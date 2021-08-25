@@ -27,8 +27,15 @@ void ResizeMoveFilters(obs_source_t *parent, obs_source_t *child, void *param)
 		return;
 	obs_data_t *settings = obs_source_get_settings(child);
 	ResizeMoveSetting(obs_data_get_obj(settings, "pos"), factor);
-	ResizeMoveSetting(obs_data_get_obj(settings, "scale"), factor);
 	ResizeMoveSetting(obs_data_get_obj(settings, "bounds"), factor);
+	const char *source_name = obs_data_get_string(settings, "source");
+	obs_source_t *source = (source_name && strlen(source_name))
+				       ? obs_get_source_by_name(source_name)
+				       : nullptr;
+	if (!obs_scene_from_source(source)) {
+		ResizeMoveSetting(obs_data_get_obj(settings, "scale"), factor);
+	}
+	obs_source_release(source);
 	obs_data_set_string(settings, "transform_text", "");
 	obs_data_release(settings);
 	return;
@@ -46,14 +53,21 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 		vec2.x *= factor;
 		vec2.y *= factor;
 		obs_data_set_vec2(item_data, "pos", &vec2);
-		obs_data_get_vec2(item_data, "scale", &vec2);
-		vec2.x *= factor;
-		vec2.y *= factor;
-		obs_data_set_vec2(item_data, "scale", &vec2);
 		obs_data_get_vec2(item_data, "bounds", &vec2);
 		vec2.x *= factor;
 		vec2.y *= factor;
 		obs_data_set_vec2(item_data, "bounds", &vec2);
+		const char *name = obs_data_get_string(item_data, "name");
+		obs_source_t *item_source = obs_get_source_by_name(name);
+		obs_source_release(item_source);
+		if (item_source && obs_scene_from_source(item_source)) {
+			obs_data_release(item_data);
+			continue;
+		}
+		obs_data_get_vec2(item_data, "scale", &vec2);
+		vec2.x *= factor;
+		vec2.y *= factor;
+		obs_data_set_vec2(item_data, "scale", &vec2);
 		obs_data_release(item_data);
 	}
 	obs_data_array_release(items);
