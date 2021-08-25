@@ -73,7 +73,74 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 	obs_data_array_release(items);
 }
 
-static void LoadSources(obs_data_array_t *data)
+void ConvertSettingPath(obs_data_t *settings, const char *setting_name,
+			const QString &path, const char *sub_folder)
+{
+	const char *file = obs_data_get_string(settings, setting_name);
+	if (!file || !strlen(file))
+		return;
+	if (QFile::exists(file))
+		return;
+	const QString file_name = QFileInfo(QT_UTF8(file)).fileName();
+	QString filePath = path + "/Resources/" + sub_folder + "/" + file_name;
+	if (QFile::exists(filePath)) {
+		obs_data_set_string(settings, setting_name,
+				    QT_TO_UTF8(filePath));
+		return;
+	}
+	filePath = path + "/" + sub_folder + "/" + file_name;
+	if (QFile::exists(filePath)) {
+		obs_data_set_string(settings, setting_name,
+				    QT_TO_UTF8(filePath));
+	}
+}
+
+void ConvertFilterPaths(obs_data_t *filter_data, const QString &path)
+{
+	const char *id = obs_data_get_string(filter_data, "id");
+	if (strcmp(id, "shader_filter") == 0) {
+		obs_data_t *settings =
+			obs_data_get_obj(filter_data, "settings");
+		ConvertSettingPath(settings, "shader_file_name", path,
+				   "Shader Filters");
+		obs_data_release(settings);
+	} else if (strcmp(id, "mask_filter") == 0) {
+		obs_data_t *settings =
+			obs_data_get_obj(filter_data, "settings");
+		ConvertSettingPath(settings, "image_path", path, "Image Masks");
+		obs_data_release(settings);
+	}
+}
+
+void ConvertSourcePaths(obs_data_t *source_data, const QString &path)
+{
+	const char *id = obs_data_get_string(source_data, "id");
+	if (strcmp(id, "image_source") == 0) {
+		obs_data_t *settings =
+			obs_data_get_obj(source_data, "settings");
+		ConvertSettingPath(settings, "file", path, "Image Sources");
+		obs_data_release(settings);
+	} else if (strcmp(id, "ffmpeg_source") == 0) {
+		obs_data_t *settings =
+			obs_data_get_obj(source_data, "settings");
+		ConvertSettingPath(settings, "local_file", path,
+				   "Media Sources");
+		obs_data_release(settings);
+	}
+	obs_data_array_t *filters = obs_data_get_array(source_data, "filters");
+	if (!filters)
+		return;
+	const size_t count = obs_data_array_count(filters);
+
+	for (size_t i = 0; i < count; i++) {
+		obs_data_t *filter_data = obs_data_array_item(filters, i);
+		ConvertFilterPaths(filter_data, path);
+		obs_data_release(filter_data);
+	}
+	obs_data_array_release(filters);
+}
+
+static void LoadSources(obs_data_array_t *data, QString path)
 {
 	const size_t count = obs_data_array_count(data);
 	std::vector<obs_source_t *> sources;
@@ -86,10 +153,12 @@ static void LoadSources(obs_data_array_t *data)
 
 		bool new_source = true;
 		obs_source_t *s = obs_get_source_by_name(name);
-		if (!s)
+		if (!s) {
+			ConvertSourcePaths(sourceData, path);
 			s = obs_load_source(sourceData);
-		else
+		} else {
 			new_source = false;
+		}
 		if (s)
 			sources.push_back(s);
 		bool resize = false;
@@ -121,14 +190,14 @@ static void LoadSources(obs_data_array_t *data)
 		obs_source_release(source);
 }
 
-static void LoadScene(obs_data_t *data)
+static void LoadScene(obs_data_t *data, QString path)
 {
 	if (!data)
 		return;
 	obs_data_array_t *sourcesData = obs_data_get_array(data, "sources");
 	if (!sourcesData)
 		return;
-	LoadSources(sourcesData);
+	LoadSources(sourcesData, path);
 	obs_data_array_release(sourcesData);
 }
 
@@ -140,7 +209,7 @@ void LoadStreamUpFile(void *private_data)
 	if (fileName.isEmpty())
 		return;
 	obs_data_t *data = obs_data_create_from_json_file(QT_TO_UTF8(fileName));
-	LoadScene(data);
+	LoadScene(data, QFileInfo(fileName).absolutePath());
 	obs_data_release(data);
 }
 

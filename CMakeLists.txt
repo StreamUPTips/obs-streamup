@@ -1,4 +1,4 @@
-project(streamup VERSION 0.0.2)
+project(streamup VERSION 0.0.3)
 set(PROJECT_FULL_NAME "StreamUP")
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/version.h.in ${CMAKE_CURRENT_SOURCE_DIR}/version.h)
