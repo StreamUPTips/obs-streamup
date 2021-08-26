@@ -32,7 +32,7 @@ void ResizeMoveFilters(obs_source_t *parent, obs_source_t *child, void *param)
 	obs_source_t *source = (source_name && strlen(source_name))
 				       ? obs_get_source_by_name(source_name)
 				       : nullptr;
-	if (!obs_scene_from_source(source)) {
+	if (!obs_scene_from_source(source) && !obs_group_from_source(source)) {
 		ResizeMoveSetting(obs_data_get_obj(settings, "scale"), factor);
 	}
 	obs_source_release(source);
@@ -60,7 +60,8 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 		const char *name = obs_data_get_string(item_data, "name");
 		obs_source_t *item_source = obs_get_source_by_name(name);
 		obs_source_release(item_source);
-		if (item_source && obs_scene_from_source(item_source)) {
+		if (item_source && (obs_scene_from_source(item_source) ||
+				    obs_group_from_source(item_source))) {
 			obs_data_release(item_data);
 			continue;
 		}
@@ -161,16 +162,13 @@ static void LoadSources(obs_data_array_t *data, QString path)
 		}
 		if (s)
 			sources.push_back(s);
-		bool resize = false;
 		obs_scene_t *scene = obs_scene_from_source(s);
 		if (!scene)
 			scene = obs_group_from_source(s);
-		else
-			resize = true;
 		if (scene) {
 			obs_data_t *scene_settings =
 				obs_data_get_obj(sourceData, "settings");
-			if (resize && w != 1920) {
+			if (w != 1920) {
 				ResizeSceneItems(scene_settings, factor);
 				if (new_source)
 					obs_source_enum_filters(
