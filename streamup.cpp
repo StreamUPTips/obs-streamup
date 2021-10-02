@@ -141,6 +141,38 @@ void ConvertSourcePaths(obs_data_t *source_data, const QString &path)
 	obs_data_array_release(filters);
 }
 
+static void merge_scenes(obs_source_t *s, obs_data_t *scene_settings)
+{
+	obs_source_save(s);
+	obs_data_array_t *items = obs_data_get_array(scene_settings, "items");
+	const size_t item_count = obs_data_array_count(items);
+	obs_data_t *scene_settings_orig = obs_source_get_settings(s);
+	obs_data_array_t *items_orig =
+		obs_data_get_array(scene_settings_orig, "items");
+	const size_t item_count_orig = obs_data_array_count(items_orig);
+	for (size_t j = 0; j < item_count_orig; j++) {
+		obs_data_t *item_data_orig = obs_data_array_item(items_orig, j);
+		const char *name_orig =
+			obs_data_get_string(item_data_orig, "name");
+		bool found = false;
+		for (size_t k = 0; k < item_count; k++) {
+			obs_data_t *item_data = obs_data_array_item(items, k);
+			const char *name =
+				obs_data_get_string(item_data, "name");
+			if (strcmp(name, name_orig) == 0) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			obs_data_array_push_back(items, item_data_orig);
+		}
+	}
+	obs_data_array_release(items_orig);
+	obs_data_release(scene_settings_orig);
+	obs_data_array_release(items);
+}
+
 static void LoadSources(obs_data_array_t *data, QString path)
 {
 	const size_t count = obs_data_array_count(data);
@@ -174,7 +206,9 @@ static void LoadSources(obs_data_array_t *data, QString path)
 					obs_source_enum_filters(
 						s, ResizeMoveFilters, &factor);
 			}
-
+			if (!new_source) {
+				merge_scenes(s, scene_settings);
+			}
 			obs_source_update(s, scene_settings);
 			obs_data_release(scene_settings);
 		}
