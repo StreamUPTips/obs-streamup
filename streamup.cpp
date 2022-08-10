@@ -21,6 +21,7 @@ void ResizeMoveSetting(obs_data_t *obs_data, float factor)
 
 void ResizeMoveFilters(obs_source_t *parent, obs_source_t *child, void *param)
 {
+	UNUSED_PARAMETER(parent);
 	float factor = *((float *)param);
 	if (strcmp(obs_source_get_unversioned_id(child),
 		   "move_source_filter") != 0)
@@ -235,6 +236,7 @@ static void LoadScene(obs_data_t *data, QString path)
 
 void LoadStreamUpFile(void *private_data)
 {
+	UNUSED_PARAMETER(private_data);
 	QString fileName = QFileDialog::getOpenFileName(
 		nullptr, QT_UTF8(obs_module_text("Load")), QString(),
 		"StreamUP File (*.streamup)");
