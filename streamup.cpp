@@ -179,9 +179,10 @@ static void merge_filters(obs_source_t *s, obs_data_array_t *filters)
 	size_t count = obs_data_array_count(filters);
 	for (size_t i = 0; i < count; i++) {
 		obs_data_t *filter_data = obs_data_array_item(filters, i);
-		const char *filter_name = obs_data_get_string(filter_data, "name");
-		obs_source_t *filter = obs_source_get_filter_by_name(s,
-								  filter_name);
+		const char *filter_name =
+			obs_data_get_string(filter_data, "name");
+		obs_source_t *filter =
+			obs_source_get_filter_by_name(s, filter_name);
 		if (filter) {
 			obs_source_release(filter);
 			continue;
@@ -200,8 +201,7 @@ static void merge_filters(obs_source_t *s, obs_data_array_t *filters)
 static void LoadSources(obs_data_array_t *data, QString path)
 {
 	const size_t count = obs_data_array_count(data);
-	std::vector<obs_source_t *> sources;
-	sources.reserve(count);
+	std::list<obs_source_t *> sources;
 	uint32_t w = obs_source_get_width(obs_frontend_get_current_scene());
 	float factor = (float)w / 1920.0f;
 	for (size_t i = 0; i < count; i++) {
@@ -237,6 +237,23 @@ static void LoadSources(obs_data_array_t *data, QString path)
 						s, ResizeMoveFilters, &factor);
 			}
 			if (!new_source) {
+				obs_scene_enum_items(
+					scene,
+					[](obs_scene_t *, obs_sceneitem_t *item,
+					   void *d) {
+						std::list<obs_source_t
+								  *> *sources =
+							(std::list<obs_source_t *>
+								 *)d;
+						obs_source_t *si =
+							obs_sceneitem_get_source(
+								item);
+						si = obs_source_get_ref(si);
+						if (si)
+							sources->push_back(si);
+						return true;
+					},
+					&sources);
 				merge_scenes(s, scene_settings);
 			}
 			obs_source_update(s, scene_settings);
