@@ -168,6 +168,7 @@ static void merge_scenes(obs_source_t *s, obs_data_t *scene_settings)
 		if (!found) {
 			obs_data_array_push_back(items, item_data_orig);
 		}
+		obs_data_release(item_data_orig);
 	}
 	obs_data_array_release(items_orig);
 	obs_data_release(scene_settings_orig);
@@ -184,6 +185,7 @@ static void merge_filters(obs_source_t *s, obs_data_array_t *filters)
 		obs_source_t *filter =
 			obs_source_get_filter_by_name(s, filter_name);
 		if (filter) {
+			obs_data_release(filter_data);
 			obs_source_release(filter);
 			continue;
 		}
@@ -201,7 +203,8 @@ static void merge_filters(obs_source_t *s, obs_data_array_t *filters)
 static void LoadSources(obs_data_array_t *data, QString path)
 {
 	const size_t count = obs_data_array_count(data);
-	std::list<obs_source_t *> sources;
+	std::list<obs_source_t *> ref_sources;
+	std::list<obs_source_t *> load_sources;
 	uint32_t w = obs_source_get_width(obs_frontend_get_current_scene());
 	float factor = (float)w / 1920.0f;
 	for (size_t i = 0; i < count; i++) {
@@ -213,6 +216,7 @@ static void LoadSources(obs_data_array_t *data, QString path)
 		if (!s) {
 			ConvertSourcePaths(sourceData, path);
 			s = obs_load_source(sourceData);
+			load_sources.push_back(s);
 		} else {
 			new_source = false;
 			obs_data_array_t *filters =
@@ -223,7 +227,7 @@ static void LoadSources(obs_data_array_t *data, QString path)
 			}
 		}
 		if (s)
-			sources.push_back(s);
+			ref_sources.push_back(s);
 		obs_scene_t *scene = obs_scene_from_source(s);
 		if (!scene)
 			scene = obs_group_from_source(s);
@@ -253,19 +257,20 @@ static void LoadSources(obs_data_array_t *data, QString path)
 							sources->push_back(si);
 						return true;
 					},
-					&sources);
+					&ref_sources);
 				merge_scenes(s, scene_settings);
 			}
 			obs_source_update(s, scene_settings);
 			obs_data_release(scene_settings);
+			load_sources.push_back(s);
 		}
 		obs_data_release(sourceData);
 	}
 
-	for (obs_source_t *source : sources)
+	for (obs_source_t *source : load_sources)
 		obs_source_load(source);
 
-	for (obs_source_t *source : sources)
+	for (obs_source_t *source : ref_sources)
 		obs_source_release(source);
 }
 
