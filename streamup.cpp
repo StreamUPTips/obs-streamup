@@ -1,14 +1,107 @@
 #include "streamup.hpp"
-#include <obs-module.h>
-#include <QFileDialog>
 #include "version.h"
+
+#include <curl/curl.h>
+#include <filesystem>
+#include <obs.h>
+#include <obs-module.h>
+#include <obs-data.h>
+#include <regex>
+#include <QApplication>
+#include <QDesktopServices>
+#include <QDialog>
+#include <QFileDialog>
+#include <QLabel>
+#include <QMenu>
+#include <QMessageBox>
+#include <QObject>
+#include <QPushButton>
+#include <QStyle>
+#include <QVBoxLayout>
+#include <util/platform.h>
 
 #define QT_UTF8(str) QString::fromUtf8(str)
 #define QT_TO_UTF8(str) str.toUtf8().constData()
 
+#if defined(_WIN32)
+#define PLATFORM_NAME "windows"
+#elif defined(__APPLE__)
+#define PLATFORM_NAME "macos"
+#elif defined(__linux__)
+#define PLATFORM_NAME "linux"
+#else
+#define PLATFORM_NAME "unknown"
+#endif
+
 OBS_DECLARE_MODULE()
-OBS_MODULE_AUTHOR("Exeldro");
+OBS_MODULE_AUTHOR("Andilippi");
 OBS_MODULE_USE_DEFAULT_LOCALE("streamup", "en-US")
+
+std::map<std::string, std::tuple<std::string, std::string, std::string>>
+	all_plugins;
+std::map<std::string, std::tuple<std::string, std::string, std::string>>
+	recommended_plugins;
+
+size_t WriteCallback(void *contents, size_t size, size_t nmemb,
+		     std::string *out)
+{
+	size_t totalSize = size * nmemb;
+	out->append((char *)contents, totalSize);
+	return totalSize;
+}
+
+std::string make_api_request(const std::string &url)
+{
+	CURL *curl = curl_easy_init();
+	std::string response;
+
+	if (curl) {
+		curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+		CURLcode res = curl_easy_perform(curl);
+		if (res != CURLE_OK)
+			fprintf(stderr, "curl_easy_perform() failed: %s\n",
+				curl_easy_strerror(res));
+		curl_easy_cleanup(curl);
+	}
+	return response;
+}
+
+void initialize_required_modules()
+{
+	std::string api_response =
+		make_api_request("https://api.streamup.tips/plugins");
+	obs_data_t *data = obs_data_create_from_json(api_response.c_str());
+
+	obs_data_array_t *plugins = obs_data_get_array(data, "plugins");
+
+	size_t count = obs_data_array_count(plugins);
+	for (size_t i = 0; i < count; ++i) {
+		obs_data_t *plugin = obs_data_array_item(plugins, i);
+
+		std::string name = obs_data_get_string(plugin, "name");
+		std::string version = obs_data_get_string(plugin, "version");
+		std::string url = obs_data_get_string(plugin, "url");
+		bool recommended = obs_data_get_bool(plugin, "recommended");
+		std::string searchString =
+			obs_data_get_string(plugin, "searchString");
+
+		all_plugins.insert(
+			{name, std::make_tuple(version, url, searchString)});
+
+		if (recommended) {
+			recommended_plugins.insert(
+				{name,
+				 std::make_tuple(version, url, searchString)});
+		}
+
+		obs_data_release(plugin);
+	}
+
+	obs_data_array_release(plugins);
+	obs_data_release(data);
+}
 
 void ResizeMoveSetting(obs_data_t *obs_data, float factor)
 {
@@ -298,12 +391,334 @@ void LoadStreamUpFile(void *private_data)
 	obs_data_release(data);
 }
 
+char *GetFilePath()
+{
+	char *relative_filepath =
+		obs_module_get_config_path(obs_current_module(), NULL);
+	char *filepath = os_get_abs_path_ptr(relative_filepath);
+	bfree(relative_filepath);
+	const char *search = "\\plugin_config\\streamup\\";
+	const char *replace = "\\logs\\";
+
+	char *found_ptr = strstr(filepath, search);
+
+	if (found_ptr) {
+		// Calculate new string size and allocate memory for it
+		size_t new_str_size =
+			strlen(filepath) - strlen(search) + strlen(replace) + 1;
+		char *new_str = (char *)bmalloc(new_str_size);
+
+		// Copy the part of the string before the found substring
+		size_t length_before = found_ptr - filepath;
+		strncpy(new_str, filepath, length_before);
+
+		// Copy the replacement string
+		strcpy(new_str + length_before, replace);
+
+		// Copy the part of the string after the found substring
+		strcpy(new_str + length_before + strlen(replace),
+		       found_ptr + strlen(search));
+
+		bfree(filepath);
+
+		std::string dirpath = new_str;
+		if (std::filesystem::exists(dirpath)) {
+			// The directory exists
+			std::filesystem::directory_iterator dir(dirpath);
+			if (dir == std::filesystem::directory_iterator{}) {
+				// The directory is empty
+				blog(LOG_INFO,
+				     "OBS doesn't have files in the install directory.");
+				return NULL;
+			} else {
+				// The directory contains files
+			}
+			char *path_str = new_str;
+			bfree(new_str);
+			return path_str;
+
+		} else {
+			// The directory does not exist
+			blog(LOG_INFO,
+			     "OBS log file folder does not exist in the install directory.");
+			bfree(new_str);
+			return NULL;
+		}
+
+	} else {
+		blog(LOG_INFO, "This error shouldn't appear!");
+		bfree(filepath);
+		return NULL;
+	}
+}
+
+std::string get_most_recent_file(std::string dirpath)
+{
+	auto it = std::filesystem::directory_iterator(dirpath);
+	auto last_write_time = decltype(it->last_write_time())::min();
+	std::filesystem::directory_entry newest_file;
+
+	for (const auto &entry : it) {
+		if (entry.is_regular_file() &&
+		    entry.path().extension() == ".txt") {
+			auto current_write_time = entry.last_write_time();
+			if (current_write_time > last_write_time) {
+				last_write_time = current_write_time;
+				newest_file = entry;
+			}
+		}
+	}
+
+	return newest_file.path().string();
+}
+
+std::string search_string_in_file(char *path, const char *search)
+{
+	std::string filepath = get_most_recent_file(path);
+	FILE *file = fopen(filepath.c_str(), "r+");
+	char line[256];
+	bool found = false;
+	std::regex version_regex("[0-9]+\\.[0-9]+\\.[0-9]+");
+
+	if (file) {
+		while (fgets(line, sizeof(line), file)) {
+			char *found_ptr = strstr(line, search);
+			if (found_ptr) {
+				found = true;
+				std::string line_str(line);
+				std::smatch match;
+
+				if (std::regex_search(line_str, match,
+						      version_regex) &&
+				    match.size() > 0) {
+					fclose(file);
+					return match.str(0);
+				}
+			}
+		}
+		fclose(file);
+		if (!found) {
+			//Plugin Not Installed
+		}
+	} else {
+		blog(LOG_ERROR, "Failed to open log file: %s",
+		     filepath.c_str());
+	}
+	return "";
+}
+
+void CheckStreamUPOBSPlugins(void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+	std::map<std::string, std::string> missing_modules;
+	std::map<std::string, std::string> version_mismatch_modules;
+
+	for (const auto &module : recommended_plugins) {
+		std::string plugin_name = module.first;
+		std::string required_version = std::get<0>(module.second);
+		std::string url = std::get<1>(module.second);
+		std::string search_string = std::get<2>(module.second);
+
+		char *filepath = GetFilePath();
+		std::string installed_version =
+			search_string_in_file(filepath, search_string.c_str());
+
+		if (installed_version.empty()) {
+			missing_modules.insert({plugin_name, required_version});
+		} else if (installed_version != required_version) {
+			version_mismatch_modules.insert(
+				{plugin_name, installed_version});
+		}
+	}
+
+	if (!missing_modules.empty() || !version_mismatch_modules.empty()) {
+		std::string errorMsg = "";
+
+		if (!missing_modules.empty()) {
+			errorMsg +=
+				"<b>The following plugins are not installed:</b><ul>";
+			for (const auto &module : missing_modules) {
+				std::string key = module.first;
+				std::string value = module.second;
+				std::string url =
+					std::get<1>(recommended_plugins[key]);
+
+				errorMsg += "<li><a href=\"" + url + "\">" +
+					    key + "</a></li>";
+			}
+			errorMsg += "</ul>";
+		}
+
+		if (!version_mismatch_modules.empty()) {
+			errorMsg +=
+				"<b>The following plugins have updates available:</b><ul>";
+			for (const auto &module : version_mismatch_modules) {
+				std::string key = module.first;
+				std::string value = module.second;
+				std::string required =
+					std::get<0>(recommended_plugins[key]);
+				std::string url =
+					std::get<1>(recommended_plugins[key]);
+
+				errorMsg += "<li><a href=\"" + url + "\">" +
+					    key + "</a> (Installed: " + value +
+					    ", Current: " + required + ")</li>";
+			}
+			errorMsg += "</ul>";
+		}
+
+		QDialog dialog;
+		QVBoxLayout *mainLayout = new QVBoxLayout;
+		mainLayout->setContentsMargins(20, 10, 20, 10);
+
+		// First layout (icon and main message)
+		QLabel *iconLabel = new QLabel;
+		iconLabel->setPixmap(
+			QApplication::style()
+				->standardIcon(QStyle::SP_MessageBoxWarning)
+				.pixmap(64, 64));
+		iconLabel->setStyleSheet("padding-top: 3px;");
+
+		QLabel *mainMessageLabel = new QLabel;
+		mainMessageLabel->setText(QString::fromStdString(
+			"OBS is missing plugins or has older versions.<br>StreamUP products may not function correctly!<br>"));
+		mainMessageLabel->setTextFormat(Qt::RichText);
+		mainMessageLabel->setTextInteractionFlags(
+			Qt::TextBrowserInteraction);
+		mainMessageLabel->setOpenExternalLinks(true);
+
+		QVBoxLayout *iconLayout = new QVBoxLayout;
+		iconLayout->addWidget(iconLabel);
+		iconLayout->addStretch();
+
+		QVBoxLayout *textLayout = new QVBoxLayout;
+		textLayout->addWidget(mainMessageLabel);
+		textLayout->addStretch();
+
+		QHBoxLayout *topLayout = new QHBoxLayout;
+		topLayout->addStretch(1);
+		topLayout->addLayout(iconLayout);
+		topLayout->addLayout(textLayout, 1);
+		topLayout->addStretch(1);
+
+		// Second layout (detailed error report)
+		QLabel *textLabel = new QLabel;
+		textLabel->setText(QString::fromStdString(errorMsg));
+		textLabel->setTextFormat(Qt::RichText);
+		textLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+		textLabel->setOpenExternalLinks(true);
+		textLabel->setStyleSheet(
+			"border: 1px solid grey; padding: 5px;");
+
+		// Third Layout
+		QLabel *additionalLabel = new QLabel(
+			"<br>Easily download missing OBS plugins and updates<br>with the <b>StreamUP Pluginstaller</b>!<br>Or click on each plugin link to download them individually.");
+		QVBoxLayout *additionalLayout = new QVBoxLayout;
+		additionalLayout->addWidget(additionalLabel);
+		additionalLayout->setAlignment(additionalLabel,
+					       Qt::AlignHCenter);
+
+		// Add layouts and widgets to the main layout
+		mainLayout->addLayout(topLayout);
+		mainLayout->addWidget(textLabel);
+		mainLayout->addLayout(additionalLayout);
+
+		// Buttons
+		QPushButton *customButton =
+			new QPushButton("Download StreamUP Pluginstaller");
+
+		QObject::connect(customButton, &QPushButton::clicked, []() {
+			QDesktopServices::openUrl(
+				QUrl("https://streamup.tips/product/plugin-installer"));
+		});
+
+		QPushButton *okButton = new QPushButton("OK");
+		QObject::connect(okButton, &QPushButton::clicked, &dialog,
+				 &QDialog::accept);
+
+		// Create a QHBoxLayout for the buttons
+		QHBoxLayout *buttonLayout = new QHBoxLayout;
+
+		// Add the buttons to the buttonLayout
+		buttonLayout->addWidget(customButton);
+		buttonLayout->addWidget(okButton);
+
+		mainLayout->addLayout(buttonLayout);
+
+		dialog.setLayout(mainLayout);
+		dialog.setWindowTitle("StreamUP • Missing or Outdated Plugins");
+		dialog.setFixedSize(dialog.sizeHint());
+		dialog.exec();
+		missing_modules.clear();
+		version_mismatch_modules.clear();
+	} else {
+
+		QDialog successDialog;
+		QVBoxLayout *successLayout = new QVBoxLayout;
+
+		QLabel *iconLabel = new QLabel;
+		iconLabel->setPixmap(
+			QApplication::style()
+				->standardIcon(QStyle::SP_DialogApplyButton)
+				.pixmap(32, 32));
+
+		QLabel *successLabel = new QLabel;
+		successLabel->setText(
+			"All OBS plugins are up to date and installed correctly.");
+		successLabel->setTextFormat(Qt::RichText);
+		successLabel->setTextInteractionFlags(
+			Qt::TextBrowserInteraction);
+		successLabel->setOpenExternalLinks(true);
+
+		QHBoxLayout *topLayout = new QHBoxLayout;
+		topLayout->addStretch(1);
+		topLayout->addWidget(iconLabel);
+		topLayout->addWidget(successLabel, 1);
+		topLayout->addStretch(1);
+
+		successLayout->addLayout(topLayout);
+
+		QPushButton *okButton = new QPushButton("OK");
+		QObject::connect(okButton, &QPushButton::clicked,
+				 &successDialog, &QDialog::accept);
+
+		successLayout->addWidget(okButton);
+
+		successDialog.setLayout(successLayout);
+		successDialog.setWindowTitle(
+			"StreamUP • All Plugins Up-to-Date");
+		successDialog.setFixedSize(successDialog.sizeHint());
+		successDialog.exec();
+	}
+}
+
+static void LoadMenu(QMenu *menu)
+{
+
+	menu->clear();
+	QAction *a = menu->addAction(obs_module_text("Install a Product"));
+	QObject::connect(a, &QAction::triggered,
+			 [] { LoadStreamUpFile(NULL); });
+	menu->addSeparator();
+	a = menu->addAction(obs_module_text("Check OBS Plugins"));
+	QObject::connect(a, &QAction::triggered,
+			 [] { CheckStreamUPOBSPlugins(NULL); });
+
+	a = menu->addAction(obs_module_text("About"));
+}
+
 bool obs_module_load()
 {
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
+	initialize_required_modules();
 
-	obs_frontend_add_tools_menu_item(obs_module_text("StreamUp"),
-					 LoadStreamUpFile, nullptr);
+	QAction *action =
+		static_cast<QAction *>(obs_frontend_add_tools_menu_qaction(
+			obs_module_text("StreamUP")));
+	QMenu *menu = new QMenu();
+	action->setMenu(menu);
+	QObject::connect(menu, &QMenu::aboutToShow, [menu] { LoadMenu(menu); });
+
 	return true;
 }
 
