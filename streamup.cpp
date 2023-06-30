@@ -6,6 +6,7 @@
 #include <obs.h>
 #include <obs-module.h>
 #include <obs-data.h>
+#include <pthread.h>
 #include <regex>
 #include <QApplication>
 #include <QDesktopServices>
@@ -42,6 +43,11 @@ std::map<std::string, std::tuple<std::string, std::string, std::string>>
 std::map<std::string, std::tuple<std::string, std::string, std::string>>
 	recommended_plugins;
 
+struct request_data {
+	std::string url;
+	std::string response;
+};
+
 size_t WriteCallback(void *contents, size_t size, size_t nmemb,
 		     std::string *out)
 {
@@ -50,28 +56,43 @@ size_t WriteCallback(void *contents, size_t size, size_t nmemb,
 	return totalSize;
 }
 
-std::string make_api_request(const std::string &url)
+void *make_api_request(void *arg)
 {
+	request_data *data = (request_data *)arg;
 	CURL *curl = curl_easy_init();
-	std::string response;
 
 	if (curl) {
-		curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+		curl_easy_setopt(curl, CURLOPT_URL, data->url.c_str());
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data->response);
 		CURLcode res = curl_easy_perform(curl);
 		if (res != CURLE_OK)
 			fprintf(stderr, "curl_easy_perform() failed: %s\n",
 				curl_easy_strerror(res));
 		curl_easy_cleanup(curl);
 	}
-	return response;
+	return NULL;
 }
 
 void initialize_required_modules()
 {
-	std::string api_response =
-		make_api_request("https://api.streamup.tips/plugins");
+	pthread_t thread;
+	request_data req_data;
+	req_data.url = "https://api.streamup.tips/plugins";
+
+	if (pthread_create(&thread, NULL, make_api_request, &req_data)) {
+		fprintf(stderr, "Error creating thread\n");
+		return;
+	}
+
+	// wait for the thread to finish
+	if (pthread_join(thread, NULL)) {
+		fprintf(stderr, "Error joining thread\n");
+		return;
+	}
+
+	std::string api_response = req_data.response;
+
 	obs_data_t *data = obs_data_create_from_json(api_response.c_str());
 
 	obs_data_array_t *plugins = obs_data_get_array(data, "plugins");
@@ -433,9 +454,7 @@ char *GetFilePath()
 			} else {
 				// The directory contains files
 			}
-			char *path_str = new_str;
-			bfree(new_str);
-			return path_str;
+			return new_str;
 
 		} else {
 			// The directory does not exist
@@ -529,6 +548,7 @@ void CheckStreamUPOBSPlugins(void *private_data)
 			version_mismatch_modules.insert(
 				{plugin_name, installed_version});
 		}
+		bfree(filepath);
 	}
 
 	if (!missing_modules.empty() || !version_mismatch_modules.empty()) {
