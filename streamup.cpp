@@ -38,10 +38,19 @@ OBS_DECLARE_MODULE()
 OBS_MODULE_AUTHOR("Andilippi");
 OBS_MODULE_USE_DEFAULT_LOCALE("streamup", "en-US")
 
-std::map<std::string, std::tuple<std::string, std::string, std::string>>
-	all_plugins;
-std::map<std::string, std::tuple<std::string, std::string, std::string>>
-	recommended_plugins;
+struct PluginInfo {
+	std::string name;
+	std::string version;
+	std::string searchString;
+	std::string url;
+	bool recommended;
+	bool mac;
+	bool windows;
+	bool linux;
+};
+
+std::map<std::string, PluginInfo> all_plugins;
+std::map<std::string, PluginInfo> recommended_plugins;
 
 struct request_data {
 	std::string url;
@@ -67,8 +76,9 @@ void *make_api_request(void *arg)
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data->response);
 		CURLcode res = curl_easy_perform(curl);
 		if (res != CURLE_OK)
-			fprintf(stderr, "curl_easy_perform() failed: %s\n",
-				curl_easy_strerror(res));
+			blog(LOG_INFO, "curl_easy_perform() failed: %s\n",
+			     curl_easy_strerror(res));
+
 		curl_easy_cleanup(curl);
 	}
 	return NULL;
@@ -81,13 +91,12 @@ void initialize_required_modules()
 	req_data.url = "https://api.streamup.tips/plugins";
 
 	if (pthread_create(&thread, NULL, make_api_request, &req_data)) {
-		fprintf(stderr, "Error creating thread\n");
+		blog(LOG_INFO, "Error creating thread\n");
 		return;
 	}
 
-	// wait for the thread to finish
 	if (pthread_join(thread, NULL)) {
-		fprintf(stderr, "Error joining thread\n");
+		blog(LOG_INFO, "Error joining thread\n");
 		return;
 	}
 
@@ -102,19 +111,17 @@ void initialize_required_modules()
 		obs_data_t *plugin = obs_data_array_item(plugins, i);
 
 		std::string name = obs_data_get_string(plugin, "name");
-		std::string version = obs_data_get_string(plugin, "version");
-		std::string url = obs_data_get_string(plugin, "url");
-		bool recommended = obs_data_get_bool(plugin, "recommended");
-		std::string searchString =
-			obs_data_get_string(plugin, "searchString");
 
-		all_plugins.insert(
-			{name, std::make_tuple(version, url, searchString)});
+		PluginInfo info;
+		info.version = obs_data_get_string(plugin, "version");
+		info.url = obs_data_get_string(plugin, "url");
+		info.searchString = obs_data_get_string(plugin, "searchString");
+		// Set additional fields here as necessary
 
-		if (recommended) {
-			recommended_plugins.insert(
-				{name,
-				 std::make_tuple(version, url, searchString)});
+		all_plugins[name] = info;
+
+		if (obs_data_get_bool(plugin, "recommended")) {
+			recommended_plugins[name] = info;
 		}
 
 		obs_data_release(plugin);
@@ -526,19 +533,142 @@ std::string search_string_in_file(char *path, const char *search)
 	return "";
 }
 
-void CheckStreamUPOBSPlugins(void *private_data)
+void PluginsUpToDateOutput()
+{
+	QDialog successDialog;
+	QVBoxLayout *successLayout = new QVBoxLayout;
+
+	QLabel *iconLabel = new QLabel;
+	iconLabel->setPixmap(
+		QApplication::style()
+			->standardIcon(QStyle::SP_DialogApplyButton)
+			.pixmap(32, 32));
+
+	QLabel *successLabel = new QLabel;
+	successLabel->setText(
+		"All OBS plugins are up to date and installed correctly.");
+	successLabel->setTextFormat(Qt::RichText);
+	successLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+	successLabel->setOpenExternalLinks(true);
+
+	QHBoxLayout *topLayout = new QHBoxLayout;
+	topLayout->addStretch(1);
+	topLayout->addWidget(iconLabel);
+	topLayout->addWidget(successLabel, 1);
+	topLayout->addStretch(1);
+
+	successLayout->addLayout(topLayout);
+
+	QPushButton *okButton = new QPushButton("OK");
+	QObject::connect(okButton, &QPushButton::clicked, &successDialog,
+			 &QDialog::accept);
+
+	successLayout->addWidget(okButton);
+
+	successDialog.setLayout(successLayout);
+	successDialog.setWindowTitle("StreamUP • All Plugins Up-to-Date");
+	successDialog.setFixedSize(successDialog.sizeHint());
+	successDialog.exec();
+}
+
+void PluginsHaveIssue(std::string errorMsg)
+{
+
+	QDialog dialog;
+	QVBoxLayout *mainLayout = new QVBoxLayout;
+	mainLayout->setContentsMargins(20, 10, 20, 10);
+
+	// First layout (icon and main message)
+	QLabel *iconLabel = new QLabel;
+	iconLabel->setPixmap(
+		QApplication::style()
+			->standardIcon(QStyle::SP_MessageBoxWarning)
+			.pixmap(64, 64));
+	iconLabel->setStyleSheet("padding-top: 3px;");
+
+	QLabel *mainMessageLabel = new QLabel;
+	mainMessageLabel->setText(QString::fromStdString(
+		"OBS is missing plugins or has older versions.<br>StreamUP products may not function correctly!<br>"));
+	mainMessageLabel->setTextFormat(Qt::RichText);
+	mainMessageLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+	mainMessageLabel->setOpenExternalLinks(true);
+
+	QVBoxLayout *iconLayout = new QVBoxLayout;
+	iconLayout->addWidget(iconLabel);
+	iconLayout->addStretch();
+
+	QVBoxLayout *textLayout = new QVBoxLayout;
+	textLayout->addWidget(mainMessageLabel);
+	textLayout->addStretch();
+
+	QHBoxLayout *topLayout = new QHBoxLayout;
+	topLayout->addStretch(1);
+	topLayout->addLayout(iconLayout);
+	topLayout->addLayout(textLayout, 1);
+	topLayout->addStretch(1);
+
+	// Second layout (detailed error report)
+	QLabel *textLabel = new QLabel;
+	textLabel->setText(QString::fromStdString(errorMsg));
+	textLabel->setTextFormat(Qt::RichText);
+	textLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+	textLabel->setOpenExternalLinks(true);
+	textLabel->setStyleSheet("border: 1px solid grey; padding: 5px;");
+
+	// Third Layout
+	QLabel *additionalLabel = new QLabel(
+		"<br>Easily download missing OBS plugins and updates<br>with the <b>StreamUP Pluginstaller</b>!<br>Or click on each plugin link to download them individually.");
+	QVBoxLayout *additionalLayout = new QVBoxLayout;
+	additionalLayout->addWidget(additionalLabel);
+	additionalLayout->setAlignment(additionalLabel, Qt::AlignHCenter);
+
+	// Add layouts and widgets to the main layout
+	mainLayout->addLayout(topLayout);
+	mainLayout->addWidget(textLabel);
+	mainLayout->addLayout(additionalLayout);
+
+	// Buttons
+	QPushButton *customButton =
+		new QPushButton("Download StreamUP Pluginstaller");
+
+	QObject::connect(customButton, &QPushButton::clicked, []() {
+		QDesktopServices::openUrl(
+			QUrl("https://streamup.tips/product/plugin-installer"));
+	});
+
+	QPushButton *okButton = new QPushButton("OK");
+	QObject::connect(okButton, &QPushButton::clicked, &dialog,
+			 &QDialog::accept);
+
+	// Create a QHBoxLayout for the buttons
+	QHBoxLayout *buttonLayout = new QHBoxLayout;
+
+	// Add the buttons to the buttonLayout
+	buttonLayout->addWidget(customButton);
+	buttonLayout->addWidget(okButton);
+
+	mainLayout->addLayout(buttonLayout);
+
+	dialog.setLayout(mainLayout);
+	dialog.setWindowTitle("StreamUP • Missing or Outdated Plugins");
+	dialog.setFixedSize(dialog.sizeHint());
+	dialog.exec();
+}
+
+void CheckOBSPlugins(void *private_data)
 {
 	UNUSED_PARAMETER(private_data);
 	std::map<std::string, std::string> missing_modules;
 	std::map<std::string, std::string> version_mismatch_modules;
+	char *filepath = GetFilePath();
 
 	for (const auto &module : recommended_plugins) {
 		std::string plugin_name = module.first;
-		std::string required_version = std::get<0>(module.second);
-		std::string url = std::get<1>(module.second);
-		std::string search_string = std::get<2>(module.second);
+		PluginInfo plugin_info = module.second;
+		std::string required_version = plugin_info.version;
+		std::string url = plugin_info.url;
+		std::string search_string = plugin_info.searchString;
 
-		char *filepath = GetFilePath();
 		std::string installed_version =
 			search_string_in_file(filepath, search_string.c_str());
 
@@ -548,8 +678,9 @@ void CheckStreamUPOBSPlugins(void *private_data)
 			version_mismatch_modules.insert(
 				{plugin_name, installed_version});
 		}
-		bfree(filepath);
 	}
+
+	bfree(filepath);
 
 	if (!missing_modules.empty() || !version_mismatch_modules.empty()) {
 		std::string errorMsg = "";
@@ -558,13 +689,15 @@ void CheckStreamUPOBSPlugins(void *private_data)
 			errorMsg +=
 				"<b>The following plugins are not installed:</b><ul>";
 			for (const auto &module : missing_modules) {
-				std::string key = module.first;
-				std::string value = module.second;
-				std::string url =
-					std::get<1>(recommended_plugins[key]);
+				std::string plugin_name = module.first;
+				std::string required_version = module.second;
+
+				PluginInfo plugin_info =
+					recommended_plugins[plugin_name];
+				std::string url = plugin_info.url;
 
 				errorMsg += "<li><a href=\"" + url + "\">" +
-					    key + "</a></li>";
+					    plugin_name + "</a></li>";
 			}
 			errorMsg += "</ul>";
 		}
@@ -573,142 +706,29 @@ void CheckStreamUPOBSPlugins(void *private_data)
 			errorMsg +=
 				"<b>The following plugins have updates available:</b><ul>";
 			for (const auto &module : version_mismatch_modules) {
-				std::string key = module.first;
-				std::string value = module.second;
-				std::string required =
-					std::get<0>(recommended_plugins[key]);
-				std::string url =
-					std::get<1>(recommended_plugins[key]);
+				std::string plugin_name = module.first;
+				std::string installed_version = module.second;
+
+				PluginInfo plugin_info =
+					recommended_plugins[plugin_name];
+				std::string required_version =
+					plugin_info.version;
+				std::string url = plugin_info.url;
 
 				errorMsg += "<li><a href=\"" + url + "\">" +
-					    key + "</a> (Installed: " + value +
-					    ", Current: " + required + ")</li>";
+					    plugin_name + "</a> (Installed: " +
+					    installed_version +
+					    ", Current: " + required_version +
+					    ")</li>";
 			}
 			errorMsg += "</ul>";
 		}
-
-		QDialog dialog;
-		QVBoxLayout *mainLayout = new QVBoxLayout;
-		mainLayout->setContentsMargins(20, 10, 20, 10);
-
-		// First layout (icon and main message)
-		QLabel *iconLabel = new QLabel;
-		iconLabel->setPixmap(
-			QApplication::style()
-				->standardIcon(QStyle::SP_MessageBoxWarning)
-				.pixmap(64, 64));
-		iconLabel->setStyleSheet("padding-top: 3px;");
-
-		QLabel *mainMessageLabel = new QLabel;
-		mainMessageLabel->setText(QString::fromStdString(
-			"OBS is missing plugins or has older versions.<br>StreamUP products may not function correctly!<br>"));
-		mainMessageLabel->setTextFormat(Qt::RichText);
-		mainMessageLabel->setTextInteractionFlags(
-			Qt::TextBrowserInteraction);
-		mainMessageLabel->setOpenExternalLinks(true);
-
-		QVBoxLayout *iconLayout = new QVBoxLayout;
-		iconLayout->addWidget(iconLabel);
-		iconLayout->addStretch();
-
-		QVBoxLayout *textLayout = new QVBoxLayout;
-		textLayout->addWidget(mainMessageLabel);
-		textLayout->addStretch();
-
-		QHBoxLayout *topLayout = new QHBoxLayout;
-		topLayout->addStretch(1);
-		topLayout->addLayout(iconLayout);
-		topLayout->addLayout(textLayout, 1);
-		topLayout->addStretch(1);
-
-		// Second layout (detailed error report)
-		QLabel *textLabel = new QLabel;
-		textLabel->setText(QString::fromStdString(errorMsg));
-		textLabel->setTextFormat(Qt::RichText);
-		textLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
-		textLabel->setOpenExternalLinks(true);
-		textLabel->setStyleSheet(
-			"border: 1px solid grey; padding: 5px;");
-
-		// Third Layout
-		QLabel *additionalLabel = new QLabel(
-			"<br>Easily download missing OBS plugins and updates<br>with the <b>StreamUP Pluginstaller</b>!<br>Or click on each plugin link to download them individually.");
-		QVBoxLayout *additionalLayout = new QVBoxLayout;
-		additionalLayout->addWidget(additionalLabel);
-		additionalLayout->setAlignment(additionalLabel,
-					       Qt::AlignHCenter);
-
-		// Add layouts and widgets to the main layout
-		mainLayout->addLayout(topLayout);
-		mainLayout->addWidget(textLabel);
-		mainLayout->addLayout(additionalLayout);
-
-		// Buttons
-		QPushButton *customButton =
-			new QPushButton("Download StreamUP Pluginstaller");
-
-		QObject::connect(customButton, &QPushButton::clicked, []() {
-			QDesktopServices::openUrl(
-				QUrl("https://streamup.tips/product/plugin-installer"));
-		});
-
-		QPushButton *okButton = new QPushButton("OK");
-		QObject::connect(okButton, &QPushButton::clicked, &dialog,
-				 &QDialog::accept);
-
-		// Create a QHBoxLayout for the buttons
-		QHBoxLayout *buttonLayout = new QHBoxLayout;
-
-		// Add the buttons to the buttonLayout
-		buttonLayout->addWidget(customButton);
-		buttonLayout->addWidget(okButton);
-
-		mainLayout->addLayout(buttonLayout);
-
-		dialog.setLayout(mainLayout);
-		dialog.setWindowTitle("StreamUP • Missing or Outdated Plugins");
-		dialog.setFixedSize(dialog.sizeHint());
-		dialog.exec();
+		PluginsHaveIssue(errorMsg);
 		missing_modules.clear();
 		version_mismatch_modules.clear();
+
 	} else {
-
-		QDialog successDialog;
-		QVBoxLayout *successLayout = new QVBoxLayout;
-
-		QLabel *iconLabel = new QLabel;
-		iconLabel->setPixmap(
-			QApplication::style()
-				->standardIcon(QStyle::SP_DialogApplyButton)
-				.pixmap(32, 32));
-
-		QLabel *successLabel = new QLabel;
-		successLabel->setText(
-			"All OBS plugins are up to date and installed correctly.");
-		successLabel->setTextFormat(Qt::RichText);
-		successLabel->setTextInteractionFlags(
-			Qt::TextBrowserInteraction);
-		successLabel->setOpenExternalLinks(true);
-
-		QHBoxLayout *topLayout = new QHBoxLayout;
-		topLayout->addStretch(1);
-		topLayout->addWidget(iconLabel);
-		topLayout->addWidget(successLabel, 1);
-		topLayout->addStretch(1);
-
-		successLayout->addLayout(topLayout);
-
-		QPushButton *okButton = new QPushButton("OK");
-		QObject::connect(okButton, &QPushButton::clicked,
-				 &successDialog, &QDialog::accept);
-
-		successLayout->addWidget(okButton);
-
-		successDialog.setLayout(successLayout);
-		successDialog.setWindowTitle(
-			"StreamUP • All Plugins Up-to-Date");
-		successDialog.setFixedSize(successDialog.sizeHint());
-		successDialog.exec();
+		PluginsUpToDateOutput();
 	}
 }
 
@@ -716,13 +736,21 @@ static void LoadMenu(QMenu *menu)
 {
 
 	menu->clear();
-	QAction *a = menu->addAction(obs_module_text("Install a Product"));
-	QObject::connect(a, &QAction::triggered,
-			 [] { LoadStreamUpFile(NULL); });
-	menu->addSeparator();
-	a = menu->addAction(obs_module_text("Check OBS Plugins"));
-	QObject::connect(a, &QAction::triggered,
-			 [] { CheckStreamUPOBSPlugins(NULL); });
+	QAction *a;
+
+	if (PLATFORM_NAME == "windows") {
+		a = menu->addAction(obs_module_text("Install a Product"));
+		QObject::connect(a, &QAction::triggered,
+				 [] { LoadStreamUpFile(NULL); });
+		a = menu->addAction(
+			obs_module_text("Check Required OBS Plugins"));
+		QObject::connect(a, &QAction::triggered,
+				 [] { CheckOBSPlugins(NULL); });
+		menu->addSeparator();
+	}
+
+	a = menu->addAction(obs_module_text("Check for OBS Plugin Updates"));
+	QObject::connect(a, &QAction::triggered, [] { CheckOBSPlugins(NULL); });
 
 	a = menu->addAction(obs_module_text("About"));
 }
