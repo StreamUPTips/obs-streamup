@@ -44,6 +44,7 @@ if(OS_WINDOWS)
 		)
 	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/resource.rc.in ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.rc)
 	target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.rc)
+  target_link_libraries(${PROJECT_NAME} w32-pthreads)
 	
 elseif(OS_MACOS)
 	set(MACOS_BUNDLEID "com.exeldro.${PROJECT_NAME}")
