@@ -22,13 +22,14 @@ target_sources(${PROJECT_NAME} PRIVATE
 	streamup.hpp
 	version.h)
 
+find_package(CURL REQUIRED)
 if(BUILD_OUT_OF_TREE)
-	find_package(libobs REQUIRED)
-	find_package(obs-frontend-api REQUIRED)
-	include(cmake/ObsPluginHelpers.cmake)
-	set(OBS_FRONTEND_API_NAME "obs-frontend-api")
+    find_package(libobs REQUIRED)
+    find_package(obs-frontend-api REQUIRED)
+    include(cmake/ObsPluginHelpers.cmake)
+    set(OBS_FRONTEND_API_NAME "obs-frontend-api")
 else()
-	set(OBS_FRONTEND_API_NAME "frontend-api")
+    set(OBS_FRONTEND_API_NAME "frontend-api")
 endif()
 
 if(OS_WINDOWS)
@@ -59,6 +60,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES AUTOMOC ON AUTOUIC ON AUTORCC O
 
 target_link_libraries(${PROJECT_NAME}
 		OBS::${OBS_FRONTEND_API_NAME}
+    CURL::libcurl
 		Qt::Widgets
 		OBS::libobs)
 
