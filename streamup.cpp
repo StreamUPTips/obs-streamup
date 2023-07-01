@@ -118,6 +118,8 @@ void initialize_required_modules()
 		PluginInfo info;
 		info.version = obs_data_get_string(plugin, "version");
 		info.windowsURL = obs_data_get_string(plugin, "url");
+		info.macURL = obs_data_get_string(plugin, "url");
+		//info.linuxURL = obs_data_get_string(plugin, "url");
 		info.searchString = obs_data_get_string(plugin, "searchString");
 		// Set additional fields here as necessary
 
@@ -724,7 +726,19 @@ void CheckOBSPlugins(const char *trigger)
 
 				PluginInfo plugin_info =
 					recommended_plugins[plugin_name];
-				std::string url = plugin_info.windowsURL;
+				std::string url;
+				if (std::string(PLATFORM_NAME) == "windows") {
+					url = plugin_info.windowsURL;
+				} else if (std::string(PLATFORM_NAME) ==
+					   "mac") {
+					url = plugin_info.macURL;
+				} else if (std::string(PLATFORM_NAME) ==
+					   "linux") {
+					url = plugin_info.linuxURL;
+				} else {
+					// Default or error case
+					url = plugin_info.windowsURL;
+				}
 
 				errorMsgMissing += "<li><a href=\"" + url +
 						   "\">" + plugin_name +
