@@ -117,11 +117,15 @@ void initialize_required_modules()
 
 		PluginInfo info;
 		info.version = obs_data_get_string(plugin, "version");
-		info.windowsURL = obs_data_get_string(plugin, "url");
-		info.macURL = obs_data_get_string(plugin, "url");
-		//info.linuxURL = obs_data_get_string(plugin, "url");
+		obs_data_t *downloads = obs_data_get_obj(plugin, "downloads");
+		if (downloads) {
+			info.windowsURL =
+				obs_data_get_string(downloads, "windows");
+			info.macURL = obs_data_get_string(downloads, "macOS");
+			info.linuxURL = obs_data_get_string(downloads, "linux");
+			obs_data_release(downloads);
+		}
 		info.searchString = obs_data_get_string(plugin, "searchString");
-		// Set additional fields here as necessary
 
 		all_plugins[name] = info;
 
@@ -431,14 +435,9 @@ char *GetFilePath()
 	char *filepath = os_get_abs_path_ptr(relative_filepath);
 	bfree(relative_filepath);
 
-	 if (filepath == NULL) {
-		blog(LOG_INFO, "Could not get file path.\nrelative_filepath: %s", relative_filepath);
-		return NULL;
-	}
-
 	const char *search;
 	const char *replace;
-	
+
 	if (std::string(PLATFORM_NAME) == "windows") {
 		search = "\\plugin_config\\streamup\\";
 		replace = "\\logs\\";
@@ -715,7 +714,17 @@ void CheckOBSPlugins(const char *trigger)
 		std::string plugin_name = module.first;
 		PluginInfo plugin_info = module.second;
 		std::string required_version = plugin_info.version;
-		std::string url = plugin_info.windowsURL;
+		std::string url;
+		if (std::string(PLATFORM_NAME) == "Windows") {
+			url = plugin_info.windowsURL;
+		} else if (std::string(PLATFORM_NAME) == "MacOS") {
+			url = plugin_info.macURL;
+		} else if (std::string(PLATFORM_NAME) == "Linux") {
+			url = plugin_info.linuxURL;
+		} else {
+			// Default or error case
+			url = plugin_info.windowsURL;
+		}
 		std::string search_string = plugin_info.searchString;
 
 		std::string installed_version =
