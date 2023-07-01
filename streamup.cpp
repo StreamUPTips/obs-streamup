@@ -715,7 +715,8 @@ void CheckOBSPlugins(const char *trigger)
 	bfree(filepath);
 
 	if (!missing_modules.empty() || !version_mismatch_modules.empty()) {
-		if (!missing_modules.empty() && trigger == "Required") {
+		if (!missing_modules.empty() &&
+		    strcmp(trigger, "Required") == 0) {
 			errorMsgMissing += "<ul>";
 			for (const auto &module : missing_modules) {
 				std::string plugin_name = module.first;
@@ -915,7 +916,7 @@ public:
 		// Last message
 		QLabel *lastText = new QLabel;
 		lastText->setText(
-			"<br>Special thanks to <a href='https://exeldro.com'>Exeldro</a>!<br>For creating the initial StreamUP plugin.");
+			"<br>Special thanks to <b><a href='https://exeldro.com'>Exeldro</a></b>!<br>For creating the initial StreamUP plugin.");
 		lastText->setTextFormat(Qt::RichText);
 		lastText->setTextInteractionFlags(Qt::TextBrowserInteraction);
 		lastText->setOpenExternalLinks(true);
