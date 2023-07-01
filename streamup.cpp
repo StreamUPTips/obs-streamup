@@ -743,11 +743,13 @@ void CheckOBSPlugins(const char *trigger)
 				std::string required_version =
 					plugin_info.version;
 				std::string url;
-				if (PLATFORM_NAME == "windows") {
+				if (std::string(PLATFORM_NAME) == "windows") {
 					url = plugin_info.windowsURL;
-				} else if (PLATFORM_NAME == "mac") {
+				} else if (std::string(PLATFORM_NAME) ==
+					   "mac") {
 					url = plugin_info.macURL;
-				} else if (PLATFORM_NAME == "linux") {
+				} else if (std::string(PLATFORM_NAME) ==
+					   "linux") {
 					url = plugin_info.linuxURL;
 				} else {
 					// Default or error case
@@ -762,7 +764,7 @@ void CheckOBSPlugins(const char *trigger)
 			}
 			errorMsgUpdate += "</ul>";
 		}
-		if (trigger == "Updates") {
+		if (std::string(trigger) == "Updates") {
 			errorMsgMissing = "NULL";
 		}
 		PluginsHaveIssue(errorMsgMissing, errorMsgUpdate);
