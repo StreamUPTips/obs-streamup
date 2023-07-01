@@ -430,6 +430,12 @@ char *GetFilePath()
 		obs_module_get_config_path(obs_current_module(), NULL);
 	char *filepath = os_get_abs_path_ptr(relative_filepath);
 	bfree(relative_filepath);
+
+	 if (filepath == NULL) {
+		blog(LOG_INFO, "Could not get file path.\nrelative_filepath: %s", relative_filepath);
+		return NULL;
+	}
+
 	const char *search;
 	const char *replace;
 	
