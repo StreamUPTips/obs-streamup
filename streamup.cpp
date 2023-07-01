@@ -430,8 +430,17 @@ char *GetFilePath()
 		obs_module_get_config_path(obs_current_module(), NULL);
 	char *filepath = os_get_abs_path_ptr(relative_filepath);
 	bfree(relative_filepath);
-	const char *search = "\\plugin_config\\streamup\\";
-	const char *replace = "\\logs\\";
+	const char *search;
+	const char *replace;
+	
+	if (std::string(PLATFORM_NAME) == "windows") {
+		search = "\\plugin_config\\streamup\\";
+		replace = "\\logs\\";
+	} else if (std::string(PLATFORM_NAME) == "mac" ||
+		   std::string(PLATFORM_NAME) == "linux") {
+		search = "/plugin_config/streamup/";
+		replace = "/logs/";
+	}
 
 	char *found_ptr = strstr(filepath, search);
 
