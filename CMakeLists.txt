@@ -6,7 +6,7 @@ else()
   cmake_minimum_required(VERSION 3.18)
 endif()
 
-project(streamup VERSION 0.0.8)
+project(streamup VERSION 0.1.0)
 set(PROJECT_FULL_NAME "StreamUP")
 
 # Set new UUIDs when you start to create a new plugin.
@@ -47,7 +47,7 @@ if(OS_WINDOWS)
   target_link_libraries(${PROJECT_NAME} w32-pthreads)
 	
 elseif(OS_MACOS)
-	set(MACOS_BUNDLEID "com.exeldro.${PROJECT_NAME}")
+	set(MACOS_BUNDLEID "com.andilippi.${PROJECT_NAME}")
 	set(MACOSX_PLUGIN_GUI_IDENTIFIER "${MACOS_BUNDLEID}")
 	set(MACOSX_PLUGIN_BUNDLE_VERSION "${PROJECT_VERSION}")
 	set(MACOSX_PLUGIN_SHORT_VERSION_STRING "1")
@@ -80,6 +80,6 @@ if(BUILD_OUT_OF_TREE)
 else()
 	target_include_directories(${PROJECT_NAME} PRIVATE
 		"${CMAKE_SOURCE_DIR}/UI/obs-frontend-api")
-	set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER "plugins/exeldro")
+	set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER "plugins/andilippi")
 endif()
 setup_plugin_target(${PROJECT_NAME})

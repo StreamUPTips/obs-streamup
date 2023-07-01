@@ -9,15 +9,19 @@
 #include <pthread.h>
 #include <regex>
 #include <QApplication>
+#include <QBuffer>
 #include <QDesktopServices>
 #include <QDialog>
 #include <QFileDialog>
+#include <QGroupBox>
+#include <QIcon>
 #include <QLabel>
 #include <QMenu>
 #include <QMessageBox>
 #include <QObject>
 #include <QPushButton>
 #include <QStyle>
+#include <QTextBrowser>
 #include <QVBoxLayout>
 #include <util/platform.h>
 
@@ -42,11 +46,10 @@ struct PluginInfo {
 	std::string name;
 	std::string version;
 	std::string searchString;
-	std::string url;
+	std::string windowsURL;
+	std::string macURL;
+	std::string linuxURL;
 	bool recommended;
-	bool mac;
-	bool windows;
-	bool linux;
 };
 
 std::map<std::string, PluginInfo> all_plugins;
@@ -114,7 +117,7 @@ void initialize_required_modules()
 
 		PluginInfo info;
 		info.version = obs_data_get_string(plugin, "version");
-		info.url = obs_data_get_string(plugin, "url");
+		info.windowsURL = obs_data_get_string(plugin, "url");
 		info.searchString = obs_data_get_string(plugin, "searchString");
 		// Set additional fields here as necessary
 
@@ -571,9 +574,8 @@ void PluginsUpToDateOutput()
 	successDialog.exec();
 }
 
-void PluginsHaveIssue(std::string errorMsg)
+void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 {
-
 	QDialog dialog;
 	QVBoxLayout *mainLayout = new QVBoxLayout;
 	mainLayout->setContentsMargins(20, 10, 20, 10);
@@ -587,10 +589,14 @@ void PluginsHaveIssue(std::string errorMsg)
 	iconLabel->setStyleSheet("padding-top: 3px;");
 
 	QLabel *mainMessageLabel = new QLabel;
-	mainMessageLabel->setText(QString::fromStdString(
-		"OBS is missing plugins or has older versions.<br>StreamUP products may not function correctly!<br>"));
+	if (errorMsgMissing != "NULL") {
+		mainMessageLabel->setText(QString::fromStdString(
+			"OBS is missing plugins or has older versions.<br>StreamUP products may not function correctly!<br>"));
+	} else {
+		mainMessageLabel->setText(QString::fromStdString(
+			"Some OBS plugins need an update.<br>Please click each one to download them!<br>"));
+	}
 	mainMessageLabel->setTextFormat(Qt::RichText);
-	mainMessageLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
 	mainMessageLabel->setOpenExternalLinks(true);
 
 	QVBoxLayout *iconLayout = new QVBoxLayout;
@@ -607,35 +613,51 @@ void PluginsHaveIssue(std::string errorMsg)
 	topLayout->addLayout(textLayout, 1);
 	topLayout->addStretch(1);
 
-	// Second layout (detailed error report)
-	QLabel *textLabel = new QLabel;
-	textLabel->setText(QString::fromStdString(errorMsg));
-	textLabel->setTextFormat(Qt::RichText);
-	textLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
-	textLabel->setOpenExternalLinks(true);
-	textLabel->setStyleSheet("border: 1px solid grey; padding: 5px;");
+	// Third layout (detailed error report for plugins to update)
+	QLabel *updateLabel = new QLabel;
+	updateLabel->setText(QString::fromStdString(errorMsgUpdate));
+	updateLabel->setTextFormat(Qt::RichText);
+	updateLabel->setTextInteractionFlags(Qt::TextBrowserInteraction);
+	updateLabel->setOpenExternalLinks(true);
 
-	// Third Layout
-	QLabel *additionalLabel = new QLabel(
-		"<br>Easily download missing OBS plugins and updates<br>with the <b>StreamUP Pluginstaller</b>!<br>Or click on each plugin link to download them individually.");
-	QVBoxLayout *additionalLayout = new QVBoxLayout;
-	additionalLayout->addWidget(additionalLabel);
-	additionalLayout->setAlignment(additionalLabel, Qt::AlignHCenter);
+	// Create a QGroupBox for plugins to update
+	QGroupBox *updateBox = new QGroupBox("Plugins to Update");
+	QVBoxLayout *updateBoxLayout = new QVBoxLayout;
+	updateBoxLayout->addWidget(updateLabel);
+	updateBox->setLayout(updateBoxLayout);
 
 	// Add layouts and widgets to the main layout
 	mainLayout->addLayout(topLayout);
-	mainLayout->addWidget(textLabel);
-	mainLayout->addLayout(additionalLayout);
+	// Second layout (detailed error report for missing plugins)
+	QLabel *missingLabel = new QLabel;
 
+	if (errorMsgMissing != "NULL") {
+		missingLabel->setText(QString::fromStdString(errorMsgMissing));
+		missingLabel->setTextFormat(Qt::RichText);
+		missingLabel->setTextInteractionFlags(
+			Qt::TextBrowserInteraction);
+		missingLabel->setOpenExternalLinks(true);
+		// Create a QGroupBox for missing plugins
+		QGroupBox *missingBox = new QGroupBox("Missing Plugins");
+		QVBoxLayout *missingBoxLayout = new QVBoxLayout;
+		missingBoxLayout->addWidget(missingLabel);
+		missingBox->setLayout(missingBoxLayout);
+		mainLayout->addWidget(missingBox);
+	}
+
+	mainLayout->addWidget(updateBox);
+
+	if (errorMsgMissing != "NULL") {
+		QLabel *pluginstallerLabel = new QLabel;
+		pluginstallerLabel->setText(QString::fromStdString(
+			"<br>Select '<b>Download StreamUP Pluginstaller</b>' to<br>use our tool to download them all at once."));
+		pluginstallerLabel->setTextFormat(Qt::RichText);
+		pluginstallerLabel->setAlignment(Qt::AlignCenter);
+		QVBoxLayout *pluginstallerLayout = new QVBoxLayout;
+		pluginstallerLayout->addWidget(pluginstallerLabel);
+		mainLayout->addLayout(pluginstallerLayout);
+	}
 	// Buttons
-	QPushButton *customButton =
-		new QPushButton("Download StreamUP Pluginstaller");
-
-	QObject::connect(customButton, &QPushButton::clicked, []() {
-		QDesktopServices::openUrl(
-			QUrl("https://streamup.tips/product/plugin-installer"));
-	});
-
 	QPushButton *okButton = new QPushButton("OK");
 	QObject::connect(okButton, &QPushButton::clicked, &dialog,
 			 &QDialog::accept);
@@ -644,7 +666,16 @@ void PluginsHaveIssue(std::string errorMsg)
 	QHBoxLayout *buttonLayout = new QHBoxLayout;
 
 	// Add the buttons to the buttonLayout
-	buttonLayout->addWidget(customButton);
+	if (errorMsgMissing != "NULL") {
+		QPushButton *customButton =
+			new QPushButton("Download StreamUP Pluginstaller");
+
+		QObject::connect(customButton, &QPushButton::clicked, []() {
+			QDesktopServices::openUrl(QUrl(
+				"https://streamup.tips/product/plugin-installer"));
+		});
+		buttonLayout->addWidget(customButton);
+	}
 	buttonLayout->addWidget(okButton);
 
 	mainLayout->addLayout(buttonLayout);
@@ -655,18 +686,19 @@ void PluginsHaveIssue(std::string errorMsg)
 	dialog.exec();
 }
 
-void CheckOBSPlugins(void *private_data)
+void CheckOBSPlugins(const char *trigger)
 {
-	UNUSED_PARAMETER(private_data);
 	std::map<std::string, std::string> missing_modules;
 	std::map<std::string, std::string> version_mismatch_modules;
+	std::string errorMsgMissing = "";
+	std::string errorMsgUpdate = "";
 	char *filepath = GetFilePath();
 
 	for (const auto &module : recommended_plugins) {
 		std::string plugin_name = module.first;
 		PluginInfo plugin_info = module.second;
 		std::string required_version = plugin_info.version;
-		std::string url = plugin_info.url;
+		std::string url = plugin_info.windowsURL;
 		std::string search_string = plugin_info.searchString;
 
 		std::string installed_version =
@@ -683,28 +715,25 @@ void CheckOBSPlugins(void *private_data)
 	bfree(filepath);
 
 	if (!missing_modules.empty() || !version_mismatch_modules.empty()) {
-		std::string errorMsg = "";
-
-		if (!missing_modules.empty()) {
-			errorMsg +=
-				"<b>The following plugins are not installed:</b><ul>";
+		if (!missing_modules.empty() && trigger == "Required") {
+			errorMsgMissing += "<ul>";
 			for (const auto &module : missing_modules) {
 				std::string plugin_name = module.first;
 				std::string required_version = module.second;
 
 				PluginInfo plugin_info =
 					recommended_plugins[plugin_name];
-				std::string url = plugin_info.url;
+				std::string url = plugin_info.windowsURL;
 
-				errorMsg += "<li><a href=\"" + url + "\">" +
-					    plugin_name + "</a></li>";
+				errorMsgMissing += "<li><a href=\"" + url +
+						   "\">" + plugin_name +
+						   "</a></li>";
 			}
-			errorMsg += "</ul>";
+			errorMsgMissing += "</ul>";
 		}
 
 		if (!version_mismatch_modules.empty()) {
-			errorMsg +=
-				"<b>The following plugins have updates available:</b><ul>";
+			errorMsgUpdate += "<ul>";
 			for (const auto &module : version_mismatch_modules) {
 				std::string plugin_name = module.first;
 				std::string installed_version = module.second;
@@ -713,17 +742,30 @@ void CheckOBSPlugins(void *private_data)
 					recommended_plugins[plugin_name];
 				std::string required_version =
 					plugin_info.version;
-				std::string url = plugin_info.url;
-
-				errorMsg += "<li><a href=\"" + url + "\">" +
-					    plugin_name + "</a> (Installed: " +
-					    installed_version +
-					    ", Current: " + required_version +
-					    ")</li>";
+				std::string url;
+				if (PLATFORM_NAME == "windows") {
+					url = plugin_info.windowsURL;
+				} else if (PLATFORM_NAME == "mac") {
+					url = plugin_info.macURL;
+				} else if (PLATFORM_NAME == "linux") {
+					url = plugin_info.linuxURL;
+				} else {
+					// Default or error case
+					url = plugin_info.windowsURL;
+				}
+				errorMsgUpdate +=
+					"<li><a href=\"" + url + "\">" +
+					plugin_name + "</a> (Installed: " +
+					installed_version +
+					", Current: " + required_version +
+					")</li>";
 			}
-			errorMsg += "</ul>";
+			errorMsgUpdate += "</ul>";
 		}
-		PluginsHaveIssue(errorMsg);
+		if (trigger == "Updates") {
+			errorMsgMissing = "NULL";
+		}
+		PluginsHaveIssue(errorMsgMissing, errorMsgUpdate);
 		missing_modules.clear();
 		version_mismatch_modules.clear();
 
@@ -732,27 +774,219 @@ void CheckOBSPlugins(void *private_data)
 	}
 }
 
+class AboutDialog : public QDialog {
+public:
+	AboutDialog(QWidget *parent = nullptr) : QDialog(parent)
+	{
+		// Version
+		std::string version =
+			PROJECT_VERSION; // Replace with actual version
+
+		// Window settings
+		setWindowTitle("StreamUP • About");
+		setFixedSize(sizeHint());
+
+		// Layouts
+		QVBoxLayout *mainLayout = new QVBoxLayout;
+		QHBoxLayout *topLayout = new QHBoxLayout;
+		QVBoxLayout *iconLayout = new QVBoxLayout;
+		QVBoxLayout *textLayout = new QVBoxLayout;
+		QVBoxLayout *secondLayout = new QVBoxLayout;
+		QVBoxLayout *thirdLayout = new QVBoxLayout;
+		QVBoxLayout *lastLayout = new QVBoxLayout;
+		QGridLayout *gridLayout = new QGridLayout;
+		QGridLayout *gridLayout2 = new QGridLayout;
+		QHBoxLayout *buttonLayout = new QHBoxLayout;
+
+		// Main message and icon
+		QLabel *iconLabel = new QLabel;
+		iconLabel->setPixmap(
+			QApplication::style()
+				->standardIcon(QStyle::SP_MessageBoxInformation)
+				.pixmap(64, 64));
+		iconLabel->setStyleSheet("padding-top: 3px;");
+
+		QLabel *mainMessageLabel = new QLabel;
+		mainMessageLabel->setText(
+			"StreamUP OBS plugin (version " +
+			QString::fromStdString(version) +
+			")<br>by <b>Andi Stone</b> (<b>Andilippi</b>)<br>");
+		mainMessageLabel->setTextFormat(Qt::RichText);
+		mainMessageLabel->setTextInteractionFlags(
+			Qt::TextBrowserInteraction);
+		mainMessageLabel->setOpenExternalLinks(true);
+
+		iconLayout->addWidget(iconLabel);
+		iconLayout->addStretch();
+		textLayout->addWidget(mainMessageLabel);
+		textLayout->addStretch();
+
+		topLayout->addStretch(1);
+		topLayout->addLayout(iconLayout);
+		topLayout->addLayout(textLayout, 1);
+		topLayout->addStretch(1);
+
+		// Second message
+		QLabel *secondText = new QLabel;
+		secondText->setText(
+			"Please consider supporting via the following<br>links or using the donation button below!");
+		secondText->setTextFormat(Qt::RichText);
+		secondText->setTextInteractionFlags(Qt::TextBrowserInteraction);
+		secondText->setOpenExternalLinks(true);
+		secondText->setAlignment(Qt::AlignCenter);
+
+		secondLayout->addWidget(secondText);
+		secondLayout->setAlignment(Qt::AlignCenter);
+
+		// Patreon and Ko-fi links
+		QLabel *textLabel1 = new QLabel;
+		textLabel1->setText(
+			"<a href='https://patreon.com/andilippi'>Andi's Patreon</a><br><a href='https://ko-fi.com/andilippi'>Andi's Ko-Fi</a>");
+		textLabel1->setTextFormat(Qt::RichText);
+		textLabel1->setTextInteractionFlags(Qt::TextBrowserInteraction);
+		textLabel1->setOpenExternalLinks(true);
+
+		QLabel *textLabel2 = new QLabel;
+		textLabel2->setText(
+			"<a href='https://patreon.com/streamup'>StreamUP's Patreon</a><br><a href='https://ko-fi.com/streamup'>StreamUP's Ko-Fi</a>");
+		textLabel2->setTextFormat(Qt::RichText);
+		textLabel2->setTextInteractionFlags(Qt::TextBrowserInteraction);
+		textLabel2->setOpenExternalLinks(true);
+
+		gridLayout->addWidget(textLabel1, 0, 0);
+		gridLayout->addWidget(textLabel2, 0, 1);
+		gridLayout->setHorizontalSpacing(40);
+		gridLayout->setAlignment(Qt::AlignCenter);
+
+		// Create a QGroupBox and add the second message and the Patreon and Ko-fi links
+		QGroupBox *supportBox = new QGroupBox("Support");
+		QVBoxLayout *boxLayout = new QVBoxLayout;
+		boxLayout->addWidget(secondText);
+		boxLayout->addLayout(gridLayout);
+		supportBox->setLayout(boxLayout);
+
+		// Third message
+		QLabel *thirdText = new QLabel;
+		thirdText->setText(
+			"Follow Andi on the following platforms.<br>Be sure to stop by and say hi!");
+		thirdText->setTextFormat(Qt::RichText);
+		thirdText->setTextInteractionFlags(Qt::TextBrowserInteraction);
+		thirdText->setOpenExternalLinks(true);
+		thirdText->setAlignment(Qt::AlignCenter);
+
+		thirdLayout->addWidget(thirdText);
+		thirdLayout->setAlignment(Qt::AlignCenter);
+
+		// Andi social links
+		QLabel *textLabel3 = new QLabel;
+		textLabel3->setText(
+			"<a href='https://youtube.com/andilippi'>YouTube</a>");
+		textLabel3->setTextFormat(Qt::RichText);
+		textLabel3->setTextInteractionFlags(Qt::TextBrowserInteraction);
+		textLabel3->setOpenExternalLinks(true);
+		QLabel *textLabel4 = new QLabel;
+		textLabel4->setText(
+			"<a href='https://twitch.tv/andilippi'>Twitch</a>");
+		textLabel4->setTextFormat(Qt::RichText);
+		textLabel4->setTextInteractionFlags(Qt::TextBrowserInteraction);
+		textLabel4->setOpenExternalLinks(true);
+		QLabel *textLabel5 = new QLabel;
+		textLabel5->setText(
+			"<a href='https://twitter.com/andi_stone'>Twitter</a>");
+		textLabel5->setTextFormat(Qt::RichText);
+		textLabel5->setTextInteractionFlags(Qt::TextBrowserInteraction);
+		textLabel5->setOpenExternalLinks(true);
+
+		gridLayout2->addWidget(textLabel3, 0, 0);
+		gridLayout2->addWidget(textLabel4, 0, 1);
+		gridLayout2->addWidget(textLabel5, 0, 2);
+		gridLayout2->setHorizontalSpacing(40);
+		gridLayout2->setAlignment(Qt::AlignCenter);
+
+		// Create a QGroupBox
+		QGroupBox *socialBox = new QGroupBox("Andi's Socials");
+		QVBoxLayout *boxLayout2 = new QVBoxLayout;
+		boxLayout2->addWidget(thirdText);
+		boxLayout2->addLayout(gridLayout2);
+		socialBox->setLayout(boxLayout2);
+
+		// Last message
+		QLabel *lastText = new QLabel;
+		lastText->setText(
+			"<br>Special thanks to <a href='https://exeldro.com'>Exeldro</a>!<br>For creating the initial StreamUP plugin.");
+		lastText->setTextFormat(Qt::RichText);
+		lastText->setTextInteractionFlags(Qt::TextBrowserInteraction);
+		lastText->setOpenExternalLinks(true);
+		lastText->setAlignment(Qt::AlignCenter);
+
+		lastLayout->addWidget(lastText);
+		lastLayout->setAlignment(Qt::AlignCenter);
+
+		// Donate button
+		QPushButton *donateButton = new QPushButton("Donate", this);
+		buttonLayout->addWidget(donateButton);
+
+		// Connect donate button
+		connect(donateButton, &QPushButton::clicked, [] {
+			QDesktopServices::openUrl(
+				QUrl("https://paypal.me/andilippi"));
+		});
+
+		// Close button
+		QPushButton *closeButton = new QPushButton("Close", this);
+		buttonLayout->addWidget(closeButton);
+
+		// Connect close button
+		connect(closeButton, &QPushButton::clicked, this,
+			&QDialog::accept);
+
+		// Add all layouts to the main layout
+		mainLayout->setContentsMargins(20, 10, 20, 10);
+		mainLayout->addLayout(topLayout);
+		mainLayout->addWidget(supportBox);
+		mainLayout->addWidget(socialBox);
+		mainLayout->addLayout(lastLayout);
+		mainLayout->addLayout(buttonLayout);
+
+		// Set main layout
+		setLayout(mainLayout);
+	}
+};
+
 static void LoadMenu(QMenu *menu)
 {
 
 	menu->clear();
 	QAction *a;
 
-	if (PLATFORM_NAME == "windows") {
+	if (strcmp(PLATFORM_NAME, "windows") == 0) {
 		a = menu->addAction(obs_module_text("Install a Product"));
 		QObject::connect(a, &QAction::triggered,
 				 [] { LoadStreamUpFile(NULL); });
 		a = menu->addAction(
 			obs_module_text("Check Required OBS Plugins"));
 		QObject::connect(a, &QAction::triggered,
-				 [] { CheckOBSPlugins(NULL); });
+				 [] { CheckOBSPlugins("Required"); });
 		menu->addSeparator();
 	}
 
 	a = menu->addAction(obs_module_text("Check for OBS Plugin Updates"));
-	QObject::connect(a, &QAction::triggered, [] { CheckOBSPlugins(NULL); });
+	QObject::connect(a, &QAction::triggered,
+			 [] { CheckOBSPlugins("Updates"); });
+	menu->addSeparator();
 
+	if (strcmp(PLATFORM_NAME, "windows") == 0) {
+		a = menu->addAction(obs_module_text("Download Products"));
+		QObject::connect(a, &QAction::triggered, []() {
+			QDesktopServices::openUrl(
+				QUrl("https://streamup.tips/"));
+		});
+	}
 	a = menu->addAction(obs_module_text("About"));
+	QObject::connect(a, &QAction::triggered, [] {
+		AboutDialog dialog;
+		dialog.exec();
+	});
 }
 
 bool obs_module_load()
