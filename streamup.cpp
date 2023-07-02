@@ -738,7 +738,7 @@ void CheckAllPluginsForUpdates()
 			std::string url;
 			if (std::string(PLATFORM_NAME) == "windows") {
 				url = plugin_info.windowsURL;
-			} else if (std::string(PLATFORM_NAME) == "mac") {
+			} else if (std::string(PLATFORM_NAME) == "macos") {
 				url = plugin_info.macURL;
 			} else if (std::string(PLATFORM_NAME) == "linux") {
 				url = plugin_info.linuxURL;
