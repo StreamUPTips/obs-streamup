@@ -430,15 +430,36 @@ void LoadStreamUpFile(void *private_data)
 
 char *GetFilePath()
 {
-	std::string path = obs_module_config_path("../../logs/");
-	blog(LOG_INFO, "FILEPATH: %s", path.c_str());
-
-	std::string path_abs = os_get_abs_path_ptr(path.c_str());
-
-	if (path_abs.back() != '/' && path_abs.back() != '\\') {
-		path_abs += "/";
+	std::string path;
+	std::string path_abs;
+	if (strcmp(PLATFORM_NAME, "windows") == 0)
+	{
+		path = obs_module_config_path("../../logs/");
+		path_abs = os_get_abs_path_ptr(path.c_str());
+		if (path_abs.back() != '/' && path_abs.back() != '\\') {
+			path_abs += "/";
+		}
 	}
+	else
+	{
+		path = obs_module_config_path("");
+
+		std::string to_search = "/plugin_config/streamup/";
+		std::string replace_str = "/logs/";
+
+		size_t pos = path.find(to_search);
+
+		// If found then replace it
+		if (pos != std::string::npos) {
+			path.replace(pos, to_search.size(), replace_str);
+		}
+
+		path_abs = path;
+	}
+
+	blog(LOG_INFO, "FILEPATH: %s", path.c_str());
 	blog(LOG_INFO, "FILEPATH ABSOLUTE: %s", path_abs.c_str());
+
 
 	std::string dirpath = path_abs;
 	if (std::filesystem::exists(dirpath)) {
