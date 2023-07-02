@@ -430,72 +430,36 @@ void LoadStreamUpFile(void *private_data)
 
 char *GetFilePath()
 {
-	char *relative_filepath =
-		obs_module_get_config_path(obs_current_module(), NULL);
-	char *filepath = os_get_abs_path_ptr(relative_filepath);
-	bfree(relative_filepath);
-
-	const char *search;
-	const char *replace;
-
-	if (std::string(PLATFORM_NAME) == "windows") {
-		search = "\\plugin_config\\streamup\\";
-		replace = "\\logs\\";
-	} else if (std::string(PLATFORM_NAME) == "mac" ||
-		   std::string(PLATFORM_NAME) == "linux") {
-		search = "/plugin_config/streamup/";
-		replace = "/logs/";
+	std::string path = obs_module_config_path("../../logs/");
+	std::string path_abs = os_get_abs_path_ptr(path.c_str());
+	if (path_abs.back() != '/' && path_abs.back() != '\\') {
+		path_abs += "/";
 	}
 
-	char *found_ptr = strstr(filepath, search);
-
-	if (found_ptr) {
-		// Calculate new string size and allocate memory for it
-		size_t new_str_size =
-			strlen(filepath) - strlen(search) + strlen(replace) + 1;
-		char *new_str = (char *)bmalloc(new_str_size);
-
-		// Copy the part of the string before the found substring
-		size_t length_before = found_ptr - filepath;
-		strncpy(new_str, filepath, length_before);
-
-		// Copy the replacement string
-		strcpy(new_str + length_before, replace);
-
-		// Copy the part of the string after the found substring
-		strcpy(new_str + length_before + strlen(replace),
-		       found_ptr + strlen(search));
-
-		bfree(filepath);
-
-		std::string dirpath = new_str;
-		if (std::filesystem::exists(dirpath)) {
-			// The directory exists
-			std::filesystem::directory_iterator dir(dirpath);
-			if (dir == std::filesystem::directory_iterator{}) {
-				// The directory is empty
-				blog(LOG_INFO,
-				     "OBS doesn't have files in the install directory.");
-				return NULL;
-			} else {
-				// The directory contains files
-			}
-			return new_str;
-
-		} else {
-			// The directory does not exist
+	std::string dirpath = path_abs;
+	if (std::filesystem::exists(dirpath)) {
+		// The directory exists
+		std::filesystem::directory_iterator dir(dirpath);
+		if (dir == std::filesystem::directory_iterator{}) {
+			// The directory is empty
 			blog(LOG_INFO,
-			     "OBS log file folder does not exist in the install directory.");
-			bfree(new_str);
+			     "OBS doesn't have files in the install directory.");
 			return NULL;
+		} else {
+			// The directory contains files
+			char *new_str = new char[path_abs.size() + 1];
+			std::strcpy(new_str, path_abs.c_str());
+			return new_str;
 		}
 
 	} else {
-		blog(LOG_INFO, "This error shouldn't appear!");
-		bfree(filepath);
+		// The directory does not exist
+		blog(LOG_INFO,
+		     "OBS log file folder does not exist in the install directory.");
 		return NULL;
 	}
 }
+
 
 std::string get_most_recent_file(std::string dirpath)
 {
@@ -740,7 +704,7 @@ void CheckAllPluginsForUpdates()
 		}
 	}
 
-	bfree(filepath);
+	delete[] filepath;
 
 	if (!version_mismatch_modules.empty()) {
 		errorMsgUpdate += "<ul>";
@@ -813,7 +777,7 @@ void CheckRecommendedOBSPlugins()
 		}
 	}
 
-	bfree(filepath);
+	delete[] filepath;
 
 	if (!missing_modules.empty() || !version_mismatch_modules.empty()) {
 		if (!missing_modules.empty()) {
