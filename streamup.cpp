@@ -706,11 +706,11 @@ void CheckAllPluginsForUpdates()
 		PluginInfo plugin_info = module.second;
 		std::string required_version = plugin_info.version;
 		std::string url;
-		if (std::string(PLATFORM_NAME) == "windows") {
+		if (strcmp(PLATFORM_NAME, "windows") == 0) {
 			url = plugin_info.windowsURL;
-		} else if (std::string(PLATFORM_NAME) == "macos") {
+		} else if (strcmp(PLATFORM_NAME, "macos") == 0) {
 			url = plugin_info.macURL;
-		} else if (std::string(PLATFORM_NAME) == "linux") {
+		} else if (strcmp(PLATFORM_NAME, "linux") == 0) {
 			url = plugin_info.linuxURL;
 		} else {
 			// Default or error case
@@ -773,11 +773,11 @@ void CheckRecommendedOBSPlugins()
 		PluginInfo plugin_info = module.second;
 		std::string required_version = plugin_info.version;
 		std::string url;
-		if (std::string(PLATFORM_NAME) == "windows") {
+		if (strcmp(PLATFORM_NAME, "windows") == 0) {
 			url = plugin_info.windowsURL;
-		} else if (std::string(PLATFORM_NAME) == "macos") {
+		} else if (strcmp(PLATFORM_NAME, "macos") == 0) {
 			url = plugin_info.macURL;
-		} else if (std::string(PLATFORM_NAME) == "linux") {
+		} else if (strcmp(PLATFORM_NAME, "linux") == 0) {
 			url = plugin_info.linuxURL;
 		} else {
 			// Default or error case
