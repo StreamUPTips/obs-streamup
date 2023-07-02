@@ -431,8 +431,9 @@ void LoadStreamUpFile(void *private_data)
 char *GetFilePath()
 {
 	std::string path = obs_module_config_path("../../logs/");
-	std::string path_abs = os_get_abs_path_ptr(path.c_str());
 	blog(LOG_INFO, "FILEPATH: %s", path.c_str());
+
+	std::string path_abs = os_get_abs_path_ptr(path.c_str());
 
 	if (path_abs.back() != '/' && path_abs.back() != '\\') {
 		path_abs += "/";
@@ -462,7 +463,6 @@ char *GetFilePath()
 		return NULL;
 	}
 }
-
 
 std::string get_most_recent_file(std::string dirpath)
 {
