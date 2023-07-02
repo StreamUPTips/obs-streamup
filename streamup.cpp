@@ -661,7 +661,11 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		mainLayout->addWidget(missingBox);
 	}
 
+	if (!errorMsgUpdate.empty())
+	{
+
 	mainLayout->addWidget(updateBox);
+	}
 
 	if (errorMsgMissing != "NULL") {
 		QLabel *pluginstallerLabel = new QLabel;
@@ -673,6 +677,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		pluginstallerLayout->addWidget(pluginstallerLabel);
 		mainLayout->addLayout(pluginstallerLayout);
 	}
+
 	// Buttons
 	QPushButton *okButton = new QPushButton("OK");
 	QObject::connect(okButton, &QPushButton::clicked, &dialog,
@@ -702,7 +707,72 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 	dialog.exec();
 }
 
-void CheckOBSPlugins(const char *trigger)
+void CheckAllPluginsForUpdates()
+{
+	std::map<std::string, std::string> version_mismatch_modules;
+	std::string errorMsgUpdate = "";
+	char *filepath = GetFilePath();
+
+	for (const auto &module : all_plugins) {
+		std::string plugin_name = module.first;
+		PluginInfo plugin_info = module.second;
+		std::string required_version = plugin_info.version;
+		std::string url;
+		if (std::string(PLATFORM_NAME) == "Windows") {
+			url = plugin_info.windowsURL;
+		} else if (std::string(PLATFORM_NAME) == "MacOS") {
+			url = plugin_info.macURL;
+		} else if (std::string(PLATFORM_NAME) == "Linux") {
+			url = plugin_info.linuxURL;
+		} else {
+			// Default or error case
+			url = plugin_info.windowsURL;
+		}
+		std::string search_string = plugin_info.searchString;
+
+		std::string installed_version =
+			search_string_in_file(filepath, search_string.c_str());
+
+		if (!installed_version.empty() &&
+		    installed_version != required_version) {
+			version_mismatch_modules.insert(
+				{plugin_name, installed_version});
+		}
+	}
+
+	bfree(filepath);
+
+	if (!version_mismatch_modules.empty()) {
+		errorMsgUpdate += "<ul>";
+		for (const auto &module : version_mismatch_modules) {
+			PluginInfo plugin_info = all_plugins[module.first];
+			std::string required_version = plugin_info.version;
+			std::string url;
+			if (std::string(PLATFORM_NAME) == "windows") {
+				url = plugin_info.windowsURL;
+			} else if (std::string(PLATFORM_NAME) == "mac") {
+				url = plugin_info.macURL;
+			} else if (std::string(PLATFORM_NAME) == "linux") {
+				url = plugin_info.linuxURL;
+			} else {
+				// Default or error case
+				url = plugin_info.windowsURL;
+			}
+			errorMsgUpdate +=
+				"<li><a href=\"" + url + "\">" + module.first +
+				"</a> (Installed: " + module.second +
+				", Current: " + required_version + ")</li>";
+		}
+		errorMsgUpdate += "</ul>";
+
+		PluginsHaveIssue("NULL", errorMsgUpdate);
+		version_mismatch_modules.clear();
+	} else {
+		PluginsUpToDateOutput();
+	}
+}
+
+void CheckRecommendedOBSPlugins()
 {
 	std::map<std::string, std::string> missing_modules;
 	std::map<std::string, std::string> version_mismatch_modules;
@@ -730,9 +800,14 @@ void CheckOBSPlugins(const char *trigger)
 		std::string installed_version =
 			search_string_in_file(filepath, search_string.c_str());
 
-		if (installed_version.empty()) {
+		// Only add to missing_modules if plugin is recommended and not installed
+		if (installed_version.empty() && plugin_info.recommended) {
 			missing_modules.insert({plugin_name, required_version});
-		} else if (installed_version != required_version) {
+		}
+		// Only add to version_mismatch_modules if plugin is recommended and there's a version mismatch
+		else if (!installed_version.empty() &&
+			 installed_version != required_version &&
+			 plugin_info.recommended) {
 			version_mismatch_modules.insert(
 				{plugin_name, installed_version});
 		}
@@ -741,8 +816,7 @@ void CheckOBSPlugins(const char *trigger)
 	bfree(filepath);
 
 	if (!missing_modules.empty() || !version_mismatch_modules.empty()) {
-		if (!missing_modules.empty() &&
-		    strcmp(trigger, "Required") == 0) {
+		if (!missing_modules.empty()) {
 			errorMsgMissing += "<ul>";
 			for (const auto &module : missing_modules) {
 				std::string plugin_name = module.first;
@@ -802,9 +876,6 @@ void CheckOBSPlugins(const char *trigger)
 					")</li>";
 			}
 			errorMsgUpdate += "</ul>";
-		}
-		if (std::string(trigger) == "Updates") {
-			errorMsgMissing = "NULL";
 		}
 		PluginsHaveIssue(errorMsgMissing, errorMsgUpdate);
 		missing_modules.clear();
@@ -1007,13 +1078,13 @@ static void LoadMenu(QMenu *menu)
 		a = menu->addAction(
 			obs_module_text("Check Required OBS Plugins"));
 		QObject::connect(a, &QAction::triggered,
-				 [] { CheckOBSPlugins("Required"); });
+				 [] { CheckRecommendedOBSPlugins(); });
 		menu->addSeparator();
 	}
 
 	a = menu->addAction(obs_module_text("Check for OBS Plugin Updates"));
 	QObject::connect(a, &QAction::triggered,
-			 [] { CheckOBSPlugins("Updates"); });
+			 [] { CheckAllPluginsForUpdates(); });
 	menu->addSeparator();
 
 	if (strcmp(PLATFORM_NAME, "windows") == 0) {
