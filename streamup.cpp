@@ -432,9 +432,12 @@ char *GetFilePath()
 {
 	std::string path = obs_module_config_path("../../logs/");
 	std::string path_abs = os_get_abs_path_ptr(path.c_str());
+	blog(LOG_INFO, "FILEPATH: %s", path.c_str());
+
 	if (path_abs.back() != '/' && path_abs.back() != '\\') {
 		path_abs += "/";
 	}
+	blog(LOG_INFO, "FILEPATH ABSOLUTE: %s", path_abs.c_str());
 
 	std::string dirpath = path_abs;
 	if (std::filesystem::exists(dirpath)) {
