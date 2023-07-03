@@ -42,104 +42,7 @@ OBS_DECLARE_MODULE()
 OBS_MODULE_AUTHOR("Andilippi");
 OBS_MODULE_USE_DEFAULT_LOCALE("streamup", "en-US")
 
-struct PluginInfo {
-	std::string name;
-	std::string version;
-	std::string searchString;
-	std::string windowsURL;
-	std::string macURL;
-	std::string linuxURL;
-	bool recommended;
-};
-
-std::map<std::string, PluginInfo> all_plugins;
-std::map<std::string, PluginInfo> recommended_plugins;
-
-struct request_data {
-	std::string url;
-	std::string response;
-};
-
-size_t WriteCallback(void *contents, size_t size, size_t nmemb,
-		     std::string *out)
-{
-	size_t totalSize = size * nmemb;
-	out->append((char *)contents, totalSize);
-	return totalSize;
-}
-
-void *make_api_request(void *arg)
-{
-	request_data *data = (request_data *)arg;
-	CURL *curl = curl_easy_init();
-
-	if (curl) {
-		curl_easy_setopt(curl, CURLOPT_URL, data->url.c_str());
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data->response);
-		CURLcode res = curl_easy_perform(curl);
-		if (res != CURLE_OK)
-			blog(LOG_INFO, "curl_easy_perform() failed: %s\n",
-			     curl_easy_strerror(res));
-
-		curl_easy_cleanup(curl);
-	}
-	return NULL;
-}
-
-void initialize_required_modules()
-{
-	pthread_t thread;
-	request_data req_data;
-	req_data.url = "https://api.streamup.tips/plugins";
-
-	if (pthread_create(&thread, NULL, make_api_request, &req_data)) {
-		blog(LOG_INFO, "Error creating thread\n");
-		return;
-	}
-
-	if (pthread_join(thread, NULL)) {
-		blog(LOG_INFO, "Error joining thread\n");
-		return;
-	}
-
-	std::string api_response = req_data.response;
-
-	obs_data_t *data = obs_data_create_from_json(api_response.c_str());
-
-	obs_data_array_t *plugins = obs_data_get_array(data, "plugins");
-
-	size_t count = obs_data_array_count(plugins);
-	for (size_t i = 0; i < count; ++i) {
-		obs_data_t *plugin = obs_data_array_item(plugins, i);
-
-		std::string name = obs_data_get_string(plugin, "name");
-
-		PluginInfo info;
-		info.version = obs_data_get_string(plugin, "version");
-		obs_data_t *downloads = obs_data_get_obj(plugin, "downloads");
-		if (downloads) {
-			info.windowsURL =
-				obs_data_get_string(downloads, "windows");
-			info.macURL = obs_data_get_string(downloads, "macOS");
-			info.linuxURL = obs_data_get_string(downloads, "linux");
-			obs_data_release(downloads);
-		}
-		info.searchString = obs_data_get_string(plugin, "searchString");
-
-		all_plugins[name] = info;
-
-		if (obs_data_get_bool(plugin, "recommended")) {
-			recommended_plugins[name] = info;
-		}
-
-		obs_data_release(plugin);
-	}
-
-	obs_data_array_release(plugins);
-	obs_data_release(data);
-}
-
+//--------------------INSTALL A PRODUCT--------------------
 void ResizeMoveSetting(obs_data_t *obs_data, float factor)
 {
 	double x = obs_data_get_double(obs_data, "x");
@@ -418,6 +321,7 @@ static void LoadScene(obs_data_t *data, QString path)
 void LoadStreamUpFile(void *private_data)
 {
 	UNUSED_PARAMETER(private_data);
+
 	QString fileName = QFileDialog::getOpenFileName(
 		nullptr, QT_UTF8(obs_module_text("Load")), QString(),
 		"StreamUP File (*.streamup)");
@@ -428,43 +332,170 @@ void LoadStreamUpFile(void *private_data)
 	obs_data_release(data);
 }
 
+//--------------------CHECK FOR PLUGIN UPDATES ETC--------------------
+class ErrorMessage : public QMessageBox {
+public:
+	ErrorMessage(QWidget *parent = nullptr) : QMessageBox(parent)
+	{
+		setIcon(QMessageBox::Critical);
+		setWindowTitle("StreamUP • Error");
+	}
+
+	void showMessage(const QString &message)
+	{
+		setText(message);
+		exec();
+	}
+};
+
+struct PluginInfo {
+	std::string name;
+	std::string version;
+	std::string searchString;
+	std::string windowsURL;
+	std::string macURL;
+	std::string linuxURL;
+	bool recommended;
+};
+
+std::map<std::string, PluginInfo> all_plugins;
+std::map<std::string, PluginInfo> recommended_plugins;
+
+struct request_data {
+	std::string url;
+	std::string response;
+};
+
+size_t WriteCallback(void *contents, size_t size, size_t nmemb,
+		     std::string *out)
+{
+	size_t totalSize = size * nmemb;
+	out->append((char *)contents, totalSize);
+	return totalSize;
+}
+
+void *make_api_request(void *arg)
+{
+	request_data *data = (request_data *)arg;
+	CURL *curl = curl_easy_init();
+
+	if (curl) {
+		curl_easy_setopt(curl, CURLOPT_URL, data->url.c_str());
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data->response);
+		CURLcode res = curl_easy_perform(curl);
+		if (res != CURLE_OK)
+			blog(LOG_INFO, "curl_easy_perform() failed: %s\n",
+			     curl_easy_strerror(res));
+		curl_easy_cleanup(curl);
+	}
+	return NULL;
+}
+
+void initialize_required_modules()
+{
+	pthread_t thread;
+	request_data req_data;
+	req_data.url = "https://api.streamup.tips/plugins";
+
+	if (pthread_create(&thread, NULL, make_api_request, &req_data)) {
+		blog(LOG_INFO, "Error creating thread\n");
+		return;
+	}
+
+	if (pthread_join(thread, NULL)) {
+		blog(LOG_INFO, "Error joining thread\n");
+		return;
+	}
+
+	std::string api_response = req_data.response;
+
+	if (api_response.find("Error:") != std::string::npos) {
+		ErrorMessage errorMsg;
+		errorMsg.showMessage(QString::fromStdString(api_response));
+		return;
+	}
+
+	if (api_response == "") {
+		ErrorMessage errorMsg;
+		errorMsg.showMessage("Unable to retrive plugin list from the StreamUP API.");
+		return;
+	}
+
+	obs_data_t *data = obs_data_create_from_json(api_response.c_str());
+
+	obs_data_array_t *plugins = obs_data_get_array(data, "plugins");
+
+	size_t count = obs_data_array_count(plugins);
+	for (size_t i = 0; i < count; ++i) {
+		obs_data_t *plugin = obs_data_array_item(plugins, i);
+
+		std::string name = obs_data_get_string(plugin, "name");
+
+		PluginInfo info;
+		info.version = obs_data_get_string(plugin, "version");
+		obs_data_t *downloads = obs_data_get_obj(plugin, "downloads");
+		if (downloads) {
+			info.windowsURL =
+				obs_data_get_string(downloads, "windows");
+			info.macURL = obs_data_get_string(downloads, "macOS");
+			info.linuxURL = obs_data_get_string(downloads, "linux");
+			obs_data_release(downloads);
+		}
+		info.searchString = obs_data_get_string(plugin, "searchString");
+
+		all_plugins[name] = info;
+
+		if (obs_data_get_bool(plugin, "recommended")) {
+			recommended_plugins[name] = info;
+		}
+
+		obs_data_release(plugin);
+	}
+
+	obs_data_array_release(plugins);
+	obs_data_release(data);
+}
+
 char *GetFilePath()
 {
-	std::string path;
-	std::string path_abs;
-	if (strcmp(PLATFORM_NAME, "windows") == 0)
-	{
+	char *path;
+	char *path_abs;
+	if (strcmp(PLATFORM_NAME, "windows") == 0) {
 		path = obs_module_config_path("../../logs/");
-		path_abs = os_get_abs_path_ptr(path.c_str());
-		if (path_abs.back() != '/' && path_abs.back() != '\\') {
-			path_abs += "/";
+		path_abs = os_get_abs_path_ptr(path);
+
+		if (path_abs[strlen(path_abs) - 1] != '/' &&
+		    path_abs[strlen(path_abs) - 1] != '\\') {
+			// Create a new string with appended "/"
+			char *newPathAbs = new char[strlen(path_abs) + 2];
+			strcpy(newPathAbs, path_abs);
+			strcat(newPathAbs, "/");
+
+			path_abs = newPathAbs;
 		}
-	}
-	else
-	{
+	} else {
 		path = obs_module_config_path("");
 
+		std::string path_str(path);
 		std::string to_search = "/plugin_config/streamup/";
 		std::string replace_str = "/logs/";
 
-		size_t pos = path.find(to_search);
+		size_t pos = path_str.find(to_search);
 
 		// If found then replace it
 		if (pos != std::string::npos) {
-			path.replace(pos, to_search.size(), replace_str);
+			path_str.replace(pos, to_search.size(), replace_str);
 		}
 
-		path_abs = path;
+		path_abs = new char[path_str.size() + 1];
+		std::strcpy(path_abs, path_str.c_str());
 	}
+	bfree(path);
 
-	blog(LOG_INFO, "FILEPATH: %s", path.c_str());
-	blog(LOG_INFO, "FILEPATH ABSOLUTE: %s", path_abs.c_str());
-
-
-	std::string dirpath = path_abs;
-	if (std::filesystem::exists(dirpath)) {
+	if (std::filesystem::exists(path_abs)) {
 		// The directory exists
-		std::filesystem::directory_iterator dir(dirpath);
+		std::filesystem::directory_iterator dir(path_abs);
 		if (dir == std::filesystem::directory_iterator{}) {
 			// The directory is empty
 			blog(LOG_INFO,
@@ -472,15 +503,13 @@ char *GetFilePath()
 			return NULL;
 		} else {
 			// The directory contains files
-			char *new_str = new char[path_abs.size() + 1];
-			std::strcpy(new_str, path_abs.c_str());
-			return new_str;
+			return path_abs;
 		}
-
 	} else {
 		// The directory does not exist
 		blog(LOG_INFO,
 		     "OBS log file folder does not exist in the install directory.");
+
 		return NULL;
 	}
 }
@@ -537,6 +566,7 @@ std::string search_string_in_file(char *path, const char *search)
 		blog(LOG_ERROR, "Failed to open log file: %s",
 		     filepath.c_str());
 	}
+
 	return "";
 }
 
@@ -649,10 +679,9 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		mainLayout->addWidget(missingBox);
 	}
 
-	if (!errorMsgUpdate.empty())
-	{
+	if (!errorMsgUpdate.empty()) {
 
-	mainLayout->addWidget(updateBox);
+		mainLayout->addWidget(updateBox);
 	}
 
 	if (errorMsgMissing != "NULL") {
@@ -695,6 +724,22 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 	dialog.exec();
 }
 
+std::string GetPlatformURL(const PluginInfo &plugin_info)
+{
+	std::string url;
+	if (strcmp(PLATFORM_NAME, "windows") == 0) {
+		url = plugin_info.windowsURL;
+	} else if (strcmp(PLATFORM_NAME, "macos") == 0) {
+		url = plugin_info.macURL;
+	} else if (strcmp(PLATFORM_NAME, "linux") == 0) {
+		url = plugin_info.linuxURL;
+	} else {
+		// Default or error case
+		url = plugin_info.windowsURL;
+	}
+	return url;
+}
+
 void CheckAllPluginsForUpdates()
 {
 	std::map<std::string, std::string> version_mismatch_modules;
@@ -705,17 +750,7 @@ void CheckAllPluginsForUpdates()
 		std::string plugin_name = module.first;
 		PluginInfo plugin_info = module.second;
 		std::string required_version = plugin_info.version;
-		std::string url;
-		if (strcmp(PLATFORM_NAME, "windows") == 0) {
-			url = plugin_info.windowsURL;
-		} else if (strcmp(PLATFORM_NAME, "macos") == 0) {
-			url = plugin_info.macURL;
-		} else if (strcmp(PLATFORM_NAME, "linux") == 0) {
-			url = plugin_info.linuxURL;
-		} else {
-			// Default or error case
-			url = plugin_info.windowsURL;
-		}
+		std::string url = GetPlatformURL(plugin_info);
 		std::string search_string = plugin_info.searchString;
 
 		std::string installed_version =
@@ -728,24 +763,14 @@ void CheckAllPluginsForUpdates()
 		}
 	}
 
-	delete[] filepath;
+	bfree(filepath);
 
 	if (!version_mismatch_modules.empty()) {
 		errorMsgUpdate += "<ul>";
 		for (const auto &module : version_mismatch_modules) {
 			PluginInfo plugin_info = all_plugins[module.first];
 			std::string required_version = plugin_info.version;
-			std::string url;
-			if (std::string(PLATFORM_NAME) == "windows") {
-				url = plugin_info.windowsURL;
-			} else if (std::string(PLATFORM_NAME) == "macos") {
-				url = plugin_info.macURL;
-			} else if (std::string(PLATFORM_NAME) == "linux") {
-				url = plugin_info.linuxURL;
-			} else {
-				// Default or error case
-				url = plugin_info.windowsURL;
-			}
+			std::string url = GetPlatformURL(plugin_info);
 			errorMsgUpdate +=
 				"<li><a href=\"" + url + "\">" + module.first +
 				"</a> (Installed: " + module.second +
@@ -772,17 +797,7 @@ void CheckRecommendedOBSPlugins()
 		std::string plugin_name = module.first;
 		PluginInfo plugin_info = module.second;
 		std::string required_version = plugin_info.version;
-		std::string url;
-		if (strcmp(PLATFORM_NAME, "windows") == 0) {
-			url = plugin_info.windowsURL;
-		} else if (strcmp(PLATFORM_NAME, "macos") == 0) {
-			url = plugin_info.macURL;
-		} else if (strcmp(PLATFORM_NAME, "linux") == 0) {
-			url = plugin_info.linuxURL;
-		} else {
-			// Default or error case
-			url = plugin_info.windowsURL;
-		}
+		std::string url = GetPlatformURL(plugin_info);
 		std::string search_string = plugin_info.searchString;
 
 		std::string installed_version =
@@ -801,7 +816,7 @@ void CheckRecommendedOBSPlugins()
 		}
 	}
 
-	delete[] filepath;
+	bfree(filepath);
 
 	if (!missing_modules.empty() || !version_mismatch_modules.empty()) {
 		if (!missing_modules.empty()) {
@@ -843,19 +858,7 @@ void CheckRecommendedOBSPlugins()
 					recommended_plugins[plugin_name];
 				std::string required_version =
 					plugin_info.version;
-				std::string url;
-				if (std::string(PLATFORM_NAME) == "windows") {
-					url = plugin_info.windowsURL;
-				} else if (std::string(PLATFORM_NAME) ==
-					   "mac") {
-					url = plugin_info.macURL;
-				} else if (std::string(PLATFORM_NAME) ==
-					   "linux") {
-					url = plugin_info.linuxURL;
-				} else {
-					// Default or error case
-					url = plugin_info.windowsURL;
-				}
+				std::string url = GetPlatformURL(plugin_info);
 				errorMsgUpdate +=
 					"<li><a href=\"" + url + "\">" +
 					plugin_name + "</a> (Installed: " +
@@ -1089,6 +1092,7 @@ static void LoadMenu(QMenu *menu)
 	});
 }
 
+//--------------------GENERAL OBS--------------------
 bool obs_module_load()
 {
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
