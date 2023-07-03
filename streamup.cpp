@@ -590,131 +590,121 @@ std::string search_string_in_file(char *path, const char *search)
 void PluginsUpToDateOutput()
 {
 	showNonModalDialog([]() {
-		QWidget *successWidget = new QWidget();
-		QVBoxLayout *successLayout = new QVBoxLayout(successWidget);
+		QDialog *successDialog = new QDialog();
+		successDialog->setWindowTitle(
+			"StreamUP • All Plugins Up-to-Date");
+		successDialog->setFixedSize(successDialog->sizeHint());
 
-		QLabel *iconLabel = new QLabel;
+		QVBoxLayout *successLayout = new QVBoxLayout(successDialog);
+
+		QLabel *iconLabel = new QLabel();
 		iconLabel->setPixmap(
 			QApplication::style()
 				->standardIcon(QStyle::SP_DialogApplyButton)
 				.pixmap(32, 32));
 
-		QLabel *successLabel = new QLabel;
-		successLabel->setText(
+		QLabel *successLabel = createRichTextLabel(
 			"All OBS plugins are up to date and installed correctly.");
-		successLabel->setTextFormat(Qt::RichText);
-		successLabel->setTextInteractionFlags(
-			Qt::TextBrowserInteraction);
-		successLabel->setOpenExternalLinks(true);
 
-		QHBoxLayout *topLayout = new QHBoxLayout;
+		QHBoxLayout *topLayout = new QHBoxLayout();
 		topLayout->addStretch(1);
 		topLayout->addWidget(iconLabel);
 		topLayout->addWidget(successLabel, 1);
 		topLayout->addStretch(1);
 
 		successLayout->addLayout(topLayout);
+		successLayout->addSpacing(10);
 
 		QPushButton *okButton = new QPushButton("OK");
-		QObject::connect(okButton, &QPushButton::clicked, successWidget,
-				 &QWidget::close);
+		QObject::connect(okButton, &QPushButton::clicked, successDialog,
+				 &QDialog::close);
 
 		successLayout->addWidget(okButton);
-		successWidget->setLayout(successLayout);
-		successWidget->setWindowTitle(
-			"StreamUP • All Plugins Up-to-Date");
-		successWidget->setWindowFlags(Qt::Window);
-		successWidget->setAttribute(Qt::WA_DeleteOnClose);
-		successWidget->show();
+		successDialog->setLayout(successLayout);
+		successDialog->setWindowFlags(Qt::Window);
+		successDialog->setAttribute(Qt::WA_DeleteOnClose);
+		successDialog->exec();
 	});
 }
 
 void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 {
 	showNonModalDialog([errorMsgMissing, errorMsgUpdate]() {
-		QWidget *dialog = new QWidget();
+		QDialog *dialog = new QDialog();
+		dialog->setWindowTitle(
+			"StreamUP • Missing or Outdated Plugins");
+		dialog->setFixedSize(dialog->sizeHint());
+
 		QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
-		mainLayout->setContentsMargins(20, 10, 20, 10);
+		mainLayout->setContentsMargins(20, 15, 20, 10);
 
 		// First layout (icon and main message)
-		QLabel *iconLabel = new QLabel;
+		QLabel *iconLabel = new QLabel();
 		iconLabel->setPixmap(
 			QApplication::style()
 				->standardIcon(QStyle::SP_MessageBoxWarning)
 				.pixmap(64, 64));
 		iconLabel->setStyleSheet("padding-top: 3px;");
 
-		QLabel *mainMessageLabel = new QLabel;
-		if (errorMsgMissing != "NULL") {
-			mainMessageLabel->setText(QString::fromStdString(
-				"OBS is missing plugins or has older versions.<br>StreamUP products may not function correctly!<br>"));
-		} else {
-			mainMessageLabel->setText(QString::fromStdString(
-				"Some OBS plugins need an update.<br>Please click each one to download them!<br>"));
-		}
-		mainMessageLabel->setTextFormat(Qt::RichText);
-		mainMessageLabel->setOpenExternalLinks(true);
+		QLabel *mainMessageLabel = createRichTextLabel(
+			(errorMsgMissing != "NULL")
+				? "OBS is missing plugins or has older versions.<br>StreamUP products may not function correctly!"
+				: "Some OBS plugins need an update.<br>Please click each one to download them!");
 
-		QVBoxLayout *iconLayout = new QVBoxLayout;
+		QVBoxLayout *iconLayout = new QVBoxLayout();
 		iconLayout->addWidget(iconLabel);
 		iconLayout->addStretch();
 
-		QVBoxLayout *textLayout = new QVBoxLayout;
+		QVBoxLayout *textLayout = new QVBoxLayout();
 		textLayout->addWidget(mainMessageLabel);
 		textLayout->addStretch();
 
-		QHBoxLayout *topLayout = new QHBoxLayout;
+		QHBoxLayout *topLayout = new QHBoxLayout();
 		topLayout->addStretch(1);
 		topLayout->addLayout(iconLayout);
 		topLayout->addLayout(textLayout, 1);
 		topLayout->addStretch(1);
 
-		// Third layout (detailed error report for plugins to update)
-		QLabel *updateLabel = new QLabel;
-		updateLabel->setText(QString::fromStdString(errorMsgUpdate));
-		updateLabel->setTextFormat(Qt::RichText);
-		updateLabel->setTextInteractionFlags(
-			Qt::TextBrowserInteraction);
-		updateLabel->setOpenExternalLinks(true);
-
-		// Create a QGroupBox for plugins to update
-		QGroupBox *updateBox = new QGroupBox("Plugins to Update");
-		QVBoxLayout *updateBoxLayout = new QVBoxLayout;
-		updateBoxLayout->addWidget(updateLabel);
-		updateBox->setLayout(updateBoxLayout);
-
-		// Add layouts and widgets to the main layout
 		mainLayout->addLayout(topLayout);
+		mainLayout->addSpacing(10);
 
-		// Second layout (detailed error report for missing plugins)
-		QLabel *missingLabel = new QLabel;
-		if (errorMsgMissing != "NULL") {
-			missingLabel->setText(
-				QString::fromStdString(errorMsgMissing));
-			missingLabel->setTextFormat(Qt::RichText);
-			missingLabel->setTextInteractionFlags(
-				Qt::TextBrowserInteraction);
-			missingLabel->setOpenExternalLinks(true);
-			// Create a QGroupBox for missing plugins
-			QGroupBox *missingBox =
-				new QGroupBox("Missing Plugins");
-			QVBoxLayout *missingBoxLayout = new QVBoxLayout;
-			missingBoxLayout->addWidget(missingLabel);
-			missingBox->setLayout(missingBoxLayout);
-			mainLayout->addWidget(missingBox);
-		}
-
+		// Third layout (detailed error report for plugins to update)
 		if (!errorMsgUpdate.empty()) {
+			QLabel *updateLabel = createRichTextLabel(
+				QString::fromStdString(errorMsgUpdate));
+
+			QGroupBox *updateBox =
+				new QGroupBox("Plugins to Update");
+			QVBoxLayout *updateBoxLayout = new QVBoxLayout();
+			updateBoxLayout->addWidget(updateLabel);
+			updateBox->setLayout(updateBoxLayout);
+
 			mainLayout->addWidget(updateBox);
 		}
 
+		// Second layout (detailed error report for missing plugins)
 		if (errorMsgMissing != "NULL") {
-			QLabel *pluginstallerLabel = new QLabel;
-			pluginstallerLabel->setText(QString::fromStdString(
-				"<br>Select '<b>Download StreamUP Pluginstaller</b>' to<br>use our tool to download them all at once."));
-			pluginstallerLabel->setTextFormat(Qt::RichText);
+			mainLayout->addSpacing(10);
+
+			QLabel *missingLabel = createRichTextLabel(
+				QString::fromStdString(errorMsgMissing));
+
+			QGroupBox *missingBox =
+				new QGroupBox("Missing Plugins");
+			QVBoxLayout *missingBoxLayout = new QVBoxLayout();
+			missingBoxLayout->addWidget(missingLabel);
+			missingBox->setLayout(missingBoxLayout);
+
+			mainLayout->addWidget(missingBox);
+		}
+
+		mainLayout->addSpacing(10);
+
+		if (errorMsgMissing != "NULL") {
+			QLabel *pluginstallerLabel = createRichTextLabel(
+				"Select '<b>Download StreamUP Pluginstaller</b>' to<br>use our tool to download them all at once.");
 			pluginstallerLabel->setAlignment(Qt::AlignCenter);
-			QVBoxLayout *pluginstallerLayout = new QVBoxLayout;
+			QVBoxLayout *pluginstallerLayout = new QVBoxLayout();
 			pluginstallerLayout->addWidget(pluginstallerLabel);
 			mainLayout->addLayout(pluginstallerLayout);
 		}
@@ -724,10 +714,8 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		QObject::connect(okButton, &QPushButton::clicked, dialog,
 				 &QWidget::close);
 
-		// Create a QHBoxLayout for the buttons
-		QHBoxLayout *buttonLayout = new QHBoxLayout;
+		QHBoxLayout *buttonLayout = new QHBoxLayout();
 
-		// Add the buttons to the buttonLayout
 		if (errorMsgMissing != "NULL") {
 			QPushButton *customButton = new QPushButton(
 				"Download StreamUP Pluginstaller");
@@ -737,13 +725,12 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 			});
 			buttonLayout->addWidget(customButton);
 		}
+
 		buttonLayout->addWidget(okButton);
 
 		mainLayout->addLayout(buttonLayout);
 
 		dialog->setLayout(mainLayout);
-		dialog->setWindowTitle(
-			"StreamUP • Missing or Outdated Plugins");
 		dialog->setWindowFlags(Qt::Window);
 		dialog->setAttribute(Qt::WA_DeleteOnClose);
 		dialog->show();
@@ -902,7 +889,7 @@ void showAboutDialog()
 	dialog->setFixedSize(dialog->sizeHint());
 
 	QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
-	mainLayout->setContentsMargins(20, 0, 20, 10);
+	mainLayout->setContentsMargins(20, 15, 20, 10);
 
 	QHBoxLayout *topLayout = new QHBoxLayout();
 	mainLayout->addLayout(topLayout);
@@ -921,7 +908,7 @@ void showAboutDialog()
 		")<br>by <b>Andi Stone</b> (<b>Andilippi</b>)");
 	mainMessageLabel->setAlignment(Qt::AlignHCenter);
 	topLayout->addWidget(mainMessageLabel);
-	mainMessageLabel->setStyleSheet("margin-left: 0px; margin-top: 15px;");
+	mainMessageLabel->setStyleSheet("margin-left: 0px; margin-top: 0px;");
 
 	mainLayout->addSpacing(10);
 
@@ -937,6 +924,7 @@ void showAboutDialog()
 		"Support this plugin by using the<br>links below or donating!");
 	secondText->setAlignment(Qt::AlignCenter);
 	supportBoxLayout->addWidget(secondText);
+	supportBoxLayout->addSpacing(5);
 
 	// Patreon and Ko-fi links
 	QGridLayout *gridLayout = new QGridLayout;
@@ -963,9 +951,10 @@ void showAboutDialog()
 
 	// Third message
 	QLabel *thirdText = createRichTextLabel(
-		"Follow Andi on the following platforms.<br>Be sure to stop by and say hi!<br>");
+		"Follow Andi on the following platforms.<br>Be sure to stop by and say hi!");
 	thirdText->setAlignment(Qt::AlignCenter);
 	socialBoxLayout->addWidget(thirdText);
+	socialBoxLayout->addSpacing(5);
 
 	// Andi social links
 	QGridLayout *gridLayout2 = new QGridLayout;
