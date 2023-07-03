@@ -44,6 +44,7 @@ OBS_DECLARE_MODULE()
 OBS_MODULE_AUTHOR("Andilippi");
 OBS_MODULE_USE_DEFAULT_LOCALE("streamup", "en-US")
 
+
 //--------------------INSTALL A PRODUCT--------------------
 void ResizeMoveSetting(obs_data_t *obs_data, float factor)
 {
@@ -350,19 +351,45 @@ QLabel *createRichTextLabel(const QString &text)
 	return label;
 }
 
-class ErrorMessage : public QObject {
+void ErrorDialog(const QString &errorMessage)
+{
+	showNonModalDialog([errorMessage]() {
+		QDialog *errorDialog = new QDialog();
+		errorDialog->setWindowTitle("StreamUP • Error");
 
-public:
-	ErrorMessage(QWidget *parent = nullptr) : QObject(parent) {}
+		QVBoxLayout *errorLayout = new QVBoxLayout(errorDialog);
+		errorLayout->setContentsMargins(20, 15, 20, 10);
 
-	void showMessage(const QString &message)
-	{
-		QMessageBox *messageBox = new QMessageBox(
-			QMessageBox::Critical, "StreamUP • Error", message);
-		messageBox->setAttribute(Qt::WA_DeleteOnClose);
-		QTimer::singleShot(0, messageBox, &QMessageBox::exec);
-	}
-};
+		QLabel *iconLabel = new QLabel();
+		iconLabel->setPixmap(
+			QApplication::style()
+				->standardIcon(QStyle::SP_MessageBoxCritical)
+				.pixmap(32, 32));
+
+		QLabel *errorLabel = createRichTextLabel(errorMessage);
+		errorLabel->setWordWrap(true);
+
+		QHBoxLayout *topLayout = new QHBoxLayout();
+		topLayout->addWidget(iconLabel);
+		topLayout->addSpacing(5);
+		topLayout->addWidget(errorLabel, 1);
+
+		errorLayout->addLayout(topLayout);
+		errorLayout->addSpacing(10);
+
+		QPushButton *okButton = new QPushButton("OK");
+		QObject::connect(okButton, &QPushButton::clicked, errorDialog,
+				 &QDialog::close);
+
+		errorLayout->addWidget(okButton);
+		errorDialog->setLayout(errorLayout);
+		errorDialog->setWindowFlags(Qt::Window);
+		errorDialog->setAttribute(Qt::WA_DeleteOnClose);
+		errorDialog->setFixedSize(errorDialog->sizeHint());
+
+		errorDialog->show();
+	});
+}
 
 struct PluginInfo {
 	std::string name;
@@ -412,7 +439,7 @@ void InitialiseRequiredModules()
 {
 	pthread_t thread;
 	request_data req_data;
-	req_data.url = "https://api.streamup.tips/plugins";
+	req_data.url = "https://api.streamup.tips/plugin";
 
 	if (pthread_create(&thread, NULL, MakeApiRequest, &req_data)) {
 		blog(LOG_INFO, "Error creating thread\n");
@@ -426,7 +453,7 @@ void InitialiseRequiredModules()
 
 	std::string api_response = req_data.response;
 
-	if (api_response.find("Error:") != std::string::npos) {
+	/* if (api_response.find("Error:") != std::string::npos) {
 		ErrorMessage errorMsg;
 		errorMsg.showMessage(QString::fromStdString(api_response));
 		return;
@@ -437,7 +464,7 @@ void InitialiseRequiredModules()
 		errorMsg.showMessage(
 			"Unable to retrive plugin list from the StreamUP API.");
 		return;
-	}
+	}*/
 
 	obs_data_t *data = obs_data_create_from_json(api_response.c_str());
 
@@ -596,6 +623,7 @@ void PluginsUpToDateOutput()
 		successDialog->setFixedSize(successDialog->sizeHint());
 
 		QVBoxLayout *successLayout = new QVBoxLayout(successDialog);
+		successLayout->setContentsMargins(20, 15, 20, 10);
 
 		QLabel *iconLabel = new QLabel();
 		iconLabel->setPixmap(
@@ -607,10 +635,9 @@ void PluginsUpToDateOutput()
 			"All OBS plugins are up to date and installed correctly.");
 
 		QHBoxLayout *topLayout = new QHBoxLayout();
-		topLayout->addStretch(1);
 		topLayout->addWidget(iconLabel);
+		topLayout->addSpacing(10);
 		topLayout->addWidget(successLabel, 1);
-		topLayout->addStretch(1);
 
 		successLayout->addLayout(topLayout);
 		successLayout->addSpacing(10);
@@ -623,7 +650,7 @@ void PluginsUpToDateOutput()
 		successDialog->setLayout(successLayout);
 		successDialog->setWindowFlags(Qt::Window);
 		successDialog->setAttribute(Qt::WA_DeleteOnClose);
-		successDialog->exec();
+		successDialog->show();
 	});
 }
 
@@ -698,9 +725,10 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 			mainLayout->addWidget(missingBox);
 		}
 
-		mainLayout->addSpacing(10);
+		mainLayout->addSpacing(5);
 
 		if (errorMsgMissing != "NULL") {
+			mainLayout->addSpacing(5);
 			QLabel *pluginstallerLabel = createRichTextLabel(
 				"Select '<b>Download StreamUP Pluginstaller</b>' to<br>use our tool to download them all at once.");
 			pluginstallerLabel->setAlignment(Qt::AlignCenter);
@@ -755,126 +783,151 @@ std::string GetPlatformURL(const PluginInfo &plugin_info)
 
 void CheckAllPluginsForUpdates()
 {
-	std::map<std::string, std::string> version_mismatch_modules;
-	std::string errorMsgUpdate = "";
-	char *filepath = GetFilePath();
+	if (all_plugins.empty()) {
+		ErrorDialog(
+			"Could not load plugin list from the StreamUP API!<br><br>If problem persists please leave a message<br>on the <b><a href='https://discord.com/invite/RnDKRaVCEu?'>StreamUP Discord server</a></b>");
+		return;
+	} else {
+		std::map<std::string, std::string> version_mismatch_modules;
+		std::string errorMsgUpdate = "";
+		char *filepath = GetFilePath();
 
-	for (const auto &module : all_plugins) {
-		std::string plugin_name = module.first;
-		PluginInfo plugin_info = module.second;
-		std::string required_version = plugin_info.version;
-		std::string url = GetPlatformURL(plugin_info);
-		std::string search_string = plugin_info.searchString;
-
-		std::string installed_version =
-			search_string_in_file(filepath, search_string.c_str());
-
-		if (!installed_version.empty() &&
-		    installed_version != required_version) {
-			version_mismatch_modules.insert(
-				{plugin_name, installed_version});
-		}
-	}
-
-	bfree(filepath);
-
-	if (!version_mismatch_modules.empty()) {
-		errorMsgUpdate += "<ul>";
-		for (const auto &module : version_mismatch_modules) {
-			PluginInfo plugin_info = all_plugins[module.first];
+		for (const auto &module : all_plugins) {
+			std::string plugin_name = module.first;
+			PluginInfo plugin_info = module.second;
 			std::string required_version = plugin_info.version;
 			std::string url = GetPlatformURL(plugin_info);
-			errorMsgUpdate +=
-				"<li><a href=\"" + url + "\">" + module.first +
-				"</a> (Installed: " + module.second +
-				", Current: " + required_version + ")</li>";
-		}
-		errorMsgUpdate += "</ul>";
+			std::string search_string = plugin_info.searchString;
 
-		PluginsHaveIssue("NULL", errorMsgUpdate);
-		version_mismatch_modules.clear();
-	} else {
-		PluginsUpToDateOutput();
-	}
-}
+			std::string installed_version = search_string_in_file(
+				filepath, search_string.c_str());
 
-void CheckRecommendedOBSPlugins()
-{
-	std::map<std::string, std::string> missing_modules;
-	std::map<std::string, std::string> version_mismatch_modules;
-	std::string errorMsgMissing = "";
-	std::string errorMsgUpdate = "";
-	char *filepath = GetFilePath();
-
-	for (const auto &module : recommended_plugins) {
-		std::string plugin_name = module.first;
-		PluginInfo plugin_info = module.second;
-		std::string required_version = plugin_info.version;
-		std::string url = GetPlatformURL(plugin_info);
-		std::string search_string = plugin_info.searchString;
-
-		std::string installed_version =
-			search_string_in_file(filepath, search_string.c_str());
-
-		// Only add to missing_modules if plugin is recommended and not installed
-		if (installed_version.empty() && plugin_info.recommended) {
-			missing_modules.insert({plugin_name, required_version});
-		}
-		// Only add to version_mismatch_modules if plugin is recommended and there's a version mismatch
-		else if (!installed_version.empty() &&
-			 installed_version != required_version &&
-			 plugin_info.recommended) {
-			version_mismatch_modules.insert(
-				{plugin_name, installed_version});
-		}
-	}
-
-	bfree(filepath);
-
-	if (!missing_modules.empty() || !version_mismatch_modules.empty()) {
-		if (!missing_modules.empty()) {
-			errorMsgMissing += "<ul>";
-			for (const auto &module : missing_modules) {
-				std::string plugin_name = module.first;
-				std::string required_version = module.second;
-
-				PluginInfo plugin_info =
-					recommended_plugins[plugin_name];
-				std::string url = GetPlatformURL(plugin_info);
-
-				errorMsgMissing += "<li><a href=\"" + url +
-						   "\">" + plugin_name +
-						   "</a></li>";
+			if (!installed_version.empty() &&
+			    installed_version != required_version) {
+				version_mismatch_modules.insert(
+					{plugin_name, installed_version});
 			}
-			errorMsgMissing += "</ul>";
 		}
+
+		bfree(filepath);
 
 		if (!version_mismatch_modules.empty()) {
 			errorMsgUpdate += "<ul>";
 			for (const auto &module : version_mismatch_modules) {
-				std::string plugin_name = module.first;
-				std::string installed_version = module.second;
-
 				PluginInfo plugin_info =
-					recommended_plugins[plugin_name];
+					all_plugins[module.first];
 				std::string required_version =
 					plugin_info.version;
 				std::string url = GetPlatformURL(plugin_info);
 				errorMsgUpdate +=
 					"<li><a href=\"" + url + "\">" +
-					plugin_name + "</a> (Installed: " +
-					installed_version +
+					module.first +
+					"</a> (Installed: " + module.second +
 					", Current: " + required_version +
 					")</li>";
 			}
 			errorMsgUpdate += "</ul>";
-		}
-		PluginsHaveIssue(errorMsgMissing, errorMsgUpdate);
-		missing_modules.clear();
-		version_mismatch_modules.clear();
 
+			PluginsHaveIssue("NULL", errorMsgUpdate);
+			version_mismatch_modules.clear();
+		} else {
+			PluginsUpToDateOutput();
+		}
+	}
+}
+
+void CheckRecommendedOBSPlugins()
+{
+	if (recommended_plugins.empty()) {
+		ErrorDialog(
+			"Could not load plugin list from the StreamUP API!<br><br>If problem persists please leave a message<br>on the <b><a href='https://discord.com/invite/RnDKRaVCEu?'>StreamUP Discord server</a></b>");
+		return;
 	} else {
-		PluginsUpToDateOutput();
+
+		std::map<std::string, std::string> missing_modules;
+		std::map<std::string, std::string> version_mismatch_modules;
+		std::string errorMsgMissing = "";
+		std::string errorMsgUpdate = "";
+		char *filepath = GetFilePath();
+
+		for (const auto &module : recommended_plugins) {
+			std::string plugin_name = module.first;
+			PluginInfo plugin_info = module.second;
+			std::string required_version = plugin_info.version;
+			std::string url = GetPlatformURL(plugin_info);
+			std::string search_string = plugin_info.searchString;
+
+			std::string installed_version = search_string_in_file(
+				filepath, search_string.c_str());
+
+			// Only add to missing_modules if plugin is recommended and not installed
+			if (installed_version.empty() &&
+			    plugin_info.recommended) {
+				missing_modules.insert(
+					{plugin_name, required_version});
+			}
+			// Only add to version_mismatch_modules if plugin is recommended and there's a version mismatch
+			else if (!installed_version.empty() &&
+				 installed_version != required_version &&
+				 plugin_info.recommended) {
+				version_mismatch_modules.insert(
+					{plugin_name, installed_version});
+			}
+		}
+
+		bfree(filepath);
+
+		if (!missing_modules.empty() ||
+		    !version_mismatch_modules.empty()) {
+			if (!missing_modules.empty()) {
+				errorMsgMissing += "<ul>";
+				for (const auto &module : missing_modules) {
+					std::string plugin_name = module.first;
+					std::string required_version =
+						module.second;
+					PluginInfo plugin_info =
+						recommended_plugins[plugin_name];
+					std::string url =
+						GetPlatformURL(plugin_info);
+
+					errorMsgMissing +=
+						"<li><a href=\"" + url + "\">" +
+						plugin_name + "</a></li>";
+				}
+				errorMsgMissing += "</ul>";
+			}
+
+			if (!version_mismatch_modules.empty()) {
+				errorMsgUpdate += "<ul>";
+				for (const auto &module :
+				     version_mismatch_modules) {
+					std::string plugin_name = module.first;
+					std::string installed_version =
+						module.second;
+
+					PluginInfo plugin_info =
+						recommended_plugins[plugin_name];
+					std::string required_version =
+						plugin_info.version;
+					std::string url =
+						GetPlatformURL(plugin_info);
+					errorMsgUpdate +=
+						"<li><a href=\"" + url + "\">" +
+						plugin_name +
+						"</a> (Installed: " +
+						installed_version +
+						", Current: " +
+						required_version + ")</li>";
+				}
+				errorMsgUpdate += "</ul>";
+			}
+			PluginsHaveIssue(errorMsgMissing, errorMsgUpdate);
+			missing_modules.clear();
+			version_mismatch_modules.clear();
+
+		} else {
+			PluginsUpToDateOutput();
+		}
 	}
 }
 
@@ -911,7 +964,6 @@ void showAboutDialog()
 	mainMessageLabel->setStyleSheet("margin-left: 0px; margin-top: 0px;");
 
 	mainLayout->addSpacing(10);
-
 
 	// Support QGroupBox
 	QGroupBox *supportBox = new QGroupBox("Support");
@@ -1051,23 +1103,6 @@ bool obs_module_load()
 
 	InitialiseRequiredModules();
 	CheckAllPluginsForUpdates();
-
-	/* QString message = "This is a test message!";
-	QTimer::singleShot(0, [message]() {
-		QMetaObject::invokeMethod(
-			qApp,
-			[message]() {
-				QDialog *dialog = new QDialog();
-				QVBoxLayout *layout = new QVBoxLayout(dialog);
-				QLabel *label = new QLabel(message, dialog);
-				layout->addWidget(label);
-				dialog->setModal(false);
-				dialog->setAttribute(Qt::WA_DeleteOnClose);
-				dialog->show();
-			},
-			Qt::QueuedConnection);
-	});
-	*/
 
 	return true;
 }
