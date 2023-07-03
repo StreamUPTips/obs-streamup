@@ -439,7 +439,7 @@ void InitialiseRequiredModules()
 {
 	pthread_t thread;
 	request_data req_data;
-	req_data.url = "https://api.streamup.tips/plugin";
+	req_data.url = "https://api.streamup.tips/plugins";
 
 	if (pthread_create(&thread, NULL, MakeApiRequest, &req_data)) {
 		blog(LOG_INFO, "Error creating thread\n");
@@ -452,7 +452,7 @@ void InitialiseRequiredModules()
 	}
 
 	std::string api_response = req_data.response;
-
+	//api_response = "";
 	/* if (api_response.find("Error:") != std::string::npos) {
 		ErrorMessage errorMsg;
 		errorMsg.showMessage(QString::fromStdString(api_response));
