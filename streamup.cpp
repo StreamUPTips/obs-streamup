@@ -1063,28 +1063,28 @@ static void LoadMenu(QMenu *menu)
 	QAction *a;
 
 	if (strcmp(PLATFORM_NAME, "windows") == 0) {
-		a = menu->addAction(obs_module_text("Install a Product"));
+		a = menu->addAction(obs_module_text("MenuInstallProduct"));
 		QObject::connect(a, &QAction::triggered,
 				 [] { LoadStreamUpFile(NULL); });
-		a = menu->addAction(obs_module_text("Download Products"));
+		a = menu->addAction(obs_module_text("MenuDownloadProduct"));
 		QObject::connect(a, &QAction::triggered, []() {
 			QDesktopServices::openUrl(
 				QUrl("https://streamup.tips/"));
 		});
 
 		a = menu->addAction(
-			obs_module_text("Check Product Requirements"));
+			obs_module_text("MenuCheckRequirements"));
 		QObject::connect(a, &QAction::triggered,
 				 [] { CheckRecommendedOBSPlugins(); });
 		menu->addSeparator();
 	}
 
-	a = menu->addAction(obs_module_text("Check for OBS Plugin Updates"));
+	a = menu->addAction(obs_module_text("MenuCheckPluginUpdates"));
 	QObject::connect(a, &QAction::triggered,
 			 [] { CheckAllPluginsForUpdates(); });
 	menu->addSeparator();
 
-	a = menu->addAction(obs_module_text("About"));
+	a = menu->addAction(obs_module_text("MenuAbout"));
 	QObject::connect(a, &QAction::triggered, [] { showAboutDialog(); });
 }
 
