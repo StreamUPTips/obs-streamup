@@ -14,7 +14,7 @@ As an added bonus Andi added a full OBS plugin update checker so you can easily 
     - **Check for OBS Plugin Updates** • Check if your currently installed OBS plugins are up to date.*
     - **About** • Information and support links for the StreamUP OBS plugin.
 
-*Not all plugins are compatible, as more devs make them compatible, they will be added too.
+*Not all plugins are compatible, as more devs make them compatible, they will be added too. They just need to add their plugin name and version number to the Log file upon load.
 
 # Build
 1. In-tree build
