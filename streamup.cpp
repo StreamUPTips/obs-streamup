@@ -1144,7 +1144,7 @@ void ShowSettingsDialog()
 	dialog->setWindowFlags(Qt::Window);
 
 	// Connect the dialog's finished signal to release the settings
-	QObject::connect(dialog, &QDialog::finished, [=](int result) {
+	QObject::connect(dialog, &QDialog::finished, [=](int) {
 		obs_data_release(settings), obs_properties_destroy(props);
 	});
 
