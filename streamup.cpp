@@ -10,6 +10,7 @@
 #include <regex>
 #include <QApplication>
 #include <QCoreApplication>
+#include <QCheckbox>
 #include <QBuffer>
 #include <QDesktopServices>
 #include <QDialog>
@@ -43,7 +44,6 @@
 OBS_DECLARE_MODULE()
 OBS_MODULE_AUTHOR("Andilippi");
 OBS_MODULE_USE_DEFAULT_LOCALE("streamup", "en-US")
-
 
 //--------------------INSTALL A PRODUCT--------------------
 void ResizeMoveSetting(obs_data_t *obs_data, float factor)
@@ -321,27 +321,13 @@ static void LoadScene(obs_data_t *data, QString path)
 	obs_data_array_release(sourcesData);
 }
 
-void LoadStreamUpFile(void *private_data)
-{
-	UNUSED_PARAMETER(private_data);
-
-	QString fileName = QFileDialog::getOpenFileName(
-		nullptr, QT_UTF8(obs_module_text("Load")), QString(),
-		"StreamUP File (*.streamup)");
-	if (fileName.isEmpty())
-		return;
-	obs_data_t *data = obs_data_create_from_json_file(QT_TO_UTF8(fileName));
-	LoadScene(data, QFileInfo(fileName).absolutePath());
-	obs_data_release(data);
-}
-
 //--------------------CHECK FOR PLUGIN UPDATES ETC--------------------
-void showNonModalDialog(const std::function<void()> &dialogFunction)
+void ShowNonModalDialog(const std::function<void()> &dialogFunction)
 {
 	QMetaObject::invokeMethod(qApp, dialogFunction, Qt::QueuedConnection);
 }
 
-QLabel *createRichTextLabel(const QString &text)
+QLabel *CreateRichTextLabel(const QString &text)
 {
 	QLabel *label = new QLabel;
 	label->setText(text);
@@ -353,9 +339,10 @@ QLabel *createRichTextLabel(const QString &text)
 
 void ErrorDialog(const QString &errorMessage)
 {
-	showNonModalDialog([errorMessage]() {
+	ShowNonModalDialog([errorMessage]() {
 		QDialog *errorDialog = new QDialog();
-		errorDialog->setWindowTitle("StreamUP • Error");
+		errorDialog->setWindowTitle(
+			obs_module_text("WindowErrorTitle"));
 
 		QVBoxLayout *errorLayout = new QVBoxLayout(errorDialog);
 		errorLayout->setContentsMargins(20, 15, 20, 10);
@@ -366,7 +353,7 @@ void ErrorDialog(const QString &errorMessage)
 				->standardIcon(QStyle::SP_MessageBoxCritical)
 				.pixmap(32, 32));
 
-		QLabel *errorLabel = createRichTextLabel(errorMessage);
+		QLabel *errorLabel = CreateRichTextLabel(errorMessage);
 		errorLabel->setWordWrap(true);
 
 		QHBoxLayout *topLayout = new QHBoxLayout();
@@ -616,10 +603,10 @@ std::string search_string_in_file(char *path, const char *search)
 
 void PluginsUpToDateOutput()
 {
-	showNonModalDialog([]() {
+	ShowNonModalDialog([]() {
 		QDialog *successDialog = new QDialog();
 		successDialog->setWindowTitle(
-			"StreamUP • All Plugins Up-to-Date");
+			obs_module_text("WindowUpToDateTitle"));
 		successDialog->setFixedSize(successDialog->sizeHint());
 
 		QVBoxLayout *successLayout = new QVBoxLayout(successDialog);
@@ -631,8 +618,8 @@ void PluginsUpToDateOutput()
 				->standardIcon(QStyle::SP_DialogApplyButton)
 				.pixmap(32, 32));
 
-		QLabel *successLabel = createRichTextLabel(
-			"All OBS plugins are up to date and installed correctly.");
+		QLabel *successLabel = CreateRichTextLabel(
+			obs_module_text("WindowUpToDateMessage"));
 
 		QHBoxLayout *topLayout = new QHBoxLayout();
 		topLayout->addWidget(iconLabel);
@@ -642,7 +629,7 @@ void PluginsUpToDateOutput()
 		successLayout->addLayout(topLayout);
 		successLayout->addSpacing(10);
 
-		QPushButton *okButton = new QPushButton("OK");
+		QPushButton *okButton = new QPushButton(obs_module_text("OK"));
 		QObject::connect(okButton, &QPushButton::clicked, successDialog,
 				 &QDialog::close);
 
@@ -656,10 +643,10 @@ void PluginsUpToDateOutput()
 
 void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 {
-	showNonModalDialog([errorMsgMissing, errorMsgUpdate]() {
+	ShowNonModalDialog([errorMsgMissing, errorMsgUpdate]() {
 		QDialog *dialog = new QDialog();
 		dialog->setWindowTitle(
-			"StreamUP • Missing or Outdated Plugins");
+			obs_module_text("WindowPluginErrorTitle"));
 		dialog->setFixedSize(dialog->sizeHint());
 
 		QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
@@ -673,10 +660,10 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 				.pixmap(64, 64));
 		iconLabel->setStyleSheet("padding-top: 3px;");
 
-		QLabel *mainMessageLabel = createRichTextLabel(
+		QLabel *mainMessageLabel = CreateRichTextLabel(
 			(errorMsgMissing != "NULL")
-				? "OBS is missing plugins or has older versions.<br>StreamUP products may not function correctly!"
-				: "Some OBS plugins need an update.<br>Please click each one to download them!");
+				? obs_module_text("WindowPluginErrorMissing")
+				: obs_module_text("WindowPluginErrorUpdating"));
 
 		QVBoxLayout *iconLayout = new QVBoxLayout();
 		iconLayout->addWidget(iconLabel);
@@ -697,11 +684,11 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 
 		// Third layout (detailed error report for plugins to update)
 		if (!errorMsgUpdate.empty()) {
-			QLabel *updateLabel = createRichTextLabel(
+			QLabel *updateLabel = CreateRichTextLabel(
 				QString::fromStdString(errorMsgUpdate));
 
-			QGroupBox *updateBox =
-				new QGroupBox("Plugins to Update");
+			QGroupBox *updateBox = new QGroupBox(obs_module_text(
+				"WindowPluginErrorUpdateGroup"));
 			QVBoxLayout *updateBoxLayout = new QVBoxLayout();
 			updateBoxLayout->addWidget(updateLabel);
 			updateBox->setLayout(updateBoxLayout);
@@ -713,11 +700,11 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		if (errorMsgMissing != "NULL") {
 			mainLayout->addSpacing(10);
 
-			QLabel *missingLabel = createRichTextLabel(
+			QLabel *missingLabel = CreateRichTextLabel(
 				QString::fromStdString(errorMsgMissing));
 
-			QGroupBox *missingBox =
-				new QGroupBox("Missing Plugins");
+			QGroupBox *missingBox = new QGroupBox(obs_module_text(
+				"WindowPluginErrorMissingGroup"));
 			QVBoxLayout *missingBoxLayout = new QVBoxLayout();
 			missingBoxLayout->addWidget(missingLabel);
 			missingBox->setLayout(missingBoxLayout);
@@ -729,8 +716,8 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 
 		if (errorMsgMissing != "NULL") {
 			mainLayout->addSpacing(5);
-			QLabel *pluginstallerLabel = createRichTextLabel(
-				"Select '<b>Download StreamUP Pluginstaller</b>' to<br>use our tool to download them all at once.");
+			QLabel *pluginstallerLabel = CreateRichTextLabel(
+				obs_module_text("WindowPluginErrorFooter"));
 			pluginstallerLabel->setAlignment(Qt::AlignCenter);
 			QVBoxLayout *pluginstallerLayout = new QVBoxLayout();
 			pluginstallerLayout->addWidget(pluginstallerLabel);
@@ -738,7 +725,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		}
 
 		// Buttons
-		QPushButton *okButton = new QPushButton("OK");
+		QPushButton *okButton = new QPushButton(obs_module_text("OK"));
 		QObject::connect(okButton, &QPushButton::clicked, dialog,
 				 &QWidget::close);
 
@@ -746,7 +733,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 
 		if (errorMsgMissing != "NULL") {
 			QPushButton *customButton = new QPushButton(
-				"Download StreamUP Pluginstaller");
+				obs_module_text("DownloadPluginstaller"));
 			QObject::connect(customButton, &QPushButton::clicked, []() {
 				QDesktopServices::openUrl(QUrl(
 					"https://streamup.tips/product/plugin-installer"));
@@ -784,8 +771,7 @@ std::string GetPlatformURL(const PluginInfo &plugin_info)
 void CheckAllPluginsForUpdates()
 {
 	if (all_plugins.empty()) {
-		ErrorDialog(
-			"Could not load plugin list from the StreamUP API!<br><br>If problem persists please leave a message<br>on the <b><a href='https://discord.com/invite/RnDKRaVCEu?'>StreamUP Discord server</a></b>");
+		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
 		return;
 	} else {
 		std::map<std::string, std::string> version_mismatch_modules;
@@ -821,10 +807,11 @@ void CheckAllPluginsForUpdates()
 				std::string url = GetPlatformURL(plugin_info);
 				errorMsgUpdate +=
 					"<li><a href=\"" + url + "\">" +
-					module.first +
-					"</a> (Installed: " + module.second +
-					", Current: " + required_version +
-					")</li>";
+					module.first + "</a> (" +
+					obs_module_text("Installed") + ": " +
+					module.second + ", " +
+					obs_module_text("Current") + ": " +
+					required_version + ")</li>";
 			}
 			errorMsgUpdate += "</ul>";
 
@@ -836,12 +823,11 @@ void CheckAllPluginsForUpdates()
 	}
 }
 
-void CheckRecommendedOBSPlugins()
+bool CheckRecommendedOBSPlugins()
 {
 	if (recommended_plugins.empty()) {
-		ErrorDialog(
-			"Could not load plugin list from the StreamUP API!<br><br>If problem persists please leave a message<br>on the <b><a href='https://discord.com/invite/RnDKRaVCEu?'>StreamUP Discord server</a></b>");
-		return;
+		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
+		return false;
 	} else {
 
 		std::map<std::string, std::string> missing_modules;
@@ -901,22 +887,20 @@ void CheckRecommendedOBSPlugins()
 				errorMsgUpdate += "<ul>";
 				for (const auto &module :
 				     version_mismatch_modules) {
-					std::string plugin_name = module.first;
-					std::string installed_version =
-						module.second;
-
 					PluginInfo plugin_info =
-						recommended_plugins[plugin_name];
+						all_plugins[module.first];
 					std::string required_version =
 						plugin_info.version;
 					std::string url =
 						GetPlatformURL(plugin_info);
 					errorMsgUpdate +=
 						"<li><a href=\"" + url + "\">" +
-						plugin_name +
-						"</a> (Installed: " +
-						installed_version +
-						", Current: " +
+						module.first + "</a> (" +
+						obs_module_text("Installed") +
+						": " +
+						module.second + ", " +
+						obs_module_text("Current") +
+						": " +
 						required_version + ")</li>";
 				}
 				errorMsgUpdate += "</ul>";
@@ -924,21 +908,41 @@ void CheckRecommendedOBSPlugins()
 			PluginsHaveIssue(errorMsgMissing, errorMsgUpdate);
 			missing_modules.clear();
 			version_mismatch_modules.clear();
+			return false;
 
 		} else {
 			PluginsUpToDateOutput();
+			return true;
 		}
 	}
 }
 
 //--------------------MENU & ABOUT-------------------
+void LoadStreamUpFile(void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
 
-void showAboutDialog()
+	if (!CheckRecommendedOBSPlugins()) {
+		return;
+	}
+
+	QString fileName = QFileDialog::getOpenFileName(
+		nullptr, QT_UTF8(obs_module_text("Load")), QString(),
+		"StreamUP File (*.streamup)");
+	if (fileName.isEmpty()) {
+		return;
+	}
+	obs_data_t *data = obs_data_create_from_json_file(QT_TO_UTF8(fileName));
+	LoadScene(data, QFileInfo(fileName).absolutePath());
+	obs_data_release(data);
+}
+
+void ShowAboutDialog()
 {
 	// Version
 	std::string version = PROJECT_VERSION;
 	QDialog *dialog = new QDialog();
-	dialog->setWindowTitle("StreamUP • About");
+	dialog->setWindowTitle(obs_module_text("WindowAboutTitle"));
 	dialog->setFixedSize(dialog->sizeHint());
 
 	QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
@@ -955,7 +959,7 @@ void showAboutDialog()
 			.pixmap(64, 64));
 	topLayout->addWidget(iconLabel);
 
-	QLabel *mainMessageLabel = createRichTextLabel(
+	QLabel *mainMessageLabel = CreateRichTextLabel(
 		"StreamUP OBS plugin (version " +
 		QString::fromStdString(version) +
 		")<br>by <b>Andi Stone</b> (<b>Andilippi</b>)");
@@ -966,14 +970,14 @@ void showAboutDialog()
 	mainLayout->addSpacing(10);
 
 	// Support QGroupBox
-	QGroupBox *supportBox = new QGroupBox("Support");
+	QGroupBox *supportBox = new QGroupBox(obs_module_text("Support"));
 	QVBoxLayout *supportBoxLayout = new QVBoxLayout;
 	mainLayout->addWidget(supportBox);
 	supportBox->setLayout(supportBoxLayout);
 
 	// Second message
-	QLabel *secondText = createRichTextLabel(
-		"Support this plugin by using the<br>links below or donating!");
+	QLabel *secondText =
+		CreateRichTextLabel(obs_module_text("WindowAboutSupport"));
 	secondText->setAlignment(Qt::AlignCenter);
 	supportBoxLayout->addWidget(secondText);
 	supportBoxLayout->addSpacing(5);
@@ -981,11 +985,11 @@ void showAboutDialog()
 	// Patreon and Ko-fi links
 	QGridLayout *gridLayout = new QGridLayout;
 	supportBoxLayout->addLayout(gridLayout);
-	QLabel *textLabel1 = createRichTextLabel(
+	QLabel *textLabel1 = CreateRichTextLabel(
 		"<b><a href='https://patreon.com/andilippi'>Andi's Patreon</a><br><a href='https://ko-fi.com/andilippi'>Andi's Ko-Fi</a></b>");
 	textLabel1->setAlignment(Qt::AlignCenter);
 	gridLayout->addWidget(textLabel1, 0, 0);
-	QLabel *textLabel2 = createRichTextLabel(
+	QLabel *textLabel2 = CreateRichTextLabel(
 		"<b><a href='https://patreon.com/streamup'>StreamUP's Patreon</a><br><a href='https://ko-fi.com/streamup'>StreamUP's Ko-Fi</a></b>");
 	textLabel2->setAlignment(Qt::AlignCenter);
 	gridLayout->addWidget(textLabel2, 0, 1);
@@ -996,14 +1000,15 @@ void showAboutDialog()
 	mainLayout->addSpacing(10);
 
 	// Andi's Socials QGroupBox
-	QGroupBox *socialBox = new QGroupBox("Andi's Socials");
+	QGroupBox *socialBox =
+		new QGroupBox(obs_module_text("WindowAboutSocialsTitle"));
 	QVBoxLayout *socialBoxLayout = new QVBoxLayout;
 	mainLayout->addWidget(socialBox);
 	socialBox->setLayout(socialBoxLayout);
 
 	// Third message
-	QLabel *thirdText = createRichTextLabel(
-		"Follow Andi on the following platforms.<br>Be sure to stop by and say hi!");
+	QLabel *thirdText =
+		CreateRichTextLabel(obs_module_text("WindowAboutSocialsMsg"));
 	thirdText->setAlignment(Qt::AlignCenter);
 	socialBoxLayout->addWidget(thirdText);
 	socialBoxLayout->addSpacing(5);
@@ -1012,15 +1017,15 @@ void showAboutDialog()
 	QGridLayout *gridLayout2 = new QGridLayout;
 	socialBoxLayout->addLayout(gridLayout2);
 
-	QLabel *textLabel3 = createRichTextLabel(
+	QLabel *textLabel3 = CreateRichTextLabel(
 		"<b><a href='https://youtube.com/andilippi'>YouTube</a></b>");
 	gridLayout2->addWidget(textLabel3, 0, 0);
 
-	QLabel *textLabel4 = createRichTextLabel(
+	QLabel *textLabel4 = CreateRichTextLabel(
 		"<b><a href='https://twitch.tv/andilippi'>Twitch</a></b>");
 	gridLayout2->addWidget(textLabel4, 0, 1);
 
-	QLabel *textLabel5 = createRichTextLabel(
+	QLabel *textLabel5 = CreateRichTextLabel(
 		"<b><a href='https://twitter.com/andi_stone'>Twitter</a></b>");
 	gridLayout2->addWidget(textLabel5, 0, 2);
 
@@ -1030,8 +1035,8 @@ void showAboutDialog()
 	mainLayout->addSpacing(10);
 
 	// Last message
-	QLabel *lastText = createRichTextLabel(
-		"Special thanks to <b><a href='https://exeldro.com'>Exeldro</a></b>!<br>For creating the initial StreamUP plugin<br>and being a huge help and inspiration.");
+	QLabel *lastText =
+		CreateRichTextLabel(obs_module_text("WindowAboutThanks"));
 	lastText->setAlignment(Qt::AlignCenter);
 	mainLayout->addWidget(lastText);
 
@@ -1039,13 +1044,13 @@ void showAboutDialog()
 	QHBoxLayout *buttonLayout = new QHBoxLayout();
 	mainLayout->addLayout(buttonLayout);
 
-	QPushButton *donateButton = new QPushButton("Donate");
+	QPushButton *donateButton = new QPushButton(obs_module_text("Donate"));
 	buttonLayout->addWidget(donateButton);
 	QObject::connect(donateButton, &QPushButton::clicked, []() {
 		QDesktopServices::openUrl(QUrl("https://paypal.me/andilippi"));
 	});
 
-	QPushButton *closeButton = new QPushButton("Close");
+	QPushButton *closeButton = new QPushButton(obs_module_text("Close"));
 	buttonLayout->addWidget(closeButton);
 	QObject::connect(closeButton, &QPushButton::clicked, dialog,
 			 &QDialog::close);
@@ -1053,6 +1058,96 @@ void showAboutDialog()
 	dialog->setLayout(mainLayout);
 	dialog->setAttribute(Qt::WA_DeleteOnClose);
 	dialog->setWindowFlags(Qt::Window);
+	dialog->show();
+}
+
+obs_data_t *LoadSettings()
+{
+	char *configPath = obs_module_config_path("config.json");
+	os_mkdirs(configPath);
+	obs_data_t *settings = obs_data_create_from_json_file(configPath);
+	bfree(configPath);
+	return settings;
+}
+
+void SaveSettings(obs_data_t *settings)
+{
+	char *configPath = obs_module_config_path("config.json");
+
+	if (obs_data_save_json(settings, configPath)) {
+		blog(LOG_INFO, "Settings saved to %s", configPath);
+	} else {
+		blog(LOG_WARNING, "Failed to save settings to file.");
+	}
+
+	bfree(configPath);
+}
+
+void ShowSettingsDialog()
+{
+	obs_data_t *settings = LoadSettings();
+
+	// Create the settings dialog
+	QDialog *dialog = new QDialog();
+	dialog->setWindowTitle(obs_module_text("WindowSettingsTitle"));
+	dialog->setFixedSize(dialog->sizeHint());
+
+	QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
+	mainLayout->setContentsMargins(20, 15, 20, 10);
+
+	// Create the boolean property
+	obs_properties_t *props = obs_properties_create();
+	obs_property_t *p = obs_properties_add_bool(
+		props, "run_at_startup",
+		obs_module_text("WindowSettingsRunOnStartup"));
+
+	// Create a horizontal layout for the label and checkbox
+	QHBoxLayout *checkboxLayout = new QHBoxLayout();
+	QLabel *label =
+		new QLabel(obs_module_text("WindowSettingsRunOnStartup"));
+	QCheckBox *checkBox = new QCheckBox();
+	checkBox->setChecked(obs_data_get_bool(settings, obs_property_name(p)));
+	checkboxLayout->addWidget(checkBox);
+	checkboxLayout->addWidget(label);
+
+	// Connect the checkbox stateChanged signal to update the property value
+	QObject::connect(checkBox, &QCheckBox::stateChanged, [=](int state) {
+		bool newValue = (state == Qt::Checked);
+		obs_data_set_bool(settings, obs_property_name(p), newValue);
+	});
+
+	// Add the checkbox layout to the main layout
+	mainLayout->addLayout(checkboxLayout);
+
+	// Create a horizontal layout for the buttons
+	QHBoxLayout *buttonLayout = new QHBoxLayout();
+	QPushButton *cancelButton = new QPushButton(obs_module_text("Cancel"));
+	QPushButton *saveButton = new QPushButton(obs_module_text("Save"));
+	buttonLayout->addWidget(cancelButton);
+	buttonLayout->addWidget(saveButton);
+
+	// Connect the cancel button's clicked signal to close the dialog
+	QObject::connect(cancelButton, &QPushButton::clicked, dialog,
+			 &QDialog::close);
+
+	// Connect the save button's clicked signal to save the settings and close the dialog
+	QObject::connect(saveButton, &QPushButton::clicked, [=]() {
+		SaveSettings(settings);
+		dialog->close();
+	});
+
+	// Add the button layout to the main layout
+	mainLayout->addLayout(buttonLayout);
+
+	dialog->setLayout(mainLayout);
+	dialog->setAttribute(Qt::WA_DeleteOnClose);
+	dialog->setWindowFlags(Qt::Window);
+
+	// Connect the dialog's finished signal to release the settings
+	QObject::connect(dialog, &QDialog::finished, [=](int result) {
+		obs_data_release(settings), obs_properties_destroy(props);
+	});
+
 	dialog->show();
 }
 
@@ -1072,8 +1167,7 @@ static void LoadMenu(QMenu *menu)
 				QUrl("https://streamup.tips/"));
 		});
 
-		a = menu->addAction(
-			obs_module_text("MenuCheckRequirements"));
+		a = menu->addAction(obs_module_text("MenuCheckRequirements"));
 		QObject::connect(a, &QAction::triggered,
 				 [] { CheckRecommendedOBSPlugins(); });
 		menu->addSeparator();
@@ -1085,7 +1179,10 @@ static void LoadMenu(QMenu *menu)
 	menu->addSeparator();
 
 	a = menu->addAction(obs_module_text("MenuAbout"));
-	QObject::connect(a, &QAction::triggered, [] { showAboutDialog(); });
+	QObject::connect(a, &QAction::triggered, [] { ShowAboutDialog(); });
+
+	a = menu->addAction(obs_module_text("MenuSettings"));
+	QObject::connect(a, &QAction::triggered, [] { ShowSettingsDialog(); });
 }
 
 //--------------------GENERAL OBS--------------------
@@ -1094,15 +1191,23 @@ bool obs_module_load()
 {
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
 
+	InitialiseRequiredModules();
+
+	//Load run on startup settings
+	obs_data_t *settings = LoadSettings();
+	bool runAtStartup = obs_data_get_bool(settings, "run_at_startup");
+	if (runAtStartup) {
+		CheckAllPluginsForUpdates();
+	}
+	obs_data_release(settings);
+
+	//load menu
 	QAction *action =
 		static_cast<QAction *>(obs_frontend_add_tools_menu_qaction(
 			obs_module_text("StreamUP")));
 	QMenu *menu = new QMenu();
 	action->setMenu(menu);
 	QObject::connect(menu, &QMenu::aboutToShow, [menu] { LoadMenu(menu); });
-
-	InitialiseRequiredModules();
-	CheckAllPluginsForUpdates();
 
 	return true;
 }
