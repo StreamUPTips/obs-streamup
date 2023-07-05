@@ -10,7 +10,7 @@
 #include <regex>
 #include <QApplication>
 #include <QCoreApplication>
-#include <QCheckbox>
+#include <QCheckBox>
 #include <QBuffer>
 #include <QDesktopServices>
 #include <QDialog>
