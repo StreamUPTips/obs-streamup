@@ -15,6 +15,7 @@
 #include <QDesktopServices>
 #include <QDialog>
 #include <QFileDialog>
+#include <QFormLayout>
 #include <QGroupBox>
 #include <QIcon>
 #include <QLabel>
@@ -348,10 +349,12 @@ void ErrorDialog(const QString &errorMessage)
 		errorLayout->setContentsMargins(20, 15, 20, 10);
 
 		QLabel *iconLabel = new QLabel();
+		int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16
+								       : 32;
 		iconLabel->setPixmap(
 			QApplication::style()
 				->standardIcon(QStyle::SP_MessageBoxCritical)
-				.pixmap(32, 32));
+				.pixmap(pixmapSize, pixmapSize));
 
 		QLabel *errorLabel = CreateRichTextLabel(errorMessage);
 		errorLabel->setWordWrap(true);
@@ -613,11 +616,12 @@ void PluginsUpToDateOutput()
 		successLayout->setContentsMargins(20, 15, 20, 10);
 
 		QLabel *iconLabel = new QLabel();
+		int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16
+								       : 32;
 		iconLabel->setPixmap(
 			QApplication::style()
 				->standardIcon(QStyle::SP_DialogApplyButton)
-				.pixmap(32, 32));
-
+				.pixmap(pixmapSize, pixmapSize));
 		QLabel *successLabel = CreateRichTextLabel(
 			obs_module_text("WindowUpToDateMessage"));
 
@@ -650,14 +654,15 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		dialog->setFixedSize(dialog->sizeHint());
 
 		QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
-		mainLayout->setContentsMargins(20, 15, 20, 10);
+		mainLayout->setContentsMargins(20, 15, 20, 20);
 
-		// First layout (icon and main message)
 		QLabel *iconLabel = new QLabel();
+		int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16
+								       : 64;
 		iconLabel->setPixmap(
 			QApplication::style()
 				->standardIcon(QStyle::SP_MessageBoxWarning)
-				.pixmap(64, 64));
+				.pixmap(pixmapSize, pixmapSize));
 		iconLabel->setStyleSheet("padding-top: 3px;");
 
 		QLabel *mainMessageLabel = CreateRichTextLabel(
@@ -689,9 +694,16 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 
 			QGroupBox *updateBox = new QGroupBox(obs_module_text(
 				"WindowPluginErrorUpdateGroup"));
-			QVBoxLayout *updateBoxLayout = new QVBoxLayout();
+			QMargins groupMargins(25, 0, 25,
+					      0); // Set left and right margins
+			updateBox->setContentsMargins(groupMargins);
+
+			QVBoxLayout *updateBoxLayout =
+				new QVBoxLayout(updateBox);
+			updateBoxLayout->setContentsMargins(
+				25, 0, 25,
+				0); // Set inner left and right margins
 			updateBoxLayout->addWidget(updateLabel);
-			updateBox->setLayout(updateBoxLayout);
 
 			mainLayout->addWidget(updateBox);
 		}
@@ -705,9 +717,16 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 
 			QGroupBox *missingBox = new QGroupBox(obs_module_text(
 				"WindowPluginErrorMissingGroup"));
-			QVBoxLayout *missingBoxLayout = new QVBoxLayout();
+			QMargins groupMargins(25, 0, 25,
+					      0); // Set left and right margins
+			missingBox->setContentsMargins(groupMargins);
+
+			QVBoxLayout *missingBoxLayout =
+				new QVBoxLayout(missingBox);
+			missingBoxLayout->setContentsMargins(
+				25, 0, 25,
+				0); // Set inner left and right margins
 			missingBoxLayout->addWidget(missingLabel);
-			missingBox->setLayout(missingBoxLayout);
 
 			mainLayout->addWidget(missingBox);
 		}
@@ -768,58 +787,84 @@ std::string GetPlatformURL(const PluginInfo &plugin_info)
 	return url;
 }
 
+std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
+{
+	std::vector<std::pair<std::string, std::string>> installedPlugins;
+	char *filepath = GetFilePath();
+
+	for (const auto &module : all_plugins) {
+		const std::string &plugin_name = module.first;
+		const PluginInfo &plugin_info = module.second;
+		const std::string &search_string = plugin_info.searchString;
+
+		std::string installed_version =
+			search_string_in_file(filepath, search_string.c_str());
+
+		if (!installed_version.empty()) {
+			installedPlugins.emplace_back(plugin_name,
+						      installed_version);
+		}
+	}
+
+	bfree(filepath);
+
+	return installedPlugins;
+}
+
 void CheckAllPluginsForUpdates()
 {
 	if (all_plugins.empty()) {
 		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
 		return;
+	}
+
+	std::map<std::string, std::string> version_mismatch_modules;
+	std::string errorMsgUpdate = "";
+	std::vector<std::pair<std::string, std::string>> installedPlugins =
+		GetInstalledPlugins();
+
+	for (const auto &plugin : installedPlugins) {
+		const std::string &plugin_name = plugin.first;
+		const std::string &installed_version = plugin.second;
+		const PluginInfo &plugin_info = all_plugins[plugin_name];
+		const std::string &required_version = plugin_info.version;
+		const std::string &url = GetPlatformURL(plugin_info);
+
+		if (installed_version != required_version) {
+			version_mismatch_modules.emplace(plugin_name,
+							 installed_version);
+		}
+	}
+
+	if (!version_mismatch_modules.empty()) {
+		for (const auto &module : version_mismatch_modules) {
+			const PluginInfo &plugin_info =
+				all_plugins[module.first];
+			const std::string &required_version =
+				plugin_info.version;
+			const std::string &url = GetPlatformURL(plugin_info);
+			errorMsgUpdate += "<a href=\"" + url + "\">" +
+					  module.first + "</a> (" +
+					  obs_module_text("Installed") + ": " +
+					  module.second + ", " +
+					  obs_module_text("Current") + ": " +
+					  required_version + ")<br>";
+		}
+
+		// Remove the last <br> tag from errorMsgUpdate
+		if (!errorMsgUpdate.empty() &&
+		    errorMsgUpdate.substr(errorMsgUpdate.length() - 4) ==
+			    "<br>") {
+			errorMsgUpdate = errorMsgUpdate.substr(
+				0,
+				errorMsgUpdate.length() -
+					4); // Remove the last 4 characters ("<br>")
+		}
+
+		PluginsHaveIssue("NULL", errorMsgUpdate);
+		version_mismatch_modules.clear();
 	} else {
-		std::map<std::string, std::string> version_mismatch_modules;
-		std::string errorMsgUpdate = "";
-		char *filepath = GetFilePath();
-
-		for (const auto &module : all_plugins) {
-			std::string plugin_name = module.first;
-			PluginInfo plugin_info = module.second;
-			std::string required_version = plugin_info.version;
-			std::string url = GetPlatformURL(plugin_info);
-			std::string search_string = plugin_info.searchString;
-
-			std::string installed_version = search_string_in_file(
-				filepath, search_string.c_str());
-
-			if (!installed_version.empty() &&
-			    installed_version != required_version) {
-				version_mismatch_modules.insert(
-					{plugin_name, installed_version});
-			}
-		}
-
-		bfree(filepath);
-
-		if (!version_mismatch_modules.empty()) {
-			errorMsgUpdate += "<ul>";
-			for (const auto &module : version_mismatch_modules) {
-				PluginInfo plugin_info =
-					all_plugins[module.first];
-				std::string required_version =
-					plugin_info.version;
-				std::string url = GetPlatformURL(plugin_info);
-				errorMsgUpdate +=
-					"<li><a href=\"" + url + "\">" +
-					module.first + "</a> (" +
-					obs_module_text("Installed") + ": " +
-					module.second + ", " +
-					obs_module_text("Current") + ": " +
-					required_version + ")</li>";
-			}
-			errorMsgUpdate += "</ul>";
-
-			PluginsHaveIssue("NULL", errorMsgUpdate);
-			version_mismatch_modules.clear();
-		} else {
-			PluginsUpToDateOutput();
-		}
+		PluginsUpToDateOutput();
 	}
 }
 
@@ -828,92 +873,107 @@ bool CheckRecommendedOBSPlugins()
 	if (recommended_plugins.empty()) {
 		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
 		return false;
+	}
+
+	std::map<std::string, std::string> missing_modules;
+	std::map<std::string, std::string> version_mismatch_modules;
+	std::string errorMsgMissing = "";
+	std::string errorMsgUpdate = "";
+	char *filepath = GetFilePath();
+
+	for (const auto &module : recommended_plugins) {
+		const std::string &plugin_name = module.first;
+		const PluginInfo &plugin_info = module.second;
+		const std::string &required_version = plugin_info.version;
+		const std::string &url = GetPlatformURL(plugin_info);
+		const std::string &search_string = plugin_info.searchString;
+
+		std::string installed_version =
+			search_string_in_file(filepath, search_string.c_str());
+
+		// Only add to missing_modules if plugin is recommended and not installed
+		if (installed_version.empty() && plugin_info.recommended) {
+			missing_modules.emplace(plugin_name, required_version);
+		}
+		// Only add to version_mismatch_modules if plugin is recommended and there's a version mismatch
+		else if (!installed_version.empty() &&
+			 installed_version != required_version &&
+			 plugin_info.recommended) {
+			version_mismatch_modules.emplace(plugin_name,
+							 installed_version);
+		}
+	}
+
+	bfree(filepath);
+
+	if (!missing_modules.empty() || !version_mismatch_modules.empty()) {
+		std::string errorMsgMissing;
+		std::string errorMsgUpdate;
+
+		if (!missing_modules.empty()) {
+			for (auto it = missing_modules.begin();
+			     it != missing_modules.end(); ++it) {
+				const std::string &moduleName = it->first;
+				const std::string &requiredVersion = it->second;
+				const PluginInfo &pluginInfo =
+					recommended_plugins[moduleName];
+				const std::string &url =
+					GetPlatformURL(pluginInfo);
+
+				errorMsgMissing += "<a href=\"" + url + "\">" +
+						   moduleName + "</a><br>";
+			}
+		}
+		// Remove the last <br> tag from errorMsgMissing
+		if (!errorMsgMissing.empty() &&
+		    errorMsgMissing.substr(errorMsgMissing.length() - 4) ==
+			    "<br>") {
+			errorMsgMissing = errorMsgMissing.substr(
+				0,
+				errorMsgMissing.length() -
+					4); // Remove the last 4 characters ("<br>")
+		}
+
+		if (!version_mismatch_modules.empty()) {
+			for (auto it = version_mismatch_modules.begin();
+			     it != version_mismatch_modules.end(); ++it) {
+				const std::string &moduleName = it->first;
+				const std::string &installedVersion =
+					it->second;
+				const PluginInfo &pluginInfo =
+					all_plugins[moduleName];
+				const std::string &requiredVersion =
+					pluginInfo.version;
+				const std::string &url =
+					GetPlatformURL(pluginInfo);
+
+				errorMsgUpdate +=
+					"<a href=\"" + url + "\">" +
+					moduleName + "</a> (" +
+					obs_module_text("Installed") + ": " +
+					installedVersion + ", " +
+					obs_module_text("Current") + ": " +
+					requiredVersion + ")<br>";
+			}
+		}
+		// Remove the last <br> tag from errorMsgUpdate
+		if (!errorMsgUpdate.empty() &&
+		    errorMsgUpdate.substr(errorMsgUpdate.length() - 4) ==
+			    "<br>") {
+			errorMsgUpdate = errorMsgUpdate.substr(
+				0,
+				errorMsgUpdate.length() -
+					4); // Remove the last 4 characters ("<br>")
+		}
+
+		PluginsHaveIssue(errorMsgMissing, errorMsgUpdate);
+		missing_modules.clear();
+		version_mismatch_modules.clear();
+		return false;
+
 	} else {
-
-		std::map<std::string, std::string> missing_modules;
-		std::map<std::string, std::string> version_mismatch_modules;
-		std::string errorMsgMissing = "";
-		std::string errorMsgUpdate = "";
-		char *filepath = GetFilePath();
-
-		for (const auto &module : recommended_plugins) {
-			std::string plugin_name = module.first;
-			PluginInfo plugin_info = module.second;
-			std::string required_version = plugin_info.version;
-			std::string url = GetPlatformURL(plugin_info);
-			std::string search_string = plugin_info.searchString;
-
-			std::string installed_version = search_string_in_file(
-				filepath, search_string.c_str());
-
-			// Only add to missing_modules if plugin is recommended and not installed
-			if (installed_version.empty() &&
-			    plugin_info.recommended) {
-				missing_modules.insert(
-					{plugin_name, required_version});
-			}
-			// Only add to version_mismatch_modules if plugin is recommended and there's a version mismatch
-			else if (!installed_version.empty() &&
-				 installed_version != required_version &&
-				 plugin_info.recommended) {
-				version_mismatch_modules.insert(
-					{plugin_name, installed_version});
-			}
-		}
-
-		bfree(filepath);
-
-		if (!missing_modules.empty() ||
-		    !version_mismatch_modules.empty()) {
-			if (!missing_modules.empty()) {
-				errorMsgMissing += "<ul>";
-				for (const auto &module : missing_modules) {
-					std::string plugin_name = module.first;
-					std::string required_version =
-						module.second;
-					PluginInfo plugin_info =
-						recommended_plugins[plugin_name];
-					std::string url =
-						GetPlatformURL(plugin_info);
-
-					errorMsgMissing +=
-						"<li><a href=\"" + url + "\">" +
-						plugin_name + "</a></li>";
-				}
-				errorMsgMissing += "</ul>";
-			}
-
-			if (!version_mismatch_modules.empty()) {
-				errorMsgUpdate += "<ul>";
-				for (const auto &module :
-				     version_mismatch_modules) {
-					PluginInfo plugin_info =
-						all_plugins[module.first];
-					std::string required_version =
-						plugin_info.version;
-					std::string url =
-						GetPlatformURL(plugin_info);
-					errorMsgUpdate +=
-						"<li><a href=\"" + url + "\">" +
-						module.first + "</a> (" +
-						obs_module_text("Installed") +
-						": " +
-						module.second + ", " +
-						obs_module_text("Current") +
-						": " +
-						required_version + ")</li>";
-				}
-				errorMsgUpdate += "</ul>";
-			}
-			PluginsHaveIssue(errorMsgMissing, errorMsgUpdate);
-			missing_modules.clear();
-			version_mismatch_modules.clear();
-			return false;
-
-		} else {
-			PluginsUpToDateOutput();
-			return true;
-		}
+		PluginsUpToDateOutput();
+		return true;
 	}
 }
 
@@ -937,6 +997,85 @@ void LoadStreamUpFile(void *private_data)
 	obs_data_release(data);
 }
 
+void ShowInstalledPluginsDialog()
+{
+	// Get the installed plugins
+	std::vector<std::pair<std::string, std::string>> installedPlugins =
+		GetInstalledPlugins();
+
+	// Create the menu dialog
+	QDialog *dialog = new QDialog();
+	dialog->setWindowTitle(
+		obs_module_text("WindowSettingsInstalledPlugins"));
+	dialog->setFixedSize(dialog->sizeHint());
+
+	QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
+	mainLayout->setContentsMargins(20, 15, 20, 10);
+	mainLayout->setAlignment(Qt::AlignCenter);
+
+	// Create a rich text label to display the installed plugins
+	QLabel *pluginLabel =
+		new QLabel(obs_module_text("WindowSettingsInstalledPlugins"));
+	pluginLabel->setAlignment(Qt::AlignCenter);
+	pluginLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
+
+	mainLayout->addWidget(pluginLabel);
+	mainLayout->addSpacing(5);
+
+	QString pluginText;
+
+	if (installedPlugins.empty()) {
+		pluginText = obs_module_text("WindowSettingsInstalledPlugins");
+	} else {
+		pluginText = "";
+		QString tempText;
+
+		for (const auto &plugin : installedPlugins) {
+			tempText +=
+				QString::fromStdString(plugin.first) + " (" +
+				QString::fromStdString(plugin.second) + ")<br>";
+		}
+
+		// Remove the last <br> tag if it exists
+		if (tempText.endsWith("<br>")) {
+			tempText.chop(
+				4); // Remove the last 4 characters ("<br>")
+		}
+
+		pluginText = tempText;
+	}
+
+	QLabel *label = CreateRichTextLabel(pluginText);
+
+	// Create a group box to encapsulate the list of plugins
+	QGroupBox *groupBox =
+		new QGroupBox(obs_module_text("UpdaterCompatible"));
+	QVBoxLayout *groupBoxLayout = new QVBoxLayout(groupBox);
+	groupBoxLayout->addWidget(label);
+	groupBoxLayout->setContentsMargins(20, 10, 20, 10);
+
+	// Add the group box to the main layout
+	mainLayout->addWidget(groupBox);
+
+	// Create a horizontal layout for the close button
+	QHBoxLayout *closeButtonLayout = new QHBoxLayout();
+	QPushButton *closeButton = new QPushButton(obs_module_text("Close"));
+	closeButtonLayout->addWidget(closeButton);
+	closeButtonLayout->setAlignment(Qt::AlignCenter);
+
+	// Add the closeButtonLayout to the main layout
+	mainLayout->addLayout(closeButtonLayout);
+
+	// Connect the close button's clicked signal to close the dialog
+	QObject::connect(closeButton, &QPushButton::clicked, dialog,
+			 &QDialog::close);
+
+	dialog->setLayout(mainLayout);
+	dialog->setAttribute(Qt::WA_DeleteOnClose);
+	dialog->setWindowFlags(Qt::Window);
+	dialog->show();
+}
+
 void ShowAboutDialog()
 {
 	// Version
@@ -953,10 +1092,11 @@ void ShowAboutDialog()
 	topLayout->setAlignment(Qt::AlignCenter);
 
 	QLabel *iconLabel = new QLabel();
+	int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16 : 64;
 	iconLabel->setPixmap(
 		QApplication::style()
 			->standardIcon(QStyle::SP_MessageBoxInformation)
-			.pixmap(64, 64));
+			.pixmap(pixmapSize, pixmapSize));
 	topLayout->addWidget(iconLabel);
 
 	QLabel *mainMessageLabel = CreateRichTextLabel(
@@ -1095,20 +1235,30 @@ void ShowSettingsDialog()
 	QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
 	mainLayout->setContentsMargins(20, 15, 20, 10);
 
+	// Create the form layout for labels and checkboxes
+	QFormLayout *formLayout = new QFormLayout();
+
+	// Create the title label for "General"
+	QLabel *titleLabel = new QLabel("<b>General</b>");
+	titleLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
+
+	// Align the title label to the left
+	titleLabel->setAlignment(Qt::AlignLeft);
+
+	// Add the title label to the form layout
+	formLayout->addRow(titleLabel);
+
 	// Create the boolean property
 	obs_properties_t *props = obs_properties_create();
 	obs_property_t *p = obs_properties_add_bool(
 		props, "run_at_startup",
 		obs_module_text("WindowSettingsRunOnStartup"));
 
-	// Create a horizontal layout for the label and checkbox
-	QHBoxLayout *checkboxLayout = new QHBoxLayout();
-	QLabel *label =
-		new QLabel(obs_module_text("WindowSettingsRunOnStartup"));
+	// Create the label and checkbox
+	QLabel *label = CreateRichTextLabel(
+		obs_module_text("WindowSettingsRunOnStartup"));
 	QCheckBox *checkBox = new QCheckBox();
 	checkBox->setChecked(obs_data_get_bool(settings, obs_property_name(p)));
-	checkboxLayout->addWidget(checkBox);
-	checkboxLayout->addWidget(label);
 
 	// Connect the checkbox stateChanged signal to update the property value
 	QObject::connect(checkBox, &QCheckBox::stateChanged, [=](int state) {
@@ -1116,8 +1266,46 @@ void ShowSettingsDialog()
 		obs_data_set_bool(settings, obs_property_name(p), newValue);
 	});
 
-	// Add the checkbox layout to the main layout
-	mainLayout->addLayout(checkboxLayout);
+	// Add the label and checkbox to the form layout
+	formLayout->addRow(label, checkBox);
+
+	// Add a small spacer above the separator
+	formLayout->addItem(new QSpacerItem(0, 5));
+
+	// Create the line separator
+	QFrame *line = new QFrame();
+	line->setFrameShape(QFrame::HLine);
+	line->setFrameShadow(QFrame::Sunken);
+	line->setLineWidth(0);
+
+	// Add the line separator to the form layout
+	formLayout->addRow(line);
+
+	formLayout->addItem(new QSpacerItem(0, 5));
+
+	// Create the label for plugin management title
+	QLabel *pluginLabel =
+		new QLabel(obs_module_text("WindowSettingsPluginManagement"));
+	pluginLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+	pluginLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
+
+	// Create the button for viewing installed plugins
+	QPushButton *pluginButton = new QPushButton(
+		obs_module_text("WindowSettingsViewInstalledPlugins"));
+	pluginButton->setStyleSheet("text-align: center;");
+
+	// Connect the plugin button's clicked signal to show the installed plugins menu
+	QObject::connect(pluginButton, &QPushButton::clicked,
+			 ShowInstalledPluginsDialog);
+
+	// Add the plugin label and button to the form layout
+	formLayout->addRow(pluginLabel);
+	formLayout->addRow(pluginButton);
+
+	formLayout->addItem(new QSpacerItem(0, 5));
+
+	// Add the form layout to the main layout
+	mainLayout->addLayout(formLayout);
 
 	// Create a horizontal layout for the buttons
 	QHBoxLayout *buttonLayout = new QHBoxLayout();
