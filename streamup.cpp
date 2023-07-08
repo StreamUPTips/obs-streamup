@@ -1,6 +1,6 @@
 #include "streamup.hpp"
 #include "version.h"
-
+#include "obs-websocket-api.h"
 #include <curl/curl.h>
 #include <filesystem>
 #include <obs.h>
@@ -1375,13 +1375,31 @@ static void LoadMenu(QMenu *menu)
 
 //--------------------GENERAL OBS--------------------
 
+obs_websocket_vendor vendor = nullptr;
+
+void vendor_request_version(obs_data_t *request_data, obs_data_t *response_data,
+			    void *)
+{
+	UNUSED_PARAMETER(request_data);
+	obs_data_set_string(response_data, "version", PROJECT_VERSION);
+	obs_data_set_bool(response_data, "success", true);
+}
+
+void vendor_request_check_plugins(obs_data_t *request_data,
+				  obs_data_t *response_data, void *)
+{
+	UNUSED_PARAMETER(request_data);
+	bool pluginsUpToDate = CheckRecommendedOBSPlugins();
+	obs_data_set_bool(response_data, "success", pluginsUpToDate);
+}
+
 bool obs_module_load()
 {
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
 
 	InitialiseRequiredModules();
 
-	//Load run on startup settings
+	// Load run on startup settings
 	obs_data_t *settings = LoadSettings();
 	bool runAtStartup = obs_data_get_bool(settings, "run_at_startup");
 	if (runAtStartup) {
@@ -1389,13 +1407,23 @@ bool obs_module_load()
 	}
 	obs_data_release(settings);
 
-	//load menu
+	// Load menu
 	QAction *action =
 		static_cast<QAction *>(obs_frontend_add_tools_menu_qaction(
 			obs_module_text("StreamUP")));
 	QMenu *menu = new QMenu();
 	action->setMenu(menu);
 	QObject::connect(menu, &QMenu::aboutToShow, [menu] { LoadMenu(menu); });
+
+	// Register OBS WebSocket vendor and requests
+	vendor = obs_websocket_register_vendor("streamup");
+	if (!vendor)
+		return true;
+
+	obs_websocket_vendor_register_request(vendor, "version",
+					      vendor_request_version, nullptr);
+	obs_websocket_vendor_register_request(
+		vendor, "check_plugins", vendor_request_check_plugins, nullptr);
 
 	return true;
 }
