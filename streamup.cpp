@@ -828,7 +828,6 @@ void CheckAllPluginsForUpdates()
 		const std::string &installed_version = plugin.second;
 		const PluginInfo &plugin_info = all_plugins[plugin_name];
 		const std::string &required_version = plugin_info.version;
-		const std::string &url = GetPlatformURL(plugin_info);
 
 		if (installed_version != required_version) {
 			version_mismatch_modules.emplace(plugin_name,
@@ -885,7 +884,6 @@ bool CheckRecommendedOBSPlugins()
 		const std::string &plugin_name = module.first;
 		const PluginInfo &plugin_info = module.second;
 		const std::string &required_version = plugin_info.version;
-		const std::string &url = GetPlatformURL(plugin_info);
 		const std::string &search_string = plugin_info.searchString;
 
 		std::string installed_version =
@@ -914,7 +912,6 @@ bool CheckRecommendedOBSPlugins()
 			for (auto it = missing_modules.begin();
 			     it != missing_modules.end(); ++it) {
 				const std::string &moduleName = it->first;
-				const std::string &requiredVersion = it->second;
 				const PluginInfo &pluginInfo =
 					recommended_plugins[moduleName];
 				const std::string &url =
