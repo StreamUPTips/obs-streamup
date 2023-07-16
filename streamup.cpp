@@ -811,6 +811,33 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 	return installedPlugins;
 }
 
+std::string RemoveDots(const std::string &version)
+{
+	std::string result;
+	for (char c : version) {
+		if (c != '.') {
+			result += c;
+		}
+	}
+	return result;
+}
+
+bool IsVersionLessThan(const std::string &version1, const std::string &version2)
+{
+	std::string numericVersion1 = RemoveDots(version1);
+	std::string numericVersion2 = RemoveDots(version2);
+
+	try {
+		int numericValue1 = std::stoi(numericVersion1);
+		int numericValue2 = std::stoi(numericVersion2);
+
+		return numericValue1 < numericValue2;
+	} catch (const std::exception &) {
+		// Invalid numeric version format, cannot compare
+		return false;
+	}
+}
+
 void CheckAllPluginsForUpdates()
 {
 	if (all_plugins.empty()) {
@@ -829,7 +856,8 @@ void CheckAllPluginsForUpdates()
 		const PluginInfo &plugin_info = all_plugins[plugin_name];
 		const std::string &required_version = plugin_info.version;
 
-		if (installed_version != required_version) {
+		if (installed_version != required_version &&
+		    IsVersionLessThan(installed_version, required_version)) {
 			version_mismatch_modules.emplace(plugin_name,
 							 installed_version);
 		}
@@ -896,7 +924,9 @@ bool CheckRecommendedOBSPlugins()
 		// Only add to version_mismatch_modules if plugin is recommended and there's a version mismatch
 		else if (!installed_version.empty() &&
 			 installed_version != required_version &&
-			 plugin_info.recommended) {
+			 plugin_info.recommended &&
+			 IsVersionLessThan(installed_version,
+					   required_version)) {
 			version_mismatch_modules.emplace(plugin_name,
 							 installed_version);
 		}
