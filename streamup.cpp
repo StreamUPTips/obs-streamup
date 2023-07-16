@@ -895,7 +895,7 @@ void CheckAllPluginsForUpdates()
 	}
 }
 
-bool CheckRecommendedOBSPlugins()
+bool CheckRecommendedOBSPlugins(bool isLoadStreamUpFile = false)
 {
 	if (recommended_plugins.empty()) {
 		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
@@ -992,14 +992,16 @@ bool CheckRecommendedOBSPlugins()
 				errorMsgUpdate.length() -
 					4); // Remove the last 4 characters ("<br>")
 		}
+			PluginsHaveIssue(errorMsgMissing, errorMsgUpdate);
 
-		PluginsHaveIssue(errorMsgMissing, errorMsgUpdate);
 		missing_modules.clear();
 		version_mismatch_modules.clear();
 		return false;
 
 	} else {
-		PluginsUpToDateOutput();
+		if (!isLoadStreamUpFile) {
+			PluginsUpToDateOutput();
+		}
 		return true;
 	}
 }
@@ -1009,19 +1011,20 @@ void LoadStreamUpFile(void *private_data)
 {
 	UNUSED_PARAMETER(private_data);
 
-	if (!CheckRecommendedOBSPlugins()) {
-		return;
-	}
+	bool arePluginsUpToDate = CheckRecommendedOBSPlugins(true);
 
-	QString fileName = QFileDialog::getOpenFileName(
-		nullptr, QT_UTF8(obs_module_text("Load")), QString(),
-		"StreamUP File (*.streamup)");
-	if (fileName.isEmpty()) {
-		return;
+	if (arePluginsUpToDate) {
+		QString fileName = QFileDialog::getOpenFileName(
+			nullptr, QT_UTF8(obs_module_text("Load")), QString(),
+			"StreamUP File (*.streamup)");
+		if (fileName.isEmpty()) {
+			return;
+		}
+		obs_data_t *data =
+			obs_data_create_from_json_file(QT_TO_UTF8(fileName));
+		LoadScene(data, QFileInfo(fileName).absolutePath());
+		obs_data_release(data);
 	}
-	obs_data_t *data = obs_data_create_from_json_file(QT_TO_UTF8(fileName));
-	LoadScene(data, QFileInfo(fileName).absolutePath());
-	obs_data_release(data);
 }
 
 void ShowInstalledPluginsDialog()
