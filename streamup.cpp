@@ -1419,7 +1419,7 @@ void vendor_request_check_plugins(obs_data_t *request_data,
 				  obs_data_t *response_data, void *)
 {
 	UNUSED_PARAMETER(request_data);
-	bool pluginsUpToDate = CheckRecommendedOBSPlugins();
+	bool pluginsUpToDate = CheckRecommendedOBSPlugins(true);
 	obs_data_set_bool(response_data, "success", pluginsUpToDate);
 }
 
