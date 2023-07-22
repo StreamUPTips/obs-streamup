@@ -992,7 +992,7 @@ bool CheckRecommendedOBSPlugins(bool isLoadStreamUpFile = false)
 				errorMsgUpdate.length() -
 					4); // Remove the last 4 characters ("<br>")
 		}
-			PluginsHaveIssue(errorMsgMissing, errorMsgUpdate);
+		PluginsHaveIssue(errorMsgMissing, errorMsgUpdate);
 
 		missing_modules.clear();
 		version_mismatch_modules.clear();
@@ -1231,18 +1231,9 @@ void ShowAboutDialog()
 	dialog->show();
 }
 
-obs_data_t *LoadSettings()
-{
-	char *configPath = obs_module_config_path("config.json");
-	os_mkdirs(configPath);
-	obs_data_t *settings = obs_data_create_from_json_file(configPath);
-	bfree(configPath);
-	return settings;
-}
-
 void SaveSettings(obs_data_t *settings)
 {
-	char *configPath = obs_module_config_path("config.json");
+	char *configPath = obs_module_config_path("configs.json");
 
 	if (obs_data_save_json(settings, configPath)) {
 		blog(LOG_INFO, "Settings saved to %s", configPath);
@@ -1251,6 +1242,32 @@ void SaveSettings(obs_data_t *settings)
 	}
 
 	bfree(configPath);
+}
+
+obs_data_t *LoadSettings()
+{
+	char *file = obs_module_config_path("configs.json");
+	char *path_abs = os_get_abs_path_ptr(file);
+
+	obs_data_t *settings = obs_data_create_from_json_file(path_abs);
+
+	if (!settings) {
+		blog(LOG_INFO,
+		     "Settings not found. Creating default settings...");
+		os_mkdirs(obs_module_config_path(""));
+		// Create default settings
+		settings = obs_data_create();
+		obs_data_set_bool(settings, "run_at_startup", true);
+		if (obs_data_save_json(settings, path_abs)) {
+			blog(LOG_INFO, "Settings saved to %s", path_abs);
+		} else {
+			blog(LOG_WARNING, "Failed to save settings to file. %s");
+		}
+
+	} else {
+		blog(LOG_INFO, "Settings loaded successfully");
+	}
+	return settings;
 }
 
 void ShowSettingsDialog()
