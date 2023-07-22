@@ -1261,7 +1261,7 @@ obs_data_t *LoadSettings()
 		if (obs_data_save_json(settings, path_abs)) {
 			blog(LOG_INFO, "Settings saved to %s", path_abs);
 		} else {
-			blog(LOG_WARNING, "Failed to save settings to file. %s");
+			blog(LOG_WARNING, "Failed to save settings to file.");
 		}
 
 	} else {
