@@ -914,6 +914,11 @@ bool CheckRecommendedOBSPlugins(bool isLoadStreamUpFile = false)
 		const std::string &required_version = plugin_info.version;
 		const std::string &search_string = plugin_info.searchString;
 
+		// Check if the search_string contains "[ignore]"
+		if (search_string.find("[ignore]") != std::string::npos) {
+			continue; // Skip to the next iteration
+		}
+
 		std::string installed_version =
 			search_string_in_file(filepath, search_string.c_str());
 
@@ -934,11 +939,39 @@ bool CheckRecommendedOBSPlugins(bool isLoadStreamUpFile = false)
 
 	bfree(filepath);
 
-	if (!missing_modules.empty() || !version_mismatch_modules.empty()) {
-		std::string errorMsgMissing;
-		std::string errorMsgUpdate;
+	bool hasUpdates = !version_mismatch_modules.empty();
+	bool hasMissingPlugins = !missing_modules.empty();
 
-		if (!missing_modules.empty()) {
+	if (hasUpdates || hasMissingPlugins) {
+		if (hasUpdates) {
+			for (const auto &module : version_mismatch_modules) {
+				const PluginInfo &plugin_info =
+					all_plugins[module.first];
+				const std::string &required_version =
+					plugin_info.version;
+				const std::string &url =
+					GetPlatformURL(plugin_info);
+				errorMsgUpdate += "<a href=\"" + url + "\">" +
+						  module.first + "</a> (" +
+						  obs_module_text("Installed") +
+						  ": " + module.second + ", " +
+						  obs_module_text("Current") +
+						  ": " + required_version +
+						  ")<br>";
+			}
+
+			// Remove the last <br> tag from errorMsgUpdate
+			if (!errorMsgUpdate.empty() &&
+			    errorMsgUpdate.substr(errorMsgUpdate.length() -
+						  4) == "<br>") {
+				errorMsgUpdate = errorMsgUpdate.substr(
+					0,
+					errorMsgUpdate.length() -
+						4); // Remove the last 4 characters ("<br>")
+			}
+		}
+
+		if (hasMissingPlugins) {
 			for (auto it = missing_modules.begin();
 			     it != missing_modules.end(); ++it) {
 				const std::string &moduleName = it->first;
@@ -950,49 +983,19 @@ bool CheckRecommendedOBSPlugins(bool isLoadStreamUpFile = false)
 				errorMsgMissing += "<a href=\"" + url + "\">" +
 						   moduleName + "</a><br>";
 			}
-		}
-		// Remove the last <br> tag from errorMsgMissing
-		if (!errorMsgMissing.empty() &&
-		    errorMsgMissing.substr(errorMsgMissing.length() - 4) ==
-			    "<br>") {
-			errorMsgMissing = errorMsgMissing.substr(
-				0,
-				errorMsgMissing.length() -
-					4); // Remove the last 4 characters ("<br>")
-		}
-
-		if (!version_mismatch_modules.empty()) {
-			for (auto it = version_mismatch_modules.begin();
-			     it != version_mismatch_modules.end(); ++it) {
-				const std::string &moduleName = it->first;
-				const std::string &installedVersion =
-					it->second;
-				const PluginInfo &pluginInfo =
-					all_plugins[moduleName];
-				const std::string &requiredVersion =
-					pluginInfo.version;
-				const std::string &url =
-					GetPlatformURL(pluginInfo);
-
-				errorMsgUpdate +=
-					"<a href=\"" + url + "\">" +
-					moduleName + "</a> (" +
-					obs_module_text("Installed") + ": " +
-					installedVersion + ", " +
-					obs_module_text("Current") + ": " +
-					requiredVersion + ")<br>";
+			// Remove the last <br> tag from errorMsgMissing
+			if (!errorMsgMissing.empty() &&
+			    errorMsgMissing.substr(errorMsgMissing.length() -
+						   4) == "<br>") {
+				errorMsgMissing = errorMsgMissing.substr(
+					0,
+					errorMsgMissing.length() -
+						4); // Remove the last 4 characters ("<br>")
 			}
 		}
-		// Remove the last <br> tag from errorMsgUpdate
-		if (!errorMsgUpdate.empty() &&
-		    errorMsgUpdate.substr(errorMsgUpdate.length() - 4) ==
-			    "<br>") {
-			errorMsgUpdate = errorMsgUpdate.substr(
-				0,
-				errorMsgUpdate.length() -
-					4); // Remove the last 4 characters ("<br>")
-		}
-		PluginsHaveIssue(errorMsgMissing, errorMsgUpdate);
+
+		PluginsHaveIssue(hasMissingPlugins ? errorMsgMissing : "NULL",
+				 errorMsgUpdate);
 
 		missing_modules.clear();
 		version_mismatch_modules.clear();
@@ -1267,6 +1270,8 @@ obs_data_t *LoadSettings()
 	} else {
 		blog(LOG_INFO, "Settings loaded successfully");
 	}
+	bfree(file);
+	bfree(path_abs);
 	return settings;
 }
 
@@ -1444,17 +1449,7 @@ bool obs_module_load()
 {
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
 
-	InitialiseRequiredModules();
-
-	// Load run on startup settings
-	obs_data_t *settings = LoadSettings();
-	bool runAtStartup = obs_data_get_bool(settings, "run_at_startup");
-	if (runAtStartup) {
-		CheckAllPluginsForUpdates();
-	}
-	obs_data_release(settings);
-
-	// Load menu
+	//Load menu
 	QAction *action =
 		static_cast<QAction *>(obs_frontend_add_tools_menu_qaction(
 			obs_module_text("StreamUP")));
@@ -1462,8 +1457,8 @@ bool obs_module_load()
 	action->setMenu(menu);
 	QObject::connect(menu, &QMenu::aboutToShow, [menu] { LoadMenu(menu); });
 
-	// Register OBS WebSocket vendor and requests
-	vendor = obs_websocket_register_vendor("streamup");
+	//Register OBS WebSocket vendor and requests vendor =
+	obs_websocket_register_vendor("streamup");
 	if (!vendor)
 		return true;
 
@@ -1473,6 +1468,19 @@ bool obs_module_load()
 		vendor, "check_plugins", vendor_request_check_plugins, nullptr);
 
 	return true;
+}
+
+void obs_module_post_load(void)
+{
+	InitialiseRequiredModules();
+
+	//Load run on startup settings
+	obs_data_t *settings = LoadSettings();
+	bool runAtStartup = obs_data_get_bool(settings, "run_at_startup");
+	if (runAtStartup) {
+		CheckAllPluginsForUpdates();
+	}
+	obs_data_release(settings);
 }
 
 void obs_module_unload() {}
