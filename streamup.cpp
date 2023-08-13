@@ -1457,8 +1457,8 @@ bool obs_module_load()
 	action->setMenu(menu);
 	QObject::connect(menu, &QMenu::aboutToShow, [menu] { LoadMenu(menu); });
 
-	//Register OBS WebSocket vendor and requests vendor =
-	obs_websocket_register_vendor("streamup");
+	//Register OBS WebSocket vendor and requests
+	vendor = obs_websocket_register_vendor("streamup");
 	if (!vendor)
 		return true;
 
