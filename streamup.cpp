@@ -604,45 +604,50 @@ std::string search_string_in_file(char *path, const char *search)
 	return "";
 }
 
-void PluginsUpToDateOutput()
+void PluginsUpToDateOutput(bool manuallyTriggered)
 {
-	ShowNonModalDialog([]() {
-		QDialog *successDialog = new QDialog();
-		successDialog->setWindowTitle(
-			obs_module_text("WindowUpToDateTitle"));
-		successDialog->setFixedSize(successDialog->sizeHint());
+	if (manuallyTriggered) {
+		ShowNonModalDialog([]() {
+			QDialog *successDialog = new QDialog();
+			successDialog->setWindowTitle(
+				obs_module_text("WindowUpToDateTitle"));
+			successDialog->setFixedSize(successDialog->sizeHint());
 
-		QVBoxLayout *successLayout = new QVBoxLayout(successDialog);
-		successLayout->setContentsMargins(20, 15, 20, 10);
+			QVBoxLayout *successLayout =
+				new QVBoxLayout(successDialog);
+			successLayout->setContentsMargins(20, 15, 20, 10);
 
-		QLabel *iconLabel = new QLabel();
-		int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16
-								       : 32;
-		iconLabel->setPixmap(
-			QApplication::style()
-				->standardIcon(QStyle::SP_DialogApplyButton)
-				.pixmap(pixmapSize, pixmapSize));
-		QLabel *successLabel = CreateRichTextLabel(
-			obs_module_text("WindowUpToDateMessage"));
+			QLabel *iconLabel = new QLabel();
+			int pixmapSize =
+				(strcmp(PLATFORM_NAME, "macos") == 0) ? 16 : 32;
+			iconLabel->setPixmap(
+				QApplication::style()
+					->standardIcon(
+						QStyle::SP_DialogApplyButton)
+					.pixmap(pixmapSize, pixmapSize));
+			QLabel *successLabel = CreateRichTextLabel(
+				obs_module_text("WindowUpToDateMessage"));
 
-		QHBoxLayout *topLayout = new QHBoxLayout();
-		topLayout->addWidget(iconLabel);
-		topLayout->addSpacing(10);
-		topLayout->addWidget(successLabel, 1);
+			QHBoxLayout *topLayout = new QHBoxLayout();
+			topLayout->addWidget(iconLabel);
+			topLayout->addSpacing(10);
+			topLayout->addWidget(successLabel, 1);
 
-		successLayout->addLayout(topLayout);
-		successLayout->addSpacing(10);
+			successLayout->addLayout(topLayout);
+			successLayout->addSpacing(10);
 
-		QPushButton *okButton = new QPushButton(obs_module_text("OK"));
-		QObject::connect(okButton, &QPushButton::clicked, successDialog,
-				 &QDialog::close);
+			QPushButton *okButton =
+				new QPushButton(obs_module_text("OK"));
+			QObject::connect(okButton, &QPushButton::clicked,
+					 successDialog, &QDialog::close);
 
-		successLayout->addWidget(okButton);
-		successDialog->setLayout(successLayout);
-		successDialog->setWindowFlags(Qt::Window);
-		successDialog->setAttribute(Qt::WA_DeleteOnClose);
-		successDialog->show();
-	});
+			successLayout->addWidget(okButton);
+			successDialog->setLayout(successLayout);
+			successDialog->setWindowFlags(Qt::Window);
+			successDialog->setAttribute(Qt::WA_DeleteOnClose);
+			successDialog->show();
+		});
+	}
 }
 
 void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
@@ -838,7 +843,7 @@ bool IsVersionLessThan(const std::string &version1, const std::string &version2)
 	}
 }
 
-void CheckAllPluginsForUpdates()
+void CheckAllPluginsForUpdates(bool manuallyTriggered)
 {
 	if (all_plugins.empty()) {
 		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
@@ -891,7 +896,7 @@ void CheckAllPluginsForUpdates()
 		PluginsHaveIssue("NULL", errorMsgUpdate);
 		version_mismatch_modules.clear();
 	} else {
-		PluginsUpToDateOutput();
+		PluginsUpToDateOutput(manuallyTriggered);
 	}
 }
 
@@ -1003,7 +1008,7 @@ bool CheckRecommendedOBSPlugins(bool isLoadStreamUpFile = false)
 
 	} else {
 		if (!isLoadStreamUpFile) {
-			PluginsUpToDateOutput();
+			PluginsUpToDateOutput(true);
 		}
 		return true;
 	}
@@ -1028,6 +1033,18 @@ void LoadStreamUpFile(void *private_data)
 		LoadScene(data, QFileInfo(fileName).absolutePath());
 		obs_data_release(data);
 	}
+}
+
+void ForceLoadStreamUpFile(void *private_data) {
+	QString fileName = QFileDialog::getOpenFileName(
+		nullptr, QT_UTF8(obs_module_text("Load")), QString(),
+		"StreamUP File (*.streamup)");
+	if (fileName.isEmpty()) {
+		return;
+	}
+	obs_data_t *data = obs_data_create_from_json_file(QT_TO_UTF8(fileName));
+	LoadScene(data, QFileInfo(fileName).absolutePath());
+	obs_data_release(data);
 }
 
 void ShowInstalledPluginsDialog()
@@ -1399,8 +1416,22 @@ static void LoadMenu(QMenu *menu)
 
 	if (strcmp(PLATFORM_NAME, "windows") == 0) {
 		a = menu->addAction(obs_module_text("MenuInstallProduct"));
-		QObject::connect(a, &QAction::triggered,
-				 [] { LoadStreamUpFile(NULL); });
+		QObject::connect(a, &QAction::triggered, [menu]() {
+			// Check if the Shift key is held down
+			Qt::KeyboardModifiers modifiers =
+				QApplication::keyboardModifiers();
+			bool shiftKeyPressed = modifiers & Qt::ShiftModifier;
+
+			if (shiftKeyPressed) {
+				ForceLoadStreamUpFile(NULL);
+			} else {
+				bool arePluginsUpToDate =
+					CheckRecommendedOBSPlugins(true);
+				if (arePluginsUpToDate) {
+					LoadStreamUpFile(NULL);
+				}
+			}
+		});
 		a = menu->addAction(obs_module_text("MenuDownloadProduct"));
 		QObject::connect(a, &QAction::triggered, []() {
 			QDesktopServices::openUrl(
@@ -1415,7 +1446,7 @@ static void LoadMenu(QMenu *menu)
 
 	a = menu->addAction(obs_module_text("MenuCheckPluginUpdates"));
 	QObject::connect(a, &QAction::triggered,
-			 [] { CheckAllPluginsForUpdates(); });
+			 [] { CheckAllPluginsForUpdates(true); });
 	menu->addSeparator();
 
 	a = menu->addAction(obs_module_text("MenuAbout"));
@@ -1474,11 +1505,11 @@ void obs_module_post_load(void)
 {
 	InitialiseRequiredModules();
 
-	//Load run on startup settings
+	// Load run on startup settings
 	obs_data_t *settings = LoadSettings();
 	bool runAtStartup = obs_data_get_bool(settings, "run_at_startup");
 	if (runAtStartup) {
-		CheckAllPluginsForUpdates();
+		CheckAllPluginsForUpdates(false);
 	}
 	obs_data_release(settings);
 }
