@@ -1035,7 +1035,7 @@ void LoadStreamUpFile(void *private_data)
 	}
 }
 
-void ForceLoadStreamUpFile(void *private_data) {
+void ForceLoadStreamUpFile() {
 	QString fileName = QFileDialog::getOpenFileName(
 		nullptr, QT_UTF8(obs_module_text("Load")), QString(),
 		"StreamUP File (*.streamup)");
@@ -1416,14 +1416,14 @@ static void LoadMenu(QMenu *menu)
 
 	if (strcmp(PLATFORM_NAME, "windows") == 0) {
 		a = menu->addAction(obs_module_text("MenuInstallProduct"));
-		QObject::connect(a, &QAction::triggered, [menu]() {
+		QObject::connect(a, &QAction::triggered, []() {
 			// Check if the Shift key is held down
 			Qt::KeyboardModifiers modifiers =
 				QApplication::keyboardModifiers();
 			bool shiftKeyPressed = modifiers & Qt::ShiftModifier;
 
 			if (shiftKeyPressed) {
-				ForceLoadStreamUpFile(NULL);
+				ForceLoadStreamUpFile();
 			} else {
 				bool arePluginsUpToDate =
 					CheckRecommendedOBSPlugins(true);
