@@ -1,6 +1,6 @@
 1 VERSIONINFO
- FILEVERSION 1,1,5,0
- PRODUCTVERSION 1,1,5,0
+ FILEVERSION 1,2,0,0
+ PRODUCTVERSION 1,2,0,0
  FILEFLAGSMASK 0x0L
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -17,12 +17,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Andi Stone Media"
             VALUE "FileDescription", "StreamUP"
-            VALUE "FileVersion", "1.1.5"
+            VALUE "FileVersion", "1.2.0"
             VALUE "InternalName", "streamup"
             VALUE "LegalCopyright", "(C) Andi Stone Media"
             VALUE "OriginalFilename", "streamup"
             VALUE "ProductName", "StreamUP"
-            VALUE "ProductVersion", "1.1.5"
+            VALUE "ProductVersion", "1.2.0"
         END
     END
     BLOCK "VarFileInfo"

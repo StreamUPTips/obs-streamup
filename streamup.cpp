@@ -84,6 +84,14 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 	obs_data_array_t *items = obs_data_get_array(settings, "items");
 	size_t count = obs_data_array_count(items);
 
+	//Set a groups custom size
+	if (obs_data_get_bool(settings, "custom_size")) {
+		obs_data_set_int(settings, "cx",
+				 obs_data_get_int(settings, "cx") * factor);
+		obs_data_set_int(settings, "cy",
+				 obs_data_get_int(settings, "cy") * factor);
+	}
+	//Set all sources pos, bounds and scale
 	for (size_t i = 0; i < count; i++) {
 		obs_data_t *item_data = obs_data_array_item(items, i);
 		vec2 vec2;
@@ -242,8 +250,10 @@ static void LoadSources(obs_data_array_t *data, QString path)
 	const size_t count = obs_data_array_count(data);
 	std::list<obs_source_t *> ref_sources;
 	std::list<obs_source_t *> load_sources;
-	uint32_t w = obs_source_get_width(obs_frontend_get_current_scene());
+	obs_source_t *cs = obs_frontend_get_current_scene();
+	uint32_t w = obs_source_get_width(cs);
 	float factor = (float)w / 1920.0f;
+	obs_source_release(cs);
 	for (size_t i = 0; i < count; i++) {
 		obs_data_t *sourceData = obs_data_array_item(data, i);
 		const char *name = obs_data_get_string(sourceData, "name");
@@ -1014,6 +1024,97 @@ bool CheckRecommendedOBSPlugins(bool isLoadStreamUpFile = false)
 	}
 }
 
+//-------------------TOOLS-------------------
+const char *monitoringTypeToString(obs_monitoring_type type)
+{
+	switch (type) {
+	case OBS_MONITORING_TYPE_NONE:
+		return "None";
+	case OBS_MONITORING_TYPE_MONITOR_ONLY:
+		return "Monitor Only";
+	case OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT:
+		return "Monitor and Output";
+	default:
+		return "Unknown";
+	}
+}
+
+bool enum_sources_callback(void *data, obs_source_t *source)
+{
+	UNUSED_PARAMETER(data);
+
+	// Get the source name
+	const char *source_name = obs_source_get_name(source);
+
+	obs_monitoring_type original_monitoring_type =
+		obs_source_get_monitoring_type(source);
+
+	if (original_monitoring_type != OBS_MONITORING_TYPE_NONE) {
+		// Set the audio monitoring type to "OBS_MONITORING_TYPE_NONE".
+		obs_source_set_monitoring_type(source,
+					       OBS_MONITORING_TYPE_NONE);
+
+		// Set the audio monitoring type back to the original monitoring type.
+		obs_source_set_monitoring_type(source,
+					       original_monitoring_type);
+
+		blog(LOG_INFO, "StreamUP: '%s' has refreshed audio '%s'",
+		     source_name,
+		     monitoringTypeToString(original_monitoring_type));
+	}
+
+	return true;
+}
+
+void ResetAudioMonitoringTypes()
+{
+	QDialog *dialog = new QDialog();
+	dialog->setWindowTitle(obs_module_text("MenuResetAudioMonitoring"));
+	dialog->setFixedSize(dialog->sizeHint());
+
+	QVBoxLayout *successLayout = new QVBoxLayout(dialog);
+	successLayout->setContentsMargins(20, 15, 20, 10);
+
+	QLabel *iconLabel = new QLabel();
+	int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16 : 32;
+	iconLabel->setPixmap(
+		QApplication::style()
+			->standardIcon(QStyle::SP_MessageBoxInformation)
+			.pixmap(pixmapSize, pixmapSize));
+	QLabel *successLabel = CreateRichTextLabel(
+		obs_module_text("ResetAudioMonitoringInfo"));
+
+	QHBoxLayout *topLayout = new QHBoxLayout();
+	topLayout->addWidget(iconLabel);
+	topLayout->addSpacing(10);
+	topLayout->addWidget(successLabel, 1);
+
+	successLayout->addLayout(topLayout);
+	successLayout->addSpacing(10);
+
+	QHBoxLayout *buttonLayout = new QHBoxLayout();
+
+	QPushButton *okButton = new QPushButton(obs_module_text("OK"));
+	QObject::connect(okButton, &QPushButton::clicked, [=]() {
+		obs_enum_sources(enum_sources_callback, nullptr);
+		dialog->close();
+	});
+
+	QPushButton *cancelButton = new QPushButton(obs_module_text("Cancel"));
+	QObject::connect(cancelButton, &QPushButton::clicked,
+			 [=]() { dialog->close(); });
+
+	buttonLayout->addWidget(cancelButton);
+	buttonLayout->addWidget(okButton);
+
+	// Add the button layout to your main layout (mainLayout or successLayout, depending on your use case)
+	successLayout->addLayout(buttonLayout);
+	dialog->setLayout(successLayout);
+	dialog->setWindowFlags(Qt::Window);
+	dialog->setAttribute(Qt::WA_DeleteOnClose);
+	dialog->show();
+}
+
 //--------------------MENU & ABOUT-------------------
 void LoadStreamUpFile(void *private_data)
 {
@@ -1035,7 +1136,8 @@ void LoadStreamUpFile(void *private_data)
 	}
 }
 
-void ForceLoadStreamUpFile() {
+void ForceLoadStreamUpFile()
+{
 	QString fileName = QFileDialog::getOpenFileName(
 		nullptr, QT_UTF8(obs_module_text("Load")), QString(),
 		"StreamUP File (*.streamup)");
@@ -1413,6 +1515,7 @@ static void LoadMenu(QMenu *menu)
 
 	menu->clear();
 	QAction *a;
+	QMenu *toolsMenu = new QMenu(obs_module_text("MenuTools"), menu);
 
 	if (strcmp(PLATFORM_NAME, "windows") == 0) {
 		a = menu->addAction(obs_module_text("MenuInstallProduct"));
@@ -1447,6 +1550,12 @@ static void LoadMenu(QMenu *menu)
 	a = menu->addAction(obs_module_text("MenuCheckPluginUpdates"));
 	QObject::connect(a, &QAction::triggered,
 			 [] { CheckAllPluginsForUpdates(true); });
+
+	a = toolsMenu->addAction(obs_module_text("MenuResetAudioMonitoring"));
+	QObject::connect(a, &QAction::triggered,
+			 [] { ResetAudioMonitoringTypes(); });
+	menu->addMenu(toolsMenu);
+
 	menu->addSeparator();
 
 	a = menu->addAction(obs_module_text("MenuAbout"));
