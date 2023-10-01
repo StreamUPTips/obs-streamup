@@ -1039,7 +1039,7 @@ const char *monitoringTypeToString(obs_monitoring_type type)
 	}
 }
 
-bool enum_sources_callback(void *data, obs_source_t *source)
+bool EnumSourcesAudioMonitoring(void *data, obs_source_t *source)
 {
 	UNUSED_PARAMETER(data);
 
@@ -1066,10 +1066,37 @@ bool enum_sources_callback(void *data, obs_source_t *source)
 	return true;
 }
 
-void ResetAudioMonitoringTypes()
+bool EnumSourcesBrowser(void *data, obs_source_t *source)
+{
+	UNUSED_PARAMETER(data);
+
+	//Get source ID
+	const char *source_id = obs_source_get_id(source);
+	const char *source_name = obs_source_get_name(source);
+
+	if (strcmp(source_id, "browser_source") == 0) {
+		obs_data_t *settings = obs_source_get_settings(source);
+		int fps = obs_data_get_int(settings, "fps");
+
+		if (fps % 2 == 0) {
+			obs_data_set_int(settings, "fps", fps + 1);
+		} else {
+			obs_data_set_int(settings, "fps", fps - 1);
+		}
+		obs_source_update(source, settings);
+		blog(LOG_INFO, "StreamUP: refreshed '%s' browser source",
+		     source_name);
+
+		obs_data_release(settings);
+	}
+
+	return true;
+}
+
+void RefreshAudioMonitoringTypes()
 {
 	QDialog *dialog = new QDialog();
-	dialog->setWindowTitle(obs_module_text("MenuResetAudioMonitoring"));
+	dialog->setWindowTitle(obs_module_text("MenuRefreshAudioMonitoring"));
 	dialog->setFixedSize(dialog->sizeHint());
 
 	QVBoxLayout *successLayout = new QVBoxLayout(dialog);
@@ -1094,9 +1121,60 @@ void ResetAudioMonitoringTypes()
 
 	QHBoxLayout *buttonLayout = new QHBoxLayout();
 
-	QPushButton *okButton = new QPushButton(obs_module_text("OK"));
+	QPushButton *okButton =
+		new QPushButton(obs_module_text("RefreshAudioMonitoring"));
 	QObject::connect(okButton, &QPushButton::clicked, [=]() {
-		obs_enum_sources(enum_sources_callback, nullptr);
+		obs_enum_sources(EnumSourcesAudioMonitoring, nullptr);
+		dialog->close();
+	});
+
+	QPushButton *cancelButton = new QPushButton(obs_module_text("Cancel"));
+	QObject::connect(cancelButton, &QPushButton::clicked,
+			 [=]() { dialog->close(); });
+
+	buttonLayout->addWidget(cancelButton);
+	buttonLayout->addWidget(okButton);
+
+	// Add the button layout to your main layout (mainLayout or successLayout, depending on your use case)
+	successLayout->addLayout(buttonLayout);
+	dialog->setLayout(successLayout);
+	dialog->setWindowFlags(Qt::Window);
+	dialog->setAttribute(Qt::WA_DeleteOnClose);
+	dialog->show();
+}
+
+void RefreshBrowserSources()
+{
+	QDialog *dialog = new QDialog();
+	dialog->setWindowTitle(obs_module_text("MenuRefreshBrowserSources"));
+	dialog->setFixedSize(dialog->sizeHint());
+
+	QVBoxLayout *successLayout = new QVBoxLayout(dialog);
+	successLayout->setContentsMargins(20, 15, 20, 10);
+
+	QLabel *iconLabel = new QLabel();
+	int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16 : 32;
+	iconLabel->setPixmap(
+		QApplication::style()
+			->standardIcon(QStyle::SP_MessageBoxInformation)
+			.pixmap(pixmapSize, pixmapSize));
+	QLabel *successLabel = CreateRichTextLabel(
+		obs_module_text("RefreshBrowserSourcesInfo"));
+
+	QHBoxLayout *topLayout = new QHBoxLayout();
+	topLayout->addWidget(iconLabel);
+	topLayout->addSpacing(10);
+	topLayout->addWidget(successLabel, 1);
+
+	successLayout->addLayout(topLayout);
+	successLayout->addSpacing(10);
+
+	QHBoxLayout *buttonLayout = new QHBoxLayout();
+
+	QPushButton *okButton =
+		new QPushButton(obs_module_text("RefreshBrowserSources"));
+	QObject::connect(okButton, &QPushButton::clicked, [=]() {
+		obs_enum_sources(EnumSourcesBrowser, nullptr);
 		dialog->close();
 	});
 
@@ -1551,9 +1629,13 @@ static void LoadMenu(QMenu *menu)
 	QObject::connect(a, &QAction::triggered,
 			 [] { CheckAllPluginsForUpdates(true); });
 
-	a = toolsMenu->addAction(obs_module_text("MenuResetAudioMonitoring"));
+	a = toolsMenu->addAction(obs_module_text("MenuRefreshAudioMonitoring"));
 	QObject::connect(a, &QAction::triggered,
-			 [] { ResetAudioMonitoringTypes(); });
+			 [] { RefreshAudioMonitoringTypes(); });
+
+	a = toolsMenu->addAction(obs_module_text("MenuRefreshBrowserSources"));
+	QObject::connect(a, &QAction::triggered,
+			 [] { RefreshBrowserSources(); });
 	menu->addMenu(toolsMenu);
 
 	menu->addSeparator();
@@ -1585,6 +1667,45 @@ void vendor_request_check_plugins(obs_data_t *request_data,
 	obs_data_set_bool(response_data, "success", pluginsUpToDate);
 }
 
+void vendor_request_refresh_audio_monitoring(obs_data_t *request_data,
+					     obs_data_t *response_data, void *)
+{
+	UNUSED_PARAMETER(request_data);
+	obs_enum_sources(EnumSourcesAudioMonitoring, nullptr);
+	obs_data_set_bool(response_data, "Audio monitoring refreshed", true);
+}
+
+static void hotkey_refresh_audio_monitoring(
+	void *data, obs_hotkey_id id, obs_hotkey_t *hotkey,
+		       bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+	if (!pressed)
+		return;
+	obs_enum_sources(EnumSourcesAudioMonitoring, nullptr);
+}
+
+void vendor_request_refresh_browser_sources(obs_data_t *request_data,
+					    obs_data_t *response_data, void *)
+{
+	UNUSED_PARAMETER(request_data);
+	obs_enum_sources(EnumSourcesBrowser, nullptr);
+	obs_data_set_bool(response_data, "Browser sources refreshed", true);
+}
+
+static void hotkey_refresh_browser_sources(void *data, obs_hotkey_id id,
+					    obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+	if (!pressed)
+		return;
+	obs_enum_sources(EnumSourcesBrowser, nullptr);
+}
+
 bool obs_module_load()
 {
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
@@ -1602,10 +1723,30 @@ bool obs_module_load()
 	if (!vendor)
 		return true;
 
+	//OBSws -> Request Version
 	obs_websocket_vendor_register_request(vendor, "version",
 					      vendor_request_version, nullptr);
+	//OBSws -> Check Plugins
 	obs_websocket_vendor_register_request(
 		vendor, "check_plugins", vendor_request_check_plugins, nullptr);
+	//OBSws & Hotkey -> Refresh Audio Monitoring
+	obs_websocket_vendor_register_request(
+		vendor, "refresh_audio_monitoring",
+		vendor_request_refresh_audio_monitoring, nullptr);
+
+	obs_hotkey_register_frontend(
+		"refresh_audio_monitoring", obs_module_text("RefreshAudioMonitoring"),
+				     hotkey_refresh_audio_monitoring,
+				     nullptr);
+	//OBSws -> Refresh Browser Sources
+	obs_websocket_vendor_register_request(
+		vendor, "refresh_browser_sources",
+		vendor_request_refresh_browser_sources, nullptr);
+
+	obs_hotkey_register_frontend("refresh_browser_sources",
+				     obs_module_text("RefreshBrowserSources"),
+				     hotkey_refresh_browser_sources, nullptr);
+
 
 	return true;
 }
