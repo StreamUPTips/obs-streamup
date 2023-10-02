@@ -767,7 +767,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 
 		if (errorMsgMissing != "NULL") {
 			QPushButton *customButton = new QPushButton(
-				obs_module_text("DownloadPluginstaller"));
+				obs_module_text("MenuDownloadPluginstaller"));
 			QObject::connect(customButton, &QPushButton::clicked, []() {
 				QDesktopServices::openUrl(QUrl(
 					"https://streamup.tips/product/plugin-installer"));
@@ -1109,7 +1109,7 @@ void RefreshAudioMonitoringTypes()
 			->standardIcon(QStyle::SP_MessageBoxInformation)
 			.pixmap(pixmapSize, pixmapSize));
 	QLabel *successLabel = CreateRichTextLabel(
-		obs_module_text("ResetAudioMonitoringInfo"));
+		obs_module_text("RefreshAudioMonitoringInfo"));
 
 	QHBoxLayout *topLayout = new QHBoxLayout();
 	topLayout->addWidget(iconLabel);
@@ -1388,16 +1388,8 @@ void ShowAboutDialog()
 	socialBoxLayout->addLayout(gridLayout2);
 
 	QLabel *textLabel3 = CreateRichTextLabel(
-		"<b><a href='https://youtube.com/andilippi'>YouTube</a></b>");
+		"<b><a href='https://andistonemedia.mystl.ink'>All Andi's Links</a></b>");
 	gridLayout2->addWidget(textLabel3, 0, 0);
-
-	QLabel *textLabel4 = CreateRichTextLabel(
-		"<b><a href='https://twitch.tv/andilippi'>Twitch</a></b>");
-	gridLayout2->addWidget(textLabel4, 0, 1);
-
-	QLabel *textLabel5 = CreateRichTextLabel(
-		"<b><a href='https://twitter.com/andi_stone'>Twitter</a></b>");
-	gridLayout2->addWidget(textLabel5, 0, 2);
 
 	gridLayout2->setHorizontalSpacing(30);
 	gridLayout2->setAlignment(Qt::AlignCenter);
