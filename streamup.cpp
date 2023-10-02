@@ -332,41 +332,83 @@ static void LoadScene(obs_data_t *data, QString path)
 	obs_data_array_release(sourcesData);
 }
 
-//--------------------CHECK FOR PLUGIN UPDATES ETC--------------------
-void ShowNonModalDialog(const std::function<void()> &dialogFunction)
+//--------------------UI HELPERS--------------------
+QDialog *CreateDialogWindow(const char *windowTitle)
 {
-	QMetaObject::invokeMethod(qApp, dialogFunction, Qt::QueuedConnection);
+	QDialog *dialog = new QDialog();
+
+	dialog->setWindowTitle(obs_module_text(windowTitle));
+	dialog->setWindowFlags(Qt::Window);
+	dialog->setAttribute(Qt::WA_DeleteOnClose);
+
+	return dialog;
 }
 
-QLabel *CreateRichTextLabel(const QString &text)
+QLabel *CreateRichTextLabel(const QString &text, bool bold)
 {
 	QLabel *label = new QLabel;
 	label->setText(text);
 	label->setTextFormat(Qt::RichText);
 	label->setTextInteractionFlags(Qt::TextBrowserInteraction);
 	label->setOpenExternalLinks(true);
+	if (bold) {
+		label->setStyleSheet("font-weight: bold; font-size: 14px;");
+	}
 	return label;
+}
+
+QLabel *CreateIconLabel(const QStyle::StandardPixmap &iconName)
+{
+	QLabel *icon = new QLabel();
+	int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16 : 64;
+	icon->setPixmap(QApplication::style()->standardIcon(iconName).pixmap(
+		pixmapSize, pixmapSize));
+	icon->setStyleSheet("padding-top: 3px;");
+	return icon;
+}
+
+QHBoxLayout *AddIconAndText(QLayout *layout,
+			    const QStyle::StandardPixmap &iconText,
+			    const char *labelText)
+{
+	QLabel *icon = CreateIconLabel(iconText);
+	QLabel *text = CreateRichTextLabel(obs_module_text(labelText), false);
+
+	QHBoxLayout *iconTextLayout = new QHBoxLayout();
+	iconTextLayout->addWidget(icon, 0, Qt::AlignTop);
+	iconTextLayout->addSpacing(10);
+	text->setWordWrap(true);
+	iconTextLayout->addWidget(text, 1);
+
+	return iconTextLayout;
+}
+
+QVBoxLayout *CreateVBoxLayout(QWidget *parent, QWidget *widget)
+{
+	QVBoxLayout *layout = new QVBoxLayout(parent);
+	layout->addWidget(widget, 0, {Qt::AlignTop, Qt::AlignHCenter});
+	layout->setContentsMargins(20, 15, 20, 10);
+	return layout;
+}
+
+//--------------------CHECK FOR PLUGIN UPDATES ETC--------------------
+void ShowNonModalDialog(const std::function<void()> &dialogFunction)
+{
+	QMetaObject::invokeMethod(qApp, dialogFunction, Qt::QueuedConnection);
 }
 
 void ErrorDialog(const QString &errorMessage)
 {
 	ShowNonModalDialog([errorMessage]() {
-		QDialog *errorDialog = new QDialog();
-		errorDialog->setWindowTitle(
-			obs_module_text("WindowErrorTitle"));
+		QDialog *errorDialog = CreateDialogWindow("WindowErrorTitle");
 
 		QVBoxLayout *errorLayout = new QVBoxLayout(errorDialog);
 		errorLayout->setContentsMargins(20, 15, 20, 10);
 
-		QLabel *iconLabel = new QLabel();
-		int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16
-								       : 32;
-		iconLabel->setPixmap(
-			QApplication::style()
-				->standardIcon(QStyle::SP_MessageBoxCritical)
-				.pixmap(pixmapSize, pixmapSize));
+		QLabel *iconLabel =
+			CreateIconLabel(QStyle::SP_MessageBoxCritical);
 
-		QLabel *errorLabel = CreateRichTextLabel(errorMessage);
+		QLabel *errorLabel = CreateRichTextLabel(errorMessage, false);
 		errorLabel->setWordWrap(true);
 
 		QHBoxLayout *topLayout = new QHBoxLayout();
@@ -383,9 +425,6 @@ void ErrorDialog(const QString &errorMessage)
 
 		errorLayout->addWidget(okButton);
 		errorDialog->setLayout(errorLayout);
-		errorDialog->setWindowFlags(Qt::Window);
-		errorDialog->setAttribute(Qt::WA_DeleteOnClose);
-		errorDialog->setFixedSize(errorDialog->sizeHint());
 
 		errorDialog->show();
 	});
@@ -618,25 +657,19 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 {
 	if (manuallyTriggered) {
 		ShowNonModalDialog([]() {
-			QDialog *successDialog = new QDialog();
-			successDialog->setWindowTitle(
-				obs_module_text("WindowUpToDateTitle"));
-			successDialog->setFixedSize(successDialog->sizeHint());
+			QDialog *successDialog =
+				CreateDialogWindow("WindowUpToDateTitle");
 
 			QVBoxLayout *successLayout =
 				new QVBoxLayout(successDialog);
 			successLayout->setContentsMargins(20, 15, 20, 10);
 
-			QLabel *iconLabel = new QLabel();
-			int pixmapSize =
-				(strcmp(PLATFORM_NAME, "macos") == 0) ? 16 : 32;
-			iconLabel->setPixmap(
-				QApplication::style()
-					->standardIcon(
-						QStyle::SP_DialogApplyButton)
-					.pixmap(pixmapSize, pixmapSize));
+			QLabel *iconLabel =
+				CreateIconLabel(QStyle::SP_DialogApplyButton);
+
 			QLabel *successLabel = CreateRichTextLabel(
-				obs_module_text("WindowUpToDateMessage"));
+				obs_module_text("WindowUpToDateMessage"),
+				false);
 
 			QHBoxLayout *topLayout = new QHBoxLayout();
 			topLayout->addWidget(iconLabel);
@@ -653,8 +686,6 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 
 			successLayout->addWidget(okButton);
 			successDialog->setLayout(successLayout);
-			successDialog->setWindowFlags(Qt::Window);
-			successDialog->setAttribute(Qt::WA_DeleteOnClose);
 			successDialog->show();
 		});
 	}
@@ -663,27 +694,19 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 {
 	ShowNonModalDialog([errorMsgMissing, errorMsgUpdate]() {
-		QDialog *dialog = new QDialog();
-		dialog->setWindowTitle(
-			obs_module_text("WindowPluginErrorTitle"));
-		dialog->setFixedSize(dialog->sizeHint());
+		QDialog *dialog = CreateDialogWindow("WindowPluginErrorTitle");
 
 		QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
 		mainLayout->setContentsMargins(20, 15, 20, 20);
 
-		QLabel *iconLabel = new QLabel();
-		int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16
-								       : 64;
-		iconLabel->setPixmap(
-			QApplication::style()
-				->standardIcon(QStyle::SP_MessageBoxWarning)
-				.pixmap(pixmapSize, pixmapSize));
-		iconLabel->setStyleSheet("padding-top: 3px;");
+		QLabel *iconLabel =
+			CreateIconLabel(QStyle::SP_MessageBoxWarning);
 
 		QLabel *mainMessageLabel = CreateRichTextLabel(
 			(errorMsgMissing != "NULL")
 				? obs_module_text("WindowPluginErrorMissing")
-				: obs_module_text("WindowPluginErrorUpdating"));
+				: obs_module_text("WindowPluginErrorUpdating"),
+			false);
 
 		QVBoxLayout *iconLayout = new QVBoxLayout();
 		iconLayout->addWidget(iconLabel);
@@ -705,7 +728,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		// Third layout (detailed error report for plugins to update)
 		if (!errorMsgUpdate.empty()) {
 			QLabel *updateLabel = CreateRichTextLabel(
-				QString::fromStdString(errorMsgUpdate));
+				QString::fromStdString(errorMsgUpdate), false);
 
 			QGroupBox *updateBox = new QGroupBox(obs_module_text(
 				"WindowPluginErrorUpdateGroup"));
@@ -728,7 +751,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 			mainLayout->addSpacing(10);
 
 			QLabel *missingLabel = CreateRichTextLabel(
-				QString::fromStdString(errorMsgMissing));
+				QString::fromStdString(errorMsgMissing), false);
 
 			QGroupBox *missingBox = new QGroupBox(obs_module_text(
 				"WindowPluginErrorMissingGroup"));
@@ -751,7 +774,8 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		if (errorMsgMissing != "NULL") {
 			mainLayout->addSpacing(5);
 			QLabel *pluginstallerLabel = CreateRichTextLabel(
-				obs_module_text("WindowPluginErrorFooter"));
+				obs_module_text("WindowPluginErrorFooter"),
+				false);
 			pluginstallerLabel->setAlignment(Qt::AlignCenter);
 			QVBoxLayout *pluginstallerLayout = new QVBoxLayout();
 			pluginstallerLayout->addWidget(pluginstallerLabel);
@@ -780,8 +804,6 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		mainLayout->addLayout(buttonLayout);
 
 		dialog->setLayout(mainLayout);
-		dialog->setWindowFlags(Qt::Window);
-		dialog->setAttribute(Qt::WA_DeleteOnClose);
 		dialog->show();
 	});
 }
@@ -1095,30 +1117,12 @@ bool EnumSourcesBrowser(void *data, obs_source_t *source)
 
 void RefreshAudioMonitoringTypes()
 {
-	QDialog *dialog = new QDialog();
-	dialog->setWindowTitle(obs_module_text("MenuRefreshAudioMonitoring"));
-	dialog->setFixedSize(dialog->sizeHint());
+	// Create Window
+	QDialog *dialog = CreateDialogWindow("MenuRefreshAudioMonitoring");
+	QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
+	dialogLayout->setContentsMargins(20, 15, 20, 10);
 
-	QVBoxLayout *successLayout = new QVBoxLayout(dialog);
-	successLayout->setContentsMargins(20, 15, 20, 10);
-
-	QLabel *iconLabel = new QLabel();
-	int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16 : 32;
-	iconLabel->setPixmap(
-		QApplication::style()
-			->standardIcon(QStyle::SP_MessageBoxInformation)
-			.pixmap(pixmapSize, pixmapSize));
-	QLabel *successLabel = CreateRichTextLabel(
-		obs_module_text("RefreshAudioMonitoringInfo"));
-
-	QHBoxLayout *topLayout = new QHBoxLayout();
-	topLayout->addWidget(iconLabel);
-	topLayout->addSpacing(10);
-	topLayout->addWidget(successLabel, 1);
-
-	successLayout->addLayout(topLayout);
-	successLayout->addSpacing(10);
-
+	// Create buttons
 	QHBoxLayout *buttonLayout = new QHBoxLayout();
 
 	QPushButton *okButton =
@@ -1135,40 +1139,23 @@ void RefreshAudioMonitoringTypes()
 	buttonLayout->addWidget(cancelButton);
 	buttonLayout->addWidget(okButton);
 
-	// Add the button layout to your main layout (mainLayout or successLayout, depending on your use case)
-	successLayout->addLayout(buttonLayout);
-	dialog->setLayout(successLayout);
-	dialog->setWindowFlags(Qt::Window);
-	dialog->setAttribute(Qt::WA_DeleteOnClose);
+	// Create Icon + Text then add to dialog layout
+	dialogLayout->addLayout(AddIconAndText(dialogLayout,
+					       QStyle::SP_MessageBoxInformation,
+					       "RefreshAudioMonitoringInfo"));
+	dialogLayout->addLayout(buttonLayout);
+	dialog->setLayout(dialogLayout);
 	dialog->show();
 }
 
 void RefreshBrowserSources()
 {
-	QDialog *dialog = new QDialog();
-	dialog->setWindowTitle(obs_module_text("MenuRefreshBrowserSources"));
-	dialog->setFixedSize(dialog->sizeHint());
+	// Create Window
+	QDialog *dialog = CreateDialogWindow("MenuRefreshBrowserSources");
+	QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
+	dialogLayout->setContentsMargins(20, 15, 20, 10);
 
-	QVBoxLayout *successLayout = new QVBoxLayout(dialog);
-	successLayout->setContentsMargins(20, 15, 20, 10);
-
-	QLabel *iconLabel = new QLabel();
-	int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16 : 32;
-	iconLabel->setPixmap(
-		QApplication::style()
-			->standardIcon(QStyle::SP_MessageBoxInformation)
-			.pixmap(pixmapSize, pixmapSize));
-	QLabel *successLabel = CreateRichTextLabel(
-		obs_module_text("RefreshBrowserSourcesInfo"));
-
-	QHBoxLayout *topLayout = new QHBoxLayout();
-	topLayout->addWidget(iconLabel);
-	topLayout->addSpacing(10);
-	topLayout->addWidget(successLabel, 1);
-
-	successLayout->addLayout(topLayout);
-	successLayout->addSpacing(10);
-
+	// Create buttons
 	QHBoxLayout *buttonLayout = new QHBoxLayout();
 
 	QPushButton *okButton =
@@ -1185,46 +1172,36 @@ void RefreshBrowserSources()
 	buttonLayout->addWidget(cancelButton);
 	buttonLayout->addWidget(okButton);
 
-	// Add the button layout to your main layout (mainLayout or successLayout, depending on your use case)
-	successLayout->addLayout(buttonLayout);
-	dialog->setLayout(successLayout);
-	dialog->setWindowFlags(Qt::Window);
-	dialog->setAttribute(Qt::WA_DeleteOnClose);
+	// Create Icon + Text then add to dialog layout
+	dialogLayout->addLayout(AddIconAndText(dialogLayout,
+					       QStyle::SP_MessageBoxInformation,
+					       "RefreshBrowserSourcesInfo"));
+	dialogLayout->addLayout(buttonLayout);
+	dialog->setLayout(dialogLayout);
 	dialog->show();
 }
 
 //--------------------MENU & ABOUT-------------------
-void LoadStreamUpFile(void *private_data)
+void LoadStreamUpFile(bool forceLoad = false)
 {
-	UNUSED_PARAMETER(private_data);
+	if (!forceLoad) {
+		bool arePluginsUpToDate = CheckRecommendedOBSPlugins(true);
 
-	bool arePluginsUpToDate = CheckRecommendedOBSPlugins(true);
-
-	if (arePluginsUpToDate) {
-		QString fileName = QFileDialog::getOpenFileName(
-			nullptr, QT_UTF8(obs_module_text("Load")), QString(),
-			"StreamUP File (*.streamup)");
-		if (fileName.isEmpty()) {
+		if (!arePluginsUpToDate) {
 			return;
 		}
+	}
+
+	QString fileName = QFileDialog::getOpenFileName(
+		nullptr, QT_UTF8(obs_module_text("Load")), QString(),
+		"StreamUP File (*.streamup)");
+
+	if (!fileName.isEmpty()) {
 		obs_data_t *data =
 			obs_data_create_from_json_file(QT_TO_UTF8(fileName));
 		LoadScene(data, QFileInfo(fileName).absolutePath());
 		obs_data_release(data);
 	}
-}
-
-void ForceLoadStreamUpFile()
-{
-	QString fileName = QFileDialog::getOpenFileName(
-		nullptr, QT_UTF8(obs_module_text("Load")), QString(),
-		"StreamUP File (*.streamup)");
-	if (fileName.isEmpty()) {
-		return;
-	}
-	obs_data_t *data = obs_data_create_from_json_file(QT_TO_UTF8(fileName));
-	LoadScene(data, QFileInfo(fileName).absolutePath());
-	obs_data_release(data);
 }
 
 void ShowInstalledPluginsDialog()
@@ -1234,30 +1211,22 @@ void ShowInstalledPluginsDialog()
 		GetInstalledPlugins();
 
 	// Create the menu dialog
-	QDialog *dialog = new QDialog();
-	dialog->setWindowTitle(
-		obs_module_text("WindowSettingsInstalledPlugins"));
-	dialog->setFixedSize(dialog->sizeHint());
+	QDialog *dialog = CreateDialogWindow("WindowSettingsInstalledPlugins");
+	QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
+	dialogLayout->setContentsMargins(20, 15, 20, 10);
 
-	QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
-	mainLayout->setContentsMargins(20, 15, 20, 10);
-	mainLayout->setAlignment(Qt::AlignCenter);
+	// Information on what the installed plugins is
+	QLabel *information = CreateRichTextLabel(
+		obs_module_text("WindowSettingsInstalledPluginsInfo"), false);
+	information->setWordWrap(true);
 
-	// Create a rich text label to display the installed plugins
-	QLabel *pluginLabel =
-		new QLabel(obs_module_text("WindowSettingsInstalledPlugins"));
-	pluginLabel->setAlignment(Qt::AlignCenter);
-	pluginLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
-
-	mainLayout->addWidget(pluginLabel);
-	mainLayout->addSpacing(5);
-
-	QString pluginText;
-
+	// Compatible plugins
+	QString compatiblePluginsString;
 	if (installedPlugins.empty()) {
-		pluginText = obs_module_text("WindowSettingsInstalledPlugins");
+		compatiblePluginsString =
+			obs_module_text("WindowSettingsInstalledPlugins");
 	} else {
-		pluginText = "";
+		compatiblePluginsString = "";
 		QString tempText;
 
 		for (const auto &plugin : installedPlugins) {
@@ -1269,40 +1238,47 @@ void ShowInstalledPluginsDialog()
 		// Remove the last <br> tag if it exists
 		if (tempText.endsWith("<br>")) {
 			tempText.chop(
-				4); // Remove the last 4 characters ("<br>")
+				4);
 		}
 
-		pluginText = tempText;
+		compatiblePluginsString = tempText;
 	}
 
-	QLabel *label = CreateRichTextLabel(pluginText);
+	QLabel *compatiblePluginsList =
+		CreateRichTextLabel(compatiblePluginsString, false);
+	QGroupBox *compatiblePluginsBox = new QGroupBox(
+		obs_module_text("WindowSettingsUpdaterCompatible"));
+	QVBoxLayout *compatiblePluginsBoxLayout =
+		CreateVBoxLayout(
+		compatiblePluginsBox, compatiblePluginsList);
 
-	// Create a group box to encapsulate the list of plugins
-	QGroupBox *groupBox =
-		new QGroupBox(obs_module_text("UpdaterCompatible"));
-	QVBoxLayout *groupBoxLayout = new QVBoxLayout(groupBox);
-	groupBoxLayout->addWidget(label);
-	groupBoxLayout->setContentsMargins(20, 10, 20, 10);
+	// Incompatible plugins
+	QLabel *incompatiblePluginsList =
+		CreateRichTextLabel("Feature Coming Soon", false);
+	QGroupBox *incompatiblePluginsBox = new QGroupBox(
+		obs_module_text("WindowSettingsUpdaterIncompatible"));
+	QVBoxLayout *incompatiblePluginsBoxLayout =
+		CreateVBoxLayout(incompatiblePluginsBox, incompatiblePluginsList);
 
-	// Add the group box to the main layout
-	mainLayout->addWidget(groupBox);
+	// Combine plugin boxes
+	QHBoxLayout *pluginBoxesLayout = new QHBoxLayout();
+	pluginBoxesLayout->addWidget(compatiblePluginsBox);
+	pluginBoxesLayout->addWidget(incompatiblePluginsBox);
 
 	// Create a horizontal layout for the close button
-	QHBoxLayout *closeButtonLayout = new QHBoxLayout();
+	QHBoxLayout *buttonLayout = new QHBoxLayout();
 	QPushButton *closeButton = new QPushButton(obs_module_text("Close"));
-	closeButtonLayout->addWidget(closeButton);
-	closeButtonLayout->setAlignment(Qt::AlignCenter);
-
-	// Add the closeButtonLayout to the main layout
-	mainLayout->addLayout(closeButtonLayout);
-
-	// Connect the close button's clicked signal to close the dialog
 	QObject::connect(closeButton, &QPushButton::clicked, dialog,
 			 &QDialog::close);
+	buttonLayout->addWidget(closeButton);
 
-	dialog->setLayout(mainLayout);
-	dialog->setAttribute(Qt::WA_DeleteOnClose);
-	dialog->setWindowFlags(Qt::Window);
+	// Combine layouts
+	dialogLayout->addWidget(information);
+	pluginBoxesLayout->setAlignment(Qt::AlignHCenter);
+	dialogLayout->addLayout(pluginBoxesLayout);
+	dialogLayout->addLayout(buttonLayout);
+
+	dialog->setLayout(dialogLayout);
 	dialog->show();
 }
 
@@ -1310,9 +1286,7 @@ void ShowAboutDialog()
 {
 	// Version
 	std::string version = PROJECT_VERSION;
-	QDialog *dialog = new QDialog();
-	dialog->setWindowTitle(obs_module_text("WindowAboutTitle"));
-	dialog->setFixedSize(dialog->sizeHint());
+	QDialog *dialog = CreateDialogWindow("WindowAboutTitle");
 
 	QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
 	mainLayout->setContentsMargins(20, 15, 20, 10);
@@ -1321,18 +1295,13 @@ void ShowAboutDialog()
 	mainLayout->addLayout(topLayout);
 	topLayout->setAlignment(Qt::AlignCenter);
 
-	QLabel *iconLabel = new QLabel();
-	int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16 : 64;
-	iconLabel->setPixmap(
-		QApplication::style()
-			->standardIcon(QStyle::SP_MessageBoxInformation)
-			.pixmap(pixmapSize, pixmapSize));
-	topLayout->addWidget(iconLabel);
+	QLabel *iconLabel = CreateIconLabel(QStyle::SP_MessageBoxInformation);
 
 	QLabel *mainMessageLabel = CreateRichTextLabel(
 		"StreamUP OBS plugin (version " +
-		QString::fromStdString(version) +
-		")<br>by <b>Andi Stone</b> (<b>Andilippi</b>)");
+			QString::fromStdString(version) +
+			")<br>by <b>Andi Stone</b> (<b>Andilippi</b>)",
+		false);
 	mainMessageLabel->setAlignment(Qt::AlignHCenter);
 	topLayout->addWidget(mainMessageLabel);
 	mainMessageLabel->setStyleSheet("margin-left: 0px; margin-top: 0px;");
@@ -1346,8 +1315,8 @@ void ShowAboutDialog()
 	supportBox->setLayout(supportBoxLayout);
 
 	// Second message
-	QLabel *secondText =
-		CreateRichTextLabel(obs_module_text("WindowAboutSupport"));
+	QLabel *secondText = CreateRichTextLabel(
+		obs_module_text("WindowAboutSupport"), false);
 	secondText->setAlignment(Qt::AlignCenter);
 	supportBoxLayout->addWidget(secondText);
 	supportBoxLayout->addSpacing(5);
@@ -1356,11 +1325,13 @@ void ShowAboutDialog()
 	QGridLayout *gridLayout = new QGridLayout;
 	supportBoxLayout->addLayout(gridLayout);
 	QLabel *textLabel1 = CreateRichTextLabel(
-		"<b><a href='https://patreon.com/andilippi'>Andi's Patreon</a><br><a href='https://ko-fi.com/andilippi'>Andi's Ko-Fi</a></b>");
+		"<b><a href='https://patreon.com/andilippi'>Andi's Patreon</a><br><a href='https://ko-fi.com/andilippi'>Andi's Ko-Fi</a></b>",
+		false);
 	textLabel1->setAlignment(Qt::AlignCenter);
 	gridLayout->addWidget(textLabel1, 0, 0);
 	QLabel *textLabel2 = CreateRichTextLabel(
-		"<b><a href='https://patreon.com/streamup'>StreamUP's Patreon</a><br><a href='https://ko-fi.com/streamup'>StreamUP's Ko-Fi</a></b>");
+		"<b><a href='https://patreon.com/streamup'>StreamUP's Patreon</a><br><a href='https://ko-fi.com/streamup'>StreamUP's Ko-Fi</a></b>",
+		false);
 	textLabel2->setAlignment(Qt::AlignCenter);
 	gridLayout->addWidget(textLabel2, 0, 1);
 	gridLayout->setHorizontalSpacing(20);
@@ -1377,8 +1348,8 @@ void ShowAboutDialog()
 	socialBox->setLayout(socialBoxLayout);
 
 	// Third message
-	QLabel *thirdText =
-		CreateRichTextLabel(obs_module_text("WindowAboutSocialsMsg"));
+	QLabel *thirdText = CreateRichTextLabel(
+		obs_module_text("WindowAboutSocialsMsg"), false);
 	thirdText->setAlignment(Qt::AlignCenter);
 	socialBoxLayout->addWidget(thirdText);
 	socialBoxLayout->addSpacing(5);
@@ -1388,7 +1359,8 @@ void ShowAboutDialog()
 	socialBoxLayout->addLayout(gridLayout2);
 
 	QLabel *textLabel3 = CreateRichTextLabel(
-		"<b><a href='https://andistonemedia.mystl.ink'>All Andi's Links</a></b>");
+		"<b><a href='https://andistonemedia.mystl.ink'>All Andi's Links</a></b>",
+		false);
 	gridLayout2->addWidget(textLabel3, 0, 0);
 
 	gridLayout2->setHorizontalSpacing(30);
@@ -1397,8 +1369,8 @@ void ShowAboutDialog()
 	mainLayout->addSpacing(10);
 
 	// Last message
-	QLabel *lastText =
-		CreateRichTextLabel(obs_module_text("WindowAboutThanks"));
+	QLabel *lastText = CreateRichTextLabel(
+		obs_module_text("WindowAboutThanks"), false);
 	lastText->setAlignment(Qt::AlignCenter);
 	mainLayout->addWidget(lastText);
 
@@ -1418,8 +1390,6 @@ void ShowAboutDialog()
 			 &QDialog::close);
 
 	dialog->setLayout(mainLayout);
-	dialog->setAttribute(Qt::WA_DeleteOnClose);
-	dialog->setWindowFlags(Qt::Window);
 	dialog->show();
 }
 
@@ -1469,9 +1439,7 @@ void ShowSettingsDialog()
 	obs_data_t *settings = LoadSettings();
 
 	// Create the settings dialog
-	QDialog *dialog = new QDialog();
-	dialog->setWindowTitle(obs_module_text("WindowSettingsTitle"));
-	dialog->setFixedSize(dialog->sizeHint());
+	QDialog *dialog = CreateDialogWindow("WindowSettingsTitle");
 
 	QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
 	mainLayout->setContentsMargins(20, 15, 20, 10);
@@ -1480,11 +1448,7 @@ void ShowSettingsDialog()
 	QFormLayout *formLayout = new QFormLayout();
 
 	// Create the title label for "General"
-	QLabel *titleLabel = new QLabel("<b>General</b>");
-	titleLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
-
-	// Align the title label to the left
-	titleLabel->setAlignment(Qt::AlignLeft);
+	QLabel *titleLabel = CreateRichTextLabel("<b>General</b>", true);
 
 	// Add the title label to the form layout
 	formLayout->addRow(titleLabel);
@@ -1497,7 +1461,7 @@ void ShowSettingsDialog()
 
 	// Create the label and checkbox
 	QLabel *label = CreateRichTextLabel(
-		obs_module_text("WindowSettingsRunOnStartup"));
+		obs_module_text("WindowSettingsRunOnStartup"), false);
 	QCheckBox *checkBox = new QCheckBox();
 	checkBox->setChecked(obs_data_get_bool(settings, obs_property_name(p)));
 
@@ -1525,10 +1489,8 @@ void ShowSettingsDialog()
 	formLayout->addItem(new QSpacerItem(0, 5));
 
 	// Create the label for plugin management title
-	QLabel *pluginLabel =
-		new QLabel(obs_module_text("WindowSettingsPluginManagement"));
-	pluginLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-	pluginLabel->setStyleSheet("font-weight: bold; font-size: 14px;");
+	QLabel *pluginLabel = CreateRichTextLabel(
+		obs_module_text("WindowSettingsPluginManagement"), true);
 
 	// Create the button for viewing installed plugins
 	QPushButton *pluginButton = new QPushButton(
@@ -1569,8 +1531,6 @@ void ShowSettingsDialog()
 	mainLayout->addLayout(buttonLayout);
 
 	dialog->setLayout(mainLayout);
-	dialog->setAttribute(Qt::WA_DeleteOnClose);
-	dialog->setWindowFlags(Qt::Window);
 
 	// Connect the dialog's finished signal to release the settings
 	QObject::connect(dialog, &QDialog::finished, [=](int) {
@@ -1595,15 +1555,7 @@ static void LoadMenu(QMenu *menu)
 				QApplication::keyboardModifiers();
 			bool shiftKeyPressed = modifiers & Qt::ShiftModifier;
 
-			if (shiftKeyPressed) {
-				ForceLoadStreamUpFile();
-			} else {
-				bool arePluginsUpToDate =
-					CheckRecommendedOBSPlugins(true);
-				if (arePluginsUpToDate) {
-					LoadStreamUpFile(NULL);
-				}
-			}
+			LoadStreamUpFile(shiftKeyPressed);
 		});
 		a = menu->addAction(obs_module_text("MenuDownloadProduct"));
 		QObject::connect(a, &QAction::triggered, []() {
@@ -1667,9 +1619,8 @@ void vendor_request_refresh_audio_monitoring(obs_data_t *request_data,
 	obs_data_set_bool(response_data, "Audio monitoring refreshed", true);
 }
 
-static void hotkey_refresh_audio_monitoring(
-	void *data, obs_hotkey_id id, obs_hotkey_t *hotkey,
-		       bool pressed)
+static void hotkey_refresh_audio_monitoring(void *data, obs_hotkey_id id,
+					    obs_hotkey_t *hotkey, bool pressed)
 {
 	UNUSED_PARAMETER(id);
 	UNUSED_PARAMETER(hotkey);
@@ -1688,7 +1639,7 @@ void vendor_request_refresh_browser_sources(obs_data_t *request_data,
 }
 
 static void hotkey_refresh_browser_sources(void *data, obs_hotkey_id id,
-					    obs_hotkey_t *hotkey, bool pressed)
+					   obs_hotkey_t *hotkey, bool pressed)
 {
 	UNUSED_PARAMETER(id);
 	UNUSED_PARAMETER(hotkey);
@@ -1726,10 +1677,9 @@ bool obs_module_load()
 		vendor, "refresh_audio_monitoring",
 		vendor_request_refresh_audio_monitoring, nullptr);
 
-	obs_hotkey_register_frontend(
-		"refresh_audio_monitoring", obs_module_text("RefreshAudioMonitoring"),
-				     hotkey_refresh_audio_monitoring,
-				     nullptr);
+	obs_hotkey_register_frontend("refresh_audio_monitoring",
+				     obs_module_text("RefreshAudioMonitoring"),
+				     hotkey_refresh_audio_monitoring, nullptr);
 	//OBSws -> Refresh Browser Sources
 	obs_websocket_vendor_register_request(
 		vendor, "refresh_browser_sources",
@@ -1738,7 +1688,6 @@ bool obs_module_load()
 	obs_hotkey_register_frontend("refresh_browser_sources",
 				     obs_module_text("RefreshBrowserSources"),
 				     hotkey_refresh_browser_sources, nullptr);
-
 
 	return true;
 }
