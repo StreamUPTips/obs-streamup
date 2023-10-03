@@ -367,8 +367,7 @@ QLabel *CreateIconLabel(const QStyle::StandardPixmap &iconName)
 	return icon;
 }
 
-QHBoxLayout *AddIconAndText(QLayout *layout,
-			    const QStyle::StandardPixmap &iconText,
+QHBoxLayout *AddIconAndText(const QStyle::StandardPixmap &iconText,
 			    const char *labelText)
 {
 	QLabel *icon = CreateIconLabel(iconText);
@@ -1140,8 +1139,7 @@ void RefreshAudioMonitoringTypes()
 	buttonLayout->addWidget(okButton);
 
 	// Create Icon + Text then add to dialog layout
-	dialogLayout->addLayout(AddIconAndText(dialogLayout,
-					       QStyle::SP_MessageBoxInformation,
+	dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxInformation,
 					       "RefreshAudioMonitoringInfo"));
 	dialogLayout->addLayout(buttonLayout);
 	dialog->setLayout(dialogLayout);
@@ -1173,8 +1171,7 @@ void RefreshBrowserSources()
 	buttonLayout->addWidget(okButton);
 
 	// Create Icon + Text then add to dialog layout
-	dialogLayout->addLayout(AddIconAndText(dialogLayout,
-					       QStyle::SP_MessageBoxInformation,
+	dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxInformation,
 					       "RefreshBrowserSourcesInfo"));
 	dialogLayout->addLayout(buttonLayout);
 	dialog->setLayout(dialogLayout);
@@ -1237,8 +1234,7 @@ void ShowInstalledPluginsDialog()
 
 		// Remove the last <br> tag if it exists
 		if (tempText.endsWith("<br>")) {
-			tempText.chop(
-				4);
+			tempText.chop(4);
 		}
 
 		compatiblePluginsString = tempText;
@@ -1248,17 +1244,14 @@ void ShowInstalledPluginsDialog()
 		CreateRichTextLabel(compatiblePluginsString, false);
 	QGroupBox *compatiblePluginsBox = new QGroupBox(
 		obs_module_text("WindowSettingsUpdaterCompatible"));
-	QVBoxLayout *compatiblePluginsBoxLayout =
-		CreateVBoxLayout(
-		compatiblePluginsBox, compatiblePluginsList);
+	CreateVBoxLayout(compatiblePluginsBox, compatiblePluginsList);
 
 	// Incompatible plugins
 	QLabel *incompatiblePluginsList =
 		CreateRichTextLabel("Feature Coming Soon", false);
 	QGroupBox *incompatiblePluginsBox = new QGroupBox(
 		obs_module_text("WindowSettingsUpdaterIncompatible"));
-	QVBoxLayout *incompatiblePluginsBoxLayout =
-		CreateVBoxLayout(incompatiblePluginsBox, incompatiblePluginsList);
+	CreateVBoxLayout(incompatiblePluginsBox, incompatiblePluginsList);
 
 	// Combine plugin boxes
 	QHBoxLayout *pluginBoxesLayout = new QHBoxLayout();
@@ -1295,7 +1288,7 @@ void ShowAboutDialog()
 	mainLayout->addLayout(topLayout);
 	topLayout->setAlignment(Qt::AlignCenter);
 
-	QLabel *iconLabel = CreateIconLabel(QStyle::SP_MessageBoxInformation);
+	//QLabel *iconLabel = CreateIconLabel(QStyle::SP_MessageBoxInformation);
 
 	QLabel *mainMessageLabel = CreateRichTextLabel(
 		"StreamUP OBS plugin (version " +
