@@ -10,6 +10,7 @@
 #include <regex>
 #include <QApplication>
 #include <QCoreApplication>
+#include <QClipboard>
 #include <QCheckBox>
 #include <QBuffer>
 #include <QDesktopServices>
@@ -27,6 +28,7 @@
 #include <QTextBrowser>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <sstream>
 #include <util/platform.h>
 
 #define QT_UTF8(str) QString::fromUtf8(str)
@@ -332,7 +334,13 @@ static void LoadScene(obs_data_t *data, QString path)
 	obs_data_array_release(sourcesData);
 }
 
-//--------------------UI HELPERS--------------------
+//--------------------HELPERS--------------------
+void CopyToClipboard(const QString &text)
+{
+	QClipboard *clipboard = QApplication::clipboard();
+	clipboard->setText(text);
+}
+
 QDialog *CreateDialogWindow(const char *windowTitle)
 {
 	QDialog *dialog = new QDialog();
@@ -379,8 +387,8 @@ QHBoxLayout *AddIconAndText(const QStyle::StandardPixmap &iconText,
 			    const char *labelText)
 {
 	QLabel *icon = CreateIconLabel(iconText);
-	QLabel *text =
-		CreateRichTextLabel(obs_module_text(labelText), false, true);
+	QLabel *text = CreateRichTextLabel(obs_module_text(labelText), false,
+					   true, Qt::AlignTop);
 
 	QHBoxLayout *iconTextLayout = new QHBoxLayout();
 	iconTextLayout->addWidget(icon, 0, Qt::AlignTop);
@@ -407,9 +415,7 @@ void CreateLabelWithLink(QLayout *layout, const QString &text,
 	label->setOpenExternalLinks(true);
 
 	QObject::connect(label, &QLabel::linkActivated,
-			 [url](const QString &link) {
-				 QDesktopServices::openUrl(QUrl(url));
-			 });
+			 [url]() { QDesktopServices::openUrl(QUrl(url)); });
 
 	static_cast<QGridLayout *>(layout)->addWidget(label, row, column);
 }
@@ -422,6 +428,79 @@ void CreateButton(QLayout *layout, const QString &text,
 	layout->addWidget(button);
 }
 
+void CreateRefreshDialog(const char *infoText1, const char *infoText2,
+			 const char *infoText3, const QString &titleText,
+			 const std::function<void()> &buttonCallback,
+			 const QString &jsonString, const char *how1,
+			 const char *how2, const char *how3)
+{
+	const char *titleTextChar = titleText.toUtf8().constData();
+	QString titleStr = obs_module_text(titleTextChar);
+	QString infoText1Str = obs_module_text(infoText1);
+	QString infoText2Str = obs_module_text(infoText2);
+	QString infoText3Str = obs_module_text(infoText3);
+	QString howTo1Str = obs_module_text(how1);
+	QString howTo2Str = obs_module_text(how2);
+	QString howTo3Str = obs_module_text(how3);
+
+	// Create Window
+	QDialog *dialog = CreateDialogWindow(titleTextChar);
+	QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
+	dialogLayout->setContentsMargins(20, 15, 20, 10);
+
+	// Create buttons
+	QHBoxLayout *buttonLayout = new QHBoxLayout();
+
+	CreateButton(buttonLayout, obs_module_text("Cancel"),
+		     [dialog]() { dialog->close(); });
+
+	CreateButton(buttonLayout, titleStr, [=]() {
+		buttonCallback();
+		dialog->close();
+	});
+
+	// Create Icon + Text then add to dialog layout
+	dialogLayout->addLayout(
+		AddIconAndText(QStyle::SP_MessageBoxInformation, infoText1));
+	dialogLayout->addSpacing(10);
+
+	// Info 2
+	QLabel *info2 =
+		CreateRichTextLabel(infoText2Str, false, true, Qt::AlignTop);
+	dialogLayout->addWidget(info2, 0, Qt::AlignTop);
+	dialogLayout->addSpacing(10);
+
+	// Create a group box to contain info3 and the "Copy JSON" button
+	QGroupBox *info3Box = new QGroupBox(obs_module_text("HowToUse"));
+	info3Box->setMinimumWidth(350);
+	QVBoxLayout *info3BoxLayout = CreateVBoxLayout(info3Box);
+	QLabel *info3 = CreateRichTextLabel(infoText3Str, false, true);
+	QLabel *howTo1 = CreateRichTextLabel(howTo1Str, false, true);
+	QLabel *howTo2 = CreateRichTextLabel(howTo2Str, false, true);
+	QLabel *howTo3 = CreateRichTextLabel(howTo3Str, false, true);
+	info3BoxLayout->addWidget(info3);
+	info3BoxLayout->addSpacing(5);
+	info3BoxLayout->addWidget(howTo1);
+	info3BoxLayout->addWidget(howTo2);
+	info3BoxLayout->addWidget(howTo3);
+
+	// Create a button to copy the JSON to clipboard
+	QPushButton *copyJsonButton =
+		new QPushButton(obs_module_text("CopyWebsocketJson"));
+	copyJsonButton->setToolTip(obs_module_text("CopyWebsocketJsonTooltip"));
+	QObject::connect(copyJsonButton, &QPushButton::clicked,
+			 [=]() { CopyToClipboard(jsonString); });
+
+	info3BoxLayout->addWidget(copyJsonButton);
+	dialogLayout->addWidget(info3Box);
+
+	dialogLayout->addSpacing(10);
+
+	dialogLayout->addLayout(buttonLayout);
+	dialog->setLayout(dialogLayout);
+	dialog->show();
+}
+
 //--------------------CHECK FOR PLUGIN UPDATES ETC--------------------
 struct PluginInfo {
 	std::string name;
@@ -430,6 +509,7 @@ struct PluginInfo {
 	std::string windowsURL;
 	std::string macURL;
 	std::string linuxURL;
+	std::string generalURL;
 	bool recommended;
 };
 
@@ -519,6 +599,7 @@ void InitialiseRequiredModules()
 			obs_data_release(downloads);
 		}
 		info.searchString = obs_data_get_string(plugin, "searchString");
+		info.generalURL = obs_data_get_string(plugin, "url");
 
 		all_plugins[name] = info;
 
@@ -703,19 +784,26 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 					: "WindowPluginErrorUpdating";
 	dialogLayout->addLayout(
 		AddIconAndText(QStyle::SP_MessageBoxWarning, errorText));
+
+	dialogLayout->addSpacing(10);
+
+	QLabel *pluginErrorInfo = CreateRichTextLabel(
+		obs_module_text("WindowPluginErrorInfo"), false, true);
+	dialogLayout->addWidget(pluginErrorInfo);
 	dialogLayout->addSpacing(10);
 
 	// Plugins need updating
 	if (!errorMsgUpdate.empty()) {
 		// Create list of plugins
 		QLabel *pluginsToUpdateList = CreateRichTextLabel(
-			QString::fromStdString(errorMsgUpdate), false, false);
+			QString::fromStdString(errorMsgUpdate), false, false,
+			Qt::AlignCenter);
 
 		// Add plugins to a box
 		QGroupBox *pluginsToUpdateBox = new QGroupBox(
 			obs_module_text("WindowPluginErrorUpdateGroup"));
 		QVBoxLayout *pluginsToUpdateBoxLayout =
-			CreateVBoxLayout(pluginsToUpdateBox);
+			new QVBoxLayout(pluginsToUpdateBox);
 		pluginsToUpdateBoxLayout->addWidget(pluginsToUpdateList);
 
 		dialogLayout->addWidget(pluginsToUpdateBox);
@@ -728,22 +816,22 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 	if (errorMsgMissing != "NULL") {
 		// Create list of plugins
 		QLabel *pluginsMissingList = CreateRichTextLabel(
-			QString::fromStdString(errorMsgMissing), false, false);
+			QString::fromStdString(errorMsgMissing), false, false,
+			Qt::AlignCenter);
 
 		// Add plugins to a box
 		QGroupBox *pluginsMissingBox = new QGroupBox(
 			obs_module_text("WindowPluginErrorMissingGroup"));
-		QVBoxLayout *pluginsToUpdateBoxLayout =
-			CreateVBoxLayout(pluginsMissingBox);
-		pluginsToUpdateBoxLayout->addWidget(pluginsMissingList);
+		QVBoxLayout *pluginsMissingBoxLayout =
+			new QVBoxLayout(pluginsMissingBox);
+		pluginsMissingBoxLayout->addWidget(pluginsMissingList);
 		dialogLayout->addWidget(pluginsMissingBox);
 	}
 
 	if (errorMsgMissing != "NULL") {
 		QLabel *pluginstallerLabel = CreateRichTextLabel(
 			obs_module_text("WindowPluginErrorFooter"), false,
-			false);
-		pluginstallerLabel->setAlignment(Qt::AlignCenter);
+			false, Qt::AlignCenter);
 		dialogLayout->addWidget(pluginstallerLabel);
 	}
 
@@ -820,16 +908,52 @@ std::string RemoveDots(const std::string &version)
 	return result;
 }
 
+std::vector<std::string> SplitString(const std::string &input, char delimiter)
+{
+	std::vector<std::string> parts;
+	std::istringstream stream(input);
+	std::string part;
+
+	while (std::getline(stream, part, delimiter)) {
+		parts.push_back(part);
+	}
+
+	return parts;
+}
+
 bool IsVersionLessThan(const std::string &version1, const std::string &version2)
 {
 	std::string numericVersion1 = RemoveDots(version1);
 	std::string numericVersion2 = RemoveDots(version2);
 
-	try {
-		int numericValue1 = std::stoi(numericVersion1);
-		int numericValue2 = std::stoi(numericVersion2);
+	// Split the version strings by '.'
+	std::vector<std::string> parts1 = SplitString(numericVersion1, '.');
+	std::vector<std::string> parts2 = SplitString(numericVersion2, '.');
 
-		return numericValue1 < numericValue2;
+	try {
+		// Compare each part of the version strings
+		for (size_t i = 0; i < std::min(parts1.size(), parts2.size());
+		     ++i) {
+			int numericValue1 = std::stoi(parts1[i]);
+			int numericValue2 = std::stoi(parts2[i]);
+
+			if (numericValue1 < numericValue2) {
+				return true;
+			} else if (numericValue1 > numericValue2) {
+				return false;
+			}
+			// If equal, continue to the next part
+		}
+
+		// If all parts are equal so far, check the remaining parts
+		if (parts1.size() < parts2.size()) {
+			return true; // version1 is shorter
+		} else if (parts1.size() > parts2.size()) {
+			return false; // version2 is shorter
+		}
+
+		// If all parts are equal, versions are considered equal
+		return false;
 	} catch (const std::exception &) {
 		// Invalid numeric version format, cannot compare
 		return false;
@@ -862,30 +986,43 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 	}
 
 	if (!version_mismatch_modules.empty()) {
+		errorMsgUpdate +=
+			"<div style=\"text-align: center;\">"
+			"<table style=\"border-collapse: collapse; width: 100%;\">"
+			"<tr style=\"background-color: #212121;\">"
+			"<th style=\"padding: 4px 10px; text-align: center;\">Plugin Name</th>"
+			"<th style=\"padding: 4px 10px; text-align: center;\">Installed</th>"
+			"<th style=\"padding: 4px 10px; text-align: center;\">Current</th>"
+			"<th style=\"padding: 4px 10px; text-align: center;\">Direct Download</th>"
+			"</tr>";
+
 		for (const auto &module : version_mismatch_modules) {
 			const PluginInfo &plugin_info =
 				all_plugins[module.first];
 			const std::string &required_version =
 				plugin_info.version;
-			const std::string &url = GetPlatformURL(plugin_info);
-			errorMsgUpdate += "<a href=\"" + url + "\">" +
-					  module.first + "</a> (" +
-					  obs_module_text("Installed") + ": " +
-					  module.second + ", " +
-					  obs_module_text("Current") + ": " +
-					  required_version + ")<br>";
+			const std::string &forum_link = plugin_info.generalURL;
+			const std::string &direct_download_link =
+				GetPlatformURL(plugin_info);
+
+			errorMsgUpdate +=
+				"<tr style=\"border: 1px solid #ddd;\">"
+				"<td style=\"padding: 2px 10px; text-align: left;\"><a href=\"" +
+				forum_link + "\">" + module.first +
+				"</a></td>"
+				"<td style=\"padding: 2px 10px; text-align: center;\">" +
+				module.second +
+				"</td>"
+				"<td style=\"padding: 2px 10px; text-align: center;\">" +
+				required_version +
+				"</td>"
+				"<td style=\"padding: 2px 10px; text-align: center;\"><a href=\"" +
+				direct_download_link +
+				"\">Download</a></td>"
+				"</tr>";
 		}
 
-		// Remove the last <br> tag from errorMsgUpdate
-		if (!errorMsgUpdate.empty() &&
-		    errorMsgUpdate.substr(errorMsgUpdate.length() - 4) ==
-			    "<br>") {
-			errorMsgUpdate = errorMsgUpdate.substr(
-				0,
-				errorMsgUpdate.length() -
-					4); // Remove the last 4 characters ("<br>")
-		}
-
+		errorMsgUpdate += "</table></div>";
 		PluginsHaveIssue("NULL", errorMsgUpdate);
 		version_mismatch_modules.clear();
 	} else {
@@ -936,27 +1073,50 @@ bool CheckRecommendedOBSPlugins(bool isLoadStreamUpFile = false)
 	}
 
 	bfree(filepath);
-
+	//
 	bool hasUpdates = !version_mismatch_modules.empty();
 	bool hasMissingPlugins = !missing_modules.empty();
 
 	if (hasUpdates || hasMissingPlugins) {
 		if (hasUpdates) {
+			errorMsgUpdate +=
+				"<div style=\"text-align: center;\">"
+				"<table style=\"border-collapse: collapse; width: 100%;\">"
+				"<tr style=\"background-color: #212121;\">"
+				"<th style=\"padding: 4px 10px; text-align: center;\">Plugin Name</th>"
+				"<th style=\"padding: 4px 10px; text-align: center;\">Installed</th>"
+				"<th style=\"padding: 4px 10px; text-align: center;\">Current</th>"
+				"<th style=\"padding: 4px 10px; text-align: center;\">Direct Download</th>"
+				"</tr>";
+
 			for (const auto &module : version_mismatch_modules) {
 				const PluginInfo &plugin_info =
 					all_plugins[module.first];
 				const std::string &required_version =
 					plugin_info.version;
-				const std::string &url =
+				const std::string &forum_link =
+					plugin_info.generalURL;
+				const std::string &direct_download_link =
 					GetPlatformURL(plugin_info);
-				errorMsgUpdate += "<a href=\"" + url + "\">" +
-						  module.first + "</a> (" +
-						  obs_module_text("Installed") +
-						  ": " + module.second + ", " +
-						  obs_module_text("Current") +
-						  ": " + required_version +
-						  ")<br>";
+
+				errorMsgUpdate +=
+					"<tr style=\"border: 1px solid #ddd;\">"
+					"<td style=\"padding: 2px 10px; text-align: left;\"><a href=\"" +
+					forum_link + "\">" + module.first +
+					"</a></td>"
+					"<td style=\"padding: 2px 10px; text-align: center;\">" +
+					module.second +
+					"</td>"
+					"<td style=\"padding: 2px 10px; text-align: center;\">" +
+					required_version +
+					"</td>"
+					"<td style=\"padding: 2px 10px; text-align: center;\"><a href=\"" +
+					direct_download_link +
+					"\">Download</a></td>"
+					"</tr>";
 			}
+
+			errorMsgUpdate += "</table></div>";
 
 			// Remove the last <br> tag from errorMsgUpdate
 			if (!errorMsgUpdate.empty() &&
@@ -970,17 +1130,37 @@ bool CheckRecommendedOBSPlugins(bool isLoadStreamUpFile = false)
 		}
 
 		if (hasMissingPlugins) {
+			errorMsgMissing +=
+				"<div style=\"text-align: center;\">"
+				"<table style=\"border-collapse: collapse; width: 100%;\">"
+				"<tr style=\"background-color: #212121;\">"
+				"<th style=\"padding: 4px 10px; text-align: center;\">Plugin Name</th>"
+				"<th style=\"padding: 4px 10px; text-align: center;\">Direct Download</th>"
+				"</tr>";
+
 			for (auto it = missing_modules.begin();
 			     it != missing_modules.end(); ++it) {
 				const std::string &moduleName = it->first;
 				const PluginInfo &pluginInfo =
 					recommended_plugins[moduleName];
-				const std::string &url =
+				const std::string &forum_link =
+					pluginInfo.generalURL;
+				const std::string &direct_download_link =
 					GetPlatformURL(pluginInfo);
 
-				errorMsgMissing += "<a href=\"" + url + "\">" +
-						   moduleName + "</a><br>";
+				errorMsgMissing +=
+					"<tr style=\"border: 1px solid #ddd;\">"
+					"<td style=\"padding: 2px 10px; text-align: left;\"><a href=\"" +
+					forum_link + "\">" + moduleName +
+					"</a></td>"
+					"<td style=\"padding: 2px 10px; text-align: center;\"><a href=\"" +
+					direct_download_link +
+					"\">Download</a></td>"
+					"</tr>";
 			}
+
+			errorMsgMissing += "</table></div>";
+
 			// Remove the last <br> tag from errorMsgMissing
 			if (!errorMsgMissing.empty() &&
 			    errorMsgMissing.substr(errorMsgMissing.length() -
@@ -1041,7 +1221,7 @@ bool EnumSourcesAudioMonitoring(void *data, obs_source_t *source)
 		obs_source_set_monitoring_type(source,
 					       original_monitoring_type);
 
-		blog(LOG_INFO, "StreamUP: '%s' has refreshed audio '%s'",
+		blog(LOG_INFO, "StreamUP: '%s' has refreshed audio monitoring type: '%s'",
 		     source_name,
 		     monitoringTypeToString(original_monitoring_type));
 	}
@@ -1067,7 +1247,7 @@ bool EnumSourcesBrowser(void *data, obs_source_t *source)
 			obs_data_set_int(settings, "fps", fps - 1);
 		}
 		obs_source_update(source, settings);
-		blog(LOG_INFO, "StreamUP: refreshed '%s' browser source",
+		blog(LOG_INFO, "StreamUP: Refreshed '%s' browser source",
 		     source_name);
 
 		obs_data_release(settings);
@@ -1078,55 +1258,40 @@ bool EnumSourcesBrowser(void *data, obs_source_t *source)
 
 void RefreshAudioMonitoringTypes()
 {
-	// Create Window
-	QDialog *dialog = CreateDialogWindow("MenuRefreshAudioMonitoring");
-	QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-	dialogLayout->setContentsMargins(20, 15, 20, 10);
-
-	// Create buttons
-	QHBoxLayout *buttonLayout = new QHBoxLayout();
-
-	CreateButton(buttonLayout, obs_module_text("Cancel"),
-		     [dialog]() { dialog->close(); });
-
-	CreateButton(
-		buttonLayout, obs_module_text("RefreshAudioMonitoring"), [=]() {
-			obs_enum_sources(EnumSourcesAudioMonitoring, nullptr);
-			dialog->close();
-		});
-
-	// Create Icon + Text then add to dialog layout
-	dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxInformation,
-					       "RefreshAudioMonitoringInfo"));
-	dialogLayout->addLayout(buttonLayout);
-	dialog->setLayout(dialogLayout);
-	dialog->show();
+	CreateRefreshDialog(
+		"RefreshAudioMonitoringInfo1", "RefreshAudioMonitoringInfo2",
+		"RefreshAudioMonitoringInfo3", "RefreshAudioMonitoring",
+		[]() { obs_enum_sources(EnumSourcesAudioMonitoring, nullptr); },
+		R"(
+                    {
+                        "requestType": "CallVendorRequest",
+                        "requestData": {
+                            "vendorName": "streamup",
+                            "requestType": "refresh_audio_monitoring",
+                            "requestData": null
+                        }
+                    })",
+		"RefreshAudioMonitoringHowTo1", "RefreshAudioMonitoringHowTo2",
+		"RefreshAudioMonitoringHowTo3");
 }
 
 void RefreshBrowserSources()
 {
-	// Create Window
-	QDialog *dialog = CreateDialogWindow("MenuRefreshBrowserSources");
-	QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-	dialogLayout->setContentsMargins(20, 15, 20, 10);
-
-	// Create buttons
-	QHBoxLayout *buttonLayout = new QHBoxLayout();
-	CreateButton(buttonLayout, obs_module_text("Cancel"),
-		     [dialog]() { dialog->close(); });
-
-	CreateButton(buttonLayout, obs_module_text("RefreshBrowserSources"),
-		     [=]() {
-			     obs_enum_sources(EnumSourcesBrowser, nullptr);
-			     dialog->close();
-		     });
-
-	// Create Icon + Text then add to dialog layout
-	dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxInformation,
-					       "RefreshBrowserSourcesInfo"));
-	dialogLayout->addLayout(buttonLayout);
-	dialog->setLayout(dialogLayout);
-	dialog->show();
+	CreateRefreshDialog(
+		"RefreshBrowserSourcesInfo1", "RefreshBrowserSourcesInfo2",
+		"RefreshBrowserSourcesInfo3", "RefreshBrowserSources",
+		[]() { obs_enum_sources(EnumSourcesBrowser, nullptr); },
+		R"(
+                    {
+                        "requestType": "CallVendorRequest",
+                        "requestData": {
+                            "vendorName": "streamup",
+                            "requestType": "refresh_browser_sources",
+                            "requestData": null
+                        }
+                    })",
+		"RefreshBrowserSourcesHowTo1", "RefreshBrowserSourcesHowTo2",
+		"RefreshBrowserSourcesHowTo3");
 }
 
 //--------------------MENU & ABOUT-------------------
@@ -1164,10 +1329,20 @@ void ShowInstalledPluginsDialog()
 	dialogLayout->setContentsMargins(20, 15, 20, 10);
 
 	// Information on what the installed plugins is
-	QLabel *information = CreateRichTextLabel(
-		obs_module_text("WindowSettingsInstalledPluginsInfo"), false,
-		true);
-	information->setWordWrap(true);
+	dialogLayout->addLayout(
+		AddIconAndText(QStyle::SP_MessageBoxInformation,
+			       "WindowSettingsInstalledPluginsInfo1"));
+	dialogLayout->addSpacing(5);
+
+	QLabel *info2 = CreateRichTextLabel(
+		obs_module_text("WindowSettingsInstalledPluginsInfo2"), false,
+		true, Qt::AlignTop);
+	dialogLayout->addWidget(info2, 0, Qt::AlignTop);
+
+	QLabel *info3 = CreateRichTextLabel(
+		obs_module_text("WindowSettingsInstalledPluginsInfo3"), false,
+		true, Qt::AlignTop);
+	dialogLayout->addWidget(info3, 0, Qt::AlignTop);
 
 	// Compatible plugins
 	QString compatiblePluginsString;
@@ -1220,7 +1395,6 @@ void ShowInstalledPluginsDialog()
 		     [dialog]() { dialog->close(); });
 
 	// Combine layouts
-	dialogLayout->addWidget(information);
 	pluginBoxesLayout->setAlignment(Qt::AlignHCenter);
 	dialogLayout->addLayout(pluginBoxesLayout);
 	dialogLayout->addLayout(buttonLayout);
@@ -1296,8 +1470,9 @@ void ShowAboutDialog()
 	dialogLayout->addSpacing(10);
 
 	// Special thanks
-	QLabel *thanksText = CreateRichTextLabel(
-		obs_module_text("WindowAboutThanks"), false, true);
+	QLabel *thanksText =
+		CreateRichTextLabel(obs_module_text("WindowAboutThanks"), false,
+				    true, Qt::AlignCenter);
 	dialogLayout->addWidget(thanksText);
 
 	// Buttons
@@ -1494,7 +1669,6 @@ static void LoadMenu(QMenu *menu)
 }
 
 //--------------------GENERAL OBS--------------------
-
 obs_websocket_vendor vendor = nullptr;
 
 void vendor_request_version(obs_data_t *request_data, obs_data_t *response_data,
