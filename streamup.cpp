@@ -30,6 +30,8 @@
 #include <QVBoxLayout>
 #include <sstream>
 #include <util/platform.h>
+#include <unordered_set>
+#include <cctype>
 
 #define QT_UTF8(str) QString::fromUtf8(str)
 #define QT_TO_UTF8(str) str.toUtf8().constData()
@@ -510,6 +512,7 @@ struct PluginInfo {
 	std::string macURL;
 	std::string linuxURL;
 	std::string generalURL;
+	std::string moduleName;
 	bool recommended;
 };
 
@@ -600,6 +603,7 @@ void InitialiseRequiredModules()
 		}
 		info.searchString = obs_data_get_string(plugin, "searchString");
 		info.generalURL = obs_data_get_string(plugin, "url");
+		info.moduleName = obs_data_get_string(plugin, "moduleName");
 
 		all_plugins[name] = info;
 
@@ -1221,7 +1225,8 @@ bool EnumSourcesAudioMonitoring(void *data, obs_source_t *source)
 		obs_source_set_monitoring_type(source,
 					       original_monitoring_type);
 
-		blog(LOG_INFO, "StreamUP: '%s' has refreshed audio monitoring type: '%s'",
+		blog(LOG_INFO,
+		     "StreamUP: '%s' has refreshed audio monitoring type: '%s'",
 		     source_name,
 		     monitoringTypeToString(original_monitoring_type));
 	}
@@ -1317,6 +1322,123 @@ void LoadStreamUpFile(bool forceLoad = false)
 	}
 }
 
+std::vector<std::string> search_modules_in_file(char *path)
+{
+	std::unordered_set<std::string> ignoreModules = {
+		"obs-websocket",      "coreaudio-encoder", "decklink-captions",
+		"decklink-output-ui", "frontend-tools",    "image-source",
+		"obs-browser",        "obs-ffmpeg",        "obs-filters",
+		"obs-outputs",        "obs-qsv11",         "obs-text",
+		"obs-transitions",    "obs-vst",           "obs-x264",
+		"rtmp-services",      "text-freetype2",    "vlc-video",
+		"win-capture",        "win-dshow",         "win-wasapi"};
+
+	std::string filepath = get_most_recent_file(path);
+	FILE *file = fopen(filepath.c_str(), "r");
+	char line[256];
+	bool in_section = false;
+	std::vector<std::string> collected_modules;
+	std::regex timestamp_regex(
+		"^[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}:"); // Regex for timestamp
+
+	if (file) {
+		while (fgets(line, sizeof(line), file) != NULL) {
+			std::string str_line(line);
+			// Remove timestamp
+			str_line = std::regex_replace(str_line, timestamp_regex,
+						      "");
+			// Remove leading and trailing whitespace
+			str_line.erase(0,
+				       str_line.find_first_not_of(" \t\r\n"));
+			str_line.erase(str_line.find_last_not_of(" \t\r\n") +
+				       1);
+
+			if (str_line.find("Loaded Modules:") !=
+			    std::string::npos) {
+				in_section = true;
+			} else if (str_line.find(
+					   "---------------------------------") !=
+				   std::string::npos) {
+				in_section = false;
+			}
+
+			if (in_section && !str_line.empty() &&
+			    str_line != "Loaded Modules:") {
+				// Remove the ".dll" suffix from the module name
+				size_t suffix_pos = str_line.find(".dll");
+				if (suffix_pos != std::string::npos) {
+					str_line =
+						str_line.substr(0, suffix_pos);
+				}
+
+				// Check if the module name is in the ignoreModules set
+				if (ignoreModules.find(str_line) ==
+				    ignoreModules.end()) {
+					// Check if the module name exists in the all_plugins map
+					bool foundInApi = false;
+					for (const auto &pair : all_plugins) {
+						if (pair.second.moduleName ==
+						    str_line) {
+							foundInApi = true;
+							break;
+						}
+					}
+					if (!foundInApi) {
+						// If not found in API and not ignored, add the module name to the collected_modules vector
+						collected_modules.push_back(
+							str_line);
+					}
+				}
+			}
+		}
+		fclose(file);
+	} else {
+		blog(LOG_ERROR, "Failed to open log file: %s",
+		     filepath.c_str());
+	}
+
+	// Custom comparison function for case-insensitive sorting
+	auto case_insensitive_compare = [](const std::string &a,
+					   const std::string &b) {
+		return std::lexicographical_compare(
+			a.begin(), a.end(), b.begin(), b.end(),
+			[](char char1, char char2) {
+				return std::tolower(char1) <
+				       std::tolower(char2);
+			});
+	};
+
+	// Sort the vector alphabetically (case-insensitively)
+	std::sort(collected_modules.begin(), collected_modules.end(),
+		  case_insensitive_compare);
+
+	return collected_modules;
+}
+
+void SetLabelWithSortedModules(QLabel *label,
+			       const std::vector<std::string> &moduleNames)
+{
+	QString text;
+	if (moduleNames.empty()) {
+		text = obs_module_text(
+			"WindowSettingsUpdaterIncompatibleModules");
+	} else {
+		for (const std::string &moduleName : moduleNames) {
+			if (!text.isEmpty()) {
+				text += "<br>";
+			}
+			text += QString::fromStdString(moduleName);
+		}
+	}
+
+	label->setMaximumWidth(300);
+	label->setWordWrap(true);
+	label->setTextFormat(Qt::RichText);
+	label->setTextInteractionFlags(Qt::TextBrowserInteraction);
+	label->setOpenExternalLinks(true);
+	label->setText(text);
+}
+
 void ShowInstalledPluginsDialog()
 {
 	// Get the installed plugins
@@ -1371,17 +1493,22 @@ void ShowInstalledPluginsDialog()
 		CreateRichTextLabel(compatiblePluginsString, false, false);
 	QGroupBox *compatiblePluginsBox = new QGroupBox(
 		obs_module_text("WindowSettingsUpdaterCompatible"));
+	compatiblePluginsBox->setMinimumWidth(180);
 	QVBoxLayout *compatiblePluginsBoxLayout =
 		CreateVBoxLayout(compatiblePluginsBox);
 	compatiblePluginsBoxLayout->addWidget(compatiblePluginsList);
 
 	// Incompatible plugins
-	QLabel *incompatiblePluginsList =
-		CreateRichTextLabel("Feature Coming Soon", false, false);
 	QGroupBox *incompatiblePluginsBox = new QGroupBox(
 		obs_module_text("WindowSettingsUpdaterIncompatible"));
+	incompatiblePluginsBox->setMinimumWidth(180);
 	QVBoxLayout *incompatiblePluginsBoxLayout =
 		CreateVBoxLayout(incompatiblePluginsBox);
+	QLabel *incompatiblePluginsList = new QLabel;
+	// Set the text of incompatiblePluginsList with the sorted list of module names
+	std::vector<std::string> moduleNames =
+		search_modules_in_file(GetFilePath());
+	SetLabelWithSortedModules(incompatiblePluginsList, moduleNames);
 	incompatiblePluginsBoxLayout->addWidget(incompatiblePluginsList);
 
 	// Combine plugin boxes
