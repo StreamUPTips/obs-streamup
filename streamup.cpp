@@ -1335,7 +1335,7 @@ std::vector<std::string> search_modules_in_file(char *path)
 		"mac-avcapture",      "mac-capture",       "mac-syphon",
 		"mac-videotoolbox",   "mac-virtualcam",    "linux-v4l2",
 		"linux-pulseaudio",   "linux-pipewire",    "linux-jack",
-		"linux-capture",      "linux-source"};
+		"linux-capture",      "linux-source",      "obs-libfdk"};
 
 	std::string filepath = get_most_recent_file(path);
 	FILE *file = fopen(filepath.c_str(), "r");
@@ -1345,7 +1345,7 @@ std::vector<std::string> search_modules_in_file(char *path)
 	std::regex timestamp_regex(
 		"^[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}:"); // Regex for timestamp
 
-	if (file) {
+if (file) {
 		while (fgets(line, sizeof(line), file) != NULL) {
 			std::string str_line(line);
 			// Remove timestamp
@@ -1369,7 +1369,8 @@ std::vector<std::string> search_modules_in_file(char *path)
 			if (in_section && !str_line.empty() &&
 			    str_line != "Loaded Modules:") {
 				// Remove the file extension from the module name based on the platform
-				size_t suffix_pos;
+				size_t suffix_pos =
+					std::string::npos;
 				if (strcmp(PLATFORM_NAME, "windows") == 0) {
 					suffix_pos = str_line.find(".dll");
 				} else if (strcmp(PLATFORM_NAME, "linux") ==
@@ -1407,6 +1408,7 @@ std::vector<std::string> search_modules_in_file(char *path)
 		blog(LOG_ERROR, "Failed to open log file: %s",
 		     filepath.c_str());
 	}
+
 
 	// Custom comparison function for case-insensitive sorting
 	auto case_insensitive_compare = [](const std::string &a,
