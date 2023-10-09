@@ -1331,7 +1331,11 @@ std::vector<std::string> search_modules_in_file(char *path)
 		"obs-outputs",        "obs-qsv11",         "obs-text",
 		"obs-transitions",    "obs-vst",           "obs-x264",
 		"rtmp-services",      "text-freetype2",    "vlc-video",
-		"win-capture",        "win-dshow",         "win-wasapi"};
+		"win-capture",        "win-dshow",         "win-wasapi",
+		"mac-avcapture",      "mac-capture",       "mac-syphon",
+		"mac-videotoolbox",   "mac-virtualcam",    "linux-v4l2",
+		"linux-pulseaudio",   "linux-pipewire",    "linux-jack",
+		"linux-capture",      "linux-source"};
 
 	std::string filepath = get_most_recent_file(path);
 	FILE *file = fopen(filepath.c_str(), "r");
