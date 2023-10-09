@@ -1368,8 +1368,15 @@ std::vector<std::string> search_modules_in_file(char *path)
 
 			if (in_section && !str_line.empty() &&
 			    str_line != "Loaded Modules:") {
-				// Remove the ".dll" suffix from the module name
-				size_t suffix_pos = str_line.find(".dll");
+				// Remove the file extension from the module name based on the platform
+				size_t suffix_pos;
+				if (strcmp(PLATFORM_NAME, "windows") == 0) {
+					suffix_pos = str_line.find(".dll");
+				} else if (strcmp(PLATFORM_NAME, "linux") ==
+					   0) {
+					suffix_pos = str_line.find(".so");
+				}
+
 				if (suffix_pos != std::string::npos) {
 					str_line =
 						str_line.substr(0, suffix_pos);
