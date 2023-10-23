@@ -1476,6 +1476,12 @@ void SetLabelWithSortedModules(QLabel *label,
 	label->setText(text);
 }
 
+QString GetForumLink(const std::string &pluginName)
+{
+	const PluginInfo &pluginInfo = all_plugins[pluginName];
+	return QString::fromStdString(pluginInfo.generalURL);
+}
+
 void ShowInstalledPluginsDialog()
 {
 	ShowDialogOnUIThread([]() {
@@ -1515,10 +1521,18 @@ void ShowInstalledPluginsDialog()
 			QString tempText;
 
 			for (const auto &plugin : installedPlugins) {
+				const std::string &pluginName = plugin.first;
+				const std::string &pluginVersion =
+					plugin.second;
+				const QString forumLink =
+					GetForumLink(pluginName);
+
+				// Create a clickable link with the plugin name
 				tempText +=
-					QString::fromStdString(plugin.first) +
-					" (" +
-					QString::fromStdString(plugin.second) +
+					"<a href=\"" + forumLink + "\">" +
+					QString::fromStdString(pluginName) +
+					"</a> (" +
+					QString::fromStdString(pluginVersion) +
 					")<br>";
 			}
 
