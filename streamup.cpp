@@ -523,11 +523,11 @@ struct PluginInfo {
 	std::string linuxURL;
 	std::string generalURL;
 	std::string moduleName;
-	bool recommended;
+	bool required;
 };
 
 std::map<std::string, PluginInfo> all_plugins;
-std::map<std::string, PluginInfo> recommended_plugins;
+std::map<std::string, PluginInfo> required_plugins;
 
 struct request_data {
 	std::string url;
@@ -617,8 +617,8 @@ void InitialiseRequiredModules()
 
 		all_plugins[name] = info;
 
-		if (obs_data_get_bool(plugin, "recommended")) {
-			recommended_plugins[name] = info;
+		if (obs_data_get_bool(plugin, "required")) {
+			required_plugins[name] = info;
 		}
 
 		obs_data_release(plugin);
@@ -1059,9 +1059,9 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 	}
 }
 
-bool CheckRecommendedOBSPlugins(bool isLoadStreamUpFile = false)
+bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile = false)
 {
-	if (recommended_plugins.empty()) {
+	if (required_plugins.empty()) {
 		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
 		return false;
 	}
@@ -1072,7 +1072,7 @@ bool CheckRecommendedOBSPlugins(bool isLoadStreamUpFile = false)
 	std::string errorMsgUpdate = "";
 	char *filepath = GetFilePath();
 
-	for (const auto &module : recommended_plugins) {
+	for (const auto &module : required_plugins) {
 		const std::string &plugin_name = module.first;
 		const PluginInfo &plugin_info = module.second;
 		const std::string &required_version = plugin_info.version;
@@ -1086,14 +1086,14 @@ bool CheckRecommendedOBSPlugins(bool isLoadStreamUpFile = false)
 		std::string installed_version =
 			search_string_in_file(filepath, search_string.c_str());
 
-		// Only add to missing_modules if plugin is recommended and not installed
-		if (installed_version.empty() && plugin_info.recommended) {
+		// Only add to missing_modules if plugin is required and not installed
+		if (installed_version.empty() && plugin_info.required) {
 			missing_modules.emplace(plugin_name, required_version);
 		}
-		// Only add to version_mismatch_modules if plugin is recommended and there's a version mismatch
+		// Only add to version_mismatch_modules if plugin is required and there's a version mismatch
 		else if (!installed_version.empty() &&
 			 installed_version != required_version &&
-			 plugin_info.recommended &&
+			 plugin_info.required &&
 			 IsVersionLessThan(installed_version,
 					   required_version)) {
 			version_mismatch_modules.emplace(plugin_name,
@@ -1171,7 +1171,7 @@ bool CheckRecommendedOBSPlugins(bool isLoadStreamUpFile = false)
 			     it != missing_modules.end(); ++it) {
 				const std::string &moduleName = it->first;
 				const PluginInfo &pluginInfo =
-					recommended_plugins[moduleName];
+					required_plugins[moduleName];
 				const std::string &forum_link =
 					pluginInfo.generalURL;
 				const std::string &direct_download_link =
@@ -1329,7 +1329,7 @@ void RefreshBrowserSources()
 void LoadStreamUpFile(bool forceLoad = false)
 {
 	if (!forceLoad) {
-		bool arePluginsUpToDate = CheckRecommendedOBSPlugins(true);
+		bool arePluginsUpToDate = CheckrequiredOBSPlugins(true);
 
 		if (!arePluginsUpToDate) {
 			return;
@@ -1841,7 +1841,7 @@ static void LoadMenu(QMenu *menu)
 
 		a = menu->addAction(obs_module_text("MenuCheckRequirements"));
 		QObject::connect(a, &QAction::triggered,
-				 [] { CheckRecommendedOBSPlugins(); });
+				 [] { CheckrequiredOBSPlugins(); });
 		menu->addSeparator();
 	}
 
@@ -1882,7 +1882,7 @@ void vendor_request_check_plugins(obs_data_t *request_data,
 				  obs_data_t *response_data, void *)
 {
 	UNUSED_PARAMETER(request_data);
-	bool pluginsUpToDate = CheckRecommendedOBSPlugins(true);
+	bool pluginsUpToDate = CheckrequiredOBSPlugins(true);
 	obs_data_set_bool(response_data, "success", pluginsUpToDate);
 }
 
