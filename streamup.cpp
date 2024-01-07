@@ -339,9 +339,9 @@ static void LoadScene(obs_data_t *data, QString path)
 }
 
 //--------------------HELPERS--------------------
-#ifdef _WIN32
 std::string GetLocalAppDataPath()
 {
+#ifdef _WIN32
 	char *buf = nullptr;
 	size_t sz = 0;
 	if (_dupenv_s(&buf, &sz, "LOCALAPPDATA") == 0 && buf != nullptr) {
@@ -349,9 +349,9 @@ std::string GetLocalAppDataPath()
 		free(buf);
 		return path;
 	}
-	return ""; // Handle the case where LOCALAPPDATA is not found or _dupenv_s fails
-}
 #endif
+	return "";
+}
 
 void ShowDialogOnUIThread(const std::function<void()> &dialogFunction)
 {
