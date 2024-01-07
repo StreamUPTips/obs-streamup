@@ -3,6 +3,8 @@
 #include "obs-websocket-api.h"
 #include <curl/curl.h>
 #include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <obs.h>
 #include <obs-module.h>
 #include <obs-data.h>
@@ -337,6 +339,18 @@ static void LoadScene(obs_data_t *data, QString path)
 }
 
 //--------------------HELPERS--------------------
+std::string GetLocalAppDataPath()
+{
+	char *buf = nullptr;
+	size_t sz = 0;
+	if (_dupenv_s(&buf, &sz, "LOCALAPPDATA") == 0 && buf != nullptr) {
+		std::string path(buf);
+		free(buf);
+		return path;
+	}
+	return ""; // Handle the case where LOCALAPPDATA is not found
+}
+
 void ShowDialogOnUIThread(const std::function<void()> &dialogFunction)
 {
 	QMetaObject::invokeMethod(qApp, dialogFunction, Qt::QueuedConnection);
@@ -1012,6 +1026,23 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 			version_mismatch_modules.emplace(plugin_name,
 							 installed_version);
 		}
+	}
+
+	// Determine the path to the local app data folder
+	std::string appDataPath =
+		GetLocalAppDataPath(); // Implement this function based on your platform
+	std::string filePath =
+		appDataPath + "/StreamUP-OutdatedPluginsList.txt";
+
+	// Open the file in write mode
+	std::ofstream outFile(filePath, std::ios::out);
+	if (outFile.is_open()) {
+		for (const auto &module : version_mismatch_modules) {
+			outFile << module.first << "\n";
+		}
+		outFile.close();
+	} else {
+		std::cerr << "Error: Unable to open file for writing.\n";
 	}
 
 	if (!version_mismatch_modules.empty()) {
