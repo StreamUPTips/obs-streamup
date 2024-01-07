@@ -341,12 +341,16 @@ static void LoadScene(obs_data_t *data, QString path)
 //--------------------HELPERS--------------------
 std::string GetLocalAppDataPath()
 {
-	char *buf = nullptr;
-	size_t sz = 0;
-	if (_dupenv_s(&buf, &sz, "LOCALAPPDATA") == 0 && buf != nullptr) {
-		std::string path(buf);
-		free(buf);
-		return path;
+	if (strcmp(PLATFORM_NAME, "windows") == 0) {
+
+		char *buf = nullptr;
+		size_t sz = 0;
+		if (_dupenv_s(&buf, &sz, "LOCALAPPDATA") == 0 &&
+		    buf != nullptr) {
+			std::string path(buf);
+			free(buf);
+			return path;
+		}
 	}
 	return ""; // Handle the case where LOCALAPPDATA is not found
 }
@@ -938,7 +942,6 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 		if (!installed_version.empty()) {
 			installedPlugins.emplace_back(plugin_name,
 						      installed_version);
-
 		}
 	}
 
