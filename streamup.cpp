@@ -719,24 +719,34 @@ std::string get_most_recent_file(std::string dirpath)
 	return newest_file.path().string();
 }
 
-std::string search_string_in_file(char *path, const char *search)
+std::string search_string_in_file(const char *path, const char *search)
 {
 	std::string filepath = get_most_recent_file(path);
 	FILE *file = fopen(filepath.c_str(), "r+");
 	char line[256];
-	bool found = false;
-	std::regex version_regex("[0-9]+\\.[0-9]+\\.[0-9]+");
+	std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
+	std::regex version_regex_double("[0-9]+\\.[0-9]+");
 
 	if (file) {
 		while (fgets(line, sizeof(line), file)) {
 			char *found_ptr = strstr(line, search);
 			if (found_ptr) {
-				found = true;
-				std::string line_str(line);
+				// Process the rest of the line from the found_ptr
+				std::string remaining_line =
+					std::string(found_ptr + strlen(search));
 				std::smatch match;
 
-				if (std::regex_search(line_str, match,
-						      version_regex) &&
+				// Try matching with x.x.x format
+				if (std::regex_search(remaining_line, match,
+						      version_regex_triple) &&
+				    match.size() > 0) {
+					fclose(file);
+					return match.str(0);
+				}
+
+				// If x.x.x format not found, try x.x format
+				if (std::regex_search(remaining_line, match,
+						      version_regex_double) &&
 				    match.size() > 0) {
 					fclose(file);
 					return match.str(0);
@@ -744,12 +754,8 @@ std::string search_string_in_file(char *path, const char *search)
 			}
 		}
 		fclose(file);
-		if (!found) {
-			//Plugin Not Installed
-		}
 	} else {
-		blog(LOG_ERROR, "Failed to open log file: %s",
-		     filepath.c_str());
+		blog(LOG_ERROR, "Failed to open file: %s", filepath.c_str());
 	}
 
 	return "";
@@ -932,6 +938,7 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 		if (!installed_version.empty()) {
 			installedPlugins.emplace_back(plugin_name,
 						      installed_version);
+
 		}
 	}
 
@@ -966,39 +973,28 @@ std::vector<std::string> SplitString(const std::string &input, char delimiter)
 
 bool IsVersionLessThan(const std::string &version1, const std::string &version2)
 {
-	std::string numericVersion1 = RemoveDots(version1);
-	std::string numericVersion2 = RemoveDots(version2);
+	std::vector<std::string> parts1 = SplitString(version1, '.');
+	std::vector<std::string> parts2 = SplitString(version2, '.');
 
-	// Split the version strings by '.'
-	std::vector<std::string> parts1 = SplitString(numericVersion1, '.');
-	std::vector<std::string> parts2 = SplitString(numericVersion2, '.');
+	// Normalize the length of version parts
+	while (parts1.size() < parts2.size())
+		parts1.push_back("0");
+	while (parts2.size() < parts1.size())
+		parts2.push_back("0");
 
 	try {
-		// Compare each part of the version strings
-		for (size_t i = 0; i < std::min(parts1.size(), parts2.size());
-		     ++i) {
-			int numericValue1 = std::stoi(parts1[i]);
-			int numericValue2 = std::stoi(parts2[i]);
+		for (size_t i = 0; i < parts1.size(); ++i) {
+			int num1 = std::stoi(parts1[i]);
+			int num2 = std::stoi(parts2[i]);
 
-			if (numericValue1 < numericValue2) {
+			if (num1 < num2)
 				return true;
-			} else if (numericValue1 > numericValue2) {
+			else if (num1 > num2)
 				return false;
-			}
-			// If equal, continue to the next part
 		}
-
-		// If all parts are equal so far, check the remaining parts
-		if (parts1.size() < parts2.size()) {
-			return true; // version1 is shorter
-		} else if (parts1.size() > parts2.size()) {
-			return false; // version2 is shorter
-		}
-
-		// If all parts are equal, versions are considered equal
-		return false;
+		return false; // Versions are equal
 	} catch (const std::exception &) {
-		// Invalid numeric version format, cannot compare
+		// Error in parsing version parts
 		return false;
 	}
 }
