@@ -6,8 +6,10 @@
 #include <fstream>
 #include <iostream>
 #include <obs.h>
+#include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <obs-data.h>
+#include <obs-encoder.h>
 #include <pthread.h>
 #include <regex>
 #include <QApplication>
@@ -1884,6 +1886,7 @@ static void LoadMenu(QMenu *menu)
 	a = toolsMenu->addAction(obs_module_text("MenuRefreshBrowserSources"));
 	QObject::connect(a, &QAction::triggered,
 			 [] { RefreshBrowserSources(); });
+
 	menu->addMenu(toolsMenu);
 
 	menu->addSeparator();
@@ -1897,6 +1900,55 @@ static void LoadMenu(QMenu *menu)
 
 //--------------------GENERAL OBS--------------------
 obs_websocket_vendor vendor = nullptr;
+
+void vendor_request_bitrate(obs_data_t *request_data, obs_data_t *response_data,
+			    void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	// Get the streaming output
+	obs_output_t *streamOutput = obs_frontend_get_streaming_output();
+
+	// If there's no streaming output or streaming is inactive, we do nothing
+	if (!streamOutput || !obs_frontend_streaming_active()) {
+		obs_data_set_string(response_data, "error",
+				    "Streaming is not active.");
+		return;
+	}
+
+	// Get total bytes sent
+	uint64_t bytesSent = obs_output_get_total_bytes(streamOutput);
+
+	// Store current time in nanoseconds
+	uint64_t currentTime = os_gettime_ns();
+
+	// Static variables to hold the previous bytes sent and the previous timestamp
+	static uint64_t lastBytesSent = 0;
+	static uint64_t lastTime = 0;
+
+	if (bytesSent < lastBytesSent)
+		bytesSent = 0;
+
+	// Calculate bytes sent since last check
+	uint64_t bytesBetween = bytesSent - lastBytesSent;
+	double timePassed = (currentTime - lastTime) /
+			    1000000000.0; // Convert ns to seconds
+
+	uint64_t bytesPerSec = 0;
+	if (timePassed != 0)
+		bytesPerSec = bytesBetween / timePassed;
+
+	// Convert bytes/sec to kbits/sec
+	uint64_t kbitsPerSec = (bytesPerSec * 8) / 1024;
+
+	// Update last bytes and last time
+	lastBytesSent = bytesSent;
+	lastTime = currentTime;
+
+	// Set the kbits/sec in the response data
+	obs_data_set_int(response_data, "kbits-per-sec", kbitsPerSec);
+}
 
 void vendor_request_version(obs_data_t *request_data, obs_data_t *response_data,
 			    void *)
@@ -1920,6 +1972,164 @@ void vendor_request_refresh_audio_monitoring(obs_data_t *request_data,
 	UNUSED_PARAMETER(request_data);
 	obs_enum_sources(EnumSourcesAudioMonitoring, nullptr);
 	obs_data_set_bool(response_data, "Audio monitoring refreshed", true);
+}
+
+void vendor_request_get_show_hide_transition(obs_data_t *request_data,
+					     obs_data_t *response_data,
+					     void *private_data,
+					     bool transition_type)
+{
+	UNUSED_PARAMETER(private_data);
+
+	const char *scene_name = obs_data_get_string(request_data, "sceneName");
+	const char *source_name =
+		obs_data_get_string(request_data, "sourceName");
+
+	obs_source_t *scene_source = obs_get_source_by_name(scene_name);
+	if (!scene_source) {
+		obs_data_set_string(response_data, "error", "Scene not found.");
+		obs_data_set_bool(response_data, "success", false);
+		return;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(scene_source);
+	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, source_name);
+	if (!scene_item) {
+		obs_data_set_string(response_data, "error",
+				    "Source not found in scene.");
+		obs_data_set_bool(response_data, "success", false);
+		obs_source_release(scene_source);
+		return;
+	}
+
+	obs_source_t *transition =
+		obs_sceneitem_get_transition(scene_item, transition_type);
+	if (!transition) {
+		obs_data_set_string(response_data, "error",
+				    "No transition set for this item.");
+		obs_data_set_bool(response_data, "success", false);
+		obs_source_release(scene_source);
+		return;
+	}
+
+	obs_data_t *settings = obs_source_get_settings(transition);
+	if (!settings) {
+		blog(LOG_WARNING, "Failed to get settings for transition: %s",
+		     obs_source_get_name(transition));
+		obs_data_set_string(response_data, "error",
+				    "Failed to get transition settings.");
+		obs_data_set_bool(response_data, "success", false);
+		obs_source_release(scene_source);
+		return;
+	}
+
+	uint32_t transition_duration = obs_sceneitem_get_transition_duration(
+		scene_item, transition_type);
+
+	obs_data_set_string(response_data, "transitionName",
+			    obs_source_get_name(transition));
+	obs_data_set_string(response_data, "transitionType",
+			    obs_source_get_id(transition));
+	obs_data_set_obj(response_data, "transitionSettings", settings);
+	obs_data_set_int(response_data, "transitionDuration",
+			 transition_duration);
+
+	obs_data_set_bool(response_data, "success", true);
+
+	obs_source_release(scene_source);
+	obs_data_release(settings);
+}
+
+
+void vendor_request_get_show_transition(obs_data_t *request_data,
+					obs_data_t *response_data,
+					void *private_data)
+{
+	vendor_request_get_show_hide_transition(request_data, response_data,
+						private_data, true);
+}
+
+void vendor_request_get_hide_transition(obs_data_t *request_data,
+					obs_data_t *response_data,
+					void *private_data)
+{
+	vendor_request_get_show_hide_transition(request_data, response_data,
+						private_data, false);
+}
+
+void vendor_request_set_show_hide_transition(obs_data_t *request_data,
+					     obs_data_t *response_data,
+					     void *private_data,
+					     bool show_transition)
+{
+	UNUSED_PARAMETER(private_data);
+
+	const char *scene_name = obs_data_get_string(request_data, "sceneName");
+	const char *source_name =
+		obs_data_get_string(request_data, "sourceName");
+	const char *transition_type =
+		obs_data_get_string(request_data, "transitionType");
+	obs_data_t *transition_settings =
+		obs_data_get_obj(request_data, "transitionSettings");
+	uint32_t transition_duration =
+		obs_data_get_int(request_data, "transitionDuration");
+
+	obs_source_t *scene_source = obs_get_source_by_name(scene_name);
+	if (!scene_source) {
+		obs_data_set_string(response_data, "error", "Scene not found.");
+		obs_data_set_bool(response_data, "success", false);
+		return;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(scene_source);
+	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, source_name);
+	if (!scene_item) {
+		obs_data_set_string(response_data, "error",
+				    "Source not found in scene.");
+		obs_data_set_bool(response_data, "success", false);
+		obs_source_release(scene_source);
+		return;
+	}
+
+	obs_source_t *transition = obs_source_create_private(
+		transition_type, "Scene Transition", NULL);
+	if (!transition) {
+		obs_data_set_string(
+			response_data, "error",
+			"Unable to create transition of specified type.");
+		obs_data_set_bool(response_data, "success", false);
+		obs_source_release(scene_source);
+		return;
+	}
+
+	if (transition_settings) {
+		obs_source_update(transition, transition_settings);
+	}
+
+	obs_sceneitem_set_transition(scene_item, show_transition, transition);
+	obs_sceneitem_set_transition_duration(scene_item, show_transition,
+					      transition_duration);
+
+	obs_data_set_bool(response_data, "success", true);
+
+	obs_source_release(transition);
+	obs_source_release(scene_source);
+}
+
+void vendor_request_set_show_transition(obs_data_t *request_data,
+					obs_data_t *response_data,
+					void *private_data)
+{
+	vendor_request_set_show_hide_transition(request_data, response_data,
+						private_data, true);
+}
+
+void vendor_request_set_hide_transition(obs_data_t *request_data,
+					obs_data_t *response_data,
+					void *private_data)
+{
+	vendor_request_set_show_hide_transition(request_data, response_data,
+						private_data, false);
 }
 
 static void hotkey_refresh_audio_monitoring(void *data, obs_hotkey_id id,
@@ -1969,6 +2179,28 @@ bool obs_module_load()
 	if (!vendor)
 		return true;
 
+	//OBSws -> Request Source Show Transition
+	obs_websocket_vendor_register_request(
+		vendor, "getShowTransition", vendor_request_get_show_transition,
+		nullptr);
+	//OBSws -> Request Source Hide Transition
+	obs_websocket_vendor_register_request(
+		vendor, "getHideTransition",
+		vendor_request_get_hide_transition, nullptr);
+
+	// OBSws -> Request Source Set Show Transition
+	obs_websocket_vendor_register_request(
+		vendor, "setShowTransition", vendor_request_set_show_transition,
+		nullptr);
+
+	// OBSws -> Request Source Set Hide Transition
+	obs_websocket_vendor_register_request(
+		vendor, "setHideTransition", vendor_request_set_hide_transition,
+		nullptr);
+
+	//OBSws -> Request Bitrate
+	obs_websocket_vendor_register_request(vendor, "getBitrate",
+					      vendor_request_bitrate, nullptr);
 	//OBSws -> Request Version
 	obs_websocket_vendor_register_request(vendor, "version",
 					      vendor_request_version, nullptr);
