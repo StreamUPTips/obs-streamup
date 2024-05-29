@@ -4,6 +4,7 @@
 #include <curl/curl.h>
 #include <filesystem>
 #include <fstream>
+#include <graphics/image-file.h>
 #include <iostream>
 #include <obs.h>
 #include <obs-frontend-api.h>
@@ -16,7 +17,9 @@
 #include <QCoreApplication>
 #include <QClipboard>
 #include <QCheckBox>
+#include <QImage>
 #include <QBuffer>
+#include <QDir>
 #include <QDesktopServices>
 #include <QDialog>
 #include <QFileDialog>
@@ -2040,7 +2043,6 @@ void vendor_request_get_show_hide_transition(obs_data_t *request_data,
 	obs_data_release(settings);
 }
 
-
 void vendor_request_get_show_transition(obs_data_t *request_data,
 					obs_data_t *response_data,
 					void *private_data)
@@ -2162,6 +2164,84 @@ static void hotkey_refresh_browser_sources(void *data, obs_hotkey_id id,
 	obs_enum_sources(EnumSourcesBrowser, nullptr);
 }
 
+struct SceneItemEnumData {
+	bool isAnySourceSelected = false;
+	const char *selectedSourceName = nullptr;
+};
+
+static bool enum_scene_items_callback(obs_scene_t *scene, obs_sceneitem_t *item,
+				      void *param)
+{
+	SceneItemEnumData *data = static_cast<SceneItemEnumData *>(param);
+	bool isSelected = obs_sceneitem_selected(item);
+	if (isSelected) {
+		data->isAnySourceSelected = true;
+		obs_source_t *source = obs_sceneitem_get_source(item);
+		data->selectedSourceName = obs_source_get_name(source);
+		blog(LOG_INFO, "source = %s is selected",
+		     data->selectedSourceName ? data->selectedSourceName
+					      : "Unknown");
+	}
+	return true;
+}
+
+bool enum_scene_items(obs_scene_t *scene, const char **selected_source_name)
+{
+	SceneItemEnumData data;
+
+	obs_scene_enum_items(scene, enum_scene_items_callback, &data);
+
+	if (data.isAnySourceSelected) {
+		*selected_source_name = data.selectedSourceName;
+	}
+	return data.isAnySourceSelected;
+}
+
+void vendor_request_get_current_selected_source(obs_data_t *request_data,
+						obs_data_t *response_data,
+						void *private_data)
+{
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	const char *scene_name = obs_source_get_name(current_scene);
+	blog(LOG_INFO, "current_scene = %s",
+	     scene_name ? scene_name : "Unknown");
+
+	if (!current_scene)
+		return;
+
+	obs_scene_t *scene = obs_scene_from_source(current_scene);
+	if (!scene) {
+		obs_source_release(current_scene);
+		return;
+	}
+
+	const char *selected_source_name = nullptr;
+	bool isAnySourceSelected =
+		enum_scene_items(scene, &selected_source_name);
+
+	obs_source_release(current_scene);
+
+	// Decide the response
+	if (!isAnySourceSelected) {
+		blog(LOG_INFO, "No selected source. Current scene: %s",
+		     scene_name);
+		obs_data_set_string(response_data, "currentScene", scene_name);
+	} else {
+		blog(LOG_INFO, "Selected source: %s", selected_source_name);
+		obs_data_set_string(response_data, "selectedSource",
+				    selected_source_name);
+	}
+}
+
+void vendor_request_get_output_file_path(obs_data_t *request_data,
+						obs_data_t *response_data,
+						void *private_data)
+{
+	char *path = obs_frontend_get_current_record_output_path();
+	obs_data_set_string(response_data, "outputFilePath", path);
+}
+
+
 bool obs_module_load()
 {
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
@@ -2179,14 +2259,23 @@ bool obs_module_load()
 	if (!vendor)
 		return true;
 
+	//OBSws -> Request Recording Output
+	obs_websocket_vendor_register_request(
+		vendor, "getOutputFilePath",
+		vendor_request_get_output_file_path, nullptr);
+
+	//OBSws -> Request Bitrate
+	obs_websocket_vendor_register_request(vendor, "getCurrentSource",
+		vendor_request_get_current_selected_source, nullptr);
+
 	//OBSws -> Request Source Show Transition
 	obs_websocket_vendor_register_request(
 		vendor, "getShowTransition", vendor_request_get_show_transition,
 		nullptr);
 	//OBSws -> Request Source Hide Transition
 	obs_websocket_vendor_register_request(
-		vendor, "getHideTransition",
-		vendor_request_get_hide_transition, nullptr);
+		vendor, "getHideTransition", vendor_request_get_hide_transition,
+		nullptr);
 
 	// OBSws -> Request Source Set Show Transition
 	obs_websocket_vendor_register_request(
