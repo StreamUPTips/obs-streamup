@@ -39,9 +39,11 @@
 #include <util/platform.h>
 #include <unordered_set>
 #include <cctype>
+#include <QSystemTrayIcon>
 
 #define QT_UTF8(str) QString::fromUtf8(str)
 #define QT_TO_UTF8(str) str.toUtf8().constData()
+
 
 #if defined(_WIN32)
 #define PLATFORM_NAME "windows"
@@ -344,6 +346,46 @@ static void LoadScene(obs_data_t *data, QString path)
 }
 
 //--------------------HELPERS--------------------
+struct SystemTrayNotification {
+	QSystemTrayIcon::MessageIcon icon;
+	QString title;
+	QString body;
+};
+
+void SendTrayNotification(QSystemTrayIcon::MessageIcon icon,
+			  const QString &title, const QString &body)
+{
+	if (!QSystemTrayIcon::isSystemTrayAvailable() ||
+	    !QSystemTrayIcon::supportsMessages())
+		return;
+
+	SystemTrayNotification *notification =
+		new SystemTrayNotification{icon, title, body};
+
+	obs_queue_task(
+		OBS_TASK_UI,
+		[](void *param) {
+			auto notification =
+				static_cast<SystemTrayNotification *>(param);
+			void *systemTrayPtr = obs_frontend_get_system_tray();
+			if (systemTrayPtr) {
+				auto systemTray =
+					static_cast<QSystemTrayIcon *>(
+						systemTrayPtr);
+				QString prefixedTitle =
+					"[StreamUP] " + notification->title;
+				systemTray->showMessage(prefixedTitle,
+							notification->body,
+							notification->icon);
+			}
+			delete notification;
+		},
+		(void *)notification, false);
+}
+
+
+
+
 std::string GetLocalAppDataPath()
 {
 #ifdef _WIN32
@@ -486,6 +528,10 @@ void CreateRefreshDialog(const char *infoText1, const char *infoText2,
 
 		CreateButton(buttonLayout, titleStr, [=]() {
 			buttonCallback();
+			// Send a system tray notification
+			SendTrayNotification(
+				QSystemTrayIcon::Information, titleStr,
+				"Action completed successfully.");
 			dialog->close();
 		});
 
@@ -533,7 +579,6 @@ void CreateRefreshDialog(const char *infoText1, const char *infoText2,
 		dialog->show();
 	});
 }
-
 
 //--------------------CHECK FOR PLUGIN UPDATES ETC--------------------
 struct PluginInfo {
@@ -2168,6 +2213,9 @@ static void hotkey_refresh_audio_monitoring(void *data, obs_hotkey_id id,
 	if (!pressed)
 		return;
 	obs_enum_sources(EnumSourcesAudioMonitoring, nullptr);
+	SendTrayNotification(QSystemTrayIcon::Information,
+			     obs_module_text("RefreshAudioMonitoring"),
+			     "Action completed successfully.");
 }
 
 void vendor_request_refresh_browser_sources(obs_data_t *request_data,
@@ -2187,6 +2235,9 @@ static void hotkey_refresh_browser_sources(void *data, obs_hotkey_id id,
 	if (!pressed)
 		return;
 	obs_enum_sources(EnumSourcesBrowser, nullptr);
+	SendTrayNotification(QSystemTrayIcon::Information,
+			     obs_module_text("RefreshBrowserSources"),
+			     "Action completed successfully.");
 }
 
 struct SceneItemEnumData {
