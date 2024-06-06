@@ -44,7 +44,6 @@
 #define QT_UTF8(str) QString::fromUtf8(str)
 #define QT_TO_UTF8(str) str.toUtf8().constData()
 
-
 #if defined(_WIN32)
 #define PLATFORM_NAME "windows"
 #elif defined(__APPLE__)
@@ -383,9 +382,6 @@ void SendTrayNotification(QSystemTrayIcon::MessageIcon icon,
 		(void *)notification, false);
 }
 
-
-
-
 std::string GetLocalAppDataPath()
 {
 #ifdef _WIN32
@@ -529,9 +525,9 @@ void CreateRefreshDialog(const char *infoText1, const char *infoText2,
 		CreateButton(buttonLayout, titleStr, [=]() {
 			buttonCallback();
 			// Send a system tray notification
-			SendTrayNotification(
-				QSystemTrayIcon::Information, titleStr,
-				"Action completed successfully.");
+			SendTrayNotification(QSystemTrayIcon::Information,
+					     titleStr,
+					     "Action completed successfully.");
 			dialog->close();
 		});
 
@@ -629,7 +625,6 @@ void ErrorDialog(const QString &errorMessage)
 		dialog->show();
 	});
 }
-
 
 size_t WriteCallback(void *contents, size_t size, size_t nmemb,
 		     std::string *out)
@@ -1427,6 +1422,171 @@ void RefreshBrowserSources()
 		"RefreshBrowserSourcesHowTo3");
 }
 
+bool CheckIfAnyUnlocked(obs_scene_t *scene);
+
+bool CheckGroupItemsIfAnyUnlocked(obs_source_t *group)
+{
+	obs_scene_t *group_scene = obs_group_from_source(group);
+	if (!group_scene) {
+		blog(LOG_WARNING, "Failed to get scene from group source.");
+		return false;
+	}
+
+	return CheckIfAnyUnlocked(group_scene);
+}
+
+bool CheckIfAnyUnlocked(obs_scene_t *scene)
+{
+	bool any_unlocked = false;
+	obs_scene_enum_items(
+		scene,
+		[](obs_scene_t *scene, obs_sceneitem_t *item, void *param) {
+			bool *any_unlocked = static_cast<bool *>(param);
+			obs_source_t *source = obs_sceneitem_get_source(item);
+
+			// Check if the source is a group (OBS_SOURCE_TYPE_SCENE)
+			if (obs_source_get_type(source) ==
+			    OBS_SOURCE_TYPE_SCENE) {
+				if (CheckGroupItemsIfAnyUnlocked(source)) {
+					*any_unlocked = true;
+					return false; // Stop enumeration
+				}
+			}
+
+			if (!obs_sceneitem_locked(item)) {
+				*any_unlocked = true;
+				return false; // Stop enumeration
+			}
+			return true; // Continue enumeration
+		},
+		&any_unlocked);
+	return any_unlocked;
+}
+
+void ToggleLockGroupItems(obs_source_t *group, bool lock);
+
+bool ToggleLockSceneItemCallback(obs_scene_t *scene, obs_sceneitem_t *item,
+				 void *param)
+{
+	bool *lock = static_cast<bool *>(param);
+	obs_source_t *source = obs_sceneitem_get_source(item);
+
+	// Check if the source is a group (OBS_SOURCE_TYPE_SCENE)
+	if (obs_source_get_type(source) == OBS_SOURCE_TYPE_SCENE) {
+		ToggleLockGroupItems(source, *lock);
+	}
+
+	// Toggle the lock state of the scene item
+	obs_sceneitem_set_locked(item, *lock);
+
+	return true; // Return true to continue enumeration
+}
+
+void ToggleLockGroupItems(obs_source_t *group, bool lock)
+{
+	obs_scene_t *group_scene = obs_group_from_source(group);
+	if (!group_scene) {
+		blog(LOG_WARNING, "Failed to get scene from group source.");
+		return;
+	}
+
+	obs_scene_enum_items(group_scene, ToggleLockSceneItemCallback, &lock);
+}
+
+bool ToggleLockSceneItems(obs_scene_t *scene, bool lock)
+{
+	obs_scene_enum_items(scene, ToggleLockSceneItemCallback, &lock);
+	return lock;
+}
+
+bool ToggleLockSourcesInCurrentScene()
+{
+	// Get the current scene
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) {
+		blog(LOG_WARNING, "No current scene found.");
+		return false;
+	}
+
+	// Get the scene data
+	obs_scene_t *scene = obs_scene_from_source(current_scene);
+	if (!scene) {
+		blog(LOG_WARNING,
+		     "Failed to get scene from current scene source.");
+		obs_source_release(current_scene);
+		return false;
+	}
+
+	// Determine if there are any unlocked items
+	bool any_unlocked = CheckIfAnyUnlocked(scene);
+
+	// Toggle the lock state for all items
+	ToggleLockSceneItems(scene, any_unlocked);
+
+	// Release the current scene reference
+	obs_source_release(current_scene);
+
+	if (any_unlocked) {
+		blog(LOG_INFO,
+		     "All sources in the current scene have been locked.");
+	} else {
+		blog(LOG_INFO,
+		     "All sources in the current scene have been unlocked.");
+	}
+
+	return any_unlocked; // Return the final state: true if sources were locked, false if unlocked
+}
+
+bool CheckIfAnyUnlockedCallback(void *param, obs_source_t *source)
+{
+	bool *any_unlocked = static_cast<bool *>(param);
+	obs_scene_t *scene = obs_scene_from_source(source);
+
+	if (CheckIfAnyUnlocked(scene)) {
+		*any_unlocked = true;
+		return false; // Stop enumeration
+	}
+
+	return true; // Continue enumeration
+}
+
+bool CheckIfAnyUnlockedInAllScenes()
+{
+	bool any_unlocked = false;
+	obs_enum_scenes(CheckIfAnyUnlockedCallback, &any_unlocked);
+	return any_unlocked;
+}
+
+bool ToggleLockSceneItemsCallback(void *param, obs_source_t *source)
+{
+	bool *lock = static_cast<bool *>(param);
+	obs_scene_t *scene = obs_scene_from_source(source);
+	ToggleLockSceneItems(scene, *lock);
+	return true; // Continue enumeration
+}
+
+void ToggleLockSourcesInAllScenes(bool lock)
+{
+	obs_enum_scenes(ToggleLockSceneItemsCallback, &lock);
+}
+
+bool ToggleLockAllSources()
+{
+	// Check if any sources are unlocked in all scenes
+	bool any_unlocked = CheckIfAnyUnlockedInAllScenes();
+
+	// Toggle lock state for all sources in all scenes
+	ToggleLockSourcesInAllScenes(any_unlocked);
+
+	if (any_unlocked) {
+		blog(LOG_INFO, "All sources in all scenes have been locked.");
+	} else {
+		blog(LOG_INFO, "All sources in all scenes have been unlocked.");
+	}
+
+	return any_unlocked; // Return the final state: true if sources were locked, false if unlocked
+}
+
 //--------------------MENU & ABOUT-------------------
 void LoadStreamUpFile(bool forceLoad = false)
 {
@@ -1952,6 +2112,14 @@ static void LoadMenu(QMenu *menu)
 	QObject::connect(a, &QAction::triggered,
 			 [] { CheckAllPluginsForUpdates(true); });
 
+	a = toolsMenu->addAction(obs_module_text("MenuLockAllCurrentSources"));
+	QObject::connect(a, &QAction::triggered,
+			 [] { ToggleLockSourcesInCurrentScene(); });
+
+	a = toolsMenu->addAction(obs_module_text("MenuLockAllSources"));
+	QObject::connect(a, &QAction::triggered,
+			 [] { ToggleLockAllSources(); });
+
 	a = toolsMenu->addAction(obs_module_text("MenuRefreshAudioMonitoring"));
 	QObject::connect(a, &QAction::triggered,
 			 [] { RefreshAudioMonitoringTypes(); });
@@ -2037,6 +2205,82 @@ void vendor_request_check_plugins(obs_data_t *request_data,
 	UNUSED_PARAMETER(request_data);
 	bool pluginsUpToDate = CheckrequiredOBSPlugins(true);
 	obs_data_set_bool(response_data, "success", pluginsUpToDate);
+}
+
+void vendor_request_lock_all_sources(obs_data_t *request_data,
+					 obs_data_t *response_data, void *)
+{
+	UNUSED_PARAMETER(request_data);
+	bool lockState = ToggleLockAllSources();
+	obs_data_set_bool(response_data, "lockState", lockState);
+	if (lockState) {
+		SendTrayNotification(QSystemTrayIcon::Information,
+				     obs_module_text("SourceLockSystem"),
+				     obs_module_text("LockedAllSources"));
+	} else {
+		SendTrayNotification(QSystemTrayIcon::Information,
+				     obs_module_text("SourceLockSystem"),
+				     obs_module_text("UnlockedAllSources"));
+	}
+}
+
+static void hotkey_lock_all_sources(void *data, obs_hotkey_id id,
+						obs_hotkey_t *hotkey,
+						bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+	if (!pressed)
+		return;
+	bool lockState = ToggleLockAllSources();
+	if (lockState) {
+		SendTrayNotification(QSystemTrayIcon::Information,
+				     obs_module_text("SourceLockSystem"),
+				     obs_module_text("LockedAllSources"));
+	} else {
+		SendTrayNotification(QSystemTrayIcon::Information,
+				     obs_module_text("SourceLockSystem"),
+				     obs_module_text("UnlockedAllSources"));
+	}
+}
+
+void vendor_request_lock_current_sources(obs_data_t *request_data,
+					 obs_data_t *response_data, void *)
+{
+	UNUSED_PARAMETER(request_data);
+	bool lockState = ToggleLockSourcesInCurrentScene();
+	obs_data_set_bool(response_data, "lockState", lockState);
+	if (lockState) {
+		SendTrayNotification(QSystemTrayIcon::Information,
+				     obs_module_text("SourceLockSystem"),
+				     obs_module_text("LockedCurrentSources"));
+	} else {
+		SendTrayNotification(QSystemTrayIcon::Information,
+				     obs_module_text("SourceLockSystem"),
+				     obs_module_text("UnlockedCurrentSources"));
+	}
+}
+
+static void hotkey_lock_current_sources(void *data, obs_hotkey_id id,
+						obs_hotkey_t *hotkey,
+						bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+	if (!pressed)
+		return;
+	bool lockState = ToggleLockSourcesInCurrentScene();
+	if (lockState) {
+		SendTrayNotification(QSystemTrayIcon::Information,
+				     obs_module_text("SourceLockSystem"),
+				     obs_module_text("LockedCurrentSources"));
+	} else {
+		SendTrayNotification(QSystemTrayIcon::Information,
+				     obs_module_text("SourceLockSystem"),
+				     obs_module_text("UnlockedCurrentSources"));
+	}
 }
 
 void vendor_request_refresh_audio_monitoring(obs_data_t *request_data,
@@ -2365,6 +2609,23 @@ bool obs_module_load()
 		vendor, "setHideTransition", vendor_request_set_hide_transition,
 		nullptr);
 
+	// OBSws -> Lock/Unlock current sources
+	obs_websocket_vendor_register_request(
+		vendor, "toggleLockSources",
+		vendor_request_lock_current_sources, nullptr);
+	obs_hotkey_register_frontend("toggle_lock_sources",
+		obs_module_text("MenuLockAllCurrentSources"),
+		hotkey_lock_current_sources, nullptr);
+
+	// OBSws -> Lock/Unlock all sources
+	obs_websocket_vendor_register_request(
+		vendor, "toggleLockSources",
+		vendor_request_lock_all_sources, nullptr);
+	obs_hotkey_register_frontend(
+		"toggle_lock_sources",
+		obs_module_text("MenuLockAllSources"),
+		hotkey_lock_all_sources, nullptr);
+
 	//OBSws -> Request Bitrate
 	obs_websocket_vendor_register_request(vendor, "getBitrate",
 					      vendor_request_bitrate, nullptr);
@@ -2374,6 +2635,7 @@ bool obs_module_load()
 	//OBSws -> Check Plugins
 	obs_websocket_vendor_register_request(
 		vendor, "check_plugins", vendor_request_check_plugins, nullptr);
+
 	//OBSws & Hotkey -> Refresh Audio Monitoring
 	obs_websocket_vendor_register_request(
 		vendor, "refresh_audio_monitoring",
@@ -2395,7 +2657,7 @@ bool obs_module_load()
 }
 
 void obs_module_post_load(void)
-{ 
+{
 	InitialiseRequiredModules();
 
 	// Load run on startup settings
