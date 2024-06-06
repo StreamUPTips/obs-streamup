@@ -1452,6 +1452,8 @@ bool CheckIfAnyUnlocked(obs_scene_t *scene)
 			bool *any_unlocked = static_cast<bool *>(param);
 			obs_source_t *source = obs_sceneitem_get_source(item);
 
+			UNUSED_PARAMETER(scene);
+
 			// Check if the source is a group (OBS_SOURCE_TYPE_SCENE)
 			if (obs_source_get_type(source) ==
 			    OBS_SOURCE_TYPE_SCENE) {
@@ -1476,6 +1478,8 @@ void ToggleLockGroupItems(obs_source_t *group, bool lock);
 bool ToggleLockSceneItemCallback(obs_scene_t *scene, obs_sceneitem_t *item,
 				 void *param)
 {
+	UNUSED_PARAMETER(scene);
+
 	bool *lock = static_cast<bool *>(param);
 	obs_source_t *source = obs_sceneitem_get_source(item);
 
@@ -2292,7 +2296,7 @@ static void hotkey_lock_all_sources(void *data, obs_hotkey_id id,
 	UNUSED_PARAMETER(data);
 	if (!pressed)
 		return;
-	bool lockState = ToggleLockAllSources();
+	ToggleLockAllSources();
 }
 
 void vendor_request_lock_current_sources(obs_data_t *request_data,
@@ -2312,7 +2316,7 @@ static void hotkey_lock_current_sources(void *data, obs_hotkey_id id,
 	UNUSED_PARAMETER(data);
 	if (!pressed)
 		return;
-	bool lockState = ToggleLockSourcesInCurrentScene();
+	ToggleLockSourcesInCurrentScene();
 }
 
 void vendor_request_refresh_audio_monitoring(obs_data_t *request_data,
@@ -2524,6 +2528,8 @@ struct SceneItemEnumData {
 static bool enum_scene_items_callback(obs_scene_t *scene, obs_sceneitem_t *item,
 				      void *param)
 {
+	UNUSED_PARAMETER(scene);
+
 	SceneItemEnumData *data = static_cast<SceneItemEnumData *>(param);
 	bool isSelected = obs_sceneitem_selected(item);
 	if (isSelected) {
@@ -2553,6 +2559,9 @@ void vendor_request_get_current_selected_source(obs_data_t *request_data,
 						obs_data_t *response_data,
 						void *private_data)
 {
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	const char *scene_name = obs_source_get_name(current_scene);
 	blog(LOG_INFO, "[StreamUP] current_scene = %s",
@@ -2591,6 +2600,9 @@ void vendor_request_get_output_file_path(obs_data_t *request_data,
 					 obs_data_t *response_data,
 					 void *private_data)
 {
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
 	char *path = obs_frontend_get_current_record_output_path();
 	obs_data_set_string(response_data, "outputFilePath", path);
 }
