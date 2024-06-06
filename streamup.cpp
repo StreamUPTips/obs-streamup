@@ -494,14 +494,16 @@ void CreateButton(QLayout *layout, const QString &text,
 	layout->addWidget(button);
 }
 
-void CreateRefreshDialog(const char *infoText1, const char *infoText2,
-			 const char *infoText3, const QString &titleText,
-			 const std::function<void()> &buttonCallback,
-			 const QString &jsonString, const char *how1,
-			 const char *how2, const char *how3)
+void CreateToolDialog(const char *infoText1, const char *infoText2,
+		      const char *infoText3, const QString &titleText,
+		      const std::function<void()> &buttonCallback,
+		      const QString &jsonString, const char *how1,
+		      const char *how2, const char *how3,
+		      const char *notificationMessage)
 {
 	ShowDialogOnUIThread([infoText1, infoText2, infoText3, titleText,
-			      buttonCallback, jsonString, how1, how2, how3]() {
+			      buttonCallback, jsonString, how1, how2, how3,
+			      notificationMessage]() {
 		const char *titleTextChar = titleText.toUtf8().constData();
 		QString titleStr = obs_module_text(titleTextChar);
 		QString infoText1Str = obs_module_text(infoText1);
@@ -525,9 +527,12 @@ void CreateRefreshDialog(const char *infoText1, const char *infoText2,
 		CreateButton(buttonLayout, titleStr, [=]() {
 			buttonCallback();
 			// Send a system tray notification
-			SendTrayNotification(QSystemTrayIcon::Information,
-					     titleStr,
-					     "Action completed successfully.");
+			if (notificationMessage)
+			{
+				SendTrayNotification(
+					QSystemTrayIcon::Information, titleStr,
+					obs_module_text(notificationMessage));
+			}
 			dialog->close();
 		});
 
@@ -575,6 +580,8 @@ void CreateRefreshDialog(const char *infoText1, const char *infoText2,
 		dialog->show();
 	});
 }
+
+
 
 //--------------------CHECK FOR PLUGIN UPDATES ETC--------------------
 struct PluginInfo {
@@ -1386,7 +1393,7 @@ bool EnumSourcesBrowser(void *data, obs_source_t *source)
 
 void RefreshAudioMonitoringTypes()
 {
-	CreateRefreshDialog(
+	CreateToolDialog(
 		"RefreshAudioMonitoringInfo1", "RefreshAudioMonitoringInfo2",
 		"RefreshAudioMonitoringInfo3", "RefreshAudioMonitoring",
 		[]() { obs_enum_sources(EnumSourcesAudioMonitoring, nullptr); },
@@ -1400,12 +1407,12 @@ void RefreshAudioMonitoringTypes()
                         }
                     })",
 		"RefreshAudioMonitoringHowTo1", "RefreshAudioMonitoringHowTo2",
-		"RefreshAudioMonitoringHowTo3");
+		"RefreshAudioMonitoringHowTo3", "RefreshAudioMonitoringNotification");
 }
 
 void RefreshBrowserSources()
 {
-	CreateRefreshDialog(
+	CreateToolDialog(
 		"RefreshBrowserSourcesInfo1", "RefreshBrowserSourcesInfo2",
 		"RefreshBrowserSourcesInfo3", "RefreshBrowserSources",
 		[]() { obs_enum_sources(EnumSourcesBrowser, nullptr); },
@@ -1419,8 +1426,9 @@ void RefreshBrowserSources()
                         }
                     })",
 		"RefreshBrowserSourcesHowTo1", "RefreshBrowserSourcesHowTo2",
-		"RefreshBrowserSourcesHowTo3");
+		"RefreshBrowserSourcesHowTo3", "RefreshBrowserSourcesNotification");
 }
+
 
 bool CheckIfAnyUnlocked(obs_scene_t *scene);
 
@@ -1534,6 +1542,16 @@ bool ToggleLockSourcesInCurrentScene()
 		     "All sources in the current scene have been unlocked.");
 	}
 
+	if (any_unlocked) {
+		SendTrayNotification(QSystemTrayIcon::Information,
+				     obs_module_text("SourceLockSystem"),
+				     obs_module_text("LockedCurrentSources"));
+	} else {
+		SendTrayNotification(QSystemTrayIcon::Information,
+				     obs_module_text("SourceLockSystem"),
+				     obs_module_text("UnlockedCurrentSources"));
+	}
+
 	return any_unlocked; // Return the final state: true if sources were locked, false if unlocked
 }
 
@@ -1584,7 +1602,55 @@ bool ToggleLockAllSources()
 		blog(LOG_INFO, "All sources in all scenes have been unlocked.");
 	}
 
+	if (any_unlocked) {
+		SendTrayNotification(QSystemTrayIcon::Information,
+				     obs_module_text("SourceLockSystem"),
+				     obs_module_text("LockedAllSources"));
+	} else {
+		SendTrayNotification(QSystemTrayIcon::Information,
+				     obs_module_text("SourceLockSystem"),
+				     obs_module_text("UnlockedAllSources"));
+	}
+
 	return any_unlocked; // Return the final state: true if sources were locked, false if unlocked
+}
+
+void LockAllSourcesDialog()
+{
+	CreateToolDialog(
+		"LockAllSourcesInfo1", "LockAllSourcesInfo2",
+		"LockAllSourcesInfo3", "LockAllSources",
+		[]() { ToggleLockAllSources(); },
+		R"(
+                    {
+                        "requestType": "CallVendorRequest",
+                        "requestData": {
+                            "vendorName": "streamup",
+                            "requestType": "toggleLockAllSources",
+                            "requestData": null
+                        }
+                    })",
+		"LockAllSourcesHowTo1", "LockAllSourcesHowTo2",
+		"LockAllSourcesHowTo3", NULL);
+}
+
+void LockAllCurrentSourcesDialog()
+{
+	CreateToolDialog(
+		"LockAllCurrentSourcesInfo1", "LockAllCurrentSourcesInfo2",
+		"LockAllCurrentSourcesInfo3", "LockAllCurrentSources",
+		[]() { ToggleLockSourcesInCurrentScene(); },
+		R"(
+                    {
+                        "requestType": "CallVendorRequest",
+                        "requestData": {
+                            "vendorName": "streamup",
+                            "requestType": "toggleLockCurrentSources",
+                            "requestData": null
+                        }
+                    })",
+		"LockAllCurrentSourcesHowTo1", "LockAllCurrentSourcesHowTo2",
+		"LockAllCurrentSourcesHowTo3", NULL);
 }
 
 //--------------------MENU & ABOUT-------------------
@@ -2114,11 +2180,13 @@ static void LoadMenu(QMenu *menu)
 
 	a = toolsMenu->addAction(obs_module_text("MenuLockAllCurrentSources"));
 	QObject::connect(a, &QAction::triggered,
-			 [] { ToggleLockSourcesInCurrentScene(); });
+			 [] { LockAllCurrentSourcesDialog(); });
 
 	a = toolsMenu->addAction(obs_module_text("MenuLockAllSources"));
 	QObject::connect(a, &QAction::triggered,
-			 [] { ToggleLockAllSources(); });
+			 [] { LockAllSourcesDialog(); });
+
+	a = toolsMenu->addSeparator();
 
 	a = toolsMenu->addAction(obs_module_text("MenuRefreshAudioMonitoring"));
 	QObject::connect(a, &QAction::triggered,
@@ -2213,15 +2281,6 @@ void vendor_request_lock_all_sources(obs_data_t *request_data,
 	UNUSED_PARAMETER(request_data);
 	bool lockState = ToggleLockAllSources();
 	obs_data_set_bool(response_data, "lockState", lockState);
-	if (lockState) {
-		SendTrayNotification(QSystemTrayIcon::Information,
-				     obs_module_text("SourceLockSystem"),
-				     obs_module_text("LockedAllSources"));
-	} else {
-		SendTrayNotification(QSystemTrayIcon::Information,
-				     obs_module_text("SourceLockSystem"),
-				     obs_module_text("UnlockedAllSources"));
-	}
 }
 
 static void hotkey_lock_all_sources(void *data, obs_hotkey_id id,
@@ -2234,15 +2293,6 @@ static void hotkey_lock_all_sources(void *data, obs_hotkey_id id,
 	if (!pressed)
 		return;
 	bool lockState = ToggleLockAllSources();
-	if (lockState) {
-		SendTrayNotification(QSystemTrayIcon::Information,
-				     obs_module_text("SourceLockSystem"),
-				     obs_module_text("LockedAllSources"));
-	} else {
-		SendTrayNotification(QSystemTrayIcon::Information,
-				     obs_module_text("SourceLockSystem"),
-				     obs_module_text("UnlockedAllSources"));
-	}
 }
 
 void vendor_request_lock_current_sources(obs_data_t *request_data,
@@ -2251,15 +2301,6 @@ void vendor_request_lock_current_sources(obs_data_t *request_data,
 	UNUSED_PARAMETER(request_data);
 	bool lockState = ToggleLockSourcesInCurrentScene();
 	obs_data_set_bool(response_data, "lockState", lockState);
-	if (lockState) {
-		SendTrayNotification(QSystemTrayIcon::Information,
-				     obs_module_text("SourceLockSystem"),
-				     obs_module_text("LockedCurrentSources"));
-	} else {
-		SendTrayNotification(QSystemTrayIcon::Information,
-				     obs_module_text("SourceLockSystem"),
-				     obs_module_text("UnlockedCurrentSources"));
-	}
 }
 
 static void hotkey_lock_current_sources(void *data, obs_hotkey_id id,
@@ -2272,15 +2313,6 @@ static void hotkey_lock_current_sources(void *data, obs_hotkey_id id,
 	if (!pressed)
 		return;
 	bool lockState = ToggleLockSourcesInCurrentScene();
-	if (lockState) {
-		SendTrayNotification(QSystemTrayIcon::Information,
-				     obs_module_text("SourceLockSystem"),
-				     obs_module_text("LockedCurrentSources"));
-	} else {
-		SendTrayNotification(QSystemTrayIcon::Information,
-				     obs_module_text("SourceLockSystem"),
-				     obs_module_text("UnlockedCurrentSources"));
-	}
 }
 
 void vendor_request_refresh_audio_monitoring(obs_data_t *request_data,
@@ -2611,7 +2643,7 @@ bool obs_module_load()
 
 	// OBSws -> Lock/Unlock current sources
 	obs_websocket_vendor_register_request(
-		vendor, "toggleLockSources",
+		vendor, "toggleLockCurrentSources",
 		vendor_request_lock_current_sources, nullptr);
 	obs_hotkey_register_frontend("toggle_lock_sources",
 		obs_module_text("MenuLockAllCurrentSources"),
@@ -2619,7 +2651,7 @@ bool obs_module_load()
 
 	// OBSws -> Lock/Unlock all sources
 	obs_websocket_vendor_register_request(
-		vendor, "toggleLockSources",
+		vendor, "toggleLockAllSources",
 		vendor_request_lock_all_sources, nullptr);
 	obs_hotkey_register_frontend(
 		"toggle_lock_sources",
