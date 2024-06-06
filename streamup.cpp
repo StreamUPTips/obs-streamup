@@ -534,6 +534,7 @@ void CreateRefreshDialog(const char *infoText1, const char *infoText2,
 	});
 }
 
+
 //--------------------CHECK FOR PLUGIN UPDATES ETC--------------------
 struct PluginInfo {
 	std::string name;
@@ -555,6 +556,36 @@ struct request_data {
 	std::string response;
 };
 
+void ErrorDialog(const QString &errorMessage)
+{
+	ShowDialogOnUIThread([errorMessage]() {
+		// Create dialog window
+		QDialog *dialog = CreateDialogWindow("WindowErrorTitle");
+		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
+		dialogLayout->setContentsMargins(20, 15, 20, 10);
+
+		// Convert error message to QString
+		QString displayMessage = errorMessage.isEmpty()
+						 ? "Unknown error occurred."
+						 : errorMessage;
+
+		// Create Icon + Text then add to dialog layout
+		dialogLayout->addLayout(
+			AddIconAndText(QStyle::SP_MessageBoxCritical,
+				       displayMessage.toUtf8().constData()));
+
+		// Create buttons
+		QHBoxLayout *buttonLayout = new QHBoxLayout();
+		CreateButton(buttonLayout, "OK",
+			     [dialog]() { dialog->close(); });
+
+		dialogLayout->addLayout(buttonLayout);
+		dialog->setLayout(dialogLayout);
+		dialog->show();
+	});
+}
+
+
 size_t WriteCallback(void *contents, size_t size, size_t nmemb,
 		     std::string *out)
 {
@@ -574,7 +605,8 @@ void *MakeApiRequest(void *arg)
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data->response);
 		CURLcode res = curl_easy_perform(curl);
 		if (res != CURLE_OK)
-			blog(LOG_INFO, "curl_easy_perform() failed: %s\n",
+			blog(LOG_INFO,
+			     "[StreamUP] curl_easy_perform() failed: %s\n",
 			     curl_easy_strerror(res));
 		curl_easy_cleanup(curl);
 	}
@@ -588,29 +620,28 @@ void InitialiseRequiredModules()
 	req_data.url = "https://api.streamup.tips/plugins";
 
 	if (pthread_create(&thread, NULL, MakeApiRequest, &req_data)) {
-		blog(LOG_INFO, "Error creating thread\n");
+		blog(LOG_INFO, "[StreamUP] Error creating thread\n");
 		return;
 	}
 
 	if (pthread_join(thread, NULL)) {
-		blog(LOG_INFO, "Error joining thread\n");
+		blog(LOG_INFO, "[StreamUP] Error joining thread\n");
 		return;
 	}
 
 	std::string api_response = req_data.response;
-	//api_response = "";
-	/* if (api_response.find("Error:") != std::string::npos) {
-		ErrorMessage errorMsg;
-		errorMsg.showMessage(QString::fromStdString(api_response));
+
+	if (api_response.find("Error:") != std::string::npos) {
+		ErrorDialog(QString::fromStdString(api_response));
 		return;
 	}
 
 	if (api_response == "") {
-		ErrorMessage errorMsg;
-		errorMsg.showMessage(
-			"Unable to retrive plugin list from the StreamUP API.");
+		blog(LOG_INFO, "[StreamUP] Error loading plugins from %s",
+		     req_data.url.c_str());
+		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
 		return;
-	}*/
+	}
 
 	obs_data_t *data = obs_data_create_from_json(api_response.c_str());
 
@@ -651,8 +682,9 @@ void InitialiseRequiredModules()
 
 char *GetFilePath()
 {
-	char *path;
-	char *path_abs;
+	char *path = nullptr;
+	char *path_abs = nullptr;
+
 	if (strcmp(PLATFORM_NAME, "windows") == 0) {
 		path = obs_module_config_path("../../logs/");
 		path_abs = os_get_abs_path_ptr(path);
@@ -660,10 +692,13 @@ char *GetFilePath()
 		if (path_abs[strlen(path_abs) - 1] != '/' &&
 		    path_abs[strlen(path_abs) - 1] != '\\') {
 			// Create a new string with appended "/"
-			char *newPathAbs = new char[strlen(path_abs) + 2];
+			size_t new_path_abs_size = strlen(path_abs) + 2;
+			char *newPathAbs = (char *)bmalloc(new_path_abs_size);
 			strcpy(newPathAbs, path_abs);
 			strcat(newPathAbs, "/");
 
+			// Free the old path_abs and reassign it
+			bfree(path_abs);
 			path_abs = newPathAbs;
 		}
 	} else {
@@ -680,18 +715,26 @@ char *GetFilePath()
 			path_str.replace(pos, to_search.size(), replace_str);
 		}
 
-		path_abs = new char[path_str.size() + 1];
+		size_t path_abs_size = path_str.size() + 1;
+		path_abs = (char *)bmalloc(path_abs_size);
 		std::strcpy(path_abs, path_str.c_str());
 	}
 	bfree(path);
 
-	if (std::filesystem::exists(path_abs)) {
-		// The directory exists
-		std::filesystem::directory_iterator dir(path_abs);
+	blog(LOG_INFO, "[StreamUP] Path: %s", path_abs);
+
+	// Use std::filesystem to check if the path exists
+	std::string path_abs_str(path_abs);
+	blog(LOG_INFO, "[StreamUP] Path: %s", path_abs_str.c_str());
+
+	bool path_exists = std::filesystem::exists(path_abs_str);
+	if (path_exists) {
+		std::filesystem::directory_iterator dir(path_abs_str);
 		if (dir == std::filesystem::directory_iterator{}) {
 			// The directory is empty
 			blog(LOG_INFO,
-			     "OBS doesn't have files in the install directory.");
+			     "[StreamUP] OBS doesn't have files in the install directory.");
+			bfree(path_abs);
 			return NULL;
 		} else {
 			// The directory contains files
@@ -700,8 +743,8 @@ char *GetFilePath()
 	} else {
 		// The directory does not exist
 		blog(LOG_INFO,
-		     "OBS log file folder does not exist in the install directory.");
-
+		     "[StreamUP] OBS log file folder does not exist in the install directory.");
+		bfree(path_abs);
 		return NULL;
 	}
 }
@@ -766,31 +809,6 @@ std::string search_string_in_file(const char *path, const char *search)
 	}
 
 	return "";
-}
-
-void ErrorDialog(const QString &errorMessage)
-{
-	ShowDialogOnUIThread([errorMessage]() {
-		// Create
-		QDialog *dialog = CreateDialogWindow("WindowErrorTitle");
-		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(20, 15, 20, 10);
-
-		// Create Icon + Text then add to dialog layout
-		const char *errorMessageChar =
-			errorMessage.toUtf8().constData();
-		dialogLayout->addLayout(AddIconAndText(
-			QStyle::SP_MessageBoxCritical, errorMessageChar));
-
-		// Create buttons
-		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		CreateButton(buttonLayout, "OK",
-			     [dialog]() { dialog->close(); });
-
-		dialogLayout->addLayout(buttonLayout);
-		dialog->setLayout(dialogLayout);
-		dialog->show();
-	});
 }
 
 void PluginsUpToDateOutput(bool manuallyTriggered)
@@ -933,6 +951,9 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 {
 	std::vector<std::pair<std::string, std::string>> installedPlugins;
 	char *filepath = GetFilePath();
+	if (filepath == NULL) {
+		return installedPlugins;
+	}
 
 	for (const auto &module : all_plugins) {
 		const std::string &plugin_name = module.first;
@@ -1104,6 +1125,9 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile = false)
 	std::string errorMsgMissing = "";
 	std::string errorMsgUpdate = "";
 	char *filepath = GetFilePath();
+	if (filepath == NULL) {
+		return false;
+	}
 
 	for (const auto &module : required_plugins) {
 		const std::string &plugin_name = module.first;
@@ -1285,7 +1309,7 @@ bool EnumSourcesAudioMonitoring(void *data, obs_source_t *source)
 					       original_monitoring_type);
 
 		blog(LOG_INFO,
-		     "StreamUP: '%s' has refreshed audio monitoring type: '%s'",
+		     "[StreamUP] '%s' has refreshed audio monitoring type: '%s'",
 		     source_name,
 		     monitoringTypeToString(original_monitoring_type));
 	}
@@ -1311,7 +1335,7 @@ bool EnumSourcesBrowser(void *data, obs_source_t *source)
 			obs_data_set_int(settings, "fps", fps - 1);
 		}
 		obs_source_update(source, settings);
-		blog(LOG_INFO, "StreamUP: Refreshed '%s' browser source",
+		blog(LOG_INFO, "[StreamUP] Refreshed '%s' browser source",
 		     source_name);
 
 		obs_data_release(settings);
@@ -1718,7 +1742,7 @@ void SaveSettings(obs_data_t *settings)
 	char *configPath = obs_module_config_path("configs.json");
 
 	if (obs_data_save_json(settings, configPath)) {
-		blog(LOG_INFO, "Settings saved to %s", configPath);
+		blog(LOG_INFO, "[StreamUP] Settings saved to %s", configPath);
 	} else {
 		blog(LOG_WARNING, "Failed to save settings to file.");
 	}
@@ -1735,19 +1759,20 @@ obs_data_t *LoadSettings()
 
 	if (!settings) {
 		blog(LOG_INFO,
-		     "Settings not found. Creating default settings...");
+		     "[StreamUP] Settings not found. Creating default settings...");
 		os_mkdirs(obs_module_config_path(""));
 		// Create default settings
 		settings = obs_data_create();
 		obs_data_set_bool(settings, "run_at_startup", true);
 		if (obs_data_save_json(settings, path_abs)) {
-			blog(LOG_INFO, "Settings saved to %s", path_abs);
+			blog(LOG_INFO, "[StreamUP] Settings saved to %s",
+			     path_abs);
 		} else {
 			blog(LOG_WARNING, "Failed to save settings to file.");
 		}
 
 	} else {
-		blog(LOG_INFO, "Settings loaded successfully");
+		blog(LOG_INFO, "[StreamUP] Settings loaded successfully");
 	}
 	bfree(file);
 	bfree(path_abs);
@@ -2178,7 +2203,7 @@ static bool enum_scene_items_callback(obs_scene_t *scene, obs_sceneitem_t *item,
 		data->isAnySourceSelected = true;
 		obs_source_t *source = obs_sceneitem_get_source(item);
 		data->selectedSourceName = obs_source_get_name(source);
-		blog(LOG_INFO, "source = %s is selected",
+		blog(LOG_INFO, "[StreamUP] source = %s is selected",
 		     data->selectedSourceName ? data->selectedSourceName
 					      : "Unknown");
 	}
@@ -2203,7 +2228,7 @@ void vendor_request_get_current_selected_source(obs_data_t *request_data,
 {
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	const char *scene_name = obs_source_get_name(current_scene);
-	blog(LOG_INFO, "current_scene = %s",
+	blog(LOG_INFO, "[StreamUP] current_scene = %s",
 	     scene_name ? scene_name : "Unknown");
 
 	if (!current_scene)
@@ -2223,24 +2248,25 @@ void vendor_request_get_current_selected_source(obs_data_t *request_data,
 
 	// Decide the response
 	if (!isAnySourceSelected) {
-		blog(LOG_INFO, "No selected source. Current scene: %s",
+		blog(LOG_INFO,
+		     "[StreamUP] No selected source. Current scene: %s",
 		     scene_name);
 		obs_data_set_string(response_data, "currentScene", scene_name);
 	} else {
-		blog(LOG_INFO, "Selected source: %s", selected_source_name);
+		blog(LOG_INFO, "[StreamUP] Selected source: %s",
+		     selected_source_name);
 		obs_data_set_string(response_data, "selectedSource",
 				    selected_source_name);
 	}
 }
 
 void vendor_request_get_output_file_path(obs_data_t *request_data,
-						obs_data_t *response_data,
-						void *private_data)
+					 obs_data_t *response_data,
+					 void *private_data)
 {
 	char *path = obs_frontend_get_current_record_output_path();
 	obs_data_set_string(response_data, "outputFilePath", path);
 }
-
 
 bool obs_module_load()
 {
@@ -2265,7 +2291,8 @@ bool obs_module_load()
 		vendor_request_get_output_file_path, nullptr);
 
 	//OBSws -> Request Bitrate
-	obs_websocket_vendor_register_request(vendor, "getCurrentSource",
+	obs_websocket_vendor_register_request(
+		vendor, "getCurrentSource",
 		vendor_request_get_current_selected_source, nullptr);
 
 	//OBSws -> Request Source Show Transition
@@ -2317,7 +2344,7 @@ bool obs_module_load()
 }
 
 void obs_module_post_load(void)
-{
+{ 
 	InitialiseRequiredModules();
 
 	// Load run on startup settings
