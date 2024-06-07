@@ -9,7 +9,7 @@ else()
   cmake_minimum_required(VERSION 3.18)
 endif()
 
-project(streamup VERSION 1.5.1)
+project(streamup VERSION 1.6.0)
 set(PROJECT_FULL_NAME "StreamUP")
 
 # Set new UUIDs when you start to create a new plugin.
@@ -23,6 +23,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/version.h.in ${CMAKE_CURRENT_SOURCE_D
 target_sources(${PROJECT_NAME} PRIVATE
 	streamup.cpp
 	streamup.hpp
+  streamup-dock.hpp
   obs-websocket-api.h
 	version.h)
 
