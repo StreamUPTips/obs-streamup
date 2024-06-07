@@ -89,6 +89,7 @@ struct SystemTrayNotification {
 
 std::map<std::string, PluginInfo> all_plugins;
 std::map<std::string, PluginInfo> required_plugins;
+static bool notificationsMuted = false;
 
 
 
@@ -384,6 +385,11 @@ static void LoadScene(obs_data_t *data, QString path)
 void SendTrayNotification(QSystemTrayIcon::MessageIcon icon,
 			  const QString &title, const QString &body)
 {
+	if (notificationsMuted) {
+		blog(LOG_INFO, "[StreamUP] Notifications are muted.");
+		return;
+	}
+
 	if (!QSystemTrayIcon::isSystemTrayAvailable() ||
 	    !QSystemTrayIcon::supportsMessages())
 		return;
@@ -1978,6 +1984,8 @@ static void HotkeyLockCurrentSources(void *data, obs_hotkey_id id,
 static void SaveLoadHotkeysCallback(obs_data_t *save_data, bool saving,
 				       void *private_data)
 {
+	UNUSED_PARAMETER(private_data);
+
 	char *configPath = obs_module_config_path("hotkeys.json");
 
 	if (saving) {
@@ -2066,7 +2074,6 @@ static obs_data_t *SaveLoadSettingsCallback(obs_data_t *save_data, bool saving)
 			blog(LOG_WARNING,
 			     "[StreamUP] Failed to save settings to file.");
 		}
-		obs_data_release(save_data);
 	} else {
 		data = obs_data_create_from_json_file(configPath);
 
@@ -2076,6 +2083,10 @@ static obs_data_t *SaveLoadSettingsCallback(obs_data_t *save_data, bool saving)
 			os_mkdirs(obs_module_config_path(""));
 			data = obs_data_create();
 			obs_data_set_bool(data, "run_at_startup", true);
+			obs_data_set_bool(
+				data, "notifications_mute",
+				false);
+
 			if (obs_data_save_json(data, configPath)) {
 				blog(LOG_INFO,
 				     "[StreamUP] Default settings saved to %s",
@@ -2317,28 +2328,62 @@ void SettingsDialog()
 			CreateRichTextLabel("General", true, false);
 		dialogLayout->addRow(titleLabel);
 
+		// Run at startup setting
 		obs_properties_t *props = obs_properties_create();
-		obs_property_t *p = obs_properties_add_bool(
+		obs_property_t *runAtStartupProp = obs_properties_add_bool(
 			props, "run_at_startup",
 			obs_module_text("WindowSettingsRunOnStartup"));
 
-		QLabel *label = CreateRichTextLabel(
+		QLabel *runAtStartupLabel = CreateRichTextLabel(
 			obs_module_text("WindowSettingsRunOnStartup"), false,
 			false);
-		QCheckBox *checkBox = new QCheckBox();
-		checkBox->setChecked(
-			obs_data_get_bool(settings, obs_property_name(p)));
+		QCheckBox *runAtStartupCheckBox = new QCheckBox();
+		runAtStartupCheckBox->setChecked(obs_data_get_bool(
+			settings, obs_property_name(runAtStartupProp)));
 
 		QObject::connect(
-			checkBox, &QCheckBox::stateChanged, [=](int state) {
-				obs_data_set_bool(settings,
-						  obs_property_name(p),
-						  state == Qt::Checked);
+			runAtStartupCheckBox, &QCheckBox::stateChanged,
+			[=](int state) {
+				obs_data_set_bool(
+					settings,
+					obs_property_name(runAtStartupProp),
+					state == Qt::Checked);
 			});
 
-		dialogLayout->addRow(label, checkBox);
+		dialogLayout->addRow(runAtStartupLabel, runAtStartupCheckBox);
+
+		// Notifications mute setting
+		obs_property_t *notificationsMuteProp = obs_properties_add_bool(
+			props, "notifications_mute",
+			obs_module_text("WindowSettingsNotificationsMute"));
+
+		QLabel *notificationsMuteLabel = CreateRichTextLabel(
+			obs_module_text("WindowSettingsNotificationsMute"),
+			false, false);
+		QCheckBox *notificationsMuteCheckBox = new QCheckBox();
+		notificationsMuteCheckBox->setChecked(obs_data_get_bool(
+			settings, obs_property_name(notificationsMuteProp)));
+
+		QObject::connect(
+			notificationsMuteCheckBox, &QCheckBox::stateChanged,
+			[=](int state) {
+				bool isChecked = (state == Qt::Checked);
+				obs_data_set_bool(
+					settings,
+					obs_property_name(
+						notificationsMuteProp),
+					isChecked);
+				notificationsMuted =
+					isChecked; // Update the global variable
+			});
+
+		dialogLayout->addRow(notificationsMuteLabel,
+				     notificationsMuteCheckBox);
+
+		// Spacer
 		dialogLayout->addItem(new QSpacerItem(0, 5));
 
+		// Plugin management
 		QLabel *pluginLabel = CreateRichTextLabel(
 			obs_module_text("WindowSettingsPluginManagement"), true,
 			false);
@@ -2350,6 +2395,7 @@ void SettingsDialog()
 		dialogLayout->addRow(pluginLabel);
 		dialogLayout->addRow(pluginButton);
 
+		// Buttons
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 		CreateButton(buttonLayout, obs_module_text("Cancel"),
 			     [dialog, settings]() {
@@ -2630,13 +2676,26 @@ void obs_module_post_load(void)
 {
 	InitialiseRequiredModules();
 
-	// Load run on startup settings
-	obs_data_t *settings =
-		SaveLoadSettingsCallback(nullptr, false);
-	bool runAtStartup = obs_data_get_bool(settings, "run_at_startup");
-	if (runAtStartup) {
-		CheckAllPluginsForUpdates(false);
+	// Load settings
+	obs_data_t *settings = SaveLoadSettingsCallback(nullptr, false);
+
+	if (settings) {
+		bool runAtStartup =
+			obs_data_get_bool(settings, "run_at_startup");
+		if (runAtStartup) {
+			CheckAllPluginsForUpdates(false);
+		}
+
+		notificationsMuted =
+			obs_data_get_bool(settings, "notifications_mute");
+		blog(LOG_INFO, "[StreamUP] Notifications mute setting: %s",
+		     notificationsMuted ? "true" : "false");
+
+	} else {
+		blog(LOG_WARNING,
+		     "[StreamUP] Failed to load settings in post load.");
 	}
+
 	obs_data_release(settings);
 }
 
