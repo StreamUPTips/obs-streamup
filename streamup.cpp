@@ -1300,7 +1300,7 @@ const char *MonitoringTypeToString(obs_monitoring_type type)
 	}
 }
 
-bool EnumSourcesAudioMonitoring(void *data, obs_source_t *source)
+bool RefreshAudioMonitoring(void *data, obs_source_t *source)
 {
 	UNUSED_PARAMETER(data);
 
@@ -1324,7 +1324,7 @@ bool EnumSourcesAudioMonitoring(void *data, obs_source_t *source)
 	return true;
 }
 
-bool EnumSourcesBrowser(void *data, obs_source_t *source)
+bool RefreshBrowserSources(void *data, obs_source_t *source)
 {
 	UNUSED_PARAMETER(data);
 
@@ -1350,12 +1350,12 @@ bool EnumSourcesBrowser(void *data, obs_source_t *source)
 	return true;
 }
 
-void RefreshAudioMonitoringTypes()
+void RefreshAudioMonitoringDialog()
 {
 	CreateToolDialog(
 		"RefreshAudioMonitoringInfo1", "RefreshAudioMonitoringInfo2",
 		"RefreshAudioMonitoringInfo3", "RefreshAudioMonitoring",
-		[]() { obs_enum_sources(EnumSourcesAudioMonitoring, nullptr); },
+		[]() { obs_enum_sources(RefreshAudioMonitoring, nullptr); },
 		R"(
                     {
                         "requestType": "CallVendorRequest",
@@ -1370,12 +1370,12 @@ void RefreshAudioMonitoringTypes()
 		"RefreshAudioMonitoringNotification");
 }
 
-void RefreshBrowserSources()
+void RefreshBrowserSourcesDialog()
 {
 	CreateToolDialog(
 		"RefreshBrowserSourcesInfo1", "RefreshBrowserSourcesInfo2",
 		"RefreshBrowserSourcesInfo3", "RefreshBrowserSources",
-		[]() { obs_enum_sources(EnumSourcesBrowser, nullptr); },
+		[]() { obs_enum_sources(RefreshBrowserSources, nullptr); },
 		R"(
                     {
                         "requestType": "CallVendorRequest",
@@ -1828,7 +1828,7 @@ void WebsocketRequestRefreshAudioMonitoring(obs_data_t *request_data,
 					     obs_data_t *response_data, void *)
 {
 	UNUSED_PARAMETER(request_data);
-	obs_enum_sources(EnumSourcesAudioMonitoring, nullptr);
+	obs_enum_sources(RefreshAudioMonitoring, nullptr);
 	obs_data_set_bool(response_data, "Audio monitoring refreshed", true);
 }
 
@@ -1868,7 +1868,7 @@ void WebsocketRequestRefreshBrowserSources(obs_data_t *request_data,
 					    obs_data_t *response_data, void *)
 {
 	UNUSED_PARAMETER(request_data);
-	obs_enum_sources(EnumSourcesBrowser, nullptr);
+	obs_enum_sources(RefreshBrowserSources, nullptr);
 	obs_data_set_bool(response_data, "Browser sources refreshed", true);
 }
 
@@ -1995,7 +1995,7 @@ static void HotkeyRefreshBrowserSources(void *data, obs_hotkey_id id,
 	UNUSED_PARAMETER(data);
 	if (!pressed)
 		return;
-	obs_enum_sources(EnumSourcesBrowser, nullptr);
+	obs_enum_sources(RefreshBrowserSources, nullptr);
 	SendTrayNotification(QSystemTrayIcon::Information,
 			     obs_module_text("RefreshBrowserSources"),
 			     "Action completed successfully.");
@@ -2020,7 +2020,7 @@ static void HotkeyRefreshAudioMonitoring(void *data, obs_hotkey_id id,
 	UNUSED_PARAMETER(data);
 	if (!pressed)
 		return;
-	obs_enum_sources(EnumSourcesAudioMonitoring, nullptr);
+	obs_enum_sources(RefreshAudioMonitoring, nullptr);
 	SendTrayNotification(QSystemTrayIcon::Information,
 			     obs_module_text("RefreshAudioMonitoring"),
 			     "Action completed successfully.");
@@ -2618,11 +2618,11 @@ static void LoadMenu(QMenu *menu)
 
 	a = toolsMenu->addAction(obs_module_text("MenuRefreshAudioMonitoring"));
 	QObject::connect(a, &QAction::triggered,
-			 []() { RefreshAudioMonitoringTypes(); });
+			 []() { RefreshAudioMonitoringDialog(); });
 
 	a = toolsMenu->addAction(obs_module_text("MenuRefreshBrowserSources"));
 	QObject::connect(a, &QAction::triggered,
-			 []() { RefreshBrowserSources(); });
+			 []() { RefreshBrowserSourcesDialog(); });
 
 	menu->addMenu(toolsMenu);
 	menu->addSeparator();
