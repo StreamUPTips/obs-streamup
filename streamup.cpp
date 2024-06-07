@@ -1923,6 +1923,62 @@ void WebsocketRequestGetOutputFilePath(obs_data_t *request_data,
 	obs_data_set_string(response_data, "outputFilePath", path);
 }
 
+void WebsocketRequestVLCGetCurrentFile(obs_data_t *request_data,
+				      obs_data_t *response_data,
+				      void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	const char *source_name =
+		obs_data_get_string(request_data, "sourceName");
+	if (!source_name) {
+		obs_data_set_string(response_data, "error",
+				    "No source name provided");
+		return;
+	}
+
+	obs_source_t *source = obs_get_source_by_name(source_name);
+	if (!source) {
+		obs_data_set_string(response_data, "error", "Source not found");
+		return;
+	}
+
+	if (strcmp(obs_source_get_unversioned_id(source), "vlc_source") == 0) {
+		proc_handler_t *ph = obs_source_get_proc_handler(source);
+		if (ph) {
+			calldata_t cd;
+			calldata_init(&cd);
+			calldata_set_string(&cd, "tag_id", "title");
+			if (proc_handler_call(ph, "get_metadata", &cd)) {
+				const char *title =
+					calldata_string(&cd, "tag_data");
+				if (title) {
+					obs_data_set_string(response_data,
+							    "title", title);
+				} else {
+					obs_data_set_string(
+						response_data, "error",
+						"No title metadata found");
+				}
+			} else {
+				obs_data_set_string(
+					response_data, "error",
+					"Failed to call get_metadata");
+			}
+			calldata_free(&cd);
+		} else {
+			obs_data_set_string(response_data, "error",
+					    "Failed to get procedure handler");
+		}
+	} else {
+		obs_data_set_string(response_data, "error",
+				    "Source is not a VLC source");
+	}
+
+	obs_source_release(source);
+}
+
 
 
 //--------------------HOTKEY HANDLERS--------------------
@@ -2634,6 +2690,9 @@ static void RegisterWebsocketRequests()
 	obs_websocket_vendor_register_request(
 		vendor, "refresh_browser_sources",
 		WebsocketRequestRefreshBrowserSources, nullptr);
+	obs_websocket_vendor_register_request(vendor, "vlcGetCurrentFile",
+					      WebsocketRequestVLCGetCurrentFile,
+					      nullptr);
 }
 
 static void RegisterHotkeys()
