@@ -1,5 +1,6 @@
 #include "obs-websocket-api.h"
 #include "streamup.hpp"
+#include "streamup-dock.hpp"
 #include "version.h"
 #include <cctype>
 #include <curl/curl.h>
