@@ -527,8 +527,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2,
 		CreateButton(buttonLayout, titleStr, [=]() {
 			buttonCallback();
 			// Send a system tray notification
-			if (notificationMessage)
-			{
+			if (notificationMessage) {
 				SendTrayNotification(
 					QSystemTrayIcon::Information, titleStr,
 					obs_module_text(notificationMessage));
@@ -580,8 +579,6 @@ void CreateToolDialog(const char *infoText1, const char *infoText2,
 		dialog->show();
 	});
 }
-
-
 
 //--------------------CHECK FOR PLUGIN UPDATES ETC--------------------
 struct PluginInfo {
@@ -1407,7 +1404,8 @@ void RefreshAudioMonitoringTypes()
                         }
                     })",
 		"RefreshAudioMonitoringHowTo1", "RefreshAudioMonitoringHowTo2",
-		"RefreshAudioMonitoringHowTo3", "RefreshAudioMonitoringNotification");
+		"RefreshAudioMonitoringHowTo3",
+		"RefreshAudioMonitoringNotification");
 }
 
 void RefreshBrowserSources()
@@ -1426,9 +1424,9 @@ void RefreshBrowserSources()
                         }
                     })",
 		"RefreshBrowserSourcesHowTo1", "RefreshBrowserSourcesHowTo2",
-		"RefreshBrowserSourcesHowTo3", "RefreshBrowserSourcesNotification");
+		"RefreshBrowserSourcesHowTo3",
+		"RefreshBrowserSourcesNotification");
 }
-
 
 bool CheckIfAnyUnlocked(obs_scene_t *scene);
 
@@ -2280,23 +2278,11 @@ void vendor_request_check_plugins(obs_data_t *request_data,
 }
 
 void vendor_request_lock_all_sources(obs_data_t *request_data,
-					 obs_data_t *response_data, void *)
+				     obs_data_t *response_data, void *)
 {
 	UNUSED_PARAMETER(request_data);
 	bool lockState = ToggleLockAllSources();
 	obs_data_set_bool(response_data, "lockState", lockState);
-}
-
-static void hotkey_lock_all_sources(void *data, obs_hotkey_id id,
-						obs_hotkey_t *hotkey,
-						bool pressed)
-{
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
-	if (!pressed)
-		return;
-	ToggleLockAllSources();
 }
 
 void vendor_request_lock_current_sources(obs_data_t *request_data,
@@ -2305,18 +2291,6 @@ void vendor_request_lock_current_sources(obs_data_t *request_data,
 	UNUSED_PARAMETER(request_data);
 	bool lockState = ToggleLockSourcesInCurrentScene();
 	obs_data_set_bool(response_data, "lockState", lockState);
-}
-
-static void hotkey_lock_current_sources(void *data, obs_hotkey_id id,
-						obs_hotkey_t *hotkey,
-						bool pressed)
-{
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
-	if (!pressed)
-		return;
-	ToggleLockSourcesInCurrentScene();
 }
 
 void vendor_request_refresh_audio_monitoring(obs_data_t *request_data,
@@ -2484,20 +2458,6 @@ void vendor_request_set_hide_transition(obs_data_t *request_data,
 						private_data, false);
 }
 
-static void hotkey_refresh_audio_monitoring(void *data, obs_hotkey_id id,
-					    obs_hotkey_t *hotkey, bool pressed)
-{
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
-	if (!pressed)
-		return;
-	obs_enum_sources(EnumSourcesAudioMonitoring, nullptr);
-	SendTrayNotification(QSystemTrayIcon::Information,
-			     obs_module_text("RefreshAudioMonitoring"),
-			     "Action completed successfully.");
-}
-
 void vendor_request_refresh_browser_sources(obs_data_t *request_data,
 					    obs_data_t *response_data, void *)
 {
@@ -2518,6 +2478,42 @@ static void hotkey_refresh_browser_sources(void *data, obs_hotkey_id id,
 	SendTrayNotification(QSystemTrayIcon::Information,
 			     obs_module_text("RefreshBrowserSources"),
 			     "Action completed successfully.");
+}
+
+static void hotkey_lock_all_sources(void *data, obs_hotkey_id id,
+				    obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+	if (!pressed)
+		return;
+	ToggleLockAllSources();
+}
+
+static void hotkey_refresh_audio_monitoring(void *data, obs_hotkey_id id,
+					    obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+	if (!pressed)
+		return;
+	obs_enum_sources(EnumSourcesAudioMonitoring, nullptr);
+	SendTrayNotification(QSystemTrayIcon::Information,
+			     obs_module_text("RefreshAudioMonitoring"),
+			     "Action completed successfully.");
+}
+
+static void hotkey_lock_current_sources(void *data, obs_hotkey_id id,
+					obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+	if (!pressed)
+		return;
+	ToggleLockSourcesInCurrentScene();
 }
 
 struct SceneItemEnumData {
@@ -2607,6 +2603,87 @@ void vendor_request_get_output_file_path(obs_data_t *request_data,
 	obs_data_set_string(response_data, "outputFilePath", path);
 }
 
+obs_hotkey_id refreshBrowserSourcesHotkey = OBS_INVALID_HOTKEY_ID;
+obs_hotkey_id lockAllSourcesHotkey = OBS_INVALID_HOTKEY_ID;
+obs_hotkey_id refreshAudioMonitoringHotkey = OBS_INVALID_HOTKEY_ID;
+obs_hotkey_id lockCurrentSourcesHotkey = OBS_INVALID_HOTKEY_ID;
+
+static void save_load_hotkeys_callback(obs_data_t *save_data, bool saving,
+				  void *private_data)
+{
+	char *configPath = obs_module_config_path("hotkeys.json");
+
+	if (saving) {
+		obs_data_array_t *hotkey_array;
+
+		hotkey_array = obs_hotkey_save(refreshBrowserSourcesHotkey);
+		obs_data_set_array(save_data, "refreshBrowserSourcesHotkey",
+				   hotkey_array);
+		obs_data_array_release(hotkey_array);
+
+		hotkey_array = obs_hotkey_save(lockAllSourcesHotkey);
+		obs_data_set_array(save_data, "lockAllSourcesHotkey",
+				   hotkey_array);
+		obs_data_array_release(hotkey_array);
+
+		hotkey_array = obs_hotkey_save(refreshAudioMonitoringHotkey);
+		obs_data_set_array(save_data, "refreshAudioMonitoringHotkey",
+				   hotkey_array);
+		obs_data_array_release(hotkey_array);
+
+		hotkey_array = obs_hotkey_save(lockCurrentSourcesHotkey);
+		obs_data_set_array(save_data, "lockCurrentSourcesHotkey",
+				   hotkey_array);
+		obs_data_array_release(hotkey_array);
+
+		if (obs_data_save_json(save_data, configPath)) {
+			blog(LOG_INFO, "[StreamUP] Hotkey settings saved to %s",
+			     configPath);
+		} else {
+			blog(LOG_WARNING,
+			     "Failed to save hotkey settings to file.");
+		}
+	} else {
+		obs_data_t *load_data =
+			obs_data_create_from_json_file(configPath);
+
+		if (load_data) {
+			obs_data_array_t *hotkey_array;
+
+			hotkey_array = obs_data_get_array(
+				load_data, "refreshBrowserSourcesHotkey");
+			obs_hotkey_load(refreshBrowserSourcesHotkey,
+					hotkey_array);
+			obs_data_array_release(hotkey_array);
+
+			hotkey_array = obs_data_get_array(
+				load_data, "lockAllSourcesHotkey");
+			obs_hotkey_load(lockAllSourcesHotkey, hotkey_array);
+			obs_data_array_release(hotkey_array);
+
+			hotkey_array = obs_data_get_array(
+				load_data, "refreshAudioMonitoringHotkey");
+			obs_hotkey_load(refreshAudioMonitoringHotkey,
+					hotkey_array);
+			obs_data_array_release(hotkey_array);
+
+			hotkey_array = obs_data_get_array(
+				load_data, "lockCurrentSourcesHotkey");
+			obs_hotkey_load(lockCurrentSourcesHotkey, hotkey_array);
+			obs_data_array_release(hotkey_array);
+
+			obs_data_release(load_data);
+		} else {
+			blog(LOG_WARNING,
+			     "Failed to load hotkey settings from %s",
+			     configPath);
+		}
+	}
+
+	bfree(configPath);
+}
+
+
 bool obs_module_load()
 {
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
@@ -2657,18 +2734,11 @@ bool obs_module_load()
 	obs_websocket_vendor_register_request(
 		vendor, "toggleLockCurrentSources",
 		vendor_request_lock_current_sources, nullptr);
-	obs_hotkey_register_frontend("toggle_lock_sources",
-		obs_module_text("MenuLockAllCurrentSources"),
-		hotkey_lock_current_sources, nullptr);
 
 	// OBSws -> Lock/Unlock all sources
-	obs_websocket_vendor_register_request(
-		vendor, "toggleLockAllSources",
-		vendor_request_lock_all_sources, nullptr);
-	obs_hotkey_register_frontend(
-		"toggle_lock_sources",
-		obs_module_text("MenuLockAllSources"),
-		hotkey_lock_all_sources, nullptr);
+	obs_websocket_vendor_register_request(vendor, "toggleLockAllSources",
+					      vendor_request_lock_all_sources,
+					      nullptr);
 
 	//OBSws -> Request Bitrate
 	obs_websocket_vendor_register_request(vendor, "getBitrate",
@@ -2685,17 +2755,33 @@ bool obs_module_load()
 		vendor, "refresh_audio_monitoring",
 		vendor_request_refresh_audio_monitoring, nullptr);
 
-	obs_hotkey_register_frontend("refresh_audio_monitoring",
-				     obs_module_text("RefreshAudioMonitoring"),
-				     hotkey_refresh_audio_monitoring, nullptr);
 	//OBSws -> Refresh Browser Sources
 	obs_websocket_vendor_register_request(
 		vendor, "refresh_browser_sources",
 		vendor_request_refresh_browser_sources, nullptr);
 
-	obs_hotkey_register_frontend("refresh_browser_sources",
-				     obs_module_text("RefreshBrowserSources"),
-				     hotkey_refresh_browser_sources, nullptr);
+	// Register hotkeys
+	refreshBrowserSourcesHotkey = obs_hotkey_register_frontend(
+		"refresh_browser_sources",
+		obs_module_text("RefreshBrowserSources"),
+		hotkey_refresh_browser_sources, nullptr);
+	lockAllSourcesHotkey = obs_hotkey_register_frontend(
+		"toggle_lock_all_sources",
+		obs_module_text("ToggleLockAllSources"),
+		hotkey_lock_all_sources, nullptr);
+	refreshAudioMonitoringHotkey = obs_hotkey_register_frontend(
+		"refresh_audio_monitoring",
+		obs_module_text("RefreshAudioMonitoring"),
+		hotkey_refresh_audio_monitoring, nullptr);
+	lockCurrentSourcesHotkey = obs_hotkey_register_frontend(
+		"toggle_lock_current_sources",
+		obs_module_text("ToggleLockCurrentSources"),
+		hotkey_lock_current_sources, nullptr);
+
+	// Register save callbacks
+	obs_frontend_add_save_callback(save_load_hotkeys_callback, nullptr);
+
+	save_load_hotkeys_callback(nullptr, false, nullptr);
 
 	return true;
 }
@@ -2713,7 +2799,15 @@ void obs_module_post_load(void)
 	obs_data_release(settings);
 }
 
-void obs_module_unload() {}
+void obs_module_unload()
+{
+	obs_frontend_remove_save_callback(save_load_hotkeys_callback, nullptr);
+
+	obs_hotkey_unregister(refreshBrowserSourcesHotkey);
+	obs_hotkey_unregister(lockAllSourcesHotkey);
+	obs_hotkey_unregister(refreshAudioMonitoringHotkey);
+	obs_hotkey_unregister(lockCurrentSourcesHotkey);
+}
 
 MODULE_EXPORT const char *obs_module_description(void)
 {
