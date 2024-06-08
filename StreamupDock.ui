@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>StreamupDock</class>
+ <widget class="QWidget" name="StreamupDock">
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QPushButton" name="button1"/>
+   </item>
+   <item>
+    <widget class="QPushButton" name="button2"/>
+   </item>
+   <item>
+    <widget class="QPushButton" name="button3"/>
+   </item>
+   <item>
+    <widget class="QPushButton" name="button4"/>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

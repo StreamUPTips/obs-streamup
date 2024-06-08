@@ -23,7 +23,9 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/version.h.in ${CMAKE_CURRENT_SOURCE_D
 target_sources(${PROJECT_NAME} PRIVATE
 	streamup.cpp
 	streamup.hpp
+  streamup-dock.cpp
   streamup-dock.hpp
+  StreamUPDock.ui
   obs-websocket-api.h
 	version.h)
 
@@ -63,6 +65,7 @@ endif()
 # lines if you want add Qt UI in your plugin
 find_qt(COMPONENTS Widgets COMPONENTS_LINUX Gui)
 set_target_properties(${PROJECT_NAME} PROPERTIES AUTOMOC ON AUTOUIC ON AUTORCC ON)
+set(UI_FILES StreamupDock.ui)
 
 target_link_libraries(${PROJECT_NAME}
 		OBS::${OBS_FRONTEND_API_NAME}

@@ -22,12 +22,14 @@
 #include <QDesktopServices>
 #include <QDialog>
 #include <QDir>
+#include <QDockWidget>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QIcon>
 #include <QImage>
 #include <QLabel>
+#include <QMainWindow>
 #include <QMenu>
 #include <QMessageBox>
 #include <QObject>
@@ -58,6 +60,14 @@
 OBS_DECLARE_MODULE()
 OBS_MODULE_AUTHOR("Andilippi");
 OBS_MODULE_USE_DEFAULT_LOCALE("streamup", "en-US")
+
+#ifdef min
+#undef min
+#endif
+
+#ifdef max
+#undef max
+#endif
 
 //--------------------STRUCTS & GLOBALS--------------------
 struct SceneItemEnumData {
@@ -2716,8 +2726,41 @@ static void RegisterHotkeys()
 		HotkeyLockCurrentSources, nullptr);
 }
 
-bool obs_module_load()
+static void LoadStreamupDock()
 {
+	const auto main_window =
+		static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	obs_frontend_push_ui_translation(obs_module_get_string);
+
+	auto *dock_widget = new StreamupDock(main_window);
+
+	const QString title =
+		QString::fromUtf8(obs_module_text("Streamup Dock"));
+	const auto name = "StreamupDock";
+
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
+	obs_frontend_add_dock_by_id(name, title.toUtf8().constData(),
+				    dock_widget);
+#else
+	auto dock = new QDockWidget(main_window);
+	dock->setObjectName(name);
+	dock->setWindowTitle(title);
+	dock->setWidget(dock_widget);
+	dock->setFeatures(QDockWidget::DockWidgetMovable |
+			  QDockWidget::DockWidgetFloatable);
+	dock->setFloating(true);
+	dock->hide();
+	obs_frontend_add_dock(dock);
+#endif
+
+	obs_frontend_pop_ui_translation();
+}
+
+
+
+
+bool obs_module_load()
+	{
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
 
 	InitialiseMenu();
@@ -2728,6 +2771,9 @@ bool obs_module_load()
 
 	obs_frontend_add_save_callback(SaveLoadHotkeysCallback, nullptr);
 	SaveLoadHotkeysCallback(nullptr, false, nullptr);
+
+	LoadStreamupDock();
+
 
 	return true;
 }
