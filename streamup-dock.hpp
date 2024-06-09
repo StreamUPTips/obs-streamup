@@ -3,26 +3,53 @@
 #include <QWidget>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <obs.h>
+#include <obs-frontend-api.h>
+
+
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
-class StreamupDock;
+class StreamUPDock;
 }
 QT_END_NAMESPACE
 
-class StreamupDock : public QWidget {
+class StreamUPDock : public QWidget {
 	Q_OBJECT
 
 public:
-	explicit StreamupDock(QWidget *parent = nullptr);
-	~StreamupDock();
+	explicit StreamUPDock(QWidget *parent = nullptr);
+	~StreamUPDock();
 
 private:
-	Ui::StreamupDock *ui;
+	Ui::StreamUPDock *ui;
+	QPushButton *button1;
+	QPushButton *button2;
+	QPushButton *button3;
+	QPushButton *button4;
+	bool isProcessing;
 
-private slots:
-	void onButton1Clicked(); // ToggleLockAllSources
-	void onButton2Clicked(); // ToggleLockSourcesInCurrentScene
-	void onButton3Clicked(); // RefreshAudioMonitoring
-	void onButton4Clicked(); // RefreshBrowserSources
+	void applyThemeIDToButton(QPushButton *button, const QString &themeID);
+	void applyFileIconToButton(QPushButton *button,
+				   const QString &filePath);
+
+	void ButtonToggleLockAllSources();
+	void ButtonToggleLockSourcesInCurrentScene();
+	void ButtonRefreshAudioMonitoring();
+	void ButtonRefreshBrowserSources();
+	void updateButtonIcons();
+
+	bool AreAllSourcesLockedInAllScenes();
+	bool AreAllSourcesLockedInCurrentScene();
+
+	void setupObsSignals();
+	void connectSceneSignals();
+	void disconnectSceneSignals();
+
+	static void onFrontendEvent(enum obs_frontend_event event,
+				    void *private_data);
+	static void onSceneItemAdded(void *param, calldata_t *data);
+	static void onSceneItemRemoved(void *param, calldata_t *data);
+	static void onItemLockChanged(void *param, calldata_t *data);
+
 };

@@ -27,6 +27,7 @@ target_sources(${PROJECT_NAME} PRIVATE
   streamup-dock.hpp
   StreamUPDock.ui
   obs-websocket-api.h
+  resources.qrc
 	version.h)
 
 find_package(CURL REQUIRED)
