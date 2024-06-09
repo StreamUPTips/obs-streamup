@@ -105,6 +105,37 @@ static bool notificationsMuted = false;
 
 
 //--------------------INSTALL A PRODUCT--------------------
+void ResizeAdvancedMaskFilter(obs_source_t *filter, float factor)
+{
+	obs_data_t *settings = obs_source_get_settings(filter);
+	if (!settings) {
+		blog(LOG_ERROR, "ResizeAdvancedMaskFilter: settings is null");
+		return;
+	}
+
+	obs_data_set_double(settings, "rectangle_width",
+			    obs_data_get_double(settings, "rectangle_width") *
+				    factor);
+	obs_data_set_double(settings, "rectangle_height",
+			    obs_data_get_double(settings, "rectangle_height") *
+				    factor);
+	obs_data_set_double(settings, "position_x",
+			    obs_data_get_double(settings, "position_x") *
+				    factor);
+	obs_data_set_double(settings, "position_y",
+			    obs_data_get_double(settings, "position_y") *
+				    factor);
+	obs_data_set_double(settings, "shape_center_x",
+			    obs_data_get_double(settings, "shape_center_x") *
+				    factor);
+	obs_data_set_double(settings, "shape_center_y",
+			    obs_data_get_double(settings, "shape_center_y") *
+				    factor);
+
+	obs_source_update(filter, settings);
+	obs_data_release(settings);
+}
+
 void ResizeMoveSetting(obs_data_t *obs_data, float factor)
 {
 	double x = obs_data_get_double(obs_data, "x");
@@ -114,27 +145,61 @@ void ResizeMoveSetting(obs_data_t *obs_data, float factor)
 	obs_data_release(obs_data);
 }
 
+void ResizeMoveValueFilter(obs_source_t *filter, float factor)
+{
+	obs_data_t *settings = obs_source_get_settings(filter);
+	if (!settings) {
+		blog(LOG_ERROR, "ResizeMoveValueFilter: settings is null");
+		return;
+	}
+
+	obs_data_set_double(settings, "rectangle_width",
+			    obs_data_get_double(settings, "rectangle_width") *
+				    factor);
+	obs_data_set_double(settings, "rectangle_height",
+			    obs_data_get_double(settings, "rectangle_height") *
+				    factor);
+	obs_data_set_double(settings, "shape_center_x",
+			    obs_data_get_double(settings, "shape_center_x") *
+				    factor);
+	obs_data_set_double(settings, "shape_center_y",
+			    obs_data_get_double(settings, "shape_center_y") *
+				    factor);
+
+	obs_source_update(filter, settings);
+	obs_data_release(settings);
+}
+
 void ResizeMoveFilters(obs_source_t *parent, obs_source_t *child, void *param)
 {
 	UNUSED_PARAMETER(parent);
 	float factor = *((float *)param);
-	if (strcmp(obs_source_get_unversioned_id(child),
-		   "move_source_filter") != 0)
-		return;
-	obs_data_t *settings = obs_source_get_settings(child);
-	ResizeMoveSetting(obs_data_get_obj(settings, "pos"), factor);
-	ResizeMoveSetting(obs_data_get_obj(settings, "bounds"), factor);
-	const char *source_name = obs_data_get_string(settings, "source");
-	obs_source_t *source = (source_name && strlen(source_name))
-				       ? obs_get_source_by_name(source_name)
-				       : nullptr;
-	if (!obs_scene_from_source(source) && !obs_group_from_source(source)) {
-		ResizeMoveSetting(obs_data_get_obj(settings, "scale"), factor);
+
+	const char *filter_id = obs_source_get_unversioned_id(child);
+
+	if (strcmp(filter_id, "move_source_filter") == 0) {
+		obs_data_t *settings = obs_source_get_settings(child);
+		ResizeMoveSetting(obs_data_get_obj(settings, "pos"), factor);
+		ResizeMoveSetting(obs_data_get_obj(settings, "bounds"), factor);
+		const char *source_name =
+			obs_data_get_string(settings, "source");
+		obs_source_t *source =
+			(source_name && strlen(source_name))
+				? obs_get_source_by_name(source_name)
+				: nullptr;
+		if (!obs_scene_from_source(source) &&
+		    !obs_group_from_source(source)) {
+			ResizeMoveSetting(obs_data_get_obj(settings, "scale"),
+					  factor);
+		}
+		obs_source_release(source);
+		obs_data_set_string(settings, "transform_text", "");
+		obs_data_release(settings);
+	} else if (strcmp(filter_id, "advanced_masks_filter") == 0) {
+		ResizeAdvancedMaskFilter(child, factor);
+	} else if (strcmp(filter_id, "move_value_filter") == 0) {
+		ResizeMoveValueFilter(child, factor);
 	}
-	obs_source_release(source);
-	obs_data_set_string(settings, "transform_text", "");
-	obs_data_release(settings);
-	return;
 }
 
 void ResizeSceneItems(obs_data_t *settings, float factor)
@@ -142,14 +207,13 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 	obs_data_array_t *items = obs_data_get_array(settings, "items");
 	size_t count = obs_data_array_count(items);
 
-	//Set a groups custom size
 	if (obs_data_get_bool(settings, "custom_size")) {
 		obs_data_set_int(settings, "cx",
 				 obs_data_get_int(settings, "cx") * factor);
 		obs_data_set_int(settings, "cy",
 				 obs_data_get_int(settings, "cy") * factor);
 	}
-	//Set all sources pos, bounds and scale
+
 	for (size_t i = 0; i < count; i++) {
 		obs_data_t *item_data = obs_data_array_item(items, i);
 		vec2 vec2;
