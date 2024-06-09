@@ -66,7 +66,7 @@ endif()
 # lines if you want add Qt UI in your plugin
 find_qt(COMPONENTS Widgets COMPONENTS_LINUX Gui)
 set_target_properties(${PROJECT_NAME} PROPERTIES AUTOMOC ON AUTOUIC ON AUTORCC ON)
-set(UI_FILES StreamupDock.ui)
+set(UI_FILES StreamUPDock.ui)
 
 target_link_libraries(${PROJECT_NAME}
 		OBS::${OBS_FRONTEND_API_NAME}
