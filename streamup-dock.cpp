@@ -237,6 +237,8 @@ void StreamUPDock::onFrontendEvent(enum obs_frontend_event event,
 
 void StreamUPDock::onSceneItemAdded(void *param, calldata_t *data)
 {
+	UNUSED_PARAMETER(data);
+
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
 	if (self->isProcessing)
 		return; 
@@ -245,6 +247,8 @@ void StreamUPDock::onSceneItemAdded(void *param, calldata_t *data)
 
 void StreamUPDock::onSceneItemRemoved(void *param, calldata_t *data)
 {
+	UNUSED_PARAMETER(data);
+
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
 	if (self->isProcessing)
 		return; 
@@ -253,6 +257,8 @@ void StreamUPDock::onSceneItemRemoved(void *param, calldata_t *data)
 
 void StreamUPDock::onItemLockChanged(void *param, calldata_t *data)
 {
+	UNUSED_PARAMETER(data);
+
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
 	if (self->isProcessing)
 		return; 
