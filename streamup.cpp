@@ -1544,7 +1544,7 @@ bool ToggleLockSceneItems(obs_scene_t *scene, bool lock)
 	return lock;
 }
 
-bool ToggleLockSourcesInCurrentScene()
+bool ToggleLockSourcesInCurrentScene(bool sendNotification = true)
 {
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	if (!current_scene) {
@@ -1562,18 +1562,22 @@ bool ToggleLockSourcesInCurrentScene()
 	ToggleLockSceneItems(scene, any_unlocked);
 	obs_source_release(current_scene);
 
-	if (any_unlocked) {
-		blog(LOG_INFO,
-		     "[StreamUP] All sources in the current scene have been locked.");
-		SendTrayNotification(QSystemTrayIcon::Information,
-				     obs_module_text("SourceLockSystem"),
-				     obs_module_text("LockedCurrentSources"));
-	} else {
-		blog(LOG_INFO,
-		     "[StreamUP] All sources in the current scene have been unlocked.");
-		SendTrayNotification(QSystemTrayIcon::Information,
-				     obs_module_text("SourceLockSystem"),
-				     obs_module_text("UnlockedCurrentSources"));
+	if (sendNotification) {
+		if (any_unlocked) {
+			blog(LOG_INFO,
+			     "[StreamUP] All sources in the current scene have been locked.");
+			SendTrayNotification(
+				QSystemTrayIcon::Information,
+				obs_module_text("SourceLockSystem"),
+				obs_module_text("LockedCurrentSources"));
+		} else {
+			blog(LOG_INFO,
+			     "[StreamUP] All sources in the current scene have been unlocked.");
+			SendTrayNotification(
+				QSystemTrayIcon::Information,
+				obs_module_text("SourceLockSystem"),
+				obs_module_text("UnlockedCurrentSources"));
+		}
 	}
 
 	return any_unlocked;
@@ -1612,26 +1616,54 @@ void ToggleLockSourcesInAllScenes(bool lock)
 	obs_enum_scenes(ToggleLockSceneItemsCallback, &lock);
 }
 
-bool ToggleLockAllSources()
+bool ToggleLockAllSources(bool sendNotification = true)
 {
 	bool any_unlocked = CheckIfAnyUnlockedInAllScenes();
 	ToggleLockSourcesInAllScenes(any_unlocked);
 
-	if (any_unlocked) {
-		blog(LOG_INFO,
-		     "[StreamUP] All sources in all scenes have been locked.");
-		SendTrayNotification(QSystemTrayIcon::Information,
-				     obs_module_text("SourceLockSystem"),
-				     obs_module_text("LockedAllSources"));
-	} else {
-		blog(LOG_INFO,
-		     "[StreamUP] All sources in all scenes have been unlocked.");
-		SendTrayNotification(QSystemTrayIcon::Information,
-				     obs_module_text("SourceLockSystem"),
-				     obs_module_text("UnlockedAllSources"));
+	if (sendNotification) {
+		if (any_unlocked) {
+			blog(LOG_INFO,
+			     "[StreamUP] All sources in all scenes have been locked.");
+			SendTrayNotification(
+				QSystemTrayIcon::Information,
+				obs_module_text("SourceLockSystem"),
+				obs_module_text("LockedAllSources"));
+		} else {
+			blog(LOG_INFO,
+			     "[StreamUP] All sources in all scenes have been unlocked.");
+			SendTrayNotification(
+				QSystemTrayIcon::Information,
+				obs_module_text("SourceLockSystem"),
+				obs_module_text("UnlockedAllSources"));
+		}
 	}
 
 	return any_unlocked;
+}
+
+bool AreAllSourcesLockedInCurrentScene()
+{
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) {
+		return false;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(current_scene);
+	if (!scene) {
+		obs_source_release(current_scene);
+		return false;
+	}
+
+	bool any_unlocked = CheckIfAnyUnlocked(scene);
+	obs_source_release(current_scene);
+
+	return !any_unlocked;
+}
+
+bool AreAllSourcesLockedInAllScenes()
+{
+	return !CheckIfAnyUnlockedInAllScenes();
 }
 
 void LockAllSourcesDialog()
@@ -2790,17 +2822,17 @@ static void RegisterHotkeys()
 		HotkeyLockCurrentSources, nullptr);
 }
 
-static void LoadStreamupDock()
+static void LoadStreamUPDock()
 {
 	const auto main_window =
 		static_cast<QMainWindow *>(obs_frontend_get_main_window());
 	obs_frontend_push_ui_translation(obs_module_get_string);
 
-	auto *dock_widget = new StreamupDock(main_window);
+	auto *dock_widget = new StreamUPDock(main_window);
 
 	const QString title =
-		QString::fromUtf8(obs_module_text("Streamup Dock"));
-	const auto name = "StreamupDock";
+		QString::fromUtf8(obs_module_text("StreamUP Dock"));
+	const auto name = "StreamUPDock";
 
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
 	obs_frontend_add_dock_by_id(name, title.toUtf8().constData(),
@@ -2820,9 +2852,6 @@ static void LoadStreamupDock()
 	obs_frontend_pop_ui_translation();
 }
 
-
-
-
 bool obs_module_load()
 	{
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
@@ -2836,7 +2865,7 @@ bool obs_module_load()
 	obs_frontend_add_save_callback(SaveLoadHotkeysCallback, nullptr);
 	SaveLoadHotkeysCallback(nullptr, false, nullptr);
 
-	LoadStreamupDock();
+	LoadStreamUPDock();
 
 
 	return true;
@@ -2868,8 +2897,6 @@ void obs_module_post_load(void)
 
 	obs_data_release(settings);
 }
-
-
 
 //--------------------EXIT COMMANDS--------------------
 void obs_module_unload()

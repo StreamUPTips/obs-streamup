@@ -1,0 +1,10 @@
+<RCC>
+	<qresource prefix="/">
+		<file>images/all-scene-source-locked.svg</file>
+		<file>images/all-scene-source-unlocked.svg</file>
+		<file>images/current-scene-source-locked.svg</file>
+		<file>images/current-scene-source-unlocked.svg</file>
+		<file>images/refresh-browser-sources.svg</file>
+		<file>images/refresh-audio-monitoring.svg</file>
+	</qresource>
+</RCC>
