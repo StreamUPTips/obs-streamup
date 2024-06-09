@@ -240,9 +240,6 @@ void StreamUPDock::onSceneItemAdded(void *param, calldata_t *data)
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
 	if (self->isProcessing)
 		return; 
-
-	obs_sceneitem_t *item =
-		static_cast<obs_sceneitem_t *>(calldata_ptr(data, "item"));
 	self->updateButtonIcons();
 }
 
@@ -251,9 +248,6 @@ void StreamUPDock::onSceneItemRemoved(void *param, calldata_t *data)
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
 	if (self->isProcessing)
 		return; 
-
-	obs_sceneitem_t *item =
-		static_cast<obs_sceneitem_t *>(calldata_ptr(data, "item"));
 	self->updateButtonIcons();
 }
 
@@ -262,9 +256,5 @@ void StreamUPDock::onItemLockChanged(void *param, calldata_t *data)
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
 	if (self->isProcessing)
 		return; 
-
-	obs_sceneitem_t *item =
-		static_cast<obs_sceneitem_t *>(calldata_ptr(data, "item"));
-	bool locked = calldata_bool(data, "locked");
 	self->updateButtonIcons();
 }
