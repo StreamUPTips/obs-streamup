@@ -700,10 +700,11 @@ void CreateToolDialog(const char *infoText1, const char *infoText2,
 		      const std::function<void()> &buttonCallback,
 		      const QString &jsonString, const char *how1,
 		      const char *how2, const char *how3,
+		      const char *how4,
 		      const char *notificationMessage)
 {
 	ShowDialogOnUIThread([infoText1, infoText2, infoText3, titleText,
-			      buttonCallback, jsonString, how1, how2, how3,
+			      buttonCallback, jsonString, how1, how2, how3, how4,
 			      notificationMessage]() {
 		const char *titleTextChar = titleText.toUtf8().constData();
 		QString titleStr = obs_module_text(titleTextChar);
@@ -713,6 +714,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2,
 		QString howTo1Str = obs_module_text(how1);
 		QString howTo2Str = obs_module_text(how2);
 		QString howTo3Str = obs_module_text(how3);
+		QString howTo4Str = obs_module_text(how4);
 
 		QDialog *dialog = CreateDialogWindow(titleTextChar);
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
@@ -750,11 +752,13 @@ void CreateToolDialog(const char *infoText1, const char *infoText2,
 		QLabel *howTo1 = CreateRichTextLabel(howTo1Str, false, true);
 		QLabel *howTo2 = CreateRichTextLabel(howTo2Str, false, true);
 		QLabel *howTo3 = CreateRichTextLabel(howTo3Str, false, true);
+		QLabel *howTo4 = CreateRichTextLabel(howTo4Str, false, true);
 		info3BoxLayout->addWidget(info3);
 		info3BoxLayout->addSpacing(5);
 		info3BoxLayout->addWidget(howTo1);
 		info3BoxLayout->addWidget(howTo2);
 		info3BoxLayout->addWidget(howTo3);
+		info3BoxLayout->addWidget(howTo4);
 
 		QPushButton *copyJsonButton =
 			new QPushButton(obs_module_text("CopyWebsocketJson"));
@@ -1441,7 +1445,7 @@ void RefreshAudioMonitoringDialog()
                         }
                     })",
 		"RefreshAudioMonitoringHowTo1", "RefreshAudioMonitoringHowTo2",
-		"RefreshAudioMonitoringHowTo3",
+		"RefreshAudioMonitoringHowTo3", "RefreshAudioMonitoringHowTo4",
 		"RefreshAudioMonitoringNotification");
 }
 
@@ -1461,7 +1465,7 @@ void RefreshBrowserSourcesDialog()
                         }
                     })",
 		"RefreshBrowserSourcesHowTo1", "RefreshBrowserSourcesHowTo2",
-		"RefreshBrowserSourcesHowTo3",
+		"RefreshBrowserSourcesHowTo3", "RefreshBrowserSourcesHowTo4",
 		"RefreshBrowserSourcesNotification");
 }
 
@@ -1682,7 +1686,7 @@ void LockAllSourcesDialog()
                         }
                     })",
 		"LockAllSourcesHowTo1", "LockAllSourcesHowTo2",
-		"LockAllSourcesHowTo3", NULL);
+		"LockAllSourcesHowTo3", "LockAllSourcesHowTo4", NULL);
 }
 
 void LockAllCurrentSourcesDialog()
@@ -1701,7 +1705,8 @@ void LockAllCurrentSourcesDialog()
                         }
                     })",
 		"LockAllCurrentSourcesHowTo1", "LockAllCurrentSourcesHowTo2",
-		"LockAllCurrentSourcesHowTo3", NULL);
+		"LockAllCurrentSourcesHowTo3", "LockAllCurrentSourcesHowTo4",
+		NULL);
 }
 
 
