@@ -1,5 +1,5 @@
 #include "streamup-dock.hpp"
-#include "ui_StreamupDock.h"
+#include "ui_StreamUPDock.h"
 #include <QMainWindow>
 #include <QDockWidget>
 #include "streamup.hpp"
