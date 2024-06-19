@@ -102,8 +102,6 @@ std::map<std::string, PluginInfo> all_plugins;
 std::map<std::string, PluginInfo> required_plugins;
 static bool notificationsMuted = false;
 
-
-
 //--------------------INSTALL A PRODUCT--------------------
 void ResizeAdvancedMaskFilter(obs_source_t *filter, float factor)
 {
@@ -113,24 +111,12 @@ void ResizeAdvancedMaskFilter(obs_source_t *filter, float factor)
 		return;
 	}
 
-	obs_data_set_double(settings, "rectangle_width",
-			    obs_data_get_double(settings, "rectangle_width") *
-				    factor);
-	obs_data_set_double(settings, "rectangle_height",
-			    obs_data_get_double(settings, "rectangle_height") *
-				    factor);
-	obs_data_set_double(settings, "position_x",
-			    obs_data_get_double(settings, "position_x") *
-				    factor);
-	obs_data_set_double(settings, "position_y",
-			    obs_data_get_double(settings, "position_y") *
-				    factor);
-	obs_data_set_double(settings, "shape_center_x",
-			    obs_data_get_double(settings, "shape_center_x") *
-				    factor);
-	obs_data_set_double(settings, "shape_center_y",
-			    obs_data_get_double(settings, "shape_center_y") *
-				    factor);
+	obs_data_set_double(settings, "rectangle_width", obs_data_get_double(settings, "rectangle_width") * factor);
+	obs_data_set_double(settings, "rectangle_height", obs_data_get_double(settings, "rectangle_height") * factor);
+	obs_data_set_double(settings, "position_x", obs_data_get_double(settings, "position_x") * factor);
+	obs_data_set_double(settings, "position_y", obs_data_get_double(settings, "position_y") * factor);
+	obs_data_set_double(settings, "shape_center_x", obs_data_get_double(settings, "shape_center_x") * factor);
+	obs_data_set_double(settings, "shape_center_y", obs_data_get_double(settings, "shape_center_y") * factor);
 
 	obs_source_update(filter, settings);
 	obs_data_release(settings);
@@ -153,18 +139,10 @@ void ResizeMoveValueFilter(obs_source_t *filter, float factor)
 		return;
 	}
 
-	obs_data_set_double(settings, "rectangle_width",
-			    obs_data_get_double(settings, "rectangle_width") *
-				    factor);
-	obs_data_set_double(settings, "rectangle_height",
-			    obs_data_get_double(settings, "rectangle_height") *
-				    factor);
-	obs_data_set_double(settings, "shape_center_x",
-			    obs_data_get_double(settings, "shape_center_x") *
-				    factor);
-	obs_data_set_double(settings, "shape_center_y",
-			    obs_data_get_double(settings, "shape_center_y") *
-				    factor);
+	obs_data_set_double(settings, "rectangle_width", obs_data_get_double(settings, "rectangle_width") * factor);
+	obs_data_set_double(settings, "rectangle_height", obs_data_get_double(settings, "rectangle_height") * factor);
+	obs_data_set_double(settings, "shape_center_x", obs_data_get_double(settings, "shape_center_x") * factor);
+	obs_data_set_double(settings, "shape_center_y", obs_data_get_double(settings, "shape_center_y") * factor);
 
 	obs_source_update(filter, settings);
 	obs_data_release(settings);
@@ -181,16 +159,10 @@ void ResizeMoveFilters(obs_source_t *parent, obs_source_t *child, void *param)
 		obs_data_t *settings = obs_source_get_settings(child);
 		ResizeMoveSetting(obs_data_get_obj(settings, "pos"), factor);
 		ResizeMoveSetting(obs_data_get_obj(settings, "bounds"), factor);
-		const char *source_name =
-			obs_data_get_string(settings, "source");
-		obs_source_t *source =
-			(source_name && strlen(source_name))
-				? obs_get_source_by_name(source_name)
-				: nullptr;
-		if (!obs_scene_from_source(source) &&
-		    !obs_group_from_source(source)) {
-			ResizeMoveSetting(obs_data_get_obj(settings, "scale"),
-					  factor);
+		const char *source_name = obs_data_get_string(settings, "source");
+		obs_source_t *source = (source_name && strlen(source_name)) ? obs_get_source_by_name(source_name) : nullptr;
+		if (!obs_scene_from_source(source) && !obs_group_from_source(source)) {
+			ResizeMoveSetting(obs_data_get_obj(settings, "scale"), factor);
 		}
 		obs_source_release(source);
 		obs_data_set_string(settings, "transform_text", "");
@@ -208,10 +180,8 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 	size_t count = obs_data_array_count(items);
 
 	if (obs_data_get_bool(settings, "custom_size")) {
-		obs_data_set_int(settings, "cx",
-				 obs_data_get_int(settings, "cx") * factor);
-		obs_data_set_int(settings, "cy",
-				 obs_data_get_int(settings, "cy") * factor);
+		obs_data_set_int(settings, "cx", obs_data_get_int(settings, "cx") * factor);
+		obs_data_set_int(settings, "cy", obs_data_get_int(settings, "cy") * factor);
 	}
 
 	for (size_t i = 0; i < count; i++) {
@@ -228,8 +198,7 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 		const char *name = obs_data_get_string(item_data, "name");
 		obs_source_t *item_source = obs_get_source_by_name(name);
 		obs_source_release(item_source);
-		if (item_source && (obs_scene_from_source(item_source) ||
-				    obs_group_from_source(item_source))) {
+		if (item_source && (obs_scene_from_source(item_source) || obs_group_from_source(item_source))) {
 			obs_data_release(item_data);
 			continue;
 		}
@@ -242,8 +211,7 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 	obs_data_array_release(items);
 }
 
-void ConvertSettingPath(obs_data_t *settings, const char *setting_name,
-			const QString &path, const char *sub_folder)
+void ConvertSettingPath(obs_data_t *settings, const char *setting_name, const QString &path, const char *sub_folder)
 {
 	const char *file = obs_data_get_string(settings, setting_name);
 	if (!file || !strlen(file))
@@ -253,14 +221,12 @@ void ConvertSettingPath(obs_data_t *settings, const char *setting_name,
 	const QString file_name = QFileInfo(QT_UTF8(file)).fileName();
 	QString filePath = path + "/Resources/" + sub_folder + "/" + file_name;
 	if (QFile::exists(filePath)) {
-		obs_data_set_string(settings, setting_name,
-				    QT_TO_UTF8(filePath));
+		obs_data_set_string(settings, setting_name, QT_TO_UTF8(filePath));
 		return;
 	}
 	filePath = path + "/" + sub_folder + "/" + file_name;
 	if (QFile::exists(filePath)) {
-		obs_data_set_string(settings, setting_name,
-				    QT_TO_UTF8(filePath));
+		obs_data_set_string(settings, setting_name, QT_TO_UTF8(filePath));
 	}
 }
 
@@ -268,14 +234,11 @@ void ConvertFilterPaths(obs_data_t *filter_data, const QString &path)
 {
 	const char *id = obs_data_get_string(filter_data, "id");
 	if (strcmp(id, "shader_filter") == 0) {
-		obs_data_t *settings =
-			obs_data_get_obj(filter_data, "settings");
-		ConvertSettingPath(settings, "shader_file_name", path,
-				   "Shader Filters");
+		obs_data_t *settings = obs_data_get_obj(filter_data, "settings");
+		ConvertSettingPath(settings, "shader_file_name", path, "Shader Filters");
 		obs_data_release(settings);
 	} else if (strcmp(id, "mask_filter") == 0) {
-		obs_data_t *settings =
-			obs_data_get_obj(filter_data, "settings");
+		obs_data_t *settings = obs_data_get_obj(filter_data, "settings");
 		ConvertSettingPath(settings, "image_path", path, "Image Masks");
 		obs_data_release(settings);
 	}
@@ -285,15 +248,12 @@ void ConvertSourcePaths(obs_data_t *source_data, const QString &path)
 {
 	const char *id = obs_data_get_string(source_data, "id");
 	if (strcmp(id, "image_source") == 0) {
-		obs_data_t *settings =
-			obs_data_get_obj(source_data, "settings");
+		obs_data_t *settings = obs_data_get_obj(source_data, "settings");
 		ConvertSettingPath(settings, "file", path, "Image Sources");
 		obs_data_release(settings);
 	} else if (strcmp(id, "ffmpeg_source") == 0) {
-		obs_data_t *settings =
-			obs_data_get_obj(source_data, "settings");
-		ConvertSettingPath(settings, "local_file", path,
-				   "Media Sources");
+		obs_data_t *settings = obs_data_get_obj(source_data, "settings");
+		ConvertSettingPath(settings, "local_file", path, "Media Sources");
 		obs_data_release(settings);
 	}
 	obs_data_array_t *filters = obs_data_get_array(source_data, "filters");
@@ -315,18 +275,15 @@ static void MergeScenes(obs_source_t *s, obs_data_t *scene_settings)
 	obs_data_array_t *items = obs_data_get_array(scene_settings, "items");
 	const size_t item_count = obs_data_array_count(items);
 	obs_data_t *scene_settings_orig = obs_source_get_settings(s);
-	obs_data_array_t *items_orig =
-		obs_data_get_array(scene_settings_orig, "items");
+	obs_data_array_t *items_orig = obs_data_get_array(scene_settings_orig, "items");
 	const size_t item_count_orig = obs_data_array_count(items_orig);
 	for (size_t j = 0; j < item_count_orig; j++) {
 		obs_data_t *item_data_orig = obs_data_array_item(items_orig, j);
-		const char *name_orig =
-			obs_data_get_string(item_data_orig, "name");
+		const char *name_orig = obs_data_get_string(item_data_orig, "name");
 		bool found = false;
 		for (size_t k = 0; k < item_count; k++) {
 			obs_data_t *item_data = obs_data_array_item(items, k);
-			const char *name =
-				obs_data_get_string(item_data, "name");
+			const char *name = obs_data_get_string(item_data, "name");
 			if (strcmp(name, name_orig) == 0) {
 				found = true;
 				break;
@@ -347,10 +304,8 @@ static void MergeFilters(obs_source_t *s, obs_data_array_t *filters)
 	size_t count = obs_data_array_count(filters);
 	for (size_t i = 0; i < count; i++) {
 		obs_data_t *filter_data = obs_data_array_item(filters, i);
-		const char *filter_name =
-			obs_data_get_string(filter_data, "name");
-		obs_source_t *filter =
-			obs_source_get_filter_by_name(s, filter_name);
+		const char *filter_name = obs_data_get_string(filter_data, "name");
+		obs_source_t *filter = obs_source_get_filter_by_name(s, filter_name);
 		if (filter) {
 			obs_data_release(filter_data);
 			obs_source_release(filter);
@@ -388,8 +343,7 @@ static void LoadSources(obs_data_array_t *data, QString path)
 			load_sources.push_back(s);
 		} else {
 			new_source = false;
-			obs_data_array_t *filters =
-				obs_data_get_array(sourceData, "filters");
+			obs_data_array_t *filters = obs_data_get_array(sourceData, "filters");
 			if (filters) {
 				MergeFilters(s, filters);
 				obs_data_array_release(filters);
@@ -401,26 +355,18 @@ static void LoadSources(obs_data_array_t *data, QString path)
 		if (!scene)
 			scene = obs_group_from_source(s);
 		if (scene) {
-			obs_data_t *scene_settings =
-				obs_data_get_obj(sourceData, "settings");
+			obs_data_t *scene_settings = obs_data_get_obj(sourceData, "settings");
 			if (w != 1920) {
 				ResizeSceneItems(scene_settings, factor);
 				if (new_source)
-					obs_source_enum_filters(
-						s, ResizeMoveFilters, &factor);
+					obs_source_enum_filters(s, ResizeMoveFilters, &factor);
 			}
 			if (!new_source) {
 				obs_scene_enum_items(
 					scene,
-					[](obs_scene_t *, obs_sceneitem_t *item,
-					   void *d) {
-						std::list<obs_source_t
-								  *> *sources =
-							(std::list<obs_source_t *>
-								 *)d;
-						obs_source_t *si =
-							obs_sceneitem_get_source(
-								item);
+					[](obs_scene_t *, obs_sceneitem_t *item, void *d) {
+						std::list<obs_source_t *> *sources = (std::list<obs_source_t *> *)d;
+						obs_source_t *si = obs_sceneitem_get_source(item);
 						si = obs_source_get_ref(si);
 						if (si)
 							sources->push_back(si);
@@ -454,46 +400,33 @@ static void LoadScene(obs_data_t *data, QString path)
 	obs_data_array_release(sourcesData);
 }
 
-
-
 //--------------------NOTIFICATION HELPERS--------------------
-void SendTrayNotification(QSystemTrayIcon::MessageIcon icon,
-			  const QString &title, const QString &body)
+void SendTrayNotification(QSystemTrayIcon::MessageIcon icon, const QString &title, const QString &body)
 {
 	if (notificationsMuted) {
 		blog(LOG_INFO, "[StreamUP] Notifications are muted.");
 		return;
 	}
 
-	if (!QSystemTrayIcon::isSystemTrayAvailable() ||
-	    !QSystemTrayIcon::supportsMessages())
+	if (!QSystemTrayIcon::isSystemTrayAvailable() || !QSystemTrayIcon::supportsMessages())
 		return;
 
-	SystemTrayNotification *notification =
-		new SystemTrayNotification{icon, title, body};
+	SystemTrayNotification *notification = new SystemTrayNotification{icon, title, body};
 
 	obs_queue_task(
 		OBS_TASK_UI,
 		[](void *param) {
-			auto notification =
-				static_cast<SystemTrayNotification *>(param);
+			auto notification = static_cast<SystemTrayNotification *>(param);
 			void *systemTrayPtr = obs_frontend_get_system_tray();
 			if (systemTrayPtr) {
-				auto systemTray =
-					static_cast<QSystemTrayIcon *>(
-						systemTrayPtr);
-				QString prefixedTitle =
-					"[StreamUP] " + notification->title;
-				systemTray->showMessage(prefixedTitle,
-							notification->body,
-							notification->icon);
+				auto systemTray = static_cast<QSystemTrayIcon *>(systemTrayPtr);
+				QString prefixedTitle = "[StreamUP] " + notification->title;
+				systemTray->showMessage(prefixedTitle, notification->body, notification->icon);
 			}
 			delete notification;
 		},
 		(void *)notification, false);
 }
-
-
 
 //--------------------PATH HELPERS--------------------
 std::string GetLocalAppDataPath()
@@ -519,8 +452,7 @@ char *GetFilePath()
 		path = obs_module_config_path("../../logs/");
 		path_abs = os_get_abs_path_ptr(path);
 
-		if (path_abs[strlen(path_abs) - 1] != '/' &&
-		    path_abs[strlen(path_abs) - 1] != '\\') {
+		if (path_abs[strlen(path_abs) - 1] != '/' && path_abs[strlen(path_abs) - 1] != '\\') {
 			// Create a new string with appended "/"
 			size_t new_path_abs_size = strlen(path_abs) + 2;
 			char *newPathAbs = (char *)bmalloc(new_path_abs_size);
@@ -562,8 +494,7 @@ char *GetFilePath()
 		std::filesystem::directory_iterator dir(path_abs_str);
 		if (dir == std::filesystem::directory_iterator{}) {
 			// The directory is empty
-			blog(LOG_INFO,
-			     "[StreamUP] OBS doesn't have files in the install directory.");
+			blog(LOG_INFO, "[StreamUP] OBS doesn't have files in the install directory.");
 			bfree(path_abs);
 			return NULL;
 		} else {
@@ -572,8 +503,7 @@ char *GetFilePath()
 		}
 	} else {
 		// The directory does not exist
-		blog(LOG_INFO,
-		     "[StreamUP] OBS log file folder does not exist in the install directory.");
+		blog(LOG_INFO, "[StreamUP] OBS log file folder does not exist in the install directory.");
 		bfree(path_abs);
 		return NULL;
 	}
@@ -586,8 +516,7 @@ std::string GetMostRecentFile(std::string dirpath)
 	std::filesystem::directory_entry newest_file;
 
 	for (const auto &entry : it) {
-		if (entry.is_regular_file() &&
-		    entry.path().extension() == ".txt") {
+		if (entry.is_regular_file() && entry.path().extension() == ".txt") {
 			auto current_write_time = entry.last_write_time();
 			if (current_write_time > last_write_time) {
 				last_write_time = current_write_time;
@@ -598,8 +527,6 @@ std::string GetMostRecentFile(std::string dirpath)
 
 	return newest_file.path().string();
 }
-
-
 
 //--------------------UI HELPERS--------------------
 void ShowDialogOnUIThread(const std::function<void()> &dialogFunction)
@@ -622,8 +549,7 @@ QDialog *CreateDialogWindow(const char *windowTitle)
 	return dialog;
 }
 
-QLabel *CreateRichTextLabel(const QString &text, bool bold, bool wrap,
-			    Qt::Alignment alignment = Qt::Alignment())
+QLabel *CreateRichTextLabel(const QString &text, bool bold, bool wrap, Qt::Alignment alignment = Qt::Alignment())
 {
 	QLabel *label = new QLabel;
 	label->setText(text);
@@ -646,18 +572,15 @@ QLabel *CreateIconLabel(const QStyle::StandardPixmap &iconName)
 {
 	QLabel *icon = new QLabel();
 	int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16 : 64;
-	icon->setPixmap(QApplication::style()->standardIcon(iconName).pixmap(
-		pixmapSize, pixmapSize));
+	icon->setPixmap(QApplication::style()->standardIcon(iconName).pixmap(pixmapSize, pixmapSize));
 	icon->setStyleSheet("padding-top: 3px;");
 	return icon;
 }
 
-QHBoxLayout *AddIconAndText(const QStyle::StandardPixmap &iconText,
-			    const char *labelText)
+QHBoxLayout *AddIconAndText(const QStyle::StandardPixmap &iconText, const char *labelText)
 {
 	QLabel *icon = CreateIconLabel(iconText);
-	QLabel *text = CreateRichTextLabel(obs_module_text(labelText), false,
-					   true, Qt::AlignTop);
+	QLabel *text = CreateRichTextLabel(obs_module_text(labelText), false, true, Qt::AlignTop);
 
 	QHBoxLayout *iconTextLayout = new QHBoxLayout();
 	iconTextLayout->addWidget(icon, 0, Qt::AlignTop);
@@ -675,36 +598,27 @@ QVBoxLayout *CreateVBoxLayout(QWidget *parent)
 	return layout;
 }
 
-void CreateLabelWithLink(QLayout *layout, const QString &text,
-			 const QString &url, int row, int column)
+void CreateLabelWithLink(QLayout *layout, const QString &text, const QString &url, int row, int column)
 {
-	QLabel *label =
-		CreateRichTextLabel(text, false, false, Qt::AlignCenter);
+	QLabel *label = CreateRichTextLabel(text, false, false, Qt::AlignCenter);
 	label->setTextInteractionFlags(Qt::TextBrowserInteraction);
 	label->setOpenExternalLinks(true);
-	QObject::connect(label, &QLabel::linkActivated,
-			 [url]() { QDesktopServices::openUrl(QUrl(url)); });
+	QObject::connect(label, &QLabel::linkActivated, [url]() { QDesktopServices::openUrl(QUrl(url)); });
 	static_cast<QGridLayout *>(layout)->addWidget(label, row, column);
 }
 
-void CreateButton(QLayout *layout, const QString &text,
-		  const std::function<void()> &onClick)
+void CreateButton(QLayout *layout, const QString &text, const std::function<void()> &onClick)
 {
 	QPushButton *button = new QPushButton(text);
 	QObject::connect(button, &QPushButton::clicked, onClick);
 	layout->addWidget(button);
 }
 
-void CreateToolDialog(const char *infoText1, const char *infoText2,
-		      const char *infoText3, const QString &titleText,
-		      const std::function<void()> &buttonCallback,
-		      const QString &jsonString, const char *how1,
-		      const char *how2, const char *how3,
-		      const char *how4,
-		      const char *notificationMessage)
+void CreateToolDialog(const char *infoText1, const char *infoText2, const char *infoText3, const QString &titleText,
+		      const std::function<void()> &buttonCallback, const QString &jsonString, const char *how1, const char *how2,
+		      const char *how3, const char *how4, const char *notificationMessage)
 {
-	ShowDialogOnUIThread([infoText1, infoText2, infoText3, titleText,
-			      buttonCallback, jsonString, how1, how2, how3, how4,
+	ShowDialogOnUIThread([infoText1, infoText2, infoText3, titleText, buttonCallback, jsonString, how1, how2, how3, how4,
 			      notificationMessage]() {
 		const char *titleTextChar = titleText.toUtf8().constData();
 		QString titleStr = obs_module_text(titleTextChar);
@@ -722,30 +636,24 @@ void CreateToolDialog(const char *infoText1, const char *infoText2,
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 
-		CreateButton(buttonLayout, obs_module_text("Cancel"),
-			     [dialog]() { dialog->close(); });
+		CreateButton(buttonLayout, obs_module_text("Cancel"), [dialog]() { dialog->close(); });
 
 		CreateButton(buttonLayout, titleStr, [=]() {
 			buttonCallback();
 			if (notificationMessage) {
-				SendTrayNotification(
-					QSystemTrayIcon::Information, titleStr,
-					obs_module_text(notificationMessage));
+				SendTrayNotification(QSystemTrayIcon::Information, titleStr, obs_module_text(notificationMessage));
 			}
 			dialog->close();
 		});
 
-		dialogLayout->addLayout(AddIconAndText(
-			QStyle::SP_MessageBoxInformation, infoText1));
+		dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxInformation, infoText1));
 		dialogLayout->addSpacing(10);
 
-		QLabel *info2 = CreateRichTextLabel(infoText2Str, false, true,
-						    Qt::AlignTop);
+		QLabel *info2 = CreateRichTextLabel(infoText2Str, false, true, Qt::AlignTop);
 		dialogLayout->addWidget(info2, 0, Qt::AlignTop);
 		dialogLayout->addSpacing(10);
 
-		QGroupBox *info3Box =
-			new QGroupBox(obs_module_text("HowToUse"));
+		QGroupBox *info3Box = new QGroupBox(obs_module_text("HowToUse"));
 		info3Box->setMinimumWidth(350);
 		QVBoxLayout *info3BoxLayout = CreateVBoxLayout(info3Box);
 		QLabel *info3 = CreateRichTextLabel(infoText3Str, false, true);
@@ -760,12 +668,9 @@ void CreateToolDialog(const char *infoText1, const char *infoText2,
 		info3BoxLayout->addWidget(howTo3);
 		info3BoxLayout->addWidget(howTo4);
 
-		QPushButton *copyJsonButton =
-			new QPushButton(obs_module_text("CopyWebsocketJson"));
-		copyJsonButton->setToolTip(
-			obs_module_text("CopyWebsocketJsonTooltip"));
-		QObject::connect(copyJsonButton, &QPushButton::clicked,
-				 [=]() { CopyToClipboard(jsonString); });
+		QPushButton *copyJsonButton = new QPushButton(obs_module_text("CopyWebsocketJson"));
+		copyJsonButton->setToolTip(obs_module_text("CopyWebsocketJsonTooltip"));
+		QObject::connect(copyJsonButton, &QPushButton::clicked, [=]() { CopyToClipboard(jsonString); });
 		info3BoxLayout->addWidget(copyJsonButton);
 		dialogLayout->addWidget(info3Box);
 		dialogLayout->addSpacing(10);
@@ -775,8 +680,6 @@ void CreateToolDialog(const char *infoText1, const char *infoText2,
 		dialog->show();
 	});
 }
-
-
 
 //-------------------PLUGIN MANAGEMENT AND SETTINGS-------------------
 std::vector<std::string> SplitString(const std::string &input, char delimiter)
@@ -830,20 +733,15 @@ std::string SearchStringInFile(const char *path, const char *search)
 		while (fgets(line, sizeof(line), file)) {
 			char *found_ptr = strstr(line, search);
 			if (found_ptr) {
-				std::string remaining_line =
-					std::string(found_ptr + strlen(search));
+				std::string remaining_line = std::string(found_ptr + strlen(search));
 				std::smatch match;
 
-				if (std::regex_search(remaining_line, match,
-						      version_regex_triple) &&
-				    match.size() > 0) {
+				if (std::regex_search(remaining_line, match, version_regex_triple) && match.size() > 0) {
 					fclose(file);
 					return match.str(0);
 				}
 
-				if (std::regex_search(remaining_line, match,
-						      version_regex_double) &&
-				    match.size() > 0) {
+				if (std::regex_search(remaining_line, match, version_regex_double) && match.size() > 0) {
 					fclose(file);
 					return match.str(0);
 				}
@@ -851,8 +749,7 @@ std::string SearchStringInFile(const char *path, const char *search)
 		}
 		fclose(file);
 	} else {
-		blog(LOG_ERROR, "[StreamUP] Failed to open file: %s",
-		     filepath.c_str());
+		blog(LOG_ERROR, "[StreamUP] Failed to open file: %s", filepath.c_str());
 	}
 
 	return "";
@@ -871,12 +768,10 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 		const PluginInfo &plugin_info = module.second;
 		const std::string &search_string = plugin_info.searchString;
 
-		std::string installed_version =
-			SearchStringInFile(filepath, search_string.c_str());
+		std::string installed_version = SearchStringInFile(filepath, search_string.c_str());
 
 		if (!installed_version.empty()) {
-			installedPlugins.emplace_back(plugin_name,
-						      installed_version);
+			installedPlugins.emplace_back(plugin_name, installed_version);
 		}
 	}
 
@@ -900,8 +795,6 @@ std::string GetPlatformURL(const PluginInfo &plugin_info)
 	return url;
 }
 
-
-
 //-------------------ERROR AND UPDATE HANDLING-------------------
 void ErrorDialog(const QString &errorMessage)
 {
@@ -910,17 +803,12 @@ void ErrorDialog(const QString &errorMessage)
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 		dialogLayout->setContentsMargins(20, 15, 20, 10);
 
-		QString displayMessage = errorMessage.isEmpty()
-						 ? "Unknown error occurred."
-						 : errorMessage;
+		QString displayMessage = errorMessage.isEmpty() ? "Unknown error occurred." : errorMessage;
 
-		dialogLayout->addLayout(
-			AddIconAndText(QStyle::SP_MessageBoxCritical,
-				       displayMessage.toUtf8().constData()));
+		dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxCritical, displayMessage.toUtf8().constData()));
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		CreateButton(buttonLayout, "OK",
-			     [dialog]() { dialog->close(); });
+		CreateButton(buttonLayout, "OK", [dialog]() { dialog->close(); });
 
 		dialogLayout->addLayout(buttonLayout);
 		dialog->setLayout(dialogLayout);
@@ -932,18 +820,14 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 {
 	if (manuallyTriggered) {
 		ShowDialogOnUIThread([]() {
-			QDialog *dialog =
-				CreateDialogWindow("WindowUpToDateTitle");
+			QDialog *dialog = CreateDialogWindow("WindowUpToDateTitle");
 			QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 			dialogLayout->setContentsMargins(20, 15, 20, 10);
 
-			dialogLayout->addLayout(
-				AddIconAndText(QStyle::SP_DialogApplyButton,
-					       "WindowUpToDateMessage"));
+			dialogLayout->addLayout(AddIconAndText(QStyle::SP_DialogApplyButton, "WindowUpToDateMessage"));
 
 			QHBoxLayout *buttonLayout = new QHBoxLayout();
-			CreateButton(buttonLayout, obs_module_text("OK"),
-				     [dialog]() { dialog->close(); });
+			CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
 
 			dialogLayout->addLayout(buttonLayout);
 			dialog->setLayout(dialogLayout);
@@ -959,29 +843,20 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 		dialogLayout->setContentsMargins(20, 15, 20, 20);
 
-		const char *errorText = (errorMsgMissing != "NULL")
-						? "WindowPluginErrorMissing"
-						: "WindowPluginErrorUpdating";
-		dialogLayout->addLayout(AddIconAndText(
-			QStyle::SP_MessageBoxWarning, errorText));
+		const char *errorText = (errorMsgMissing != "NULL") ? "WindowPluginErrorMissing" : "WindowPluginErrorUpdating";
+		dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxWarning, errorText));
 		dialogLayout->addSpacing(10);
 
-		QLabel *pluginErrorInfo = CreateRichTextLabel(
-			obs_module_text("WindowPluginErrorInfo"), false, true);
+		QLabel *pluginErrorInfo = CreateRichTextLabel(obs_module_text("WindowPluginErrorInfo"), false, true);
 		dialogLayout->addWidget(pluginErrorInfo);
 		dialogLayout->addSpacing(10);
 
 		if (!errorMsgUpdate.empty()) {
-			QLabel *pluginsToUpdateList = CreateRichTextLabel(
-				QString::fromStdString(errorMsgUpdate), false,
-				false, Qt::AlignCenter);
-			QGroupBox *pluginsToUpdateBox =
-				new QGroupBox(obs_module_text(
-					"WindowPluginErrorUpdateGroup"));
-			QVBoxLayout *pluginsToUpdateBoxLayout =
-				new QVBoxLayout(pluginsToUpdateBox);
-			pluginsToUpdateBoxLayout->addWidget(
-				pluginsToUpdateList);
+			QLabel *pluginsToUpdateList =
+				CreateRichTextLabel(QString::fromStdString(errorMsgUpdate), false, false, Qt::AlignCenter);
+			QGroupBox *pluginsToUpdateBox = new QGroupBox(obs_module_text("WindowPluginErrorUpdateGroup"));
+			QVBoxLayout *pluginsToUpdateBoxLayout = new QVBoxLayout(pluginsToUpdateBox);
+			pluginsToUpdateBoxLayout->addWidget(pluginsToUpdateList);
 			dialogLayout->addWidget(pluginsToUpdateBox);
 			if (errorMsgMissing != "NULL") {
 				dialogLayout->addSpacing(10);
@@ -989,39 +864,29 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		}
 
 		if (errorMsgMissing != "NULL") {
-			QLabel *pluginsMissingList = CreateRichTextLabel(
-				QString::fromStdString(errorMsgMissing), false,
-				false, Qt::AlignCenter);
-			QGroupBox *pluginsMissingBox =
-				new QGroupBox(obs_module_text(
-					"WindowPluginErrorMissingGroup"));
-			QVBoxLayout *pluginsMissingBoxLayout =
-				new QVBoxLayout(pluginsMissingBox);
+			QLabel *pluginsMissingList =
+				CreateRichTextLabel(QString::fromStdString(errorMsgMissing), false, false, Qt::AlignCenter);
+			QGroupBox *pluginsMissingBox = new QGroupBox(obs_module_text("WindowPluginErrorMissingGroup"));
+			QVBoxLayout *pluginsMissingBoxLayout = new QVBoxLayout(pluginsMissingBox);
 			pluginsMissingBoxLayout->addWidget(pluginsMissingList);
 			dialogLayout->addWidget(pluginsMissingBox);
 		}
 
 		if (errorMsgMissing != "NULL") {
-			QLabel *pluginstallerLabel = CreateRichTextLabel(
-				obs_module_text("WindowPluginErrorFooter"),
-				false, false, Qt::AlignCenter);
+			QLabel *pluginstallerLabel =
+				CreateRichTextLabel(obs_module_text("WindowPluginErrorFooter"), false, false, Qt::AlignCenter);
 			dialogLayout->addWidget(pluginstallerLabel);
 		}
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 
-		CreateButton(buttonLayout, obs_module_text("OK"),
-			     [dialog]() { dialog->close(); });
+		CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
 
 		if (errorMsgMissing != "NULL") {
-			QPushButton *pluginstallerButton = new QPushButton(
-				obs_module_text("MenuDownloadPluginstaller"));
-			QObject::connect(
-				pluginstallerButton, &QPushButton::clicked,
-				[]() {
-					QDesktopServices::openUrl(QUrl(
-						"https://streamup.tips/product/plugin-installer"));
-				});
+			QPushButton *pluginstallerButton = new QPushButton(obs_module_text("MenuDownloadPluginstaller"));
+			QObject::connect(pluginstallerButton, &QPushButton::clicked, []() {
+				QDesktopServices::openUrl(QUrl("https://streamup.tips/product/plugin-installer"));
+			});
 			buttonLayout->addWidget(pluginstallerButton);
 		}
 
@@ -1041,8 +906,7 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 
 	std::map<std::string, std::string> version_mismatch_modules;
 	std::string errorMsgUpdate = "";
-	std::vector<std::pair<std::string, std::string>> installedPlugins =
-		GetInstalledPlugins();
+	std::vector<std::pair<std::string, std::string>> installedPlugins = GetInstalledPlugins();
 
 	for (const auto &plugin : installedPlugins) {
 		const std::string &plugin_name = plugin.first;
@@ -1050,16 +914,13 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 		const PluginInfo &plugin_info = all_plugins[plugin_name];
 		const std::string &required_version = plugin_info.version;
 
-		if (installed_version != required_version &&
-		    IsVersionLessThan(installed_version, required_version)) {
-			version_mismatch_modules.emplace(plugin_name,
-							 installed_version);
+		if (installed_version != required_version && IsVersionLessThan(installed_version, required_version)) {
+			version_mismatch_modules.emplace(plugin_name, installed_version);
 		}
 	}
 
 	std::string appDataPath = GetLocalAppDataPath();
-	std::string filePath =
-		appDataPath + "/StreamUP-OutdatedPluginsList.txt";
+	std::string filePath = appDataPath + "/StreamUP-OutdatedPluginsList.txt";
 
 	std::ofstream outFile(filePath, std::ios::out);
 	if (outFile.is_open()) {
@@ -1072,40 +933,35 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 	}
 
 	if (!version_mismatch_modules.empty()) {
-		errorMsgUpdate +=
-			"<div style=\"text-align: center;\">"
-			"<table style=\"border-collapse: collapse; width: 100%;\">"
-			"<tr style=\"background-color: #212121;\">"
-			"<th style=\"padding: 4px 10px; text-align: center;\">Plugin Name</th>"
-			"<th style=\"padding: 4px 10px; text-align: center;\">Installed</th>"
-			"<th style=\"padding: 4px 10px; text-align: center;\">Current</th>"
-			"<th style=\"padding: 4px 10px; text-align: center;\">Direct Download</th>"
-			"</tr>";
+		errorMsgUpdate += "<div style=\"text-align: center;\">"
+				  "<table style=\"border-collapse: collapse; width: 100%;\">"
+				  "<tr style=\"background-color: #212121;\">"
+				  "<th style=\"padding: 4px 10px; text-align: center;\">Plugin Name</th>"
+				  "<th style=\"padding: 4px 10px; text-align: center;\">Installed</th>"
+				  "<th style=\"padding: 4px 10px; text-align: center;\">Current</th>"
+				  "<th style=\"padding: 4px 10px; text-align: center;\">Direct Download</th>"
+				  "</tr>";
 
 		for (const auto &module : version_mismatch_modules) {
-			const PluginInfo &plugin_info =
-				all_plugins[module.first];
-			const std::string &required_version =
-				plugin_info.version;
+			const PluginInfo &plugin_info = all_plugins[module.first];
+			const std::string &required_version = plugin_info.version;
 			const std::string &forum_link = plugin_info.generalURL;
-			const std::string &direct_download_link =
-				GetPlatformURL(plugin_info);
+			const std::string &direct_download_link = GetPlatformURL(plugin_info);
 
-			errorMsgUpdate +=
-				"<tr style=\"border: 1px solid #ddd;\">"
-				"<td style=\"padding: 2px 10px; text-align: left;\"><a href=\"" +
-				forum_link + "\">" + module.first +
-				"</a></td>"
-				"<td style=\"padding: 2px 10px; text-align: center;\">" +
-				module.second +
-				"</td>"
-				"<td style=\"padding: 2px 10px; text-align: center;\">" +
-				required_version +
-				"</td>"
-				"<td style=\"padding: 2px 10px; text-align: center;\"><a href=\"" +
-				direct_download_link +
-				"\">Download</a></td>"
-				"</tr>";
+			errorMsgUpdate += "<tr style=\"border: 1px solid #ddd;\">"
+					  "<td style=\"padding: 2px 10px; text-align: left;\"><a href=\"" +
+					  forum_link + "\">" + module.first +
+					  "</a></td>"
+					  "<td style=\"padding: 2px 10px; text-align: center;\">" +
+					  module.second +
+					  "</td>"
+					  "<td style=\"padding: 2px 10px; text-align: center;\">" +
+					  required_version +
+					  "</td>"
+					  "<td style=\"padding: 2px 10px; text-align: center;\"><a href=\"" +
+					  direct_download_link +
+					  "\">Download</a></td>"
+					  "</tr>";
 		}
 
 		errorMsgUpdate += "</table></div>";
@@ -1116,11 +972,8 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 	}
 }
 
-
-
 //-------------------PLUGINS AND INITIALIZATION-------------------
-size_t WriteCallback(void *contents, size_t size, size_t nmemb,
-		     std::string *out)
+size_t WriteCallback(void *contents, size_t size, size_t nmemb, std::string *out)
 {
 	size_t totalSize = size * nmemb;
 	out->append((char *)contents, totalSize);
@@ -1138,9 +991,7 @@ void *MakeApiRequest(void *arg)
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data->response);
 		CURLcode res = curl_easy_perform(curl);
 		if (res != CURLE_OK)
-			blog(LOG_INFO,
-			     "[StreamUP] curl_easy_perform() failed: %s\n",
-			     curl_easy_strerror(res));
+			blog(LOG_INFO, "[StreamUP] curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 		curl_easy_cleanup(curl);
 	}
 	return NULL;
@@ -1170,8 +1021,7 @@ void InitialiseRequiredModules()
 	}
 
 	if (api_response == "") {
-		blog(LOG_INFO, "[StreamUP] Error loading plugins from %s",
-		     req_data.url.c_str());
+		blog(LOG_INFO, "[StreamUP] Error loading plugins from %s", req_data.url.c_str());
 		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
 		return;
 	}
@@ -1189,8 +1039,7 @@ void InitialiseRequiredModules()
 		info.version = obs_data_get_string(plugin, "version");
 		obs_data_t *downloads = obs_data_get_obj(plugin, "downloads");
 		if (downloads) {
-			info.windowsURL =
-				obs_data_get_string(downloads, "windows");
+			info.windowsURL = obs_data_get_string(downloads, "windows");
 			info.macURL = obs_data_get_string(downloads, "macOS");
 			info.linuxURL = obs_data_get_string(downloads, "linux");
 			obs_data_release(downloads);
@@ -1238,18 +1087,13 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile = false)
 			continue; // Skip to the next iteration
 		}
 
-		std::string installed_version =
-			SearchStringInFile(filepath, search_string.c_str());
+		std::string installed_version = SearchStringInFile(filepath, search_string.c_str());
 
 		if (installed_version.empty() && plugin_info.required) {
 			missing_modules.emplace(plugin_name, required_version);
-		} else if (!installed_version.empty() &&
-			   installed_version != required_version &&
-			   plugin_info.required &&
-			   IsVersionLessThan(installed_version,
-					     required_version)) {
-			version_mismatch_modules.emplace(plugin_name,
-							 installed_version);
+		} else if (!installed_version.empty() && installed_version != required_version && plugin_info.required &&
+			   IsVersionLessThan(installed_version, required_version)) {
+			version_mismatch_modules.emplace(plugin_name, installed_version);
 		}
 	}
 
@@ -1260,95 +1104,76 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile = false)
 
 	if (hasUpdates || hasMissingPlugins) {
 		if (hasUpdates) {
-			errorMsgUpdate +=
-				"<div style=\"text-align: center;\">"
-				"<table style=\"border-collapse: collapse; width: 100%;\">"
-				"<tr style=\"background-color: #212121;\">"
-				"<th style=\"padding: 4px 10px; text-align: center;\">Plugin Name</th>"
-				"<th style=\"padding: 4px 10px; text-align: center;\">Installed</th>"
-				"<th style=\"padding: 4px 10px; text-align: center;\">Current</th>"
-				"<th style=\"padding: 4px 10px; text-align: center;\">Direct Download</th>"
-				"</tr>";
+			errorMsgUpdate += "<div style=\"text-align: center;\">"
+					  "<table style=\"border-collapse: collapse; width: 100%;\">"
+					  "<tr style=\"background-color: #212121;\">"
+					  "<th style=\"padding: 4px 10px; text-align: center;\">Plugin Name</th>"
+					  "<th style=\"padding: 4px 10px; text-align: center;\">Installed</th>"
+					  "<th style=\"padding: 4px 10px; text-align: center;\">Current</th>"
+					  "<th style=\"padding: 4px 10px; text-align: center;\">Direct Download</th>"
+					  "</tr>";
 
 			for (const auto &module : version_mismatch_modules) {
-				const PluginInfo &plugin_info =
-					all_plugins[module.first];
-				const std::string &required_version =
-					plugin_info.version;
-				const std::string &forum_link =
-					plugin_info.generalURL;
-				const std::string &direct_download_link =
-					GetPlatformURL(plugin_info);
+				const PluginInfo &plugin_info = all_plugins[module.first];
+				const std::string &required_version = plugin_info.version;
+				const std::string &forum_link = plugin_info.generalURL;
+				const std::string &direct_download_link = GetPlatformURL(plugin_info);
 
-				errorMsgUpdate +=
-					"<tr style=\"border: 1px solid #ddd;\">"
-					"<td style=\"padding: 2px 10px; text-align: left;\"><a href=\"" +
-					forum_link + "\">" + module.first +
-					"</a></td>"
-					"<td style=\"padding: 2px 10px; text-align: center;\">" +
-					module.second +
-					"</td>"
-					"<td style=\"padding: 2px 10px; text-align: center;\">" +
-					required_version +
-					"</td>"
-					"<td style=\"padding: 2px 10px; text-align: center;\"><a href=\"" +
-					direct_download_link +
-					"\">Download</a></td>"
-					"</tr>";
+				errorMsgUpdate += "<tr style=\"border: 1px solid #ddd;\">"
+						  "<td style=\"padding: 2px 10px; text-align: left;\"><a href=\"" +
+						  forum_link + "\">" + module.first +
+						  "</a></td>"
+						  "<td style=\"padding: 2px 10px; text-align: center;\">" +
+						  module.second +
+						  "</td>"
+						  "<td style=\"padding: 2px 10px; text-align: center;\">" +
+						  required_version +
+						  "</td>"
+						  "<td style=\"padding: 2px 10px; text-align: center;\"><a href=\"" +
+						  direct_download_link +
+						  "\">Download</a></td>"
+						  "</tr>";
 			}
 
 			errorMsgUpdate += "</table></div>";
 
-			if (!errorMsgUpdate.empty() &&
-			    errorMsgUpdate.substr(errorMsgUpdate.length() -
-						  4) == "<br>") {
-				errorMsgUpdate = errorMsgUpdate.substr(
-					0, errorMsgUpdate.length() - 4);
+			if (!errorMsgUpdate.empty() && errorMsgUpdate.substr(errorMsgUpdate.length() - 4) == "<br>") {
+				errorMsgUpdate = errorMsgUpdate.substr(0, errorMsgUpdate.length() - 4);
 			}
 		}
 
 		if (hasMissingPlugins) {
-			errorMsgMissing +=
-				"<div style=\"text-align: center;\">"
-				"<table style=\"border-collapse: collapse; width: 100%;\">"
-				"<tr style=\"background-color: #212121;\">"
-				"<th style=\"padding: 4px 10px; text-align: center;\">Plugin Name</th>"
-				"<th style=\"padding: 4px 10px; text-align: center;\">Direct Download</th>"
-				"</tr>";
+			errorMsgMissing += "<div style=\"text-align: center;\">"
+					   "<table style=\"border-collapse: collapse; width: 100%;\">"
+					   "<tr style=\"background-color: #212121;\">"
+					   "<th style=\"padding: 4px 10px; text-align: center;\">Plugin Name</th>"
+					   "<th style=\"padding: 4px 10px; text-align: center;\">Direct Download</th>"
+					   "</tr>";
 
-			for (auto it = missing_modules.begin();
-			     it != missing_modules.end(); ++it) {
+			for (auto it = missing_modules.begin(); it != missing_modules.end(); ++it) {
 				const std::string &moduleName = it->first;
-				const PluginInfo &pluginInfo =
-					required_plugins[moduleName];
-				const std::string &forum_link =
-					pluginInfo.generalURL;
-				const std::string &direct_download_link =
-					GetPlatformURL(pluginInfo);
+				const PluginInfo &pluginInfo = required_plugins[moduleName];
+				const std::string &forum_link = pluginInfo.generalURL;
+				const std::string &direct_download_link = GetPlatformURL(pluginInfo);
 
-				errorMsgMissing +=
-					"<tr style=\"border: 1px solid #ddd;\">"
-					"<td style=\"padding: 2px 10px; text-align: left;\"><a href=\"" +
-					forum_link + "\">" + moduleName +
-					"</a></td>"
-					"<td style=\"padding: 2px 10px; text-align: center;\"><a href=\"" +
-					direct_download_link +
-					"\">Download</a></td>"
-					"</tr>";
+				errorMsgMissing += "<tr style=\"border: 1px solid #ddd;\">"
+						   "<td style=\"padding: 2px 10px; text-align: left;\"><a href=\"" +
+						   forum_link + "\">" + moduleName +
+						   "</a></td>"
+						   "<td style=\"padding: 2px 10px; text-align: center;\"><a href=\"" +
+						   direct_download_link +
+						   "\">Download</a></td>"
+						   "</tr>";
 			}
 
 			errorMsgMissing += "</table></div>";
 
-			if (!errorMsgMissing.empty() &&
-			    errorMsgMissing.substr(errorMsgMissing.length() -
-						   4) == "<br>") {
-				errorMsgMissing = errorMsgMissing.substr(
-					0, errorMsgMissing.length() - 4);
+			if (!errorMsgMissing.empty() && errorMsgMissing.substr(errorMsgMissing.length() - 4) == "<br>") {
+				errorMsgMissing = errorMsgMissing.substr(0, errorMsgMissing.length() - 4);
 			}
 		}
 
-		PluginsHaveIssue(hasMissingPlugins ? errorMsgMissing : "NULL",
-				 errorMsgUpdate);
+		PluginsHaveIssue(hasMissingPlugins ? errorMsgMissing : "NULL", errorMsgUpdate);
 
 		missing_modules.clear();
 		version_mismatch_modules.clear();
@@ -1361,8 +1186,6 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile = false)
 		return true;
 	}
 }
-
-
 
 //-------------------UTILITY FUNCTIONS-------------------
 const char *MonitoringTypeToString(obs_monitoring_type type)
@@ -1385,18 +1208,13 @@ bool RefreshAudioMonitoring(void *data, obs_source_t *source)
 
 	const char *source_name = obs_source_get_name(source);
 
-	obs_monitoring_type original_monitoring_type =
-		obs_source_get_monitoring_type(source);
+	obs_monitoring_type original_monitoring_type = obs_source_get_monitoring_type(source);
 
 	if (original_monitoring_type != OBS_MONITORING_TYPE_NONE) {
-		obs_source_set_monitoring_type(source,
-					       OBS_MONITORING_TYPE_NONE);
-		obs_source_set_monitoring_type(source,
-					       original_monitoring_type);
+		obs_source_set_monitoring_type(source, OBS_MONITORING_TYPE_NONE);
+		obs_source_set_monitoring_type(source, original_monitoring_type);
 
-		blog(LOG_INFO,
-		     "[StreamUP] '%s' has refreshed audio monitoring type: '%s'",
-		     source_name,
+		blog(LOG_INFO, "[StreamUP] '%s' has refreshed audio monitoring type: '%s'", source_name,
 		     MonitoringTypeToString(original_monitoring_type));
 	}
 
@@ -1420,8 +1238,7 @@ bool RefreshBrowserSources(void *data, obs_source_t *source)
 			obs_data_set_int(settings, "fps", fps - 1);
 		}
 		obs_source_update(source, settings);
-		blog(LOG_INFO, "[StreamUP] Refreshed '%s' browser source",
-		     source_name);
+		blog(LOG_INFO, "[StreamUP] Refreshed '%s' browser source", source_name);
 
 		obs_data_release(settings);
 	}
@@ -1432,9 +1249,8 @@ bool RefreshBrowserSources(void *data, obs_source_t *source)
 void RefreshAudioMonitoringDialog()
 {
 	CreateToolDialog(
-		"RefreshAudioMonitoringInfo1", "RefreshAudioMonitoringInfo2",
-		"RefreshAudioMonitoringInfo3", "RefreshAudioMonitoring",
-		[]() { obs_enum_sources(RefreshAudioMonitoring, nullptr); },
+		"RefreshAudioMonitoringInfo1", "RefreshAudioMonitoringInfo2", "RefreshAudioMonitoringInfo3",
+		"RefreshAudioMonitoring", []() { obs_enum_sources(RefreshAudioMonitoring, nullptr); },
 		R"(
                     {
                         "requestType": "CallVendorRequest",
@@ -1444,16 +1260,14 @@ void RefreshAudioMonitoringDialog()
                             "requestData": null
                         }
                     })",
-		"RefreshAudioMonitoringHowTo1", "RefreshAudioMonitoringHowTo2",
-		"RefreshAudioMonitoringHowTo3", "RefreshAudioMonitoringHowTo4",
-		"RefreshAudioMonitoringNotification");
+		"RefreshAudioMonitoringHowTo1", "RefreshAudioMonitoringHowTo2", "RefreshAudioMonitoringHowTo3",
+		"RefreshAudioMonitoringHowTo4", "RefreshAudioMonitoringNotification");
 }
 
 void RefreshBrowserSourcesDialog()
 {
 	CreateToolDialog(
-		"RefreshBrowserSourcesInfo1", "RefreshBrowserSourcesInfo2",
-		"RefreshBrowserSourcesInfo3", "RefreshBrowserSources",
+		"RefreshBrowserSourcesInfo1", "RefreshBrowserSourcesInfo2", "RefreshBrowserSourcesInfo3", "RefreshBrowserSources",
 		[]() { obs_enum_sources(RefreshBrowserSources, nullptr); },
 		R"(
                     {
@@ -1464,12 +1278,9 @@ void RefreshBrowserSourcesDialog()
                             "requestData": null
                         }
                     })",
-		"RefreshBrowserSourcesHowTo1", "RefreshBrowserSourcesHowTo2",
-		"RefreshBrowserSourcesHowTo3", "RefreshBrowserSourcesHowTo4",
-		"RefreshBrowserSourcesNotification");
+		"RefreshBrowserSourcesHowTo1", "RefreshBrowserSourcesHowTo2", "RefreshBrowserSourcesHowTo3",
+		"RefreshBrowserSourcesHowTo4", "RefreshBrowserSourcesNotification");
 }
-
-
 
 //-------------------LOCK SOURCE MANAGEMENT-------------------
 bool CheckIfAnyUnlocked(obs_scene_t *scene);
@@ -1495,8 +1306,7 @@ bool CheckIfAnyUnlocked(obs_scene_t *scene)
 
 			UNUSED_PARAMETER(scene);
 
-			if (obs_source_get_type(source) ==
-			    OBS_SOURCE_TYPE_SCENE) {
+			if (obs_source_get_type(source) == OBS_SOURCE_TYPE_SCENE) {
 				if (CheckGroupItemsIfAnyUnlocked(source)) {
 					*any_unlocked = true;
 					return false; // Stop enumeration
@@ -1515,8 +1325,7 @@ bool CheckIfAnyUnlocked(obs_scene_t *scene)
 
 void ToggleLockGroupItems(obs_source_t *group, bool lock);
 
-bool ToggleLockSceneItemCallback(obs_scene_t *scene, obs_sceneitem_t *item,
-				 void *param)
+bool ToggleLockSceneItemCallback(obs_scene_t *scene, obs_sceneitem_t *item, void *param)
 {
 	UNUSED_PARAMETER(scene);
 
@@ -1568,19 +1377,13 @@ bool ToggleLockSourcesInCurrentScene(bool sendNotification = true)
 
 	if (sendNotification) {
 		if (any_unlocked) {
-			blog(LOG_INFO,
-			     "[StreamUP] All sources in the current scene have been locked.");
-			SendTrayNotification(
-				QSystemTrayIcon::Information,
-				obs_module_text("SourceLockSystem"),
-				obs_module_text("LockedCurrentSources"));
+			blog(LOG_INFO, "[StreamUP] All sources in the current scene have been locked.");
+			SendTrayNotification(QSystemTrayIcon::Information, obs_module_text("SourceLockSystem"),
+					     obs_module_text("LockedCurrentSources"));
 		} else {
-			blog(LOG_INFO,
-			     "[StreamUP] All sources in the current scene have been unlocked.");
-			SendTrayNotification(
-				QSystemTrayIcon::Information,
-				obs_module_text("SourceLockSystem"),
-				obs_module_text("UnlockedCurrentSources"));
+			blog(LOG_INFO, "[StreamUP] All sources in the current scene have been unlocked.");
+			SendTrayNotification(QSystemTrayIcon::Information, obs_module_text("SourceLockSystem"),
+					     obs_module_text("UnlockedCurrentSources"));
 		}
 	}
 
@@ -1627,19 +1430,13 @@ bool ToggleLockAllSources(bool sendNotification = true)
 
 	if (sendNotification) {
 		if (any_unlocked) {
-			blog(LOG_INFO,
-			     "[StreamUP] All sources in all scenes have been locked.");
-			SendTrayNotification(
-				QSystemTrayIcon::Information,
-				obs_module_text("SourceLockSystem"),
-				obs_module_text("LockedAllSources"));
+			blog(LOG_INFO, "[StreamUP] All sources in all scenes have been locked.");
+			SendTrayNotification(QSystemTrayIcon::Information, obs_module_text("SourceLockSystem"),
+					     obs_module_text("LockedAllSources"));
 		} else {
-			blog(LOG_INFO,
-			     "[StreamUP] All sources in all scenes have been unlocked.");
-			SendTrayNotification(
-				QSystemTrayIcon::Information,
-				obs_module_text("SourceLockSystem"),
-				obs_module_text("UnlockedAllSources"));
+			blog(LOG_INFO, "[StreamUP] All sources in all scenes have been unlocked.");
+			SendTrayNotification(QSystemTrayIcon::Information, obs_module_text("SourceLockSystem"),
+					     obs_module_text("UnlockedAllSources"));
 		}
 	}
 
@@ -1673,8 +1470,7 @@ bool AreAllSourcesLockedInAllScenes()
 void LockAllSourcesDialog()
 {
 	CreateToolDialog(
-		"LockAllSourcesInfo1", "LockAllSourcesInfo2",
-		"LockAllSourcesInfo3", "LockAllSources",
+		"LockAllSourcesInfo1", "LockAllSourcesInfo2", "LockAllSourcesInfo3", "LockAllSources",
 		[]() { ToggleLockAllSources(); },
 		R"(
                     {
@@ -1685,15 +1481,13 @@ void LockAllSourcesDialog()
                             "requestData": null
                         }
                     })",
-		"LockAllSourcesHowTo1", "LockAllSourcesHowTo2",
-		"LockAllSourcesHowTo3", "LockAllSourcesHowTo4", NULL);
+		"LockAllSourcesHowTo1", "LockAllSourcesHowTo2", "LockAllSourcesHowTo3", "LockAllSourcesHowTo4", NULL);
 }
 
 void LockAllCurrentSourcesDialog()
 {
 	CreateToolDialog(
-		"LockAllCurrentSourcesInfo1", "LockAllCurrentSourcesInfo2",
-		"LockAllCurrentSourcesInfo3", "LockAllCurrentSources",
+		"LockAllCurrentSourcesInfo1", "LockAllCurrentSourcesInfo2", "LockAllCurrentSourcesInfo3", "LockAllCurrentSources",
 		[]() { ToggleLockSourcesInCurrentScene(); },
 		R"(
                     {
@@ -1704,16 +1498,12 @@ void LockAllCurrentSourcesDialog()
                             "requestData": null
                         }
                     })",
-		"LockAllCurrentSourcesHowTo1", "LockAllCurrentSourcesHowTo2",
-		"LockAllCurrentSourcesHowTo3", "LockAllCurrentSourcesHowTo4",
-		NULL);
+		"LockAllCurrentSourcesHowTo1", "LockAllCurrentSourcesHowTo2", "LockAllCurrentSourcesHowTo3",
+		"LockAllCurrentSourcesHowTo4", NULL);
 }
 
-
-
 //--------------------WEBSOCKET HELPER FUNCTIONS--------------------
-static bool EnumSceneItemsCallback(obs_scene_t *scene, obs_sceneitem_t *item,
-				   void *param)
+static bool EnumSceneItemsCallback(obs_scene_t *scene, obs_sceneitem_t *item, void *param)
 {
 	UNUSED_PARAMETER(scene);
 
@@ -1724,8 +1514,7 @@ static bool EnumSceneItemsCallback(obs_scene_t *scene, obs_sceneitem_t *item,
 		obs_source_t *source = obs_sceneitem_get_source(item);
 		data->selectedSourceName = obs_source_get_name(source);
 		blog(LOG_INFO, "[StreamUP] source = %s is selected",
-		     data->selectedSourceName ? data->selectedSourceName
-					      : "Unknown");
+		     data->selectedSourceName ? data->selectedSourceName : "Unknown");
 	}
 	return true;
 }
@@ -1742,14 +1531,12 @@ bool EnumSceneItems(obs_scene_t *scene, const char **selected_source_name)
 	return data.isAnySourceSelected;
 }
 
-void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data,
-			   void *private_data, bool transition_type)
+void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data, bool transition_type)
 {
 	UNUSED_PARAMETER(private_data);
 
 	const char *scene_name = obs_data_get_string(request_data, "sceneName");
-	const char *source_name =
-		obs_data_get_string(request_data, "sourceName");
+	const char *source_name = obs_data_get_string(request_data, "sourceName");
 
 	obs_source_t *scene_source = obs_get_source_by_name(scene_name);
 	if (!scene_source) {
@@ -1761,18 +1548,15 @@ void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data,
 	obs_scene_t *scene = obs_scene_from_source(scene_source);
 	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, source_name);
 	if (!scene_item) {
-		obs_data_set_string(response_data, "error",
-				    "Source not found in scene.");
+		obs_data_set_string(response_data, "error", "Source not found in scene.");
 		obs_data_set_bool(response_data, "success", false);
 		obs_source_release(scene_source);
 		return;
 	}
 
-	obs_source_t *transition =
-		obs_sceneitem_get_transition(scene_item, transition_type);
+	obs_source_t *transition = obs_sceneitem_get_transition(scene_item, transition_type);
 	if (!transition) {
-		obs_data_set_string(response_data, "error",
-				    "No transition set for this item.");
+		obs_data_set_string(response_data, "error", "No transition set for this item.");
 		obs_data_set_bool(response_data, "success", false);
 		obs_source_release(scene_source);
 		return;
@@ -1780,26 +1564,19 @@ void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data,
 
 	obs_data_t *settings = obs_source_get_settings(transition);
 	if (!settings) {
-		blog(LOG_WARNING,
-		     "[StreamUP] Failed to get settings for transition: %s",
-		     obs_source_get_name(transition));
-		obs_data_set_string(response_data, "error",
-				    "Failed to get transition settings.");
+		blog(LOG_WARNING, "[StreamUP] Failed to get settings for transition: %s", obs_source_get_name(transition));
+		obs_data_set_string(response_data, "error", "Failed to get transition settings.");
 		obs_data_set_bool(response_data, "success", false);
 		obs_source_release(scene_source);
 		return;
 	}
 
-	uint32_t transition_duration = obs_sceneitem_get_transition_duration(
-		scene_item, transition_type);
+	uint32_t transition_duration = obs_sceneitem_get_transition_duration(scene_item, transition_type);
 
-	obs_data_set_string(response_data, "transitionName",
-			    obs_source_get_name(transition));
-	obs_data_set_string(response_data, "transitionType",
-			    obs_source_get_id(transition));
+	obs_data_set_string(response_data, "transitionName", obs_source_get_name(transition));
+	obs_data_set_string(response_data, "transitionType", obs_source_get_id(transition));
 	obs_data_set_obj(response_data, "transitionSettings", settings);
-	obs_data_set_int(response_data, "transitionDuration",
-			 transition_duration);
+	obs_data_set_int(response_data, "transitionDuration", transition_duration);
 
 	obs_data_set_bool(response_data, "success", true);
 
@@ -1807,20 +1584,15 @@ void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data,
 	obs_data_release(settings);
 }
 
-void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data,
-			   void *private_data, bool show_transition)
+void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data, bool show_transition)
 {
 	UNUSED_PARAMETER(private_data);
 
 	const char *scene_name = obs_data_get_string(request_data, "sceneName");
-	const char *source_name =
-		obs_data_get_string(request_data, "sourceName");
-	const char *transition_type =
-		obs_data_get_string(request_data, "transitionType");
-	obs_data_t *transition_settings =
-		obs_data_get_obj(request_data, "transitionSettings");
-	uint32_t transition_duration =
-		obs_data_get_int(request_data, "transitionDuration");
+	const char *source_name = obs_data_get_string(request_data, "sourceName");
+	const char *transition_type = obs_data_get_string(request_data, "transitionType");
+	obs_data_t *transition_settings = obs_data_get_obj(request_data, "transitionSettings");
+	uint32_t transition_duration = obs_data_get_int(request_data, "transitionDuration");
 
 	obs_source_t *scene_source = obs_get_source_by_name(scene_name);
 	if (!scene_source) {
@@ -1832,19 +1604,15 @@ void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data,
 	obs_scene_t *scene = obs_scene_from_source(scene_source);
 	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, source_name);
 	if (!scene_item) {
-		obs_data_set_string(response_data, "error",
-				    "Source not found in scene.");
+		obs_data_set_string(response_data, "error", "Source not found in scene.");
 		obs_data_set_bool(response_data, "success", false);
 		obs_source_release(scene_source);
 		return;
 	}
 
-	obs_source_t *transition = obs_source_create_private(
-		transition_type, "Scene Transition", NULL);
+	obs_source_t *transition = obs_source_create_private(transition_type, "Scene Transition", NULL);
 	if (!transition) {
-		obs_data_set_string(
-			response_data, "error",
-			"Unable to create transition of specified type.");
+		obs_data_set_string(response_data, "error", "Unable to create transition of specified type.");
 		obs_data_set_bool(response_data, "success", false);
 		obs_source_release(scene_source);
 		return;
@@ -1855,8 +1623,7 @@ void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data,
 	}
 
 	obs_sceneitem_set_transition(scene_item, show_transition, transition);
-	obs_sceneitem_set_transition_duration(scene_item, show_transition,
-					      transition_duration);
+	obs_sceneitem_set_transition_duration(scene_item, show_transition, transition_duration);
 
 	obs_data_set_bool(response_data, "success", true);
 
@@ -1864,21 +1631,17 @@ void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data,
 	obs_source_release(scene_source);
 }
 
-
-
 //--------------------WEBSOCKET VENDOR REQUESTS--------------------
 obs_websocket_vendor vendor = nullptr;
 
-void WebsocketRequestBitrate(obs_data_t *request_data, obs_data_t *response_data,
-			    void *private_data)
+void WebsocketRequestBitrate(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
 
 	obs_output_t *streamOutput = obs_frontend_get_streaming_output();
 	if (!streamOutput || !obs_frontend_streaming_active()) {
-		obs_data_set_string(response_data, "error",
-				    "Streaming is not active.");
+		obs_data_set_string(response_data, "error", "Streaming is not active.");
 		return;
 	}
 
@@ -1904,97 +1667,76 @@ void WebsocketRequestBitrate(obs_data_t *request_data, obs_data_t *response_data
 	obs_data_set_int(response_data, "kbits-per-sec", kbitsPerSec);
 }
 
-void WebsocketRequestVersion(obs_data_t *request_data, obs_data_t *response_data,
-			    void *)
+void WebsocketRequestVersion(obs_data_t *request_data, obs_data_t *response_data, void *)
 {
 	UNUSED_PARAMETER(request_data);
 	obs_data_set_string(response_data, "version", PROJECT_VERSION);
 	obs_data_set_bool(response_data, "success", true);
 }
 
-void WebsocketRequestCheckPlugins(obs_data_t *request_data,
-				  obs_data_t *response_data, void *)
+void WebsocketRequestCheckPlugins(obs_data_t *request_data, obs_data_t *response_data, void *)
 {
 	UNUSED_PARAMETER(request_data);
 	bool pluginsUpToDate = CheckrequiredOBSPlugins(true);
 	obs_data_set_bool(response_data, "success", pluginsUpToDate);
 }
 
-void WebsocketRequestLockAllSources(obs_data_t *request_data,
-				     obs_data_t *response_data, void *)
+void WebsocketRequestLockAllSources(obs_data_t *request_data, obs_data_t *response_data, void *)
 {
 	UNUSED_PARAMETER(request_data);
 	bool lockState = ToggleLockAllSources();
 	obs_data_set_bool(response_data, "lockState", lockState);
 }
 
-void WebsocketRequestLockCurrentSources(obs_data_t *request_data,
-					 obs_data_t *response_data, void *)
+void WebsocketRequestLockCurrentSources(obs_data_t *request_data, obs_data_t *response_data, void *)
 {
 	UNUSED_PARAMETER(request_data);
 	bool lockState = ToggleLockSourcesInCurrentScene();
 	obs_data_set_bool(response_data, "lockState", lockState);
 }
 
-void WebsocketRequestRefreshAudioMonitoring(obs_data_t *request_data,
-					     obs_data_t *response_data, void *)
+void WebsocketRequestRefreshAudioMonitoring(obs_data_t *request_data, obs_data_t *response_data, void *)
 {
 	UNUSED_PARAMETER(request_data);
 	obs_enum_sources(RefreshAudioMonitoring, nullptr);
 	obs_data_set_bool(response_data, "Audio monitoring refreshed", true);
 }
 
-void WebsocketRequestGetShowTransition(obs_data_t *request_data,
-					obs_data_t *response_data,
-					void *private_data)
+void WebsocketRequestGetShowTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
-	GetShowHideTransition(request_data, response_data, private_data,
-				 true);
+	GetShowHideTransition(request_data, response_data, private_data, true);
 }
 
-void WebsocketRequestGetHideTransition(obs_data_t *request_data,
-					obs_data_t *response_data,
-					void *private_data)
+void WebsocketRequestGetHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
-	GetShowHideTransition(request_data, response_data, private_data,
-				 false);
+	GetShowHideTransition(request_data, response_data, private_data, false);
 }
 
-void WebsocketRequestSetShowTransition(obs_data_t *request_data,
-					obs_data_t *response_data,
-					void *private_data)
+void WebsocketRequestSetShowTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
-	SetShowHideTransition(request_data, response_data, private_data,
-				 true);
+	SetShowHideTransition(request_data, response_data, private_data, true);
 }
 
-void WebsocketRequestSetHideTransition(obs_data_t *request_data,
-					obs_data_t *response_data,
-					void *private_data)
+void WebsocketRequestSetHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
-	SetShowHideTransition(request_data, response_data, private_data,
-				 false);
+	SetShowHideTransition(request_data, response_data, private_data, false);
 }
 
-void WebsocketRequestRefreshBrowserSources(obs_data_t *request_data,
-					    obs_data_t *response_data, void *)
+void WebsocketRequestRefreshBrowserSources(obs_data_t *request_data, obs_data_t *response_data, void *)
 {
 	UNUSED_PARAMETER(request_data);
 	obs_enum_sources(RefreshBrowserSources, nullptr);
 	obs_data_set_bool(response_data, "Browser sources refreshed", true);
 }
 
-void WebsocketRequestGetCurrentSelectedSource(obs_data_t *request_data,
-						obs_data_t *response_data,
-						void *private_data)
+void WebsocketRequestGetCurrentSelectedSource(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
 
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	const char *scene_name = obs_source_get_name(current_scene);
-	blog(LOG_INFO, "[StreamUP] current_scene = %s",
-	     scene_name ? scene_name : "Unknown");
+	blog(LOG_INFO, "[StreamUP] current_scene = %s", scene_name ? scene_name : "Unknown");
 
 	if (!current_scene)
 		return;
@@ -2006,27 +1748,20 @@ void WebsocketRequestGetCurrentSelectedSource(obs_data_t *request_data,
 	}
 
 	const char *selected_source_name = nullptr;
-	bool isAnySourceSelected =
-		EnumSceneItems(scene, &selected_source_name);
+	bool isAnySourceSelected = EnumSceneItems(scene, &selected_source_name);
 
 	obs_source_release(current_scene);
 
 	if (!isAnySourceSelected) {
-		blog(LOG_INFO,
-		     "[StreamUP] No selected source. Current scene: %s",
-		     scene_name);
+		blog(LOG_INFO, "[StreamUP] No selected source. Current scene: %s", scene_name);
 		obs_data_set_string(response_data, "currentScene", scene_name);
 	} else {
-		blog(LOG_INFO, "[StreamUP] Selected source: %s",
-		     selected_source_name);
-		obs_data_set_string(response_data, "selectedSource",
-				    selected_source_name);
+		blog(LOG_INFO, "[StreamUP] Selected source: %s", selected_source_name);
+		obs_data_set_string(response_data, "selectedSource", selected_source_name);
 	}
 }
 
-void WebsocketRequestGetOutputFilePath(obs_data_t *request_data,
-					 obs_data_t *response_data,
-					 void *private_data)
+void WebsocketRequestGetOutputFilePath(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
@@ -2035,18 +1770,14 @@ void WebsocketRequestGetOutputFilePath(obs_data_t *request_data,
 	obs_data_set_string(response_data, "outputFilePath", path);
 }
 
-void WebsocketRequestVLCGetCurrentFile(obs_data_t *request_data,
-				      obs_data_t *response_data,
-				      void *private_data)
+void WebsocketRequestVLCGetCurrentFile(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
 
-	const char *source_name =
-		obs_data_get_string(request_data, "sourceName");
+	const char *source_name = obs_data_get_string(request_data, "sourceName");
 	if (!source_name) {
-		obs_data_set_string(response_data, "error",
-				    "No source name provided");
+		obs_data_set_string(response_data, "error", "No source name provided");
 		return;
 	}
 
@@ -2063,35 +1794,25 @@ void WebsocketRequestVLCGetCurrentFile(obs_data_t *request_data,
 			calldata_init(&cd);
 			calldata_set_string(&cd, "tag_id", "title");
 			if (proc_handler_call(ph, "get_metadata", &cd)) {
-				const char *title =
-					calldata_string(&cd, "tag_data");
+				const char *title = calldata_string(&cd, "tag_data");
 				if (title) {
-					obs_data_set_string(response_data,
-							    "title", title);
+					obs_data_set_string(response_data, "title", title);
 				} else {
-					obs_data_set_string(
-						response_data, "error",
-						"No title metadata found");
+					obs_data_set_string(response_data, "error", "No title metadata found");
 				}
 			} else {
-				obs_data_set_string(
-					response_data, "error",
-					"Failed to call get_metadata");
+				obs_data_set_string(response_data, "error", "Failed to call get_metadata");
 			}
 			calldata_free(&cd);
 		} else {
-			obs_data_set_string(response_data, "error",
-					    "Failed to get procedure handler");
+			obs_data_set_string(response_data, "error", "Failed to get procedure handler");
 		}
 	} else {
-		obs_data_set_string(response_data, "error",
-				    "Source is not a VLC source");
+		obs_data_set_string(response_data, "error", "Source is not a VLC source");
 	}
 
 	obs_source_release(source);
 }
-
-
 
 //--------------------HOTKEY HANDLERS--------------------
 obs_hotkey_id refreshBrowserSourcesHotkey = OBS_INVALID_HOTKEY_ID;
@@ -2099,8 +1820,7 @@ obs_hotkey_id lockAllSourcesHotkey = OBS_INVALID_HOTKEY_ID;
 obs_hotkey_id refreshAudioMonitoringHotkey = OBS_INVALID_HOTKEY_ID;
 obs_hotkey_id lockCurrentSourcesHotkey = OBS_INVALID_HOTKEY_ID;
 
-static void HotkeyRefreshBrowserSources(void *data, obs_hotkey_id id,
-					   obs_hotkey_t *hotkey, bool pressed)
+static void HotkeyRefreshBrowserSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
 	UNUSED_PARAMETER(id);
 	UNUSED_PARAMETER(hotkey);
@@ -2108,13 +1828,11 @@ static void HotkeyRefreshBrowserSources(void *data, obs_hotkey_id id,
 	if (!pressed)
 		return;
 	obs_enum_sources(RefreshBrowserSources, nullptr);
-	SendTrayNotification(QSystemTrayIcon::Information,
-			     obs_module_text("RefreshBrowserSources"),
+	SendTrayNotification(QSystemTrayIcon::Information, obs_module_text("RefreshBrowserSources"),
 			     "Action completed successfully.");
 }
 
-static void HotkeyLockAllSources(void *data, obs_hotkey_id id,
-				    obs_hotkey_t *hotkey, bool pressed)
+static void HotkeyLockAllSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
 	UNUSED_PARAMETER(id);
 	UNUSED_PARAMETER(hotkey);
@@ -2124,8 +1842,7 @@ static void HotkeyLockAllSources(void *data, obs_hotkey_id id,
 	ToggleLockAllSources();
 }
 
-static void HotkeyRefreshAudioMonitoring(void *data, obs_hotkey_id id,
-					    obs_hotkey_t *hotkey, bool pressed)
+static void HotkeyRefreshAudioMonitoring(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
 	UNUSED_PARAMETER(id);
 	UNUSED_PARAMETER(hotkey);
@@ -2133,13 +1850,11 @@ static void HotkeyRefreshAudioMonitoring(void *data, obs_hotkey_id id,
 	if (!pressed)
 		return;
 	obs_enum_sources(RefreshAudioMonitoring, nullptr);
-	SendTrayNotification(QSystemTrayIcon::Information,
-			     obs_module_text("RefreshAudioMonitoring"),
+	SendTrayNotification(QSystemTrayIcon::Information, obs_module_text("RefreshAudioMonitoring"),
 			     "Action completed successfully.");
 }
 
-static void HotkeyLockCurrentSources(void *data, obs_hotkey_id id,
-					obs_hotkey_t *hotkey, bool pressed)
+static void HotkeyLockCurrentSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
 	UNUSED_PARAMETER(id);
 	UNUSED_PARAMETER(hotkey);
@@ -2149,8 +1864,7 @@ static void HotkeyLockCurrentSources(void *data, obs_hotkey_id id,
 	ToggleLockSourcesInCurrentScene();
 }
 
-static void SaveLoadHotkeysCallback(obs_data_t *save_data, bool saving,
-				       void *private_data)
+static void SaveLoadHotkeysCallback(obs_data_t *save_data, bool saving, void *private_data)
 {
 	UNUSED_PARAMETER(private_data);
 
@@ -2160,73 +1874,56 @@ static void SaveLoadHotkeysCallback(obs_data_t *save_data, bool saving,
 		obs_data_array_t *hotkey_array;
 
 		hotkey_array = obs_hotkey_save(refreshBrowserSourcesHotkey);
-		obs_data_set_array(save_data, "refreshBrowserSourcesHotkey",
-				   hotkey_array);
+		obs_data_set_array(save_data, "refreshBrowserSourcesHotkey", hotkey_array);
 		obs_data_array_release(hotkey_array);
 
 		hotkey_array = obs_hotkey_save(lockAllSourcesHotkey);
-		obs_data_set_array(save_data, "lockAllSourcesHotkey",
-				   hotkey_array);
+		obs_data_set_array(save_data, "lockAllSourcesHotkey", hotkey_array);
 		obs_data_array_release(hotkey_array);
 
 		hotkey_array = obs_hotkey_save(refreshAudioMonitoringHotkey);
-		obs_data_set_array(save_data, "refreshAudioMonitoringHotkey",
-				   hotkey_array);
+		obs_data_set_array(save_data, "refreshAudioMonitoringHotkey", hotkey_array);
 		obs_data_array_release(hotkey_array);
 
 		hotkey_array = obs_hotkey_save(lockCurrentSourcesHotkey);
-		obs_data_set_array(save_data, "lockCurrentSourcesHotkey",
-				   hotkey_array);
+		obs_data_set_array(save_data, "lockCurrentSourcesHotkey", hotkey_array);
 		obs_data_array_release(hotkey_array);
 
 		if (obs_data_save_json(save_data, configPath)) {
-			blog(LOG_INFO, "[StreamUP] Hotkey settings saved to %s",
-			     configPath);
+			blog(LOG_INFO, "[StreamUP] Hotkey settings saved to %s", configPath);
 		} else {
-			blog(LOG_WARNING,
-			     "[StreamUP] Failed to save hotkey settings to file.");
+			blog(LOG_WARNING, "[StreamUP] Failed to save hotkey settings to file.");
 		}
 	} else {
-		obs_data_t *load_data =
-			obs_data_create_from_json_file(configPath);
+		obs_data_t *load_data = obs_data_create_from_json_file(configPath);
 
 		if (load_data) {
 			obs_data_array_t *hotkey_array;
 
-			hotkey_array = obs_data_get_array(
-				load_data, "refreshBrowserSourcesHotkey");
-			obs_hotkey_load(refreshBrowserSourcesHotkey,
-					hotkey_array);
+			hotkey_array = obs_data_get_array(load_data, "refreshBrowserSourcesHotkey");
+			obs_hotkey_load(refreshBrowserSourcesHotkey, hotkey_array);
 			obs_data_array_release(hotkey_array);
 
-			hotkey_array = obs_data_get_array(
-				load_data, "lockAllSourcesHotkey");
+			hotkey_array = obs_data_get_array(load_data, "lockAllSourcesHotkey");
 			obs_hotkey_load(lockAllSourcesHotkey, hotkey_array);
 			obs_data_array_release(hotkey_array);
 
-			hotkey_array = obs_data_get_array(
-				load_data, "refreshAudioMonitoringHotkey");
-			obs_hotkey_load(refreshAudioMonitoringHotkey,
-					hotkey_array);
+			hotkey_array = obs_data_get_array(load_data, "refreshAudioMonitoringHotkey");
+			obs_hotkey_load(refreshAudioMonitoringHotkey, hotkey_array);
 			obs_data_array_release(hotkey_array);
 
-			hotkey_array = obs_data_get_array(
-				load_data, "lockCurrentSourcesHotkey");
+			hotkey_array = obs_data_get_array(load_data, "lockCurrentSourcesHotkey");
 			obs_hotkey_load(lockCurrentSourcesHotkey, hotkey_array);
 			obs_data_array_release(hotkey_array);
 
 			obs_data_release(load_data);
 		} else {
-			blog(LOG_WARNING,
-			     "[StreamUP] Failed to load hotkey settings from %s",
-			     configPath);
+			blog(LOG_WARNING, "[StreamUP] Failed to load hotkey settings from %s", configPath);
 		}
 	}
 
 	bfree(configPath);
 }
-
-
 
 //--------------------MENU HELPERS--------------------
 static obs_data_t *SaveLoadSettingsCallback(obs_data_t *save_data, bool saving)
@@ -2236,37 +1933,27 @@ static obs_data_t *SaveLoadSettingsCallback(obs_data_t *save_data, bool saving)
 
 	if (saving) {
 		if (obs_data_save_json(save_data, configPath)) {
-			blog(LOG_INFO, "[StreamUP] Settings saved to %s",
-			     configPath);
+			blog(LOG_INFO, "[StreamUP] Settings saved to %s", configPath);
 		} else {
-			blog(LOG_WARNING,
-			     "[StreamUP] Failed to save settings to file.");
+			blog(LOG_WARNING, "[StreamUP] Failed to save settings to file.");
 		}
 	} else {
 		data = obs_data_create_from_json_file(configPath);
 
 		if (!data) {
-			blog(LOG_INFO,
-			     "[StreamUP] Settings not found. Creating default settings...");
+			blog(LOG_INFO, "[StreamUP] Settings not found. Creating default settings...");
 			os_mkdirs(obs_module_config_path(""));
 			data = obs_data_create();
 			obs_data_set_bool(data, "run_at_startup", true);
-			obs_data_set_bool(
-				data, "notifications_mute",
-				false);
+			obs_data_set_bool(data, "notifications_mute", false);
 
 			if (obs_data_save_json(data, configPath)) {
-				blog(LOG_INFO,
-				     "[StreamUP] Default settings saved to %s",
-				     configPath);
+				blog(LOG_INFO, "[StreamUP] Default settings saved to %s", configPath);
 			} else {
-				blog(LOG_WARNING,
-				     "[StreamUP] Failed to save default settings to file.");
+				blog(LOG_WARNING, "[StreamUP] Failed to save default settings to file.");
 			}
 		} else {
-			blog(LOG_INFO,
-			     "[StreamUP] Settings loaded successfully from %s",
-			     configPath);
+			blog(LOG_INFO, "[StreamUP] Settings loaded successfully from %s", configPath);
 		}
 	}
 
@@ -2280,13 +1967,11 @@ QString GetForumLink(const std::string &pluginName)
 	return QString::fromStdString(pluginInfo.generalURL);
 }
 
-void SetLabelWithSortedModules(QLabel *label,
-			       const std::vector<std::string> &moduleNames)
+void SetLabelWithSortedModules(QLabel *label, const std::vector<std::string> &moduleNames)
 {
 	QString text;
 	if (moduleNames.empty()) {
-		text = obs_module_text(
-			"WindowSettingsUpdaterIncompatibleModules");
+		text = obs_module_text("WindowSettingsUpdaterIncompatibleModules");
 	} else {
 		for (const std::string &moduleName : moduleNames) {
 			if (!text.isEmpty()) {
@@ -2306,18 +1991,17 @@ void SetLabelWithSortedModules(QLabel *label,
 
 std::vector<std::string> SearchModulesInFile(const char *path)
 {
-	std::unordered_set<std::string> ignoreModules = {
-		"obs-websocket",      "coreaudio-encoder", "decklink-captions",
-		"decklink-output-ui", "frontend-tools",    "image-source",
-		"obs-browser",        "obs-ffmpeg",        "obs-filters",
-		"obs-outputs",        "obs-qsv11",         "obs-text",
-		"obs-transitions",    "obs-vst",           "obs-x264",
-		"rtmp-services",      "text-freetype2",    "vlc-video",
-		"win-capture",        "win-dshow",         "win-wasapi",
-		"mac-avcapture",      "mac-capture",       "mac-syphon",
-		"mac-videotoolbox",   "mac-virtualcam",    "linux-v4l2",
-		"linux-pulseaudio",   "linux-pipewire",    "linux-jack",
-		"linux-capture",      "linux-source",      "obs-libfdk"};
+	std::unordered_set<std::string> ignoreModules = {"obs-websocket",      "coreaudio-encoder", "decklink-captions",
+							 "decklink-output-ui", "frontend-tools",    "image-source",
+							 "obs-browser",        "obs-ffmpeg",        "obs-filters",
+							 "obs-outputs",        "obs-qsv11",         "obs-text",
+							 "obs-transitions",    "obs-vst",           "obs-x264",
+							 "rtmp-services",      "text-freetype2",    "vlc-video",
+							 "win-capture",        "win-dshow",         "win-wasapi",
+							 "mac-avcapture",      "mac-capture",       "mac-syphon",
+							 "mac-videotoolbox",   "mac-virtualcam",    "linux-v4l2",
+							 "linux-pulseaudio",   "linux-pipewire",    "linux-jack",
+							 "linux-capture",      "linux-source",      "obs-libfdk"};
 
 	std::string filepath = GetMostRecentFile(path);
 	FILE *file = fopen(filepath.c_str(), "r");
@@ -2330,74 +2014,55 @@ std::vector<std::string> SearchModulesInFile(const char *path)
 
 		while (fgets(line, sizeof(line), file) != NULL) {
 			std::string str_line(line);
-			str_line = std::regex_replace(str_line, timestamp_regex,
-						      "");
-			str_line.erase(0,
-				       str_line.find_first_not_of(" \t\r\n"));
-			str_line.erase(str_line.find_last_not_of(" \t\r\n") +
-				       1);
+			str_line = std::regex_replace(str_line, timestamp_regex, "");
+			str_line.erase(0, str_line.find_first_not_of(" \t\r\n"));
+			str_line.erase(str_line.find_last_not_of(" \t\r\n") + 1);
 
-			if (str_line.find("Loaded Modules:") !=
-			    std::string::npos) {
+			if (str_line.find("Loaded Modules:") != std::string::npos) {
 				in_section = true;
-			} else if (str_line.find(
-					   "---------------------------------") !=
-				   std::string::npos) {
+			} else if (str_line.find("---------------------------------") != std::string::npos) {
 				in_section = false;
 			}
 
-			if (in_section && !str_line.empty() &&
-			    str_line != "Loaded Modules:") {
+			if (in_section && !str_line.empty() && str_line != "Loaded Modules:") {
 				size_t suffix_pos = std::string::npos;
 				if (strcmp(PLATFORM_NAME, "windows") == 0) {
 					suffix_pos = str_line.find(".dll");
-				} else if (strcmp(PLATFORM_NAME, "linux") ==
-					   0) {
+				} else if (strcmp(PLATFORM_NAME, "linux") == 0) {
 					suffix_pos = str_line.find(".so");
 				}
 
 				if (suffix_pos != std::string::npos) {
-					str_line =
-						str_line.substr(0, suffix_pos);
+					str_line = str_line.substr(0, suffix_pos);
 				}
 
-				if (ignoreModules.find(str_line) ==
-				    ignoreModules.end()) {
+				if (ignoreModules.find(str_line) == ignoreModules.end()) {
 					bool foundInApi = false;
 					for (const auto &pair : all_plugins) {
-						if (pair.second.moduleName ==
-						    str_line) {
+						if (pair.second.moduleName == str_line) {
 							foundInApi = true;
 							break;
 						}
 					}
 					if (!foundInApi) {
-						collected_modules.push_back(
-							str_line);
+						collected_modules.push_back(str_line);
 					}
 				}
 			}
 		}
 		fclose(file);
 	} else {
-		blog(LOG_ERROR, "[StreamUP] Failed to open log file: %s",
-		     filepath.c_str());
+		blog(LOG_ERROR, "[StreamUP] Failed to open log file: %s", filepath.c_str());
 	}
 
-	std::sort(collected_modules.begin(), collected_modules.end(),
-		  [](const std::string &a, const std::string &b) {
-			  return std::lexicographical_compare(
-				  a.begin(), a.end(), b.begin(), b.end(),
-				  [](char char1, char char2) {
-					  return std::tolower(char1) <
-						 std::tolower(char2);
-				  });
-		  });
+	std::sort(collected_modules.begin(), collected_modules.end(), [](const std::string &a, const std::string &b) {
+		return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), [](char char1, char char2) {
+			return std::tolower(char1) < std::tolower(char2);
+		});
+	});
 
 	return collected_modules;
 }
-
-
 
 //--------------------SETTINGS MENU--------------------
 void InstalledPluginsDialog()
@@ -2405,74 +2070,54 @@ void InstalledPluginsDialog()
 	ShowDialogOnUIThread([]() {
 		auto installedPlugins = GetInstalledPlugins();
 
-		QDialog *dialog =
-			CreateDialogWindow("WindowSettingsInstalledPlugins");
+		QDialog *dialog = CreateDialogWindow("WindowSettingsInstalledPlugins");
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 		dialogLayout->setContentsMargins(20, 15, 20, 10);
 
-		dialogLayout->addLayout(
-			AddIconAndText(QStyle::SP_MessageBoxInformation,
-				       "WindowSettingsInstalledPluginsInfo1"));
+		dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxInformation, "WindowSettingsInstalledPluginsInfo1"));
 		dialogLayout->addSpacing(5);
 
-		dialogLayout->addWidget(CreateRichTextLabel(
-			obs_module_text("WindowSettingsInstalledPluginsInfo2"),
-			false, true, Qt::AlignTop));
-		dialogLayout->addWidget(CreateRichTextLabel(
-			obs_module_text("WindowSettingsInstalledPluginsInfo3"),
-			false, true, Qt::AlignTop));
+		dialogLayout->addWidget(
+			CreateRichTextLabel(obs_module_text("WindowSettingsInstalledPluginsInfo2"), false, true, Qt::AlignTop));
+		dialogLayout->addWidget(
+			CreateRichTextLabel(obs_module_text("WindowSettingsInstalledPluginsInfo3"), false, true, Qt::AlignTop));
 
 		QString compatiblePluginsString;
 		if (installedPlugins.empty()) {
-			compatiblePluginsString = obs_module_text(
-				"WindowSettingsInstalledPlugins");
+			compatiblePluginsString = obs_module_text("WindowSettingsInstalledPlugins");
 		} else {
 			for (const auto &plugin : installedPlugins) {
 				const auto &pluginName = plugin.first;
 				const auto &pluginVersion = plugin.second;
-				const QString forumLink =
-					GetForumLink(pluginName);
+				const QString forumLink = GetForumLink(pluginName);
 
-				compatiblePluginsString +=
-					"<a href=\"" + forumLink + "\">" +
-					QString::fromStdString(pluginName) +
-					"</a> (" +
-					QString::fromStdString(pluginVersion) +
-					")<br>";
+				compatiblePluginsString += "<a href=\"" + forumLink + "\">" + QString::fromStdString(pluginName) +
+							   "</a> (" + QString::fromStdString(pluginVersion) + ")<br>";
 			}
 			if (compatiblePluginsString.endsWith("<br>")) {
 				compatiblePluginsString.chop(4);
 			}
 		}
 
-		QLabel *compatiblePluginsList = CreateRichTextLabel(
-			compatiblePluginsString, false, false);
-		QGroupBox *compatiblePluginsBox = new QGroupBox(
-			obs_module_text("WindowSettingsUpdaterCompatible"));
+		QLabel *compatiblePluginsList = CreateRichTextLabel(compatiblePluginsString, false, false);
+		QGroupBox *compatiblePluginsBox = new QGroupBox(obs_module_text("WindowSettingsUpdaterCompatible"));
 		compatiblePluginsBox->setMinimumWidth(180);
-		QVBoxLayout *compatiblePluginsBoxLayout =
-			CreateVBoxLayout(compatiblePluginsBox);
+		QVBoxLayout *compatiblePluginsBoxLayout = CreateVBoxLayout(compatiblePluginsBox);
 		compatiblePluginsBoxLayout->addWidget(compatiblePluginsList);
 
-		QGroupBox *incompatiblePluginsBox = new QGroupBox(
-			obs_module_text("WindowSettingsUpdaterIncompatible"));
+		QGroupBox *incompatiblePluginsBox = new QGroupBox(obs_module_text("WindowSettingsUpdaterIncompatible"));
 		incompatiblePluginsBox->setMinimumWidth(180);
-		QVBoxLayout *incompatiblePluginsBoxLayout =
-			CreateVBoxLayout(incompatiblePluginsBox);
+		QVBoxLayout *incompatiblePluginsBoxLayout = CreateVBoxLayout(incompatiblePluginsBox);
 		QLabel *incompatiblePluginsList = new QLabel;
-		SetLabelWithSortedModules(
-			incompatiblePluginsList,
-			SearchModulesInFile(GetFilePath()));
-		incompatiblePluginsBoxLayout->addWidget(
-			incompatiblePluginsList);
+		SetLabelWithSortedModules(incompatiblePluginsList, SearchModulesInFile(GetFilePath()));
+		incompatiblePluginsBoxLayout->addWidget(incompatiblePluginsList);
 
 		QHBoxLayout *pluginBoxesLayout = new QHBoxLayout();
 		pluginBoxesLayout->addWidget(compatiblePluginsBox);
 		pluginBoxesLayout->addWidget(incompatiblePluginsBox);
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		CreateButton(buttonLayout, obs_module_text("Close"),
-			     [dialog]() { dialog->close(); });
+		CreateButton(buttonLayout, obs_module_text("Close"), [dialog]() { dialog->close(); });
 
 		pluginBoxesLayout->setAlignment(Qt::AlignHCenter);
 		dialogLayout->addLayout(pluginBoxesLayout);
@@ -2492,84 +2137,58 @@ void SettingsDialog()
 		QFormLayout *dialogLayout = new QFormLayout(dialog);
 		dialogLayout->setContentsMargins(20, 15, 20, 10);
 
-		QLabel *titleLabel =
-			CreateRichTextLabel("General", true, false);
+		QLabel *titleLabel = CreateRichTextLabel("General", true, false);
 		dialogLayout->addRow(titleLabel);
 
 		// Run at startup setting
 		obs_properties_t *props = obs_properties_create();
-		obs_property_t *runAtStartupProp = obs_properties_add_bool(
-			props, "run_at_startup",
-			obs_module_text("WindowSettingsRunOnStartup"));
+		obs_property_t *runAtStartupProp =
+			obs_properties_add_bool(props, "run_at_startup", obs_module_text("WindowSettingsRunOnStartup"));
 
-		QLabel *runAtStartupLabel = CreateRichTextLabel(
-			obs_module_text("WindowSettingsRunOnStartup"), false,
-			false);
+		QLabel *runAtStartupLabel = CreateRichTextLabel(obs_module_text("WindowSettingsRunOnStartup"), false, false);
 		QCheckBox *runAtStartupCheckBox = new QCheckBox();
-		runAtStartupCheckBox->setChecked(obs_data_get_bool(
-			settings, obs_property_name(runAtStartupProp)));
+		runAtStartupCheckBox->setChecked(obs_data_get_bool(settings, obs_property_name(runAtStartupProp)));
 
-		QObject::connect(
-			runAtStartupCheckBox, &QCheckBox::stateChanged,
-			[=](int state) {
-				obs_data_set_bool(
-					settings,
-					obs_property_name(runAtStartupProp),
-					state == Qt::Checked);
-			});
+		QObject::connect(runAtStartupCheckBox, &QCheckBox::stateChanged, [=](int state) {
+			obs_data_set_bool(settings, obs_property_name(runAtStartupProp), state == Qt::Checked);
+		});
 
 		dialogLayout->addRow(runAtStartupLabel, runAtStartupCheckBox);
 
 		// Notifications mute setting
-		obs_property_t *notificationsMuteProp = obs_properties_add_bool(
-			props, "notifications_mute",
-			obs_module_text("WindowSettingsNotificationsMute"));
+		obs_property_t *notificationsMuteProp =
+			obs_properties_add_bool(props, "notifications_mute", obs_module_text("WindowSettingsNotificationsMute"));
 
-		QLabel *notificationsMuteLabel = CreateRichTextLabel(
-			obs_module_text("WindowSettingsNotificationsMute"),
-			false, false);
+		QLabel *notificationsMuteLabel =
+			CreateRichTextLabel(obs_module_text("WindowSettingsNotificationsMute"), false, false);
 		QCheckBox *notificationsMuteCheckBox = new QCheckBox();
-		notificationsMuteCheckBox->setChecked(obs_data_get_bool(
-			settings, obs_property_name(notificationsMuteProp)));
+		notificationsMuteCheckBox->setChecked(obs_data_get_bool(settings, obs_property_name(notificationsMuteProp)));
 
-		QObject::connect(
-			notificationsMuteCheckBox, &QCheckBox::stateChanged,
-			[=](int state) {
-				bool isChecked = (state == Qt::Checked);
-				obs_data_set_bool(
-					settings,
-					obs_property_name(
-						notificationsMuteProp),
-					isChecked);
-				notificationsMuted =
-					isChecked; // Update the global variable
-			});
+		QObject::connect(notificationsMuteCheckBox, &QCheckBox::stateChanged, [=](int state) {
+			bool isChecked = (state == Qt::Checked);
+			obs_data_set_bool(settings, obs_property_name(notificationsMuteProp), isChecked);
+			notificationsMuted = isChecked; // Update the global variable
+		});
 
-		dialogLayout->addRow(notificationsMuteLabel,
-				     notificationsMuteCheckBox);
+		dialogLayout->addRow(notificationsMuteLabel, notificationsMuteCheckBox);
 
 		// Spacer
 		dialogLayout->addItem(new QSpacerItem(0, 5));
 
 		// Plugin management
-		QLabel *pluginLabel = CreateRichTextLabel(
-			obs_module_text("WindowSettingsPluginManagement"), true,
-			false);
-		QPushButton *pluginButton = new QPushButton(
-			obs_module_text("WindowSettingsViewInstalledPlugins"));
-		QObject::connect(pluginButton, &QPushButton::clicked,
-				 InstalledPluginsDialog);
+		QLabel *pluginLabel = CreateRichTextLabel(obs_module_text("WindowSettingsPluginManagement"), true, false);
+		QPushButton *pluginButton = new QPushButton(obs_module_text("WindowSettingsViewInstalledPlugins"));
+		QObject::connect(pluginButton, &QPushButton::clicked, InstalledPluginsDialog);
 
 		dialogLayout->addRow(pluginLabel);
 		dialogLayout->addRow(pluginButton);
 
 		// Buttons
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		CreateButton(buttonLayout, obs_module_text("Cancel"),
-			     [dialog, settings]() {
-				     obs_data_release(settings);
-				     dialog->close();
-			     });
+		CreateButton(buttonLayout, obs_module_text("Cancel"), [dialog, settings]() {
+			obs_data_release(settings);
+			dialog->close();
+		});
 
 		CreateButton(buttonLayout, obs_module_text("Save"), [=]() {
 			SaveLoadSettingsCallback(settings, true);
@@ -2591,8 +2210,6 @@ void SettingsDialog()
 	});
 }
 
-
-
 //--------------------MAIN MENU--------------------
 void LoadStreamupFile(bool forceLoad = false)
 {
@@ -2602,12 +2219,10 @@ void LoadStreamupFile(bool forceLoad = false)
 		}
 	}
 
-	QString fileName = QFileDialog::getOpenFileName(
-		nullptr, QT_UTF8(obs_module_text("Load")), QString(),
-		"StreamUP File (*.streamup)");
+	QString fileName =
+		QFileDialog::getOpenFileName(nullptr, QT_UTF8(obs_module_text("Load")), QString(), "StreamUP File (*.streamup)");
 	if (!fileName.isEmpty()) {
-		obs_data_t *data =
-			obs_data_create_from_json_file(QT_TO_UTF8(fileName));
+		obs_data_t *data = obs_data_create_from_json_file(QT_TO_UTF8(fileName));
 		LoadScene(data, QFileInfo(fileName).absolutePath());
 		obs_data_release(data);
 	}
@@ -2622,22 +2237,16 @@ void AboutDialog()
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 		dialogLayout->setContentsMargins(20, 15, 20, 10);
 
-		QString informationRaw =
-			"StreamUP OBS plugin (version " +
-			QString::fromStdString(version) +
-			")<br>by <b>Andi Stone</b> (<b>Andilippi</b>)";
-		dialogLayout->addLayout(
-			AddIconAndText(QStyle::SP_MessageBoxInformation,
-				       informationRaw.toUtf8().constData()));
+		QString informationRaw = "StreamUP OBS plugin (version " + QString::fromStdString(version) +
+					 ")<br>by <b>Andi Stone</b> (<b>Andilippi</b>)";
+		dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxInformation, informationRaw.toUtf8().constData()));
 		dialogLayout->addSpacing(10);
 
-		QGroupBox *supportBox =
-			new QGroupBox(obs_module_text("Support"));
+		QGroupBox *supportBox = new QGroupBox(obs_module_text("Support"));
 		supportBox->setMaximumWidth(500);
 		QVBoxLayout *supportBoxLayout = CreateVBoxLayout(supportBox);
-		supportBoxLayout->addWidget(CreateRichTextLabel(
-			obs_module_text("WindowAboutSupport"), false, true,
-			Qt::AlignCenter));
+		supportBoxLayout->addWidget(
+			CreateRichTextLabel(obs_module_text("WindowAboutSupport"), false, true, Qt::AlignCenter));
 
 		QGridLayout *supportLinksLayout = new QGridLayout;
 		CreateLabelWithLink(
@@ -2653,35 +2262,26 @@ void AboutDialog()
 		supportBoxLayout->addLayout(supportLinksLayout);
 		dialogLayout->addWidget(supportBox);
 
-		QGroupBox *socialBox = new QGroupBox(
-			obs_module_text("WindowAboutSocialsTitle"));
+		QGroupBox *socialBox = new QGroupBox(obs_module_text("WindowAboutSocialsTitle"));
 		socialBox->setMaximumWidth(500);
 		QVBoxLayout *socialBoxLayout = CreateVBoxLayout(socialBox);
-		socialBoxLayout->addWidget(CreateRichTextLabel(
-			obs_module_text("WindowAboutSocialsMsg"), false, true,
-			Qt::AlignCenter));
+		socialBoxLayout->addWidget(
+			CreateRichTextLabel(obs_module_text("WindowAboutSocialsMsg"), false, true, Qt::AlignCenter));
 
 		QGridLayout *socialLinksLayout = new QGridLayout;
-		CreateLabelWithLink(
-			socialLinksLayout,
-			"<b><a href='https://andistonemedia.mystl.ink'>All Andi's Links</a></b>",
-			"https://andistonemedia.mystl.ink", 0, 0);
+		CreateLabelWithLink(socialLinksLayout, "<b><a href='https://andistonemedia.mystl.ink'>All Andi's Links</a></b>",
+				    "https://andistonemedia.mystl.ink", 0, 0);
 		socialBoxLayout->addLayout(socialLinksLayout);
 		dialogLayout->addWidget(socialBox);
 
 		dialogLayout->addSpacing(10);
 
-		dialogLayout->addWidget(CreateRichTextLabel(
-			obs_module_text("WindowAboutThanks"), false, true,
-			Qt::AlignCenter));
+		dialogLayout->addWidget(CreateRichTextLabel(obs_module_text("WindowAboutThanks"), false, true, Qt::AlignCenter));
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		CreateButton(buttonLayout, obs_module_text("Donate"), []() {
-			QDesktopServices::openUrl(
-				QUrl("https://paypal.me/andilippi"));
-		});
-		CreateButton(buttonLayout, obs_module_text("Close"),
-			     [dialog]() { dialog->close(); });
+		CreateButton(buttonLayout, obs_module_text("Donate"),
+			     []() { QDesktopServices::openUrl(QUrl("https://paypal.me/andilippi")); });
+		CreateButton(buttonLayout, obs_module_text("Close"), [dialog]() { dialog->close(); });
 
 		dialogLayout->addLayout(buttonLayout);
 
@@ -2698,43 +2298,32 @@ static void LoadMenu(QMenu *menu)
 
 	if (strcmp(PLATFORM_NAME, "windows") == 0) {
 		a = menu->addAction(obs_module_text("MenuInstallProduct"));
-		QObject::connect(a, &QAction::triggered, []() {
-			LoadStreamupFile(QApplication::keyboardModifiers() &
-					 Qt::ShiftModifier);
-		});
+		QObject::connect(a, &QAction::triggered,
+				 []() { LoadStreamupFile(QApplication::keyboardModifiers() & Qt::ShiftModifier); });
 		a = menu->addAction(obs_module_text("MenuDownloadProduct"));
-		QObject::connect(a, &QAction::triggered, []() {
-			QDesktopServices::openUrl(
-				QUrl("https://streamup.tips/"));
-		});
+		QObject::connect(a, &QAction::triggered, []() { QDesktopServices::openUrl(QUrl("https://streamup.tips/")); });
 
 		a = menu->addAction(obs_module_text("MenuCheckRequirements"));
-		QObject::connect(a, &QAction::triggered,
-				 []() { CheckrequiredOBSPlugins(); });
+		QObject::connect(a, &QAction::triggered, []() { CheckrequiredOBSPlugins(); });
 		menu->addSeparator();
 	}
 
 	a = menu->addAction(obs_module_text("MenuCheckPluginUpdates"));
-	QObject::connect(a, &QAction::triggered,
-			 []() { CheckAllPluginsForUpdates(true); });
+	QObject::connect(a, &QAction::triggered, []() { CheckAllPluginsForUpdates(true); });
 
 	a = toolsMenu->addAction(obs_module_text("MenuLockAllCurrentSources"));
-	QObject::connect(a, &QAction::triggered,
-			 []() { LockAllCurrentSourcesDialog(); });
+	QObject::connect(a, &QAction::triggered, []() { LockAllCurrentSourcesDialog(); });
 
 	a = toolsMenu->addAction(obs_module_text("MenuLockAllSources"));
-	QObject::connect(a, &QAction::triggered,
-			 []() { LockAllSourcesDialog(); });
+	QObject::connect(a, &QAction::triggered, []() { LockAllSourcesDialog(); });
 
 	toolsMenu->addSeparator();
 
 	a = toolsMenu->addAction(obs_module_text("MenuRefreshAudioMonitoring"));
-	QObject::connect(a, &QAction::triggered,
-			 []() { RefreshAudioMonitoringDialog(); });
+	QObject::connect(a, &QAction::triggered, []() { RefreshAudioMonitoringDialog(); });
 
 	a = toolsMenu->addAction(obs_module_text("MenuRefreshBrowserSources"));
-	QObject::connect(a, &QAction::triggered,
-			 []() { RefreshBrowserSourcesDialog(); });
+	QObject::connect(a, &QAction::triggered, []() { RefreshBrowserSourcesDialog(); });
 
 	menu->addMenu(toolsMenu);
 	menu->addSeparator();
@@ -2743,18 +2332,13 @@ static void LoadMenu(QMenu *menu)
 	QObject::connect(a, &QAction::triggered, []() { AboutDialog(); });
 
 	a = menu->addAction(obs_module_text("MenuSettings"));
-	QObject::connect(a, &QAction::triggered,
-			 []() { SettingsDialog(); });
+	QObject::connect(a, &QAction::triggered, []() { SettingsDialog(); });
 }
-
-
 
 //--------------------STARTUP COMMANDS--------------------
 static void InitialiseMenu()
 {
-	QAction *action =
-		static_cast<QAction *>(obs_frontend_add_tools_menu_qaction(
-			obs_module_text("StreamUP")));
+	QAction *action = static_cast<QAction *>(obs_frontend_add_tools_menu_qaction(obs_module_text("StreamUP")));
 	QMenu *menu = new QMenu();
 	action->setMenu(menu);
 	QObject::connect(menu, &QMenu::aboutToShow, [menu] { LoadMenu(menu); });
@@ -2766,89 +2350,52 @@ static void RegisterWebsocketRequests()
 	if (!vendor)
 		return;
 
-	obs_websocket_vendor_register_request(
-		vendor, "getOutputFilePath",
-		WebsocketRequestGetOutputFilePath, nullptr);
-	obs_websocket_vendor_register_request(
-		vendor, "getCurrentSource",
-		WebsocketRequestGetCurrentSelectedSource, nullptr);
-	obs_websocket_vendor_register_request(
-		vendor, "getShowTransition", WebsocketRequestGetShowTransition,
-		nullptr);
-	obs_websocket_vendor_register_request(
-		vendor, "getHideTransition", WebsocketRequestGetHideTransition,
-		nullptr);
-	obs_websocket_vendor_register_request(
-		vendor, "setShowTransition", WebsocketRequestSetShowTransition,
-		nullptr);
-	obs_websocket_vendor_register_request(
-		vendor, "setHideTransition", WebsocketRequestSetHideTransition,
-		nullptr);
-	obs_websocket_vendor_register_request(
-		vendor, "toggleLockCurrentSources",
-		WebsocketRequestLockCurrentSources, nullptr);
-	obs_websocket_vendor_register_request(vendor, "toggleLockAllSources",
-					      WebsocketRequestLockAllSources,
-					      nullptr);
-	obs_websocket_vendor_register_request(vendor, "getBitrate",
-					      WebsocketRequestBitrate, nullptr);
-	obs_websocket_vendor_register_request(vendor, "version",
-					      WebsocketRequestVersion, nullptr);
-	obs_websocket_vendor_register_request(
-		vendor, "check_plugins", WebsocketRequestCheckPlugins, nullptr);
-	obs_websocket_vendor_register_request(
-		vendor, "refresh_audio_monitoring",
-		WebsocketRequestRefreshAudioMonitoring, nullptr);
-	obs_websocket_vendor_register_request(
-		vendor, "refresh_browser_sources",
-		WebsocketRequestRefreshBrowserSources, nullptr);
-	obs_websocket_vendor_register_request(vendor, "vlcGetCurrentFile",
-					      WebsocketRequestVLCGetCurrentFile,
-					      nullptr);
+	obs_websocket_vendor_register_request(vendor, "getOutputFilePath", WebsocketRequestGetOutputFilePath, nullptr);
+	obs_websocket_vendor_register_request(vendor, "getCurrentSource", WebsocketRequestGetCurrentSelectedSource, nullptr);
+	obs_websocket_vendor_register_request(vendor, "getShowTransition", WebsocketRequestGetShowTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "getHideTransition", WebsocketRequestGetHideTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "setShowTransition", WebsocketRequestSetShowTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "setHideTransition", WebsocketRequestSetHideTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "toggleLockCurrentSources", WebsocketRequestLockCurrentSources, nullptr);
+	obs_websocket_vendor_register_request(vendor, "toggleLockAllSources", WebsocketRequestLockAllSources, nullptr);
+	obs_websocket_vendor_register_request(vendor, "getBitrate", WebsocketRequestBitrate, nullptr);
+	obs_websocket_vendor_register_request(vendor, "version", WebsocketRequestVersion, nullptr);
+	obs_websocket_vendor_register_request(vendor, "check_plugins", WebsocketRequestCheckPlugins, nullptr);
+	obs_websocket_vendor_register_request(vendor, "refresh_audio_monitoring", WebsocketRequestRefreshAudioMonitoring, nullptr);
+	obs_websocket_vendor_register_request(vendor, "refresh_browser_sources", WebsocketRequestRefreshBrowserSources, nullptr);
+	obs_websocket_vendor_register_request(vendor, "vlcGetCurrentFile", WebsocketRequestVLCGetCurrentFile, nullptr);
 }
 
 static void RegisterHotkeys()
 {
 	refreshBrowserSourcesHotkey = obs_hotkey_register_frontend(
-		"refresh_browser_sources",
-		obs_module_text("RefreshBrowserSources"),
-		HotkeyRefreshBrowserSources, nullptr);
-	lockAllSourcesHotkey = obs_hotkey_register_frontend(
-		"toggle_lock_all_sources",
-		obs_module_text("LockAllSources"),
-		HotkeyLockAllSources, nullptr);
+		"refresh_browser_sources", obs_module_text("RefreshBrowserSources"), HotkeyRefreshBrowserSources, nullptr);
+	lockAllSourcesHotkey = obs_hotkey_register_frontend("toggle_lock_all_sources", obs_module_text("LockAllSources"),
+							    HotkeyLockAllSources, nullptr);
 	refreshAudioMonitoringHotkey = obs_hotkey_register_frontend(
-		"refresh_audio_monitoring",
-		obs_module_text("RefreshAudioMonitoring"),
-		HotkeyRefreshAudioMonitoring, nullptr);
+		"refresh_audio_monitoring", obs_module_text("RefreshAudioMonitoring"), HotkeyRefreshAudioMonitoring, nullptr);
 	lockCurrentSourcesHotkey = obs_hotkey_register_frontend(
-		"toggle_lock_current_sources",
-		obs_module_text("LockAllCurrentSources"),
-		HotkeyLockCurrentSources, nullptr);
+		"toggle_lock_current_sources", obs_module_text("LockAllCurrentSources"), HotkeyLockCurrentSources, nullptr);
 }
 
 static void LoadStreamUPDock()
 {
-	const auto main_window =
-		static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	const auto main_window = static_cast<QMainWindow *>(obs_frontend_get_main_window());
 	obs_frontend_push_ui_translation(obs_module_get_string);
 
 	auto *dock_widget = new StreamUPDock(main_window);
 
-	const QString title =
-		QString::fromUtf8(obs_module_text("StreamUP Dock"));
+	const QString title = QString::fromUtf8(obs_module_text("StreamUP Dock"));
 	const auto name = "StreamUPDock";
 
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
-	obs_frontend_add_dock_by_id(name, title.toUtf8().constData(),
-				    dock_widget);
+	obs_frontend_add_dock_by_id(name, title.toUtf8().constData(), dock_widget);
 #else
 	auto dock = new QDockWidget(main_window);
 	dock->setObjectName(name);
 	dock->setWindowTitle(title);
 	dock->setWidget(dock_widget);
-	dock->setFeatures(QDockWidget::DockWidgetMovable |
-			  QDockWidget::DockWidgetFloatable);
+	dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
 	dock->setFloating(true);
 	dock->hide();
 	obs_frontend_add_dock(dock);
@@ -2858,7 +2405,7 @@ static void LoadStreamUPDock()
 }
 
 bool obs_module_load()
-	{
+{
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
 
 	InitialiseMenu();
@@ -2872,7 +2419,6 @@ bool obs_module_load()
 
 	LoadStreamUPDock();
 
-
 	return true;
 }
 
@@ -2884,20 +2430,16 @@ void obs_module_post_load(void)
 	obs_data_t *settings = SaveLoadSettingsCallback(nullptr, false);
 
 	if (settings) {
-		bool runAtStartup =
-			obs_data_get_bool(settings, "run_at_startup");
+		bool runAtStartup = obs_data_get_bool(settings, "run_at_startup");
 		if (runAtStartup) {
 			CheckAllPluginsForUpdates(false);
 		}
 
-		notificationsMuted =
-			obs_data_get_bool(settings, "notifications_mute");
-		blog(LOG_INFO, "[StreamUP] Notifications mute setting: %s",
-		     notificationsMuted ? "true" : "false");
+		notificationsMuted = obs_data_get_bool(settings, "notifications_mute");
+		blog(LOG_INFO, "[StreamUP] Notifications mute setting: %s", notificationsMuted ? "true" : "false");
 
 	} else {
-		blog(LOG_WARNING,
-		     "[StreamUP] Failed to load settings in post load.");
+		blog(LOG_WARNING, "[StreamUP] Failed to load settings in post load.");
 	}
 
 	obs_data_release(settings);
