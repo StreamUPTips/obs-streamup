@@ -28,7 +28,6 @@ private:
 	QHBoxLayout *mainDockLayout;
 	bool isProcessing;
 
-	void applyThemeIDToButton(QPushButton *button, const QString &themeID);
 	void applyFileIconToButton(QPushButton *button, const QString &filePath);
 
 	void ButtonToggleLockAllSources();

@@ -1,4 +1,4 @@
-# --- Detect if the plugin is build out of tree or not ---
+# --- Detect if the plugin is built out of tree or not ---
 if(CMAKE_PROJECT_NAME STREQUAL "obs-studio")
   set(BUILD_OUT_OF_TREE OFF)
   if(OBS_CMAKE_VERSION VERSION_GREATER_EQUAL 3.0.0)
@@ -63,15 +63,17 @@ elseif(OS_MACOS)
 	target_compile_options(${PROJECT_NAME} PRIVATE -Wall)
 endif()
 
-# lines if you want add Qt UI in your plugin
-find_qt(COMPONENTS Widgets COMPONENTS_LINUX Gui)
+# Find Qt components
+find_package(Qt6 REQUIRED COMPONENTS Widgets Gui)
+
 set_target_properties(${PROJECT_NAME} PROPERTIES AUTOMOC ON AUTOUIC ON AUTORCC ON)
 set(UI_FILES StreamUPDock.ui)
 
 target_link_libraries(${PROJECT_NAME}
 		OBS::${OBS_FRONTEND_API_NAME}
     CURL::libcurl
-		Qt::Widgets
+		Qt6::Widgets
+    Qt6::Gui
 		OBS::libobs)
 
 if(BUILD_OUT_OF_TREE)

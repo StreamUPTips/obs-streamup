@@ -1864,65 +1864,48 @@ static void HotkeyLockCurrentSources(void *data, obs_hotkey_id id, obs_hotkey_t 
 	ToggleLockSourcesInCurrentScene();
 }
 
-static void SaveLoadHotkeysCallback(obs_data_t *save_data, bool saving, void *private_data)
+static void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *)
 {
-	UNUSED_PARAMETER(private_data);
-
-	char *configPath = obs_module_config_path("hotkeys.json");
-
 	if (saving) {
-		obs_data_array_t *hotkey_array;
+		// save hotkeys
+		obs_data_array_t *hotkeySaveArray;
 
-		hotkey_array = obs_hotkey_save(refreshBrowserSourcesHotkey);
-		obs_data_set_array(save_data, "refreshBrowserSourcesHotkey", hotkey_array);
-		obs_data_array_release(hotkey_array);
+		hotkeySaveArray = obs_hotkey_save(refreshBrowserSourcesHotkey);
+		obs_data_set_array(save_data, "refreshBrowserSourcesHotkey", hotkeySaveArray);
+		obs_data_array_release(hotkeySaveArray);
 
-		hotkey_array = obs_hotkey_save(lockAllSourcesHotkey);
-		obs_data_set_array(save_data, "lockAllSourcesHotkey", hotkey_array);
-		obs_data_array_release(hotkey_array);
+		hotkeySaveArray = obs_hotkey_save(lockAllSourcesHotkey);
+		obs_data_set_array(save_data, "lockAllSourcesHotkey", hotkeySaveArray);
+		obs_data_array_release(hotkeySaveArray);
 
-		hotkey_array = obs_hotkey_save(refreshAudioMonitoringHotkey);
-		obs_data_set_array(save_data, "refreshAudioMonitoringHotkey", hotkey_array);
-		obs_data_array_release(hotkey_array);
+		hotkeySaveArray = obs_hotkey_save(refreshAudioMonitoringHotkey);
+		obs_data_set_array(save_data, "refreshAudioMonitoringHotkey", hotkeySaveArray);
+		obs_data_array_release(hotkeySaveArray);
 
-		hotkey_array = obs_hotkey_save(lockCurrentSourcesHotkey);
-		obs_data_set_array(save_data, "lockCurrentSourcesHotkey", hotkey_array);
-		obs_data_array_release(hotkey_array);
+		hotkeySaveArray = obs_hotkey_save(lockCurrentSourcesHotkey);
+		obs_data_set_array(save_data, "lockCurrentSourcesHotkey", hotkeySaveArray);
+		obs_data_array_release(hotkeySaveArray);
 
-		if (obs_data_save_json(save_data, configPath)) {
-			blog(LOG_INFO, "[StreamUP] Hotkey settings saved to %s", configPath);
-		} else {
-			blog(LOG_WARNING, "[StreamUP] Failed to save hotkey settings to file.");
-		}
 	} else {
-		obs_data_t *load_data = obs_data_create_from_json_file(configPath);
+		// load hotkeys
+		obs_data_array_t *hotkeyLoadArray;
 
-		if (load_data) {
-			obs_data_array_t *hotkey_array;
+		hotkeyLoadArray = obs_data_get_array(save_data, "refreshBrowserSourcesHotkey");
+		obs_hotkey_load(refreshBrowserSourcesHotkey, hotkeyLoadArray);
+		obs_data_array_release(hotkeyLoadArray);
 
-			hotkey_array = obs_data_get_array(load_data, "refreshBrowserSourcesHotkey");
-			obs_hotkey_load(refreshBrowserSourcesHotkey, hotkey_array);
-			obs_data_array_release(hotkey_array);
+		hotkeyLoadArray = obs_data_get_array(save_data, "lockAllSourcesHotkey");
+		obs_hotkey_load(lockAllSourcesHotkey, hotkeyLoadArray);
+		obs_data_array_release(hotkeyLoadArray);
 
-			hotkey_array = obs_data_get_array(load_data, "lockAllSourcesHotkey");
-			obs_hotkey_load(lockAllSourcesHotkey, hotkey_array);
-			obs_data_array_release(hotkey_array);
+		hotkeyLoadArray = obs_data_get_array(save_data, "refreshAudioMonitoringHotkey");
+		obs_hotkey_load(refreshAudioMonitoringHotkey, hotkeyLoadArray);
+		obs_data_array_release(hotkeyLoadArray);
 
-			hotkey_array = obs_data_get_array(load_data, "refreshAudioMonitoringHotkey");
-			obs_hotkey_load(refreshAudioMonitoringHotkey, hotkey_array);
-			obs_data_array_release(hotkey_array);
-
-			hotkey_array = obs_data_get_array(load_data, "lockCurrentSourcesHotkey");
-			obs_hotkey_load(lockCurrentSourcesHotkey, hotkey_array);
-			obs_data_array_release(hotkey_array);
-
-			obs_data_release(load_data);
-		} else {
-			blog(LOG_WARNING, "[StreamUP] Failed to load hotkey settings from %s", configPath);
-		}
+		hotkeyLoadArray = obs_data_get_array(save_data, "lockCurrentSourcesHotkey");
+		obs_hotkey_load(lockCurrentSourcesHotkey, hotkeyLoadArray);
+		obs_data_array_release(hotkeyLoadArray);
 	}
-
-	bfree(configPath);
 }
 
 //--------------------MENU HELPERS--------------------
@@ -1942,7 +1925,12 @@ static obs_data_t *SaveLoadSettingsCallback(obs_data_t *save_data, bool saving)
 
 		if (!data) {
 			blog(LOG_INFO, "[StreamUP] Settings not found. Creating default settings...");
-			os_mkdirs(obs_module_config_path(""));
+			char *config_path = obs_module_config_path("");
+			if (config_path) {
+				os_mkdirs(config_path);
+				bfree(config_path);
+			}
+
 			data = obs_data_create();
 			obs_data_set_bool(data, "run_at_startup", true);
 			obs_data_set_bool(data, "notifications_mute", false);
@@ -2411,11 +2399,9 @@ bool obs_module_load()
 	InitialiseMenu();
 
 	RegisterWebsocketRequests();
-
 	RegisterHotkeys();
 
-	obs_frontend_add_save_callback(SaveLoadHotkeysCallback, nullptr);
-	SaveLoadHotkeysCallback(nullptr, false, nullptr);
+	obs_frontend_add_save_callback(SaveLoadHotkeys, nullptr);
 
 	LoadStreamUPDock();
 
@@ -2448,7 +2434,7 @@ void obs_module_post_load(void)
 //--------------------EXIT COMMANDS--------------------
 void obs_module_unload()
 {
-	obs_frontend_remove_save_callback(SaveLoadHotkeysCallback, nullptr);
+	obs_frontend_remove_save_callback(SaveLoadHotkeys, nullptr);
 
 	obs_hotkey_unregister(refreshBrowserSourcesHotkey);
 	obs_hotkey_unregister(lockAllSourcesHotkey);
