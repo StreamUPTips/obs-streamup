@@ -1,41 +1,23 @@
+#include "streamup.hpp"
 #include "streamup-dock.hpp"
 #include "ui_StreamUPDock.h"
-#include <QMainWindow>
-#include <QDockWidget>
-#include "streamup.hpp"
-#include <obs-frontend-api.h>
-#include <QIcon>
-#include <QStyle>
-#include <QVBoxLayout>
-#include <QLabel>
-#include <QTimer>
 #include <obs.h>
+#include <obs-frontend-api.h>
 #include <obs-module.h>
+#include <QDockWidget>
+#include <QIcon>
+#include <QLabel>
+#include <QMainWindow>
+#include <QStyle>
+#include <QTimer>
+#include <QVBoxLayout>
 
-// Function to apply a themeID to a button
-void StreamUPDock::applyThemeIDToButton(QPushButton *button,
-					const QString &themeID)
-{
-	button->setProperty("themeID", themeID);
-	button->setMinimumSize(40, 40);
-	button->setMaximumSize(40, 40);
-	button->setIconSize(QSize(20, 20));
-	button->style()->unpolish(button);
-	button->style()->polish(button);
-}
-
-// Function to apply an icon from a file to a button
-void StreamUPDock::applyFileIconToButton(QPushButton *button,
-					 const QString &filePath)
+void StreamUPDock::applyFileIconToButton(QPushButton *button, const QString &filePath)
 {
 	button->setIcon(QIcon(filePath));
-	button->setMinimumSize(40, 40);
-	button->setMaximumSize(40, 40);
-	button->setIconSize(QSize(20, 20));
 }
 
-StreamUPDock::StreamUPDock(QWidget *parent)
-	: QWidget(parent), ui(new Ui::StreamUPDock), isProcessing(false)
+StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamUPDock), isProcessing(false)
 {
 	ui->setupUi(this);
 
@@ -47,10 +29,21 @@ StreamUPDock::StreamUPDock(QWidget *parent)
 
 	// Apply initial icons to buttons
 	applyFileIconToButton(button1, ":images/all-scene-source-locked.svg");
-	applyFileIconToButton(button2,
-			      ":images/current-scene-source-locked.svg");
+	applyFileIconToButton(button2, ":images/current-scene-source-locked.svg");
 	applyFileIconToButton(button3, ":images/refresh-browser-sources.svg");
 	applyFileIconToButton(button4, ":images/refresh-audio-monitoring.svg");
+
+	auto setButtonProperties = [](QPushButton *button) {
+		button->setIconSize(QSize(20, 20));
+	button->setFixedSize(40, 40);
+	button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+	};
+
+	// Set properties for each button
+	setButtonProperties(button1);
+	setButtonProperties(button2);
+	setButtonProperties(button3);
+	setButtonProperties(button4);
 
 	// Set tooltips for buttons
 	button1->setToolTip(obs_module_text("LockAllSources"));
@@ -59,25 +52,22 @@ StreamUPDock::StreamUPDock(QWidget *parent)
 	button4->setToolTip(obs_module_text("RefreshAudioMonitoring"));
 
 	// Create a horizontal layout to hold the buttons
-	QHBoxLayout *mainLayout = new QHBoxLayout;
+	mainDockLayout = new QHBoxLayout;
 
-	mainLayout->addWidget(button1);
-	mainLayout->addWidget(button2);
-	mainLayout->addWidget(button3);
-	mainLayout->addWidget(button4);
+	mainDockLayout->addWidget(button1);
+	mainDockLayout->addWidget(button2);
+	mainDockLayout->addWidget(button3);
+	mainDockLayout->addWidget(button4);
+	//mainDockLayout->setAlignment(Qt::AlignCenter);
 
 	// Set the layout to the StreamupDock
-	this->setLayout(mainLayout);
+	this->setLayout(mainDockLayout);
 
 	// Connect buttons to their respective slots
-	connect(button1, &QPushButton::clicked, this,
-		&StreamUPDock::ButtonToggleLockAllSources);
-	connect(button2, &QPushButton::clicked, this,
-		&StreamUPDock::ButtonToggleLockSourcesInCurrentScene);
-	connect(button3, &QPushButton::clicked, this,
-		&StreamUPDock::ButtonRefreshBrowserSources);
-	connect(button4, &QPushButton::clicked, this,
-		&StreamUPDock::ButtonRefreshAudioMonitoring);
+	connect(button1, &QPushButton::clicked, this, &StreamUPDock::ButtonToggleLockAllSources);
+	connect(button2, &QPushButton::clicked, this, &StreamUPDock::ButtonToggleLockSourcesInCurrentScene);
+	connect(button3, &QPushButton::clicked, this, &StreamUPDock::ButtonRefreshBrowserSources);
+	connect(button4, &QPushButton::clicked, this, &StreamUPDock::ButtonRefreshAudioMonitoring);
 
 	// Setup OBS signals
 	setupObsSignals();
@@ -109,7 +99,7 @@ void StreamUPDock::ButtonToggleLockAllSources()
 void StreamUPDock::ButtonToggleLockSourcesInCurrentScene()
 {
 	if (isProcessing)
-		return; 
+		return;
 	isProcessing = true;
 
 	ToggleLockSourcesInCurrentScene(false);
@@ -121,7 +111,7 @@ void StreamUPDock::ButtonToggleLockSourcesInCurrentScene()
 void StreamUPDock::ButtonRefreshAudioMonitoring()
 {
 	if (isProcessing)
-		return; 
+		return;
 	isProcessing = true;
 
 	obs_enum_sources(RefreshAudioMonitoring, nullptr);
@@ -132,7 +122,7 @@ void StreamUPDock::ButtonRefreshAudioMonitoring()
 void StreamUPDock::ButtonRefreshBrowserSources()
 {
 	if (isProcessing)
-		return; 
+		return;
 	isProcessing = true;
 
 	obs_enum_sources(RefreshBrowserSources, nullptr);
@@ -142,17 +132,20 @@ void StreamUPDock::ButtonRefreshBrowserSources()
 
 void StreamUPDock::updateButtonIcons()
 {
+	// Update button1 icon based on whether all sources are locked in all scenes
 	if (AreAllSourcesLockedInAllScenes()) {
 		applyFileIconToButton(button1, ":images/all-scene-source-locked.svg");
 	} else {
 		applyFileIconToButton(button1, ":images/all-scene-source-unlocked.svg");
 	}
 
+	// Update button2 icon based on whether all sources are locked in the current scene
 	if (AreAllSourcesLockedInCurrentScene()) {
 		applyFileIconToButton(button2, ":images/current-scene-source-locked.svg");
 	} else {
 		applyFileIconToButton(button2, ":images/current-scene-source-unlocked.svg");
 	}
+
 }
 
 bool StreamUPDock::AreAllSourcesLockedInAllScenes()
@@ -183,18 +176,11 @@ void StreamUPDock::connectSceneSignals()
 {
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	if (current_scene) {
-		signal_handler_t *scene_handler =
-			obs_source_get_signal_handler(current_scene);
+		signal_handler_t *scene_handler = obs_source_get_signal_handler(current_scene);
 		if (scene_handler) {
-			signal_handler_connect(scene_handler, "item_add",
-					       StreamUPDock::onSceneItemAdded,
-					       this);
-			signal_handler_connect(scene_handler, "item_remove",
-					       StreamUPDock::onSceneItemRemoved,
-					       this);
-			signal_handler_connect(scene_handler, "item_locked",
-					       StreamUPDock::onItemLockChanged,
-					       this);
+			signal_handler_connect(scene_handler, "item_add", StreamUPDock::onSceneItemAdded, this);
+			signal_handler_connect(scene_handler, "item_remove", StreamUPDock::onSceneItemRemoved, this);
+			signal_handler_connect(scene_handler, "item_locked", StreamUPDock::onItemLockChanged, this);
 		}
 		obs_source_release(current_scene);
 	}
@@ -204,29 +190,21 @@ void StreamUPDock::disconnectSceneSignals()
 {
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	if (current_scene) {
-		signal_handler_t *scene_handler =
-			obs_source_get_signal_handler(current_scene);
+		signal_handler_t *scene_handler = obs_source_get_signal_handler(current_scene);
 		if (scene_handler) {
-			signal_handler_disconnect(
-				scene_handler, "item_add",
-				StreamUPDock::onSceneItemAdded, this);
-			signal_handler_disconnect(
-				scene_handler, "item_remove",
-				StreamUPDock::onSceneItemRemoved, this);
-			signal_handler_disconnect(
-				scene_handler, "item_locked",
-				StreamUPDock::onItemLockChanged, this);
+			signal_handler_disconnect(scene_handler, "item_add", StreamUPDock::onSceneItemAdded, this);
+			signal_handler_disconnect(scene_handler, "item_remove", StreamUPDock::onSceneItemRemoved, this);
+			signal_handler_disconnect(scene_handler, "item_locked", StreamUPDock::onItemLockChanged, this);
 		}
 		obs_source_release(current_scene);
 	}
 }
 
-void StreamUPDock::onFrontendEvent(enum obs_frontend_event event,
-				   void *private_data)
+void StreamUPDock::onFrontendEvent(enum obs_frontend_event event, void *private_data)
 {
 	StreamUPDock *dock = static_cast<StreamUPDock *>(private_data);
 	if (dock->isProcessing)
-		return; 
+		return;
 
 	if (event == OBS_FRONTEND_EVENT_SCENE_CHANGED) {
 		dock->disconnectSceneSignals();
@@ -241,7 +219,7 @@ void StreamUPDock::onSceneItemAdded(void *param, calldata_t *data)
 
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
 	if (self->isProcessing)
-		return; 
+		return;
 	self->updateButtonIcons();
 }
 
@@ -251,7 +229,7 @@ void StreamUPDock::onSceneItemRemoved(void *param, calldata_t *data)
 
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
 	if (self->isProcessing)
-		return; 
+		return;
 	self->updateButtonIcons();
 }
 
@@ -261,6 +239,6 @@ void StreamUPDock::onItemLockChanged(void *param, calldata_t *data)
 
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
 	if (self->isProcessing)
-		return; 
+		return;
 	self->updateButtonIcons();
 }
