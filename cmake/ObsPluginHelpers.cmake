@@ -412,7 +412,7 @@ if(OS_MACOS)
     if(TARGET Qt::Core)
       # Framework version has changed between Qt5 (uses wrong numerical version) and Qt6 (uses
       # correct alphabetical version)
-      if(${_QT_VERSION} EQUAL 5)
+      if(_QT_VERSION EQUAL 5)
         set(_QT_FW_VERSION "${QT_VERSION}")
       else()
         set(_QT_FW_VERSION "A")
