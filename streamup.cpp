@@ -2161,32 +2161,30 @@ void SettingsDialog()
 		obs_property_t *runAtStartupProp =
 			obs_properties_add_bool(props, "run_at_startup", obs_module_text("WindowSettingsRunOnStartup"));
 
-		QLabel *runAtStartupLabel = CreateRichTextLabel(obs_module_text("WindowSettingsRunOnStartup"), false, false);
-		QCheckBox *runAtStartupCheckBox = new QCheckBox();
+		QCheckBox *runAtStartupCheckBox = new QCheckBox(obs_module_text("WindowSettingsRunOnStartup"));
 		runAtStartupCheckBox->setChecked(obs_data_get_bool(settings, obs_property_name(runAtStartupProp)));
 
 		QObject::connect(runAtStartupCheckBox, &QCheckBox::stateChanged, [=](int state) {
 			obs_data_set_bool(settings, obs_property_name(runAtStartupProp), state == Qt::Checked);
 		});
 
-		dialogLayout->addRow(runAtStartupLabel, runAtStartupCheckBox);
+		dialogLayout->addWidget(runAtStartupCheckBox);
 
 		// Notifications mute setting
 		obs_property_t *notificationsMuteProp =
 			obs_properties_add_bool(props, "notifications_mute", obs_module_text("WindowSettingsNotificationsMute"));
 
-		QLabel *notificationsMuteLabel =
-			CreateRichTextLabel(obs_module_text("WindowSettingsNotificationsMute"), false, false);
-		QCheckBox *notificationsMuteCheckBox = new QCheckBox();
+		QCheckBox *notificationsMuteCheckBox = new QCheckBox(obs_module_text("WindowSettingsNotificationsMute"));
 		notificationsMuteCheckBox->setChecked(obs_data_get_bool(settings, obs_property_name(notificationsMuteProp)));
+		notificationsMuteCheckBox->setToolTip(obs_module_text("WindowSettingsNotificationsMuteTooltip"));
 
 		QObject::connect(notificationsMuteCheckBox, &QCheckBox::stateChanged, [=](int state) {
 			bool isChecked = (state == Qt::Checked);
 			obs_data_set_bool(settings, obs_property_name(notificationsMuteProp), isChecked);
-			notificationsMuted = isChecked; // Update the global variable
+			notificationsMuted = isChecked;
 		});
 
-		dialogLayout->addRow(notificationsMuteLabel, notificationsMuteCheckBox);
+		dialogLayout->addWidget(notificationsMuteCheckBox);
 
 		// Spacer
 		dialogLayout->addItem(new QSpacerItem(0, 5));
