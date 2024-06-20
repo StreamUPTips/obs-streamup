@@ -43,6 +43,7 @@
 #include <sstream>
 #include <unordered_set>
 #include <util/platform.h>
+#include <qscrollarea.h>
 
 #define QT_UTF8(str) QString::fromUtf8(str)
 #define QT_TO_UTF8(str) str.toUtf8().constData()
@@ -1649,14 +1650,26 @@ void WebsocketRequestBitrate(obs_data_t *request_data, obs_data_t *response_data
 	uint64_t currentTime = os_gettime_ns();
 	static uint64_t lastBytesSent = 0;
 	static uint64_t lastTime = 0;
+	static bool initialized = false;
 
-	if (bytesSent < lastBytesSent)
+	if (!initialized) {
+		lastBytesSent = bytesSent;
+		lastTime = currentTime;
+		initialized = true;
+		obs_data_set_int(response_data, "kbits-per-sec", 0);
+		return;
+	}
+
+	if (bytesSent < lastBytesSent) {
 		bytesSent = 0;
+	}
 
 	uint64_t bytesBetween = bytesSent - lastBytesSent;
 	double timePassed = (currentTime - lastTime) / 1000000000.0;
+
+	// Ensure timePassed is greater than zero to avoid division by zero
 	uint64_t bytesPerSec = 0;
-	if (timePassed != 0)
+	if (timePassed > 0)
 		bytesPerSec = bytesBetween / timePassed;
 
 	uint64_t kbitsPerSec = (bytesPerSec * 8) / 1024;
@@ -2089,20 +2102,34 @@ void InstalledPluginsDialog()
 
 		QLabel *compatiblePluginsList = CreateRichTextLabel(compatiblePluginsString, false, false);
 		QGroupBox *compatiblePluginsBox = new QGroupBox(obs_module_text("WindowSettingsUpdaterCompatible"));
-		compatiblePluginsBox->setMinimumWidth(180);
 		QVBoxLayout *compatiblePluginsBoxLayout = CreateVBoxLayout(compatiblePluginsBox);
 		compatiblePluginsBoxLayout->addWidget(compatiblePluginsList);
 
+		QScrollArea *compatibleScrollArea = new QScrollArea;
+		compatibleScrollArea->setWidgetResizable(true);
+		compatibleScrollArea->setWidget(compatiblePluginsBox);
+		compatibleScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		compatibleScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+		compatibleScrollArea->setMinimumWidth(200);
+
 		QGroupBox *incompatiblePluginsBox = new QGroupBox(obs_module_text("WindowSettingsUpdaterIncompatible"));
-		incompatiblePluginsBox->setMinimumWidth(180);
 		QVBoxLayout *incompatiblePluginsBoxLayout = CreateVBoxLayout(incompatiblePluginsBox);
 		QLabel *incompatiblePluginsList = new QLabel;
-		SetLabelWithSortedModules(incompatiblePluginsList, SearchModulesInFile(GetFilePath()));
+		char *filePath = GetFilePath();
+		SetLabelWithSortedModules(incompatiblePluginsList, SearchModulesInFile(filePath));
+		bfree(filePath);
 		incompatiblePluginsBoxLayout->addWidget(incompatiblePluginsList);
 
+		QScrollArea *incompatibleScrollArea = new QScrollArea;
+		incompatibleScrollArea->setWidgetResizable(true);
+		incompatibleScrollArea->setWidget(incompatiblePluginsBox);
+		incompatibleScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		incompatibleScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+		incompatibleScrollArea->setMinimumWidth(200);
+
 		QHBoxLayout *pluginBoxesLayout = new QHBoxLayout();
-		pluginBoxesLayout->addWidget(compatiblePluginsBox);
-		pluginBoxesLayout->addWidget(incompatiblePluginsBox);
+		pluginBoxesLayout->addWidget(compatibleScrollArea);
+		pluginBoxesLayout->addWidget(incompatibleScrollArea);
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 		CreateButton(buttonLayout, obs_module_text("Close"), [dialog]() { dialog->close(); });
@@ -2112,6 +2139,7 @@ void InstalledPluginsDialog()
 		dialogLayout->addLayout(buttonLayout);
 
 		dialog->setLayout(dialogLayout);
+
 		dialog->show();
 	});
 }
