@@ -31,6 +31,7 @@
 #include <QLabel>
 #include <QMainWindow>
 #include <QMenu>
+#include <QMenuBar>
 #include <QMessageBox>
 #include <QObject>
 #include <QPushButton>
@@ -149,6 +150,35 @@ void ResizeMoveValueFilter(obs_source_t *filter, float factor)
 	obs_data_release(settings);
 }
 
+bool IsCloningSceneOrGroup(obs_source_t *source)
+{
+	if (!source)
+		return false;
+
+	const char *input_kind = obs_source_get_id(source);
+	if (strcmp(input_kind, "source-clone") != 0)
+		return false; // Not a source-clone, no need to check further.
+
+	obs_data_t *source_settings = obs_source_get_settings(source);
+	if (!source_settings)
+		return false;
+
+	const char *cloned_source_name = obs_data_get_string(source_settings, "clone");
+	obs_source_t *cloned_source = obs_get_source_by_name(cloned_source_name);
+	if (!cloned_source) {
+		obs_data_release(source_settings);
+		return false;
+	}
+
+	const char *cloned_source_kind = obs_source_get_unversioned_id(cloned_source);
+	bool is_scene_or_group = (strcmp(cloned_source_kind, "scene") == 0 || strcmp(cloned_source_kind, "group") == 0);
+
+	obs_source_release(cloned_source);
+	obs_data_release(source_settings);
+
+	return is_scene_or_group;
+}
+
 void ResizeMoveFilters(obs_source_t *parent, obs_source_t *child, void *param)
 {
 	UNUSED_PARAMETER(parent);
@@ -158,6 +188,12 @@ void ResizeMoveFilters(obs_source_t *parent, obs_source_t *child, void *param)
 
 	if (strcmp(filter_id, "move_source_filter") == 0) {
 		obs_data_t *settings = obs_source_get_settings(child);
+		// Skip resize if cloning a Scene or Group
+		if (IsCloningSceneOrGroup(child)) {
+			obs_data_release(settings);
+			return;
+		}
+
 		ResizeMoveSetting(obs_data_get_obj(settings, "pos"), factor);
 		ResizeMoveSetting(obs_data_get_obj(settings, "bounds"), factor);
 		const char *source_name = obs_data_get_string(settings, "source");
@@ -187,6 +223,16 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 
 	for (size_t i = 0; i < count; i++) {
 		obs_data_t *item_data = obs_data_array_item(items, i);
+		const char *name = obs_data_get_string(item_data, "name");
+		obs_source_t *item_source = obs_get_source_by_name(name);
+
+		// Skip resizing if it's a source-clone and cloning a Scene or Group
+		if (item_source && IsCloningSceneOrGroup(item_source)) {
+			obs_source_release(item_source);
+			obs_data_release(item_data);
+			continue;
+		}
+
 		vec2 vec2;
 		obs_data_get_vec2(item_data, "pos", &vec2);
 		vec2.x *= factor;
@@ -196,19 +242,22 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 		vec2.x *= factor;
 		vec2.y *= factor;
 		obs_data_set_vec2(item_data, "bounds", &vec2);
-		const char *name = obs_data_get_string(item_data, "name");
-		obs_source_t *item_source = obs_get_source_by_name(name);
-		obs_source_release(item_source);
+
 		if (item_source && (obs_scene_from_source(item_source) || obs_group_from_source(item_source))) {
+			obs_source_release(item_source);
 			obs_data_release(item_data);
 			continue;
 		}
+
 		obs_data_get_vec2(item_data, "scale", &vec2);
 		vec2.x *= factor;
 		vec2.y *= factor;
 		obs_data_set_vec2(item_data, "scale", &vec2);
+
+		obs_source_release(item_source);
 		obs_data_release(item_data);
 	}
+
 	obs_data_array_release(items);
 }
 
@@ -2304,12 +2353,39 @@ void AboutDialog()
 	});
 }
 
+//--------------------STARTUP COMMANDS--------------------
+static void LoadMenu(QMenu *menu);
+
+static void InitialiseMenu()
+{
+	// Get the main window and cast it to QMainWindow*
+	void *main_window_ptr = obs_frontend_get_main_window();
+	if (!main_window_ptr) {
+		blog(LOG_ERROR, "Could not find main window");
+		return;
+	}
+
+	QMainWindow *main_window = static_cast<QMainWindow *>(main_window_ptr);
+	QMenuBar *menuBar = main_window->menuBar();
+	if (!menuBar) {
+		blog(LOG_ERROR, "Could not find main menu bar");
+		return;
+	}
+
+	// Add the new top-level menu
+	QMenu *menu = new QMenu(obs_module_text("StreamUP"), menuBar);
+	menuBar->addMenu(menu);
+
+	// Connect to the aboutToShow signal to load the menu items dynamically
+	QObject::connect(menu, &QMenu::aboutToShow, [menu] { LoadMenu(menu); });
+}
+
 static void LoadMenu(QMenu *menu)
 {
 	menu->clear();
 	QAction *a;
-	QMenu *toolsMenu = new QMenu(obs_module_text("MenuTools"), menu);
 
+	// Check if running on Windows platform
 	if (strcmp(PLATFORM_NAME, "windows") == 0) {
 		a = menu->addAction(obs_module_text("MenuInstallProduct"));
 		QObject::connect(a, &QAction::triggered,
@@ -2322,9 +2398,14 @@ static void LoadMenu(QMenu *menu)
 		menu->addSeparator();
 	}
 
+	// Check plugin updates
 	a = menu->addAction(obs_module_text("MenuCheckPluginUpdates"));
 	QObject::connect(a, &QAction::triggered, []() { CheckAllPluginsForUpdates(true); });
 
+	// Create "Tools" submenu
+	QMenu *toolsMenu = menu->addMenu(obs_module_text("MenuTools"));
+
+	// Add actions to the "Tools" submenu
 	a = toolsMenu->addAction(obs_module_text("MenuLockAllCurrentSources"));
 	QObject::connect(a, &QAction::triggered, []() { LockAllCurrentSourcesDialog(); });
 
@@ -2339,23 +2420,14 @@ static void LoadMenu(QMenu *menu)
 	a = toolsMenu->addAction(obs_module_text("MenuRefreshBrowserSources"));
 	QObject::connect(a, &QAction::triggered, []() { RefreshBrowserSourcesDialog(); });
 
-	menu->addMenu(toolsMenu);
 	menu->addSeparator();
 
+	// Add remaining actions
 	a = menu->addAction(obs_module_text("MenuAbout"));
 	QObject::connect(a, &QAction::triggered, []() { AboutDialog(); });
 
 	a = menu->addAction(obs_module_text("MenuSettings"));
 	QObject::connect(a, &QAction::triggered, []() { SettingsDialog(); });
-}
-
-//--------------------STARTUP COMMANDS--------------------
-static void InitialiseMenu()
-{
-	QAction *action = static_cast<QAction *>(obs_frontend_add_tools_menu_qaction(obs_module_text("StreamUP")));
-	QMenu *menu = new QMenu();
-	action->setMenu(menu);
-	QObject::connect(menu, &QMenu::aboutToShow, [menu] { LoadMenu(menu); });
 }
 
 static void RegisterWebsocketRequests()
