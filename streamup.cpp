@@ -1715,6 +1715,25 @@ void LockAllCurrentSourcesDialog()
 //--------------------WEBSOCKET VENDOR REQUESTS--------------------
 obs_websocket_vendor vendor = nullptr;
 
+bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad = false)
+{
+	if (!forceLoad) {
+		if (!CheckrequiredOBSPlugins(true)) {
+			return false;
+		}
+	}
+
+	// Load the .streamup file from the file path
+	obs_data_t *data = obs_data_create_from_json_file(QT_TO_UTF8(file_path));
+	if (data) {
+		LoadScene(data, QFileInfo(file_path).absolutePath());
+		obs_data_release(data);
+		return true;
+	}
+
+	return false;
+}
+
 void LoadStreamupFile(bool forceLoad = false)
 {
 	if (!forceLoad) {
@@ -1726,26 +1745,8 @@ void LoadStreamupFile(bool forceLoad = false)
 	QString fileName =
 		QFileDialog::getOpenFileName(nullptr, QT_UTF8(obs_module_text("Load")), QString(), "StreamUP File (*.streamup)");
 	if (!fileName.isEmpty()) {
-		obs_data_t *data = obs_data_create_from_json_file(QT_TO_UTF8(fileName));
-		LoadScene(data, QFileInfo(fileName).absolutePath());
-		obs_data_release(data);
+		LoadStreamupFileFromPath(fileName, forceLoad);
 	}
-}
-
-bool LoadStreamupFileFromData(obs_data_t *data, bool forceLoad = false)
-{
-	if (!forceLoad) {
-		if (!CheckrequiredOBSPlugins(true)) {
-			return false;
-		}
-	}
-
-	if (data) {
-		LoadScene(data, QString());
-		return true;
-	}
-
-	return false;
 }
 
 void WebsocketRequestBitrate(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
@@ -2007,34 +2008,31 @@ void WebsocketOpenSceneFilters(obs_data_t *request_data, obs_data_t *response_da
 
 void WebsocketLoadStreamupFile(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
+	UNUSED_PARAMETER(private_data);
+
 	// Log the entire request for debugging
 	const char *request_data_json = obs_data_get_json(request_data);
 	blog(LOG_INFO, "Websocket request data: %s", request_data_json);
 
-	// Extract the "file" parameter as nested JSON (obs_data_t)
-	obs_data_t *file_data = obs_data_get_obj(request_data, "file");
+	// Extract the "file" parameter as a string (file path)
+	const char *file_path = obs_data_get_string(request_data, "file");
 	bool force_load = obs_data_get_bool(request_data, "force_load");
 
-	if (!file_data) {
-		// If the "file" data is missing, return an error response and log it
+	if (!file_path || !strlen(file_path)) {
+		// If the "file" path is missing, return an error response and log it
 		blog(LOG_ERROR, "WebsocketLoadStreamupFile: 'file' parameter is missing or invalid");
-		obs_data_set_string(response_data, "error", "'file' data is missing or invalid");
+		obs_data_set_string(response_data, "error", "'file' path is missing or invalid");
 		return;
 	}
 
-	// Log the extracted file content for debugging
-	const char *file_data_json = obs_data_get_json(file_data);
-	blog(LOG_INFO, "Extracted 'file' content: %s", file_data_json);
+	// Log the extracted file path for debugging
+	blog(LOG_INFO, "Extracted 'file' path: %s", file_path);
 
-	// Call the function to load the scene with the extracted "file" data
-	if (!LoadStreamupFileFromData(file_data, force_load)) {
+	// Call the function to load the .streamup file from the path
+	if (!LoadStreamupFileFromPath(QString::fromUtf8(file_path), force_load)) {
 		obs_data_set_string(response_data, "error", "Failed to load streamup file");
-		obs_data_release(file_data);
 		return;
 	}
-
-	// Clean up the obs_data_t object
-	obs_data_release(file_data);
 
 	// Return success response
 	obs_data_set_string(response_data, "status", "success");
