@@ -450,6 +450,7 @@ static void LoadScene(obs_data_t *data, QString path)
 	obs_data_array_release(sourcesData);
 }
 
+
 //--------------------NOTIFICATION HELPERS--------------------
 void SendTrayNotification(QSystemTrayIcon::MessageIcon icon, const QString &title, const QString &body)
 {
@@ -1714,6 +1715,39 @@ void LockAllCurrentSourcesDialog()
 //--------------------WEBSOCKET VENDOR REQUESTS--------------------
 obs_websocket_vendor vendor = nullptr;
 
+void LoadStreamupFile(bool forceLoad = false)
+{
+	if (!forceLoad) {
+		if (!CheckrequiredOBSPlugins(true)) {
+			return;
+		}
+	}
+
+	QString fileName =
+		QFileDialog::getOpenFileName(nullptr, QT_UTF8(obs_module_text("Load")), QString(), "StreamUP File (*.streamup)");
+	if (!fileName.isEmpty()) {
+		obs_data_t *data = obs_data_create_from_json_file(QT_TO_UTF8(fileName));
+		LoadScene(data, QFileInfo(fileName).absolutePath());
+		obs_data_release(data);
+	}
+}
+
+bool LoadStreamupFileFromData(obs_data_t *data, bool forceLoad = false)
+{
+	if (!forceLoad) {
+		if (!CheckrequiredOBSPlugins(true)) {
+			return false;
+		}
+	}
+
+	if (data) {
+		LoadScene(data, QString());
+		return true;
+	}
+
+	return false;
+}
+
 void WebsocketRequestBitrate(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
 	UNUSED_PARAMETER(request_data);
@@ -1969,6 +2003,41 @@ void WebsocketOpenSceneFilters(obs_data_t *request_data, obs_data_t *response_da
 	obs_frontend_open_source_filters(current_scene);
 	obs_source_release(current_scene);
 	obs_data_set_string(response_data, "status", "Scene filters opened.");
+}
+
+void WebsocketLoadStreamupFile(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	// Log the entire request for debugging
+	const char *request_data_json = obs_data_get_json(request_data);
+	blog(LOG_INFO, "Websocket request data: %s", request_data_json);
+
+	// Extract the "file" parameter as nested JSON (obs_data_t)
+	obs_data_t *file_data = obs_data_get_obj(request_data, "file");
+	bool force_load = obs_data_get_bool(request_data, "force_load");
+
+	if (!file_data) {
+		// If the "file" data is missing, return an error response and log it
+		blog(LOG_ERROR, "WebsocketLoadStreamupFile: 'file' parameter is missing or invalid");
+		obs_data_set_string(response_data, "error", "'file' data is missing or invalid");
+		return;
+	}
+
+	// Log the extracted file content for debugging
+	const char *file_data_json = obs_data_get_json(file_data);
+	blog(LOG_INFO, "Extracted 'file' content: %s", file_data_json);
+
+	// Call the function to load the scene with the extracted "file" data
+	if (!LoadStreamupFileFromData(file_data, force_load)) {
+		obs_data_set_string(response_data, "error", "Failed to load streamup file");
+		obs_data_release(file_data);
+		return;
+	}
+
+	// Clean up the obs_data_t object
+	obs_data_release(file_data);
+
+	// Return success response
+	obs_data_set_string(response_data, "status", "success");
 }
 
 //--------------------HOTKEY HANDLERS--------------------
@@ -2509,22 +2578,6 @@ void SettingsDialog()
 }
 
 //--------------------MAIN MENU--------------------
-void LoadStreamupFile(bool forceLoad = false)
-{
-	if (!forceLoad) {
-		if (!CheckrequiredOBSPlugins(true)) {
-			return;
-		}
-	}
-
-	QString fileName =
-		QFileDialog::getOpenFileName(nullptr, QT_UTF8(obs_module_text("Load")), QString(), "StreamUP File (*.streamup)");
-	if (!fileName.isEmpty()) {
-		obs_data_t *data = obs_data_create_from_json_file(QT_TO_UTF8(fileName));
-		LoadScene(data, QFileInfo(fileName).absolutePath());
-		obs_data_release(data);
-	}
-}
 
 void AboutDialog()
 {
@@ -2689,6 +2742,7 @@ static void RegisterWebsocketRequests()
 	obs_websocket_vendor_register_request(vendor, "openSourceFilters", WebsocketOpenSourceFilters, nullptr);
 	obs_websocket_vendor_register_request(vendor, "openSourceInteract", WebsocketOpenSourceInteract, nullptr);
 	obs_websocket_vendor_register_request(vendor, "openSceneFilters", WebsocketOpenSceneFilters, nullptr);
+	obs_websocket_vendor_register_request(vendor, "loadStreamupFile", WebsocketLoadStreamupFile, nullptr);
 }
 
 static void RegisterHotkeys()
@@ -2719,11 +2773,11 @@ static void RegisterHotkeys()
 
 	// Open Source Interact Hotkey
 	openSourceInteractHotkey = obs_hotkey_register_frontend("open_source_interact", obs_module_text("OpenSourceInteract"),
-							       HotkeyOpenSourceInteract, nullptr);
+								HotkeyOpenSourceInteract, nullptr);
 
 	// Open Scenes Filter Hotkey
 	openSceneFiltersHotkey = obs_hotkey_register_frontend("open_scene_filters", obs_module_text("OpenSceneFilters"),
-							       HotkeyOpenSceneFilters, nullptr);
+							      HotkeyOpenSceneFilters, nullptr);
 }
 
 static void LoadStreamUPDock()
