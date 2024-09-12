@@ -1237,6 +1237,133 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile = false)
 	}
 }
 
+//-------------------- HELPER FUNCTIONS--------------------
+static bool EnumSceneItemsCallback(obs_scene_t *scene, obs_sceneitem_t *item, void *param)
+{
+	UNUSED_PARAMETER(scene);
+
+	SceneItemEnumData *data = static_cast<SceneItemEnumData *>(param);
+	bool isSelected = obs_sceneitem_selected(item);
+	if (isSelected) {
+		data->isAnySourceSelected = true;
+		obs_source_t *source = obs_sceneitem_get_source(item);
+		data->selectedSourceName = obs_source_get_name(source);
+	}
+	return true;
+}
+
+bool EnumSceneItems(obs_scene_t *scene, const char **selected_source_name)
+{
+	SceneItemEnumData data;
+
+	obs_scene_enum_items(scene, EnumSceneItemsCallback, &data);
+
+	if (data.isAnySourceSelected) {
+		*selected_source_name = data.selectedSourceName;
+	}
+	return data.isAnySourceSelected;
+}
+
+void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data, bool transition_type)
+{
+	UNUSED_PARAMETER(private_data);
+
+	const char *scene_name = obs_data_get_string(request_data, "sceneName");
+	const char *source_name = obs_data_get_string(request_data, "sourceName");
+
+	obs_source_t *scene_source = obs_get_source_by_name(scene_name);
+	if (!scene_source) {
+		obs_data_set_string(response_data, "error", "Scene not found.");
+		obs_data_set_bool(response_data, "success", false);
+		return;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(scene_source);
+	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, source_name);
+	if (!scene_item) {
+		obs_data_set_string(response_data, "error", "Source not found in scene.");
+		obs_data_set_bool(response_data, "success", false);
+		obs_source_release(scene_source);
+		return;
+	}
+
+	obs_source_t *transition = obs_sceneitem_get_transition(scene_item, transition_type);
+	if (!transition) {
+		obs_data_set_string(response_data, "error", "No transition set for this item.");
+		obs_data_set_bool(response_data, "success", false);
+		obs_source_release(scene_source);
+		return;
+	}
+
+	obs_data_t *settings = obs_source_get_settings(transition);
+	if (!settings) {
+		blog(LOG_WARNING, "[StreamUP] Failed to get settings for transition: %s", obs_source_get_name(transition));
+		obs_data_set_string(response_data, "error", "Failed to get transition settings.");
+		obs_data_set_bool(response_data, "success", false);
+		obs_source_release(scene_source);
+		return;
+	}
+
+	uint32_t transition_duration = obs_sceneitem_get_transition_duration(scene_item, transition_type);
+
+	obs_data_set_string(response_data, "transitionName", obs_source_get_name(transition));
+	obs_data_set_string(response_data, "transitionType", obs_source_get_id(transition));
+	obs_data_set_obj(response_data, "transitionSettings", settings);
+	obs_data_set_int(response_data, "transitionDuration", transition_duration);
+
+	obs_data_set_bool(response_data, "success", true);
+
+	obs_source_release(scene_source);
+	obs_data_release(settings);
+}
+
+void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data, bool show_transition)
+{
+	UNUSED_PARAMETER(private_data);
+
+	const char *scene_name = obs_data_get_string(request_data, "sceneName");
+	const char *source_name = obs_data_get_string(request_data, "sourceName");
+	const char *transition_type = obs_data_get_string(request_data, "transitionType");
+	obs_data_t *transition_settings = obs_data_get_obj(request_data, "transitionSettings");
+	uint32_t transition_duration = obs_data_get_int(request_data, "transitionDuration");
+
+	obs_source_t *scene_source = obs_get_source_by_name(scene_name);
+	if (!scene_source) {
+		obs_data_set_string(response_data, "error", "Scene not found.");
+		obs_data_set_bool(response_data, "success", false);
+		return;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(scene_source);
+	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, source_name);
+	if (!scene_item) {
+		obs_data_set_string(response_data, "error", "Source not found in scene.");
+		obs_data_set_bool(response_data, "success", false);
+		obs_source_release(scene_source);
+		return;
+	}
+
+	obs_source_t *transition = obs_source_create_private(transition_type, "Scene Transition", NULL);
+	if (!transition) {
+		obs_data_set_string(response_data, "error", "Unable to create transition of specified type.");
+		obs_data_set_bool(response_data, "success", false);
+		obs_source_release(scene_source);
+		return;
+	}
+
+	if (transition_settings) {
+		obs_source_update(transition, transition_settings);
+	}
+
+	obs_sceneitem_set_transition(scene_item, show_transition, transition);
+	obs_sceneitem_set_transition_duration(scene_item, show_transition, transition_duration);
+
+	obs_data_set_bool(response_data, "success", true);
+
+	obs_source_release(transition);
+	obs_source_release(scene_source);
+}
+
 //-------------------UTILITY FUNCTIONS-------------------
 const char *MonitoringTypeToString(obs_monitoring_type type)
 {
@@ -1330,6 +1457,38 @@ void RefreshBrowserSourcesDialog()
                     })",
 		"RefreshBrowserSourcesHowTo1", "RefreshBrowserSourcesHowTo2", "RefreshBrowserSourcesHowTo3",
 		"RefreshBrowserSourcesHowTo4", "RefreshBrowserSourcesNotification");
+}
+
+const char *GetCurrentSelectedSource()
+{
+	// Get the current scene
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) {
+		blog(LOG_INFO, "[StreamUP] No current scene found.");
+		return nullptr;
+	}
+
+	const char *scene_name = obs_source_get_name(current_scene);
+
+	// Get the scene from the current scene source
+	obs_scene_t *scene = obs_scene_from_source(current_scene);
+	if (!scene) {
+		obs_source_release(current_scene);
+		return nullptr;
+	}
+
+	const char *selected_source_name = nullptr;
+	bool isAnySourceSelected = EnumSceneItems(scene, &selected_source_name);
+
+	// Release the current scene
+	obs_source_release(current_scene);
+
+	if (!isAnySourceSelected) {
+		blog(LOG_INFO, "[StreamUP] No selected source in current scene: %s", scene_name);
+		return nullptr;
+	}
+
+	return selected_source_name;
 }
 
 //-------------------LOCK SOURCE MANAGEMENT-------------------
@@ -1552,135 +1711,6 @@ void LockAllCurrentSourcesDialog()
 		"LockAllCurrentSourcesHowTo4", NULL);
 }
 
-//--------------------WEBSOCKET HELPER FUNCTIONS--------------------
-static bool EnumSceneItemsCallback(obs_scene_t *scene, obs_sceneitem_t *item, void *param)
-{
-	UNUSED_PARAMETER(scene);
-
-	SceneItemEnumData *data = static_cast<SceneItemEnumData *>(param);
-	bool isSelected = obs_sceneitem_selected(item);
-	if (isSelected) {
-		data->isAnySourceSelected = true;
-		obs_source_t *source = obs_sceneitem_get_source(item);
-		data->selectedSourceName = obs_source_get_name(source);
-		blog(LOG_INFO, "[StreamUP] source = %s is selected",
-		     data->selectedSourceName ? data->selectedSourceName : "Unknown");
-	}
-	return true;
-}
-
-bool EnumSceneItems(obs_scene_t *scene, const char **selected_source_name)
-{
-	SceneItemEnumData data;
-
-	obs_scene_enum_items(scene, EnumSceneItemsCallback, &data);
-
-	if (data.isAnySourceSelected) {
-		*selected_source_name = data.selectedSourceName;
-	}
-	return data.isAnySourceSelected;
-}
-
-void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data, bool transition_type)
-{
-	UNUSED_PARAMETER(private_data);
-
-	const char *scene_name = obs_data_get_string(request_data, "sceneName");
-	const char *source_name = obs_data_get_string(request_data, "sourceName");
-
-	obs_source_t *scene_source = obs_get_source_by_name(scene_name);
-	if (!scene_source) {
-		obs_data_set_string(response_data, "error", "Scene not found.");
-		obs_data_set_bool(response_data, "success", false);
-		return;
-	}
-
-	obs_scene_t *scene = obs_scene_from_source(scene_source);
-	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, source_name);
-	if (!scene_item) {
-		obs_data_set_string(response_data, "error", "Source not found in scene.");
-		obs_data_set_bool(response_data, "success", false);
-		obs_source_release(scene_source);
-		return;
-	}
-
-	obs_source_t *transition = obs_sceneitem_get_transition(scene_item, transition_type);
-	if (!transition) {
-		obs_data_set_string(response_data, "error", "No transition set for this item.");
-		obs_data_set_bool(response_data, "success", false);
-		obs_source_release(scene_source);
-		return;
-	}
-
-	obs_data_t *settings = obs_source_get_settings(transition);
-	if (!settings) {
-		blog(LOG_WARNING, "[StreamUP] Failed to get settings for transition: %s", obs_source_get_name(transition));
-		obs_data_set_string(response_data, "error", "Failed to get transition settings.");
-		obs_data_set_bool(response_data, "success", false);
-		obs_source_release(scene_source);
-		return;
-	}
-
-	uint32_t transition_duration = obs_sceneitem_get_transition_duration(scene_item, transition_type);
-
-	obs_data_set_string(response_data, "transitionName", obs_source_get_name(transition));
-	obs_data_set_string(response_data, "transitionType", obs_source_get_id(transition));
-	obs_data_set_obj(response_data, "transitionSettings", settings);
-	obs_data_set_int(response_data, "transitionDuration", transition_duration);
-
-	obs_data_set_bool(response_data, "success", true);
-
-	obs_source_release(scene_source);
-	obs_data_release(settings);
-}
-
-void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data, bool show_transition)
-{
-	UNUSED_PARAMETER(private_data);
-
-	const char *scene_name = obs_data_get_string(request_data, "sceneName");
-	const char *source_name = obs_data_get_string(request_data, "sourceName");
-	const char *transition_type = obs_data_get_string(request_data, "transitionType");
-	obs_data_t *transition_settings = obs_data_get_obj(request_data, "transitionSettings");
-	uint32_t transition_duration = obs_data_get_int(request_data, "transitionDuration");
-
-	obs_source_t *scene_source = obs_get_source_by_name(scene_name);
-	if (!scene_source) {
-		obs_data_set_string(response_data, "error", "Scene not found.");
-		obs_data_set_bool(response_data, "success", false);
-		return;
-	}
-
-	obs_scene_t *scene = obs_scene_from_source(scene_source);
-	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, source_name);
-	if (!scene_item) {
-		obs_data_set_string(response_data, "error", "Source not found in scene.");
-		obs_data_set_bool(response_data, "success", false);
-		obs_source_release(scene_source);
-		return;
-	}
-
-	obs_source_t *transition = obs_source_create_private(transition_type, "Scene Transition", NULL);
-	if (!transition) {
-		obs_data_set_string(response_data, "error", "Unable to create transition of specified type.");
-		obs_data_set_bool(response_data, "success", false);
-		obs_source_release(scene_source);
-		return;
-	}
-
-	if (transition_settings) {
-		obs_source_update(transition, transition_settings);
-	}
-
-	obs_sceneitem_set_transition(scene_item, show_transition, transition);
-	obs_sceneitem_set_transition_duration(scene_item, show_transition, transition_duration);
-
-	obs_data_set_bool(response_data, "success", true);
-
-	obs_source_release(transition);
-	obs_source_release(scene_source);
-}
-
 //--------------------WEBSOCKET VENDOR REQUESTS--------------------
 obs_websocket_vendor vendor = nullptr;
 
@@ -1796,30 +1826,12 @@ void WebsocketRequestGetCurrentSelectedSource(obs_data_t *request_data, obs_data
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
 
-	obs_source_t *current_scene = obs_frontend_get_current_scene();
-	const char *scene_name = obs_source_get_name(current_scene);
-	blog(LOG_INFO, "[StreamUP] current_scene = %s", scene_name ? scene_name : "Unknown");
-
-	if (!current_scene)
-		return;
-
-	obs_scene_t *scene = obs_scene_from_source(current_scene);
-	if (!scene) {
-		obs_source_release(current_scene);
-		return;
-	}
-
-	const char *selected_source_name = nullptr;
-	bool isAnySourceSelected = EnumSceneItems(scene, &selected_source_name);
-
-	obs_source_release(current_scene);
-
-	if (!isAnySourceSelected) {
-		blog(LOG_INFO, "[StreamUP] No selected source. Current scene: %s", scene_name);
-		obs_data_set_string(response_data, "currentScene", scene_name);
-	} else {
-		blog(LOG_INFO, "[StreamUP] Selected source: %s", selected_source_name);
+	const char *selected_source_name = GetCurrentSelectedSource();
+	if (selected_source_name) {
 		obs_data_set_string(response_data, "selectedSource", selected_source_name);
+	} else {
+		blog(LOG_INFO, "[StreamUP] No selected source.");
+		obs_data_set_string(response_data, "selectedSource", "None");
 	}
 }
 
@@ -1876,11 +1888,98 @@ void WebsocketRequestVLCGetCurrentFile(obs_data_t *request_data, obs_data_t *res
 	obs_source_release(source);
 }
 
+void WebsocketOpenSourceProperties(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	const char *selected_source_name = GetCurrentSelectedSource();
+	if (!selected_source_name) {
+		obs_data_set_string(response_data, "error", "No source selected.");
+		blog(LOG_INFO, "[StreamUP] No source selected for properties.");
+		return;
+	}
+
+	obs_source_t *selected_source = obs_get_source_by_name(selected_source_name);
+	if (selected_source) {
+		obs_frontend_open_source_properties(selected_source);
+		obs_source_release(selected_source);
+		obs_data_set_string(response_data, "status", "Properties opened.");
+	} else {
+		obs_data_set_string(response_data, "error", "Failed to find source.");
+	}
+}
+
+void WebsocketOpenSourceFilters(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	const char *selected_source_name = GetCurrentSelectedSource();
+	if (!selected_source_name) {
+		obs_data_set_string(response_data, "error", "No source selected.");
+		blog(LOG_INFO, "[StreamUP] No source selected for filters.");
+		return;
+	}
+
+	obs_source_t *selected_source = obs_get_source_by_name(selected_source_name);
+	if (selected_source) {
+		obs_frontend_open_source_filters(selected_source);
+		obs_source_release(selected_source);
+		obs_data_set_string(response_data, "status", "Filters opened.");
+	} else {
+		obs_data_set_string(response_data, "error", "Failed to find source.");
+	}
+}
+
+void WebsocketOpenSourceInteract(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	const char *selected_source_name = GetCurrentSelectedSource();
+	if (!selected_source_name) {
+		obs_data_set_string(response_data, "error", "No source selected.");
+		blog(LOG_INFO, "[StreamUP] No source selected for interaction.");
+		return;
+	}
+
+	obs_source_t *selected_source = obs_get_source_by_name(selected_source_name);
+	if (selected_source) {
+		obs_frontend_open_source_interaction(selected_source);
+		obs_source_release(selected_source);
+		obs_data_set_string(response_data, "status", "Interact window opened.");
+	} else {
+		obs_data_set_string(response_data, "error", "Failed to find source.");
+	}
+}
+
+void WebsocketOpenSceneFilters(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) {
+		obs_data_set_string(response_data, "error", "No current scene.");
+		blog(LOG_INFO, "[StreamUP] No current scene for filters.");
+		return;
+	}
+
+	obs_frontend_open_source_filters(current_scene);
+	obs_source_release(current_scene);
+	obs_data_set_string(response_data, "status", "Scene filters opened.");
+}
+
 //--------------------HOTKEY HANDLERS--------------------
 obs_hotkey_id refreshBrowserSourcesHotkey = OBS_INVALID_HOTKEY_ID;
-obs_hotkey_id lockAllSourcesHotkey = OBS_INVALID_HOTKEY_ID;
 obs_hotkey_id refreshAudioMonitoringHotkey = OBS_INVALID_HOTKEY_ID;
+obs_hotkey_id lockAllSourcesHotkey = OBS_INVALID_HOTKEY_ID;
 obs_hotkey_id lockCurrentSourcesHotkey = OBS_INVALID_HOTKEY_ID;
+obs_hotkey_id openSourcePropertiesHotkey = OBS_INVALID_HOTKEY_ID;
+obs_hotkey_id openSourceFiltersHotkey = OBS_INVALID_HOTKEY_ID;
+obs_hotkey_id openSceneFiltersHotkey = OBS_INVALID_HOTKEY_ID;
+obs_hotkey_id openSourceInteractHotkey = OBS_INVALID_HOTKEY_ID;
 
 static void HotkeyRefreshBrowserSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
@@ -1926,6 +2025,110 @@ static void HotkeyLockCurrentSources(void *data, obs_hotkey_id id, obs_hotkey_t 
 	ToggleLockSourcesInCurrentScene();
 }
 
+static void HotkeyOpenSourceProperties(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+
+	if (!pressed)
+		return;
+
+	// Get the name of the currently selected source
+	const char *selected_source_name = GetCurrentSelectedSource();
+	if (!selected_source_name) {
+		blog(LOG_INFO, "[StreamUP] No source selected, cannot open properties.");
+		return;
+	}
+
+	// Find the source by name
+	obs_source_t *selected_source = obs_get_source_by_name(selected_source_name);
+	if (selected_source) {
+		// Open the properties of the selected source
+		obs_frontend_open_source_properties(selected_source);
+		obs_source_release(selected_source);
+	} else {
+		blog(LOG_INFO, "[StreamUP] Failed to find source: %s", selected_source_name);
+	}
+}
+
+static void HotkeyOpenSourceFilters(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+
+	if (!pressed)
+		return;
+
+	// Get the name of the currently selected source
+	const char *selected_source_name = GetCurrentSelectedSource();
+	if (!selected_source_name) {
+		blog(LOG_INFO, "[StreamUP] No source selected, cannot open filters.");
+		return;
+	}
+
+	// Find the source by name
+	obs_source_t *selected_source = obs_get_source_by_name(selected_source_name);
+	if (selected_source) {
+		// Open the filters of the selected source
+		obs_frontend_open_source_filters(selected_source);
+		obs_source_release(selected_source);
+	} else {
+		blog(LOG_INFO, "[StreamUP] Failed to find source: %s", selected_source_name);
+	}
+}
+
+static void HotkeyOpenSourceInteract(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+
+	if (!pressed)
+		return;
+
+	// Get the name of the currently selected source
+	const char *selected_source_name = GetCurrentSelectedSource();
+	if (!selected_source_name) {
+		blog(LOG_INFO, "[StreamUP] No source selected, cannot open interact window.");
+		return;
+	}
+
+	// Find the source by name
+	obs_source_t *selected_source = obs_get_source_by_name(selected_source_name);
+	if (selected_source) {
+		// Open the interact window of the selected source
+		obs_frontend_open_source_interaction(selected_source);
+		obs_source_release(selected_source); // Release reference count
+	} else {
+		blog(LOG_INFO, "[StreamUP] Failed to find source: %s", selected_source_name);
+	}
+}
+
+static void HotkeyOpenSceneFilters(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+
+	if (!pressed)
+		return;
+
+	// Get the current scene
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) {
+		blog(LOG_INFO, "[StreamUP] No current scene found, cannot open filters.");
+		return;
+	}
+
+	// Open the filters of the current scene
+	obs_frontend_open_source_filters(current_scene);
+
+	// Release reference count for the current scene
+	obs_source_release(current_scene);
+}
+
 static void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *)
 {
 	if (saving) {
@@ -1948,6 +2151,22 @@ static void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *)
 		obs_data_set_array(save_data, "lockCurrentSourcesHotkey", hotkeySaveArray);
 		obs_data_array_release(hotkeySaveArray);
 
+		hotkeySaveArray = obs_hotkey_save(openSourceInteractHotkey);
+		obs_data_set_array(save_data, "openSourceInteractHotkey", hotkeySaveArray);
+		obs_data_array_release(hotkeySaveArray);
+
+		hotkeySaveArray = obs_hotkey_save(openSceneFiltersHotkey);
+		obs_data_set_array(save_data, "openSceneFiltersHotkey", hotkeySaveArray);
+		obs_data_array_release(hotkeySaveArray);
+
+		hotkeySaveArray = obs_hotkey_save(openSourceFiltersHotkey);
+		obs_data_set_array(save_data, "openSourceFiltersHotkey", hotkeySaveArray);
+		obs_data_array_release(hotkeySaveArray);
+
+		hotkeySaveArray = obs_hotkey_save(openSourcePropertiesHotkey);
+		obs_data_set_array(save_data, "openSourcePropertiesHotkey", hotkeySaveArray);
+		obs_data_array_release(hotkeySaveArray);
+
 	} else {
 		// load hotkeys
 		obs_data_array_t *hotkeyLoadArray;
@@ -1966,6 +2185,22 @@ static void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *)
 
 		hotkeyLoadArray = obs_data_get_array(save_data, "lockCurrentSourcesHotkey");
 		obs_hotkey_load(lockCurrentSourcesHotkey, hotkeyLoadArray);
+		obs_data_array_release(hotkeyLoadArray);
+
+		hotkeyLoadArray = obs_data_get_array(save_data, "openSourceInteractHotkey");
+		obs_hotkey_load(openSourceInteractHotkey, hotkeyLoadArray);
+		obs_data_array_release(hotkeyLoadArray);
+
+		hotkeyLoadArray = obs_data_get_array(save_data, "openSceneFiltersHotkey");
+		obs_hotkey_load(openSceneFiltersHotkey, hotkeyLoadArray);
+		obs_data_array_release(hotkeyLoadArray);
+
+		hotkeyLoadArray = obs_data_get_array(save_data, "openSourceFiltersHotkey");
+		obs_hotkey_load(openSourceFiltersHotkey, hotkeyLoadArray);
+		obs_data_array_release(hotkeyLoadArray);
+
+		hotkeyLoadArray = obs_data_get_array(save_data, "openSourcePropertiesHotkey");
+		obs_hotkey_load(openSourcePropertiesHotkey, hotkeyLoadArray);
 		obs_data_array_release(hotkeyLoadArray);
 	}
 }
@@ -2450,18 +2685,45 @@ static void RegisterWebsocketRequests()
 	obs_websocket_vendor_register_request(vendor, "refresh_audio_monitoring", WebsocketRequestRefreshAudioMonitoring, nullptr);
 	obs_websocket_vendor_register_request(vendor, "refresh_browser_sources", WebsocketRequestRefreshBrowserSources, nullptr);
 	obs_websocket_vendor_register_request(vendor, "vlcGetCurrentFile", WebsocketRequestVLCGetCurrentFile, nullptr);
+	obs_websocket_vendor_register_request(vendor, "openSourceProperties", WebsocketOpenSourceProperties, nullptr);
+	obs_websocket_vendor_register_request(vendor, "openSourceFilters", WebsocketOpenSourceFilters, nullptr);
+	obs_websocket_vendor_register_request(vendor, "openSourceInteract", WebsocketOpenSourceInteract, nullptr);
+	obs_websocket_vendor_register_request(vendor, "openSceneFilters", WebsocketOpenSceneFilters, nullptr);
 }
 
 static void RegisterHotkeys()
 {
+	// Refresh Browser Sources Hotkey
 	refreshBrowserSourcesHotkey = obs_hotkey_register_frontend(
 		"refresh_browser_sources", obs_module_text("RefreshBrowserSources"), HotkeyRefreshBrowserSources, nullptr);
-	lockAllSourcesHotkey = obs_hotkey_register_frontend("toggle_lock_all_sources", obs_module_text("LockAllSources"),
-							    HotkeyLockAllSources, nullptr);
+
+	// Refresh Audio Monitoring Hotkey
 	refreshAudioMonitoringHotkey = obs_hotkey_register_frontend(
 		"refresh_audio_monitoring", obs_module_text("RefreshAudioMonitoring"), HotkeyRefreshAudioMonitoring, nullptr);
+
+	// Lock All Sources Hotkey
+	lockAllSourcesHotkey = obs_hotkey_register_frontend("toggle_lock_all_sources", obs_module_text("LockAllSources"),
+							    HotkeyLockAllSources, nullptr);
+
+	// Lock Curent Scenes Sources Hotkey
 	lockCurrentSourcesHotkey = obs_hotkey_register_frontend(
 		"toggle_lock_current_sources", obs_module_text("LockAllCurrentSources"), HotkeyLockCurrentSources, nullptr);
+
+	// Open Source Properties Hotkey
+	openSourcePropertiesHotkey = obs_hotkey_register_frontend("open_source_properties", obs_module_text("OpenSourceProperties"),
+								  HotkeyOpenSourceProperties, nullptr);
+
+	// Open Source Filter Hotkey
+	openSourceFiltersHotkey = obs_hotkey_register_frontend("open_source_filters", obs_module_text("OpenSourceFilters"),
+							       HotkeyOpenSourceFilters, nullptr);
+
+	// Open Source Interact Hotkey
+	openSourceInteractHotkey = obs_hotkey_register_frontend("open_source_interact", obs_module_text("OpenSourceInteract"),
+							       HotkeyOpenSourceInteract, nullptr);
+
+	// Open Scenes Filter Hotkey
+	openSceneFiltersHotkey = obs_hotkey_register_frontend("open_scene_filters", obs_module_text("OpenSceneFilters"),
+							       HotkeyOpenSceneFilters, nullptr);
 }
 
 static void LoadStreamUPDock()
