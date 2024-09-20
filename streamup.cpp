@@ -450,7 +450,6 @@ static void LoadScene(obs_data_t *data, QString path)
 	obs_data_array_release(sourcesData);
 }
 
-
 //--------------------NOTIFICATION HELPERS--------------------
 void SendTrayNotification(QSystemTrayIcon::MessageIcon icon, const QString &title, const QString &body)
 {
@@ -1460,36 +1459,77 @@ void RefreshBrowserSourcesDialog()
 		"RefreshBrowserSourcesHowTo4", "RefreshBrowserSourcesNotification");
 }
 
-const char *GetCurrentSelectedSource()
+// Structure to hold data for finding selected items
+struct SceneFindBoxData {
+	std::vector<obs_sceneitem_t *> sceneItems;
+
+	// Constructor
+	SceneFindBoxData() = default;
+
+	// Deleted copy/move constructors and assignment operators to avoid accidental copying
+	SceneFindBoxData(const SceneFindBoxData &) = delete;
+	SceneFindBoxData(SceneFindBoxData &&) = delete;
+	SceneFindBoxData &operator=(const SceneFindBoxData &) = delete;
+	SceneFindBoxData &operator=(SceneFindBoxData &&) = delete;
+};
+
+// Callback function to find selected scene items (handles groups as well)
+bool FindSelected(obs_scene_t *scene, obs_sceneitem_t *item, void *param)
 {
-	// Get the current scene
-	obs_source_t *current_scene = obs_frontend_get_current_scene();
-	if (!current_scene) {
-		blog(LOG_INFO, "[StreamUP] No current scene found.");
+	UNUSED_PARAMETER(scene);
+
+	SceneFindBoxData *data = reinterpret_cast<SceneFindBoxData *>(param);
+
+	obs_source_t *source = obs_sceneitem_get_source(item);
+	if (source) {
+		// If the item is selected, add it to the list
+		if (obs_sceneitem_selected(item)) {
+			data->sceneItems.push_back(item);
+		}
+
+		// If the source is a group, recursively enumerate its items
+		obs_scene_t *group_scene = obs_group_from_source(source);
+		if (group_scene) {
+			obs_scene_enum_items(group_scene, FindSelected, param); // Enumerate items inside the group
+		}
+	}
+
+	return true; // Continue enumerating items
+}
+
+// Function to get the currently selected source name
+const char *GetSelectedSourceFromCurrentScene()
+{
+	// Get the current scene source from the frontend
+	obs_source_t *current_scene_source = obs_frontend_get_current_scene();
+	if (!current_scene_source) {
+		blog(LOG_INFO, "[StreamUP] No active scene.");
 		return nullptr;
 	}
 
-	const char *scene_name = obs_source_get_name(current_scene);
+	// Get the scene from the source
+	obs_scene_t *scene = obs_scene_from_source(current_scene_source);
+	obs_source_release(current_scene_source); // Always release the source when done
 
-	// Get the scene from the current scene source
-	obs_scene_t *scene = obs_scene_from_source(current_scene);
 	if (!scene) {
-		obs_source_release(current_scene);
+		blog(LOG_INFO, "[StreamUP] No active scene found.");
 		return nullptr;
 	}
 
-	const char *selected_source_name = nullptr;
-	bool isAnySourceSelected = EnumSceneItems(scene, &selected_source_name);
+	// Data structure to hold the selected items found
+	SceneFindBoxData data;
 
-	// Release the current scene
-	obs_source_release(current_scene);
+	// Enumerate through the scene items and find the selected ones, including groups
+	obs_scene_enum_items(scene, FindSelected, &data);
 
-	if (!isAnySourceSelected) {
-		blog(LOG_INFO, "[StreamUP] No selected source in current scene: %s", scene_name);
-		return nullptr;
+	// If there is exactly one selected item, return its source name
+	if (data.sceneItems.size() == 1) {
+		obs_source_t *selected_source = obs_sceneitem_get_source(data.sceneItems[0]);
+		return obs_source_get_name(selected_source); // Return the source name
 	}
 
-	return selected_source_name;
+	blog(LOG_INFO, "[StreamUP] No selected source or multiple selected sources.");
+	return nullptr; // No source or multiple sources selected
 }
 
 //-------------------LOCK SOURCE MANAGEMENT-------------------
@@ -1861,7 +1901,7 @@ void WebsocketRequestGetCurrentSelectedSource(obs_data_t *request_data, obs_data
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
 
-	const char *selected_source_name = GetCurrentSelectedSource();
+	const char *selected_source_name = GetSelectedSourceFromCurrentScene();
 	if (selected_source_name) {
 		obs_data_set_string(response_data, "selectedSource", selected_source_name);
 	} else {
@@ -1928,7 +1968,7 @@ void WebsocketOpenSourceProperties(obs_data_t *request_data, obs_data_t *respons
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
 
-	const char *selected_source_name = GetCurrentSelectedSource();
+	const char *selected_source_name = GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
 		obs_data_set_string(response_data, "error", "No source selected.");
 		blog(LOG_INFO, "[StreamUP] No source selected for properties.");
@@ -1950,7 +1990,7 @@ void WebsocketOpenSourceFilters(obs_data_t *request_data, obs_data_t *response_d
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
 
-	const char *selected_source_name = GetCurrentSelectedSource();
+	const char *selected_source_name = GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
 		obs_data_set_string(response_data, "error", "No source selected.");
 		blog(LOG_INFO, "[StreamUP] No source selected for filters.");
@@ -1972,7 +2012,7 @@ void WebsocketOpenSourceInteract(obs_data_t *request_data, obs_data_t *response_
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
 
-	const char *selected_source_name = GetCurrentSelectedSource();
+	const char *selected_source_name = GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
 		obs_data_set_string(response_data, "error", "No source selected.");
 		blog(LOG_INFO, "[StreamUP] No source selected for interaction.");
@@ -2102,7 +2142,7 @@ static void HotkeyOpenSourceProperties(void *data, obs_hotkey_id id, obs_hotkey_
 		return;
 
 	// Get the name of the currently selected source
-	const char *selected_source_name = GetCurrentSelectedSource();
+	const char *selected_source_name = GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
 		blog(LOG_INFO, "[StreamUP] No source selected, cannot open properties.");
 		return;
@@ -2129,7 +2169,7 @@ static void HotkeyOpenSourceFilters(void *data, obs_hotkey_id id, obs_hotkey_t *
 		return;
 
 	// Get the name of the currently selected source
-	const char *selected_source_name = GetCurrentSelectedSource();
+	const char *selected_source_name = GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
 		blog(LOG_INFO, "[StreamUP] No source selected, cannot open filters.");
 		return;
@@ -2156,7 +2196,7 @@ static void HotkeyOpenSourceInteract(void *data, obs_hotkey_id id, obs_hotkey_t 
 		return;
 
 	// Get the name of the currently selected source
-	const char *selected_source_name = GetCurrentSelectedSource();
+	const char *selected_source_name = GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
 		blog(LOG_INFO, "[StreamUP] No source selected, cannot open interact window.");
 		return;
