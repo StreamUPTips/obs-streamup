@@ -1287,6 +1287,7 @@ void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 		return;
 	}
 
+	// Get the transition for the scene item
 	obs_source_t *transition = obs_sceneitem_get_transition(scene_item, transition_type);
 	if (!transition) {
 		obs_data_set_string(response_data, "error", "No transition set for this item.");
@@ -1295,6 +1296,7 @@ void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 		return;
 	}
 
+	// Fetch transition settings
 	obs_data_t *settings = obs_source_get_settings(transition);
 	if (!settings) {
 		blog(LOG_WARNING, "[StreamUP] Failed to get settings for transition: %s", obs_source_get_name(transition));
@@ -1304,10 +1306,16 @@ void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 		return;
 	}
 
+	// Fetch the transition duration
 	uint32_t transition_duration = obs_sceneitem_get_transition_duration(scene_item, transition_type);
 
-	obs_data_set_string(response_data, "transitionName", obs_source_get_name(transition));
-	obs_data_set_string(response_data, "transitionType", obs_source_get_id(transition));
+	// Get the transition's display name using obs_source_get_display_name, which provides the user-friendly name
+	const char *transition_display_name = obs_source_get_display_name(obs_source_get_id(transition));
+
+	// Return the display name in "transitionType" (this replaces the internal ID)
+	obs_data_set_string(response_data, "transitionType", transition_display_name);
+
+	// Add transition settings and duration to the response
 	obs_data_set_obj(response_data, "transitionSettings", settings);
 	obs_data_set_int(response_data, "transitionDuration", transition_duration);
 
@@ -1317,15 +1325,52 @@ void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 	obs_data_release(settings);
 }
 
+const char *GetTransitionIDFromDisplayName(const char *display_name)
+{
+	const char *possible_transitions[] = {"cut_transition",   "fade_transition",     "swipe_transition",
+					      "slide_transition", "obs_stinger_transition",  "fade_to_color_transition",
+					      "wipe_transition",  "scene_as_transition", "move_transition",
+					      "shader_transition"};
+
+	// Iterate through all known transition types
+	for (size_t i = 0; i < sizeof(possible_transitions) / sizeof(possible_transitions[0]); ++i) {
+		const char *transition_id = possible_transitions[i];
+
+		// Fetch the display name for this transition type
+		const char *transition_display_name = obs_source_get_display_name(transition_id);
+
+		// Check if the display name is valid before calling strcmp
+		if (transition_display_name == NULL) {
+			blog(LOG_WARNING, "[StreamUP] Failed to get display name for transition ID: %s", transition_id);
+			continue; // Skip to the next transition type
+		}
+
+		// Compare the provided display name with the translated display name
+		if (strcmp(display_name, transition_display_name) == 0) {
+			return transition_id; // Return the corresponding internal ID
+		}
+	}
+
+	return NULL; // If no matching transition type is found
+}
+
 void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data, bool show_transition)
 {
 	UNUSED_PARAMETER(private_data);
 
 	const char *scene_name = obs_data_get_string(request_data, "sceneName");
 	const char *source_name = obs_data_get_string(request_data, "sourceName");
-	const char *transition_type = obs_data_get_string(request_data, "transitionType");
+	const char *transition_display_name = obs_data_get_string(request_data, "transitionType"); // Expecting display name
 	obs_data_t *transition_settings = obs_data_get_obj(request_data, "transitionSettings");
 	uint32_t transition_duration = obs_data_get_int(request_data, "transitionDuration");
+
+	// Find the internal transition ID from the display name
+	const char *transition_type = GetTransitionIDFromDisplayName(transition_display_name);
+	if (!transition_type) {
+		obs_data_set_string(response_data, "error", "Invalid transition display name.");
+		obs_data_set_bool(response_data, "success", false);
+		return;
+	}
 
 	obs_source_t *scene_source = obs_get_source_by_name(scene_name);
 	if (!scene_source) {
@@ -1343,6 +1388,7 @@ void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 		return;
 	}
 
+	// Create the transition using the internal transition ID (from the display name)
 	obs_source_t *transition = obs_source_create_private(transition_type, "Scene Transition", NULL);
 	if (!transition) {
 		obs_data_set_string(response_data, "error", "Unable to create transition of specified type.");
@@ -1355,6 +1401,7 @@ void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 		obs_source_update(transition, transition_settings);
 	}
 
+	// Set the transition and its duration
 	obs_sceneitem_set_transition(scene_item, show_transition, transition);
 	obs_sceneitem_set_transition_duration(scene_item, show_transition, transition_duration);
 
