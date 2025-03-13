@@ -2602,7 +2602,11 @@ void SettingsDialog()
 		QCheckBox *runAtStartupCheckBox = new QCheckBox(obs_module_text("WindowSettingsRunOnStartup"));
 		runAtStartupCheckBox->setChecked(obs_data_get_bool(settings, obs_property_name(runAtStartupProp)));
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+		QObject::connect(runAtStartupCheckBox, &QCheckBox::checkStateChanged, [=](int state) {
+#else
 		QObject::connect(runAtStartupCheckBox, &QCheckBox::stateChanged, [=](int state) {
+#endif
 			obs_data_set_bool(settings, obs_property_name(runAtStartupProp), state == Qt::Checked);
 		});
 
@@ -2616,7 +2620,11 @@ void SettingsDialog()
 		notificationsMuteCheckBox->setChecked(obs_data_get_bool(settings, obs_property_name(notificationsMuteProp)));
 		notificationsMuteCheckBox->setToolTip(obs_module_text("WindowSettingsNotificationsMuteTooltip"));
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+		QObject::connect(notificationsMuteCheckBox, &QCheckBox::checkStateChanged, [=](int state) {
+#else
 		QObject::connect(notificationsMuteCheckBox, &QCheckBox::stateChanged, [=](int state) {
+#endif
 			bool isChecked = (state == Qt::Checked);
 			obs_data_set_bool(settings, obs_property_name(notificationsMuteProp), isChecked);
 			notificationsMuted = isChecked;
