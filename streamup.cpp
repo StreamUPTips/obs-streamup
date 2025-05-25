@@ -220,17 +220,12 @@ void ResizeMoveFilters(obs_source_t *parent, obs_source_t *child, void *param)
 
 	if (strcmp(filter_id, "move_source_filter") == 0) {
 		obs_data_t *settings = obs_source_get_settings(child);
-		// Skip resize if cloning a Scene or Group
-		if (IsCloningSceneOrGroup(child)) {
-			obs_data_release(settings);
-			return;
-		}
-
 		ResizeMoveSetting(obs_data_get_obj(settings, "pos"), factor);
 		ResizeMoveSetting(obs_data_get_obj(settings, "bounds"), factor);
 		const char *source_name = obs_data_get_string(settings, "source");
 		obs_source_t *source = (source_name && strlen(source_name)) ? obs_get_source_by_name(source_name) : nullptr;
-		if (!obs_scene_from_source(source) && !obs_group_from_source(source)) {
+		// Skip resize if cloning a Scene or Group
+		if (!obs_scene_from_source(source) && !obs_group_from_source(source) && !IsCloningSceneOrGroup(source)) {
 			ResizeMoveSetting(obs_data_get_obj(settings, "scale"), factor);
 		}
 		obs_source_release(source);
