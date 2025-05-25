@@ -104,6 +104,23 @@ std::map<std::string, PluginInfo> all_plugins;
 std::map<std::string, PluginInfo> required_plugins;
 static bool notificationsMuted = false;
 
+#define ADVANCED_MASKS_SETTINGS_SIZE 15
+static const char *advanced_mask_settings[] = {"rectangle_width",
+					       "rectangle_height",
+					       "position_x",
+					       "position_y",
+					       "shape_center_x",
+					       "shape_center_y",
+					       "rectangle_corner_radius",
+					       "mask_gradient_position",
+					       "mask_gradient_width",
+					       "circle_radius",
+					       "heart_size",
+					       "shape_star_outer_radius",
+					       "shape_star_inner_radius",
+					       "star_corner_radius",
+					       "shape_feather_amount"};
+
 //--------------------INSTALL A PRODUCT--------------------
 void ResizeAdvancedMaskFilter(obs_source_t *filter, float factor)
 {
@@ -113,13 +130,11 @@ void ResizeAdvancedMaskFilter(obs_source_t *filter, float factor)
 		return;
 	}
 
-	obs_data_set_double(settings, "rectangle_width", obs_data_get_double(settings, "rectangle_width") * factor);
-	obs_data_set_double(settings, "rectangle_height", obs_data_get_double(settings, "rectangle_height") * factor);
-	obs_data_set_double(settings, "position_x", obs_data_get_double(settings, "position_x") * factor);
-	obs_data_set_double(settings, "position_y", obs_data_get_double(settings, "position_y") * factor);
-	obs_data_set_double(settings, "shape_center_x", obs_data_get_double(settings, "shape_center_x") * factor);
-	obs_data_set_double(settings, "shape_center_y", obs_data_get_double(settings, "shape_center_y") * factor);
-
+	for (size_t i = 0; i < ADVANCED_MASKS_SETTINGS_SIZE; i++) {
+		if (obs_data_has_user_value(settings, advanced_mask_settings[i]))
+			obs_data_set_double(settings, advanced_mask_settings[i],
+					    obs_data_get_double(settings, advanced_mask_settings[i]) * factor);
+	}
 	obs_source_update(filter, settings);
 	obs_data_release(settings);
 }
@@ -140,11 +155,28 @@ void ResizeMoveValueFilter(obs_source_t *filter, float factor)
 		blog(LOG_ERROR, "ResizeMoveValueFilter: settings is null");
 		return;
 	}
-
-	obs_data_set_double(settings, "rectangle_width", obs_data_get_double(settings, "rectangle_width") * factor);
-	obs_data_set_double(settings, "rectangle_height", obs_data_get_double(settings, "rectangle_height") * factor);
-	obs_data_set_double(settings, "shape_center_x", obs_data_get_double(settings, "shape_center_x") * factor);
-	obs_data_set_double(settings, "shape_center_y", obs_data_get_double(settings, "shape_center_y") * factor);
+	if (obs_data_get_int(settings, "move_value_type") == 1) {
+		for (size_t i = 0; i < ADVANCED_MASKS_SETTINGS_SIZE; i++) {
+			if (obs_data_has_user_value(settings, advanced_mask_settings[i]))
+				obs_data_set_double(settings, advanced_mask_settings[i],
+						    obs_data_get_double(settings, advanced_mask_settings[i]) * factor);
+		}
+	} else {
+		const char *setting_name = obs_data_get_string(settings, "setting_name");
+		for (size_t i = 0; i < ADVANCED_MASKS_SETTINGS_SIZE; i++) {
+			if (strcmp(setting_name, advanced_mask_settings[i]) == 0) {
+				if (obs_data_has_user_value(settings, "setting_float"))
+					obs_data_set_double(settings, "setting_float",
+							    obs_data_get_double(settings, "setting_float") * factor);
+				if (obs_data_has_user_value(settings, "setting_float_min"))
+					obs_data_set_double(settings, "setting_float_min",
+							    obs_data_get_double(settings, "setting_float_min") * factor);
+				if (obs_data_has_user_value(settings, "setting_float_max"))
+					obs_data_set_double(settings, "setting_float_max",
+							    obs_data_get_double(settings, "setting_float_max") * factor);
+			}
+		}
+	}
 
 	obs_source_update(filter, settings);
 	obs_data_release(settings);
@@ -1327,9 +1359,9 @@ void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 
 const char *GetTransitionIDFromDisplayName(const char *display_name)
 {
-	const char *possible_transitions[] = {"cut_transition",   "fade_transition",     "swipe_transition",
-					      "slide_transition", "obs_stinger_transition",  "fade_to_color_transition",
-					      "wipe_transition",  "scene_as_transition", "move_transition",
+	const char *possible_transitions[] = {"cut_transition",   "fade_transition",        "swipe_transition",
+					      "slide_transition", "obs_stinger_transition", "fade_to_color_transition",
+					      "wipe_transition",  "scene_as_transition",    "move_transition",
 					      "shader_transition"};
 
 	// Iterate through all known transition types
