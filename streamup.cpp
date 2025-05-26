@@ -271,15 +271,16 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 		// Skip resizing if it's a source-clone and cloning a Scene or Group
 		if (item_source && (obs_scene_from_source(item_source) || obs_group_from_source(item_source) ||
 				    IsCloningSceneOrGroup(item_source))) {
-			obs_source_release(item_source);
-			obs_data_release(item_data);
-			continue;
+			obs_data_get_vec2(item_data, "scale_ref", &vec2);
+			vec2.x *= factor;
+			vec2.y *= factor;
+			obs_data_set_vec2(item_data, "scale_ref", &vec2);
+		} else {
+			obs_data_get_vec2(item_data, "scale", &vec2);
+			vec2.x *= factor;
+			vec2.y *= factor;
+			obs_data_set_vec2(item_data, "scale", &vec2);
 		}
-
-		obs_data_get_vec2(item_data, "scale", &vec2);
-		vec2.x *= factor;
-		vec2.y *= factor;
-		obs_data_set_vec2(item_data, "scale", &vec2);
 
 		obs_source_release(item_source);
 		obs_data_release(item_data);
