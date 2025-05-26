@@ -195,6 +195,11 @@ bool IsCloningSceneOrGroup(obs_source_t *source)
 	if (!source_settings)
 		return false;
 
+	if (obs_data_get_int(source_settings, "clone_type")) {
+		obs_data_release(source_settings);
+		return true;
+	}
+
 	const char *cloned_source_name = obs_data_get_string(source_settings, "clone");
 	obs_source_t *cloned_source = obs_get_source_by_name(cloned_source_name);
 	if (!cloned_source) {
