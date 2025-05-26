@@ -253,13 +253,6 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 		const char *name = obs_data_get_string(item_data, "name");
 		obs_source_t *item_source = obs_get_source_by_name(name);
 
-		// Skip resizing if it's a source-clone and cloning a Scene or Group
-		if (item_source && IsCloningSceneOrGroup(item_source)) {
-			obs_source_release(item_source);
-			obs_data_release(item_data);
-			continue;
-		}
-
 		vec2 vec2;
 		obs_data_get_vec2(item_data, "pos", &vec2);
 		vec2.x *= factor;
@@ -270,7 +263,9 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 		vec2.y *= factor;
 		obs_data_set_vec2(item_data, "bounds", &vec2);
 
-		if (item_source && (obs_scene_from_source(item_source) || obs_group_from_source(item_source))) {
+		// Skip resizing if it's a source-clone and cloning a Scene or Group
+		if (item_source && (obs_scene_from_source(item_source) || obs_group_from_source(item_source) ||
+				    IsCloningSceneOrGroup(item_source))) {
 			obs_source_release(item_source);
 			obs_data_release(item_data);
 			continue;
