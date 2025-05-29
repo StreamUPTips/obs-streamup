@@ -2720,18 +2720,61 @@ void AboutDialog()
 		supportBoxLayout->addWidget(
 			CreateRichTextLabel(obs_module_text("WindowAboutSupport"), false, true, Qt::AlignCenter));
 
-		QGridLayout *supportLinksLayout = new QGridLayout;
-		CreateLabelWithLink(
-			supportLinksLayout,
-			"<b><a href='https://patreon.com/andilippi'>Andi's Patreon</a><br><a href='https://ko-fi.com/andilippi'>Andi's Ko-Fi</a></b>",
-			"https://patreon.com/andilippi", 0, 0);
-		CreateLabelWithLink(
-			supportLinksLayout,
-			"<b><a href='https://patreon.com/streamup'>StreamUP's Patreon</a><br><a href='https://ko-fi.com/streamup'>StreamUP's Ko-Fi</a></b>",
-			"https://patreon.com/streamup", 0, 1);
-		supportLinksLayout->setHorizontalSpacing(20);
-		supportLinksLayout->setAlignment(Qt::AlignCenter);
-		supportBoxLayout->addLayout(supportLinksLayout);
+		// Create a clickable button that opens the new link
+		QPushButton *membershipButton = new QPushButton("Andi's Memberships");
+		membershipButton->setCursor(Qt::PointingHandCursor);
+		membershipButton->setStyleSheet("QPushButton {"
+						"  background-color: #fcd34d;"
+						"  color: black;"
+						"  border: none;"
+						"  padding: 8px 16px;"
+						"  font-weight: bold;"
+						"  border-radius: 18px;"
+						"  width: 200px;"
+						"  height: 20px;"
+						"}"
+						"QPushButton:hover {"
+						"  background-color: #fde68a;"
+						"}");
+
+		QObject::connect(membershipButton, &QPushButton::clicked,
+				 []() { QDesktopServices::openUrl(QUrl("https://andilippi.co.uk")); });
+
+		QHBoxLayout *centerButtonLayout = new QHBoxLayout;
+		centerButtonLayout->addStretch();
+		centerButtonLayout->addWidget(membershipButton);
+		centerButtonLayout->addStretch();
+		supportBoxLayout->addLayout(centerButtonLayout);
+
+		QHBoxLayout *streamupLinksLayout = new QHBoxLayout;
+		streamupLinksLayout->setSpacing(20);
+		streamupLinksLayout->setAlignment(Qt::AlignCenter);
+
+		auto createLinkButton = [](const QString &text, const QString &url, const QString &bgColor = "#93c5fd") {
+			QPushButton *btn = new QPushButton(text);
+			btn->setCursor(Qt::PointingHandCursor);
+			btn->setStyleSheet("QPushButton {"
+					   "  background-color: " +
+					   bgColor +
+					   ";"
+					   "  color: black;"
+					   "  border: none;"
+					   "  padding: 8px 16px;"
+					   "  font-weight: bold;"
+					   "  border-radius: 18px;"
+					   "}"
+					   "QPushButton:hover {"
+					   "  background-color: #bfdbfe;"
+					   "}");
+			QObject::connect(btn, &QPushButton::clicked, [url]() { QDesktopServices::openUrl(QUrl(url)); });
+			return btn;
+		};
+
+		streamupLinksLayout->addWidget(createLinkButton("StreamUP Patreon", "https://patreon.com/streamup"));
+		streamupLinksLayout->addWidget(createLinkButton("StreamUP Ko-Fi", "https://ko-fi.com/streamup"));
+
+		supportBoxLayout->addLayout(streamupLinksLayout);
+
 		dialogLayout->addWidget(supportBox);
 
 		QGroupBox *socialBox = new QGroupBox(obs_module_text("WindowAboutSocialsTitle"));
@@ -2741,9 +2784,13 @@ void AboutDialog()
 			CreateRichTextLabel(obs_module_text("WindowAboutSocialsMsg"), false, true, Qt::AlignCenter));
 
 		QGridLayout *socialLinksLayout = new QGridLayout;
-		CreateLabelWithLink(socialLinksLayout, "<b><a href='https://andistonemedia.mystl.ink'>All Andi's Links</a></b>",
-				    "https://andistonemedia.mystl.ink", 0, 0);
-		socialBoxLayout->addLayout(socialLinksLayout);
+		QHBoxLayout *socialLinksButtonLayout = new QHBoxLayout;
+		socialLinksButtonLayout->setAlignment(Qt::AlignCenter);
+
+		QPushButton *allLinksButton = createLinkButton("All Andi's Links", "https://doras.to/andi", "#a5b4fc");
+		socialLinksButtonLayout->addWidget(allLinksButton);
+
+		socialBoxLayout->addLayout(socialLinksButtonLayout);
 		dialogLayout->addWidget(socialBox);
 
 		dialogLayout->addSpacing(10);
