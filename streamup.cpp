@@ -2783,7 +2783,6 @@ void AboutDialog()
 		socialBoxLayout->addWidget(
 			CreateRichTextLabel(obs_module_text("WindowAboutSocialsMsg"), false, true, Qt::AlignCenter));
 
-		QGridLayout *socialLinksLayout = new QGridLayout;
 		QHBoxLayout *socialLinksButtonLayout = new QHBoxLayout;
 		socialLinksButtonLayout->setAlignment(Qt::AlignCenter);
 
