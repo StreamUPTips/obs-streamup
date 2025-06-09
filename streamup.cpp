@@ -2813,7 +2813,9 @@ static void LoadMenu(QMenu *menu);
 
 static void InitialiseMenu()
 {
-	// Get the main window and cast it to QMainWindow*
+	QMenu *menu = new QMenu();
+#if defined(_WIN32)
+	// Windows: Add to main menu bar
 	void *main_window_ptr = obs_frontend_get_main_window();
 	if (!main_window_ptr) {
 		blog(LOG_ERROR, "Could not find main window");
@@ -2827,11 +2829,17 @@ static void InitialiseMenu()
 		return;
 	}
 
-	// Add the new top-level menu
-	QMenu *menu = new QMenu(obs_module_text("StreamUP"), menuBar);
-	menuBar->addMenu(menu);
+	QMenu *topLevelMenu = new QMenu(obs_module_text("StreamUP"), menuBar);
+	menuBar->addMenu(topLevelMenu);
+	menu = topLevelMenu;
 
-	// Connect to the aboutToShow signal to load the menu items dynamically
+#else
+	// macOS and Linux: Add to Tools menu
+	QAction *action = static_cast<QAction *>(obs_frontend_add_tools_menu_qaction(obs_module_text("StreamUP")));
+	action->setMenu(menu);
+#endif
+
+	// Connect dynamic loader
 	QObject::connect(menu, &QMenu::aboutToShow, [menu] { LoadMenu(menu); });
 }
 
