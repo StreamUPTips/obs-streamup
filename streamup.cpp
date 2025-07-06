@@ -100,6 +100,8 @@ struct SystemTrayNotification {
 	QString body;
 };
 
+void LoadStreamupFile(bool forceLoad = false, bool fromMainMenu = false);
+
 std::map<std::string, PluginInfo> all_plugins;
 std::map<std::string, PluginInfo> required_plugins;
 static bool notificationsMuted = false;
@@ -685,11 +687,11 @@ void CreateLabelWithLink(QLayout *layout, const QString &text, const QString &ur
 	static_cast<QGridLayout *>(layout)->addWidget(label, row, column);
 }
 
-void CreateButton(QLayout *layout, const QString &text, const std::function<void()> &onClick)
+void CreateButton(QBoxLayout *layout, const QString &text, const std::function<void()> &onClick, int size = 0)
 {
 	QPushButton *button = new QPushButton(text);
 	QObject::connect(button, &QPushButton::clicked, onClick);
-	layout->addWidget(button);
+	layout->addWidget(button, size);
 }
 
 void CreateToolDialog(const char *infoText1, const char *infoText2, const char *infoText3, const QString &titleText,
@@ -914,9 +916,9 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 	}
 }
 
-void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
+void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, bool fromMainMenu = false)
 {
-	ShowDialogOnUIThread([errorMsgMissing, errorMsgUpdate]() {
+	ShowDialogOnUIThread([errorMsgMissing, errorMsgUpdate, fromMainMenu]() {
 		QDialog *dialog = CreateDialogWindow("WindowPluginErrorTitle");
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 		dialogLayout->setContentsMargins(20, 15, 20, 20);
@@ -956,8 +958,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 			dialogLayout->addWidget(pluginstallerLabel);
 		}
 
-		QHBoxLayout *buttonLayout = new QHBoxLayout();
-
+		QVBoxLayout *buttonLayout = new QVBoxLayout();
 		CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
 
 		if (errorMsgMissing != "NULL") {
@@ -969,6 +970,46 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		}
 
 		dialogLayout->addLayout(buttonLayout);
+
+
+
+		if (fromMainMenu){
+			QFrame *warningSection = new QFrame();
+			warningSection->setFrameShape(QFrame::StyledPanel);
+			warningSection->setStyleSheet(R"(
+				QFrame {
+					background-color: #fff3cd; /* light yellow */
+					border: 1px solid #ffeeba;
+					border-radius: 4px;
+					padding: 10px;
+					color: black;
+				}
+			)");
+
+			// Layout inside the frame
+			QVBoxLayout *warningLayout = new QVBoxLayout(warningSection);
+
+			dialogLayout->addWidget(warningSection);
+
+			// Rich text label
+			QLabel *messageLabel = new QLabel();
+			messageLabel->setTextFormat(Qt::RichText);
+			messageLabel->setText(
+				"<b>Warning:</b> Pressing the button below will prompt you to select a <i>StreamUP</i> file for installation.<br /><br />"
+				"Continuing at this stage may result in incomplete functionality or unexpected behavior. You may also need to reinstall the StreamUP file after the required plugins are installed."
+			);
+			messageLabel->setWordWrap(true);
+			warningLayout->addWidget(messageLabel);
+
+			CreateButton(warningLayout, obs_module_text("Continue Anyway"), [dialog]() {
+				dialog->close();
+				LoadStreamupFile(true);
+			});
+
+			dialogLayout->addLayout(warningLayout);
+		}
+
+
 
 		dialog->setLayout(dialogLayout);
 		dialog->show();
@@ -1139,7 +1180,7 @@ void InitialiseRequiredModules()
 	obs_data_release(data);
 }
 
-bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile = false)
+bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile = false, bool fromMainMenu = false)
 {
 	if (required_plugins.empty()) {
 		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
@@ -1251,7 +1292,7 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile = false)
 			}
 		}
 
-		PluginsHaveIssue(hasMissingPlugins ? errorMsgMissing : "NULL", errorMsgUpdate);
+		PluginsHaveIssue(hasMissingPlugins ? errorMsgMissing : "NULL", errorMsgUpdate, fromMainMenu);
 
 		missing_modules.clear();
 		version_mismatch_modules.clear();
@@ -1849,10 +1890,10 @@ bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad = false)
 	return false;
 }
 
-void LoadStreamupFile(bool forceLoad = false)
+void LoadStreamupFile(bool forceLoad, bool fromMainMenu)
 {
 	if (!forceLoad) {
-		if (!CheckrequiredOBSPlugins(true)) {
+		if (!CheckrequiredOBSPlugins(true, fromMainMenu)) {
 			return;
 		}
 	}
@@ -2852,7 +2893,7 @@ static void LoadMenu(QMenu *menu)
 	if (strcmp(PLATFORM_NAME, "windows") == 0) {
 		a = menu->addAction(obs_module_text("MenuInstallProduct"));
 		QObject::connect(a, &QAction::triggered,
-				 []() { LoadStreamupFile(QApplication::keyboardModifiers() & Qt::ShiftModifier); });
+				 []() { LoadStreamupFile(QApplication::keyboardModifiers() & Qt::ShiftModifier, true); });
 		a = menu->addAction(obs_module_text("MenuDownloadProduct"));
 		QObject::connect(a, &QAction::triggered, []() { QDesktopServices::openUrl(QUrl("https://streamup.tips/")); });
 
