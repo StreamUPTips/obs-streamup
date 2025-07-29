@@ -25,6 +25,16 @@ target_sources(${PROJECT_NAME} PRIVATE
   StreamUPDock.ui
   obs-websocket-api.h
   resources.qrc
+  core/streamup-common.hpp
+  core/streamup-common.cpp
+  core/source-manager.hpp
+  core/source-manager.cpp
+  utilities/path-utils.hpp
+  utilities/path-utils.cpp
+  utilities/string-utils.hpp
+  utilities/string-utils.cpp
+  utilities/version-utils.hpp
+  utilities/version-utils.cpp
 	version.h)
 
 find_package(CURL REQUIRED)
@@ -33,6 +43,11 @@ if(BUILD_OUT_OF_TREE)
     find_package(obs-frontend-api REQUIRED)
     include(cmake/ObsPluginHelpers.cmake)
     set(OBS_FRONTEND_API_NAME "obs-frontend-api")
+    target_include_directories(${PROJECT_NAME} PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/core"
+		"${CMAKE_CURRENT_SOURCE_DIR}/utilities"
+		"${CMAKE_CURRENT_SOURCE_DIR}/ui"
+		"${CMAKE_CURRENT_SOURCE_DIR}/integrations")
 else()
     set(OBS_FRONTEND_API_NAME "frontend-api")
 endif()
@@ -88,7 +103,11 @@ if(BUILD_OUT_OF_TREE)
 	setup_plugin_target(${PROJECT_NAME})
 else()
 	target_include_directories(${PROJECT_NAME} PRIVATE
-		"${CMAKE_SOURCE_DIR}/UI/obs-frontend-api")
+		"${CMAKE_SOURCE_DIR}/UI/obs-frontend-api"
+		"${CMAKE_CURRENT_SOURCE_DIR}/core"
+		"${CMAKE_CURRENT_SOURCE_DIR}/utilities"
+		"${CMAKE_CURRENT_SOURCE_DIR}/ui"
+		"${CMAKE_CURRENT_SOURCE_DIR}/integrations")
 	if(OBS_CMAKE_VERSION VERSION_GREATER_EQUAL 3.0.0)
 		set_target_properties_obs(${PROJECT_NAME} PROPERTIES FOLDER "plugins/andilippi" PREFIX "")
 	else()
