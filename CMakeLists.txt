@@ -43,6 +43,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   integrations/websocket-api.cpp
   ui/hotkey-manager.hpp
   ui/hotkey-manager.cpp
+  ui/ui-helpers.hpp
+  ui/ui-helpers.cpp
 	version.h)
 
 find_package(CURL REQUIRED)

@@ -12,6 +12,7 @@
 #include "plugin-manager.hpp"
 #include "websocket-api.hpp"
 #include "hotkey-manager.hpp"
+#include "ui-helpers.hpp"
 
 // Wrapper functions for backward compatibility
 inline bool ToggleLockAllSources(bool sendNotification = true) {
@@ -211,6 +212,48 @@ inline void RegisterHotkeys() {
 
 inline void UnregisterHotkeys() {
     StreamUP::HotkeyManager::UnregisterHotkeys();
+}
+
+// UI Helpers function wrappers
+inline void ShowDialogOnUIThread(const std::function<void()> &dialogFunction) {
+    StreamUP::UIHelpers::ShowDialogOnUIThread(dialogFunction);
+}
+
+inline QDialog *CreateDialogWindow(const char *windowTitle) {
+    return StreamUP::UIHelpers::CreateDialogWindow(windowTitle);
+}
+
+inline void CreateToolDialog(const char *infoText1, const char *infoText2, const char *infoText3, const QString &titleText,
+                            const QStyle::StandardPixmap &iconType) {
+    StreamUP::UIHelpers::CreateToolDialog(infoText1, infoText2, infoText3, titleText, iconType);
+}
+
+inline QLabel *CreateRichTextLabel(const QString &text, bool bold, bool wrap, Qt::Alignment alignment = Qt::Alignment()) {
+    return StreamUP::UIHelpers::CreateRichTextLabel(text, bold, wrap, alignment);
+}
+
+inline QLabel *CreateIconLabel(const QStyle::StandardPixmap &iconName) {
+    return StreamUP::UIHelpers::CreateIconLabel(iconName);
+}
+
+inline QHBoxLayout *AddIconAndText(const QStyle::StandardPixmap &iconText, const char *labelText) {
+    return StreamUP::UIHelpers::AddIconAndText(iconText, labelText);
+}
+
+inline QVBoxLayout *CreateVBoxLayout(QWidget *parent) {
+    return StreamUP::UIHelpers::CreateVBoxLayout(parent);
+}
+
+inline void CreateLabelWithLink(QLayout *layout, const QString &text, const QString &url, int row, int column) {
+    StreamUP::UIHelpers::CreateLabelWithLink(layout, text, url, row, column);
+}
+
+inline void CreateButton(QLayout *layout, const QString &text, const std::function<void()> &onClick) {
+    StreamUP::UIHelpers::CreateButton(layout, text, onClick);
+}
+
+inline void CopyToClipboard(const QString &text) {
+    StreamUP::UIHelpers::CopyToClipboard(text);
 }
 
 #endif
