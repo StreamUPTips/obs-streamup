@@ -39,6 +39,10 @@ target_sources(${PROJECT_NAME} PRIVATE
   utilities/string-utils.cpp
   utilities/version-utils.hpp
   utilities/version-utils.cpp
+  integrations/websocket-api.hpp
+  integrations/websocket-api.cpp
+  ui/hotkey-manager.hpp
+  ui/hotkey-manager.cpp
 	version.h)
 
 find_package(CURL REQUIRED)
