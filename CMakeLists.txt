@@ -29,6 +29,10 @@ target_sources(${PROJECT_NAME} PRIVATE
   core/streamup-common.cpp
   core/source-manager.hpp
   core/source-manager.cpp
+  core/file-manager.hpp
+  core/file-manager.cpp
+  core/plugin-manager.hpp
+  core/plugin-manager.cpp
   utilities/path-utils.hpp
   utilities/path-utils.cpp
   utilities/string-utils.hpp

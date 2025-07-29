@@ -5,9 +5,11 @@
 #include <obs-frontend-api.h>
 #include <obs-source.h>
 
-// These functions are now provided by the SourceManager module
-// Include source-manager.hpp to access them
+// These functions are now provided by modular components
+// Include relevant module headers to access them
 #include "source-manager.hpp"
+#include "file-manager.hpp"
+#include "plugin-manager.hpp"
 
 // Wrapper functions for backward compatibility
 inline bool ToggleLockAllSources(bool sendNotification = true) {
@@ -63,6 +65,28 @@ inline void RefreshAudioMonitoringDialog() {
 
 inline void RefreshBrowserSourcesDialog() {
     StreamUP::SourceManager::RefreshBrowserSourcesDialog();
+}
+
+// File management function wrappers
+inline bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad = false) {
+    return StreamUP::FileManager::LoadStreamupFileFromPath(file_path, forceLoad);
+}
+
+inline void LoadStreamupFile(bool forceLoad = false) {
+    StreamUP::FileManager::LoadStreamupFile(forceLoad);
+}
+
+// Plugin management function wrappers
+inline void CheckAllPluginsForUpdates(bool manuallyTriggered) {
+    StreamUP::PluginManager::CheckAllPluginsForUpdates(manuallyTriggered);
+}
+
+inline void InitialiseRequiredModules() {
+    StreamUP::PluginManager::InitialiseRequiredModules();
+}
+
+inline bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile = false) {
+    return StreamUP::PluginManager::CheckrequiredOBSPlugins(isLoadStreamUpFile);
 }
 
 #endif
