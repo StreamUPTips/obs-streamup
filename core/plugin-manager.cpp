@@ -6,6 +6,7 @@
 #include "path-utils.hpp"
 #include "http-client.hpp"
 #include "ui-helpers.hpp"
+#include "obs-wrappers.hpp"
 #include <obs-module.h>
 #include <obs-data.h>
 #include <curl/curl.h>
@@ -212,39 +213,33 @@ void InitialiseRequiredModules()
 		return;
 	}
 
-	obs_data_t *data = obs_data_create_from_json(api_response.c_str());
-	obs_data_array_t *plugins = obs_data_get_array(data, "plugins");
+	auto data = OBSWrappers::MakeOBSDataFromJson(api_response.c_str());
+	auto plugins = OBSWrappers::GetArrayProperty(data.get(), "plugins");
 
-	size_t count = obs_data_array_count(plugins);
+	size_t count = obs_data_array_count(plugins.get());
 	for (size_t i = 0; i < count; ++i) {
-		obs_data_t *plugin = obs_data_array_item(plugins, i);
+		auto plugin = OBSWrappers::OBSDataPtr(obs_data_array_item(plugins.get(), i));
 
-		std::string name = obs_data_get_string(plugin, "name");
+		std::string name = OBSWrappers::GetStringProperty(plugin.get(), "name");
 
 		PluginInfo info;
-		info.version = obs_data_get_string(plugin, "version");
-		obs_data_t *downloads = obs_data_get_obj(plugin, "downloads");
+		info.version = OBSWrappers::GetStringProperty(plugin.get(), "version");
+		auto downloads = OBSWrappers::GetObjectProperty(plugin.get(), "downloads");
 		if (downloads) {
-			info.windowsURL = obs_data_get_string(downloads, "windows");
-			info.macURL = obs_data_get_string(downloads, "macOS");
-			info.linuxURL = obs_data_get_string(downloads, "linux");
-			obs_data_release(downloads);
+			info.windowsURL = OBSWrappers::GetStringProperty(downloads.get(), "windows");
+			info.macURL = OBSWrappers::GetStringProperty(downloads.get(), "macOS");
+			info.linuxURL = OBSWrappers::GetStringProperty(downloads.get(), "linux");
 		}
-		info.searchString = obs_data_get_string(plugin, "searchString");
-		info.generalURL = obs_data_get_string(plugin, "url");
-		info.moduleName = obs_data_get_string(plugin, "moduleName");
+		info.searchString = OBSWrappers::GetStringProperty(plugin.get(), "searchString");
+		info.generalURL = OBSWrappers::GetStringProperty(plugin.get(), "url");
+		info.moduleName = OBSWrappers::GetStringProperty(plugin.get(), "moduleName");
 
 		StreamUP::PluginState::Instance().AddPlugin(name, info);
 
-		if (obs_data_get_bool(plugin, "required")) {
+		if (OBSWrappers::GetBoolProperty(plugin.get(), "required")) {
 			StreamUP::PluginState::Instance().AddRequiredPlugin(name, info);
 		}
-
-		obs_data_release(plugin);
 	}
-
-	obs_data_array_release(plugins);
-	obs_data_release(data);
 }
 
 bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)

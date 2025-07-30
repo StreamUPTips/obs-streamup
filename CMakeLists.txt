@@ -43,6 +43,7 @@ target_sources(${PROJECT_NAME} PRIVATE
   utilities/version-utils.cpp
   utilities/http-client.hpp
   utilities/http-client.cpp
+  utilities/obs-wrappers.hpp
   integrations/websocket-api.hpp
   integrations/websocket-api.cpp
   ui/hotkey-manager.hpp
