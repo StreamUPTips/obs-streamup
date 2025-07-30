@@ -1,6 +1,7 @@
 #include "file-manager.hpp"
 #include "streamup-common.hpp"
 #include "plugin-manager.hpp"
+#include "obs-wrappers.hpp"
 #include <obs-module.h>
 #include <QFile>
 #include <QFileInfo>
@@ -14,62 +15,62 @@ namespace FileManager {
 //-------------------RESIZE AND SCALING FUNCTIONS-------------------
 void ResizeAdvancedMaskFilter(obs_source_t *filter, float factor)
 {
-	obs_data_t *settings = obs_source_get_settings(filter);
+	auto settings = OBSWrappers::OBSDataPtr(obs_source_get_settings(filter));
 	if (!settings) {
 		blog(LOG_ERROR, "ResizeAdvancedMaskFilter: settings is null");
 		return;
 	}
 
 	for (size_t i = 0; i < ADVANCED_MASKS_SETTINGS_SIZE; i++) {
-		if (obs_data_has_user_value(settings, advanced_mask_settings[i]))
-			obs_data_set_double(settings, advanced_mask_settings[i],
-					    obs_data_get_double(settings, advanced_mask_settings[i]) * factor);
+		if (obs_data_has_user_value(settings.get(), advanced_mask_settings[i]))
+			obs_data_set_double(settings.get(), advanced_mask_settings[i],
+					    obs_data_get_double(settings.get(), advanced_mask_settings[i]) * factor);
 	}
-	obs_source_update(filter, settings);
-	obs_data_release(settings);
+	obs_source_update(filter, settings.get());
 }
 
 void ResizeMoveSetting(obs_data_t *obs_data, float factor)
 {
+	if (!obs_data) return;
+	
 	double x = obs_data_get_double(obs_data, "x");
 	obs_data_set_double(obs_data, "x", x * factor);
 	double y = obs_data_get_double(obs_data, "y");
 	obs_data_set_double(obs_data, "y", y * factor);
-	obs_data_release(obs_data);
+	// Note: obs_data passed in is managed externally, don't release here
 }
 
 void ResizeMoveValueFilter(obs_source_t *filter, float factor)
 {
-	obs_data_t *settings = obs_source_get_settings(filter);
+	auto settings = OBSWrappers::OBSDataPtr(obs_source_get_settings(filter));
 	if (!settings) {
 		blog(LOG_ERROR, "ResizeMoveValueFilter: settings is null");
 		return;
 	}
-	if (obs_data_get_int(settings, "move_value_type") == 1) {
+	if (obs_data_get_int(settings.get(), "move_value_type") == 1) {
 		for (size_t i = 0; i < ADVANCED_MASKS_SETTINGS_SIZE; i++) {
-			if (obs_data_has_user_value(settings, advanced_mask_settings[i]))
-				obs_data_set_double(settings, advanced_mask_settings[i],
-						    obs_data_get_double(settings, advanced_mask_settings[i]) * factor);
+			if (obs_data_has_user_value(settings.get(), advanced_mask_settings[i]))
+				obs_data_set_double(settings.get(), advanced_mask_settings[i],
+						    obs_data_get_double(settings.get(), advanced_mask_settings[i]) * factor);
 		}
 	} else {
-		const char *setting_name = obs_data_get_string(settings, "setting_name");
+		const char *setting_name = obs_data_get_string(settings.get(), "setting_name");
 		for (size_t i = 0; i < ADVANCED_MASKS_SETTINGS_SIZE; i++) {
 			if (strcmp(setting_name, advanced_mask_settings[i]) == 0) {
-				if (obs_data_has_user_value(settings, "setting_float"))
-					obs_data_set_double(settings, "setting_float",
-							    obs_data_get_double(settings, "setting_float") * factor);
-				if (obs_data_has_user_value(settings, "setting_float_min"))
-					obs_data_set_double(settings, "setting_float_min",
-							    obs_data_get_double(settings, "setting_float_min") * factor);
-				if (obs_data_has_user_value(settings, "setting_float_max"))
-					obs_data_set_double(settings, "setting_float_max",
-							    obs_data_get_double(settings, "setting_float_max") * factor);
+				if (obs_data_has_user_value(settings.get(), "setting_float"))
+					obs_data_set_double(settings.get(), "setting_float",
+							    obs_data_get_double(settings.get(), "setting_float") * factor);
+				if (obs_data_has_user_value(settings.get(), "setting_float_min"))
+					obs_data_set_double(settings.get(), "setting_float_min",
+							    obs_data_get_double(settings.get(), "setting_float_min") * factor);
+				if (obs_data_has_user_value(settings.get(), "setting_float_max"))
+					obs_data_set_double(settings.get(), "setting_float_max",
+							    obs_data_get_double(settings.get(), "setting_float_max") * factor);
 			}
 		}
 	}
 
-	obs_source_update(filter, settings);
-	obs_data_release(settings);
+	obs_source_update(filter, settings.get());
 }
 
 bool IsCloningSceneOrGroup(obs_source_t *source)
@@ -380,10 +381,9 @@ bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad)
 	}
 
 	// Load the .streamup file from the file path
-	obs_data_t *data = obs_data_create_from_json_file(QT_TO_UTF8(file_path));
+	auto data = OBSWrappers::MakeOBSDataFromJsonFile(QT_TO_UTF8(file_path));
 	if (data) {
-		LoadScene(data, QFileInfo(file_path).absolutePath());
-		obs_data_release(data);
+		LoadScene(data.get(), QFileInfo(file_path).absolutePath());
 		return true;
 	}
 
