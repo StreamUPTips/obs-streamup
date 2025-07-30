@@ -12,6 +12,9 @@ class StreamUPDock;
 }
 QT_END_NAMESPACE
 
+class FlowLayout;
+class VideoCapturePopup;
+
 class StreamUPDock : public QFrame {
 	Q_OBJECT
 
@@ -25,10 +28,9 @@ private:
 	QPushButton *button2;
 	QPushButton *button3;
 	QPushButton *button4;
-	QPushButton *button5;
-	QPushButton *button6;
-	QPushButton *button7;
-	QHBoxLayout *mainDockLayout;
+	QPushButton *videoCaptureButton;
+	FlowLayout *mainDockLayout;
+	VideoCapturePopup *videoCapturePopup;
 	bool isProcessing;
 
 	void applyFileIconToButton(QPushButton *button, const QString &filePath);
@@ -37,6 +39,7 @@ private:
 	void ButtonToggleLockSourcesInCurrentScene();
 	void ButtonRefreshAudioMonitoring();
 	void ButtonRefreshBrowserSources();
+	void ButtonShowVideoCapturePopup();
 	void ButtonActivateAllVideoCaptureDevices();
 	void ButtonDeactivateAllVideoCaptureDevices();
 	void ButtonRefreshAllVideoCaptureDevices();
