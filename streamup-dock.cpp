@@ -1,6 +1,8 @@
 #include "source-manager.hpp"
 #include "streamup-dock.hpp"
 #include "ui_StreamUPDock.h"
+#include "flow-layout.hpp"
+#include "video-capture-popup.hpp"
 #include <obs.h>
 #include <obs-frontend-api.h>
 #include <obs-module.h>
@@ -17,7 +19,7 @@ void StreamUPDock::applyFileIconToButton(QPushButton *button, const QString &fil
 	button->setIcon(QIcon(filePath));
 }
 
-StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamUPDock), isProcessing(false)
+StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamUPDock), isProcessing(false), videoCapturePopup(nullptr)
 {
 	ui->setupUi(this);
 
@@ -26,23 +28,19 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	button2 = new QPushButton(this);
 	button3 = new QPushButton(this);
 	button4 = new QPushButton(this);
-	button5 = new QPushButton(this);
-	button6 = new QPushButton(this);
-	button7 = new QPushButton(this);
+	videoCaptureButton = new QPushButton(this);
 
 	// Apply initial icons to buttons
 	applyFileIconToButton(button1, ":images/all-scene-source-locked.svg");
 	applyFileIconToButton(button2, ":images/current-scene-source-locked.svg");
 	applyFileIconToButton(button3, ":images/refresh-browser-sources.svg");
 	applyFileIconToButton(button4, ":images/refresh-audio-monitoring.svg");
-	applyFileIconToButton(button5, ":Qt/icons/16x16/media-playback-start.png");  // Activate video capture devices
-	applyFileIconToButton(button6, ":Qt/icons/16x16/media-playback-stop.png");   // Deactivate video capture devices  
-	applyFileIconToButton(button7, ":Qt/icons/16x16/view-refresh.png");          // Refresh video capture devices
+	applyFileIconToButton(videoCaptureButton, ":Qt/icons/16x16/camera-video.png");
 
 	auto setButtonProperties = [](QPushButton *button) {
 		button->setIconSize(QSize(20, 20));
-	button->setFixedSize(40, 40);
-	button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+		button->setFixedSize(40, 40);
+		button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 	};
 
 	// Set properties for each button
@@ -50,30 +48,23 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	setButtonProperties(button2);
 	setButtonProperties(button3);
 	setButtonProperties(button4);
-	setButtonProperties(button5);
-	setButtonProperties(button6);
-	setButtonProperties(button7);
+	setButtonProperties(videoCaptureButton);
 
 	// Set tooltips for buttons
 	button1->setToolTip(obs_module_text("LockAllSources"));
 	button2->setToolTip(obs_module_text("LockAllCurrentSources"));
 	button3->setToolTip(obs_module_text("RefreshBrowserSources"));
 	button4->setToolTip(obs_module_text("RefreshAudioMonitoring"));
-	button5->setToolTip(obs_module_text("ActivateAllVideoCaptureDevices"));
-	button6->setToolTip(obs_module_text("DeactivateAllVideoCaptureDevices"));
-	button7->setToolTip(obs_module_text("RefreshAllVideoCaptureDevices"));
+	videoCaptureButton->setToolTip("Video Capture Device Options");
 
-	// Create a horizontal layout to hold the buttons
-	mainDockLayout = new QHBoxLayout;
+	// Create a flow layout to hold the buttons
+	mainDockLayout = new FlowLayout(this, 5, 5, 5);
 
 	mainDockLayout->addWidget(button1);
 	mainDockLayout->addWidget(button2);
 	mainDockLayout->addWidget(button3);
 	mainDockLayout->addWidget(button4);
-	mainDockLayout->addWidget(button5);
-	mainDockLayout->addWidget(button6);
-	mainDockLayout->addWidget(button7);
-	//mainDockLayout->setAlignment(Qt::AlignCenter);
+	mainDockLayout->addWidget(videoCaptureButton);
 
 	// Set the layout to the StreamupDock
 	this->setLayout(mainDockLayout);
@@ -83,9 +74,7 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	connect(button2, &QPushButton::clicked, this, &StreamUPDock::ButtonToggleLockSourcesInCurrentScene);
 	connect(button3, &QPushButton::clicked, this, &StreamUPDock::ButtonRefreshBrowserSources);
 	connect(button4, &QPushButton::clicked, this, &StreamUPDock::ButtonRefreshAudioMonitoring);
-	connect(button5, &QPushButton::clicked, this, &StreamUPDock::ButtonActivateAllVideoCaptureDevices);
-	connect(button6, &QPushButton::clicked, this, &StreamUPDock::ButtonDeactivateAllVideoCaptureDevices);
-	connect(button7, &QPushButton::clicked, this, &StreamUPDock::ButtonRefreshAllVideoCaptureDevices);
+	connect(videoCaptureButton, &QPushButton::clicked, this, &StreamUPDock::ButtonShowVideoCapturePopup);
 
 	// Setup OBS signals
 	setupObsSignals();
@@ -99,6 +88,12 @@ StreamUPDock::~StreamUPDock()
 	signal_handler_disconnect(sh, "item_add", onSceneItemAdded, this);
 	signal_handler_disconnect(sh, "item_remove", onSceneItemRemoved, this);
 	signal_handler_disconnect(sh, "item_locked", onItemLockChanged, this);
+	
+	if (videoCapturePopup) {
+		videoCapturePopup->deleteLater();
+		videoCapturePopup = nullptr;
+	}
+	
 	delete ui;
 }
 
@@ -168,6 +163,38 @@ void StreamUPDock::ButtonDeactivateAllVideoCaptureDevices()
 	StreamUP::SourceManager::DeactivateAllVideoCaptureDevices(true);
 
 	isProcessing = false;
+}
+
+void StreamUPDock::ButtonShowVideoCapturePopup()
+{
+	if (isProcessing)
+		return;
+
+	// Close existing popup if open
+	if (videoCapturePopup) {
+		videoCapturePopup->deleteLater();
+		videoCapturePopup = nullptr;
+	}
+
+	// Create new popup
+	videoCapturePopup = new VideoCapturePopup(this);
+	
+	// Connect popup signals to our methods
+	connect(videoCapturePopup, &VideoCapturePopup::activateAllVideoCaptureDevices,
+		this, &StreamUPDock::ButtonActivateAllVideoCaptureDevices);
+	connect(videoCapturePopup, &VideoCapturePopup::deactivateAllVideoCaptureDevices,
+		this, &StreamUPDock::ButtonDeactivateAllVideoCaptureDevices);
+	connect(videoCapturePopup, &VideoCapturePopup::refreshAllVideoCaptureDevices,
+		this, &StreamUPDock::ButtonRefreshAllVideoCaptureDevices);
+	
+	// Connect to handle cleanup when popup is closed
+	connect(videoCapturePopup, &QWidget::destroyed, this, [this]() {
+		videoCapturePopup = nullptr;
+	});
+
+	// Show popup next to button
+	QPoint buttonPos = videoCaptureButton->mapToGlobal(QPoint(0, 0));
+	videoCapturePopup->showNearButton(buttonPos, videoCaptureButton->size());
 }
 
 void StreamUPDock::ButtonRefreshAllVideoCaptureDevices()

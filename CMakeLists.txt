@@ -23,6 +23,10 @@ target_sources(${PROJECT_NAME} PRIVATE
 	streamup.hpp
   streamup-dock.cpp
   streamup-dock.hpp
+  video-capture-popup.cpp
+  video-capture-popup.hpp
+  flow-layout.cpp
+  flow-layout.hpp
   StreamUPDock.ui
   obs-websocket-api.h
   resources.qrc
@@ -79,6 +83,10 @@ source_group("Root" FILES
 	streamup.hpp
   streamup-dock.cpp
   streamup-dock.hpp
+  video-capture-popup.cpp
+  video-capture-popup.hpp
+  flow-layout.cpp
+  flow-layout.hpp
   StreamUPDock.ui
   obs-websocket-api.h
   resources.qrc
