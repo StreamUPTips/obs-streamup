@@ -941,6 +941,39 @@ static void RegisterWebsocketRequests()
 	if (!vendor)
 		return;
 
+	// Register new properly named commands (PascalCase following OBS WebSocket conventions)
+	// Utility commands
+	obs_websocket_vendor_register_request(vendor, "GetStreamBitrate", StreamUP::WebSocketAPI::WebsocketRequestBitrate, nullptr);
+	obs_websocket_vendor_register_request(vendor, "GetPluginVersion", StreamUP::WebSocketAPI::WebsocketRequestVersion, nullptr);
+	
+	// Plugin management
+	obs_websocket_vendor_register_request(vendor, "CheckRequiredPlugins", StreamUP::WebSocketAPI::WebsocketRequestCheckPlugins, nullptr);
+	
+	// Source management
+	obs_websocket_vendor_register_request(vendor, "ToggleLockAllSources", StreamUP::WebSocketAPI::WebsocketRequestLockAllSources, nullptr);
+	obs_websocket_vendor_register_request(vendor, "ToggleLockCurrentSceneSources", StreamUP::WebSocketAPI::WebsocketRequestLockCurrentSources, nullptr);
+	obs_websocket_vendor_register_request(vendor, "RefreshAudioMonitoring", StreamUP::WebSocketAPI::WebsocketRequestRefreshAudioMonitoring, nullptr);
+	obs_websocket_vendor_register_request(vendor, "RefreshBrowserSources", StreamUP::WebSocketAPI::WebsocketRequestRefreshBrowserSources, nullptr);
+	obs_websocket_vendor_register_request(vendor, "GetSelectedSource", StreamUP::WebSocketAPI::WebsocketRequestGetCurrentSelectedSource, nullptr);
+	
+	// Transition management
+	obs_websocket_vendor_register_request(vendor, "GetShowTransition", StreamUP::WebSocketAPI::WebsocketRequestGetShowTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "GetHideTransition", StreamUP::WebSocketAPI::WebsocketRequestGetHideTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "SetShowTransition", StreamUP::WebSocketAPI::WebsocketRequestSetShowTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "SetHideTransition", StreamUP::WebSocketAPI::WebsocketRequestSetHideTransition, nullptr);
+	
+	// File and output management
+	obs_websocket_vendor_register_request(vendor, "GetRecordingOutputPath", StreamUP::WebSocketAPI::WebsocketRequestGetOutputFilePath, nullptr);
+	obs_websocket_vendor_register_request(vendor, "GetVLCCurrentFile", StreamUP::WebSocketAPI::WebsocketRequestVLCGetCurrentFile, nullptr);
+	obs_websocket_vendor_register_request(vendor, "LoadStreamUpFile", StreamUP::WebSocketAPI::WebsocketLoadStreamupFile, nullptr);
+	
+	// UI interaction
+	obs_websocket_vendor_register_request(vendor, "OpenSourceProperties", StreamUP::WebSocketAPI::WebsocketOpenSourceProperties, nullptr);
+	obs_websocket_vendor_register_request(vendor, "OpenSourceFilters", StreamUP::WebSocketAPI::WebsocketOpenSourceFilters, nullptr);
+	obs_websocket_vendor_register_request(vendor, "OpenSourceInteraction", StreamUP::WebSocketAPI::WebsocketOpenSourceInteract, nullptr);
+	obs_websocket_vendor_register_request(vendor, "OpenSceneFilters", StreamUP::WebSocketAPI::WebsocketOpenSceneFilters, nullptr);
+	
+	// Backward compatibility - register old command names (deprecated)
 	obs_websocket_vendor_register_request(vendor, "getOutputFilePath", StreamUP::WebSocketAPI::WebsocketRequestGetOutputFilePath, nullptr);
 	obs_websocket_vendor_register_request(vendor, "getCurrentSource", StreamUP::WebSocketAPI::WebsocketRequestGetCurrentSelectedSource, nullptr);
 	obs_websocket_vendor_register_request(vendor, "getShowTransition", StreamUP::WebSocketAPI::WebsocketRequestGetShowTransition, nullptr);
