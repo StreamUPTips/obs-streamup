@@ -10,7 +10,7 @@
 #include <QGroupBox>
 #include <QGridLayout>
 #include <QObject>
-#include <QSystemTrayIcon>
+// QSystemTrayIcon now handled by NotificationManager module
 
 #if defined(_WIN32)
 #define PLATFORM_NAME "windows"
@@ -23,7 +23,7 @@
 #endif
 
 // Forward declarations for functions from main streamup.cpp
-extern void SendTrayNotification(QSystemTrayIcon::MessageIcon icon, const QString &title, const QString &body);
+// Notification functionality moved to StreamUP::NotificationManager module
 
 namespace StreamUP {
 namespace UIHelpers {

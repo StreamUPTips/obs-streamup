@@ -4,10 +4,10 @@
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <obs-hotkey.h>
-#include <QSystemTrayIcon>
+// QSystemTrayIcon now handled by NotificationManager
 
 // Forward declarations for functions from main streamup.cpp
-extern void SendTrayNotification(QSystemTrayIcon::MessageIcon icon, const QString &title, const QString &body);
+#include "notification-manager.hpp"
 
 namespace StreamUP {
 namespace HotkeyManager {
@@ -31,7 +31,7 @@ void HotkeyRefreshBrowserSources(void *data, obs_hotkey_id id, obs_hotkey_t *hot
 	if (!pressed)
 		return;
 	obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr);
-	SendTrayNotification(QSystemTrayIcon::Information, obs_module_text("RefreshBrowserSources"),
+	StreamUP::NotificationManager::SendInfoNotification(obs_module_text("RefreshBrowserSources"),
 			     "Action completed successfully.");
 }
 
@@ -53,7 +53,7 @@ void HotkeyRefreshAudioMonitoring(void *data, obs_hotkey_id id, obs_hotkey_t *ho
 	if (!pressed)
 		return;
 	obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr);
-	SendTrayNotification(QSystemTrayIcon::Information, obs_module_text("RefreshAudioMonitoring"),
+	StreamUP::NotificationManager::SendInfoNotification(obs_module_text("RefreshAudioMonitoring"),
 			     "Action completed successfully.");
 }
 

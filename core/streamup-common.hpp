@@ -5,7 +5,7 @@
 #include <obs-frontend-api.h>
 #include <obs-source.h>
 #include <QString>
-#include <QSystemTrayIcon>
+// QSystemTrayIcon now handled by NotificationManager module
 #include <map>
 #include <string>
 
@@ -31,11 +31,7 @@ struct PluginInfo {
 
 // RequestData moved to StreamUP::HttpClient module
 
-struct SystemTrayNotification {
-	QSystemTrayIcon::MessageIcon icon;
-	QString title;
-	QString body;
-};
+// SystemTrayNotification struct moved to StreamUP::NotificationManager module
 
 struct SceneItemEnumData {
 	bool isAnySourceSelected = false;

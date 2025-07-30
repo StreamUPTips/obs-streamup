@@ -1,14 +1,14 @@
 #include "source-manager.hpp"
 #include "streamup-common.hpp"
 #include <obs-module.h>
-#include <QSystemTrayIcon>
+// QSystemTrayIcon now handled by NotificationManager
 #include <vector>
 
 // Forward declarations for functions from main streamup.cpp
 extern void CreateToolDialog(const char *infoText1, const char *infoText2, const char *infoText3, const QString &titleText,
                             const std::function<void()> &buttonCallback, const QString &jsonString, const char *how1, const char *how2,
                             const char *how3, const char *how4, const char *notificationMessage);
-extern void SendTrayNotification(QSystemTrayIcon::MessageIcon icon, const QString &title, const QString &body);
+#include "notification-manager.hpp"
 
 namespace StreamUP {
 namespace SourceManager {
@@ -240,11 +240,11 @@ bool ToggleLockSourcesInCurrentScene(bool sendNotification)
 	if (sendNotification) {
 		if (any_unlocked) {
 			blog(LOG_INFO, "[StreamUP] All sources in the current scene have been locked.");
-			SendTrayNotification(QSystemTrayIcon::Information, obs_module_text("SourceLockSystem"),
+			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("SourceLockSystem"),
 					     obs_module_text("LockedCurrentSources"));
 		} else {
 			blog(LOG_INFO, "[StreamUP] All sources in the current scene have been unlocked.");
-			SendTrayNotification(QSystemTrayIcon::Information, obs_module_text("SourceLockSystem"),
+			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("SourceLockSystem"),
 					     obs_module_text("UnlockedCurrentSources"));
 		}
 	}
@@ -294,11 +294,11 @@ bool ToggleLockAllSources(bool sendNotification)
 	if (sendNotification) {
 		if (any_unlocked) {
 			blog(LOG_INFO, "[StreamUP] All sources in all scenes have been locked.");
-			SendTrayNotification(QSystemTrayIcon::Information, obs_module_text("SourceLockSystem"),
+			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("SourceLockSystem"),
 					     obs_module_text("LockedAllSources"));
 		} else {
 			blog(LOG_INFO, "[StreamUP] All sources in all scenes have been unlocked.");
-			SendTrayNotification(QSystemTrayIcon::Information, obs_module_text("SourceLockSystem"),
+			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("SourceLockSystem"),
 					     obs_module_text("UnlockedAllSources"));
 		}
 	}

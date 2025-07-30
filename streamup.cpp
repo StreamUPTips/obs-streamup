@@ -11,6 +11,7 @@
 #include "ui-helpers.hpp"
 #include "menu-manager.hpp"
 #include "settings-manager.hpp"
+#include "notification-manager.hpp"
 #include "http-client.hpp"
 #include "path-utils.hpp"
 #include "string-utils.hpp"
@@ -49,7 +50,7 @@
 #include <QObject>
 #include <QPushButton>
 #include <QStyle>
-#include <QSystemTrayIcon>
+// QSystemTrayIcon now handled by NotificationManager module
 #include <QTextBrowser>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -103,11 +104,7 @@ struct PluginInfo {
 };
 
 
-struct SystemTrayNotification {
-	QSystemTrayIcon::MessageIcon icon;
-	QString title;
-	QString body;
-};
+// SystemTrayNotification struct moved to StreamUP::NotificationManager module
 
 std::map<std::string, PluginInfo> all_plugins;
 std::map<std::string, PluginInfo> required_plugins;
@@ -132,32 +129,7 @@ static const char *advanced_mask_settings[] = {"rectangle_width",
 
 
 //--------------------NOTIFICATION HELPERS--------------------
-void SendTrayNotification(QSystemTrayIcon::MessageIcon icon, const QString &title, const QString &body)
-{
-	if (StreamUP::SettingsManager::AreNotificationsMuted()) {
-		blog(LOG_INFO, "[StreamUP] Notifications are muted.");
-		return;
-	}
-
-	if (!QSystemTrayIcon::isSystemTrayAvailable() || !QSystemTrayIcon::supportsMessages())
-		return;
-
-	SystemTrayNotification *notification = new SystemTrayNotification{icon, title, body};
-
-	obs_queue_task(
-		OBS_TASK_UI,
-		[](void *param) {
-			auto notification = static_cast<SystemTrayNotification *>(param);
-			void *systemTrayPtr = obs_frontend_get_system_tray();
-			if (systemTrayPtr) {
-				auto systemTray = static_cast<QSystemTrayIcon *>(systemTrayPtr);
-				QString prefixedTitle = "[StreamUP] " + notification->title;
-				systemTray->showMessage(prefixedTitle, notification->body, notification->icon);
-			}
-			delete notification;
-		},
-		(void *)notification, false);
-}
+// Notification functionality moved to StreamUP::NotificationManager module
 
 //--------------------PATH HELPERS--------------------
 std::string GetLocalAppDataPath()
@@ -287,7 +259,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		StreamUP::UIHelpers::CreateButton(buttonLayout, titleStr, [=]() {
 			buttonCallback();
 			if (notificationMessage) {
-				SendTrayNotification(QSystemTrayIcon::Information, titleStr, obs_module_text(notificationMessage));
+				StreamUP::NotificationManager::SendInfoNotification(titleStr, obs_module_text(notificationMessage));
 			}
 			dialog->close();
 		});
