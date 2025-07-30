@@ -3,6 +3,7 @@
 #include "streamup-dock.hpp"
 #include "version.h"
 #include "streamup-common.hpp"
+#include "plugin-state.hpp"
 #include "source-manager.hpp"
 #include "file-manager.hpp"
 #include "plugin-manager.hpp"
@@ -86,28 +87,10 @@ OBS_MODULE_USE_DEFAULT_LOCALE("streamup", "en-US")
 #endif
 
 //--------------------STRUCTS & GLOBALS--------------------
-struct SceneItemEnumData {
-	bool isAnySourceSelected = false;
-	const char *selectedSourceName = nullptr;
-};
-
-struct PluginInfo {
-	std::string name;
-	std::string version;
-	std::string searchString;
-	std::string windowsURL;
-	std::string macURL;
-	std::string linuxURL;
-	std::string generalURL;
-	std::string moduleName;
-	bool required;
-};
-
-
+// SceneItemEnumData moved to StreamUP::streamup-common.hpp
+// PluginInfo moved to StreamUP::streamup-common.hpp
 // SystemTrayNotification struct moved to StreamUP::NotificationManager module
-
-std::map<std::string, PluginInfo> all_plugins;
-std::map<std::string, PluginInfo> required_plugins;
+// Plugin state moved to StreamUP::PluginState class
 // Notification mute state now managed by SettingsManager
 
 #define ADVANCED_MASKS_SETTINGS_SIZE 15
@@ -381,9 +364,10 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 		return installedPlugins;
 	}
 
-	for (const auto &module : all_plugins) {
+	const auto& allPlugins = StreamUP::GetAllPlugins();
+	for (const auto &module : allPlugins) {
 		const std::string &plugin_name = module.first;
-		const PluginInfo &plugin_info = module.second;
+		const StreamUP::PluginInfo &plugin_info = module.second;
 		const std::string &search_string = plugin_info.searchString;
 
 		std::string installed_version = SearchStringInFile(filepath, search_string.c_str());
@@ -398,7 +382,7 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 	return installedPlugins;
 }
 
-std::string GetPlatformURL(const PluginInfo &plugin_info)
+std::string GetPlatformURL(const StreamUP::PluginInfo &plugin_info)
 {
 	std::string url;
 	if (strcmp(PLATFORM_NAME, "windows") == 0) {
@@ -525,7 +509,7 @@ static bool EnumSceneItemsCallback(obs_scene_t *scene, obs_sceneitem_t *item, vo
 {
 	UNUSED_PARAMETER(scene);
 
-	SceneItemEnumData *data = static_cast<SceneItemEnumData *>(param);
+	StreamUP::SceneItemEnumData *data = static_cast<StreamUP::SceneItemEnumData *>(param);
 	bool isSelected = obs_sceneitem_selected(item);
 	if (isSelected) {
 		data->isAnySourceSelected = true;
@@ -537,7 +521,7 @@ static bool EnumSceneItemsCallback(obs_scene_t *scene, obs_sceneitem_t *item, vo
 
 bool EnumSceneItems(obs_scene_t *scene, const char **selected_source_name)
 {
-	SceneItemEnumData data;
+	StreamUP::SceneItemEnumData data;
 
 	obs_scene_enum_items(scene, EnumSceneItemsCallback, &data);
 
@@ -727,7 +711,8 @@ obs_websocket_vendor vendor = nullptr;
 
 QString GetForumLink(const std::string &pluginName)
 {
-	const PluginInfo &pluginInfo = all_plugins[pluginName];
+	const auto& allPlugins = StreamUP::GetAllPlugins();
+	const StreamUP::PluginInfo &pluginInfo = allPlugins.at(pluginName);
 	return QString::fromStdString(pluginInfo.generalURL);
 }
 
@@ -802,7 +787,8 @@ std::vector<std::string> SearchModulesInFile(const char *path)
 
 				if (ignoreModules.find(str_line) == ignoreModules.end()) {
 					bool foundInApi = false;
-					for (const auto &pair : all_plugins) {
+					const auto& allPlugins = StreamUP::GetAllPlugins();
+					for (const auto &pair : allPlugins) {
 						if (pair.second.moduleName == str_line) {
 							foundInApi = true;
 							break;
