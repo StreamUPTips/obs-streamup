@@ -57,6 +57,7 @@
 #include <QVBoxLayout>
 #include <regex>
 #include <sstream>
+#include <thread>
 #include <unordered_set>
 #include <util/platform.h>
 #include <qscrollarea.h>
@@ -1055,10 +1056,14 @@ void obs_module_post_load(void)
 	// Initialize settings system
 	StreamUP::SettingsManager::InitializeSettingsSystem();
 	
-	// Check for plugin updates on startup if enabled
+	// Check for plugin updates on startup if enabled (asynchronously to avoid blocking OBS startup)
 	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 	if (settings.runAtStartup) {
-		StreamUP::PluginManager::CheckAllPluginsForUpdates(false);
+		// Run update check on separate thread to avoid blocking OBS startup
+		std::thread updateThread([]() {
+			StreamUP::PluginManager::CheckAllPluginsForUpdates(false);
+		});
+		updateThread.detach(); // Detach so thread can run independently
 	}
 }
 
