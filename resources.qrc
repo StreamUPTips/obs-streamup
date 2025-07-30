@@ -6,5 +6,7 @@
 		<file>images/current-scene-source-unlocked.svg</file>
 		<file>images/refresh-browser-sources.svg</file>
 		<file>images/refresh-audio-monitoring.svg</file>
+		<file>images/square_logo.png</file>
+		<file>images/text_logo.png</file>
 	</qresource>
 </RCC>

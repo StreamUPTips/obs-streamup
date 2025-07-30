@@ -2,6 +2,7 @@
 #include "source-manager.hpp"
 #include "file-manager.hpp"
 #include "plugin-manager.hpp"
+#include "splash-screen.hpp"
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <QApplication>
@@ -100,6 +101,9 @@ void LoadMenuItems(QMenu* menu)
     // About and Settings
     action = menu->addAction(obs_module_text("MenuAbout"));
     QObject::connect(action, &QAction::triggered, []() { AboutDialog(); });
+
+    action = menu->addAction(obs_module_text("MenuWelcomeScreen"));
+    QObject::connect(action, &QAction::triggered, []() { StreamUP::SplashScreen::ShowSplashScreen(); });
 
     action = menu->addAction(obs_module_text("MenuSettings"));
     QObject::connect(action, &QAction::triggered, []() { SettingsDialog(); });
