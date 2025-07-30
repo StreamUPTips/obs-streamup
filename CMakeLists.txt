@@ -51,6 +51,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/menu-manager.cpp
   ui/settings-manager.hpp
   ui/settings-manager.cpp
+  ui/notification-manager.hpp
+  ui/notification-manager.cpp
 	version.h)
 
 find_package(CURL REQUIRED)

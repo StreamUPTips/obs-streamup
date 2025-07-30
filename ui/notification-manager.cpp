@@ -1,0 +1,60 @@
+#include "notification-manager.hpp"
+#include "settings-manager.hpp"
+#include <obs-module.h>
+#include <obs-frontend-api.h>
+#include <QSystemTrayIcon>
+
+namespace StreamUP {
+namespace NotificationManager {
+
+void SendTrayNotification(QSystemTrayIcon::MessageIcon icon, const QString& title, const QString& body)
+{
+    if (StreamUP::SettingsManager::AreNotificationsMuted()) {
+        blog(LOG_INFO, "[StreamUP] Notifications are muted.");
+        return;
+    }
+
+    if (!QSystemTrayIcon::isSystemTrayAvailable() || !QSystemTrayIcon::supportsMessages()) {
+        blog(LOG_INFO, "[StreamUP] System tray notifications not available.");
+        return;
+    }
+
+    SystemTrayNotification* notification = new SystemTrayNotification{icon, title, body};
+
+    obs_queue_task(
+        OBS_TASK_UI,
+        [](void* param) {
+            auto notification = static_cast<SystemTrayNotification*>(param);
+            void* systemTrayPtr = obs_frontend_get_system_tray();
+            if (systemTrayPtr) {
+                auto systemTray = static_cast<QSystemTrayIcon*>(systemTrayPtr);
+                QString prefixedTitle = "[StreamUP] " + notification->title;
+                systemTray->showMessage(prefixedTitle, notification->body, notification->icon);
+            }
+            delete notification;
+        },
+        (void*)notification, false);
+}
+
+bool IsSystemTrayAvailable()
+{
+    return QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages();
+}
+
+void SendInfoNotification(const QString& title, const QString& body)
+{
+    SendTrayNotification(QSystemTrayIcon::Information, title, body);
+}
+
+void SendWarningNotification(const QString& title, const QString& body)
+{
+    SendTrayNotification(QSystemTrayIcon::Warning, title, body);
+}
+
+void SendCriticalNotification(const QString& title, const QString& body)
+{
+    SendTrayNotification(QSystemTrayIcon::Critical, title, body);
+}
+
+} // namespace NotificationManager
+} // namespace StreamUP
