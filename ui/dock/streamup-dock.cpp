@@ -1,8 +1,8 @@
-#include "source-manager.hpp"
+#include "../../core/source-manager.hpp"
 #include "streamup-dock.hpp"
-#include "ui_StreamUPDock.h"
-#include "flow-layout.hpp"
-#include "video-capture-popup.hpp"
+#include "../../ui_StreamUPDock.h"
+#include "../../flow-layout.hpp"
+#include "../../video-capture-popup.hpp"
 #include <obs.h>
 #include <obs-frontend-api.h>
 #include <obs-module.h>

@@ -21,8 +21,6 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/version.h.in ${CMAKE_CURRENT_SOURCE_D
 target_sources(${PROJECT_NAME} PRIVATE
 	streamup.cpp
 	streamup.hpp
-  streamup-dock.cpp
-  streamup-dock.hpp
   video-capture-popup.cpp
   video-capture-popup.hpp
   flow-layout.cpp
@@ -70,7 +68,9 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/settings-manager.hpp
   ui/settings-manager.cpp
   ui/notification-manager.hpp
-  ui/notification-manager.cpp)
+  ui/notification-manager.cpp
+  ui/dock/streamup-dock.hpp
+  ui/dock/streamup-dock.cpp)
 
 # Integrations module files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -81,8 +81,6 @@ target_sources(${PROJECT_NAME} PRIVATE
 source_group("Root" FILES
 	streamup.cpp
 	streamup.hpp
-  streamup-dock.cpp
-  streamup-dock.hpp
   video-capture-popup.cpp
   video-capture-popup.hpp
   flow-layout.cpp
@@ -128,6 +126,10 @@ source_group("UI" FILES
   ui/settings-manager.cpp
   ui/notification-manager.hpp
   ui/notification-manager.cpp)
+
+source_group("UI\\Dock" FILES
+  ui/dock/streamup-dock.hpp
+  ui/dock/streamup-dock.cpp)
 
 source_group("Integrations" FILES
   integrations/websocket-api.hpp
