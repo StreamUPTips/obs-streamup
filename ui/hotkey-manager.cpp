@@ -13,14 +13,14 @@ namespace StreamUP {
 namespace HotkeyManager {
 
 //-------------------HOTKEY ID STORAGE-------------------
-static obs_hotkey_id refreshBrowserSourcesHotkey = OBS_INVALID_HOTKEY_ID;
-static obs_hotkey_id refreshAudioMonitoringHotkey = OBS_INVALID_HOTKEY_ID;
-static obs_hotkey_id lockAllSourcesHotkey = OBS_INVALID_HOTKEY_ID;
-static obs_hotkey_id lockCurrentSourcesHotkey = OBS_INVALID_HOTKEY_ID;
-static obs_hotkey_id openSourcePropertiesHotkey = OBS_INVALID_HOTKEY_ID;
-static obs_hotkey_id openSourceFiltersHotkey = OBS_INVALID_HOTKEY_ID;
-static obs_hotkey_id openSceneFiltersHotkey = OBS_INVALID_HOTKEY_ID;
-static obs_hotkey_id openSourceInteractHotkey = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id refresh_browser_sources_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id refresh_audio_monitoring_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id lock_all_sources_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id lock_current_sources_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id open_source_properties_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id open_source_filters_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id open_scene_filters_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id open_source_interact_hotkey_id = OBS_INVALID_HOTKEY_ID;
 
 //-------------------HOTKEY HANDLERS-------------------
 void HotkeyRefreshBrowserSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
@@ -180,71 +180,71 @@ void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 		// save hotkeys
 		obs_data_array_t *hotkeySaveArray;
 
-		hotkeySaveArray = obs_hotkey_save(refreshBrowserSourcesHotkey);
-		obs_data_set_array(save_data, "refreshBrowserSourcesHotkey", hotkeySaveArray);
+		hotkeySaveArray = obs_hotkey_save(refresh_browser_sources_hotkey_id);
+		obs_data_set_array(save_data, "refresh_browser_sources_hotkey", hotkeySaveArray);
 		obs_data_array_release(hotkeySaveArray);
 
-		hotkeySaveArray = obs_hotkey_save(lockAllSourcesHotkey);
-		obs_data_set_array(save_data, "lockAllSourcesHotkey", hotkeySaveArray);
+		hotkeySaveArray = obs_hotkey_save(refresh_audio_monitoring_hotkey_id);
+		obs_data_set_array(save_data, "refresh_audio_monitoring_hotkey", hotkeySaveArray);
 		obs_data_array_release(hotkeySaveArray);
 
-		hotkeySaveArray = obs_hotkey_save(refreshAudioMonitoringHotkey);
-		obs_data_set_array(save_data, "refreshAudioMonitoringHotkey", hotkeySaveArray);
+		hotkeySaveArray = obs_hotkey_save(lock_all_sources_hotkey_id);
+		obs_data_set_array(save_data, "lock_all_sources_hotkey", hotkeySaveArray);
 		obs_data_array_release(hotkeySaveArray);
 
-		hotkeySaveArray = obs_hotkey_save(lockCurrentSourcesHotkey);
-		obs_data_set_array(save_data, "lockCurrentSourcesHotkey", hotkeySaveArray);
+		hotkeySaveArray = obs_hotkey_save(lock_current_sources_hotkey_id);
+		obs_data_set_array(save_data, "lock_current_sources_hotkey", hotkeySaveArray);
 		obs_data_array_release(hotkeySaveArray);
 
-		hotkeySaveArray = obs_hotkey_save(openSourceInteractHotkey);
-		obs_data_set_array(save_data, "openSourceInteractHotkey", hotkeySaveArray);
+		hotkeySaveArray = obs_hotkey_save(open_source_properties_hotkey_id);
+		obs_data_set_array(save_data, "open_source_properties_hotkey", hotkeySaveArray);
 		obs_data_array_release(hotkeySaveArray);
 
-		hotkeySaveArray = obs_hotkey_save(openSourcePropertiesHotkey);
-		obs_data_set_array(save_data, "openSourcePropertiesHotkey", hotkeySaveArray);
+		hotkeySaveArray = obs_hotkey_save(open_source_filters_hotkey_id);
+		obs_data_set_array(save_data, "open_source_filters_hotkey", hotkeySaveArray);
 		obs_data_array_release(hotkeySaveArray);
 
-		hotkeySaveArray = obs_hotkey_save(openSourceFiltersHotkey);
-		obs_data_set_array(save_data, "openSourceFiltersHotkey", hotkeySaveArray);
+		hotkeySaveArray = obs_hotkey_save(open_source_interact_hotkey_id);
+		obs_data_set_array(save_data, "open_source_interact_hotkey", hotkeySaveArray);
 		obs_data_array_release(hotkeySaveArray);
 
-		hotkeySaveArray = obs_hotkey_save(openSceneFiltersHotkey);
-		obs_data_set_array(save_data, "openSceneFiltersHotkey", hotkeySaveArray);
+		hotkeySaveArray = obs_hotkey_save(open_scene_filters_hotkey_id);
+		obs_data_set_array(save_data, "open_scene_filters_hotkey", hotkeySaveArray);
 		obs_data_array_release(hotkeySaveArray);
 	} else {
 		// load hotkeys
 		obs_data_array_t *hotkeyLoadArray;
 
-		hotkeyLoadArray = obs_data_get_array(save_data, "refreshBrowserSourcesHotkey");
-		obs_hotkey_load(refreshBrowserSourcesHotkey, hotkeyLoadArray);
+		hotkeyLoadArray = obs_data_get_array(save_data, "refresh_browser_sources_hotkey");
+		obs_hotkey_load(refresh_browser_sources_hotkey_id, hotkeyLoadArray);
 		obs_data_array_release(hotkeyLoadArray);
 
-		hotkeyLoadArray = obs_data_get_array(save_data, "lockAllSourcesHotkey");
-		obs_hotkey_load(lockAllSourcesHotkey, hotkeyLoadArray);
+		hotkeyLoadArray = obs_data_get_array(save_data, "refresh_audio_monitoring_hotkey");
+		obs_hotkey_load(refresh_audio_monitoring_hotkey_id, hotkeyLoadArray);
 		obs_data_array_release(hotkeyLoadArray);
 
-		hotkeyLoadArray = obs_data_get_array(save_data, "refreshAudioMonitoringHotkey");
-		obs_hotkey_load(refreshAudioMonitoringHotkey, hotkeyLoadArray);
+		hotkeyLoadArray = obs_data_get_array(save_data, "lock_all_sources_hotkey");
+		obs_hotkey_load(lock_all_sources_hotkey_id, hotkeyLoadArray);
 		obs_data_array_release(hotkeyLoadArray);
 
-		hotkeyLoadArray = obs_data_get_array(save_data, "lockCurrentSourcesHotkey");
-		obs_hotkey_load(lockCurrentSourcesHotkey, hotkeyLoadArray);
+		hotkeyLoadArray = obs_data_get_array(save_data, "lock_current_sources_hotkey");
+		obs_hotkey_load(lock_current_sources_hotkey_id, hotkeyLoadArray);
 		obs_data_array_release(hotkeyLoadArray);
 
-		hotkeyLoadArray = obs_data_get_array(save_data, "openSourceInteractHotkey");
-		obs_hotkey_load(openSourceInteractHotkey, hotkeyLoadArray);
+		hotkeyLoadArray = obs_data_get_array(save_data, "open_source_properties_hotkey");
+		obs_hotkey_load(open_source_properties_hotkey_id, hotkeyLoadArray);
 		obs_data_array_release(hotkeyLoadArray);
 
-		hotkeyLoadArray = obs_data_get_array(save_data, "openSourcePropertiesHotkey");
-		obs_hotkey_load(openSourcePropertiesHotkey, hotkeyLoadArray);
+		hotkeyLoadArray = obs_data_get_array(save_data, "open_source_filters_hotkey");
+		obs_hotkey_load(open_source_filters_hotkey_id, hotkeyLoadArray);
 		obs_data_array_release(hotkeyLoadArray);
 
-		hotkeyLoadArray = obs_data_get_array(save_data, "openSourceFiltersHotkey");
-		obs_hotkey_load(openSourceFiltersHotkey, hotkeyLoadArray);
+		hotkeyLoadArray = obs_data_get_array(save_data, "open_source_interact_hotkey");
+		obs_hotkey_load(open_source_interact_hotkey_id, hotkeyLoadArray);
 		obs_data_array_release(hotkeyLoadArray);
 
-		hotkeyLoadArray = obs_data_get_array(save_data, "openSceneFiltersHotkey");
-		obs_hotkey_load(openSceneFiltersHotkey, hotkeyLoadArray);
+		hotkeyLoadArray = obs_data_get_array(save_data, "open_scene_filters_hotkey");
+		obs_hotkey_load(open_scene_filters_hotkey_id, hotkeyLoadArray);
 		obs_data_array_release(hotkeyLoadArray);
 	}
 }
@@ -252,34 +252,34 @@ void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 //-------------------HOTKEY REGISTRATION-------------------
 void RegisterHotkeys()
 {
-	refreshBrowserSourcesHotkey = obs_hotkey_register_frontend("refresh_browser_sources", obs_module_text("RefreshBrowserSources"),
-								HotkeyRefreshBrowserSources, nullptr);
-	lockAllSourcesHotkey = obs_hotkey_register_frontend("lock_all_sources", obs_module_text("LockAllSources"),
-							    HotkeyLockAllSources, nullptr);
-	refreshAudioMonitoringHotkey = obs_hotkey_register_frontend("refresh_audio_monitoring", obs_module_text("RefreshAudioMonitoring"),
-								    HotkeyRefreshAudioMonitoring, nullptr);
-	lockCurrentSourcesHotkey = obs_hotkey_register_frontend("lock_current_sources", obs_module_text("LockCurrentSources"),
-								HotkeyLockCurrentSources, nullptr);
-	openSourcePropertiesHotkey = obs_hotkey_register_frontend("open_source_properties", obs_module_text("OpenSourceProperties"),
-								  HotkeyOpenSourceProperties, nullptr);
-	openSourceFiltersHotkey = obs_hotkey_register_frontend("open_source_filters", obs_module_text("OpenSourceFilters"),
-							       HotkeyOpenSourceFilters, nullptr);
-	openSourceInteractHotkey = obs_hotkey_register_frontend("open_source_interact", obs_module_text("OpenSourceInteract"),
-								HotkeyOpenSourceInteract, nullptr);
-	openSceneFiltersHotkey = obs_hotkey_register_frontend("open_scene_filters", obs_module_text("OpenSceneFilters"),
-							      HotkeyOpenSceneFilters, nullptr);
+	refresh_browser_sources_hotkey_id = obs_hotkey_register_frontend("streamup_refresh_browser_sources", "StreamUP: Refresh Browser Sources",
+											 HotkeyRefreshBrowserSources, nullptr);
+	refresh_audio_monitoring_hotkey_id = obs_hotkey_register_frontend("streamup_refresh_audio_monitoring", "StreamUP: Refresh Audio Monitoring",
+											  HotkeyRefreshAudioMonitoring, nullptr);
+	lock_all_sources_hotkey_id = obs_hotkey_register_frontend("streamup_lock_all_sources", "StreamUP: Lock/Unlock All Sources",
+										  HotkeyLockAllSources, nullptr);
+	lock_current_sources_hotkey_id = obs_hotkey_register_frontend("streamup_lock_current_sources", "StreamUP: Lock/Unlock Current Scene Sources",
+										      HotkeyLockCurrentSources, nullptr);
+	open_source_properties_hotkey_id = obs_hotkey_register_frontend("streamup_open_source_properties", "StreamUP: Open Selected Source Properties",
+											    HotkeyOpenSourceProperties, nullptr);
+	open_source_filters_hotkey_id = obs_hotkey_register_frontend("streamup_open_source_filters", "StreamUP: Open Selected Source Filters",
+											 HotkeyOpenSourceFilters, nullptr);
+	open_source_interact_hotkey_id = obs_hotkey_register_frontend("streamup_open_source_interact", "StreamUP: Open Selected Source Interact",
+											  HotkeyOpenSourceInteract, nullptr);
+	open_scene_filters_hotkey_id = obs_hotkey_register_frontend("streamup_open_scene_filters", "StreamUP: Open Current Scene Filters",
+											 HotkeyOpenSceneFilters, nullptr);
 }
 
 void UnregisterHotkeys()
 {
-	obs_hotkey_unregister(refreshBrowserSourcesHotkey);
-	obs_hotkey_unregister(lockAllSourcesHotkey);
-	obs_hotkey_unregister(refreshAudioMonitoringHotkey);
-	obs_hotkey_unregister(lockCurrentSourcesHotkey);
-	obs_hotkey_unregister(openSourcePropertiesHotkey);
-	obs_hotkey_unregister(openSourceFiltersHotkey);
-	obs_hotkey_unregister(openSourceInteractHotkey);
-	obs_hotkey_unregister(openSceneFiltersHotkey);
+	obs_hotkey_unregister(refresh_browser_sources_hotkey_id);
+	obs_hotkey_unregister(refresh_audio_monitoring_hotkey_id);
+	obs_hotkey_unregister(lock_all_sources_hotkey_id);
+	obs_hotkey_unregister(lock_current_sources_hotkey_id);
+	obs_hotkey_unregister(open_source_properties_hotkey_id);
+	obs_hotkey_unregister(open_source_filters_hotkey_id);
+	obs_hotkey_unregister(open_source_interact_hotkey_id);
+	obs_hotkey_unregister(open_scene_filters_hotkey_id);
 }
 
 } // namespace HotkeyManager
