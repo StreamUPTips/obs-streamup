@@ -1,5 +1,6 @@
 #include "notification-manager.hpp"
 #include "settings-manager.hpp"
+#include "error-handler.hpp"
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <QSystemTrayIcon>
@@ -10,12 +11,12 @@ namespace NotificationManager {
 void SendTrayNotification(QSystemTrayIcon::MessageIcon icon, const QString& title, const QString& body)
 {
     if (StreamUP::SettingsManager::AreNotificationsMuted()) {
-        blog(LOG_INFO, "[StreamUP] Notifications are muted.");
+        StreamUP::ErrorHandler::LogInfo("Notifications are muted, skipping tray notification", StreamUP::ErrorHandler::Category::UI);
         return;
     }
 
     if (!QSystemTrayIcon::isSystemTrayAvailable() || !QSystemTrayIcon::supportsMessages()) {
-        blog(LOG_INFO, "[StreamUP] System tray notifications not available.");
+        StreamUP::ErrorHandler::LogWarning("System tray notifications not available on this platform", StreamUP::ErrorHandler::Category::UI);
         return;
     }
 

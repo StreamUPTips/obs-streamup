@@ -7,6 +7,7 @@
 #include "http-client.hpp"
 #include "ui-helpers.hpp"
 #include "obs-wrappers.hpp"
+#include "error-handler.hpp"
 #include <obs-module.h>
 #include <obs-data.h>
 #include <curl/curl.h>
@@ -30,22 +31,8 @@ namespace PluginManager {
 //-------------------ERROR HANDLING FUNCTIONS-------------------
 void ErrorDialog(const QString &errorMessage)
 {
-	StreamUP::UIHelpers::ShowDialogOnUIThread([errorMessage]() {
-		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowErrorTitle");
-		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(20, 15, 20, 10);
-
-		QString displayMessage = errorMessage.isEmpty() ? "Unknown error occurred." : errorMessage;
-
-		dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_MessageBoxCritical, displayMessage.toUtf8().constData()));
-
-		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		StreamUP::UIHelpers::CreateButton(buttonLayout, "OK", [dialog]() { dialog->close(); });
-
-		dialogLayout->addLayout(buttonLayout);
-		dialog->setLayout(dialogLayout);
-		dialog->show();
-	});
+	std::string message = errorMessage.isEmpty() ? "Unknown error occurred." : errorMessage.toStdString();
+	StreamUP::ErrorHandler::ShowErrorDialog("Plugin Error", message);
 }
 
 void PluginsUpToDateOutput(bool manuallyTriggered)
@@ -198,18 +185,18 @@ void InitialiseRequiredModules()
 	const std::string url = "https://api.streamup.tips/plugins";
 	
 	if (!StreamUP::HttpClient::MakeGetRequest(url, api_response)) {
-		blog(LOG_WARNING, "[StreamUP] Failed to fetch plugins from API");
+		StreamUP::ErrorHandler::LogWarning("Failed to fetch plugins from API: " + url, StreamUP::ErrorHandler::Category::Network);
 		return;
 	}
 
 	if (api_response.find("Error:") != std::string::npos) {
-		ErrorDialog(QString::fromStdString(api_response));
+		StreamUP::ErrorHandler::ShowErrorDialog("API Error", api_response);
 		return;
 	}
 
 	if (api_response.empty()) {
-		blog(LOG_INFO, "[StreamUP] Error loading plugins from %s", url.c_str());
-		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
+		StreamUP::ErrorHandler::LogError("Empty response from plugins API: " + url, StreamUP::ErrorHandler::Category::Network);
+		StreamUP::ErrorHandler::ShowErrorDialog("Plugin Load Error", obs_module_text("WindowErrorLoadIssue"));
 		return;
 	}
 

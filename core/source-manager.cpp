@@ -1,5 +1,6 @@
 #include "source-manager.hpp"
 #include "streamup-common.hpp"
+#include "error-handler.hpp"
 #include <obs-module.h>
 // QSystemTrayIcon now handled by NotificationManager
 #include <vector>
@@ -46,6 +47,10 @@ struct SceneFindBoxData {
 bool RefreshAudioMonitoring(void *data, obs_source_t *source)
 {
 	UNUSED_PARAMETER(data);
+
+	if (!StreamUP::ErrorHandler::ValidateSource(source, "RefreshAudioMonitoring")) {
+		return false;
+	}
 
 	const char *source_name = obs_source_get_name(source);
 

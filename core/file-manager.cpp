@@ -2,6 +2,7 @@
 #include "streamup-common.hpp"
 #include "plugin-manager.hpp"
 #include "obs-wrappers.hpp"
+#include "error-handler.hpp"
 #include <obs-module.h>
 #include <QFile>
 #include <QFileInfo>
@@ -15,9 +16,13 @@ namespace FileManager {
 //-------------------RESIZE AND SCALING FUNCTIONS-------------------
 void ResizeAdvancedMaskFilter(obs_source_t *filter, float factor)
 {
+	if (!StreamUP::ErrorHandler::ValidateSource(filter, "ResizeAdvancedMaskFilter")) {
+		return;
+	}
+
 	auto settings = OBSWrappers::OBSDataPtr(obs_source_get_settings(filter));
 	if (!settings) {
-		blog(LOG_ERROR, "ResizeAdvancedMaskFilter: settings is null");
+		StreamUP::ErrorHandler::LogError("Failed to get settings for advanced mask filter", StreamUP::ErrorHandler::Category::Source);
 		return;
 	}
 
@@ -42,9 +47,13 @@ void ResizeMoveSetting(obs_data_t *obs_data, float factor)
 
 void ResizeMoveValueFilter(obs_source_t *filter, float factor)
 {
+	if (!StreamUP::ErrorHandler::ValidateSource(filter, "ResizeMoveValueFilter")) {
+		return;
+	}
+
 	auto settings = OBSWrappers::OBSDataPtr(obs_source_get_settings(filter));
 	if (!settings) {
-		blog(LOG_ERROR, "ResizeMoveValueFilter: settings is null");
+		StreamUP::ErrorHandler::LogError("Failed to get settings for move value filter", StreamUP::ErrorHandler::Category::Source);
 		return;
 	}
 	if (obs_data_get_int(settings.get(), "move_value_type") == 1) {
@@ -380,11 +389,19 @@ bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad)
 		}
 	}
 
+	// Validate file path first
+	if (!StreamUP::ErrorHandler::ValidateFile(file_path)) {
+		return false;
+	}
+
 	// Load the .streamup file from the file path
 	auto data = OBSWrappers::MakeOBSDataFromJsonFile(QT_TO_UTF8(file_path));
 	if (data) {
+		StreamUP::ErrorHandler::LogInfo("Successfully loaded StreamUP file: " + file_path.toStdString(), StreamUP::ErrorHandler::Category::FileSystem);
 		LoadScene(data.get(), QFileInfo(file_path).absolutePath());
 		return true;
+	} else {
+		StreamUP::ErrorHandler::LogError("Failed to parse StreamUP file: " + file_path.toStdString(), StreamUP::ErrorHandler::Category::FileSystem);
 	}
 
 	return false;
