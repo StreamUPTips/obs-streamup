@@ -967,6 +967,16 @@ static void RegisterWebsocketRequests()
 	obs_websocket_vendor_register_request(vendor, "GetVLCCurrentFile", StreamUP::WebSocketAPI::WebsocketRequestVLCGetCurrentFile, nullptr);
 	obs_websocket_vendor_register_request(vendor, "LoadStreamUpFile", StreamUP::WebSocketAPI::WebsocketLoadStreamupFile, nullptr);
 	
+	// Source properties
+	obs_websocket_vendor_register_request(vendor, "GetBlendingMethod", StreamUP::WebSocketAPI::WebsocketRequestGetBlendingMethod, nullptr);
+	obs_websocket_vendor_register_request(vendor, "SetBlendingMethod", StreamUP::WebSocketAPI::WebsocketRequestSetBlendingMethod, nullptr);
+	obs_websocket_vendor_register_request(vendor, "GetDeinterlacing", StreamUP::WebSocketAPI::WebsocketRequestGetDeinterlacing, nullptr);
+	obs_websocket_vendor_register_request(vendor, "SetDeinterlacing", StreamUP::WebSocketAPI::WebsocketRequestSetDeinterlacing, nullptr);
+	obs_websocket_vendor_register_request(vendor, "GetScaleFiltering", StreamUP::WebSocketAPI::WebsocketRequestGetScaleFiltering, nullptr);
+	obs_websocket_vendor_register_request(vendor, "SetScaleFiltering", StreamUP::WebSocketAPI::WebsocketRequestSetScaleFiltering, nullptr);
+	obs_websocket_vendor_register_request(vendor, "GetDownmixMono", StreamUP::WebSocketAPI::WebsocketRequestGetDownmixMono, nullptr);
+	obs_websocket_vendor_register_request(vendor, "SetDownmixMono", StreamUP::WebSocketAPI::WebsocketRequestSetDownmixMono, nullptr);
+	
 	// UI interaction
 	obs_websocket_vendor_register_request(vendor, "OpenSourceProperties", StreamUP::WebSocketAPI::WebsocketOpenSourceProperties, nullptr);
 	obs_websocket_vendor_register_request(vendor, "OpenSourceFilters", StreamUP::WebSocketAPI::WebsocketOpenSourceFilters, nullptr);
