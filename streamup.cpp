@@ -17,6 +17,7 @@
 #include "path-utils.hpp"
 #include "string-utils.hpp"
 #include "version-utils.hpp"
+#include "ui/splash-screen.hpp"
 #include <cctype>
 #include <curl/curl.h>
 #include <filesystem>
@@ -1060,6 +1061,11 @@ void obs_module_post_load(void)
 
 	// Initialize settings system
 	StreamUP::SettingsManager::InitializeSettingsSystem();
+	
+	// Show splash screen if needed (first install or version update) with slight delay
+	QTimer::singleShot(1000, []() {
+		StreamUP::SplashScreen::ShowSplashScreenIfNeeded();
+	});
 	
 	// Check for plugin updates on startup if enabled (asynchronously to avoid blocking OBS startup)
 	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();

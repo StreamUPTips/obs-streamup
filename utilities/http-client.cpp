@@ -21,11 +21,21 @@ bool MakeGetRequest(const std::string& url, std::string& response)
         return false;
     }
 
+    // Set headers for GitHub API compatibility
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, "User-Agent: StreamUP-OBS-Plugin/1.7.1");
+    headers = curl_slist_append(headers, "Accept: application/vnd.github.v3+json");
+    
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
     
     CURLcode res = curl_easy_perform(curl);
+    
+    curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
 
     if (res != CURLE_OK) {

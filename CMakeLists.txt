@@ -69,6 +69,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/settings-manager.cpp
   ui/notification-manager.hpp
   ui/notification-manager.cpp
+  ui/splash-screen.hpp
+  ui/splash-screen.cpp
   ui/dock/streamup-dock.hpp
   ui/dock/streamup-dock.cpp)
 
@@ -125,7 +127,9 @@ source_group("UI" FILES
   ui/settings-manager.hpp
   ui/settings-manager.cpp
   ui/notification-manager.hpp
-  ui/notification-manager.cpp)
+  ui/notification-manager.cpp
+  ui/splash-screen.hpp
+  ui/splash-screen.cpp)
 
 source_group("UI\\Dock" FILES
   ui/dock/streamup-dock.hpp
