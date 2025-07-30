@@ -133,6 +133,58 @@ bool AreAllSourcesLockedInCurrentScene();
  */
 bool AreAllSourcesLockedInAllScenes();
 
+// Video capture device management functions
+/**
+ * Activate all video capture device sources
+ * @param sendNotification Whether to send a notification
+ * @return bool True if operation was successful
+ */
+bool ActivateAllVideoCaptureDevices(bool sendNotification = true);
+
+/**
+ * Deactivate all video capture device sources
+ * @param sendNotification Whether to send a notification
+ * @return bool True if operation was successful
+ */
+bool DeactivateAllVideoCaptureDevices(bool sendNotification = true);
+
+/**
+ * Refresh all video capture device sources (deactivate then reactivate)
+ * @param sendNotification Whether to send a notification
+ * @return bool True if operation was successful
+ */
+bool RefreshAllVideoCaptureDevices(bool sendNotification = true);
+
+/**
+ * Show dialog for activating all video capture devices
+ */
+void ActivateAllVideoCaptureDevicesDialog();
+
+/**
+ * Show dialog for deactivating all video capture devices
+ */
+void DeactivateAllVideoCaptureDevicesDialog();
+
+/**
+ * Show dialog for refreshing all video capture devices
+ */
+void RefreshAllVideoCaptureDevicesDialog();
+
+/**
+ * Check if a source is a video capture device
+ * @param source The source to check
+ * @return bool True if the source is a video capture device
+ */
+bool IsVideoCaptureDevice(obs_source_t *source);
+
+/**
+ * Callback function for video capture device operations
+ * @param data Pointer to operation parameters
+ * @param source The source to process
+ * @return bool True to continue enumeration
+ */
+bool VideoCaptureDeviceCallback(void *data, obs_source_t *source);
+
 } // namespace SourceManager
 } // namespace StreamUP
 

@@ -21,6 +21,9 @@ static obs_hotkey_id open_source_properties_hotkey_id = OBS_INVALID_HOTKEY_ID;
 static obs_hotkey_id open_source_filters_hotkey_id = OBS_INVALID_HOTKEY_ID;
 static obs_hotkey_id open_scene_filters_hotkey_id = OBS_INVALID_HOTKEY_ID;
 static obs_hotkey_id open_source_interact_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id activate_video_capture_devices_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id deactivate_video_capture_devices_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id refresh_video_capture_devices_hotkey_id = OBS_INVALID_HOTKEY_ID;
 
 //-------------------HOTKEY HANDLERS-------------------
 void HotkeyRefreshBrowserSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
@@ -171,6 +174,42 @@ void HotkeyOpenSceneFilters(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, 
 	obs_source_release(current_scene);
 }
 
+void HotkeyActivateAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+	
+	if (!pressed)
+		return;
+		
+	StreamUP::SourceManager::ActivateAllVideoCaptureDevices();
+}
+
+void HotkeyDeactivateAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+	
+	if (!pressed)
+		return;
+		
+	StreamUP::SourceManager::DeactivateAllVideoCaptureDevices();
+}
+
+void HotkeyRefreshAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+	
+	if (!pressed)
+		return;
+		
+	StreamUP::SourceManager::RefreshAllVideoCaptureDevices();
+}
+
 //-------------------HOTKEY MANAGEMENT-------------------
 void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 {
@@ -268,6 +307,12 @@ void RegisterHotkeys()
 											  HotkeyOpenSourceInteract, nullptr);
 	open_scene_filters_hotkey_id = obs_hotkey_register_frontend("streamup_open_scene_filters", "StreamUP: Open Current Scene Filters",
 											 HotkeyOpenSceneFilters, nullptr);
+	activate_video_capture_devices_hotkey_id = obs_hotkey_register_frontend("streamup_activate_video_capture_devices", "StreamUP: Activate All Video Capture Devices",
+												HotkeyActivateAllVideoCaptureDevices, nullptr);
+	deactivate_video_capture_devices_hotkey_id = obs_hotkey_register_frontend("streamup_deactivate_video_capture_devices", "StreamUP: Deactivate All Video Capture Devices",
+												  HotkeyDeactivateAllVideoCaptureDevices, nullptr);
+	refresh_video_capture_devices_hotkey_id = obs_hotkey_register_frontend("streamup_refresh_video_capture_devices", "StreamUP: Refresh All Video Capture Devices",
+											       HotkeyRefreshAllVideoCaptureDevices, nullptr);
 }
 
 void UnregisterHotkeys()
@@ -280,6 +325,9 @@ void UnregisterHotkeys()
 	obs_hotkey_unregister(open_source_filters_hotkey_id);
 	obs_hotkey_unregister(open_source_interact_hotkey_id);
 	obs_hotkey_unregister(open_scene_filters_hotkey_id);
+	obs_hotkey_unregister(activate_video_capture_devices_hotkey_id);
+	obs_hotkey_unregister(deactivate_video_capture_devices_hotkey_id);
+	obs_hotkey_unregister(refresh_video_capture_devices_hotkey_id);
 }
 
 } // namespace HotkeyManager

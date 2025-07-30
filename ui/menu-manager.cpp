@@ -134,6 +134,24 @@ QMenu* CreateToolsSubmenu(QMenu* parentMenu)
         StreamUP::SourceManager::RefreshBrowserSourcesDialog(); 
     });
 
+    toolsMenu->addSeparator();
+
+    // Video capture device actions
+    action = toolsMenu->addAction(obs_module_text("MenuActivateVideoCaptureDevices"));
+    QObject::connect(action, &QAction::triggered, []() { 
+        StreamUP::SourceManager::ActivateAllVideoCaptureDevicesDialog(); 
+    });
+
+    action = toolsMenu->addAction(obs_module_text("MenuDeactivateVideoCaptureDevices"));
+    QObject::connect(action, &QAction::triggered, []() { 
+        StreamUP::SourceManager::DeactivateAllVideoCaptureDevicesDialog(); 
+    });
+
+    action = toolsMenu->addAction(obs_module_text("MenuRefreshVideoCaptureDevices"));
+    QObject::connect(action, &QAction::triggered, []() { 
+        StreamUP::SourceManager::RefreshAllVideoCaptureDevicesDialog(); 
+    });
+
     return toolsMenu;
 }
 

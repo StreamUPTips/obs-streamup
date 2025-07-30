@@ -229,6 +229,31 @@ void WebsocketOpenSourceInteract(obs_data_t *request_data, obs_data_t *response_
  */
 void WebsocketOpenSceneFilters(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 
+//-------------------VIDEO CAPTURE DEVICE MANAGEMENT-------------------
+/**
+ * Activate all video capture devices
+ * @param request_data Request data from WebSocket
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketActivateAllVideoCaptureDevices(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Deactivate all video capture devices
+ * @param request_data Request data from WebSocket
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketDeactivateAllVideoCaptureDevices(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Refresh all video capture devices
+ * @param request_data Request data from WebSocket
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketRefreshAllVideoCaptureDevices(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
 } // namespace WebSocketAPI
 } // namespace StreamUP
 

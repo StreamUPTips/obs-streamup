@@ -80,6 +80,33 @@ void HotkeyOpenSourceInteract(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
  */
 void HotkeyOpenSceneFilters(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
 
+/**
+ * Hotkey handler for activating all video capture devices
+ * @param data User data (unused)
+ * @param id Hotkey ID
+ * @param hotkey Hotkey object
+ * @param pressed Whether the key was pressed (true) or released (false)
+ */
+void HotkeyActivateAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
+
+/**
+ * Hotkey handler for deactivating all video capture devices
+ * @param data User data (unused)
+ * @param id Hotkey ID
+ * @param hotkey Hotkey object
+ * @param pressed Whether the key was pressed (true) or released (false)
+ */
+void HotkeyDeactivateAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
+
+/**
+ * Hotkey handler for refreshing all video capture devices
+ * @param data User data (unused)
+ * @param id Hotkey ID
+ * @param hotkey Hotkey object
+ * @param pressed Whether the key was pressed (true) or released (false)
+ */
+void HotkeyRefreshAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
+
 //-------------------HOTKEY MANAGEMENT-------------------
 /**
  * Save and load hotkey settings
