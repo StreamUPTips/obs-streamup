@@ -131,6 +131,71 @@ void WebsocketRequestVLCGetCurrentFile(obs_data_t *request_data, obs_data_t *res
  */
 void WebsocketLoadStreamupFile(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 
+//-------------------SOURCE PROPERTIES-------------------
+/**
+ * Get source blending method (scene item property)
+ * @param request_data Request data from WebSocket (requires sourceName and optional sceneName)
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketRequestGetBlendingMethod(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Set source blending method (scene item property)
+ * @param request_data Request data from WebSocket (requires sourceName, method, and optional sceneName)
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketRequestSetBlendingMethod(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Get source deinterlacing settings
+ * @param request_data Request data from WebSocket (requires sourceName)
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketRequestGetDeinterlacing(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Set source deinterlacing settings
+ * @param request_data Request data from WebSocket (requires sourceName, mode, and optional fieldOrder)
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketRequestSetDeinterlacing(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Get source scale filtering (scene item property)
+ * @param request_data Request data from WebSocket (requires sourceName and optional sceneName)
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketRequestGetScaleFiltering(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Set source scale filtering (scene item property)
+ * @param request_data Request data from WebSocket (requires sourceName, filter, and optional sceneName)
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketRequestSetScaleFiltering(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Get source downmix to mono setting
+ * @param request_data Request data from WebSocket (requires sourceName)
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketRequestGetDownmixMono(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Set source downmix to mono setting
+ * @param request_data Request data from WebSocket (requires sourceName, enabled)
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketRequestSetDownmixMono(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
 //-------------------UI INTERACTION-------------------
 /**
  * Open source properties dialog

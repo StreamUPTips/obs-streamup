@@ -232,6 +232,405 @@ void WebsocketLoadStreamupFile(obs_data_t *request_data, obs_data_t *response_da
 	obs_data_set_string(response_data, "status", "success");
 }
 
+//-------------------SOURCE PROPERTIES-------------------
+void WebsocketRequestGetBlendingMethod(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+
+	const char *source_name = obs_data_get_string(request_data, "sourceName");
+	const char *scene_name = obs_data_get_string(request_data, "sceneName");
+
+	if (!source_name || !strlen(source_name)) {
+		obs_data_set_string(response_data, "error", "sourceName parameter is required");
+		return;
+	}
+
+	obs_source_t *scene_source = nullptr;
+	if (scene_name && strlen(scene_name)) {
+		scene_source = obs_get_source_by_name(scene_name);
+	} else {
+		scene_source = obs_frontend_get_current_scene();
+	}
+
+	if (!scene_source) {
+		obs_data_set_string(response_data, "error", "Scene not found");
+		return;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(scene_source);
+	if (!scene) {
+		obs_source_release(scene_source);
+		obs_data_set_string(response_data, "error", "Invalid scene");
+		return;
+	}
+
+	obs_sceneitem_t *sceneitem = obs_scene_find_source(scene, source_name);
+	if (!sceneitem) {
+		obs_source_release(scene_source);
+		obs_data_set_string(response_data, "error", "Source not found in scene");
+		return;
+	}
+
+	enum obs_blending_method method = obs_sceneitem_get_blending_method(sceneitem);
+	const char *method_name = (method == OBS_BLEND_METHOD_SRGB_OFF) ? "srgb_off" : "default";
+	
+	obs_data_set_string(response_data, "blendingMethod", method_name);
+	obs_data_set_bool(response_data, "success", true);
+	
+	obs_source_release(scene_source);
+}
+
+void WebsocketRequestSetBlendingMethod(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+
+	const char *source_name = obs_data_get_string(request_data, "sourceName");
+	const char *scene_name = obs_data_get_string(request_data, "sceneName");
+	const char *method_str = obs_data_get_string(request_data, "method");
+
+	if (!source_name || !strlen(source_name)) {
+		obs_data_set_string(response_data, "error", "sourceName parameter is required");
+		return;
+	}
+
+	if (!method_str || !strlen(method_str)) {
+		obs_data_set_string(response_data, "error", "method parameter is required");
+		return;
+	}
+
+	enum obs_blending_method method;
+	if (strcmp(method_str, "srgb_off") == 0) {
+		method = OBS_BLEND_METHOD_SRGB_OFF;
+	} else if (strcmp(method_str, "default") == 0) {
+		method = OBS_BLEND_METHOD_DEFAULT;
+	} else {
+		obs_data_set_string(response_data, "error", "Invalid method. Valid values: 'default', 'srgb_off'");
+		return;
+	}
+
+	obs_source_t *scene_source = nullptr;
+	if (scene_name && strlen(scene_name)) {
+		scene_source = obs_get_source_by_name(scene_name);
+	} else {
+		scene_source = obs_frontend_get_current_scene();
+	}
+
+	if (!scene_source) {
+		obs_data_set_string(response_data, "error", "Scene not found");
+		return;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(scene_source);
+	if (!scene) {
+		obs_source_release(scene_source);
+		obs_data_set_string(response_data, "error", "Invalid scene");
+		return;
+	}
+
+	obs_sceneitem_t *sceneitem = obs_scene_find_source(scene, source_name);
+	if (!sceneitem) {
+		obs_source_release(scene_source);
+		obs_data_set_string(response_data, "error", "Source not found in scene");
+		return;
+	}
+
+	obs_sceneitem_set_blending_method(sceneitem, method);
+	obs_data_set_string(response_data, "status", "success");
+	
+	obs_source_release(scene_source);
+}
+
+void WebsocketRequestGetDeinterlacing(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+
+	const char *source_name = obs_data_get_string(request_data, "sourceName");
+
+	if (!source_name || !strlen(source_name)) {
+		obs_data_set_string(response_data, "error", "sourceName parameter is required");
+		return;
+	}
+
+	obs_source_t *source = obs_get_source_by_name(source_name);
+	if (!source) {
+		obs_data_set_string(response_data, "error", "Source not found");
+		return;
+	}
+
+	enum obs_deinterlace_mode mode = obs_source_get_deinterlace_mode(source);
+	enum obs_deinterlace_field_order field_order = obs_source_get_deinterlace_field_order(source);
+
+	const char *mode_name;
+	switch (mode) {
+		case OBS_DEINTERLACE_MODE_DISABLE: mode_name = "disable"; break;
+		case OBS_DEINTERLACE_MODE_DISCARD: mode_name = "discard"; break;
+		case OBS_DEINTERLACE_MODE_RETRO: mode_name = "retro"; break;
+		case OBS_DEINTERLACE_MODE_BLEND: mode_name = "blend"; break;
+		case OBS_DEINTERLACE_MODE_BLEND_2X: mode_name = "blend_2x"; break;
+		case OBS_DEINTERLACE_MODE_LINEAR: mode_name = "linear"; break;
+		case OBS_DEINTERLACE_MODE_LINEAR_2X: mode_name = "linear_2x"; break;
+		case OBS_DEINTERLACE_MODE_YADIF: mode_name = "yadif"; break;
+		case OBS_DEINTERLACE_MODE_YADIF_2X: mode_name = "yadif_2x"; break;
+		default: mode_name = "unknown"; break;
+	}
+
+	const char *field_order_name = (field_order == OBS_DEINTERLACE_FIELD_ORDER_TOP) ? "top" : "bottom";
+
+	obs_data_set_string(response_data, "mode", mode_name);
+	obs_data_set_string(response_data, "fieldOrder", field_order_name);
+	obs_data_set_bool(response_data, "success", true);
+	
+	obs_source_release(source);
+}
+
+void WebsocketRequestSetDeinterlacing(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+
+	const char *source_name = obs_data_get_string(request_data, "sourceName");
+	const char *mode_str = obs_data_get_string(request_data, "mode");
+	const char *field_order_str = obs_data_get_string(request_data, "fieldOrder");
+
+	if (!source_name || !strlen(source_name)) {
+		obs_data_set_string(response_data, "error", "sourceName parameter is required");
+		return;
+	}
+
+	if (!mode_str || !strlen(mode_str)) {
+		obs_data_set_string(response_data, "error", "mode parameter is required");
+		return;
+	}
+
+	enum obs_deinterlace_mode mode;
+	if (strcmp(mode_str, "disable") == 0) {
+		mode = OBS_DEINTERLACE_MODE_DISABLE;
+	} else if (strcmp(mode_str, "discard") == 0) {
+		mode = OBS_DEINTERLACE_MODE_DISCARD;
+	} else if (strcmp(mode_str, "retro") == 0) {
+		mode = OBS_DEINTERLACE_MODE_RETRO;
+	} else if (strcmp(mode_str, "blend") == 0) {
+		mode = OBS_DEINTERLACE_MODE_BLEND;
+	} else if (strcmp(mode_str, "blend_2x") == 0) {
+		mode = OBS_DEINTERLACE_MODE_BLEND_2X;
+	} else if (strcmp(mode_str, "linear") == 0) {
+		mode = OBS_DEINTERLACE_MODE_LINEAR;
+	} else if (strcmp(mode_str, "linear_2x") == 0) {
+		mode = OBS_DEINTERLACE_MODE_LINEAR_2X;
+	} else if (strcmp(mode_str, "yadif") == 0) {
+		mode = OBS_DEINTERLACE_MODE_YADIF;
+	} else if (strcmp(mode_str, "yadif_2x") == 0) {
+		mode = OBS_DEINTERLACE_MODE_YADIF_2X;
+	} else {
+		obs_data_set_string(response_data, "error", "Invalid mode. Valid values: disable, discard, retro, blend, blend_2x, linear, linear_2x, yadif, yadif_2x");
+		return;
+	}
+
+	enum obs_deinterlace_field_order field_order = OBS_DEINTERLACE_FIELD_ORDER_TOP;
+	if (field_order_str && strlen(field_order_str)) {
+		if (strcmp(field_order_str, "bottom") == 0) {
+			field_order = OBS_DEINTERLACE_FIELD_ORDER_BOTTOM;
+		} else if (strcmp(field_order_str, "top") != 0) {
+			obs_data_set_string(response_data, "error", "Invalid fieldOrder. Valid values: 'top', 'bottom'");
+			return;
+		}
+	}
+
+	obs_source_t *source = obs_get_source_by_name(source_name);
+	if (!source) {
+		obs_data_set_string(response_data, "error", "Source not found");
+		return;
+	}
+
+	obs_source_set_deinterlace_mode(source, mode);
+	obs_source_set_deinterlace_field_order(source, field_order);
+	obs_data_set_string(response_data, "status", "success");
+	
+	obs_source_release(source);
+}
+
+void WebsocketRequestGetScaleFiltering(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+
+	const char *source_name = obs_data_get_string(request_data, "sourceName");
+	const char *scene_name = obs_data_get_string(request_data, "sceneName");
+
+	if (!source_name || !strlen(source_name)) {
+		obs_data_set_string(response_data, "error", "sourceName parameter is required");
+		return;
+	}
+
+	obs_source_t *scene_source = nullptr;
+	if (scene_name && strlen(scene_name)) {
+		scene_source = obs_get_source_by_name(scene_name);
+	} else {
+		scene_source = obs_frontend_get_current_scene();
+	}
+
+	if (!scene_source) {
+		obs_data_set_string(response_data, "error", "Scene not found");
+		return;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(scene_source);
+	if (!scene) {
+		obs_source_release(scene_source);
+		obs_data_set_string(response_data, "error", "Invalid scene");
+		return;
+	}
+
+	obs_sceneitem_t *sceneitem = obs_scene_find_source(scene, source_name);
+	if (!sceneitem) {
+		obs_source_release(scene_source);
+		obs_data_set_string(response_data, "error", "Source not found in scene");
+		return;
+	}
+
+	enum obs_scale_type filter = obs_sceneitem_get_scale_filter(sceneitem);
+	
+	const char *filter_name;
+	switch (filter) {
+		case OBS_SCALE_DISABLE: filter_name = "disable"; break;
+		case OBS_SCALE_POINT: filter_name = "point"; break;
+		case OBS_SCALE_BICUBIC: filter_name = "bicubic"; break;
+		case OBS_SCALE_BILINEAR: filter_name = "bilinear"; break;
+		case OBS_SCALE_LANCZOS: filter_name = "lanczos"; break;
+		case OBS_SCALE_AREA: filter_name = "area"; break;
+		default: filter_name = "unknown"; break;
+	}
+	
+	obs_data_set_string(response_data, "scaleFilter", filter_name);
+	obs_data_set_bool(response_data, "success", true);
+	
+	obs_source_release(scene_source);
+}
+
+void WebsocketRequestSetScaleFiltering(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+
+	const char *source_name = obs_data_get_string(request_data, "sourceName");
+	const char *scene_name = obs_data_get_string(request_data, "sceneName");
+	const char *filter_str = obs_data_get_string(request_data, "filter");
+
+	if (!source_name || !strlen(source_name)) {
+		obs_data_set_string(response_data, "error", "sourceName parameter is required");
+		return;
+	}
+
+	if (!filter_str || !strlen(filter_str)) {
+		obs_data_set_string(response_data, "error", "filter parameter is required");
+		return;
+	}
+
+	enum obs_scale_type filter;
+	if (strcmp(filter_str, "disable") == 0) {
+		filter = OBS_SCALE_DISABLE;
+	} else if (strcmp(filter_str, "point") == 0) {
+		filter = OBS_SCALE_POINT;
+	} else if (strcmp(filter_str, "bicubic") == 0) {
+		filter = OBS_SCALE_BICUBIC;
+	} else if (strcmp(filter_str, "bilinear") == 0) {
+		filter = OBS_SCALE_BILINEAR;
+	} else if (strcmp(filter_str, "lanczos") == 0) {
+		filter = OBS_SCALE_LANCZOS;
+	} else if (strcmp(filter_str, "area") == 0) {
+		filter = OBS_SCALE_AREA;
+	} else {
+		obs_data_set_string(response_data, "error", "Invalid filter. Valid values: disable, point, bicubic, bilinear, lanczos, area");
+		return;
+	}
+
+	obs_source_t *scene_source = nullptr;
+	if (scene_name && strlen(scene_name)) {
+		scene_source = obs_get_source_by_name(scene_name);
+	} else {
+		scene_source = obs_frontend_get_current_scene();
+	}
+
+	if (!scene_source) {
+		obs_data_set_string(response_data, "error", "Scene not found");
+		return;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(scene_source);
+	if (!scene) {
+		obs_source_release(scene_source);
+		obs_data_set_string(response_data, "error", "Invalid scene");
+		return;
+	}
+
+	obs_sceneitem_t *sceneitem = obs_scene_find_source(scene, source_name);
+	if (!sceneitem) {
+		obs_source_release(scene_source);
+		obs_data_set_string(response_data, "error", "Source not found in scene");
+		return;
+	}
+
+	obs_sceneitem_set_scale_filter(sceneitem, filter);
+	obs_data_set_string(response_data, "status", "success");
+	
+	obs_source_release(scene_source);
+}
+
+void WebsocketRequestGetDownmixMono(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+
+	const char *source_name = obs_data_get_string(request_data, "sourceName");
+
+	if (!source_name || !strlen(source_name)) {
+		obs_data_set_string(response_data, "error", "sourceName parameter is required");
+		return;
+	}
+
+	obs_source_t *source = obs_get_source_by_name(source_name);
+	if (!source) {
+		obs_data_set_string(response_data, "error", "Source not found");
+		return;
+	}
+
+	uint32_t flags = obs_source_get_flags(source);
+	bool is_mono = (flags & OBS_SOURCE_FLAG_FORCE_MONO) != 0;
+	
+	obs_data_set_bool(response_data, "downmixMono", is_mono);
+	obs_data_set_bool(response_data, "success", true);
+	
+	obs_source_release(source);
+}
+
+void WebsocketRequestSetDownmixMono(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+
+	const char *source_name = obs_data_get_string(request_data, "sourceName");
+	bool enabled = obs_data_get_bool(request_data, "enabled");
+
+	if (!source_name || !strlen(source_name)) {
+		obs_data_set_string(response_data, "error", "sourceName parameter is required");
+		return;
+	}
+
+	obs_source_t *source = obs_get_source_by_name(source_name);
+	if (!source) {
+		obs_data_set_string(response_data, "error", "Source not found");
+		return;
+	}
+
+	uint32_t flags = obs_source_get_flags(source);
+	
+	if (enabled) {
+		flags |= OBS_SOURCE_FLAG_FORCE_MONO;
+	} else {
+		flags &= ~OBS_SOURCE_FLAG_FORCE_MONO;
+	}
+	
+	obs_source_set_flags(source, flags);
+	obs_data_set_string(response_data, "status", "success");
+	
+	obs_source_release(source);
+}
+
 //-------------------UI INTERACTION-------------------
 void WebsocketOpenSourceProperties(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
