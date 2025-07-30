@@ -38,10 +38,7 @@ struct SceneItemEnumData {
 	const char *selectedSourceName = nullptr;
 };
 
-// Global plugin state
-extern std::map<std::string, PluginInfo> all_plugins;
-extern std::map<std::string, PluginInfo> required_plugins;
-extern bool notificationsMuted;
+// Global plugin state moved to StreamUP::PluginState class
 
 // Platform detection
 #if defined(_WIN32)

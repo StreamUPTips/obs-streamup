@@ -1,0 +1,51 @@
+#include "plugin-state.hpp"
+#include <obs-module.h>
+
+namespace StreamUP {
+
+PluginState& PluginState::Instance() {
+    static PluginState instance;
+    return instance;
+}
+
+const std::map<std::string, PluginInfo>& PluginState::GetAllPlugins() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_allPlugins;
+}
+
+const std::map<std::string, PluginInfo>& PluginState::GetRequiredPlugins() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_requiredPlugins;
+}
+
+void PluginState::SetAllPlugins(const std::map<std::string, PluginInfo>& plugins) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_allPlugins = plugins;
+    blog(LOG_INFO, "[StreamUP] Updated all plugins registry with %zu entries", plugins.size());
+}
+
+void PluginState::SetRequiredPlugins(const std::map<std::string, PluginInfo>& plugins) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_requiredPlugins = plugins;
+    blog(LOG_INFO, "[StreamUP] Updated required plugins registry with %zu entries", plugins.size());
+}
+
+void PluginState::AddPlugin(const std::string& key, const PluginInfo& plugin) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_allPlugins[key] = plugin;
+}
+
+void PluginState::AddRequiredPlugin(const std::string& key, const PluginInfo& plugin) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_requiredPlugins[key] = plugin;
+}
+
+void PluginState::Reset() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_allPlugins.clear();
+    m_requiredPlugins.clear();
+    m_initialized = false;
+    blog(LOG_INFO, "[StreamUP] Plugin state reset");
+}
+
+} // namespace StreamUP

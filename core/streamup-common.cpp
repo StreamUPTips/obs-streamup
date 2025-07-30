@@ -2,10 +2,7 @@
 
 namespace StreamUP {
 
-// Global plugin state definitions
-std::map<std::string, PluginInfo> all_plugins;
-std::map<std::string, PluginInfo> required_plugins;
-bool notificationsMuted = false;
+// Global plugin state moved to StreamUP::PluginState class
 
 // Advanced mask filter settings
 const char *advanced_mask_settings[ADVANCED_MASKS_SETTINGS_SIZE] = {

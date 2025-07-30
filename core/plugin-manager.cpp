@@ -1,5 +1,6 @@
 #include "plugin-manager.hpp"
 #include "streamup-common.hpp"
+#include "plugin-state.hpp"
 #include "string-utils.hpp"
 #include "version-utils.hpp"
 #include "path-utils.hpp"
@@ -108,7 +109,8 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 //-------------------PLUGIN UPDATE FUNCTIONS-------------------
 void CheckAllPluginsForUpdates(bool manuallyTriggered)
 {
-	if (all_plugins.empty()) {
+	const auto& allPlugins = StreamUP::GetAllPlugins();
+	if (allPlugins.empty()) {
 		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
 		return;
 	}
@@ -120,7 +122,8 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 	for (const auto &plugin : installedPlugins) {
 		const std::string &plugin_name = plugin.first;
 		const std::string &installed_version = plugin.second;
-		const PluginInfo &plugin_info = all_plugins[plugin_name];
+		const auto& allPlugins = StreamUP::GetAllPlugins();
+		const StreamUP::PluginInfo &plugin_info = allPlugins.at(plugin_name);
 		const std::string &required_version = plugin_info.version;
 
 		if (installed_version != required_version && VersionUtils::IsVersionLessThan(installed_version, required_version)) {
@@ -152,7 +155,8 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 				  "</tr>";
 
 		for (const auto &module : version_mismatch_modules) {
-			const PluginInfo &plugin_info = all_plugins[module.first];
+			const auto& allPlugins = StreamUP::GetAllPlugins();
+			const StreamUP::PluginInfo &plugin_info = allPlugins.at(module.first);
 			const std::string &required_version = plugin_info.version;
 			const std::string &forum_link = plugin_info.generalURL;
 			const std::string &direct_download_link = StringUtils::GetPlatformURL(
@@ -230,10 +234,10 @@ void InitialiseRequiredModules()
 		info.generalURL = obs_data_get_string(plugin, "url");
 		info.moduleName = obs_data_get_string(plugin, "moduleName");
 
-		all_plugins[name] = info;
+		StreamUP::PluginState::Instance().AddPlugin(name, info);
 
 		if (obs_data_get_bool(plugin, "required")) {
-			required_plugins[name] = info;
+			StreamUP::PluginState::Instance().AddRequiredPlugin(name, info);
 		}
 
 		obs_data_release(plugin);
@@ -245,7 +249,8 @@ void InitialiseRequiredModules()
 
 bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 {
-	if (required_plugins.empty()) {
+	const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
+	if (requiredPlugins.empty()) {
 		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
 		return false;
 	}
@@ -259,9 +264,9 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 		return false;
 	}
 
-	for (const auto &module : required_plugins) {
+	for (const auto &module : requiredPlugins) {
 		const std::string &plugin_name = module.first;
-		const PluginInfo &plugin_info = module.second;
+		const StreamUP::PluginInfo &plugin_info = module.second;
 		const std::string &required_version = plugin_info.version;
 		const std::string &search_string = plugin_info.searchString;
 
@@ -296,7 +301,8 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 					  "</tr>";
 
 			for (const auto &module : version_mismatch_modules) {
-				const PluginInfo &plugin_info = all_plugins[module.first];
+				const auto& allPlugins = StreamUP::GetAllPlugins();
+			const StreamUP::PluginInfo &plugin_info = allPlugins.at(module.first);
 				const std::string &required_version = plugin_info.version;
 				const std::string &forum_link = plugin_info.generalURL;
 				const std::string &direct_download_link = StringUtils::GetPlatformURL(
@@ -338,7 +344,8 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 
 			for (auto it = missing_modules.begin(); it != missing_modules.end(); ++it) {
 				const std::string &moduleName = it->first;
-				const PluginInfo &pluginInfo = required_plugins[moduleName];
+				const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
+				const StreamUP::PluginInfo &pluginInfo = requiredPlugins.at(moduleName);
 				const std::string &forum_link = pluginInfo.generalURL;
 				const std::string &direct_download_link = StringUtils::GetPlatformURL(
 					QString::fromStdString(pluginInfo.windowsURL),
@@ -424,9 +431,10 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 		return installedPlugins;
 	}
 
-	for (const auto &module : all_plugins) {
+	const auto& allPlugins = StreamUP::GetAllPlugins();
+	for (const auto &module : allPlugins) {
 		const std::string &plugin_name = module.first;
-		const PluginInfo &plugin_info = module.second;
+		const StreamUP::PluginInfo &plugin_info = module.second;
 		const std::string &search_string = plugin_info.searchString;
 
 		std::string installed_version = SearchStringInFileForVersion(filepath, search_string.c_str());

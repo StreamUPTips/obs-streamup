@@ -27,6 +27,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   resources.qrc
   core/streamup-common.hpp
   core/streamup-common.cpp
+  core/plugin-state.hpp
+  core/plugin-state.cpp
   core/source-manager.hpp
   core/source-manager.cpp
   core/file-manager.hpp
