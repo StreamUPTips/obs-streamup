@@ -6,6 +6,12 @@
 #include "source-manager.hpp"
 #include "file-manager.hpp"
 #include "plugin-manager.hpp"
+#include "websocket-api.hpp"
+#include "hotkey-manager.hpp"
+#include "ui-helpers.hpp"
+#include "menu-manager.hpp"
+#include "settings-manager.hpp"
+#include "http-client.hpp"
 #include "path-utils.hpp"
 #include "string-utils.hpp"
 #include "version-utils.hpp"
@@ -96,10 +102,6 @@ struct PluginInfo {
 	bool required;
 };
 
-struct RequestData {
-	std::string url;
-	std::string response;
-};
 
 struct SystemTrayNotification {
 	QSystemTrayIcon::MessageIcon icon;
@@ -109,7 +111,7 @@ struct SystemTrayNotification {
 
 std::map<std::string, PluginInfo> all_plugins;
 std::map<std::string, PluginInfo> required_plugins;
-static bool notificationsMuted = false;
+// Notification mute state now managed by SettingsManager
 
 #define ADVANCED_MASKS_SETTINGS_SIZE 15
 static const char *advanced_mask_settings[] = {"rectangle_width",
@@ -132,7 +134,7 @@ static const char *advanced_mask_settings[] = {"rectangle_width",
 //--------------------NOTIFICATION HELPERS--------------------
 void SendTrayNotification(QSystemTrayIcon::MessageIcon icon, const QString &title, const QString &body)
 {
-	if (notificationsMuted) {
+	if (StreamUP::SettingsManager::AreNotificationsMuted()) {
 		blog(LOG_INFO, "[StreamUP] Notifications are muted.");
 		return;
 	}
@@ -262,7 +264,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		      const std::function<void()> &buttonCallback, const QString &jsonString, const char *how1, const char *how2,
 		      const char *how3, const char *how4, const char *notificationMessage)
 {
-	ShowDialogOnUIThread([infoText1, infoText2, infoText3, titleText, buttonCallback, jsonString, how1, how2, how3, how4,
+	StreamUP::UIHelpers::ShowDialogOnUIThread([infoText1, infoText2, infoText3, titleText, buttonCallback, jsonString, how1, how2, how3, how4,
 			      notificationMessage]() {
 		const char *titleTextChar = titleText.toUtf8().constData();
 		QString titleStr = obs_module_text(titleTextChar);
@@ -274,15 +276,15 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		QString howTo3Str = obs_module_text(how3);
 		QString howTo4Str = obs_module_text(how4);
 
-		QDialog *dialog = CreateDialogWindow(titleTextChar);
+		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow(titleTextChar);
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 		dialogLayout->setContentsMargins(20, 15, 20, 10);
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 
-		CreateButton(buttonLayout, obs_module_text("Cancel"), [dialog]() { dialog->close(); });
+		StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("Cancel"), [dialog]() { dialog->close(); });
 
-		CreateButton(buttonLayout, titleStr, [=]() {
+		StreamUP::UIHelpers::CreateButton(buttonLayout, titleStr, [=]() {
 			buttonCallback();
 			if (notificationMessage) {
 				SendTrayNotification(QSystemTrayIcon::Information, titleStr, obs_module_text(notificationMessage));
@@ -290,21 +292,21 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 			dialog->close();
 		});
 
-		dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxInformation, infoText1));
+		dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_MessageBoxInformation, infoText1));
 		dialogLayout->addSpacing(10);
 
-		QLabel *info2 = CreateRichTextLabel(infoText2Str, false, true, Qt::AlignTop);
+		QLabel *info2 = StreamUP::UIHelpers::CreateRichTextLabel(infoText2Str, false, true, Qt::AlignTop);
 		dialogLayout->addWidget(info2, 0, Qt::AlignTop);
 		dialogLayout->addSpacing(10);
 
 		QGroupBox *info3Box = new QGroupBox(obs_module_text("HowToUse"));
 		info3Box->setMinimumWidth(350);
-		QVBoxLayout *info3BoxLayout = CreateVBoxLayout(info3Box);
-		QLabel *info3 = CreateRichTextLabel(infoText3Str, false, true);
-		QLabel *howTo1 = CreateRichTextLabel(howTo1Str, false, true);
-		QLabel *howTo2 = CreateRichTextLabel(howTo2Str, false, true);
-		QLabel *howTo3 = CreateRichTextLabel(howTo3Str, false, true);
-		QLabel *howTo4 = CreateRichTextLabel(howTo4Str, false, true);
+		QVBoxLayout *info3BoxLayout = StreamUP::UIHelpers::CreateVBoxLayout(info3Box);
+		QLabel *info3 = StreamUP::UIHelpers::CreateRichTextLabel(infoText3Str, false, true);
+		QLabel *howTo1 = StreamUP::UIHelpers::CreateRichTextLabel(howTo1Str, false, true);
+		QLabel *howTo2 = StreamUP::UIHelpers::CreateRichTextLabel(howTo2Str, false, true);
+		QLabel *howTo3 = StreamUP::UIHelpers::CreateRichTextLabel(howTo3Str, false, true);
+		QLabel *howTo4 = StreamUP::UIHelpers::CreateRichTextLabel(howTo4Str, false, true);
 		info3BoxLayout->addWidget(info3);
 		info3BoxLayout->addSpacing(5);
 		info3BoxLayout->addWidget(howTo1);
@@ -314,7 +316,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 
 		QPushButton *copyJsonButton = new QPushButton(obs_module_text("CopyWebsocketJson"));
 		copyJsonButton->setToolTip(obs_module_text("CopyWebsocketJsonTooltip"));
-		QObject::connect(copyJsonButton, &QPushButton::clicked, [=]() { CopyToClipboard(jsonString); });
+		QObject::connect(copyJsonButton, &QPushButton::clicked, [=]() { StreamUP::UIHelpers::CopyToClipboard(jsonString); });
 		info3BoxLayout->addWidget(copyJsonButton);
 		dialogLayout->addWidget(info3Box);
 		dialogLayout->addSpacing(10);
@@ -442,17 +444,17 @@ std::string GetPlatformURL(const PluginInfo &plugin_info)
 //-------------------ERROR AND UPDATE HANDLING-------------------
 void ErrorDialog(const QString &errorMessage)
 {
-	ShowDialogOnUIThread([errorMessage]() {
-		QDialog *dialog = CreateDialogWindow("WindowErrorTitle");
+	StreamUP::UIHelpers::ShowDialogOnUIThread([errorMessage]() {
+		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowErrorTitle");
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 		dialogLayout->setContentsMargins(20, 15, 20, 10);
 
 		QString displayMessage = errorMessage.isEmpty() ? "Unknown error occurred." : errorMessage;
 
-		dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxCritical, displayMessage.toUtf8().constData()));
+		dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_MessageBoxCritical, displayMessage.toUtf8().constData()));
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		CreateButton(buttonLayout, "OK", [dialog]() { dialog->close(); });
+		StreamUP::UIHelpers::CreateButton(buttonLayout, "OK", [dialog]() { dialog->close(); });
 
 		dialogLayout->addLayout(buttonLayout);
 		dialog->setLayout(dialogLayout);
@@ -463,15 +465,15 @@ void ErrorDialog(const QString &errorMessage)
 void PluginsUpToDateOutput(bool manuallyTriggered)
 {
 	if (manuallyTriggered) {
-		ShowDialogOnUIThread([]() {
-			QDialog *dialog = CreateDialogWindow("WindowUpToDateTitle");
+		StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
+			QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowUpToDateTitle");
 			QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 			dialogLayout->setContentsMargins(20, 15, 20, 10);
 
-			dialogLayout->addLayout(AddIconAndText(QStyle::SP_DialogApplyButton, "WindowUpToDateMessage"));
+			dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_DialogApplyButton, "WindowUpToDateMessage"));
 
 			QHBoxLayout *buttonLayout = new QHBoxLayout();
-			CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
+			StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
 
 			dialogLayout->addLayout(buttonLayout);
 			dialog->setLayout(dialogLayout);
@@ -482,22 +484,22 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 
 void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 {
-	ShowDialogOnUIThread([errorMsgMissing, errorMsgUpdate]() {
-		QDialog *dialog = CreateDialogWindow("WindowPluginErrorTitle");
+	StreamUP::UIHelpers::ShowDialogOnUIThread([errorMsgMissing, errorMsgUpdate]() {
+		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowPluginErrorTitle");
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 		dialogLayout->setContentsMargins(20, 15, 20, 20);
 
 		const char *errorText = (errorMsgMissing != "NULL") ? "WindowPluginErrorMissing" : "WindowPluginErrorUpdating";
-		dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxWarning, errorText));
+		dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_MessageBoxWarning, errorText));
 		dialogLayout->addSpacing(10);
 
-		QLabel *pluginErrorInfo = CreateRichTextLabel(obs_module_text("WindowPluginErrorInfo"), false, true);
+		QLabel *pluginErrorInfo = StreamUP::UIHelpers::CreateRichTextLabel(obs_module_text("WindowPluginErrorInfo"), false, true);
 		dialogLayout->addWidget(pluginErrorInfo);
 		dialogLayout->addSpacing(10);
 
 		if (!errorMsgUpdate.empty()) {
 			QLabel *pluginsToUpdateList =
-				CreateRichTextLabel(QString::fromStdString(errorMsgUpdate), false, false, Qt::AlignCenter);
+				StreamUP::UIHelpers::CreateRichTextLabel(QString::fromStdString(errorMsgUpdate), false, false, Qt::AlignCenter);
 			QGroupBox *pluginsToUpdateBox = new QGroupBox(obs_module_text("WindowPluginErrorUpdateGroup"));
 			QVBoxLayout *pluginsToUpdateBoxLayout = new QVBoxLayout(pluginsToUpdateBox);
 			pluginsToUpdateBoxLayout->addWidget(pluginsToUpdateList);
@@ -509,7 +511,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 
 		if (errorMsgMissing != "NULL") {
 			QLabel *pluginsMissingList =
-				CreateRichTextLabel(QString::fromStdString(errorMsgMissing), false, false, Qt::AlignCenter);
+				StreamUP::UIHelpers::CreateRichTextLabel(QString::fromStdString(errorMsgMissing), false, false, Qt::AlignCenter);
 			QGroupBox *pluginsMissingBox = new QGroupBox(obs_module_text("WindowPluginErrorMissingGroup"));
 			QVBoxLayout *pluginsMissingBoxLayout = new QVBoxLayout(pluginsMissingBox);
 			pluginsMissingBoxLayout->addWidget(pluginsMissingList);
@@ -518,13 +520,13 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 
 		if (errorMsgMissing != "NULL") {
 			QLabel *pluginstallerLabel =
-				CreateRichTextLabel(obs_module_text("WindowPluginErrorFooter"), false, false, Qt::AlignCenter);
+				StreamUP::UIHelpers::CreateRichTextLabel(obs_module_text("WindowPluginErrorFooter"), false, false, Qt::AlignCenter);
 			dialogLayout->addWidget(pluginstallerLabel);
 		}
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 
-		CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
+		StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
 
 		if (errorMsgMissing != "NULL") {
 			QPushButton *pluginstallerButton = new QPushButton(obs_module_text("MenuDownloadPluginstaller"));
@@ -542,30 +544,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 }
 
 
-//-------------------PLUGINS AND INITIALIZATION-------------------
-size_t WriteCallback(void *contents, size_t size, size_t nmemb, std::string *out)
-{
-	size_t totalSize = size * nmemb;
-	out->append((char *)contents, totalSize);
-	return totalSize;
-}
-
-void *MakeApiRequest(void *arg)
-{
-	RequestData *data = (RequestData *)arg;
-	CURL *curl = curl_easy_init();
-
-	if (curl) {
-		curl_easy_setopt(curl, CURLOPT_URL, data->url.c_str());
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data->response);
-		CURLcode res = curl_easy_perform(curl);
-		if (res != CURLE_OK)
-			blog(LOG_INFO, "[StreamUP] curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-		curl_easy_cleanup(curl);
-	}
-	return NULL;
-}
+//-------------------OBS API HELPER FUNCTIONS-------------------
 
 
 
@@ -772,45 +751,7 @@ obs_websocket_vendor vendor = nullptr;
 
 
 //--------------------MENU HELPERS--------------------
-static obs_data_t *SaveLoadSettingsCallback(obs_data_t *save_data, bool saving)
-{
-	char *configPath = obs_module_config_path("configs.json");
-	obs_data_t *data = nullptr;
-
-	if (saving) {
-		if (obs_data_save_json(save_data, configPath)) {
-			blog(LOG_INFO, "[StreamUP] Settings saved to %s", configPath);
-		} else {
-			blog(LOG_WARNING, "[StreamUP] Failed to save settings to file.");
-		}
-	} else {
-		data = obs_data_create_from_json_file(configPath);
-
-		if (!data) {
-			blog(LOG_INFO, "[StreamUP] Settings not found. Creating default settings...");
-			char *config_path = obs_module_config_path("");
-			if (config_path) {
-				os_mkdirs(config_path);
-				bfree(config_path);
-			}
-
-			data = obs_data_create();
-			obs_data_set_bool(data, "run_at_startup", true);
-			obs_data_set_bool(data, "notifications_mute", false);
-
-			if (obs_data_save_json(data, configPath)) {
-				blog(LOG_INFO, "[StreamUP] Default settings saved to %s", configPath);
-			} else {
-				blog(LOG_WARNING, "[StreamUP] Failed to save default settings to file.");
-			}
-		} else {
-			blog(LOG_INFO, "[StreamUP] Settings loaded successfully from %s", configPath);
-		}
-	}
-
-	bfree(configPath);
-	return data;
-}
+// Settings functionality moved to StreamUP::SettingsManager module
 
 QString GetForumLink(const std::string &pluginName)
 {
@@ -916,193 +857,35 @@ std::vector<std::string> SearchModulesInFile(const char *path)
 }
 
 //--------------------SETTINGS MENU--------------------
-void InstalledPluginsDialog()
-{
-	ShowDialogOnUIThread([]() {
-		auto installedPlugins = GetInstalledPlugins();
-
-		QDialog *dialog = CreateDialogWindow("WindowSettingsInstalledPlugins");
-		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(20, 15, 20, 10);
-
-		dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxInformation, "WindowSettingsInstalledPluginsInfo1"));
-		dialogLayout->addSpacing(5);
-
-		dialogLayout->addWidget(
-			CreateRichTextLabel(obs_module_text("WindowSettingsInstalledPluginsInfo2"), false, true, Qt::AlignTop));
-		dialogLayout->addWidget(
-			CreateRichTextLabel(obs_module_text("WindowSettingsInstalledPluginsInfo3"), false, true, Qt::AlignTop));
-
-		QString compatiblePluginsString;
-		if (installedPlugins.empty()) {
-			compatiblePluginsString = obs_module_text("WindowSettingsInstalledPlugins");
-		} else {
-			for (const auto &plugin : installedPlugins) {
-				const auto &pluginName = plugin.first;
-				const auto &pluginVersion = plugin.second;
-				const QString forumLink = GetForumLink(pluginName);
-
-				compatiblePluginsString += "<a href=\"" + forumLink + "\">" + QString::fromStdString(pluginName) +
-							   "</a> (" + QString::fromStdString(pluginVersion) + ")<br>";
-			}
-			if (compatiblePluginsString.endsWith("<br>")) {
-				compatiblePluginsString.chop(4);
-			}
-		}
-
-		QLabel *compatiblePluginsList = CreateRichTextLabel(compatiblePluginsString, false, false);
-		QGroupBox *compatiblePluginsBox = new QGroupBox(obs_module_text("WindowSettingsUpdaterCompatible"));
-		QVBoxLayout *compatiblePluginsBoxLayout = CreateVBoxLayout(compatiblePluginsBox);
-		compatiblePluginsBoxLayout->addWidget(compatiblePluginsList);
-
-		QScrollArea *compatibleScrollArea = new QScrollArea;
-		compatibleScrollArea->setWidgetResizable(true);
-		compatibleScrollArea->setWidget(compatiblePluginsBox);
-		compatibleScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-		compatibleScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-		compatibleScrollArea->setMinimumWidth(200);
-
-		QGroupBox *incompatiblePluginsBox = new QGroupBox(obs_module_text("WindowSettingsUpdaterIncompatible"));
-		QVBoxLayout *incompatiblePluginsBoxLayout = CreateVBoxLayout(incompatiblePluginsBox);
-		QLabel *incompatiblePluginsList = new QLabel;
-		char *filePath = GetFilePath();
-		SetLabelWithSortedModules(incompatiblePluginsList, SearchModulesInFile(filePath));
-		bfree(filePath);
-		incompatiblePluginsBoxLayout->addWidget(incompatiblePluginsList);
-
-		QScrollArea *incompatibleScrollArea = new QScrollArea;
-		incompatibleScrollArea->setWidgetResizable(true);
-		incompatibleScrollArea->setWidget(incompatiblePluginsBox);
-		incompatibleScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-		incompatibleScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-		incompatibleScrollArea->setMinimumWidth(200);
-
-		QHBoxLayout *pluginBoxesLayout = new QHBoxLayout();
-		pluginBoxesLayout->addWidget(compatibleScrollArea);
-		pluginBoxesLayout->addWidget(incompatibleScrollArea);
-
-		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		CreateButton(buttonLayout, obs_module_text("Close"), [dialog]() { dialog->close(); });
-
-		pluginBoxesLayout->setAlignment(Qt::AlignHCenter);
-		dialogLayout->addLayout(pluginBoxesLayout);
-		dialogLayout->addLayout(buttonLayout);
-
-		dialog->setLayout(dialogLayout);
-
-		dialog->show();
-	});
-}
+// InstalledPluginsDialog functionality moved to StreamUP::SettingsManager module
 
 void SettingsDialog()
 {
-	ShowDialogOnUIThread([]() {
-		obs_data_t *settings = SaveLoadSettingsCallback(nullptr, false);
-
-		QDialog *dialog = CreateDialogWindow("WindowSettingsTitle");
-		QFormLayout *dialogLayout = new QFormLayout(dialog);
-		dialogLayout->setContentsMargins(20, 15, 20, 10);
-
-		QLabel *titleLabel = CreateRichTextLabel("General", true, false);
-		dialogLayout->addRow(titleLabel);
-
-		// Run at startup setting
-		obs_properties_t *props = obs_properties_create();
-		obs_property_t *runAtStartupProp =
-			obs_properties_add_bool(props, "run_at_startup", obs_module_text("WindowSettingsRunOnStartup"));
-
-		QCheckBox *runAtStartupCheckBox = new QCheckBox(obs_module_text("WindowSettingsRunOnStartup"));
-		runAtStartupCheckBox->setChecked(obs_data_get_bool(settings, obs_property_name(runAtStartupProp)));
-
-#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
-		QObject::connect(runAtStartupCheckBox, &QCheckBox::checkStateChanged, [=](int state) {
-#else
-		QObject::connect(runAtStartupCheckBox, &QCheckBox::stateChanged, [=](int state) {
-#endif
-			obs_data_set_bool(settings, obs_property_name(runAtStartupProp), state == Qt::Checked);
-		});
-
-		dialogLayout->addWidget(runAtStartupCheckBox);
-
-		// Notifications mute setting
-		obs_property_t *notificationsMuteProp =
-			obs_properties_add_bool(props, "notifications_mute", obs_module_text("WindowSettingsNotificationsMute"));
-
-		QCheckBox *notificationsMuteCheckBox = new QCheckBox(obs_module_text("WindowSettingsNotificationsMute"));
-		notificationsMuteCheckBox->setChecked(obs_data_get_bool(settings, obs_property_name(notificationsMuteProp)));
-		notificationsMuteCheckBox->setToolTip(obs_module_text("WindowSettingsNotificationsMuteTooltip"));
-
-#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
-		QObject::connect(notificationsMuteCheckBox, &QCheckBox::checkStateChanged, [=](int state) {
-#else
-		QObject::connect(notificationsMuteCheckBox, &QCheckBox::stateChanged, [=](int state) {
-#endif
-			bool isChecked = (state == Qt::Checked);
-			obs_data_set_bool(settings, obs_property_name(notificationsMuteProp), isChecked);
-			notificationsMuted = isChecked;
-		});
-
-		dialogLayout->addWidget(notificationsMuteCheckBox);
-
-		// Spacer
-		dialogLayout->addItem(new QSpacerItem(0, 5));
-
-		// Plugin management
-		QLabel *pluginLabel = CreateRichTextLabel(obs_module_text("WindowSettingsPluginManagement"), true, false);
-		QPushButton *pluginButton = new QPushButton(obs_module_text("WindowSettingsViewInstalledPlugins"));
-		QObject::connect(pluginButton, &QPushButton::clicked, InstalledPluginsDialog);
-
-		dialogLayout->addRow(pluginLabel);
-		dialogLayout->addRow(pluginButton);
-
-		// Buttons
-		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		CreateButton(buttonLayout, obs_module_text("Cancel"), [dialog, settings]() {
-			obs_data_release(settings);
-			dialog->close();
-		});
-
-		CreateButton(buttonLayout, obs_module_text("Save"), [=]() {
-			SaveLoadSettingsCallback(settings, true);
-			dialog->close();
-		});
-
-		QWidget *buttonWidget = new QWidget();
-		buttonWidget->setLayout(buttonLayout);
-		dialogLayout->addRow(buttonWidget);
-
-		dialog->setLayout(dialogLayout);
-
-		QObject::connect(dialog, &QDialog::finished, [=](int) {
-			obs_data_release(settings);
-			obs_properties_destroy(props);
-		});
-
-		dialog->show();
-	});
+	// Settings dialog functionality moved to StreamUP::SettingsManager module
+	StreamUP::SettingsManager::ShowSettingsDialog();
 }
 
 //--------------------MAIN MENU--------------------
 
 void AboutDialog()
 {
-	ShowDialogOnUIThread([]() {
+	StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
 		std::string version = PROJECT_VERSION;
 
-		QDialog *dialog = CreateDialogWindow("WindowAboutTitle");
+		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowAboutTitle");
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 		dialogLayout->setContentsMargins(20, 15, 20, 10);
 
 		QString informationRaw = "StreamUP OBS plugin (version " + QString::fromStdString(version) +
 					 ")<br>by <b>Andi Stone</b> (<b>Andilippi</b>)";
-		dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxInformation, informationRaw.toUtf8().constData()));
+		dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_MessageBoxInformation, informationRaw.toUtf8().constData()));
 		dialogLayout->addSpacing(10);
 
 		QGroupBox *supportBox = new QGroupBox(obs_module_text("Support"));
 		supportBox->setMaximumWidth(500);
-		QVBoxLayout *supportBoxLayout = CreateVBoxLayout(supportBox);
+		QVBoxLayout *supportBoxLayout = StreamUP::UIHelpers::CreateVBoxLayout(supportBox);
 		supportBoxLayout->addWidget(
-			CreateRichTextLabel(obs_module_text("WindowAboutSupport"), false, true, Qt::AlignCenter));
+			StreamUP::UIHelpers::CreateRichTextLabel(obs_module_text("WindowAboutSupport"), false, true, Qt::AlignCenter));
 
 		// Create a clickable button that opens the new link
 		QPushButton *membershipButton = new QPushButton("Andi's Memberships");
@@ -1163,9 +946,9 @@ void AboutDialog()
 
 		QGroupBox *socialBox = new QGroupBox(obs_module_text("WindowAboutSocialsTitle"));
 		socialBox->setMaximumWidth(500);
-		QVBoxLayout *socialBoxLayout = CreateVBoxLayout(socialBox);
+		QVBoxLayout *socialBoxLayout = StreamUP::UIHelpers::CreateVBoxLayout(socialBox);
 		socialBoxLayout->addWidget(
-			CreateRichTextLabel(obs_module_text("WindowAboutSocialsMsg"), false, true, Qt::AlignCenter));
+			StreamUP::UIHelpers::CreateRichTextLabel(obs_module_text("WindowAboutSocialsMsg"), false, true, Qt::AlignCenter));
 
 		QHBoxLayout *socialLinksButtonLayout = new QHBoxLayout;
 		socialLinksButtonLayout->setAlignment(Qt::AlignCenter);
@@ -1178,12 +961,12 @@ void AboutDialog()
 
 		dialogLayout->addSpacing(10);
 
-		dialogLayout->addWidget(CreateRichTextLabel(obs_module_text("WindowAboutThanks"), false, true, Qt::AlignCenter));
+		dialogLayout->addWidget(StreamUP::UIHelpers::CreateRichTextLabel(obs_module_text("WindowAboutThanks"), false, true, Qt::AlignCenter));
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		CreateButton(buttonLayout, obs_module_text("Donate"),
+		StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("Donate"),
 			     []() { QDesktopServices::openUrl(QUrl("https://paypal.me/andilippi")); });
-		CreateButton(buttonLayout, obs_module_text("Close"), [dialog]() { dialog->close(); });
+		StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("Close"), [dialog]() { dialog->close(); });
 
 		dialogLayout->addLayout(buttonLayout);
 
@@ -1192,90 +975,7 @@ void AboutDialog()
 	});
 }
 
-//--------------------STARTUP COMMANDS--------------------
-static void LoadMenu(QMenu *menu);
-
-static void InitialiseMenu()
-{
-	QMenu *menu = new QMenu();
-#if defined(_WIN32)
-	// Windows: Add to main menu bar
-	void *main_window_ptr = obs_frontend_get_main_window();
-	if (!main_window_ptr) {
-		blog(LOG_ERROR, "Could not find main window");
-		return;
-	}
-
-	QMainWindow *main_window = static_cast<QMainWindow *>(main_window_ptr);
-	QMenuBar *menuBar = main_window->menuBar();
-	if (!menuBar) {
-		blog(LOG_ERROR, "Could not find main menu bar");
-		return;
-	}
-
-	QMenu *topLevelMenu = new QMenu(obs_module_text("StreamUP"), menuBar);
-	menuBar->addMenu(topLevelMenu);
-	menu = topLevelMenu;
-
-#else
-	// macOS and Linux: Add to Tools menu
-	QAction *action = static_cast<QAction *>(obs_frontend_add_tools_menu_qaction(obs_module_text("StreamUP")));
-	action->setMenu(menu);
-#endif
-
-	// Connect dynamic loader
-	QObject::connect(menu, &QMenu::aboutToShow, [menu] { LoadMenu(menu); });
-}
-
-static void LoadMenu(QMenu *menu)
-{
-	menu->clear();
-	QAction *a;
-
-	// Check if running on Windows platform
-	if (strcmp(PLATFORM_NAME, "windows") == 0) {
-		a = menu->addAction(obs_module_text("MenuInstallProduct"));
-		QObject::connect(a, &QAction::triggered,
-				 []() { LoadStreamupFile(QApplication::keyboardModifiers() & Qt::ShiftModifier); });
-		a = menu->addAction(obs_module_text("MenuDownloadProduct"));
-		QObject::connect(a, &QAction::triggered, []() { QDesktopServices::openUrl(QUrl("https://streamup.tips/")); });
-
-		a = menu->addAction(obs_module_text("MenuCheckRequirements"));
-		QObject::connect(a, &QAction::triggered, []() { CheckrequiredOBSPlugins(); });
-		menu->addSeparator();
-	}
-
-	// Check plugin updates
-	a = menu->addAction(obs_module_text("MenuCheckPluginUpdates"));
-	QObject::connect(a, &QAction::triggered, []() { CheckAllPluginsForUpdates(true); });
-
-	// Create "Tools" submenu
-	QMenu *toolsMenu = menu->addMenu(obs_module_text("MenuTools"));
-
-	// Add actions to the "Tools" submenu
-	a = toolsMenu->addAction(obs_module_text("MenuLockAllCurrentSources"));
-	QObject::connect(a, &QAction::triggered, []() { LockAllCurrentSourcesDialog(); });
-
-	a = toolsMenu->addAction(obs_module_text("MenuLockAllSources"));
-	QObject::connect(a, &QAction::triggered, []() { LockAllSourcesDialog(); });
-
-	toolsMenu->addSeparator();
-
-	a = toolsMenu->addAction(obs_module_text("MenuRefreshAudioMonitoring"));
-	QObject::connect(a, &QAction::triggered, []() { RefreshAudioMonitoringDialog(); });
-
-	a = toolsMenu->addAction(obs_module_text("MenuRefreshBrowserSources"));
-	QObject::connect(a, &QAction::triggered, []() { RefreshBrowserSourcesDialog(); });
-
-	menu->addSeparator();
-
-	// Add remaining actions
-	a = menu->addAction(obs_module_text("MenuAbout"));
-	QObject::connect(a, &QAction::triggered, []() { AboutDialog(); });
-
-	a = menu->addAction(obs_module_text("MenuSettings"));
-	QObject::connect(a, &QAction::triggered, []() { SettingsDialog(); });
-}
+//--------------------WEBSOCKET REGISTRATION--------------------
 
 static void RegisterWebsocketRequests()
 {
@@ -1283,25 +983,25 @@ static void RegisterWebsocketRequests()
 	if (!vendor)
 		return;
 
-	obs_websocket_vendor_register_request(vendor, "getOutputFilePath", WebsocketRequestGetOutputFilePath, nullptr);
-	obs_websocket_vendor_register_request(vendor, "getCurrentSource", WebsocketRequestGetCurrentSelectedSource, nullptr);
-	obs_websocket_vendor_register_request(vendor, "getShowTransition", WebsocketRequestGetShowTransition, nullptr);
-	obs_websocket_vendor_register_request(vendor, "getHideTransition", WebsocketRequestGetHideTransition, nullptr);
-	obs_websocket_vendor_register_request(vendor, "setShowTransition", WebsocketRequestSetShowTransition, nullptr);
-	obs_websocket_vendor_register_request(vendor, "setHideTransition", WebsocketRequestSetHideTransition, nullptr);
-	obs_websocket_vendor_register_request(vendor, "toggleLockCurrentSources", WebsocketRequestLockCurrentSources, nullptr);
-	obs_websocket_vendor_register_request(vendor, "toggleLockAllSources", WebsocketRequestLockAllSources, nullptr);
-	obs_websocket_vendor_register_request(vendor, "getBitrate", WebsocketRequestBitrate, nullptr);
-	obs_websocket_vendor_register_request(vendor, "version", WebsocketRequestVersion, nullptr);
-	obs_websocket_vendor_register_request(vendor, "check_plugins", WebsocketRequestCheckPlugins, nullptr);
-	obs_websocket_vendor_register_request(vendor, "refresh_audio_monitoring", WebsocketRequestRefreshAudioMonitoring, nullptr);
-	obs_websocket_vendor_register_request(vendor, "refresh_browser_sources", WebsocketRequestRefreshBrowserSources, nullptr);
-	obs_websocket_vendor_register_request(vendor, "vlcGetCurrentFile", WebsocketRequestVLCGetCurrentFile, nullptr);
-	obs_websocket_vendor_register_request(vendor, "openSourceProperties", WebsocketOpenSourceProperties, nullptr);
-	obs_websocket_vendor_register_request(vendor, "openSourceFilters", WebsocketOpenSourceFilters, nullptr);
-	obs_websocket_vendor_register_request(vendor, "openSourceInteract", WebsocketOpenSourceInteract, nullptr);
-	obs_websocket_vendor_register_request(vendor, "openSceneFilters", WebsocketOpenSceneFilters, nullptr);
-	obs_websocket_vendor_register_request(vendor, "loadStreamupFile", WebsocketLoadStreamupFile, nullptr);
+	obs_websocket_vendor_register_request(vendor, "getOutputFilePath", StreamUP::WebSocketAPI::WebsocketRequestGetOutputFilePath, nullptr);
+	obs_websocket_vendor_register_request(vendor, "getCurrentSource", StreamUP::WebSocketAPI::WebsocketRequestGetCurrentSelectedSource, nullptr);
+	obs_websocket_vendor_register_request(vendor, "getShowTransition", StreamUP::WebSocketAPI::WebsocketRequestGetShowTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "getHideTransition", StreamUP::WebSocketAPI::WebsocketRequestGetHideTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "setShowTransition", StreamUP::WebSocketAPI::WebsocketRequestSetShowTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "setHideTransition", StreamUP::WebSocketAPI::WebsocketRequestSetHideTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "toggleLockCurrentSources", StreamUP::WebSocketAPI::WebsocketRequestLockCurrentSources, nullptr);
+	obs_websocket_vendor_register_request(vendor, "toggleLockAllSources", StreamUP::WebSocketAPI::WebsocketRequestLockAllSources, nullptr);
+	obs_websocket_vendor_register_request(vendor, "getBitrate", StreamUP::WebSocketAPI::WebsocketRequestBitrate, nullptr);
+	obs_websocket_vendor_register_request(vendor, "version", StreamUP::WebSocketAPI::WebsocketRequestVersion, nullptr);
+	obs_websocket_vendor_register_request(vendor, "check_plugins", StreamUP::WebSocketAPI::WebsocketRequestCheckPlugins, nullptr);
+	obs_websocket_vendor_register_request(vendor, "refresh_audio_monitoring", StreamUP::WebSocketAPI::WebsocketRequestRefreshAudioMonitoring, nullptr);
+	obs_websocket_vendor_register_request(vendor, "refresh_browser_sources", StreamUP::WebSocketAPI::WebsocketRequestRefreshBrowserSources, nullptr);
+	obs_websocket_vendor_register_request(vendor, "vlcGetCurrentFile", StreamUP::WebSocketAPI::WebsocketRequestVLCGetCurrentFile, nullptr);
+	obs_websocket_vendor_register_request(vendor, "openSourceProperties", StreamUP::WebSocketAPI::WebsocketOpenSourceProperties, nullptr);
+	obs_websocket_vendor_register_request(vendor, "openSourceFilters", StreamUP::WebSocketAPI::WebsocketOpenSourceFilters, nullptr);
+	obs_websocket_vendor_register_request(vendor, "openSourceInteract", StreamUP::WebSocketAPI::WebsocketOpenSourceInteract, nullptr);
+	obs_websocket_vendor_register_request(vendor, "openSceneFilters", StreamUP::WebSocketAPI::WebsocketOpenSceneFilters, nullptr);
+	obs_websocket_vendor_register_request(vendor, "loadStreamupFile", StreamUP::WebSocketAPI::WebsocketLoadStreamupFile, nullptr);
 }
 
 
@@ -1335,7 +1035,7 @@ bool obs_module_load()
 {
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
 
-	InitialiseMenu();
+	StreamUP::MenuManager::InitializeMenu();
 
 	RegisterWebsocketRequests();
 	StreamUP::HotkeyManager::RegisterHotkeys();
@@ -1349,25 +1049,16 @@ bool obs_module_load()
 
 void obs_module_post_load(void)
 {
-	InitialiseRequiredModules();
+	StreamUP::PluginManager::InitialiseRequiredModules();
 
-	// Load settings
-	obs_data_t *settings = SaveLoadSettingsCallback(nullptr, false);
-
-	if (settings) {
-		bool runAtStartup = obs_data_get_bool(settings, "run_at_startup");
-		if (runAtStartup) {
-			CheckAllPluginsForUpdates(false);
-		}
-
-		notificationsMuted = obs_data_get_bool(settings, "notifications_mute");
-		blog(LOG_INFO, "[StreamUP] Notifications mute setting: %s", notificationsMuted ? "true" : "false");
-
-	} else {
-		blog(LOG_WARNING, "[StreamUP] Failed to load settings in post load.");
+	// Initialize settings system
+	StreamUP::SettingsManager::InitializeSettingsSystem();
+	
+	// Check for plugin updates on startup if enabled
+	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+	if (settings.runAtStartup) {
+		StreamUP::PluginManager::CheckAllPluginsForUpdates(false);
 	}
-
-	obs_data_release(settings);
 }
 
 //--------------------EXIT COMMANDS--------------------

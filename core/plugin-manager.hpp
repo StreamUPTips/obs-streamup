@@ -35,22 +35,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate);
  */
 void CheckAllPluginsForUpdates(bool manuallyTriggered);
 
-/**
- * CURL write callback for HTTP requests
- * @param contents The data received
- * @param size Size of each data element
- * @param nmemb Number of data elements
- * @param out Output string to write to
- * @return size_t Number of bytes processed
- */
-size_t WriteCallback(void *contents, size_t size, size_t nmemb, std::string *out);
-
-/**
- * Make API request in separate thread
- * @param arg RequestData structure containing URL and response
- * @return void* Always returns nullptr
- */
-void *MakeApiRequest(void *arg);
+// HTTP functionality moved to StreamUP::HttpClient module
 
 //-------------------PLUGIN INITIALIZATION FUNCTIONS-------------------
 /**

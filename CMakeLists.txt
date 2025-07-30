@@ -39,12 +39,18 @@ target_sources(${PROJECT_NAME} PRIVATE
   utilities/string-utils.cpp
   utilities/version-utils.hpp
   utilities/version-utils.cpp
+  utilities/http-client.hpp
+  utilities/http-client.cpp
   integrations/websocket-api.hpp
   integrations/websocket-api.cpp
   ui/hotkey-manager.hpp
   ui/hotkey-manager.cpp
   ui/ui-helpers.hpp
   ui/ui-helpers.cpp
+  ui/menu-manager.hpp
+  ui/menu-manager.cpp
+  ui/settings-manager.hpp
+  ui/settings-manager.cpp
 	version.h)
 
 find_package(CURL REQUIRED)

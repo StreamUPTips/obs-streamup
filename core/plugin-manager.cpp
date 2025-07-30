@@ -3,6 +3,8 @@
 #include "string-utils.hpp"
 #include "version-utils.hpp"
 #include "path-utils.hpp"
+#include "http-client.hpp"
+#include "ui-helpers.hpp"
 #include <obs-module.h>
 #include <obs-data.h>
 #include <curl/curl.h>
@@ -17,11 +19,7 @@
 #include <regex>
 #include <util/platform.h>
 
-// Forward declarations for functions from main streamup.cpp
-extern void ShowDialogOnUIThread(const std::function<void()> &dialogFunction);
-extern QDialog *CreateDialogWindow(const char *windowTitle);
-extern QHBoxLayout *AddIconAndText(const QStyle::StandardPixmap &iconText, const char *labelText);
-extern void CreateButton(QLayout *layout, const QString &text, const std::function<void()> &onClick);
+// UI functions now accessed through StreamUP::UIHelpers namespace
 extern char *GetFilePath();
 
 namespace StreamUP {
@@ -30,17 +28,17 @@ namespace PluginManager {
 //-------------------ERROR HANDLING FUNCTIONS-------------------
 void ErrorDialog(const QString &errorMessage)
 {
-	ShowDialogOnUIThread([errorMessage]() {
-		QDialog *dialog = CreateDialogWindow("WindowErrorTitle");
+	StreamUP::UIHelpers::ShowDialogOnUIThread([errorMessage]() {
+		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowErrorTitle");
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 		dialogLayout->setContentsMargins(20, 15, 20, 10);
 
 		QString displayMessage = errorMessage.isEmpty() ? "Unknown error occurred." : errorMessage;
 
-		dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxCritical, displayMessage.toUtf8().constData()));
+		dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_MessageBoxCritical, displayMessage.toUtf8().constData()));
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		CreateButton(buttonLayout, "OK", [dialog]() { dialog->close(); });
+		StreamUP::UIHelpers::CreateButton(buttonLayout, "OK", [dialog]() { dialog->close(); });
 
 		dialogLayout->addLayout(buttonLayout);
 		dialog->setLayout(dialogLayout);
@@ -51,15 +49,15 @@ void ErrorDialog(const QString &errorMessage)
 void PluginsUpToDateOutput(bool manuallyTriggered)
 {
 	if (manuallyTriggered) {
-		ShowDialogOnUIThread([]() {
-			QDialog *dialog = CreateDialogWindow("WindowUpToDateTitle");
+		StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
+			QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowUpToDateTitle");
 			QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 			dialogLayout->setContentsMargins(20, 15, 20, 10);
 
-			dialogLayout->addLayout(AddIconAndText(QStyle::SP_DialogApplyButton, "WindowUpToDateMessage"));
+			dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_DialogApplyButton, "WindowUpToDateMessage"));
 
 			QHBoxLayout *buttonLayout = new QHBoxLayout();
-			CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
+			StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
 
 			dialogLayout->addLayout(buttonLayout);
 			dialog->setLayout(dialogLayout);
@@ -70,13 +68,13 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 
 void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 {
-	ShowDialogOnUIThread([errorMsgMissing, errorMsgUpdate]() {
-		QDialog *dialog = CreateDialogWindow("WindowPluginErrorTitle");
+	StreamUP::UIHelpers::ShowDialogOnUIThread([errorMsgMissing, errorMsgUpdate]() {
+		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowPluginErrorTitle");
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 		dialogLayout->setContentsMargins(20, 15, 20, 20);
 
 		const char *errorText = (errorMsgMissing != "NULL") ? "WindowPluginErrorMissing" : "WindowPluginErrorUpdating";
-		dialogLayout->addLayout(AddIconAndText(QStyle::SP_MessageBoxWarning, errorText));
+		dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_MessageBoxWarning, errorText));
 		dialogLayout->addSpacing(10);
 
 		if (errorMsgMissing != "NULL") {
@@ -99,7 +97,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		}
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
+		StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
 
 		dialogLayout->addLayout(buttonLayout);
 		dialog->setLayout(dialogLayout);
@@ -187,55 +185,25 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 	}
 }
 
-size_t WriteCallback(void *contents, size_t size, size_t nmemb, std::string *out)
-{
-	size_t totalSize = size * nmemb;
-	out->append((char *)contents, totalSize);
-	return totalSize;
-}
-
-void *MakeApiRequest(void *arg)
-{
-	RequestData *data = (RequestData *)arg;
-	CURL *curl = curl_easy_init();
-
-	if (curl) {
-		curl_easy_setopt(curl, CURLOPT_URL, data->url.c_str());
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data->response);
-		CURLcode res = curl_easy_perform(curl);
-		if (res != CURLE_OK)
-			blog(LOG_INFO, "[StreamUP] curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-		curl_easy_cleanup(curl);
-	}
-	return NULL;
-}
+// HTTP functionality moved to StreamUP::HttpClient module
 
 void InitialiseRequiredModules()
 {
-	pthread_t thread;
-	RequestData req_data;
-	req_data.url = "https://api.streamup.tips/plugins";
-
-	if (pthread_create(&thread, NULL, MakeApiRequest, &req_data)) {
-		blog(LOG_INFO, "[StreamUP] Error creating thread\n");
+	std::string api_response;
+	const std::string url = "https://api.streamup.tips/plugins";
+	
+	if (!StreamUP::HttpClient::MakeGetRequest(url, api_response)) {
+		blog(LOG_WARNING, "[StreamUP] Failed to fetch plugins from API");
 		return;
 	}
-
-	if (pthread_join(thread, NULL)) {
-		blog(LOG_INFO, "[StreamUP] Error joining thread\n");
-		return;
-	}
-
-	std::string api_response = req_data.response;
 
 	if (api_response.find("Error:") != std::string::npos) {
 		ErrorDialog(QString::fromStdString(api_response));
 		return;
 	}
 
-	if (api_response == "") {
-		blog(LOG_INFO, "[StreamUP] Error loading plugins from %s", req_data.url.c_str());
+	if (api_response.empty()) {
+		blog(LOG_INFO, "[StreamUP] Error loading plugins from %s", url.c_str());
 		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
 		return;
 	}

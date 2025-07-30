@@ -1,4 +1,4 @@
-#include "streamup.hpp"
+#include "source-manager.hpp"
 #include "streamup-dock.hpp"
 #include "ui_StreamUPDock.h"
 #include <obs.h>
@@ -90,7 +90,7 @@ void StreamUPDock::ButtonToggleLockAllSources()
 		return;
 	isProcessing = true;
 
-	ToggleLockAllSources(false);
+	StreamUP::SourceManager::ToggleLockAllSources(false);
 	updateButtonIcons();
 
 	isProcessing = false;
@@ -102,7 +102,7 @@ void StreamUPDock::ButtonToggleLockSourcesInCurrentScene()
 		return;
 	isProcessing = true;
 
-	ToggleLockSourcesInCurrentScene(false);
+	StreamUP::SourceManager::ToggleLockSourcesInCurrentScene(false);
 	updateButtonIcons();
 
 	isProcessing = false;
@@ -114,7 +114,7 @@ void StreamUPDock::ButtonRefreshAudioMonitoring()
 		return;
 	isProcessing = true;
 
-	obs_enum_sources(RefreshAudioMonitoring, nullptr);
+	obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr);
 
 	isProcessing = false;
 }
@@ -125,7 +125,7 @@ void StreamUPDock::ButtonRefreshBrowserSources()
 		return;
 	isProcessing = true;
 
-	obs_enum_sources(RefreshBrowserSources, nullptr);
+	obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr);
 
 	isProcessing = false;
 }
@@ -133,14 +133,14 @@ void StreamUPDock::ButtonRefreshBrowserSources()
 void StreamUPDock::updateButtonIcons()
 {
 	// Update button1 icon based on whether all sources are locked in all scenes
-	if (AreAllSourcesLockedInAllScenes()) {
+	if (StreamUP::SourceManager::AreAllSourcesLockedInAllScenes()) {
 		applyFileIconToButton(button1, ":images/all-scene-source-locked.svg");
 	} else {
 		applyFileIconToButton(button1, ":images/all-scene-source-unlocked.svg");
 	}
 
 	// Update button2 icon based on whether all sources are locked in the current scene
-	if (AreAllSourcesLockedInCurrentScene()) {
+	if (StreamUP::SourceManager::AreAllSourcesLockedInCurrentScene()) {
 		applyFileIconToButton(button2, ":images/current-scene-source-locked.svg");
 	} else {
 		applyFileIconToButton(button2, ":images/current-scene-source-unlocked.svg");
@@ -150,7 +150,7 @@ void StreamUPDock::updateButtonIcons()
 
 bool StreamUPDock::AreAllSourcesLockedInAllScenes()
 {
-	return !CheckIfAnyUnlockedInAllScenes();
+	return !StreamUP::SourceManager::CheckIfAnyUnlockedInAllScenes();
 }
 
 bool StreamUPDock::AreAllSourcesLockedInCurrentScene()
@@ -161,7 +161,7 @@ bool StreamUPDock::AreAllSourcesLockedInCurrentScene()
 	}
 
 	obs_scene_t *scene = obs_scene_from_source(current_scene);
-	bool result = !CheckIfAnyUnlocked(scene);
+	bool result = !StreamUP::SourceManager::CheckIfAnyUnlocked(scene);
 	obs_source_release(current_scene);
 	return result;
 }

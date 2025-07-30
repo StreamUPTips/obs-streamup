@@ -1,0 +1,74 @@
+#ifndef STREAMUP_SETTINGS_MANAGER_HPP
+#define STREAMUP_SETTINGS_MANAGER_HPP
+
+#include <obs-data.h>
+
+namespace StreamUP {
+namespace SettingsManager {
+
+/**
+ * @brief Settings structure to hold plugin configuration
+ */
+struct PluginSettings {
+    bool runAtStartup;
+    bool notificationsMute;
+    
+    PluginSettings() : runAtStartup(true), notificationsMute(false) {}
+};
+
+/**
+ * @brief Load settings from configuration file
+ * @return obs_data_t* Pointer to loaded settings data (caller must release)
+ */
+obs_data_t* LoadSettings();
+
+/**
+ * @brief Save settings to configuration file
+ * @param settings The settings data to save
+ * @return bool True if save was successful, false otherwise
+ */
+bool SaveSettings(obs_data_t* settings);
+
+/**
+ * @brief Get current plugin settings as a structure
+ * @return PluginSettings Current settings values
+ */
+PluginSettings GetCurrentSettings();
+
+/**
+ * @brief Update plugin settings from structure
+ * @param settings The new settings to apply
+ */
+void UpdateSettings(const PluginSettings& settings);
+
+/**
+ * @brief Initialize settings system (creates default config if needed)
+ */
+void InitializeSettingsSystem();
+
+/**
+ * @brief Show the settings dialog window
+ */
+void ShowSettingsDialog();
+
+/**
+ * @brief Check if notifications are currently muted
+ * @return bool True if notifications are muted
+ */
+bool AreNotificationsMuted();
+
+/**
+ * @brief Set notification mute state
+ * @param muted True to mute notifications, false to enable them
+ */
+void SetNotificationsMuted(bool muted);
+
+/**
+ * @brief Show the installed plugins dialog
+ */
+void ShowInstalledPluginsDialog();
+
+} // namespace SettingsManager
+} // namespace StreamUP
+
+#endif // STREAMUP_SETTINGS_MANAGER_HPP
