@@ -44,6 +44,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   utilities/http-client.hpp
   utilities/http-client.cpp
   utilities/obs-wrappers.hpp
+  utilities/error-handler.hpp
+  utilities/error-handler.cpp
   integrations/websocket-api.hpp
   integrations/websocket-api.cpp
   ui/hotkey-manager.hpp
