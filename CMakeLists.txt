@@ -17,6 +17,7 @@ add_library(${PROJECT_NAME} MODULE)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/version.h.in ${CMAKE_CURRENT_SOURCE_DIR}/version.h)
 
+# Root files
 target_sources(${PROJECT_NAME} PRIVATE
 	streamup.cpp
 	streamup.hpp
@@ -25,6 +26,10 @@ target_sources(${PROJECT_NAME} PRIVATE
   StreamUPDock.ui
   obs-websocket-api.h
   resources.qrc
+	version.h)
+
+# Core module files
+target_sources(${PROJECT_NAME} PRIVATE
   core/streamup-common.hpp
   core/streamup-common.cpp
   core/plugin-state.hpp
@@ -34,7 +39,10 @@ target_sources(${PROJECT_NAME} PRIVATE
   core/file-manager.hpp
   core/file-manager.cpp
   core/plugin-manager.hpp
-  core/plugin-manager.cpp
+  core/plugin-manager.cpp)
+
+# Utilities module files
+target_sources(${PROJECT_NAME} PRIVATE
   utilities/path-utils.hpp
   utilities/path-utils.cpp
   utilities/string-utils.hpp
@@ -45,9 +53,10 @@ target_sources(${PROJECT_NAME} PRIVATE
   utilities/http-client.cpp
   utilities/obs-wrappers.hpp
   utilities/error-handler.hpp
-  utilities/error-handler.cpp
-  integrations/websocket-api.hpp
-  integrations/websocket-api.cpp
+  utilities/error-handler.cpp)
+
+# UI module files
+target_sources(${PROJECT_NAME} PRIVATE
   ui/hotkey-manager.hpp
   ui/hotkey-manager.cpp
   ui/ui-helpers.hpp
@@ -57,8 +66,64 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/settings-manager.hpp
   ui/settings-manager.cpp
   ui/notification-manager.hpp
-  ui/notification-manager.cpp
+  ui/notification-manager.cpp)
+
+# Integrations module files
+target_sources(${PROJECT_NAME} PRIVATE
+  integrations/websocket-api.hpp
+  integrations/websocket-api.cpp)
+
+# Create source groups for Visual Studio folder structure
+source_group("Root" FILES
+	streamup.cpp
+	streamup.hpp
+  streamup-dock.cpp
+  streamup-dock.hpp
+  StreamUPDock.ui
+  obs-websocket-api.h
+  resources.qrc
 	version.h)
+
+source_group("Core" FILES
+  core/streamup-common.hpp
+  core/streamup-common.cpp
+  core/plugin-state.hpp
+  core/plugin-state.cpp
+  core/source-manager.hpp
+  core/source-manager.cpp
+  core/file-manager.hpp
+  core/file-manager.cpp
+  core/plugin-manager.hpp
+  core/plugin-manager.cpp)
+
+source_group("Utilities" FILES
+  utilities/path-utils.hpp
+  utilities/path-utils.cpp
+  utilities/string-utils.hpp
+  utilities/string-utils.cpp
+  utilities/version-utils.hpp
+  utilities/version-utils.cpp
+  utilities/http-client.hpp
+  utilities/http-client.cpp
+  utilities/obs-wrappers.hpp
+  utilities/error-handler.hpp
+  utilities/error-handler.cpp)
+
+source_group("UI" FILES
+  ui/hotkey-manager.hpp
+  ui/hotkey-manager.cpp
+  ui/ui-helpers.hpp
+  ui/ui-helpers.cpp
+  ui/menu-manager.hpp
+  ui/menu-manager.cpp
+  ui/settings-manager.hpp
+  ui/settings-manager.cpp
+  ui/notification-manager.hpp
+  ui/notification-manager.cpp)
+
+source_group("Integrations" FILES
+  integrations/websocket-api.hpp
+  integrations/websocket-api.cpp)
 
 find_package(CURL REQUIRED)
 if(BUILD_OUT_OF_TREE)
