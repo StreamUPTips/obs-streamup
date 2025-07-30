@@ -4,6 +4,7 @@
 #include <obs-module.h>
 // QSystemTrayIcon now handled by NotificationManager
 #include <vector>
+#include <QTimer>
 
 // Forward declarations for functions from main streamup.cpp
 extern void CreateToolDialog(const char *infoText1, const char *infoText2, const char *infoText3, const QString &titleText,
@@ -405,6 +406,204 @@ bool AreAllSourcesLockedInCurrentScene()
 bool AreAllSourcesLockedInAllScenes()
 {
 	return !CheckIfAnyUnlockedInAllScenes();
+}
+
+//-------------------VIDEO CAPTURE DEVICE FUNCTIONS-------------------
+
+// Structure to hold video capture device operation data
+struct VideoCaptureDeviceData {
+	enum Operation { ACTIVATE, DEACTIVATE, REFRESH_COLLECT, REFRESH_RESTORE };
+	Operation operation;
+	std::vector<obs_source_t*> activeSources; // For refresh operation
+	int processed_count = 0;
+	int total_count = 0;
+	
+	VideoCaptureDeviceData(Operation op) : operation(op) {}
+};
+
+bool IsVideoCaptureDevice(obs_source_t *source)
+{
+	if (!source) return false;
+	
+	const char *source_id = obs_source_get_id(source);
+	if (!source_id) return false;
+	
+	// Check for common video capture device source IDs across platforms
+	return (strcmp(source_id, "dshow_input") == 0 ||      // Windows DirectShow
+		strcmp(source_id, "av_capture_input") == 0 ||  // macOS AVCapture  
+		strcmp(source_id, "v4l2_input") == 0);         // Linux V4L2
+}
+
+bool VideoCaptureDeviceCallback(void *data, obs_source_t *source)
+{
+	if (!source || !IsVideoCaptureDevice(source)) {
+		return true; // Continue enumeration
+	}
+	
+	VideoCaptureDeviceData *vcData = static_cast<VideoCaptureDeviceData*>(data);
+	if (!vcData) return true;
+	
+	vcData->total_count++;
+	
+	switch (vcData->operation) {
+	case VideoCaptureDeviceData::ACTIVATE:
+		if (!obs_source_enabled(source)) {
+			obs_source_set_enabled(source, true);
+			vcData->processed_count++;
+		}
+		break;
+		
+	case VideoCaptureDeviceData::DEACTIVATE:
+		if (obs_source_enabled(source)) {
+			obs_source_set_enabled(source, false);
+			vcData->processed_count++;
+		}
+		break;
+		
+	case VideoCaptureDeviceData::REFRESH_COLLECT:
+		if (obs_source_enabled(source)) {
+			obs_source_get_ref(source); // Add reference since we're storing it
+			vcData->activeSources.push_back(source);
+			vcData->processed_count++;
+		}
+		break;
+		
+	case VideoCaptureDeviceData::REFRESH_RESTORE:
+		// This case is handled separately in RefreshAllVideoCaptureDevices
+		break;
+	}
+	
+	return true; // Continue enumeration
+}
+
+bool ActivateAllVideoCaptureDevices(bool sendNotification)
+{
+	VideoCaptureDeviceData data(VideoCaptureDeviceData::ACTIVATE);
+	obs_enum_sources(VideoCaptureDeviceCallback, &data);
+	
+	if (sendNotification) {
+		QString message;
+		if (data.processed_count > 0) {
+			message = QString("Activated %1 video capture device(s)").arg(data.processed_count);
+			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
+		} else if (data.total_count > 0) {
+			message = "All video capture devices were already active";
+			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
+		} else {
+			message = "No video capture devices found";
+			StreamUP::NotificationManager::SendWarningNotification("Video Capture Devices", message);
+		}
+	}
+	
+	blog(LOG_INFO, "[StreamUP] Activated %d video capture devices (total found: %d)", 
+		 data.processed_count, data.total_count);
+	return true;
+}
+
+bool DeactivateAllVideoCaptureDevices(bool sendNotification)
+{
+	VideoCaptureDeviceData data(VideoCaptureDeviceData::DEACTIVATE);
+	obs_enum_sources(VideoCaptureDeviceCallback, &data);
+	
+	if (sendNotification) {
+		QString message;
+		if (data.processed_count > 0) {
+			message = QString("Deactivated %1 video capture device(s)").arg(data.processed_count);
+			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
+		} else if (data.total_count > 0) {
+			message = "All video capture devices were already inactive";
+			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
+		} else {
+			message = "No video capture devices found";
+			StreamUP::NotificationManager::SendWarningNotification("Video Capture Devices", message);
+		}
+	}
+	
+	blog(LOG_INFO, "[StreamUP] Deactivated %d video capture devices (total found: %d)", 
+		 data.processed_count, data.total_count);
+	return true;
+}
+
+bool RefreshAllVideoCaptureDevices(bool sendNotification)
+{
+	// Step 1: Collect all currently active video capture devices
+	VideoCaptureDeviceData collectData(VideoCaptureDeviceData::REFRESH_COLLECT);
+	obs_enum_sources(VideoCaptureDeviceCallback, &collectData);
+	
+	if (collectData.activeSources.empty()) {
+		if (sendNotification) {
+			QString message = collectData.total_count > 0 ? 
+				"No active video capture devices to refresh" : 
+				"No video capture devices found";
+			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
+		}
+		blog(LOG_INFO, "[StreamUP] No active video capture devices to refresh (total found: %d)", 
+			 collectData.total_count);
+		return true;
+	}
+	
+	// Step 2: Deactivate all active devices
+	for (obs_source_t *source : collectData.activeSources) {
+		obs_source_set_enabled(source, false);
+	}
+	
+	// Step 3: Wait a short time for devices to properly deactivate
+	// Use Qt's event processing to avoid blocking the UI completely
+	QTimer::singleShot(500, [collectData, sendNotification]() {
+		// Step 4: Reactivate all previously active devices
+		int reactivated = 0;
+		for (obs_source_t *source : collectData.activeSources) {
+			if (source) { // Check if source pointer is valid
+				obs_source_set_enabled(source, true);
+				reactivated++;
+			}
+			obs_source_release(source); // Release our reference
+		}
+		
+		if (sendNotification) {
+			QString message = QString("Refreshed %1 video capture device(s)").arg(reactivated);
+			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
+		}
+		
+		blog(LOG_INFO, "[StreamUP] Refreshed %d video capture devices", reactivated);
+	});
+	
+	blog(LOG_INFO, "[StreamUP] Started refresh process for %d video capture devices", 
+		 static_cast<int>(collectData.activeSources.size()));
+	return true;
+}
+
+void ActivateAllVideoCaptureDevicesDialog()
+{
+	CreateToolDialog("VideoCaptureActivateInfo1", "VideoCaptureActivateInfo2", "VideoCaptureActivateInfo3",
+			 QString(obs_module_text("VideoCaptureActivateTitle")),
+			 []() { ActivateAllVideoCaptureDevices(true); },
+			 QString(), // No JSON needed for this action
+			 "VideoCaptureActivateHow1", "VideoCaptureActivateHow2", 
+			 "VideoCaptureActivateHow3", "VideoCaptureActivateHow4",
+			 "VideoCaptureActivateNotification");
+}
+
+void DeactivateAllVideoCaptureDevicesDialog()
+{
+	CreateToolDialog("VideoCaptureDeactivateInfo1", "VideoCaptureDeactivateInfo2", "VideoCaptureDeactivateInfo3",
+			 QString(obs_module_text("VideoCaptureDeactivateTitle")),
+			 []() { DeactivateAllVideoCaptureDevices(true); },
+			 QString(), // No JSON needed for this action
+			 "VideoCaptureDeactivateHow1", "VideoCaptureDeactivateHow2", 
+			 "VideoCaptureDeactivateHow3", "VideoCaptureDeactivateHow4",
+			 "VideoCaptureDeactivateNotification");
+}
+
+void RefreshAllVideoCaptureDevicesDialog()
+{
+	CreateToolDialog("VideoCaptureRefreshInfo1", "VideoCaptureRefreshInfo2", "VideoCaptureRefreshInfo3",
+			 QString(obs_module_text("VideoCaptureRefreshTitle")),
+			 []() { RefreshAllVideoCaptureDevices(true); },
+			 QString(), // No JSON needed for this action
+			 "VideoCaptureRefreshHow1", "VideoCaptureRefreshHow2", 
+			 "VideoCaptureRefreshHow3", "VideoCaptureRefreshHow4",
+			 "VideoCaptureRefreshNotification");
 }
 
 } // namespace SourceManager

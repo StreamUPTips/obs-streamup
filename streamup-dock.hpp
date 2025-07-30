@@ -25,6 +25,9 @@ private:
 	QPushButton *button2;
 	QPushButton *button3;
 	QPushButton *button4;
+	QPushButton *button5;
+	QPushButton *button6;
+	QPushButton *button7;
 	QHBoxLayout *mainDockLayout;
 	bool isProcessing;
 
@@ -34,6 +37,9 @@ private:
 	void ButtonToggleLockSourcesInCurrentScene();
 	void ButtonRefreshAudioMonitoring();
 	void ButtonRefreshBrowserSources();
+	void ButtonActivateAllVideoCaptureDevices();
+	void ButtonDeactivateAllVideoCaptureDevices();
+	void ButtonRefreshAllVideoCaptureDevices();
 	void updateButtonIcons();
 
 	bool AreAllSourcesLockedInAllScenes();

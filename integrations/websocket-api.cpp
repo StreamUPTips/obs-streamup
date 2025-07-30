@@ -715,5 +715,51 @@ void WebsocketOpenSceneFilters(obs_data_t *request_data, obs_data_t *response_da
 	obs_data_set_string(response_data, "status", "Scene filters opened.");
 }
 
+//-------------------VIDEO CAPTURE DEVICE MANAGEMENT-------------------
+void WebsocketActivateAllVideoCaptureDevices(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	bool success = StreamUP::SourceManager::ActivateAllVideoCaptureDevices(false);
+	if (success) {
+		obs_data_set_string(response_data, "status", "All video capture devices activated successfully");
+		obs_data_set_bool(response_data, "success", true);
+	} else {
+		obs_data_set_string(response_data, "error", "Failed to activate video capture devices");
+		obs_data_set_bool(response_data, "success", false);
+	}
+}
+
+void WebsocketDeactivateAllVideoCaptureDevices(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	bool success = StreamUP::SourceManager::DeactivateAllVideoCaptureDevices(false);
+	if (success) {
+		obs_data_set_string(response_data, "status", "All video capture devices deactivated successfully");
+		obs_data_set_bool(response_data, "success", true);
+	} else {
+		obs_data_set_string(response_data, "error", "Failed to deactivate video capture devices");
+		obs_data_set_bool(response_data, "success", false);
+	}
+}
+
+void WebsocketRefreshAllVideoCaptureDevices(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	bool success = StreamUP::SourceManager::RefreshAllVideoCaptureDevices(false);
+	if (success) {
+		obs_data_set_string(response_data, "status", "All video capture devices refresh initiated successfully");
+		obs_data_set_bool(response_data, "success", true);
+	} else {
+		obs_data_set_string(response_data, "error", "Failed to refresh video capture devices");
+		obs_data_set_bool(response_data, "success", false);
+	}
+}
+
 } // namespace WebSocketAPI
 } // namespace StreamUP
