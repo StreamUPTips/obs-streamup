@@ -29,10 +29,7 @@ struct PluginInfo {
 	bool required;
 };
 
-struct RequestData {
-	std::string url;
-	std::string response;
-};
+// RequestData moved to StreamUP::HttpClient module
 
 struct SystemTrayNotification {
 	QSystemTrayIcon::MessageIcon icon;

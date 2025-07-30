@@ -1,14 +1,12 @@
 #include "file-manager.hpp"
 #include "streamup-common.hpp"
+#include "plugin-manager.hpp"
 #include <obs-module.h>
 #include <QFile>
 #include <QFileInfo>
 #include <QFileDialog>
 #include <QApplication>
 #include <list>
-
-// Forward declaration for function from main streamup.cpp
-extern bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile);
 
 namespace StreamUP {
 namespace FileManager {
@@ -376,7 +374,7 @@ void LoadScene(obs_data_t *data, const QString &path)
 bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad)
 {
 	if (!forceLoad) {
-		if (!CheckrequiredOBSPlugins(true)) {
+		if (!StreamUP::PluginManager::CheckrequiredOBSPlugins(true)) {
 			return false;
 		}
 	}
@@ -395,7 +393,7 @@ bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad)
 void LoadStreamupFile(bool forceLoad)
 {
 	if (!forceLoad) {
-		if (!CheckrequiredOBSPlugins(true)) {
+		if (!StreamUP::PluginManager::CheckrequiredOBSPlugins(true)) {
 			return;
 		}
 	}
