@@ -136,6 +136,219 @@ std::string ProcessInlineFormatting(const std::string& text)
     return result;
 }
 
+std::string LoadLocalSupportInfo()
+{
+    QFile file(":support-info.md");
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        ErrorHandler::LogWarning("Failed to open local support info file", ErrorHandler::Category::UI);
+        return "";
+    }
+
+    QTextStream in(&file);
+    QString markdownContent = in.readAll();
+    file.close();
+
+    if (markdownContent.isEmpty()) {
+        ErrorHandler::LogWarning("Local support info file is empty", ErrorHandler::Category::UI);
+        return "";
+    }
+
+    // Convert markdown to HTML - line by line processing for better control
+    std::string result;
+    std::istringstream stream(markdownContent.toStdString());
+    std::string line;
+    bool inList = false;
+    
+    while (std::getline(stream, line)) {
+        // Skip empty lines to reduce spacing
+        if (line.empty()) {
+            continue;
+        }
+        
+        // Convert horizontal rules (--- or ***)
+        if (line == "---" || line == "***") {
+            if (inList) {
+                result += "</ul>\n";
+                inList = false;
+            }
+            result += "<hr style=\"border: none; border-top: 1px solid #374151; margin: 16px 0;\">\n";
+            continue;
+        }
+        
+        // Convert headers with custom colors for support section
+        if (line.length() >= 4 && line.substr(0, 4) == "### ") {
+            if (inList) {
+                result += "</ul>\n";
+                inList = false;
+            }
+            std::string headerText = line.substr(4);
+            result += "<h4 style=\"color: #f3e8ff; margin: 12px 0 6px 0; font-size: 14px;\">" + headerText + "</h4>\n";
+        }
+        else if (line.length() >= 3 && line.substr(0, 3) == "## ") {
+            if (inList) {
+                result += "</ul>\n";
+                inList = false;
+            }
+            std::string headerText = line.substr(3);
+            // Use different colors for "What Your Support" vs "Monthly Supporter Benefits"
+            if (headerText.find("What Your Support") != std::string::npos) {
+                result += "<h3 style=\"color: #fbbf24; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+            } else if (headerText.find("Monthly Supporter") != std::string::npos) {
+                result += "<h3 style=\"color: #a78bfa; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+            } else {
+                result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+            }
+        }
+        else if (line.length() >= 2 && line.substr(0, 2) == "# ") {
+            if (inList) {
+                result += "</ul>\n";
+                inList = false;
+            }
+            std::string headerText = line.substr(2);
+            result += "<h2 style=\"color: #f9fafb; margin: 18px 0 10px 0; font-size: 18px; font-weight: 600;\">" + headerText + "</h2>\n";
+        }
+        // Convert list items
+        else if (line.length() >= 2 && line.substr(0, 2) == "- ") {
+            if (!inList) {
+                result += "<ul style=\"margin: 8px 0; padding-left: 20px;\">\n";
+                inList = true;
+            }
+            std::string content = line.substr(2);
+            
+            // Process inline formatting in list content
+            content = ProcessInlineFormatting(content);
+            
+            result += "<li style=\"margin: 3px 0;\">" + content + "</li>\n";
+        }
+        // Regular paragraph
+        else {
+            if (inList) {
+                result += "</ul>\n";
+                inList = false;
+            }
+            
+            // Process inline formatting
+            std::string processedLine = ProcessInlineFormatting(line);
+            result += "<p style=\"margin: 8px 0;\">" + processedLine + "</p>\n";
+        }
+    }
+    
+    // Close any open list
+    if (inList) {
+        result += "</ul>\n";
+    }
+    
+    std::string formattedNotes = "<div style=\"color: #dbeafe; line-height: 1.4; font-size: 12px;\">\n";
+    formattedNotes += result;
+    formattedNotes += "</div>";
+    
+    ErrorHandler::LogInfo("Successfully loaded local support info", ErrorHandler::Category::UI);
+    return formattedNotes;
+}
+
+std::string LoadLocalPluginInfo()
+{
+    QFile file(":plugin-info.md");
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        ErrorHandler::LogWarning("Failed to open local plugin info file", ErrorHandler::Category::UI);
+        return "";
+    }
+
+    QTextStream in(&file);
+    QString markdownContent = in.readAll();
+    file.close();
+
+    if (markdownContent.isEmpty()) {
+        ErrorHandler::LogWarning("Local plugin info file is empty", ErrorHandler::Category::UI);
+        return "";
+    }
+
+    // Convert markdown to HTML - line by line processing for better control
+    std::string result;
+    std::istringstream stream(markdownContent.toStdString());
+    std::string line;
+    bool inList = false;
+    
+    while (std::getline(stream, line)) {
+        // Skip empty lines to reduce spacing
+        if (line.empty()) {
+            continue;
+        }
+        
+        // Convert horizontal rules (--- or ***)
+        if (line == "---" || line == "***") {
+            if (inList) {
+                result += "</ul>\n";
+                inList = false;
+            }
+            result += "<hr style=\"border: none; border-top: 1px solid #374151; margin: 16px 0;\">\n";
+            continue;
+        }
+        
+        // Convert headers
+        if (line.length() >= 4 && line.substr(0, 4) == "### ") {
+            if (inList) {
+                result += "</ul>\n";
+                inList = false;
+            }
+            std::string headerText = line.substr(4);
+            result += "<h4 style=\"color: #f3e8ff; margin: 12px 0 6px 0; font-size: 14px;\">" + headerText + "</h4>\n";
+        }
+        else if (line.length() >= 3 && line.substr(0, 3) == "## ") {
+            if (inList) {
+                result += "</ul>\n";
+                inList = false;
+            }
+            std::string headerText = line.substr(3);
+            result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+        }
+        else if (line.length() >= 2 && line.substr(0, 2) == "# ") {
+            if (inList) {
+                result += "</ul>\n";
+                inList = false;
+            }
+            std::string headerText = line.substr(2);
+            result += "<h2 style=\"color: #3b82f6; margin: 18px 0 10px 0; font-size: 18px; font-weight: 600;\">" + headerText + "</h2>\n";
+        }
+        // Convert list items
+        else if (line.length() >= 2 && line.substr(0, 2) == "- ") {
+            if (!inList) {
+                result += "<ul style=\"margin: 8px 0; padding-left: 20px;\">\n";
+                inList = true;
+            }
+            std::string content = line.substr(2);
+            
+            // Process inline formatting in list content
+            content = ProcessInlineFormatting(content);
+            
+            result += "<li style=\"margin: 3px 0;\">" + content + "</li>\n";
+        }
+        // Regular paragraph
+        else {
+            if (inList) {
+                result += "</ul>\n";
+                inList = false;
+            }
+            
+            // Process inline formatting
+            std::string processedLine = ProcessInlineFormatting(line);
+            result += "<p style=\"margin: 8px 0;\">" + processedLine + "</p>\n";
+        }
+    }
+    
+    // Close any open list
+    if (inList) {
+        result += "</ul>\n";
+    }
+    
+    std::string formattedNotes = "<div style=\"color: #d1d5db; line-height: 1.4; font-size: 12px;\">\n";
+    formattedNotes += result;
+    formattedNotes += "</div>";
+    
+    ErrorHandler::LogInfo("Successfully loaded local plugin info", ErrorHandler::Category::UI);
+    return formattedNotes;
+}
+
 std::string LoadLocalPatchNotes()
 {
     QFile file(":patch-notes.md");
@@ -382,14 +595,15 @@ void CreateSplashDialog()
         socialIconsLayout->setContentsMargins(0, 8, 0, 0);
         
         QPushButton* twitterIcon = new QPushButton();
-        twitterIcon->setIcon(QIcon(":images/icons/TwitterX.svg"));
-        twitterIcon->setIconSize(QSize(24, 24));
-        twitterIcon->setFixedSize(24, 24);
+        twitterIcon->setIcon(QIcon(":images/icons/twitter.svg"));
+        twitterIcon->setIconSize(QSize(20, 20));
+        twitterIcon->setFixedSize(20, 20);
         twitterIcon->setStyleSheet(R"(
             QPushButton {
                 background: transparent;
                 border: none;
                 padding: 0px;
+                color: white;
             }
             QPushButton:hover {
                 opacity: 0.7;
@@ -401,14 +615,15 @@ void CreateSplashDialog()
         });
         
         QPushButton* blueskyIcon = new QPushButton();
-        blueskyIcon->setIcon(QIcon(":images/icons/Bluesky.svg"));
-        blueskyIcon->setIconSize(QSize(24, 24));
-        blueskyIcon->setFixedSize(24, 24);
+        blueskyIcon->setIcon(QIcon(":images/icons/bluesky.svg"));
+        blueskyIcon->setIconSize(QSize(20, 20));
+        blueskyIcon->setFixedSize(20, 20);
         blueskyIcon->setStyleSheet(R"(
             QPushButton {
                 background: transparent;
                 border: none;
                 padding: 0px;
+                color: white;
             }
             QPushButton:hover {
                 opacity: 0.7;
@@ -420,15 +635,15 @@ void CreateSplashDialog()
         });
         
         QPushButton* dorasIcon = new QPushButton();
-        QPixmap dorasPixmap(":images/square_logo.png"); // Using StreamUP logo for Doras link
-        dorasIcon->setIcon(QIcon(dorasPixmap));
-        dorasIcon->setIconSize(QSize(24, 24));
-        dorasIcon->setFixedSize(24, 24);
+        dorasIcon->setIcon(QIcon(":images/icons/doras.svg"));
+        dorasIcon->setIconSize(QSize(20, 20));
+        dorasIcon->setFixedSize(20, 20);
         dorasIcon->setStyleSheet(R"(
             QPushButton {
                 background: transparent;
                 border: none;
                 padding: 0px;
+                color: white;
             }
             QPushButton:hover {
                 opacity: 0.7;
@@ -533,12 +748,9 @@ void CreateSplashDialog()
         QVBoxLayout* supportLayout = new QVBoxLayout(supportCard);
         supportLayout->setContentsMargins(10, 10, 10, 10);
         
-        QString supportText = R"(
-<div style="color: #dbeafe; line-height: 1.3; font-size: 12px;">
-    <h3 style="font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;">💖 Support This Plugin</h3>
-    <p style="margin: 0;">This plugin is made completely free, please support to help further develop the plugin. Made with love by <a href="https://doras.to/andi" style="color: #60a5fa;">andilippi</a></p>
-</div>
-        )";
+        // Load support info from local markdown file
+        std::string supportContent = LoadLocalSupportInfo();
+        QString supportText = QString::fromStdString(supportContent);
         
         QLabel* supportLabel = UIHelpers::CreateRichTextLabel(supportText, false, true);
         supportLayout->addWidget(supportLabel);
@@ -549,7 +761,7 @@ void CreateSplashDialog()
         donationLayout->setContentsMargins(0, 6, 0, 0);
         
         QPushButton* patreonBtn = new QPushButton("Patreon");
-        patreonBtn->setIcon(QIcon(":images/icons/PhPatreonLogoBold.svg"));
+        patreonBtn->setIcon(QIcon(":images/icons/patreon.svg"));
         patreonBtn->setIconSize(QSize(16, 16));
         patreonBtn->setStyleSheet(R"(
             QPushButton {
@@ -566,6 +778,7 @@ void CreateSplashDialog()
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #e879f9, stop:1 #9333ea);
+                transform: translateY(-1px);
             }
         )");
         QObject::connect(patreonBtn, &QPushButton::clicked, []() {
@@ -573,7 +786,7 @@ void CreateSplashDialog()
         });
         
         QPushButton* kofiBtn = new QPushButton("Ko-Fi");
-        kofiBtn->setIcon(QIcon(":images/icons/HugeiconsKoFi.svg"));
+        kofiBtn->setIcon(QIcon(":images/icons/kofi.svg"));
         kofiBtn->setIconSize(QSize(16, 16));
         kofiBtn->setStyleSheet(R"(
             QPushButton {
@@ -590,14 +803,15 @@ void CreateSplashDialog()
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #2563eb, stop:1 #0891b2);
+                transform: translateY(-1px);
             }
         )");
         QObject::connect(kofiBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://ko-fi.com/streamup"));
         });
         
-        QPushButton* beerBtn = new QPushButton("Buy us a Beer");
-        beerBtn->setIcon(QIcon(":images/icons/FamiconsBeerOutline.svg"));
+        QPushButton* beerBtn = new QPushButton("🍺 Buy a Beer");
+        beerBtn->setIcon(QIcon(":images/icons/beer.svg"));
         beerBtn->setIconSize(QSize(16, 16));
         beerBtn->setStyleSheet(R"(
             QPushButton {
@@ -608,20 +822,21 @@ void CreateSplashDialog()
                 padding: 10px 16px;
                 border-radius: 20px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 11px;
                 min-height: 20px;
             }
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #f59e0b, stop:1 #b45309);
+                transform: translateY(-1px);
             }
         )");
         QObject::connect(beerBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.lemonsqueezy.com/buy/15f64c2f-8b8c-443e-bd6c-e8bf49a0fc97"));
         });
         
-        QPushButton* githubBtn = new QPushButton("Star on GitHub");
-        githubBtn->setIcon(QIcon(":images/icons/HugeiconsGithub01.svg"));
+        QPushButton* githubBtn = new QPushButton("⭐ Star Project");
+        githubBtn->setIcon(QIcon(":images/icons/github.svg"));
         githubBtn->setIconSize(QSize(16, 16));
         githubBtn->setStyleSheet(R"(
             QPushButton {
@@ -631,11 +846,12 @@ void CreateSplashDialog()
                 padding: 10px 16px;
                 border-radius: 20px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 11px;
                 min-height: 20px;
             }
             QPushButton:hover {
                 background: #111827;
+                transform: translateY(-1px);
             }
         )");
         QObject::connect(githubBtn, &QPushButton::clicked, []() {

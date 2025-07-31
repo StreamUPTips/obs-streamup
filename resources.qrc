@@ -8,12 +8,15 @@
 		<file>images/refresh-audio-monitoring.svg</file>
 		<file>images/square_logo.png</file>
 		<file>images/text_logo.png</file>
-		<file>images/icons/PhPatreonLogoBold.svg</file>
-		<file>images/icons/HugeiconsKoFi.svg</file>
-		<file>images/icons/FamiconsBeerOutline.svg</file>
-		<file>images/icons/HugeiconsGithub01.svg</file>
-		<file>images/icons/TwitterX.svg</file>
-		<file>images/icons/Bluesky.svg</file>
+		<file>images/icons/patreon.svg</file>
+		<file>images/icons/kofi.svg</file>
+		<file>images/icons/beer.svg</file>
+		<file>images/icons/github.svg</file>
+		<file>images/icons/twitter.svg</file>
+		<file>images/icons/bluesky.svg</file>
+		<file>images/icons/doras.svg</file>
 		<file>patch-notes.md</file>
+		<file>plugin-info.md</file>
+		<file>support-info.md</file>
 	</qresource>
 </RCC>
