@@ -346,7 +346,7 @@ void CreateSplashDialog()
         // Header section in scrollable area
         QWidget* headerWidget = new QWidget();
         headerWidget->setObjectName("headerWidget");
-        headerWidget->setStyleSheet("QWidget#headerWidget { background: #1f2937; padding: 10px 20px 20px 20px; }"); // 10px top, 20px sides, 20px bottom
+        headerWidget->setStyleSheet("QWidget#headerWidget { background: #1f2937; padding: 20px; }"); // Even padding all around
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
         headerLayout->setSpacing(4);
         headerLayout->setAlignment(Qt::AlignCenter);
@@ -398,7 +398,7 @@ void CreateSplashDialog()
         headerLayout->addWidget(textLogoLabel);
         headerLayout->addWidget(versionLabel);
 
-        // Content area with dark mode scrolling
+        // Content area with dark mode scrolling and overlay scrollbar
         QScrollArea* scrollArea = new QScrollArea();
         scrollArea->setWidgetResizable(true);
         scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -407,25 +407,43 @@ void CreateSplashDialog()
                 background: #1f2937;
                 border: none;
             }
+            QScrollArea::corner {
+                background: transparent;
+            }
             QScrollBar:vertical {
-                background: #374151;
+                background: rgba(55, 65, 81, 0.8);
                 width: 12px;
-                border-radius: 6px;
+                border-radius: 12px;
+                margin: 0px;
+                border: none;
+                position: absolute;
+                right: 2px;
             }
             QScrollBar::handle:vertical {
-                background: #6b7280;
-                border-radius: 6px;
+                background: rgba(107, 114, 128, 0.9);
+                border-radius: 12px;
                 min-height: 20px;
+                margin: 2px;
             }
             QScrollBar::handle:vertical:hover {
-                background: #9ca3af;
+                background: rgba(156, 163, 175, 0.9);
+            }
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+                border: none;
+                background: none;
+                height: 0px;
+            }
+            QScrollBar::add-page:vertical,
+            QScrollBar::sub-page:vertical {
+                background: transparent;
             }
         )");
         
         QWidget* contentWidget = new QWidget();
         contentWidget->setStyleSheet("background: #1f2937;");
         QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
-        contentLayout->setContentsMargins(0, 0, 0, 10);
+        contentLayout->setContentsMargins(0, 10, 0, 10); // Add 10px top margin
         contentLayout->setSpacing(10);
 
         // Add header to the scrollable content
@@ -438,11 +456,11 @@ void CreateSplashDialog()
                 background: #374151;
                 border: none;
                 border-radius: 0px;
-                padding: 12px;
+                padding: 0px;
             }
         )");
         QVBoxLayout* patchNotesLayout = new QVBoxLayout(patchNotesCard);
-        patchNotesLayout->setContentsMargins(0, 0, 0, 0);
+        patchNotesLayout->setContentsMargins(10, 10, 10, 10);
         
         // Fetch dynamic patch notes from GitHub
         std::string dynamicPatchNotes = GetPatchNotes();
@@ -453,17 +471,18 @@ void CreateSplashDialog()
         contentLayout->addWidget(patchNotesCard);
 
         // Support Section - Much more compact
+
         QWidget* supportCard = new QWidget();
         supportCard->setStyleSheet(R"(
             QWidget {
                 background: #1e3a8a;
                 border: none;
                 border-radius: 0px;
-                padding: 12px;
+                padding: 0px;
             }
         )");
         QVBoxLayout* supportLayout = new QVBoxLayout(supportCard);
-        supportLayout->setContentsMargins(0, 0, 0, 0);
+        supportLayout->setContentsMargins(10, 10, 10, 10);
         
         QString supportText = R"(
 <div style="color: #dbeafe; line-height: 1.3; font-size: 12px;">
@@ -487,10 +506,11 @@ void CreateSplashDialog()
                     stop:0 #f472b6, stop:1 #a855f7);
                 color: white;
                 border: none;
-                padding: 8px 12px;
-                border-radius: 6px;
+                padding: 10px 16px;
+                border-radius: 20px;
                 font-weight: 500;
                 font-size: 12px;
+                min-height: 20px;
             }
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
@@ -508,10 +528,11 @@ void CreateSplashDialog()
                     stop:0 #3b82f6, stop:1 #06b6d4);
                 color: white;
                 border: none;
-                padding: 8px 12px;
-                border-radius: 6px;
+                padding: 10px 16px;
+                border-radius: 20px;
                 font-weight: 500;
                 font-size: 12px;
+                min-height: 20px;
             }
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
@@ -528,10 +549,11 @@ void CreateSplashDialog()
                 background: #1f2937;
                 color: white;
                 border: none;
-                padding: 8px 12px;
-                border-radius: 6px;
+                padding: 10px 16px;
+                border-radius: 20px;
                 font-weight: 500;
                 font-size: 12px;
+                min-height: 20px;
             }
             QPushButton:hover {
                 background: #111827;
@@ -556,11 +578,11 @@ void CreateSplashDialog()
                 background: #581c87;
                 border: none;
                 border-radius: 0px;
-                padding: 12px;
+                padding: 0px;
             }
         )");
         QVBoxLayout* supportersLayout = new QVBoxLayout(supportersCard);
-        supportersLayout->setContentsMargins(0, 0, 0, 0);
+        supportersLayout->setContentsMargins(10, 10, 10, 10);
         
         QString modernSupporters = R"(
 <div style="color: #e9d5ff; line-height: 1.4; font-size: 13px;">
@@ -588,11 +610,11 @@ void CreateSplashDialog()
                 background: #374151;
                 border: none;
                 border-radius: 0px;
-                padding: 12px;
+                padding: 0px;
             }
         )");
         QVBoxLayout* linksCardLayout = new QVBoxLayout(linksCard);
-        linksCardLayout->setContentsMargins(0, 0, 0, 0);
+        linksCardLayout->setContentsMargins(10, 10, 10, 10);
         
         QString linksText = R"(
 <div style="color: #d1d5db; line-height: 1.3; font-size: 12px;">
@@ -605,6 +627,7 @@ void CreateSplashDialog()
         
         QHBoxLayout* linksLayout = new QHBoxLayout();
         linksLayout->setSpacing(8);
+        linksLayout->setContentsMargins(0, 6, 0, 0);
         
         QPushButton* docsBtn = new QPushButton("📖 Documentation");
         docsBtn->setStyleSheet(R"(
@@ -612,10 +635,11 @@ void CreateSplashDialog()
                 background: #059669;
                 color: white;
                 border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
+                padding: 10px 16px;
+                border-radius: 20px;
                 font-weight: 500;
                 font-size: 12px;
+                min-height: 20px;
             }
             QPushButton:hover { background: #047857; }
         )");
@@ -629,10 +653,11 @@ void CreateSplashDialog()
                 background: #5865f2;
                 color: white;
                 border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
+                padding: 10px 16px;
+                border-radius: 20px;
                 font-weight: 500;
                 font-size: 12px;
+                min-height: 20px;
             }
             QPushButton:hover { background: #4752c4; }
         )");
@@ -646,10 +671,11 @@ void CreateSplashDialog()
                 background: #dc2626;
                 color: white;
                 border: none;
-                padding: 6px 12px;
-                border-radius: 4px;
+                padding: 10px 16px;
+                border-radius: 20px;
                 font-weight: 500;
                 font-size: 12px;
+                min-height: 20px;
             }
             QPushButton:hover { background: #b91c1c; }
         )");
@@ -678,10 +704,11 @@ void CreateSplashDialog()
                     stop:0 #3b82f6, stop:1 #1d4ed8);
                 color: white;
                 border: none;
-                padding: 12px 24px;
-                border-radius: 8px;
+                padding: 12px 32px;
+                border-radius: 25px;
                 font-weight: 600;
                 font-size: 16px;
+                min-height: 26px;
             }
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
