@@ -2,7 +2,6 @@
 #include "ui-helpers.hpp"
 #include "settings-manager.hpp"
 #include "../utilities/error-handler.hpp"
-#include "../utilities/http-client.hpp"
 #include "../version.h"
 #include <obs-module.h>
 #include <QApplication>
@@ -16,16 +15,13 @@
 #include <QCheckBox>
 #include <QScrollBar>
 #include <QMouseEvent>
+#include <QFile>
+#include <QTextStream>
 #include <util/platform.h>
 #include <sstream>
 
 namespace StreamUP {
 namespace SplashScreen {
-
-// Patch notes for current version
-static const char* PATCH_NOTES = R"(
-<h3>Unable to Load Patch Notes</h3>
-)";
 
 // Monthly supporters list (you'll want to update this regularly)
 static const char* MONTHLY_SUPPORTERS = R"(
@@ -63,229 +59,201 @@ static const char* MONTHLY_SUPPORTERS = R"(
 <p><i>And many more amazing supporters who make this project possible! ❤️</i></p>
 )";
 
-// GitHub API configuration
-static const char* GITHUB_API_URL = "https://api.github.com/repos/StreamUPTips/obs-streamup/releases/latest";
-static const char* GITHUB_RELEASES_API_URL = "https://api.github.com/repos/StreamUPTips/obs-streamup/releases";
-
-std::string FetchLatestReleaseNotes()
+std::string ProcessInlineFormatting(const std::string& text)
 {
-    std::string response;
-    if (!HttpClient::MakeGetRequest(GITHUB_API_URL, response)) {
-        ErrorHandler::LogWarning("Failed to fetch GitHub release data", ErrorHandler::Category::Network);
-        return "";
-    }
-
-    // Log the first 200 characters of response for debugging
-    std::string responsePreview = response.length() > 200 ? response.substr(0, 200) + "..." : response;
-    ErrorHandler::LogInfo("GitHub API response preview: " + responsePreview, ErrorHandler::Category::Network);
-
-    // Check if response looks like JSON
-    if (response.empty() || (response[0] != '{' && response[0] != '[')) {
-        ErrorHandler::LogWarning("GitHub API returned non-JSON response: " + responsePreview, ErrorHandler::Category::Network);
-        return "";
-    }
-
-    // Parse JSON response using OBS built-in JSON functions
-    obs_data_t* releaseData = obs_data_create_from_json(response.c_str());
-    if (!releaseData) {
-        ErrorHandler::LogWarning("Failed to parse GitHub release JSON: " + responsePreview, ErrorHandler::Category::Network);
-        return "";
-    }
-
-    const char* tagName = obs_data_get_string(releaseData, "tag_name");
-    const char* releaseName = obs_data_get_string(releaseData, "name");
-    const char* body = obs_data_get_string(releaseData, "body");
-    const char* publishedAt = obs_data_get_string(releaseData, "published_at");
-
-    if (!tagName || !body) {
-        obs_data_release(releaseData);
-        return "";
-    }
-
-    // Format the release notes as HTML with comprehensive markdown parsing
-    std::string formattedNotes = "<h3 style=\"font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;\">What's New in " + std::string(tagName) + "</h3>\n";
-    
-    // Convert markdown-style formatting to HTML
-    std::string bodyStr = body;
+    std::string result = text;
     
     // Convert **bold** text to <b>
     size_t pos = 0;
-    while ((pos = bodyStr.find("**", pos)) != std::string::npos) {
-        bodyStr.replace(pos, 2, "<b>");
-        size_t endPos = bodyStr.find("**", pos + 3);
+    while ((pos = result.find("**", pos)) != std::string::npos) {
+        result.replace(pos, 2, "<b>");
+        size_t endPos = result.find("**", pos + 3);
         if (endPos != std::string::npos) {
-            bodyStr.replace(endPos, 2, "</b>");
+            result.replace(endPos, 2, "</b>");
+            pos = endPos + 4;
+        } else {
+            pos += 3;
         }
-        pos += 3;
     }
     
-    // Convert *italic* text to <i>
+    // Convert *italic* text to <i> (but skip already processed bold)
     pos = 0;
-    while ((pos = bodyStr.find("*", pos)) != std::string::npos) {
-        // Skip if it's part of **bold** (already converted)
-        if (pos >= 1 && pos + 2 < bodyStr.length()) {
-            std::string check = bodyStr.substr(pos-1, 3);
-            if (check == "<b>") {
-                pos++;
-                continue;
-            }
+    while ((pos = result.find("*", pos)) != std::string::npos) {
+        // Skip if it's part of <b> or </b> tags
+        if (pos >= 1 && result.substr(pos-1, 3) == "<b>") {
+            pos++;
+            continue;
         }
-        if (pos + 4 <= bodyStr.length()) {
-            std::string check = bodyStr.substr(pos, 4);
-            if (check == "</b>") {
-                pos += 4;
-                continue;
-            }
+        if (pos + 4 <= result.length() && result.substr(pos, 4) == "</b>") {
+            pos += 4;
+            continue;
         }
         
-        bodyStr.replace(pos, 1, "<i>");
-        size_t endPos = bodyStr.find("*", pos + 3);
+        result.replace(pos, 1, "<i>");
+        size_t endPos = result.find("*", pos + 3);
         if (endPos != std::string::npos) {
-            bodyStr.replace(endPos, 1, "</i>");
+            result.replace(endPos, 1, "</i>");
+            pos = endPos + 4;
+        } else {
+            pos += 3;
         }
-        pos += 3;
     }
     
     // Convert `code` blocks to <code>
     pos = 0;
-    while ((pos = bodyStr.find("`", pos)) != std::string::npos) {
-        bodyStr.replace(pos, 1, "<code style=\"background: #374151; padding: 2px 4px; border-radius: 3px; font-family: monospace;\">");
-        size_t endPos = bodyStr.find("`", pos + 10);
+    while ((pos = result.find("`", pos)) != std::string::npos) {
+        result.replace(pos, 1, "<code style=\"background: #374151; padding: 2px 4px; border-radius: 3px; font-family: monospace; color: #e5e7eb;\">");
+        size_t endPos = result.find("`", pos + 10);
         if (endPos != std::string::npos) {
-            bodyStr.replace(endPos, 1, "</code>");
+            result.replace(endPos, 1, "</code>");
+            pos = endPos + 7;
+        } else {
+            pos += 10;
         }
-        pos += 10;
-    }
-    
-    // Convert ### headers to <h4>
-    pos = 0;
-    while ((pos = bodyStr.find("### ", pos)) != std::string::npos) {
-        bodyStr.replace(pos, 4, "<h4 style=\"color: #f3e8ff; margin: 8px 0 4px 0;\">");
-        size_t endPos = bodyStr.find('\n', pos);
-        if (endPos != std::string::npos) {
-            bodyStr.insert(endPos, "</h4>");
-        }
-        pos += 4;
-    }
-    
-    // Convert ## headers to <h3>
-    pos = 0;
-    while ((pos = bodyStr.find("## ", pos)) != std::string::npos) {
-        bodyStr.replace(pos, 3, "<h3 style=\"color: #a855f7; margin: 10px 0 6px 0;\">");
-        size_t endPos = bodyStr.find('\n', pos);
-        if (endPos != std::string::npos) {
-            bodyStr.insert(endPos, "</h3>");
-        }
-        pos += 4;
-    }
-    
-    // Convert # headers to <h2>
-    pos = 0;
-    while ((pos = bodyStr.find("# ", pos)) != std::string::npos) {
-        // Skip if it's already part of a header tag
-        if (pos >= 4) {
-            std::string before = bodyStr.substr(pos-4, 4);
-            if (before == "<h3>" || before == "<h4>") {
-                pos += 2;
-                continue;
-            }
-        }
-        bodyStr.replace(pos, 2, "<h2 style=\"color: #3b82f6; margin: 12px 0 8px 0;\">");
-        size_t endPos = bodyStr.find('\n', pos);
-        if (endPos != std::string::npos) {
-            bodyStr.insert(endPos, "</h2>");
-        }
-        pos += 4;
     }
     
     // Convert [link text](url) to <a href="url">link text</a>
     pos = 0;
-    while ((pos = bodyStr.find("[", pos)) != std::string::npos) {
-        size_t closePos = bodyStr.find("]", pos);
-        size_t parenPos = bodyStr.find("(", closePos);
-        size_t closeParenPos = bodyStr.find(")", parenPos);
+    while ((pos = result.find("[", pos)) != std::string::npos) {
+        size_t closePos = result.find("]", pos);
+        size_t parenPos = result.find("(", closePos);
+        size_t closeParenPos = result.find(")", parenPos);
         
         if (closePos != std::string::npos && parenPos != std::string::npos && 
             closeParenPos != std::string::npos && parenPos == closePos + 1) {
             
-            std::string linkText = bodyStr.substr(pos + 1, closePos - pos - 1);
-            std::string linkUrl = bodyStr.substr(parenPos + 1, closeParenPos - parenPos - 1);
-            std::string replacement = "<a href=\"" + linkUrl + "\" style=\"color: #60a5fa;\">" + linkText + "</a>";
+            std::string linkText = result.substr(pos + 1, closePos - pos - 1);
+            std::string linkUrl = result.substr(parenPos + 1, closeParenPos - parenPos - 1);
+            std::string replacement = "<a href=\"" + linkUrl + "\" style=\"color: #60a5fa; text-decoration: underline;\">" + linkText + "</a>";
             
-            bodyStr.replace(pos, closeParenPos - pos + 1, replacement);
+            result.replace(pos, closeParenPos - pos + 1, replacement);
             pos += replacement.length();
         } else {
             pos++;
         }
     }
     
-    // Convert line breaks to <br> for better formatting
-    pos = 0;
-    while ((pos = bodyStr.find("\n\n", pos)) != std::string::npos) {
-        bodyStr.replace(pos, 2, "<br><br>");
-        pos += 8;
+    return result;
+}
+
+std::string LoadLocalPatchNotes()
+{
+    QFile file(":patch-notes.md");
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        ErrorHandler::LogWarning("Failed to open local patch notes file", ErrorHandler::Category::UI);
+        return "";
     }
-    
-    // Convert - list items to <li>
-    pos = 0;
-    bool inList = false;
+
+    QTextStream in(&file);
+    QString markdownContent = in.readAll();
+    file.close();
+
+    if (markdownContent.isEmpty()) {
+        ErrorHandler::LogWarning("Local patch notes file is empty", ErrorHandler::Category::UI);
+        return "";
+    }
+
+    // Convert markdown to HTML - line by line processing for better control
     std::string result;
-    std::istringstream stream(bodyStr);
+    std::istringstream stream(markdownContent.toStdString());
     std::string line;
+    bool inList = false;
     
     while (std::getline(stream, line)) {
-        if (line.length() >= 2 && line.substr(0, 2) == "- ") {
-            if (!inList) {
-                result += "<ul style=\"margin: 4px 0; padding-left: 20px;\">\n";
-                inList = true;
-            }
-            std::string content = line.length() > 2 ? line.substr(2) : "";
-            result += "<li style=\"margin: 2px 0;\">" + content + "</li>\n";
-        } else if (line.length() >= 3 && line.substr(0, 3) == "  -") {
-            if (!inList) {
-                result += "<ul style=\"margin: 4px 0; padding-left: 20px;\">\n";
-                inList = true;
-            }
-            std::string content = line.length() > 3 ? line.substr(3) : "";
-            result += "<li style=\"margin: 2px 0; margin-left: 15px;\">" + content + "</li>\n";
-        } else {
-            if (inList && !line.empty()) {
+        // Skip empty lines to reduce spacing
+        if (line.empty()) {
+            continue;
+        }
+        
+        // Convert horizontal rules (--- or ***)
+        if (line == "---" || line == "***") {
+            if (inList) {
                 result += "</ul>\n";
                 inList = false;
             }
-            result += line + "\n";
+            result += "<hr style=\"border: none; border-top: 1px solid #374151; margin: 16px 0;\">\n";
+            continue;
+        }
+        
+        // Convert headers
+        if (line.length() >= 4 && line.substr(0, 4) == "### ") {
+            if (inList) {
+                result += "</ul>\n";
+                inList = false;
+            }
+            std::string headerText = line.substr(4);
+            result += "<h4 style=\"color: #f3e8ff; margin: 12px 0 6px 0; font-size: 14px;\">" + headerText + "</h4>\n";
+        }
+        else if (line.length() >= 3 && line.substr(0, 3) == "## ") {
+            if (inList) {
+                result += "</ul>\n";
+                inList = false;
+            }
+            std::string headerText = line.substr(3);
+            result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+        }
+        else if (line.length() >= 2 && line.substr(0, 2) == "# ") {
+            if (inList) {
+                result += "</ul>\n";
+                inList = false;
+            }
+            std::string headerText = line.substr(2);
+            result += "<h2 style=\"color: #3b82f6; margin: 18px 0 10px 0; font-size: 18px; font-weight: 600;\">" + headerText + "</h2>\n";
+        }
+        // Convert list items
+        else if (line.length() >= 2 && line.substr(0, 2) == "- ") {
+            if (!inList) {
+                result += "<ul style=\"margin: 8px 0; padding-left: 20px;\">\n";
+                inList = true;
+            }
+            std::string content = line.substr(2);
+            
+            // Process inline formatting in list content
+            content = ProcessInlineFormatting(content);
+            
+            result += "<li style=\"margin: 3px 0;\">" + content + "</li>\n";
+        }
+        // Regular paragraph
+        else {
+            if (inList) {
+                result += "</ul>\n";
+                inList = false;
+            }
+            
+            // Process inline formatting
+            std::string processedLine = ProcessInlineFormatting(line);
+            result += "<p style=\"margin: 8px 0;\">" + processedLine + "</p>\n";
         }
     }
     
+    // Close any open list
     if (inList) {
         result += "</ul>\n";
     }
     
-    formattedNotes += "<div style=\"color: #d1d5db; line-height: 1.4; font-size: 12px;\">\n";
+    std::string formattedNotes = "<div style=\"color: #d1d5db; line-height: 1.4; font-size: 12px;\">\n";
     formattedNotes += result;
-    formattedNotes += "\n</div>";
-
-    obs_data_release(releaseData);
+    formattedNotes += "</div>";
     
-    ErrorHandler::LogInfo("Successfully fetched release notes for " + std::string(tagName), ErrorHandler::Category::Network);
+    ErrorHandler::LogInfo("Successfully loaded local patch notes", ErrorHandler::Category::UI);
     return formattedNotes;
 }
 
 std::string GetPatchNotes()
 {
-    // Try to fetch from GitHub first
-    std::string githubNotes = FetchLatestReleaseNotes();
-    if (!githubNotes.empty()) {
-        return githubNotes;
+    // Load patch notes from local markdown file
+    std::string localNotes = LoadLocalPatchNotes();
+    if (!localNotes.empty()) {
+        return localNotes;
     }
     
-    // Fallback to static notes if GitHub fetch fails
-    ErrorHandler::LogInfo("Using fallback static patch notes", ErrorHandler::Category::UI);
+    // Fallback to static notes if local file fails
+    ErrorHandler::LogWarning("Using fallback static patch notes", ErrorHandler::Category::UI);
     
     return std::string(R"(
 <div style="color: #d1d5db; line-height: 1.3; font-size: 12px;">
-    <h3 style="font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;">What's New in )") + PROJECT_VERSION + R"(</h3>
-    <p style="margin: 0 0 8px 0; color: #fbbf24; font-style: italic;">⚠️ Unable to load patch notes from GitHub</p>
+    <h2 style="color: #3b82f6; margin: 12px 0 8px 0;">What's New in )") + PROJECT_VERSION + R"(</h2>
+    <p style="margin: 0 0 8px 0; color: #fbbf24; font-style: italic;">⚠️ Unable to load patch notes from local file</p>
     <p style="margin: 0;"><b>🚀 Recent Features:</b> WebSocket API, Plugin Manager, Notifications, Settings UI</p>
 </div>
     )";
@@ -333,7 +301,7 @@ void CreateSplashDialog()
         QDialog* dialog = UIHelpers::CreateDialogWindow("StreamUP");
         dialog->setModal(false);
         dialog->setFixedSize(800, 600);
-        dialog->setStyleSheet("QDialog { background: #1f2937; }");
+        dialog->setStyleSheet("QDialog { background: #13171f; }");
         
         QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
         mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -342,7 +310,7 @@ void CreateSplashDialog()
         // Header section in scrollable area
         QWidget* headerWidget = new QWidget();
         headerWidget->setObjectName("headerWidget");
-        headerWidget->setStyleSheet("QWidget#headerWidget { background: #1f2937; padding: 20px; }"); // Even padding all around
+        headerWidget->setStyleSheet("QWidget#headerWidget { background: #13171f; padding: 20px; }"); // Even padding all around
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
         headerLayout->setSpacing(4);
         headerLayout->setAlignment(Qt::AlignCenter);
@@ -407,6 +375,77 @@ void CreateSplashDialog()
         
         headerLayout->addWidget(textLogoLabel);
         headerLayout->addWidget(versionLabel);
+        
+        // Social media icons - icon only buttons
+        QHBoxLayout* socialIconsLayout = new QHBoxLayout();
+        socialIconsLayout->setSpacing(12);
+        socialIconsLayout->setContentsMargins(0, 8, 0, 0);
+        
+        QPushButton* twitterIcon = new QPushButton();
+        twitterIcon->setIcon(QIcon(":images/icons/TwitterX.svg"));
+        twitterIcon->setIconSize(QSize(24, 24));
+        twitterIcon->setFixedSize(24, 24);
+        twitterIcon->setStyleSheet(R"(
+            QPushButton {
+                background: transparent;
+                border: none;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                opacity: 0.7;
+            }
+        )");
+        twitterIcon->setCursor(Qt::PointingHandCursor);
+        QObject::connect(twitterIcon, &QPushButton::clicked, []() {
+            QDesktopServices::openUrl(QUrl("https://twitter.com/StreamUPTips"));
+        });
+        
+        QPushButton* blueskyIcon = new QPushButton();
+        blueskyIcon->setIcon(QIcon(":images/icons/Bluesky.svg"));
+        blueskyIcon->setIconSize(QSize(24, 24));
+        blueskyIcon->setFixedSize(24, 24);
+        blueskyIcon->setStyleSheet(R"(
+            QPushButton {
+                background: transparent;
+                border: none;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                opacity: 0.7;
+            }
+        )");
+        blueskyIcon->setCursor(Qt::PointingHandCursor);
+        QObject::connect(blueskyIcon, &QPushButton::clicked, []() {
+            QDesktopServices::openUrl(QUrl("https://bsky.app/profile/streamuptips.bsky.social"));
+        });
+        
+        QPushButton* dorasIcon = new QPushButton();
+        QPixmap dorasPixmap(":images/square_logo.png"); // Using StreamUP logo for Doras link
+        dorasIcon->setIcon(QIcon(dorasPixmap));
+        dorasIcon->setIconSize(QSize(24, 24));
+        dorasIcon->setFixedSize(24, 24);
+        dorasIcon->setStyleSheet(R"(
+            QPushButton {
+                background: transparent;
+                border: none;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                opacity: 0.7;
+            }
+        )");
+        dorasIcon->setCursor(Qt::PointingHandCursor);
+        QObject::connect(dorasIcon, &QPushButton::clicked, []() {
+            QDesktopServices::openUrl(QUrl("https://doras.to/streamup"));
+        });
+        
+        socialIconsLayout->addStretch();
+        socialIconsLayout->addWidget(twitterIcon);
+        socialIconsLayout->addWidget(blueskyIcon);
+        socialIconsLayout->addWidget(dorasIcon);
+        socialIconsLayout->addStretch();
+        
+        headerLayout->addLayout(socialIconsLayout);
 
         // Content area with dark mode scrolling and overlay scrollbar
         QScrollArea* scrollArea = new QScrollArea();
@@ -414,7 +453,7 @@ void CreateSplashDialog()
         scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         scrollArea->setStyleSheet(R"(
             QScrollArea {
-                background: #1f2937;
+                background: #13171f;
                 border: none;
             }
             QScrollArea::corner {
@@ -451,7 +490,7 @@ void CreateSplashDialog()
         )");
         
         QWidget* contentWidget = new QWidget();
-        contentWidget->setStyleSheet("background: #1f2937;");
+        contentWidget->setStyleSheet("background: #13171f;");
         QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
         contentLayout->setContentsMargins(0, 10, 0, 10); // Add 10px top margin
         contentLayout->setSpacing(10);
@@ -472,7 +511,7 @@ void CreateSplashDialog()
         QVBoxLayout* patchNotesLayout = new QVBoxLayout(patchNotesCard);
         patchNotesLayout->setContentsMargins(10, 10, 10, 10);
         
-        // Fetch dynamic patch notes from GitHub
+        // Load patch notes from local markdown file
         std::string dynamicPatchNotes = GetPatchNotes();
         QString modernPatchNotes = QString::fromStdString(dynamicPatchNotes);
         
@@ -603,6 +642,7 @@ void CreateSplashDialog()
             QDesktopServices::openUrl(QUrl("https://github.com/StreamUPTips/obs-streamup"));
         });
         
+        donationLayout->addStretch();
         donationLayout->addWidget(patreonBtn);
         donationLayout->addWidget(kofiBtn);
         donationLayout->addWidget(beerBtn);
@@ -716,6 +756,7 @@ void CreateSplashDialog()
             QDesktopServices::openUrl(QUrl("https://streamup.tips"));
         });
         
+        linksLayout->addStretch();
         linksLayout->addWidget(docsBtn);
         linksLayout->addWidget(discordBtn);
         linksLayout->addWidget(websiteBtn);
@@ -726,7 +767,7 @@ void CreateSplashDialog()
 
         // Add Get Started button to the scrollable content at the bottom
         QWidget* buttonWidget = new QWidget();
-        buttonWidget->setStyleSheet("background: #1f2937; padding: 20px;");
+        buttonWidget->setStyleSheet("background: #13171f; padding: 20px;");
         QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
         buttonLayout->setContentsMargins(0, 0, 0, 0);
         

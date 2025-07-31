@@ -12,5 +12,8 @@
 		<file>images/icons/HugeiconsKoFi.svg</file>
 		<file>images/icons/FamiconsBeerOutline.svg</file>
 		<file>images/icons/HugeiconsGithub01.svg</file>
+		<file>images/icons/TwitterX.svg</file>
+		<file>images/icons/Bluesky.svg</file>
+		<file>patch-notes.md</file>
 	</qresource>
 </RCC>
