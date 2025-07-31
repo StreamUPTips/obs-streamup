@@ -8,5 +8,9 @@
 		<file>images/refresh-audio-monitoring.svg</file>
 		<file>images/square_logo.png</file>
 		<file>images/text_logo.png</file>
+		<file>images/icons/PhPatreonLogoBold.svg</file>
+		<file>images/icons/HugeiconsKoFi.svg</file>
+		<file>images/icons/FamiconsBeerOutline.svg</file>
+		<file>images/icons/HugeiconsGithub01.svg</file>
 	</qresource>
 </RCC>

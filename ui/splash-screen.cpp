@@ -15,6 +15,7 @@
 #include <QStyle>
 #include <QCheckBox>
 #include <QScrollBar>
+#include <QMouseEvent>
 #include <util/platform.h>
 #include <sstream>
 
@@ -102,7 +103,7 @@ std::string FetchLatestReleaseNotes()
     }
 
     // Format the release notes as HTML with comprehensive markdown parsing
-    std::string formattedNotes = "<h3 style=\"font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;\">What's New in Version " + std::string(tagName) + "</h3>\n";
+    std::string formattedNotes = "<h3 style=\"font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;\">What's New in " + std::string(tagName) + "</h3>\n";
     
     // Convert markdown-style formatting to HTML
     std::string bodyStr = body;
@@ -283,7 +284,7 @@ std::string GetPatchNotes()
     
     return std::string(R"(
 <div style="color: #d1d5db; line-height: 1.3; font-size: 12px;">
-    <h3 style="font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;">What's New in Version )") + PROJECT_VERSION + R"(</h3>
+    <h3 style="font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;">What's New in )") + PROJECT_VERSION + R"(</h3>
     <p style="margin: 0 0 8px 0; color: #fbbf24; font-style: italic;">⚠️ Unable to load patch notes from GitHub</p>
     <p style="margin: 0;"><b>🚀 Recent Features:</b> WebSocket API, Plugin Manager, Notifications, Settings UI</p>
 </div>
@@ -347,8 +348,22 @@ void CreateSplashDialog()
         headerLayout->setAlignment(Qt::AlignCenter);
         headerLayout->setContentsMargins(0, 0, 0, 0);
         
-        // StreamUP text logo
-        QLabel* textLogoLabel = new QLabel();
+        // StreamUP text logo (clickable)
+        class ClickableLabel : public QLabel {
+        public:
+            ClickableLabel(QWidget* parent = nullptr) : QLabel(parent) {
+                setCursor(Qt::PointingHandCursor);
+            }
+        protected:
+            void mousePressEvent(QMouseEvent* event) override {
+                if (event->button() == Qt::LeftButton) {
+                    QDesktopServices::openUrl(QUrl("https://streamup.tips"));
+                }
+                QLabel::mousePressEvent(event);
+            }
+        };
+        
+        ClickableLabel* textLogoLabel = new ClickableLabel();
         textLogoLabel->setObjectName("textLogoLabel");
         QPixmap textLogoPixmap;
         
@@ -481,8 +496,8 @@ void CreateSplashDialog()
         
         QString supportText = R"(
 <div style="color: #dbeafe; line-height: 1.3; font-size: 12px;">
-    <h3 style="font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;">💖 Support StreamUP Development</h3>
-    <p style="margin: 0;">StreamUP is developed by independent developers. Your support helps us continue!</p>
+    <h3 style="font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;">💖 Support This Plugin</h3>
+    <p style="margin: 0;">This plugin is made completely free, please support to help further develop the plugin. Made with love by <a href="https://doras.to/andi" style="color: #60a5fa;">andilippi</a></p>
 </div>
         )";
         
@@ -494,7 +509,9 @@ void CreateSplashDialog()
         donationLayout->setSpacing(6);
         donationLayout->setContentsMargins(0, 6, 0, 0);
         
-        QPushButton* patreonBtn = new QPushButton("💝 Support on Patreon");
+        QPushButton* patreonBtn = new QPushButton("Patreon");
+        patreonBtn->setIcon(QIcon(":images/icons/PhPatreonLogoBold.svg"));
+        patreonBtn->setIconSize(QSize(16, 16));
         patreonBtn->setStyleSheet(R"(
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
@@ -503,7 +520,7 @@ void CreateSplashDialog()
                 border: none;
                 padding: 10px 16px;
                 border-radius: 20px;
-                font-weight: 500;
+                font-weight: bold;
                 font-size: 12px;
                 min-height: 20px;
             }
@@ -516,7 +533,9 @@ void CreateSplashDialog()
             QDesktopServices::openUrl(QUrl("https://www.patreon.com/streamup"));
         });
         
-        QPushButton* kofiBtn = new QPushButton("☕ Buy us a Coffee");
+        QPushButton* kofiBtn = new QPushButton("Ko-Fi");
+        kofiBtn->setIcon(QIcon(":images/icons/HugeiconsKoFi.svg"));
+        kofiBtn->setIconSize(QSize(16, 16));
         kofiBtn->setStyleSheet(R"(
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
@@ -525,7 +544,7 @@ void CreateSplashDialog()
                 border: none;
                 padding: 10px 16px;
                 border-radius: 20px;
-                font-weight: 500;
+                font-weight: bold;
                 font-size: 12px;
                 min-height: 20px;
             }
@@ -538,7 +557,33 @@ void CreateSplashDialog()
             QDesktopServices::openUrl(QUrl("https://ko-fi.com/streamup"));
         });
         
-        QPushButton* githubBtn = new QPushButton("⭐ Star on GitHub");
+        QPushButton* beerBtn = new QPushButton("Buy us a Beer");
+        beerBtn->setIcon(QIcon(":images/icons/FamiconsBeerOutline.svg"));
+        beerBtn->setIconSize(QSize(16, 16));
+        beerBtn->setStyleSheet(R"(
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #f59e0b, stop:1 #d97706);
+                color: white;
+                border: none;
+                padding: 10px 16px;
+                border-radius: 20px;
+                font-weight: bold;
+                font-size: 12px;
+                min-height: 20px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 #f59e0b, stop:1 #b45309);
+            }
+        )");
+        QObject::connect(beerBtn, &QPushButton::clicked, []() {
+            QDesktopServices::openUrl(QUrl("https://streamup.lemonsqueezy.com/buy/15f64c2f-8b8c-443e-bd6c-e8bf49a0fc97"));
+        });
+        
+        QPushButton* githubBtn = new QPushButton("Star on GitHub");
+        githubBtn->setIcon(QIcon(":images/icons/HugeiconsGithub01.svg"));
+        githubBtn->setIconSize(QSize(16, 16));
         githubBtn->setStyleSheet(R"(
             QPushButton {
                 background: #1f2937;
@@ -546,7 +591,7 @@ void CreateSplashDialog()
                 border: none;
                 padding: 10px 16px;
                 border-radius: 20px;
-                font-weight: 500;
+                font-weight: bold;
                 font-size: 12px;
                 min-height: 20px;
             }
@@ -555,11 +600,12 @@ void CreateSplashDialog()
             }
         )");
         QObject::connect(githubBtn, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://github.com/streamup-plugins/streamup"));
+            QDesktopServices::openUrl(QUrl("https://github.com/StreamUPTips/obs-streamup"));
         });
         
         donationLayout->addWidget(patreonBtn);
         donationLayout->addWidget(kofiBtn);
+        donationLayout->addWidget(beerBtn);
         donationLayout->addWidget(githubBtn);
         donationLayout->addStretch();
         
@@ -582,15 +628,7 @@ void CreateSplashDialog()
         QString modernSupporters = R"(
 <div style="color: #e9d5ff; line-height: 1.4; font-size: 13px;">
     <h3 style="font-size: 16px; font-weight: 600; color: #f9fafb; margin: 0 0 10px 0;">🙏 Thank You to Our Supporters!</h3>
-    <p style="margin: 0 0 8px 0; font-style: italic;">Your support makes StreamUP possible!</p>
-    
-    <p style="margin: 0 0 6px 0;"><b style="color: #f3e8ff;">🌟 Diamond:</b> <span style="color: #d8b4fe;">StreamerName1, ContentCreator2, TechEnthusiast3</span></p>
-    <p style="margin: 0 0 6px 0;"><b style="color: #f3e8ff;">💎 Gold:</b> <span style="color: #d8b4fe;">Supporter1, Supporter2, Supporter3, Supporter4</span></p>
-    <p style="margin: 0 0 8px 0;"><b style="color: #f3e8ff;">⭐ Silver:</b> <span style="color: #d8b4fe;">Fan1, Fan2, Fan3, Fan4, Fan5, Fan6</span></p>
-    
-    <div style="text-align: center; margin-top: 10px; padding: 8px; background: rgba(139, 92, 246, 0.2); border-radius: 6px;">
-        <p style="margin: 0; color: #f3e8ff; font-weight: 600; font-size: 12px;">Want to see your name here? <a href="https://www.patreon.com/streamup" style="color: #f3e8ff;">Join our supporters!</a></p>
-    </div>
+    <p style="margin: 0; color: #d8b4fe;">Awaiting Waldo to make an API end point.</p>
 </div>
         )";
         
@@ -632,7 +670,7 @@ void CreateSplashDialog()
                 border: none;
                 padding: 10px 16px;
                 border-radius: 20px;
-                font-weight: 500;
+                font-weight: bold;
                 font-size: 12px;
                 min-height: 20px;
             }
@@ -650,7 +688,7 @@ void CreateSplashDialog()
                 border: none;
                 padding: 10px 16px;
                 border-radius: 20px;
-                font-weight: 500;
+                font-weight: bold;
                 font-size: 12px;
                 min-height: 20px;
             }
@@ -668,7 +706,7 @@ void CreateSplashDialog()
                 border: none;
                 padding: 10px 16px;
                 border-radius: 20px;
-                font-weight: 500;
+                font-weight: bold;
                 font-size: 12px;
                 min-height: 20px;
             }
