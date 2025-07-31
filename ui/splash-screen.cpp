@@ -14,6 +14,7 @@
 #include <QStyleOption>
 #include <QStyle>
 #include <QCheckBox>
+#include <QScrollBar>
 #include <util/platform.h>
 #include <sstream>
 
@@ -101,7 +102,8 @@ std::string FetchLatestReleaseNotes()
     }
 
     // Format the release notes as HTML with comprehensive markdown parsing
-    std::string formattedNotes = "<h3>🎉 Latest Release: " + std::string(releaseName ? releaseName : tagName) + "</h3>\n";
+    std::string formattedNotes = "<h3 style=\"font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;\">📋 What's New & Recent Features</h3>\n";
+    formattedNotes += "<h4>🎉 Latest Release: " + std::string(releaseName ? releaseName : tagName) + "</h4>\n";
     
     // Convert markdown-style formatting to HTML
     std::string bodyStr = body;
@@ -282,7 +284,8 @@ std::string GetPatchNotes()
     
     return R"(
 <div style="color: #d1d5db; line-height: 1.3; font-size: 12px;">
-    <h3>🎉 What's New in v1.7.1</h3>
+    <h3 style="font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;">📋 What's New & Recent Features</h3>
+    <h4>🎉 What's New in v1.7.1</h4>
     <p style="margin: 0 0 4px 0;"><b>🔧 Enhanced Source Management:</b> Improved locking functionality</p>
     <p style="margin: 0 0 4px 0;"><b>🎵 Audio Monitoring:</b> Better refresh capabilities</p>
     <p style="margin: 0 0 4px 0;"><b>🌐 Browser Sources:</b> Enhanced refresh functionality</p>
@@ -340,15 +343,18 @@ void CreateSplashDialog()
         mainLayout->setContentsMargins(0, 0, 0, 0);
         mainLayout->setSpacing(0);
 
-        // Much more compact header section
+        // Header section in scrollable area
         QWidget* headerWidget = new QWidget();
-        headerWidget->setStyleSheet("background: #1f2937; padding: 10px 20px 0px 20px;");
+        headerWidget->setObjectName("headerWidget");
+        headerWidget->setStyleSheet("QWidget#headerWidget { background: #1f2937; padding: 10px 20px 20px 20px; }"); // 10px top, 20px sides, 20px bottom
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
         headerLayout->setSpacing(4);
         headerLayout->setAlignment(Qt::AlignCenter);
+        headerLayout->setContentsMargins(0, 0, 0, 0);
         
         // StreamUP text logo
         QLabel* textLogoLabel = new QLabel();
+        textLogoLabel->setObjectName("textLogoLabel");
         QPixmap textLogoPixmap;
         
         QStringList textLogoPaths = {
@@ -362,8 +368,8 @@ void CreateSplashDialog()
         for (const QString& path : textLogoPaths) {
             textLogoPixmap = QPixmap(path);
             if (!textLogoPixmap.isNull()) {
-                // Scale the text logo to fit nicely in header
-                QPixmap scaledTextLogo = textLogoPixmap.scaled(200, 40, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                // Scale the text logo to fit nicely in header - static size
+                QPixmap scaledTextLogo = textLogoPixmap.scaled(250, 50, Qt::KeepAspectRatio, Qt::SmoothTransformation);
                 textLogoLabel->setPixmap(scaledTextLogo);
                 textLogoLoaded = true;
                 break;
@@ -371,10 +377,10 @@ void CreateSplashDialog()
         }
         
         if (!textLogoLoaded) {
-            // Fallback to text if logo fails to load
+            // Fallback to text if logo fails to load - static size
             textLogoLabel->setText("StreamUP");
             textLogoLabel->setStyleSheet(R"(
-                font-size: 20px; 
+                font-size: 24px; 
                 font-weight: bold; 
                 color: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #f472b6, stop:0.25 #a855f7, stop:0.5 #3b82f6, stop:1 #06b6d4); 
@@ -385,13 +391,12 @@ void CreateSplashDialog()
         
         QString versionText = QString("Advanced Toolkit for OBS Studio • Version %1").arg(PROJECT_VERSION);
         QLabel* versionLabel = new QLabel(versionText);
-        versionLabel->setStyleSheet("font-size: 12px; color: #9ca3af; margin: 0;");
+        versionLabel->setObjectName("versionLabel");
+        versionLabel->setStyleSheet("font-size: 14px; color: #9ca3af; margin: 0;"); // Static size
         versionLabel->setAlignment(Qt::AlignCenter);
         
         headerLayout->addWidget(textLogoLabel);
         headerLayout->addWidget(versionLabel);
-        
-        mainLayout->addWidget(headerWidget);
 
         // Content area with dark mode scrolling
         QScrollArea* scrollArea = new QScrollArea();
@@ -420,31 +425,29 @@ void CreateSplashDialog()
         QWidget* contentWidget = new QWidget();
         contentWidget->setStyleSheet("background: #1f2937;");
         QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
-        contentLayout->setContentsMargins(20, 10, 20, 10);
-        contentLayout->setSpacing(12);
+        contentLayout->setContentsMargins(0, 0, 0, 10);
+        contentLayout->setSpacing(10);
 
+        // Add header to the scrollable content
+        contentLayout->addWidget(headerWidget);
 
         // Patch Notes Section - Much more compact
         QWidget* patchNotesCard = new QWidget();
         patchNotesCard->setStyleSheet(R"(
             QWidget {
                 background: #374151;
-                border: 1px solid #4b5563;
-                border-radius: 6px;
+                border: none;
+                border-radius: 0px;
                 padding: 12px;
             }
         )");
         QVBoxLayout* patchNotesLayout = new QVBoxLayout(patchNotesCard);
         patchNotesLayout->setContentsMargins(0, 0, 0, 0);
         
-        QLabel* patchNotesTitle = new QLabel("📋 What's New & Recent Features");
-        patchNotesTitle->setStyleSheet("font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;");
-        
         // Fetch dynamic patch notes from GitHub
         std::string dynamicPatchNotes = GetPatchNotes();
         QString modernPatchNotes = QString::fromStdString(dynamicPatchNotes);
         
-        patchNotesLayout->addWidget(patchNotesTitle);
         QLabel* patchNotesLabel = UIHelpers::CreateRichTextLabel(modernPatchNotes, false, true);
         patchNotesLayout->addWidget(patchNotesLabel);
         contentLayout->addWidget(patchNotesCard);
@@ -454,24 +457,21 @@ void CreateSplashDialog()
         supportCard->setStyleSheet(R"(
             QWidget {
                 background: #1e3a8a;
-                border: 1px solid #3b82f6;
-                border-radius: 6px;
+                border: none;
+                border-radius: 0px;
                 padding: 12px;
             }
         )");
         QVBoxLayout* supportLayout = new QVBoxLayout(supportCard);
         supportLayout->setContentsMargins(0, 0, 0, 0);
         
-        QLabel* supportTitle = new QLabel("💖 Support StreamUP Development");
-        supportTitle->setStyleSheet("font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;");
-        
         QString supportText = R"(
 <div style="color: #dbeafe; line-height: 1.3; font-size: 12px;">
+    <h3 style="font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;">💖 Support StreamUP Development</h3>
     <p style="margin: 0;">StreamUP is developed by independent developers. Your support helps us continue!</p>
 </div>
         )";
         
-        supportLayout->addWidget(supportTitle);
         QLabel* supportLabel = UIHelpers::CreateRichTextLabel(supportText, false, true);
         supportLayout->addWidget(supportLabel);
         
@@ -554,19 +554,17 @@ void CreateSplashDialog()
         supportersCard->setStyleSheet(R"(
             QWidget {
                 background: #581c87;
-                border: 1px solid #a855f7;
-                border-radius: 6px;
+                border: none;
+                border-radius: 0px;
                 padding: 12px;
             }
         )");
         QVBoxLayout* supportersLayout = new QVBoxLayout(supportersCard);
         supportersLayout->setContentsMargins(0, 0, 0, 0);
         
-        QLabel* supportersTitle = new QLabel("🙏 Thank You to Our Supporters!");
-        supportersTitle->setStyleSheet("font-size: 16px; font-weight: 600; color: #f9fafb; margin: 0 0 10px 0;");
-        
         QString modernSupporters = R"(
 <div style="color: #e9d5ff; line-height: 1.4; font-size: 13px;">
+    <h3 style="font-size: 16px; font-weight: 600; color: #f9fafb; margin: 0 0 10px 0;">🙏 Thank You to Our Supporters!</h3>
     <p style="margin: 0 0 8px 0; font-style: italic;">Your support makes StreamUP possible!</p>
     
     <p style="margin: 0 0 6px 0;"><b style="color: #f3e8ff;">🌟 Diamond:</b> <span style="color: #d8b4fe;">StreamerName1, ContentCreator2, TechEnthusiast3</span></p>
@@ -579,7 +577,6 @@ void CreateSplashDialog()
 </div>
         )";
         
-        supportersLayout->addWidget(supportersTitle);
         QLabel* supportersLabel = UIHelpers::CreateRichTextLabel(modernSupporters, false, true);
         supportersLayout->addWidget(supportersLabel);
         contentLayout->addWidget(supportersCard);
@@ -589,16 +586,22 @@ void CreateSplashDialog()
         linksCard->setStyleSheet(R"(
             QWidget {
                 background: #374151;
-                border: 1px solid #4b5563;
-                border-radius: 6px;
+                border: none;
+                border-radius: 0px;
                 padding: 12px;
             }
         )");
         QVBoxLayout* linksCardLayout = new QVBoxLayout(linksCard);
         linksCardLayout->setContentsMargins(0, 0, 0, 0);
         
-        QLabel* linksTitle = new QLabel("🔗 Useful Links");
-        linksTitle->setStyleSheet("font-size: 16px; font-weight: 600; color: #f9fafb; margin: 0 0 10px 0;");
+        QString linksText = R"(
+<div style="color: #d1d5db; line-height: 1.3; font-size: 12px;">
+    <h3 style="font-size: 16px; font-weight: 600; color: #f9fafb; margin: 0 0 10px 0;">🔗 Useful Links</h3>
+</div>
+        )";
+        
+        QLabel* linksLabel = UIHelpers::CreateRichTextLabel(linksText, false, true);
+        linksCardLayout->addWidget(linksLabel);
         
         QHBoxLayout* linksLayout = new QHBoxLayout();
         linksLayout->setSpacing(8);
@@ -659,37 +662,14 @@ void CreateSplashDialog()
         linksLayout->addWidget(websiteBtn);
         linksLayout->addStretch();
         
-        linksCardLayout->addWidget(linksTitle);
         linksCardLayout->addLayout(linksLayout);
         contentLayout->addWidget(linksCard);
 
-        scrollArea->setWidget(contentWidget);
-        mainLayout->addWidget(scrollArea);
-
-        // Modern footer with dark mode styling
-        QWidget* footerWidget = new QWidget();
-        footerWidget->setStyleSheet("background: #1f2937; border-top: 1px solid #4b5563; padding: 20px;");
-        QHBoxLayout* footerLayout = new QHBoxLayout(footerWidget);
-        
-        QCheckBox* dontShowAgain = new QCheckBox("Don't show this again for updates");
-        dontShowAgain->setStyleSheet(R"(
-            QCheckBox {
-                color: #d1d5db;
-                font-size: 14px;
-            }
-            QCheckBox::indicator {
-                width: 16px;
-                height: 16px;
-                border-radius: 3px;
-                border: 2px solid #6b7280;
-                background: #374151;
-            }
-            QCheckBox::indicator:checked {
-                background: #3b82f6;
-                border-color: #3b82f6;
-            }
-        )");
-        dontShowAgain->setToolTip("You can always access this screen from the StreamUP menu");
+        // Add Get Started button to the scrollable content at the bottom
+        QWidget* buttonWidget = new QWidget();
+        buttonWidget->setStyleSheet("background: #1f2937; padding: 20px;");
+        QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
+        buttonLayout->setContentsMargins(0, 0, 0, 0);
         
         QPushButton* closeBtn = new QPushButton("Get Started! 🚀");
         closeBtn->setStyleSheet(R"(
@@ -710,26 +690,20 @@ void CreateSplashDialog()
         )");
         closeBtn->setDefault(true);
         
-        QObject::connect(closeBtn, &QPushButton::clicked, [dialog, dontShowAgain]() {
+        QObject::connect(closeBtn, &QPushButton::clicked, [dialog]() {
             UpdateVersionTracking();
-            
-            // If user checked "don't show again", save preference
-            if (dontShowAgain->isChecked()) {
-                obs_data_t* settings = SettingsManager::LoadSettings();
-                if (!settings) settings = obs_data_create();
-                obs_data_set_bool(settings, "splash_disabled", true);
-                SettingsManager::SaveSettings(settings);
-                obs_data_release(settings);
-            }
-            
             dialog->close();
         });
         
-        footerLayout->addWidget(dontShowAgain);
-        footerLayout->addStretch();
-        footerLayout->addWidget(closeBtn);
+        buttonLayout->addStretch();
+        buttonLayout->addWidget(closeBtn);
+        buttonLayout->addStretch();
         
-        mainLayout->addWidget(footerWidget);
+        contentLayout->addWidget(buttonWidget);
+
+        scrollArea->setWidget(contentWidget);
+        
+        mainLayout->addWidget(scrollArea);
 
         dialog->setLayout(mainLayout);
         dialog->show();
