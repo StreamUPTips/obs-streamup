@@ -102,8 +102,7 @@ std::string FetchLatestReleaseNotes()
     }
 
     // Format the release notes as HTML with comprehensive markdown parsing
-    std::string formattedNotes = "<h3 style=\"font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;\">📋 What's New & Recent Features</h3>\n";
-    formattedNotes += "<h4>🎉 Latest Release: " + std::string(releaseName ? releaseName : tagName) + "</h4>\n";
+    std::string formattedNotes = "<h3 style=\"font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;\">What's New in Version " + std::string(tagName) + "</h3>\n";
     
     // Convert markdown-style formatting to HTML
     std::string bodyStr = body;
@@ -282,15 +281,11 @@ std::string GetPatchNotes()
     // Fallback to static notes if GitHub fetch fails
     ErrorHandler::LogInfo("Using fallback static patch notes", ErrorHandler::Category::UI);
     
-    return R"(
+    return std::string(R"(
 <div style="color: #d1d5db; line-height: 1.3; font-size: 12px;">
-    <h3 style="font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;">📋 What's New & Recent Features</h3>
-    <h4>🎉 What's New in v1.7.1</h4>
-    <p style="margin: 0 0 4px 0;"><b>🔧 Enhanced Source Management:</b> Improved locking functionality</p>
-    <p style="margin: 0 0 4px 0;"><b>🎵 Audio Monitoring:</b> Better refresh capabilities</p>
-    <p style="margin: 0 0 4px 0;"><b>🌐 Browser Sources:</b> Enhanced refresh functionality</p>
-    <p style="margin: 0 0 8px 0;"><b>🐛 Bug Fixes:</b> Stability improvements</p>
-    <p style="margin: 0;"><b>🚀 Recent:</b> WebSocket API, Plugin Manager, Notifications, Settings UI</p>
+    <h3 style="font-size: 14px; font-weight: 600; color: #f9fafb; margin: 0 0 6px 0;">What's New in Version )") + PROJECT_VERSION + R"(</h3>
+    <p style="margin: 0 0 8px 0; color: #fbbf24; font-style: italic;">⚠️ Unable to load patch notes from GitHub</p>
+    <p style="margin: 0;"><b>🚀 Recent Features:</b> WebSocket API, Plugin Manager, Notifications, Settings UI</p>
 </div>
     )";
 }
