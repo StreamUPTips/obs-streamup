@@ -24,7 +24,6 @@
 #endif
 
 // Forward declarations for dialog functions (defined in main streamup.cpp for now)
-extern void AboutDialog();
 extern void SettingsDialog();
 
 namespace StreamUP {
@@ -100,9 +99,6 @@ void LoadMenuItems(QMenu* menu)
 
     // About and Settings
     action = menu->addAction(obs_module_text("MenuAbout"));
-    QObject::connect(action, &QAction::triggered, []() { AboutDialog(); });
-
-    action = menu->addAction(obs_module_text("MenuWelcomeScreen"));
     QObject::connect(action, &QAction::triggered, []() { StreamUP::SplashScreen::ShowSplashScreen(); });
 
     action = menu->addAction(obs_module_text("MenuSettings"));
