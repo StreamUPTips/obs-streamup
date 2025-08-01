@@ -101,7 +101,7 @@ void WebsocketRequestRefreshAudioMonitoring(obs_data_t *request_data, obs_data_t
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
 	obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr);
-	obs_data_set_bool(response_data, "Audio monitoring refreshed", true);
+	obs_data_set_bool(response_data, "success", true);
 }
 
 void WebsocketRequestRefreshBrowserSources(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
@@ -109,7 +109,7 @@ void WebsocketRequestRefreshBrowserSources(obs_data_t *request_data, obs_data_t 
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
 	obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr);
-	obs_data_set_bool(response_data, "Browser sources refreshed", true);
+	obs_data_set_bool(response_data, "success", true);
 }
 
 void WebsocketRequestGetCurrentSelectedSource(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
