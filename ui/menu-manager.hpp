@@ -24,12 +24,6 @@ void InitializeMenu();
  */
 void LoadMenuItems(QMenu* menu);
 
-/**
- * @brief Create and configure the Tools submenu
- * @param parentMenu The parent menu to attach the Tools submenu to
- * @return QMenu* Pointer to the created Tools submenu
- */
-QMenu* CreateToolsSubmenu(QMenu* parentMenu);
 
 } // namespace MenuManager
 } // namespace StreamUP
