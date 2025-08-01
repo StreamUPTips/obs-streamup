@@ -58,7 +58,7 @@ void ShowVideoDeviceOptionsInline(QScrollArea* scrollArea, QWidget* originalCont
 void ShowToolDetailInline(QScrollArea* scrollArea, QWidget* originalContent, const char* titleKey,
                          const char* info1Key, const char* info2Key, const char* info3Key,
                          std::function<void()> action, const char* howTo1Key, const char* howTo2Key,
-                         const char* howTo3Key, const char* howTo4Key);
+                         const char* howTo3Key, const char* howTo4Key, const char* websocketCommand = nullptr);
 
 
 } // namespace ToolsWindow

@@ -137,22 +137,38 @@ void ShowToolsWindow()
         sourceDesc->setTextFormat(Qt::PlainText);
         sourceGroupLayout->addWidget(sourceDesc);
         
+        // Source buttons in 2x1 grid
+        QHBoxLayout* sourceRow1Layout = new QHBoxLayout();
+        sourceRow1Layout->setSpacing(10);
+        
         // Lock Current Scene Sources button
         QPushButton* lockCurrentBtn = new QPushButton("Lock Current Scene Sources");
-        lockCurrentBtn->setMinimumHeight(60);
+        lockCurrentBtn->setMinimumHeight(70);
         lockCurrentBtn->setStyleSheet(R"(
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3b82f6, stop:1 #2563eb);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(99, 102, 241, 0.8), 
+                    stop:0.5 rgba(79, 70, 229, 0.9), 
+                    stop:1 rgba(67, 56, 202, 1.0));
                 color: white;
-                border: none;
+                border: 1px solid rgba(255, 255, 255, 0.1);
                 padding: 15px 20px;
-                font-size: 14px;
-                font-weight: bold;
-                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                border-radius: 12px;
                 text-align: center;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60a5fa, stop:1 #3b82f6);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(129, 140, 248, 0.9), 
+                    stop:0.5 rgba(99, 102, 241, 1.0), 
+                    stop:1 rgba(79, 70, 229, 1.0));
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(67, 56, 202, 1.0), 
+                    stop:1 rgba(55, 48, 163, 1.0));
             }
         )");
         QObject::connect(lockCurrentBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
@@ -160,25 +176,37 @@ void ShowToolsWindow()
                 "LockAllCurrentSourcesInfo1", "LockAllCurrentSourcesInfo2", "LockAllCurrentSourcesInfo3",
                 []() { StreamUP::SourceManager::ToggleLockSourcesInCurrentScene(); },
                 "LockAllCurrentSourcesHowTo1", "LockAllCurrentSourcesHowTo2", 
-                "LockAllCurrentSourcesHowTo3", "LockAllCurrentSourcesHowTo4");
+                "LockAllCurrentSourcesHowTo3", "LockAllCurrentSourcesHowTo4", "ToggleLockCurrentSceneSources");
         });
         
         // Lock All Sources button
         QPushButton* lockAllBtn = new QPushButton("Lock All Sources");
-        lockAllBtn->setMinimumHeight(60);
+        lockAllBtn->setMinimumHeight(70);
         lockAllBtn->setStyleSheet(R"(
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3b82f6, stop:1 #2563eb);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(168, 85, 247, 0.8), 
+                    stop:0.5 rgba(147, 51, 234, 0.9), 
+                    stop:1 rgba(126, 34, 206, 1.0));
                 color: white;
-                border: none;
+                border: 1px solid rgba(255, 255, 255, 0.1);
                 padding: 15px 20px;
-                font-size: 14px;
-                font-weight: bold;
-                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                border-radius: 12px;
                 text-align: center;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60a5fa, stop:1 #3b82f6);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(196, 125, 249, 0.9), 
+                    stop:0.5 rgba(168, 85, 247, 1.0), 
+                    stop:1 rgba(147, 51, 234, 1.0));
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(126, 34, 206, 1.0), 
+                    stop:1 rgba(107, 33, 168, 1.0));
             }
         )");
         QObject::connect(lockAllBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
@@ -186,11 +214,12 @@ void ShowToolsWindow()
                 "LockAllSourcesInfo1", "LockAllSourcesInfo2", "LockAllSourcesInfo3",
                 []() { StreamUP::SourceManager::ToggleLockAllSources(); },
                 "LockAllSourcesHowTo1", "LockAllSourcesHowTo2", 
-                "LockAllSourcesHowTo3", "LockAllSourcesHowTo4");
+                "LockAllSourcesHowTo3", "LockAllSourcesHowTo4", "ToggleLockAllSources");
         });
         
-        sourceGroupLayout->addWidget(lockCurrentBtn);
-        sourceGroupLayout->addWidget(lockAllBtn);
+        sourceRow1Layout->addWidget(lockCurrentBtn);
+        sourceRow1Layout->addWidget(lockAllBtn);
+        sourceGroupLayout->addLayout(sourceRow1Layout);
         
         contentLayout->addWidget(sourceGroupBox);
 
@@ -236,22 +265,38 @@ void ShowToolsWindow()
         avDesc->setTextFormat(Qt::PlainText);
         avGroupLayout->addWidget(avDesc);
         
+        // Audio/Video buttons in 2x2 grid
+        QHBoxLayout* avRow1Layout = new QHBoxLayout();
+        avRow1Layout->setSpacing(10);
+        
         // Refresh Audio Monitoring button
         QPushButton* audioBtn = new QPushButton("Refresh Audio Monitoring");
-        audioBtn->setMinimumHeight(60);
+        audioBtn->setMinimumHeight(70);
         audioBtn->setStyleSheet(R"(
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22c55e, stop:1 #16a34a);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(34, 197, 94, 0.8), 
+                    stop:0.5 rgba(22, 163, 74, 0.9), 
+                    stop:1 rgba(21, 128, 61, 1.0));
                 color: white;
-                border: none;
+                border: 1px solid rgba(255, 255, 255, 0.1);
                 padding: 15px 20px;
-                font-size: 14px;
-                font-weight: bold;
-                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                border-radius: 12px;
                 text-align: center;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #32d56e, stop:1 #26b35a);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(74, 222, 128, 0.9), 
+                    stop:0.5 rgba(34, 197, 94, 1.0), 
+                    stop:1 rgba(22, 163, 74, 1.0));
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(21, 128, 61, 1.0), 
+                    stop:1 rgba(20, 83, 45, 1.0));
             }
         )");
         QObject::connect(audioBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
@@ -259,25 +304,37 @@ void ShowToolsWindow()
                 "RefreshAudioMonitoringInfo1", "RefreshAudioMonitoringInfo2", "RefreshAudioMonitoringInfo3",
                 []() { obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr); },
                 "RefreshAudioMonitoringHowTo1", "RefreshAudioMonitoringHowTo2", 
-                "RefreshAudioMonitoringHowTo3", "RefreshAudioMonitoringHowTo4");
+                "RefreshAudioMonitoringHowTo3", "RefreshAudioMonitoringHowTo4", "RefreshAudioMonitoring");
         });
         
         // Refresh Browser Sources button
         QPushButton* browserBtn = new QPushButton("Refresh Browser Sources");
-        browserBtn->setMinimumHeight(60);
+        browserBtn->setMinimumHeight(70);
         browserBtn->setStyleSheet(R"(
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ef4444, stop:1 #dc2626);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(239, 68, 68, 0.8), 
+                    stop:0.5 rgba(220, 38, 38, 0.9), 
+                    stop:1 rgba(185, 28, 28, 1.0));
                 color: white;
-                border: none;
+                border: 1px solid rgba(255, 255, 255, 0.1);
                 padding: 15px 20px;
-                font-size: 14px;
-                font-weight: bold;
-                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                border-radius: 12px;
                 text-align: center;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f87171, stop:1 #ef4444);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(248, 113, 113, 0.9), 
+                    stop:0.5 rgba(239, 68, 68, 1.0), 
+                    stop:1 rgba(220, 38, 38, 1.0));
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(185, 28, 28, 1.0), 
+                    stop:1 rgba(153, 27, 27, 1.0));
             }
         )");
         QObject::connect(browserBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
@@ -285,34 +342,56 @@ void ShowToolsWindow()
                 "RefreshBrowserSourcesInfo1", "RefreshBrowserSourcesInfo2", "RefreshBrowserSourcesInfo3",
                 []() { obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr); },
                 "RefreshBrowserSourcesHowTo1", "RefreshBrowserSourcesHowTo2", 
-                "RefreshBrowserSourcesHowTo3", "RefreshBrowserSourcesHowTo4");
+                "RefreshBrowserSourcesHowTo3", "RefreshBrowserSourcesHowTo4", "RefreshBrowserSources");
         });
+        
+        avRow1Layout->addWidget(audioBtn);
+        avRow1Layout->addWidget(browserBtn);
+        avGroupLayout->addLayout(avRow1Layout);
+        
+        // Second row for video device button (centered)
+        QHBoxLayout* avRow2Layout = new QHBoxLayout();
+        avRow2Layout->setSpacing(10);
         
         // Manage Video Capture Devices button
         QPushButton* videoBtn = new QPushButton("Manage Video Capture Devices");
-        videoBtn->setMinimumHeight(60);
+        videoBtn->setMinimumHeight(70);
         videoBtn->setStyleSheet(R"(
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3b82f6, stop:1 #2563eb);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(59, 130, 246, 0.8), 
+                    stop:0.5 rgba(37, 99, 235, 0.9), 
+                    stop:1 rgba(29, 78, 216, 1.0));
                 color: white;
-                border: none;
+                border: 1px solid rgba(255, 255, 255, 0.1);
                 padding: 15px 20px;
-                font-size: 14px;
-                font-weight: bold;
-                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 600;
+                border-radius: 12px;
                 text-align: center;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60a5fa, stop:1 #3b82f6);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(96, 165, 250, 0.9), 
+                    stop:0.5 rgba(59, 130, 246, 1.0), 
+                    stop:1 rgba(37, 99, 235, 1.0));
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 rgba(29, 78, 216, 1.0), 
+                    stop:1 rgba(30, 58, 138, 1.0));
             }
         )");
         QObject::connect(videoBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
             ShowVideoDeviceOptionsInline(scrollArea, contentWidget);
         });
         
-        avGroupLayout->addWidget(audioBtn);
-        avGroupLayout->addWidget(browserBtn);
-        avGroupLayout->addWidget(videoBtn);
+        // Add spacer, button, spacer to center the video button
+        avRow2Layout->addStretch(1);
+        avRow2Layout->addWidget(videoBtn, 2);
+        avRow2Layout->addStretch(1);
+        avGroupLayout->addLayout(avRow2Layout);
         
         contentLayout->addWidget(avGroupBox);
 
@@ -751,7 +830,7 @@ void ShowVideoDeviceOptionsInline(QScrollArea* scrollArea, QWidget* originalCont
 void ShowToolDetailInline(QScrollArea* scrollArea, QWidget* originalContent, const char* titleKey,
                          const char* info1Key, const char* info2Key, const char* info3Key,
                          std::function<void()> action, const char* howTo1Key, const char* howTo2Key,
-                         const char* howTo3Key, const char* howTo4Key)
+                         const char* howTo3Key, const char* howTo4Key, const char* websocketCommand)
 {
     // Store the current widget temporarily
     QWidget* currentWidget = scrollArea->takeWidget();
@@ -922,30 +1001,61 @@ void ShowToolDetailInline(QScrollArea* scrollArea, QWidget* originalContent, con
     QLabel* howTo1Label = new QLabel("1. " + howTo1Str);
     howTo1Label->setStyleSheet("color: #9ca3af; font-size: 12px; margin: 0px; padding: 0px; background: transparent; border: none;");
     howTo1Label->setWordWrap(true);
-    howTo1Label->setTextFormat(Qt::PlainText);
     howToGroupLayout->addWidget(howTo1Label);
     
     QLabel* howTo2Label = new QLabel("2. " + howTo2Str);
     howTo2Label->setStyleSheet("color: #9ca3af; font-size: 12px; margin: 0px; padding: 0px; background: transparent; border: none;");
     howTo2Label->setWordWrap(true);
-    howTo2Label->setTextFormat(Qt::PlainText);
     howToGroupLayout->addWidget(howTo2Label);
     
     QLabel* howTo3Label = new QLabel("3. " + howTo3Str);
     howTo3Label->setStyleSheet("color: #9ca3af; font-size: 12px; margin: 0px; padding: 0px; background: transparent; border: none;");
     howTo3Label->setWordWrap(true);
-    howTo3Label->setTextFormat(Qt::PlainText);
     howToGroupLayout->addWidget(howTo3Label);
     
     QLabel* howTo4Label = new QLabel("4. " + howTo4Str);
     howTo4Label->setStyleSheet("color: #9ca3af; font-size: 12px; margin: 0px; padding: 0px; background: transparent; border: none;");
     howTo4Label->setWordWrap(true);
-    howTo4Label->setTextFormat(Qt::PlainText);
     howToGroupLayout->addWidget(howTo4Label);
     
     detailLayout->addWidget(howToGroup);
     
-    // Action button
+    // Action buttons layout
+    QHBoxLayout* actionButtonsLayout = new QHBoxLayout();
+    actionButtonsLayout->setSpacing(15);
+    
+    // WebSocket JSON copy button (if websocketCommand is provided)
+    if (websocketCommand) {
+        QPushButton* copyJsonBtn = new QPushButton(obs_module_text("CopyWebsocketJson"));
+        copyJsonBtn->setMinimumHeight(60);
+        copyJsonBtn->setStyleSheet(R"(
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3b82f6, stop:1 #2563eb);
+                color: white;
+                border: none;
+                padding: 0px;
+                font-size: 16px;
+                font-weight: bold;
+                border-radius: 8px;
+                text-align: center;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60a5fa, stop:1 #3b82f6);
+            }
+        )");
+        
+        // Generate WebSocket JSON
+        QString websocketJson = QString(R"({"requestType":"CallVendorRequest","requestData":{"vendorName":"streamup","requestType":"%1","requestData":{}}})").arg(websocketCommand);
+        
+        QObject::connect(copyJsonBtn, &QPushButton::clicked, [websocketJson]() {
+            StreamUP::UIHelpers::CopyToClipboard(websocketJson);
+            StreamUP::NotificationManager::SendInfoNotification("WebSocket JSON", "Copied to clipboard successfully");
+        });
+        
+        actionButtonsLayout->addWidget(copyJsonBtn);
+    }
+    
+    // Execute button
     QPushButton* executeBtn = new QPushButton("Execute " + titleStr);
     executeBtn->setMinimumHeight(60);
     executeBtn->setStyleSheet(R"(
@@ -971,7 +1081,8 @@ void ShowToolDetailInline(QScrollArea* scrollArea, QWidget* originalContent, con
         detailWidget->deleteLater(); // Schedule for deletion
     });
     
-    detailLayout->addWidget(executeBtn);
+    actionButtonsLayout->addWidget(executeBtn);
+    detailLayout->addLayout(actionButtonsLayout);
     detailLayout->addStretch();
     
     // Replace the content in the scroll area
