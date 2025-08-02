@@ -4,6 +4,7 @@
 #include <QString>
 #include <string>
 #include <vector>
+#include <functional>
 
 namespace StreamUP {
 namespace PluginManager {
@@ -25,8 +26,9 @@ void PluginsUpToDateOutput(bool manuallyTriggered);
  * Show dialog indicating there are plugin issues
  * @param errorMsgMissing String containing missing plugin errors ("NULL" if none)
  * @param errorMsgUpdate String containing update errors
+ * @param continueCallback Optional callback to execute when "Continue Anyway" is pressed
  */
-void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate);
+void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, std::function<void()> continueCallback = nullptr);
 
 //-------------------PLUGIN UPDATE FUNCTIONS-------------------
 /**
@@ -42,6 +44,13 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered);
  * Initialize required modules list from remote API
  */
 void InitialiseRequiredModules();
+
+/**
+ * Check if all required OBS plugins are installed and up to date (without showing UI)
+ * @param isLoadStreamUpFile Whether this check is for loading a .StreamUP file
+ * @return bool True if all required plugins are present and up to date
+ */
+bool CheckrequiredOBSPluginsWithoutUI(bool isLoadStreamUpFile = false);
 
 /**
  * Check if all required OBS plugins are installed and up to date

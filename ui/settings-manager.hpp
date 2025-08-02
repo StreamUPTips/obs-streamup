@@ -3,6 +3,10 @@
 
 #include <obs-data.h>
 
+// Forward declarations
+class QScrollArea;
+class QWidget;
+
 namespace StreamUP {
 namespace SettingsManager {
 
@@ -64,9 +68,16 @@ bool AreNotificationsMuted();
 void SetNotificationsMuted(bool muted);
 
 /**
- * @brief Show the installed plugins dialog
+ * @brief Show the installed plugins page inline within the same window
+ * @param scrollArea The scroll area to replace content in
+ * @param originalContent The original content widget to restore later
  */
-void ShowInstalledPluginsDialog();
+void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalContent);
+
+/**
+ * @brief Show the installed plugins page in a separate window
+ */
+void ShowInstalledPluginsPage();
 
 } // namespace SettingsManager
 } // namespace StreamUP

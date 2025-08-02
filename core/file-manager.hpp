@@ -121,6 +121,12 @@ bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad = false);
  */
 void LoadStreamupFile(bool forceLoad = false);
 
+/**
+ * Show file dialog and load a .StreamUP file with plugin warning dialog
+ * Shows a warning dialog with "Continue Anyway" option when plugins are missing/outdated
+ */
+void LoadStreamupFileWithWarning();
+
 } // namespace FileManager
 } // namespace StreamUP
 

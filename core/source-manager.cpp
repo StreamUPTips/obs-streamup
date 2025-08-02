@@ -2,6 +2,8 @@
 #include "streamup-common.hpp"
 #include "error-handler.hpp"
 #include <obs-module.h>
+#include <callback/proc.h>
+#include <callback/calldata.h>
 // QSystemTrayIcon now handled by NotificationManager
 #include <vector>
 #include <QTimer>
@@ -410,16 +412,6 @@ bool AreAllSourcesLockedInAllScenes()
 
 //-------------------VIDEO CAPTURE DEVICE FUNCTIONS-------------------
 
-// Structure to hold video capture device operation data
-struct VideoCaptureDeviceData {
-	enum Operation { ACTIVATE, DEACTIVATE, REFRESH_COLLECT, REFRESH_RESTORE };
-	Operation operation;
-	std::vector<obs_source_t*> activeSources; // For refresh operation
-	int processed_count = 0;
-	int total_count = 0;
-	
-	VideoCaptureDeviceData(Operation op) : operation(op) {}
-};
 
 bool IsVideoCaptureDevice(obs_source_t *source)
 {
@@ -434,59 +426,64 @@ bool IsVideoCaptureDevice(obs_source_t *source)
 		strcmp(source_id, "v4l2_input") == 0);         // Linux V4L2
 }
 
-bool VideoCaptureDeviceCallback(void *data, obs_source_t *source)
-{
-	if (!source || !IsVideoCaptureDevice(source)) {
-		return true; // Continue enumeration
-	}
-	
-	VideoCaptureDeviceData *vcData = static_cast<VideoCaptureDeviceData*>(data);
-	if (!vcData) return true;
-	
-	vcData->total_count++;
-	
-	switch (vcData->operation) {
-	case VideoCaptureDeviceData::ACTIVATE:
-		if (!obs_source_enabled(source)) {
-			obs_source_set_enabled(source, true);
-			vcData->processed_count++;
-		}
-		break;
-		
-	case VideoCaptureDeviceData::DEACTIVATE:
-		if (obs_source_enabled(source)) {
-			obs_source_set_enabled(source, false);
-			vcData->processed_count++;
-		}
-		break;
-		
-	case VideoCaptureDeviceData::REFRESH_COLLECT:
-		if (obs_source_enabled(source)) {
-			obs_source_get_ref(source); // Add reference since we're storing it
-			vcData->activeSources.push_back(source);
-			vcData->processed_count++;
-		}
-		break;
-		
-	case VideoCaptureDeviceData::REFRESH_RESTORE:
-		// This case is handled separately in RefreshAllVideoCaptureDevices
-		break;
-	}
-	
-	return true; // Continue enumeration
-}
 
 bool ActivateAllVideoCaptureDevices(bool sendNotification)
 {
-	VideoCaptureDeviceData data(VideoCaptureDeviceData::ACTIVATE);
-	obs_enum_sources(VideoCaptureDeviceCallback, &data);
+	int activated_count = 0;
+	int total_count = 0;
+	int counts[2] = {0, 0}; // [activated_count, total_count]
+	
+	obs_enum_sources([](void *data, obs_source_t *source) -> bool {
+		int *counts = static_cast<int*>(data);
+		int &activated = counts[0];
+		int &total = counts[1];
+		
+		if (!IsVideoCaptureDevice(source)) {
+			return true;
+		}
+		
+		total++;
+		
+		// Get the source's procedure handler
+		proc_handler_t *ph = obs_source_get_proc_handler(source);
+		if (!ph) {
+			// Fallback to old method if no procedure handler
+			if (!obs_source_enabled(source)) {
+				obs_source_set_enabled(source, true);
+				activated++;
+			}
+			return true;
+		}
+		
+		// Use proper activation via procedure handler
+		calldata_t cd;
+		calldata_init(&cd);
+		calldata_set_bool(&cd, "active", true);
+		
+		if (proc_handler_call(ph, "activate", &cd)) {
+			activated++;
+			blog(LOG_INFO, "[StreamUP] Activated video capture device: %s", obs_source_get_name(source));
+		} else {
+			// Fallback to old method if procedure call fails
+			if (!obs_source_enabled(source)) {
+				obs_source_set_enabled(source, true);
+				activated++;
+			}
+		}
+		
+		calldata_free(&cd);
+		return true;
+	}, (void*)counts);
+	
+	activated_count = counts[0];
+	total_count = counts[1];
 	
 	if (sendNotification) {
 		QString message;
-		if (data.processed_count > 0) {
-			message = QString("Activated %1 video capture device(s)").arg(data.processed_count);
+		if (activated_count > 0) {
+			message = QString("Activated %1 video capture device(s)").arg(activated_count);
 			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
-		} else if (data.total_count > 0) {
+		} else if (total_count > 0) {
 			message = "All video capture devices were already active";
 			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
 		} else {
@@ -496,21 +493,67 @@ bool ActivateAllVideoCaptureDevices(bool sendNotification)
 	}
 	
 	blog(LOG_INFO, "[StreamUP] Activated %d video capture devices (total found: %d)", 
-		 data.processed_count, data.total_count);
+		 activated_count, total_count);
 	return true;
 }
 
 bool DeactivateAllVideoCaptureDevices(bool sendNotification)
 {
-	VideoCaptureDeviceData data(VideoCaptureDeviceData::DEACTIVATE);
-	obs_enum_sources(VideoCaptureDeviceCallback, &data);
+	int deactivated_count = 0;
+	int total_count = 0;
+	int counts[2] = {0, 0}; // [deactivated_count, total_count]
+	
+	obs_enum_sources([](void *data, obs_source_t *source) -> bool {
+		int *counts = static_cast<int*>(data);
+		int &deactivated = counts[0];
+		int &total = counts[1];
+		
+		if (!IsVideoCaptureDevice(source)) {
+			return true;
+		}
+		
+		total++;
+		
+		// Get the source's procedure handler
+		proc_handler_t *ph = obs_source_get_proc_handler(source);
+		if (!ph) {
+			// Fallback to old method if no procedure handler
+			if (obs_source_enabled(source)) {
+				obs_source_set_enabled(source, false);
+				deactivated++;
+			}
+			return true;
+		}
+		
+		// Use proper deactivation via procedure handler
+		calldata_t cd;
+		calldata_init(&cd);
+		calldata_set_bool(&cd, "active", false);
+		
+		if (proc_handler_call(ph, "activate", &cd)) {
+			deactivated++;
+			blog(LOG_INFO, "[StreamUP] Deactivated video capture device: %s", obs_source_get_name(source));
+		} else {
+			// Fallback to old method if procedure call fails
+			if (obs_source_enabled(source)) {
+				obs_source_set_enabled(source, false);
+				deactivated++;
+			}
+		}
+		
+		calldata_free(&cd);
+		return true;
+	}, (void*)counts);
+	
+	deactivated_count = counts[0];
+	total_count = counts[1];
 	
 	if (sendNotification) {
 		QString message;
-		if (data.processed_count > 0) {
-			message = QString("Deactivated %1 video capture device(s)").arg(data.processed_count);
+		if (deactivated_count > 0) {
+			message = QString("Deactivated %1 video capture device(s)").arg(deactivated_count);
 			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
-		} else if (data.total_count > 0) {
+		} else if (total_count > 0) {
 			message = "All video capture devices were already inactive";
 			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
 		} else {
@@ -520,42 +563,83 @@ bool DeactivateAllVideoCaptureDevices(bool sendNotification)
 	}
 	
 	blog(LOG_INFO, "[StreamUP] Deactivated %d video capture devices (total found: %d)", 
-		 data.processed_count, data.total_count);
+		 deactivated_count, total_count);
 	return true;
 }
 
 bool RefreshAllVideoCaptureDevices(bool sendNotification)
 {
-	// Step 1: Collect all currently active video capture devices
-	VideoCaptureDeviceData collectData(VideoCaptureDeviceData::REFRESH_COLLECT);
-	obs_enum_sources(VideoCaptureDeviceCallback, &collectData);
+	std::vector<obs_source_t*> activeSources;
+	int total_count = 0;
 	
-	if (collectData.activeSources.empty()) {
+	// Step 1: Collect all currently active video capture devices
+	std::pair<std::vector<obs_source_t*>*, int*> context = {&activeSources, &total_count};
+	obs_enum_sources([](void *data, obs_source_t *source) -> bool {
+		auto *context = static_cast<std::pair<std::vector<obs_source_t*>*, int*>*>(data);
+		std::vector<obs_source_t*> *activeSources = context->first;
+		int *total_count = context->second;
+		
+		if (!IsVideoCaptureDevice(source)) {
+			return true;
+		}
+		
+		(*total_count)++;
+		
+		if (obs_source_enabled(source)) {
+			obs_source_get_ref(source); // Add reference since we're storing it
+			activeSources->push_back(source);
+		}
+		
+		return true;
+	}, &context);
+	
+	if (activeSources.empty()) {
 		if (sendNotification) {
-			QString message = collectData.total_count > 0 ? 
+			QString message = total_count > 0 ? 
 				"No active video capture devices to refresh" : 
 				"No video capture devices found";
 			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
 		}
-		blog(LOG_INFO, "[StreamUP] No active video capture devices to refresh (total found: %d)", 
-			 collectData.total_count);
+		blog(LOG_INFO, "[StreamUP] No active video capture devices to refresh (total found: %d)", total_count);
 		return true;
 	}
 	
-	// Step 2: Deactivate all active devices
-	for (obs_source_t *source : collectData.activeSources) {
-		obs_source_set_enabled(source, false);
+	// Step 2: Deactivate all active devices using proper procedure handler
+	for (obs_source_t *source : activeSources) {
+		proc_handler_t *ph = obs_source_get_proc_handler(source);
+		if (ph) {
+			calldata_t cd;
+			calldata_init(&cd);
+			calldata_set_bool(&cd, "active", false);
+			proc_handler_call(ph, "activate", &cd);
+			calldata_free(&cd);
+		} else {
+			// Fallback to old method
+			obs_source_set_enabled(source, false);
+		}
 	}
 	
 	// Step 3: Wait a short time for devices to properly deactivate
 	// Use Qt's event processing to avoid blocking the UI completely
-	QTimer::singleShot(500, [collectData, sendNotification]() {
+	QTimer::singleShot(500, [activeSources, sendNotification]() {
 		// Step 4: Reactivate all previously active devices
 		int reactivated = 0;
-		for (obs_source_t *source : collectData.activeSources) {
+		for (obs_source_t *source : activeSources) {
 			if (source) { // Check if source pointer is valid
-				obs_source_set_enabled(source, true);
-				reactivated++;
+				proc_handler_t *ph = obs_source_get_proc_handler(source);
+				if (ph) {
+					calldata_t cd;
+					calldata_init(&cd);
+					calldata_set_bool(&cd, "active", true);
+					if (proc_handler_call(ph, "activate", &cd)) {
+						reactivated++;
+					}
+					calldata_free(&cd);
+				} else {
+					// Fallback to old method
+					obs_source_set_enabled(source, true);
+					reactivated++;
+				}
 			}
 			obs_source_release(source); // Release our reference
 		}
@@ -569,7 +653,7 @@ bool RefreshAllVideoCaptureDevices(bool sendNotification)
 	});
 	
 	blog(LOG_INFO, "[StreamUP] Started refresh process for %d video capture devices", 
-		 static_cast<int>(collectData.activeSources.size()));
+		 static_cast<int>(activeSources.size()));
 	return true;
 }
 
