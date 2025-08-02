@@ -1,4 +1,5 @@
 #include "ui-helpers.hpp"
+#include "ui-styles.hpp"
 #include <obs-module.h>
 #include <util/platform.h>
 #include <QApplication>
@@ -53,104 +54,81 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		QString infoText2Str = obs_module_text(infoText2);
 		QString infoText3Str = obs_module_text(infoText3);
 
-		QDialog *dialog = CreateDialogWindow(titleTextChar);
-		dialog->setStyleSheet("QDialog { background: #13171f; }");
-		dialog->resize(500, 400);
-		dialog->setMinimumSize(450, 350);
+		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleStr);
 		
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(25, 20, 25, 20);
-		dialogLayout->setSpacing(20);
+		dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
+			StreamUP::UIStyles::Sizes::PADDING_LARGE, 
+			StreamUP::UIStyles::Sizes::PADDING_XL, 
+			StreamUP::UIStyles::Sizes::PADDING_LARGE);
+		dialogLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
 
-		// Header section
-		QLabel *titleLabel = new QLabel(titleStr);
-		titleLabel->setStyleSheet(
-			"QLabel {"
-			"color: white;"
-			"font-size: 20px;"
-			"font-weight: bold;"
-			"margin: 0px 0px 15px 0px;"
-			"padding: 0px;"
-			"}");
-		titleLabel->setAlignment(Qt::AlignCenter);
+		// Add styled title
+		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(titleStr);
 		dialogLayout->addWidget(titleLabel);
 
-		// Message section with blue border for info
-		QGroupBox *messageGroup = new QGroupBox();
-		messageGroup->setStyleSheet(
-			"QGroupBox {"
-			"border: 2px solid #3b82f6;"
-			"border-radius: 10px;"
-			"padding-top: 15px;"
-			"background: #1f2937;"
-			"}");
-		
+		// Create styled message group
+		QGroupBox *messageGroup = StreamUP::UIStyles::CreateStyledGroupBox("", "info");
 		QVBoxLayout *messageLayout = new QVBoxLayout(messageGroup);
-		messageLayout->setContentsMargins(15, 15, 15, 15);
-		messageLayout->setSpacing(15);
+		messageLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+			StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+			StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+			StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+		messageLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 		
 		// First info text (main message)
 		QLabel *info1 = CreateRichTextLabel(infoText1Str, false, true, Qt::AlignCenter);
-		info1->setStyleSheet(
+		info1->setStyleSheet(QString(
 			"QLabel {"
-			"color: #f3f4f6;"
-			"font-size: 14px;"
+			"color: %1;"
+			"font-size: %2px;"
 			"font-weight: bold;"
 			"background: transparent;"
 			"border: none;"
-			"}");
+			"}").arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
+			   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
 		messageLayout->addWidget(info1);
 
 		// Second info text
 		QLabel *info2 = CreateRichTextLabel(infoText2Str, false, true, Qt::AlignCenter);
-		info2->setStyleSheet(
+		info2->setStyleSheet(QString(
 			"QLabel {"
-			"color: #d1d5db;"
-			"font-size: 13px;"
+			"color: %1;"
+			"font-size: %2px;"
 			"background: transparent;"
 			"border: none;"
-			"}");
+			"}").arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
+			   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
 		messageLayout->addWidget(info2);
 
 		// Third info text
 		QLabel *info3 = CreateRichTextLabel(infoText3Str, false, true, Qt::AlignCenter);
-		info3->setStyleSheet(
+		info3->setStyleSheet(QString(
 			"QLabel {"
-			"color: #d1d5db;"
-			"font-size: 13px;"
+			"color: %1;"
+			"font-size: %2px;"
 			"background: transparent;"
 			"border: none;"
-			"}");
+			"}").arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
+			   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
 		messageLayout->addWidget(info3);
 		
 		dialogLayout->addWidget(messageGroup);
 
-		// Button section
+		// Add styled button
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 		buttonLayout->addStretch();
 		
-		QPushButton *okButton = new QPushButton(obs_module_text("OK"));
-		okButton->setStyleSheet(
-			"QPushButton {"
-			"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3b82f6, stop:1 #2563eb);"
-			"color: white;"
-			"border: none;"
-			"padding: 12px 24px;"
-			"font-size: 14px;"
-			"font-weight: bold;"
-			"border-radius: 6px;"
-			"min-width: 100px;"
-			"}"
-			"QPushButton:hover {"
-			"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60a5fa, stop:1 #3b82f6);"
-			"}");
+		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("OK"), "info");
 		QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
 		buttonLayout->addWidget(okButton);
 		buttonLayout->addStretch();
 
 		dialogLayout->addLayout(buttonLayout);
 		dialog->setLayout(dialogLayout);
-		dialog->show();
+		
+		// Apply auto-sizing
+		StreamUP::UIStyles::ApplyAutoSizing(dialog, 450, 600, 350, 500);
 	});
 }
 

@@ -1,5 +1,6 @@
 #include "tools-window.hpp"
 #include "ui-helpers.hpp"
+#include "ui-styles.hpp"
 #include "source-manager.hpp"
 #include "notification-manager.hpp"
 #include "../version.h"
@@ -20,8 +21,7 @@ namespace ToolsWindow {
 void ShowToolsWindow()
 {
     StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
-        QDialog* dialog = StreamUP::UIHelpers::CreateDialogWindow("StreamUP Tools");
-        dialog->setStyleSheet("QDialog { background: #13171f; }");
+        QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP Tools");
         dialog->resize(900, 650);
         dialog->setMinimumSize(800, 550);
         
@@ -32,145 +32,55 @@ void ShowToolsWindow()
         // Header section
         QWidget* headerWidget = new QWidget();
         headerWidget->setObjectName("headerWidget");
-        headerWidget->setStyleSheet("QWidget#headerWidget { background: #13171f; padding: 20px; }");
+        headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px; }")
+            .arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
         
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
         headerLayout->setContentsMargins(0, 0, 0, 0);
         
-        QLabel* titleLabel = new QLabel("🛠️ StreamUP Tools");
-        titleLabel->setStyleSheet(R"(
-            QLabel {
-                color: white;
-                font-size: 24px;
-                font-weight: bold;
-                margin: 0px;
-                padding: 0px;
-            }
-        )");
-        titleLabel->setAlignment(Qt::AlignCenter);
+        QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("🛠️ StreamUP Tools");
         headerLayout->addWidget(titleLabel);
         
-        QLabel* subtitleLabel = new QLabel("Powerful tools to manage your OBS setup efficiently");
-        subtitleLabel->setStyleSheet(R"(
-            QLabel {
-                color: #9ca3af;
-                font-size: 14px;
-                margin: 5px 0px 0px 0px;
-                padding: 0px;
-            }
-        )");
-        subtitleLabel->setAlignment(Qt::AlignCenter);
+        QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription("Powerful tools to manage your OBS setup efficiently");
         headerLayout->addWidget(subtitleLabel);
         
         mainLayout->addWidget(headerWidget);
 
         // Content area with scroll
-        QScrollArea* scrollArea = new QScrollArea();
-        scrollArea->setWidgetResizable(true);
-        scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        scrollArea->setStyleSheet(R"(
-            QScrollArea {
-                border: none;
-                background: #13171f;
-            }
-            QScrollBar:vertical {
-                background: #374151;
-                width: 12px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:vertical {
-                background: #6b7280;
-                border-radius: 6px;
-                min-height: 20px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #9ca3af;
-            }
-        )");
+        QScrollArea* scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 
         QWidget* contentWidget = new QWidget();
-        contentWidget->setStyleSheet("background: #13171f;");
+        contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
         QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
-        contentLayout->setContentsMargins(25, 20, 25, 20);
-        contentLayout->setSpacing(20);
+        contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+            StreamUP::UIStyles::Sizes::PADDING_XL, 
+            StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+            StreamUP::UIStyles::Sizes::PADDING_XL);
+        contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
 
         // Source Management Section
-        QGroupBox* sourceGroupBox = new QGroupBox("🎭 Source Management");
-        sourceGroupBox->setStyleSheet(R"(
-            QGroupBox {
-                color: white;
-                font-size: 16px;
-                font-weight: bold;
-                border: 2px solid #4b5563;
-                border-radius: 10px;
-                margin-top: 12px;
-                padding-top: 15px;
-                background: #1f2937;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 15px;
-                padding: 0 8px 0 8px;
-                color: #60a5fa;
-            }
-        )");
+        QGroupBox* sourceGroupBox = StreamUP::UIStyles::CreateStyledGroupBox("🎭 Source Management", "info");
         
         QVBoxLayout* sourceGroupLayout = new QVBoxLayout(sourceGroupBox);
-        sourceGroupLayout->setContentsMargins(15, 20, 15, 15);
-        sourceGroupLayout->setSpacing(15);
+        sourceGroupLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+            StreamUP::UIStyles::Sizes::PADDING_XL, 
+            StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+            StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+        sourceGroupLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
         
         // Description
-        QLabel* sourceDesc = new QLabel("Tools for managing and controlling your OBS sources");
-        sourceDesc->setStyleSheet(R"(
-            QLabel {
-                color: #9ca3af;
-                font-size: 12px;
-                font-weight: normal;
-                margin: 0px;
-                padding: 0px;
-                background: transparent;
-                border: none;
-            }
-        )");
-        sourceDesc->setWordWrap(true);
-        sourceDesc->setTextFormat(Qt::PlainText);
+        QLabel* sourceDesc = StreamUP::UIStyles::CreateStyledContent("Tools for managing and controlling your OBS sources");
+        sourceDesc->setAlignment(Qt::AlignLeft);
         sourceGroupLayout->addWidget(sourceDesc);
         
         // Source buttons in 2x1 grid
         QHBoxLayout* sourceRow1Layout = new QHBoxLayout();
-        sourceRow1Layout->setSpacing(10);
+        sourceRow1Layout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
         
         // Lock Current Scene Sources button
-        QPushButton* lockCurrentBtn = new QPushButton("Lock Current Scene Sources");
+        QPushButton* lockCurrentBtn = StreamUP::UIStyles::CreateStyledButton("Lock Current Scene Sources", "info");
         lockCurrentBtn->setMinimumHeight(70);
-        lockCurrentBtn->setStyleSheet(R"(
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(99, 102, 241, 0.8), 
-                    stop:0.5 rgba(79, 70, 229, 0.9), 
-                    stop:1 rgba(67, 56, 202, 1.0));
-                color: white;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                padding: 15px 20px;
-                font-size: 13px;
-                font-weight: 600;
-                border-radius: 12px;
-                text-align: center;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(129, 140, 248, 0.9), 
-                    stop:0.5 rgba(99, 102, 241, 1.0), 
-                    stop:1 rgba(79, 70, 229, 1.0));
-                border: 1px solid rgba(255, 255, 255, 0.2);
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(67, 56, 202, 1.0), 
-                    stop:1 rgba(55, 48, 163, 1.0));
-            }
-        )");
         QObject::connect(lockCurrentBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
             ShowToolDetailInline(scrollArea, contentWidget, "LockAllCurrentSources", 
                 "LockAllCurrentSourcesInfo1", "LockAllCurrentSourcesInfo2", "LockAllCurrentSourcesInfo3",
@@ -180,35 +90,8 @@ void ShowToolsWindow()
         });
         
         // Lock All Sources button
-        QPushButton* lockAllBtn = new QPushButton("Lock All Sources");
+        QPushButton* lockAllBtn = StreamUP::UIStyles::CreateStyledButton("Lock All Sources", "warning");
         lockAllBtn->setMinimumHeight(70);
-        lockAllBtn->setStyleSheet(R"(
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(168, 85, 247, 0.8), 
-                    stop:0.5 rgba(147, 51, 234, 0.9), 
-                    stop:1 rgba(126, 34, 206, 1.0));
-                color: white;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                padding: 15px 20px;
-                font-size: 13px;
-                font-weight: 600;
-                border-radius: 12px;
-                text-align: center;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(196, 125, 249, 0.9), 
-                    stop:0.5 rgba(168, 85, 247, 1.0), 
-                    stop:1 rgba(147, 51, 234, 1.0));
-                border: 1px solid rgba(255, 255, 255, 0.2);
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(126, 34, 206, 1.0), 
-                    stop:1 rgba(107, 33, 168, 1.0));
-            }
-        )");
         QObject::connect(lockAllBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
             ShowToolDetailInline(scrollArea, contentWidget, "LockAllSources", 
                 "LockAllSourcesInfo1", "LockAllSourcesInfo2", "LockAllSourcesInfo3",
@@ -224,81 +107,27 @@ void ShowToolsWindow()
         contentLayout->addWidget(sourceGroupBox);
 
         // Audio & Video Section
-        QGroupBox* avGroupBox = new QGroupBox("🔊 Audio & Video");
-        avGroupBox->setStyleSheet(R"(
-            QGroupBox {
-                color: white;
-                font-size: 16px;
-                font-weight: bold;
-                border: 2px solid #4b5563;
-                border-radius: 10px;
-                margin-top: 12px;
-                padding-top: 15px;
-                background: #1f2937;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 15px;
-                padding: 0 8px 0 8px;
-                color: #60a5fa;
-            }
-        )");
+        QGroupBox* avGroupBox = StreamUP::UIStyles::CreateStyledGroupBox("🔊 Audio & Video", "info");
         
         QVBoxLayout* avGroupLayout = new QVBoxLayout(avGroupBox);
-        avGroupLayout->setContentsMargins(15, 20, 15, 15);
-        avGroupLayout->setSpacing(15);
+        avGroupLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+            StreamUP::UIStyles::Sizes::PADDING_XL, 
+            StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+            StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+        avGroupLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
         
         // Description
-        QLabel* avDesc = new QLabel("Manage audio monitoring and video capture devices");
-        avDesc->setStyleSheet(R"(
-            QLabel {
-                color: #9ca3af;
-                font-size: 12px;
-                font-weight: normal;
-                margin: 0px;
-                padding: 0px;
-                background: transparent;
-                border: none;
-            }
-        )");
-        avDesc->setWordWrap(true);
-        avDesc->setTextFormat(Qt::PlainText);
+        QLabel* avDesc = StreamUP::UIStyles::CreateStyledContent("Manage audio monitoring and video capture devices");
+        avDesc->setAlignment(Qt::AlignLeft);
         avGroupLayout->addWidget(avDesc);
         
         // Audio/Video buttons in 2x2 grid
         QHBoxLayout* avRow1Layout = new QHBoxLayout();
-        avRow1Layout->setSpacing(10);
+        avRow1Layout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
         
         // Refresh Audio Monitoring button
-        QPushButton* audioBtn = new QPushButton("Refresh Audio Monitoring");
+        QPushButton* audioBtn = StreamUP::UIStyles::CreateStyledButton("Refresh Audio Monitoring", "success");
         audioBtn->setMinimumHeight(70);
-        audioBtn->setStyleSheet(R"(
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(34, 197, 94, 0.8), 
-                    stop:0.5 rgba(22, 163, 74, 0.9), 
-                    stop:1 rgba(21, 128, 61, 1.0));
-                color: white;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                padding: 15px 20px;
-                font-size: 13px;
-                font-weight: 600;
-                border-radius: 12px;
-                text-align: center;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(74, 222, 128, 0.9), 
-                    stop:0.5 rgba(34, 197, 94, 1.0), 
-                    stop:1 rgba(22, 163, 74, 1.0));
-                border: 1px solid rgba(255, 255, 255, 0.2);
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(21, 128, 61, 1.0), 
-                    stop:1 rgba(20, 83, 45, 1.0));
-            }
-        )");
         QObject::connect(audioBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
             ShowToolDetailInline(scrollArea, contentWidget, "RefreshAudioMonitoring", 
                 "RefreshAudioMonitoringInfo1", "RefreshAudioMonitoringInfo2", "RefreshAudioMonitoringInfo3",
@@ -308,35 +137,8 @@ void ShowToolsWindow()
         });
         
         // Refresh Browser Sources button
-        QPushButton* browserBtn = new QPushButton("Refresh Browser Sources");
+        QPushButton* browserBtn = StreamUP::UIStyles::CreateStyledButton("Refresh Browser Sources", "error");
         browserBtn->setMinimumHeight(70);
-        browserBtn->setStyleSheet(R"(
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(239, 68, 68, 0.8), 
-                    stop:0.5 rgba(220, 38, 38, 0.9), 
-                    stop:1 rgba(185, 28, 28, 1.0));
-                color: white;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                padding: 15px 20px;
-                font-size: 13px;
-                font-weight: 600;
-                border-radius: 12px;
-                text-align: center;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(248, 113, 113, 0.9), 
-                    stop:0.5 rgba(239, 68, 68, 1.0), 
-                    stop:1 rgba(220, 38, 38, 1.0));
-                border: 1px solid rgba(255, 255, 255, 0.2);
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(185, 28, 28, 1.0), 
-                    stop:1 rgba(153, 27, 27, 1.0));
-            }
-        )");
         QObject::connect(browserBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
             ShowToolDetailInline(scrollArea, contentWidget, "RefreshBrowserSources", 
                 "RefreshBrowserSourcesInfo1", "RefreshBrowserSourcesInfo2", "RefreshBrowserSourcesInfo3",
@@ -351,38 +153,11 @@ void ShowToolsWindow()
         
         // Second row for video device button (centered)
         QHBoxLayout* avRow2Layout = new QHBoxLayout();
-        avRow2Layout->setSpacing(10);
+        avRow2Layout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
         
         // Manage Video Capture Devices button
-        QPushButton* videoBtn = new QPushButton("Manage Video Capture Devices");
+        QPushButton* videoBtn = StreamUP::UIStyles::CreateStyledButton("Manage Video Capture Devices", "info");
         videoBtn->setMinimumHeight(70);
-        videoBtn->setStyleSheet(R"(
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(59, 130, 246, 0.8), 
-                    stop:0.5 rgba(37, 99, 235, 0.9), 
-                    stop:1 rgba(29, 78, 216, 1.0));
-                color: white;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                padding: 15px 20px;
-                font-size: 13px;
-                font-weight: 600;
-                border-radius: 12px;
-                text-align: center;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(96, 165, 250, 0.9), 
-                    stop:0.5 rgba(59, 130, 246, 1.0), 
-                    stop:1 rgba(37, 99, 235, 1.0));
-                border: 1px solid rgba(255, 255, 255, 0.2);
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
-                    stop:0 rgba(29, 78, 216, 1.0), 
-                    stop:1 rgba(30, 58, 138, 1.0));
-            }
-        )");
         QObject::connect(videoBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
             ShowVideoDeviceOptionsInline(scrollArea, contentWidget);
         });
@@ -403,26 +178,14 @@ void ShowToolsWindow()
 
         // Bottom button area
         QWidget* buttonWidget = new QWidget();
-        buttonWidget->setStyleSheet("background: #13171f; padding: 15px;");
+        buttonWidget->setStyleSheet(QString("background: %1; padding: %2px;")
+            .arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
         QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
-        buttonLayout->setContentsMargins(15, 0, 15, 0);
+        buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0, 
+            StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
 
-        QPushButton* closeButton = new QPushButton("Close");
-        closeButton->setStyleSheet(R"(
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #64748b, stop:1 #475569);
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                font-size: 14px;
-                font-weight: bold;
-                border-radius: 6px;
-                min-width: 100px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #74859b, stop:1 #576579);
-            }
-        )");
+        QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton("Close", "neutral");
         QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
 
         buttonLayout->addStretch();
@@ -443,33 +206,38 @@ QPushButton* CreateToolButton(const QString& title, const QString& description, 
     
     // Set the button layout
     QVBoxLayout* buttonLayout = new QVBoxLayout(button);
-    buttonLayout->setContentsMargins(15, 12, 15, 12);
-    buttonLayout->setSpacing(5);
+    buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+        StreamUP::UIStyles::Sizes::PADDING_SMALL + 2, 
+        StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+        StreamUP::UIStyles::Sizes::PADDING_SMALL + 2);
+    buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
     
     QLabel* titleLabel = new QLabel(title);
-    titleLabel->setStyleSheet(R"(
-        QLabel {
-            color: white;
-            font-size: 13px;
-            font-weight: bold;
-            margin: 0px;
-            padding: 0px;
-            background: transparent;
-        }
-    )");
+    titleLabel->setStyleSheet(QString(
+        "QLabel {"
+        "color: %1;"
+        "font-size: %2px;"
+        "font-weight: bold;"
+        "margin: 0px;"
+        "padding: 0px;"
+        "background: transparent;"
+        "}")
+        .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL + 1));
     titleLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     
     QLabel* descLabel = new QLabel(description);
-    descLabel->setStyleSheet(R"(
-        QLabel {
-            color: #9ca3af;
-            font-size: 11px;
-            margin: 0px;
-            padding: 0px;
-            line-height: 1.3;
-            background: transparent;
-        }
-    )");
+    descLabel->setStyleSheet(QString(
+        "QLabel {"
+        "color: %1;"
+        "font-size: %2px;"
+        "margin: 0px;"
+        "padding: 0px;"
+        "line-height: 1.3;"
+        "background: transparent;"
+        "}")
+        .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
+        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY + 1));
     descLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     descLabel->setWordWrap(true);
     
@@ -477,22 +245,28 @@ QPushButton* CreateToolButton(const QString& title, const QString& description, 
     buttonLayout->addWidget(descLabel);
     buttonLayout->addStretch();
     
-    button->setStyleSheet(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #374151, stop:1 #1f2937);
-            border: 1px solid #4b5563;
-            border-radius: 8px;
-            text-align: left;
-            padding: 0px;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4b5563, stop:1 #374151);
-            border: 1px solid #6b7280;
-        }
-        QPushButton:pressed {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1f2937, stop:1 #111827);
-        }
-    )");
+    button->setStyleSheet(QString(
+        "QPushButton {"
+        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:1 %2);"
+        "border: 1px solid %3;"
+        "border-radius: %4px;"
+        "text-align: left;"
+        "padding: 0px;"
+        "}"
+        "QPushButton:hover {"
+        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %5, stop:1 %1);"
+        "border: 1px solid %6;"
+        "}"
+        "QPushButton:pressed {"
+        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %2, stop:1 %7);"
+        "}")
+        .arg(StreamUP::UIStyles::Colors::BACKGROUND_HOVER)
+        .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
+        .arg(StreamUP::UIStyles::Colors::BORDER_LIGHT)
+        .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS)
+        .arg(StreamUP::UIStyles::Colors::BORDER_LIGHT)
+        .arg(StreamUP::UIStyles::Colors::TEXT_DISABLED)
+        .arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
     
     QObject::connect(button, &QPushButton::clicked, [action]() {
         action();
@@ -506,107 +280,45 @@ void ShowVideoDeviceOptions(QDialog* parentDialog)
     // Create a new dialog within the existing window
     QDialog* optionsDialog = new QDialog(parentDialog);
     optionsDialog->setWindowTitle("Video Capture Device Management");
-    optionsDialog->setStyleSheet("QDialog { background: #13171f; }");
+    optionsDialog->setStyleSheet(StreamUP::UIStyles::GetDialogStyle());
     optionsDialog->setFixedSize(500, 300);
     optionsDialog->setModal(true);
     
     QVBoxLayout* mainLayout = new QVBoxLayout(optionsDialog);
-    mainLayout->setContentsMargins(20, 20, 20, 20);
-    mainLayout->setSpacing(20);
+    mainLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
+        StreamUP::UIStyles::Sizes::PADDING_XL, 
+        StreamUP::UIStyles::Sizes::PADDING_XL, 
+        StreamUP::UIStyles::Sizes::PADDING_XL);
+    mainLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
     
     // Title
-    QLabel* titleLabel = new QLabel("🎥 Video Capture Device Management");
-    titleLabel->setStyleSheet(R"(
-        QLabel {
-            color: white;
-            font-size: 18px;
-            font-weight: bold;
-            margin: 0px 0px 10px 0px;
-            padding: 0px;
-        }
-    )");
-    titleLabel->setAlignment(Qt::AlignCenter);
+    QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("🎥 Video Capture Device Management");
     mainLayout->addWidget(titleLabel);
     
     // Description
-    QLabel* descLabel = new QLabel("Choose an action to perform on all video capture devices in your scenes:");
-    descLabel->setStyleSheet(R"(
-        QLabel {
-            color: #9ca3af;
-            font-size: 13px;
-            margin: 0px 0px 20px 0px;
-            padding: 0px;
-        }
-    )");
-    descLabel->setWordWrap(true);
-    descLabel->setAlignment(Qt::AlignCenter);
+    QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription("Choose an action to perform on all video capture devices in your scenes:");
     mainLayout->addWidget(descLabel);
     
     // Action buttons
     QVBoxLayout* buttonLayout = new QVBoxLayout();
-    buttonLayout->setSpacing(10);
+    buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
     
     // Activate button
-    QPushButton* activateBtn = new QPushButton("Activate All Video Devices");
-    activateBtn->setStyleSheet(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22c55e, stop:1 #16a34a);
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            font-size: 14px;
-            font-weight: bold;
-            border-radius: 6px;
-            text-align: left;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #32d56e, stop:1 #26b35a);
-        }
-    )");
+    QPushButton* activateBtn = StreamUP::UIStyles::CreateStyledButton("Activate All Video Devices", "success");
     QObject::connect(activateBtn, &QPushButton::clicked, [optionsDialog]() {
         StreamUP::SourceManager::ActivateAllVideoCaptureDevicesDialog();
         optionsDialog->close();
     });
     
     // Deactivate button
-    QPushButton* deactivateBtn = new QPushButton("Deactivate All Video Devices");
-    deactivateBtn->setStyleSheet(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ef4444, stop:1 #dc2626);
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            font-size: 14px;
-            font-weight: bold;
-            border-radius: 6px;
-            text-align: left;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f87171, stop:1 #ef4444);
-        }
-    )");
+    QPushButton* deactivateBtn = StreamUP::UIStyles::CreateStyledButton("Deactivate All Video Devices", "error");
     QObject::connect(deactivateBtn, &QPushButton::clicked, [optionsDialog]() {
         StreamUP::SourceManager::DeactivateAllVideoCaptureDevicesDialog();
         optionsDialog->close();
     });
     
     // Refresh button
-    QPushButton* refreshBtn = new QPushButton("Refresh All Video Devices");
-    refreshBtn->setStyleSheet(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3b82f6, stop:1 #2563eb);
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            font-size: 14px;
-            font-weight: bold;
-            border-radius: 6px;
-            text-align: left;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60a5fa, stop:1 #3b82f6);
-        }
-    )");
+    QPushButton* refreshBtn = StreamUP::UIStyles::CreateStyledButton("Refresh All Video Devices", "info");
     QObject::connect(refreshBtn, &QPushButton::clicked, [optionsDialog]() {
         StreamUP::SourceManager::RefreshAllVideoCaptureDevicesDialog();
         optionsDialog->close();
@@ -620,22 +332,7 @@ void ShowVideoDeviceOptions(QDialog* parentDialog)
     
     // Close button
     QHBoxLayout* closeLayout = new QHBoxLayout();
-    QPushButton* closeBtn = new QPushButton("Cancel");
-    closeBtn->setStyleSheet(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #64748b, stop:1 #475569);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            font-size: 12px;
-            font-weight: bold;
-            border-radius: 4px;
-            min-width: 80px;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #74859b, stop:1 #576579);
-        }
-    )");
+    QPushButton* closeBtn = StreamUP::UIStyles::CreateStyledButton("Cancel", "neutral");
     QObject::connect(closeBtn, &QPushButton::clicked, [optionsDialog]() {
         optionsDialog->close();
     });
@@ -654,30 +351,23 @@ void ShowVideoDeviceOptionsInline(QScrollArea* scrollArea, QWidget* originalCont
     
     // Create replacement content widget
     QWidget* optionsWidget = new QWidget();
-    optionsWidget->setStyleSheet("background: #13171f;");
+    optionsWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
     QVBoxLayout* optionsLayout = new QVBoxLayout(optionsWidget);
-    optionsLayout->setContentsMargins(25, 20, 25, 20);
-    optionsLayout->setSpacing(20);
+    optionsLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+        StreamUP::UIStyles::Sizes::PADDING_XL, 
+        StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+        StreamUP::UIStyles::Sizes::PADDING_XL);
+    optionsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
     
     // Back button and title section
     QHBoxLayout* headerLayout = new QHBoxLayout();
     
-    QPushButton* backButton = new QPushButton("← Back to Tools");
-    backButton->setStyleSheet(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #64748b, stop:1 #475569);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            font-size: 12px;
-            font-weight: bold;
-            border-radius: 4px;
-            text-align: left;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #74859b, stop:1 #576579);
-        }
-    )");
+    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back to Tools", "neutral");
+    backButton->setStyleSheet(backButton->styleSheet() + QString(
+        "QPushButton { font-size: %1px; padding: %2px %3px; }")
+        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
+        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
+        .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
     QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, optionsWidget]() {
         // Safely switch back to original content
         scrollArea->takeWidget(); // Remove current widget
@@ -691,76 +381,26 @@ void ShowVideoDeviceOptionsInline(QScrollArea* scrollArea, QWidget* originalCont
     optionsLayout->addLayout(headerLayout);
     
     // Title
-    QLabel* titleLabel = new QLabel("🎥 Video Capture Device Management");
-    titleLabel->setStyleSheet(R"(
-        QLabel {
-            color: white;
-            font-size: 24px;
-            font-weight: bold;
-            margin: 20px 0px 10px 0px;
-            padding: 0px;
-        }
-    )");
-    titleLabel->setAlignment(Qt::AlignCenter);
+    QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("🎥 Video Capture Device Management");
     optionsLayout->addWidget(titleLabel);
     
     // Description
-    QLabel* descLabel = new QLabel("Choose an action to perform on all video capture devices in your scenes:");
-    descLabel->setStyleSheet(R"(
-        QLabel {
-            color: #9ca3af;
-            font-size: 14px;
-            margin: 0px 0px 30px 0px;
-            padding: 0px;
-        }
-    )");
-    descLabel->setWordWrap(true);
-    descLabel->setAlignment(Qt::AlignCenter);
+    QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription("Choose an action to perform on all video capture devices in your scenes:");
     optionsLayout->addWidget(descLabel);
     
     // Options group
-    QGroupBox* optionsGroup = new QGroupBox("Device Actions");
-    optionsGroup->setStyleSheet(R"(
-        QGroupBox {
-            color: white;
-            font-size: 16px;
-            font-weight: bold;
-            border: 2px solid #4b5563;
-            border-radius: 10px;
-            margin-top: 12px;
-            padding-top: 15px;
-            background: #1f2937;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            left: 15px;
-            padding: 0 8px 0 8px;
-            color: #60a5fa;
-        }
-    )");
+    QGroupBox* optionsGroup = StreamUP::UIStyles::CreateStyledGroupBox("Device Actions", "info");
     
     QVBoxLayout* optionsGroupLayout = new QVBoxLayout(optionsGroup);
-    optionsGroupLayout->setContentsMargins(15, 20, 15, 15);
-    optionsGroupLayout->setSpacing(15);
+    optionsGroupLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+        StreamUP::UIStyles::Sizes::PADDING_XL, 
+        StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+        StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+    optionsGroupLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
     
     // Action buttons with larger sizing
-    QPushButton* activateBtn = new QPushButton("Activate All Video Devices");
+    QPushButton* activateBtn = StreamUP::UIStyles::CreateStyledButton("Activate All Video Devices", "success");
     activateBtn->setMinimumHeight(60);
-    activateBtn->setStyleSheet(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22c55e, stop:1 #16a34a);
-            color: white;
-            border: none;
-            padding: 15px 20px;
-            font-size: 14px;
-            font-weight: bold;
-            border-radius: 8px;
-            text-align: center;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #32d56e, stop:1 #26b35a);
-        }
-    )");
     QObject::connect(activateBtn, &QPushButton::clicked, [scrollArea, originalContent, optionsWidget]() {
         StreamUP::SourceManager::ActivateAllVideoCaptureDevicesDialog();
         scrollArea->takeWidget(); // Remove current widget
@@ -768,23 +408,8 @@ void ShowVideoDeviceOptionsInline(QScrollArea* scrollArea, QWidget* originalCont
         optionsWidget->deleteLater(); // Schedule for deletion
     });
     
-    QPushButton* deactivateBtn = new QPushButton("Deactivate All Video Devices");
+    QPushButton* deactivateBtn = StreamUP::UIStyles::CreateStyledButton("Deactivate All Video Devices", "error");
     deactivateBtn->setMinimumHeight(60);
-    deactivateBtn->setStyleSheet(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ef4444, stop:1 #dc2626);
-            color: white;
-            border: none;
-            padding: 15px 20px;
-            font-size: 14px;
-            font-weight: bold;
-            border-radius: 8px;
-            text-align: center;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f87171, stop:1 #ef4444);
-        }
-    )");
     QObject::connect(deactivateBtn, &QPushButton::clicked, [scrollArea, originalContent, optionsWidget]() {
         StreamUP::SourceManager::DeactivateAllVideoCaptureDevicesDialog();
         scrollArea->takeWidget(); // Remove current widget
@@ -792,23 +417,8 @@ void ShowVideoDeviceOptionsInline(QScrollArea* scrollArea, QWidget* originalCont
         optionsWidget->deleteLater(); // Schedule for deletion
     });
     
-    QPushButton* refreshBtn = new QPushButton("Refresh All Video Devices");
+    QPushButton* refreshBtn = StreamUP::UIStyles::CreateStyledButton("Refresh All Video Devices", "info");
     refreshBtn->setMinimumHeight(60);
-    refreshBtn->setStyleSheet(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3b82f6, stop:1 #2563eb);
-            color: white;
-            border: none;
-            padding: 15px 20px;
-            font-size: 14px;
-            font-weight: bold;
-            border-radius: 8px;
-            text-align: center;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60a5fa, stop:1 #3b82f6);
-        }
-    )");
     QObject::connect(refreshBtn, &QPushButton::clicked, [scrollArea, originalContent, optionsWidget]() {
         StreamUP::SourceManager::RefreshAllVideoCaptureDevicesDialog();
         scrollArea->takeWidget(); // Remove current widget
@@ -837,30 +447,23 @@ void ShowToolDetailInline(QScrollArea* scrollArea, QWidget* originalContent, con
     
     // Create replacement content widget
     QWidget* detailWidget = new QWidget();
-    detailWidget->setStyleSheet("background: #13171f;");
+    detailWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
     QVBoxLayout* detailLayout = new QVBoxLayout(detailWidget);
-    detailLayout->setContentsMargins(25, 20, 25, 20);
-    detailLayout->setSpacing(20);
+    detailLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+        StreamUP::UIStyles::Sizes::PADDING_XL, 
+        StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+        StreamUP::UIStyles::Sizes::PADDING_XL);
+    detailLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
     
     // Back button and title section
     QHBoxLayout* headerLayout = new QHBoxLayout();
     
-    QPushButton* backButton = new QPushButton("← Back to Tools");
-    backButton->setStyleSheet(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #64748b, stop:1 #475569);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            font-size: 12px;
-            font-weight: bold;
-            border-radius: 4px;
-            text-align: left;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #74859b, stop:1 #576579);
-        }
-    )");
+    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back to Tools", "neutral");
+    backButton->setStyleSheet(backButton->styleSheet() + QString(
+        "QPushButton { font-size: %1px; padding: %2px %3px; }")
+        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
+        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
+        .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
     QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, detailWidget]() {
         // Safely switch back to original content
         scrollArea->takeWidget(); // Remove current widget
@@ -875,122 +478,63 @@ void ShowToolDetailInline(QScrollArea* scrollArea, QWidget* originalContent, con
     
     // Title
     QString titleStr = obs_module_text(titleKey);
-    QLabel* titleLabel = new QLabel("🛠️ " + titleStr);
-    titleLabel->setStyleSheet(R"(
-        QLabel {
-            color: white;
-            font-size: 24px;
-            font-weight: bold;
-            margin: 20px 0px 10px 0px;
-            padding: 0px;
-        }
-    )");
-    titleLabel->setAlignment(Qt::AlignCenter);
+    QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("🛠️ " + titleStr);
     detailLayout->addWidget(titleLabel);
     
     // Main info section
-    QGroupBox* infoGroup = new QGroupBox("Tool Information");
-    infoGroup->setStyleSheet(R"(
-        QGroupBox {
-            color: white;
-            font-size: 16px;
-            font-weight: bold;
-            border: 2px solid #4b5563;
-            border-radius: 10px;
-            margin-top: 12px;
-            padding-top: 15px;
-            background: #1f2937;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            left: 15px;
-            padding: 0 8px 0 8px;
-            color: #60a5fa;
-        }
-    )");
+    QGroupBox* infoGroup = StreamUP::UIStyles::CreateStyledGroupBox("Tool Information", "info");
     
     QVBoxLayout* infoGroupLayout = new QVBoxLayout(infoGroup);
-    infoGroupLayout->setContentsMargins(15, 20, 15, 15);
-    infoGroupLayout->setSpacing(8);
+    infoGroupLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+        StreamUP::UIStyles::Sizes::PADDING_XL, 
+        StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+        StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+    infoGroupLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
     
     // Info text 1
     QString info1Str = obs_module_text(info1Key);
     QLabel* info1Label = new QLabel(info1Str);
-    info1Label->setStyleSheet(R"(
-        QLabel {
-            color: white;
-            font-size: 14px;
-            font-weight: bold;
-            margin: 0px;
-            padding: 0px;
-            background: transparent;
-            border: none;
-        }
-    )");
+    info1Label->setStyleSheet(QString(
+        "QLabel {"
+        "color: %1;"
+        "font-size: %2px;"
+        "font-weight: bold;"
+        "margin: 0px;"
+        "padding: 0px;"
+        "background: transparent;"
+        "border: none;"
+        "}")
+        .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
     info1Label->setWordWrap(true);
     info1Label->setTextFormat(Qt::PlainText);
     infoGroupLayout->addWidget(info1Label);
     
     // Info text 2
     QString info2Str = obs_module_text(info2Key);
-    QLabel* info2Label = new QLabel(info2Str);
-    info2Label->setStyleSheet(R"(
-        QLabel {
-            color: #9ca3af;
-            font-size: 13px;
-            margin: 0px;
-            padding: 0px;
-            background: transparent;
-            border: none;
-        }
-    )");
-    info2Label->setWordWrap(true);
+    QLabel* info2Label = StreamUP::UIStyles::CreateStyledContent(info2Str);
+    info2Label->setAlignment(Qt::AlignLeft);
     info2Label->setTextFormat(Qt::PlainText);
     infoGroupLayout->addWidget(info2Label);
     
     // Info text 3
     QString info3Str = obs_module_text(info3Key);
-    QLabel* info3Label = new QLabel(info3Str);
-    info3Label->setStyleSheet(R"(
-        QLabel {
-            color: #9ca3af;
-            font-size: 13px;
-            margin: 0px;
-            padding: 0px;
-            background: transparent;
-            border: none;
-        }
-    )");
-    info3Label->setWordWrap(true);
+    QLabel* info3Label = StreamUP::UIStyles::CreateStyledContent(info3Str);
+    info3Label->setAlignment(Qt::AlignLeft);
     info3Label->setTextFormat(Qt::PlainText);
     infoGroupLayout->addWidget(info3Label);
     
     detailLayout->addWidget(infoGroup);
     
     // How to use section
-    QGroupBox* howToGroup = new QGroupBox("How To Use");
-    howToGroup->setStyleSheet(R"(
-        QGroupBox {
-            color: white;
-            font-size: 16px;
-            font-weight: bold;
-            border: 2px solid #4b5563;
-            border-radius: 10px;
-            margin-top: 12px;
-            padding-top: 15px;
-            background: #1f2937;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            left: 15px;
-            padding: 0 8px 0 8px;
-            color: #60a5fa;
-        }
-    )");
+    QGroupBox* howToGroup = StreamUP::UIStyles::CreateStyledGroupBox("How To Use", "info");
     
     QVBoxLayout* howToGroupLayout = new QVBoxLayout(howToGroup);
-    howToGroupLayout->setContentsMargins(15, 20, 15, 15);
-    howToGroupLayout->setSpacing(5);
+    howToGroupLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+        StreamUP::UIStyles::Sizes::PADDING_XL, 
+        StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+        StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+    howToGroupLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
     
     // How-to steps
     QString howTo1Str = obs_module_text(howTo1Key);
@@ -998,23 +542,35 @@ void ShowToolDetailInline(QScrollArea* scrollArea, QWidget* originalContent, con
     QString howTo3Str = obs_module_text(howTo3Key);
     QString howTo4Str = obs_module_text(howTo4Key);
     
+    QString stepStyle = QString(
+        "QLabel {"
+        "color: %1;"
+        "font-size: %2px;"
+        "margin: 0px;"
+        "padding: 0px;"
+        "background: transparent;"
+        "border: none;"
+        "}")
+        .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
+        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY);
+    
     QLabel* howTo1Label = new QLabel("1. " + howTo1Str);
-    howTo1Label->setStyleSheet("color: #9ca3af; font-size: 12px; margin: 0px; padding: 0px; background: transparent; border: none;");
+    howTo1Label->setStyleSheet(stepStyle);
     howTo1Label->setWordWrap(true);
     howToGroupLayout->addWidget(howTo1Label);
     
     QLabel* howTo2Label = new QLabel("2. " + howTo2Str);
-    howTo2Label->setStyleSheet("color: #9ca3af; font-size: 12px; margin: 0px; padding: 0px; background: transparent; border: none;");
+    howTo2Label->setStyleSheet(stepStyle);
     howTo2Label->setWordWrap(true);
     howToGroupLayout->addWidget(howTo2Label);
     
     QLabel* howTo3Label = new QLabel("3. " + howTo3Str);
-    howTo3Label->setStyleSheet("color: #9ca3af; font-size: 12px; margin: 0px; padding: 0px; background: transparent; border: none;");
+    howTo3Label->setStyleSheet(stepStyle);
     howTo3Label->setWordWrap(true);
     howToGroupLayout->addWidget(howTo3Label);
     
     QLabel* howTo4Label = new QLabel("4. " + howTo4Str);
-    howTo4Label->setStyleSheet("color: #9ca3af; font-size: 12px; margin: 0px; padding: 0px; background: transparent; border: none;");
+    howTo4Label->setStyleSheet(stepStyle);
     howTo4Label->setWordWrap(true);
     howToGroupLayout->addWidget(howTo4Label);
     
@@ -1022,27 +578,12 @@ void ShowToolDetailInline(QScrollArea* scrollArea, QWidget* originalContent, con
     
     // Action buttons layout
     QHBoxLayout* actionButtonsLayout = new QHBoxLayout();
-    actionButtonsLayout->setSpacing(15);
+    actionButtonsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
     
     // WebSocket JSON copy button (if websocketCommand is provided)
     if (websocketCommand) {
-        QPushButton* copyJsonBtn = new QPushButton(obs_module_text("CopyWebsocketJson"));
+        QPushButton* copyJsonBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("CopyWebsocketJson"), "info");
         copyJsonBtn->setMinimumHeight(60);
-        copyJsonBtn->setStyleSheet(R"(
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3b82f6, stop:1 #2563eb);
-                color: white;
-                border: none;
-                padding: 0px;
-                font-size: 16px;
-                font-weight: bold;
-                border-radius: 8px;
-                text-align: center;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60a5fa, stop:1 #3b82f6);
-            }
-        )");
         
         // Generate WebSocket JSON
         QString websocketJson = QString(R"({"requestType":"CallVendorRequest","requestData":{"vendorName":"streamup","requestType":"%1","requestData":{}}})").arg(websocketCommand);
@@ -1056,23 +597,8 @@ void ShowToolDetailInline(QScrollArea* scrollArea, QWidget* originalContent, con
     }
     
     // Execute button
-    QPushButton* executeBtn = new QPushButton("Execute " + titleStr);
+    QPushButton* executeBtn = StreamUP::UIStyles::CreateStyledButton("Execute " + titleStr, "success");
     executeBtn->setMinimumHeight(60);
-    executeBtn->setStyleSheet(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22c55e, stop:1 #16a34a);
-            color: white;
-            border: none;
-            padding: 0px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 8px;
-            text-align: center;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #32d56e, stop:1 #26b35a);
-        }
-    )");
     QObject::connect(executeBtn, &QPushButton::clicked, [scrollArea, originalContent, detailWidget, action, titleStr]() {
         action();
         StreamUP::NotificationManager::SendInfoNotification(titleStr, "Tool executed successfully");
