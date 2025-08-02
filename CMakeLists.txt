@@ -63,6 +63,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/hotkey-manager.cpp
   ui/ui-helpers.hpp
   ui/ui-helpers.cpp
+  ui/ui-styles.hpp
+  ui/ui-styles.cpp
   ui/menu-manager.hpp
   ui/menu-manager.cpp
   ui/settings-manager.hpp
@@ -124,6 +126,8 @@ source_group("UI" FILES
   ui/hotkey-manager.cpp
   ui/ui-helpers.hpp
   ui/ui-helpers.cpp
+  ui/ui-styles.hpp
+  ui/ui-styles.cpp
   ui/menu-manager.hpp
   ui/menu-manager.cpp
   ui/settings-manager.hpp

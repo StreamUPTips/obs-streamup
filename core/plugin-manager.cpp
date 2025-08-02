@@ -6,6 +6,7 @@
 #include "path-utils.hpp"
 #include "http-client.hpp"
 #include "ui-helpers.hpp"
+#include "ui-styles.hpp"
 #include "obs-wrappers.hpp"
 #include "error-handler.hpp"
 #include <obs-module.h>
@@ -48,34 +49,39 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 			toast->setWindowTitle("StreamUP");
 			toast->setWindowFlags(Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint | Qt::WindowStaysOnTopHint);
 			toast->setAttribute(Qt::WA_DeleteOnClose);
-			toast->setStyleSheet("QDialog { background: #22c55e; border-radius: 8px; }");
+			toast->setStyleSheet(QString("QDialog { background: %1; border-radius: %2px; }")
+				.arg(StreamUP::UIStyles::Colors::SUCCESS)
+				.arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS));
 			toast->resize(400, 100);
 			toast->setFixedSize(400, 100);
 			
 			QVBoxLayout *toastLayout = new QVBoxLayout(toast);
-			toastLayout->setContentsMargins(20, 15, 20, 15);
+			toastLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
+				StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+				StreamUP::UIStyles::Sizes::PADDING_XL, 
+				StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
 			toastLayout->setSpacing(8);
 			
 			QLabel *messageLabel = new QLabel("✓ All plugins are up to date!");
-			messageLabel->setStyleSheet(
+			messageLabel->setStyleSheet(QString(
 				"QLabel {"
 				"color: white;"
-				"font-size: 16px;"
+				"font-size: %1px;"
 				"font-weight: bold;"
 				"background: transparent;"
 				"border: none;"
-				"}");
+				"}").arg(StreamUP::UIStyles::Sizes::FONT_SIZE_MEDIUM));
 			messageLabel->setAlignment(Qt::AlignCenter);
 			toastLayout->addWidget(messageLabel);
 			
 			QLabel *countdownLabel = new QLabel("Auto closing in 3 seconds");
-			countdownLabel->setStyleSheet(
+			countdownLabel->setStyleSheet(QString(
 				"QLabel {"
 				"color: rgba(255, 255, 255, 0.8);"
-				"font-size: 12px;"
+				"font-size: %1px;"
 				"background: transparent;"
 				"border: none;"
-				"}");
+				"}").arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY));
 			countdownLabel->setAlignment(Qt::AlignCenter);
 			toastLayout->addWidget(countdownLabel);
 			
@@ -104,24 +110,11 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 {
 	StreamUP::UIHelpers::ShowDialogOnUIThread([errorMsgMissing, errorMsgUpdate]() {
-		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowPluginErrorTitle");
-		dialog->setStyleSheet("QDialog { background: #13171f; }");
-		
-		// Dynamic sizing based on content
-		int maxHeight = 600;
-		int minHeight = 150;
-		int maxWidth = 900;
-		int minWidth = 700;
-		
-		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(20, 15, 20, 15);
-		dialogLayout->setSpacing(15);
-
-		// Dynamic title based on what issues exist
-		QString titleText;
+		// Create styled dialog with dynamic title
 		bool hasMissing = (errorMsgMissing != "NULL");
 		bool hasUpdates = (!errorMsgUpdate.empty());
 		
+		QString titleText;
 		if (hasMissing && hasUpdates) {
 			titleText = "Missing Plugins & Updates Available";
 		} else if (hasMissing) {
@@ -130,20 +123,20 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 			titleText = "Plugin Updates Available";
 		}
 
-		// Header section
-		QLabel *titleLabel = new QLabel(titleText);
-		titleLabel->setStyleSheet(
-			"QLabel {"
-			"color: white;"
-			"font-size: 20px;"
-			"font-weight: bold;"
-			"margin: 0px 0px 10px 0px;"
-			"padding: 0px;"
-			"}");
-		titleLabel->setAlignment(Qt::AlignCenter);
+		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
+		
+		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
+		dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
+			StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+			StreamUP::UIStyles::Sizes::PADDING_XL, 
+			StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+		dialogLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+		// Add styled title
+		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(titleText);
 		dialogLayout->addWidget(titleLabel);
 
-		// Dynamic description based on content
+		// Add styled description
 		QString descText;
 		if (hasMissing && hasUpdates) {
 			descText = "Some required plugins are missing and others need updates to work correctly.";
@@ -153,120 +146,40 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 			descText = "The following plugins have updates available.";
 		}
 		
-		QLabel *descLabel = new QLabel(descText);
-		descLabel->setStyleSheet(
-			"QLabel {"
-			"color: #9ca3af;"
-			"font-size: 14px;"
-			"margin: 0px 0px 10px 0px;"
-			"padding: 0px;"
-			"}");
-		descLabel->setWordWrap(true);
-		descLabel->setAlignment(Qt::AlignCenter);
+		QLabel *descLabel = StreamUP::UIStyles::CreateStyledDescription(descText);
 		dialogLayout->addWidget(descLabel);
 
-		// Scrollable content area
-		QScrollArea *scrollArea = new QScrollArea();
-		scrollArea->setWidgetResizable(true);
-		scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-		scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-		scrollArea->setStyleSheet(
-			"QScrollArea {"
-			"border: none;"
-			"background: #13171f;"
-			"}"
-			"QScrollBar:vertical {"
-			"background: #374151;"
-			"width: 12px;"
-			"border-radius: 6px;"
-			"}"
-			"QScrollBar::handle:vertical {"
-			"background: #6b7280;"
-			"border-radius: 6px;"
-			"min-height: 20px;"
-			"}"
-			"QScrollBar::handle:vertical:hover {"
-			"background: #9ca3af;"
-			"}");
+		// Create styled scroll area
+		QScrollArea *scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 
 		QWidget *contentWidget = new QWidget();
-		contentWidget->setStyleSheet("background: #13171f;");
+		contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
 		QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
 		contentLayout->setContentsMargins(5, 5, 5, 5);
-		contentLayout->setSpacing(10);
+		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
 		if (hasMissing) {
-			QGroupBox *missingGroup = new QGroupBox("Missing Plugins");
-			missingGroup->setStyleSheet(
-				"QGroupBox {"
-				"color: white;"
-				"font-size: 16px;"
-				"font-weight: bold;"
-				"border: 2px solid #ef4444;"
-				"border-radius: 10px;"
-				"margin-top: 14px;"
-				"padding-top: 10px;"
-				"background: #1f2937;"
-				"}"
-				"QGroupBox::title {"
-				"subcontrol-origin: margin;"
-				"left: 15px;"
-				"padding: 0 8px 0 8px;"
-				"color: #ef4444;"
-				"}");
-			
+			QGroupBox *missingGroup = StreamUP::UIStyles::CreateStyledGroupBox("Missing Plugins", "error");
 			QVBoxLayout *missingLayout = new QVBoxLayout(missingGroup);
-			missingLayout->setContentsMargins(10, 10, 10, 10);
+			missingLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_SMALL, 
+				StreamUP::UIStyles::Sizes::SPACING_SMALL, 
+				StreamUP::UIStyles::Sizes::SPACING_SMALL, 
+				StreamUP::UIStyles::Sizes::SPACING_SMALL);
 			
-			QLabel *missingLabel = new QLabel(QString::fromStdString(errorMsgMissing));
-			missingLabel->setTextFormat(Qt::RichText);
-			missingLabel->setWordWrap(true);
-			missingLabel->setOpenExternalLinks(true);
-			missingLabel->setStyleSheet(
-				"QLabel {"
-				"color: #f3f4f6;"
-				"font-size: 13px;"
-				"background: transparent;"
-				"border: none;"
-				"}");
+			QLabel *missingLabel = StreamUP::UIStyles::CreateStyledContent(QString::fromStdString(errorMsgMissing));
 			missingLayout->addWidget(missingLabel);
 			contentLayout->addWidget(missingGroup);
 		}
 
 		if (hasUpdates) {
-			QGroupBox *updateGroup = new QGroupBox("Plugin Updates Available");
-			updateGroup->setStyleSheet(
-				"QGroupBox {"
-				"color: white;"
-				"font-size: 16px;"
-				"font-weight: bold;"
-				"border: 2px solid #f59e0b;"
-				"border-radius: 10px;"
-				"margin-top: 14px;"
-				"padding-top: 10px;"
-				"background: #1f2937;"
-				"}"
-				"QGroupBox::title {"
-				"subcontrol-origin: margin;"
-				"left: 15px;"
-				"padding: 0 8px 0 8px;"
-				"color: #f59e0b;"
-				"}");
-			
+			QGroupBox *updateGroup = StreamUP::UIStyles::CreateStyledGroupBox("Plugin Updates Available", "warning");
 			QVBoxLayout *updateLayout = new QVBoxLayout(updateGroup);
-			updateLayout->setContentsMargins(10, 10, 10, 10);
+			updateLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_SMALL, 
+				StreamUP::UIStyles::Sizes::SPACING_SMALL, 
+				StreamUP::UIStyles::Sizes::SPACING_SMALL, 
+				StreamUP::UIStyles::Sizes::SPACING_SMALL);
 			
-			QLabel *updateLabel = new QLabel(QString::fromStdString(errorMsgUpdate));
-			updateLabel->setTextFormat(Qt::RichText);
-			updateLabel->setWordWrap(true);
-			updateLabel->setOpenExternalLinks(true);
-			updateLabel->setStyleSheet(
-				"QLabel {"
-				"color: #f3f4f6;"
-				"font-size: 13px;"
-				"background: transparent;"
-				"border: none;"
-				"}");
+			QLabel *updateLabel = StreamUP::UIStyles::CreateStyledContent(QString::fromStdString(errorMsgUpdate));
 			updateLayout->addWidget(updateLabel);
 			contentLayout->addWidget(updateGroup);
 		}
@@ -274,48 +187,19 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		scrollArea->setWidget(contentWidget);
 		dialogLayout->addWidget(scrollArea);
 
-		// Button section
+		// Add styled button
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 		buttonLayout->addStretch();
 		
-		QPushButton *okButton = new QPushButton(obs_module_text("OK"));
-		okButton->setStyleSheet(
-			"QPushButton {"
-			"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #64748b, stop:1 #475569);"
-			"color: white;"
-			"border: none;"
-			"padding: 12px 24px;"
-			"font-size: 14px;"
-			"font-weight: bold;"
-			"border-radius: 6px;"
-			"min-width: 100px;"
-			"}"
-			"QPushButton:hover {"
-			"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #74859b, stop:1 #576579);"
-			"}");
+		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("OK"), "neutral");
 		QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
 		buttonLayout->addWidget(okButton);
 
 		dialogLayout->addLayout(buttonLayout);
 		dialog->setLayout(dialogLayout);
 		
-		// Set initial size and show
-		dialog->show();
-		
-		// Calculate proper size after layout is complete
-		QTimer::singleShot(10, [dialog, dialogLayout, maxHeight, minHeight, maxWidth, minWidth]() {
-			// Force layout calculation
-			dialog->adjustSize();
-			QSize sizeHint = dialog->sizeHint();
-			
-			// Calculate appropriate size based on content
-			int width = qMax(minWidth, qMin(sizeHint.width() + 20, maxWidth));
-			int height = qMax(minHeight, qMin(sizeHint.height() + 10, maxHeight));
-			
-			dialog->resize(width, height);
-			dialog->setMaximumSize(maxWidth, maxHeight);
-			dialog->setMinimumSize(minWidth, minHeight);
-		});
+		// Apply auto-sizing
+		StreamUP::UIStyles::ApplyAutoSizing(dialog);
 	});
 }
 
