@@ -602,6 +602,7 @@ void CreateSplashDialog()
             "border: none;"
             "padding: 0px;"
             "color: %1;"
+            "border-radius: 15px;"
             "}"
             "QPushButton:hover {"
             "opacity: 0.7;"
@@ -653,14 +654,14 @@ void CreateSplashDialog()
             "QScrollArea::corner { background: transparent; }"
             "QScrollBar:vertical {"
             "background: rgba(55, 65, 81, 0.8);"
-            "border-radius: 12px;"
+            "border-radius: 15px;"
             "margin: 0px;"
             "position: absolute;"
             "right: 2px;"
             "}"
             "QScrollBar::handle:vertical {"
             "background: rgba(107, 114, 128, 0.9);"
-            "border-radius: 12px;"
+            "border-radius: 15px;"
             "margin: 2px;"
             "}"
             "QScrollBar::handle:vertical:hover {"
@@ -737,86 +738,31 @@ void CreateSplashDialog()
         donationLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
         donationLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::SPACING_SMALL, 0, 0);
         
-        QString donationButtonStyle = QString(
-            "QPushButton {"
-            "color: %1;"
-            "border: none;"
-            "padding: %2px %3px;"
-            "border-radius: 20px;"
-            "font-weight: bold;"
-            "font-size: %4px;"
-            "min-height: 20px;"
-            "}"
-            "QPushButton:hover {"
-            "margin-top: 1px;"
-            "}")
-            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-            .arg(StreamUP::UIStyles::Sizes::SPACING_MEDIUM)
-            .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
-            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY);
             
-        QPushButton* patreonBtn = new QPushButton("Patreon");
+        QPushButton* patreonBtn = StreamUP::UIStyles::CreateStyledButton("Patreon", "info");
         patreonBtn->setIcon(QIcon(":images/icons/patreon.svg"));
         patreonBtn->setIconSize(QSize(16, 16));
-        patreonBtn->setStyleSheet(donationButtonStyle + 
-            "QPushButton {"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "    stop:0 #f472b6, stop:1 #a855f7);"
-            "}"
-            "QPushButton:hover {"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "    stop:0 #e879f9, stop:1 #9333ea);"
-            "}");
         QObject::connect(patreonBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://www.patreon.com/streamup"));
         });
         
-        QPushButton* kofiBtn = new QPushButton("Ko-Fi");
+        QPushButton* kofiBtn = StreamUP::UIStyles::CreateStyledButton("Ko-Fi", "info");
         kofiBtn->setIcon(QIcon(":images/icons/kofi.svg"));
         kofiBtn->setIconSize(QSize(16, 16));
-        kofiBtn->setStyleSheet(donationButtonStyle + 
-            "QPushButton {"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "    stop:0 #3b82f6, stop:1 #06b6d4);"
-            "}"
-            "QPushButton:hover {"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "    stop:0 #2563eb, stop:1 #0891b2);"
-            "}");
         QObject::connect(kofiBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://ko-fi.com/streamup"));
         });
         
-        QPushButton* beerBtn = new QPushButton("🍺 Buy a Beer");
+        QPushButton* beerBtn = StreamUP::UIStyles::CreateStyledButton("🍺 Buy a Beer", "warning");
         beerBtn->setIcon(QIcon(":images/icons/beer.svg"));
         beerBtn->setIconSize(QSize(16, 16));
-        beerBtn->setStyleSheet(donationButtonStyle + 
-            "QPushButton {"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "    stop:0 #f59e0b, stop:1 #d97706);"
-            "font-size: 11px;"
-            "}"
-            "QPushButton:hover {"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "    stop:0 #f59e0b, stop:1 #b45309);"
-            "}");
         QObject::connect(beerBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.lemonsqueezy.com/buy/15f64c2f-8b8c-443e-bd6c-e8bf49a0fc97"));
         });
         
-        QPushButton* githubBtn = new QPushButton("⭐ Star Project");
+        QPushButton* githubBtn = StreamUP::UIStyles::CreateStyledButton("⭐ Star Project", "neutral");
         githubBtn->setIcon(QIcon(":images/icons/github.svg"));
         githubBtn->setIconSize(QSize(16, 16));
-        githubBtn->setStyleSheet(donationButtonStyle + QString(
-            "QPushButton {"
-            "background: %1;"
-            "font-size: 11px;"
-            "}"
-            "QPushButton:hover {"
-            "background: %2;"
-            "}")
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
         QObject::connect(githubBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://github.com/StreamUPTips/obs-streamup"));
         });
@@ -887,41 +833,17 @@ void CreateSplashDialog()
         linksLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
         linksLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::SPACING_SMALL, 0, 0);
         
-        QString linkButtonStyle = QString(
-            "QPushButton {"
-            "color: %1;"
-            "border: none;"
-            "padding: %2px %3px;"
-            "border-radius: 20px;"
-            "font-weight: bold;"
-            "font-size: %4px;"
-            "min-height: 20px;"
-            "}")
-            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-            .arg(StreamUP::UIStyles::Sizes::SPACING_MEDIUM)
-            .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
-            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY);
-            
-        QPushButton* docsBtn = new QPushButton("📖 Documentation");
-        docsBtn->setStyleSheet(linkButtonStyle + 
-            "QPushButton { background: #059669; }"
-            "QPushButton:hover { background: #047857; }");
+        QPushButton* docsBtn = StreamUP::UIStyles::CreateStyledButton("📖 Documentation", "success");
         QObject::connect(docsBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://docs.streamup.tips"));
         });
         
-        QPushButton* discordBtn = new QPushButton("💬 Discord Community");
-        discordBtn->setStyleSheet(linkButtonStyle + 
-            "QPushButton { background: #5865f2; }"
-            "QPushButton:hover { background: #4752c4; }");
+        QPushButton* discordBtn = StreamUP::UIStyles::CreateStyledButton("💬 Discord Community", "info");
         QObject::connect(discordBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://discord.gg/streamup"));
         });
         
-        QPushButton* websiteBtn = new QPushButton("🌐 Website");
-        websiteBtn->setStyleSheet(linkButtonStyle + 
-            "QPushButton { background: #dc2626; }"
-            "QPushButton:hover { background: #b91c1c; }");
+        QPushButton* websiteBtn = StreamUP::UIStyles::CreateStyledButton("🌐 Website", "error");
         QObject::connect(websiteBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.tips"));
         });
@@ -944,23 +866,6 @@ void CreateSplashDialog()
         buttonLayout->setContentsMargins(0, 0, 0, 0);
         
         QPushButton* closeBtn = StreamUP::UIStyles::CreateStyledButton("Get Started! 🚀", "info");
-        closeBtn->setStyleSheet(closeBtn->styleSheet() + QString(
-            "QPushButton {"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "    stop:0 #3b82f6, stop:1 #1d4ed8);"
-            "padding: %1px %2px;"
-            "border-radius: 25px;"
-            "font-weight: 600;"
-            "font-size: %3px;"
-            "min-height: 26px;"
-            "}"
-            "QPushButton:hover {"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "    stop:0 #2563eb, stop:1 #1e40af);"
-            "}")
-            .arg(StreamUP::UIStyles::Sizes::SPACING_SMALL + 2)
-            .arg(StreamUP::UIStyles::Sizes::PADDING_XL + 12)
-            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_MEDIUM));
         closeBtn->setDefault(true);
         
         QObject::connect(closeBtn, &QPushButton::clicked, [dialog]() {

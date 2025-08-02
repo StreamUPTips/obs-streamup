@@ -201,8 +201,8 @@ void ShowToolsWindow()
 QPushButton* CreateToolButton(const QString& title, const QString& description, std::function<void()> action)
 {
     QPushButton* button = new QPushButton();
-    button->setMinimumHeight(80);
-    button->setMaximumHeight(80);
+    button->setMinimumHeight(60);
+    button->setMaximumHeight(60);
     
     // Set the button layout
     QVBoxLayout* buttonLayout = new QVBoxLayout(button);
@@ -263,7 +263,7 @@ QPushButton* CreateToolButton(const QString& title, const QString& description, 
         .arg(StreamUP::UIStyles::Colors::BACKGROUND_HOVER)
         .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
         .arg(StreamUP::UIStyles::Colors::BORDER_LIGHT)
-        .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS)
+        .arg(15)
         .arg(StreamUP::UIStyles::Colors::BORDER_LIGHT)
         .arg(StreamUP::UIStyles::Colors::TEXT_DISABLED)
         .arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
@@ -363,11 +363,6 @@ void ShowVideoDeviceOptionsInline(QScrollArea* scrollArea, QWidget* originalCont
     QHBoxLayout* headerLayout = new QHBoxLayout();
     
     QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back to Tools", "neutral");
-    backButton->setStyleSheet(backButton->styleSheet() + QString(
-        "QPushButton { font-size: %1px; padding: %2px %3px; }")
-        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
-        .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
     QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, optionsWidget]() {
         // Safely switch back to original content
         scrollArea->takeWidget(); // Remove current widget
@@ -459,11 +454,6 @@ void ShowToolDetailInline(QScrollArea* scrollArea, QWidget* originalContent, con
     QHBoxLayout* headerLayout = new QHBoxLayout();
     
     QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back to Tools", "neutral");
-    backButton->setStyleSheet(backButton->styleSheet() + QString(
-        "QPushButton { font-size: %1px; padding: %2px %3px; }")
-        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
-        .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
     QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, detailWidget]() {
         // Safely switch back to original content
         scrollArea->takeWidget(); // Remove current widget

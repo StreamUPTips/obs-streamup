@@ -3,6 +3,7 @@
 #include "../../ui_StreamUPDock.h"
 #include "../../flow-layout.hpp"
 #include "../../video-capture-popup.hpp"
+#include "../ui-styles.hpp"
 #include <obs.h>
 #include <obs-frontend-api.h>
 #include <obs-module.h>
@@ -24,11 +25,11 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	ui->setupUi(this);
 
 	// Create buttons
-	button1 = new QPushButton(this);
-	button2 = new QPushButton(this);
-	button3 = new QPushButton(this);
-	button4 = new QPushButton(this);
-	videoCaptureButton = new QPushButton(this);
+	button1 = StreamUP::UIStyles::CreateStyledButton("", "neutral");
+	button2 = StreamUP::UIStyles::CreateStyledButton("", "neutral");
+	button3 = StreamUP::UIStyles::CreateStyledButton("", "neutral");
+	button4 = StreamUP::UIStyles::CreateStyledButton("", "neutral");
+	videoCaptureButton = StreamUP::UIStyles::CreateStyledButton("", "neutral");
 
 	// Apply initial icons to buttons
 	applyFileIconToButton(button1, ":images/all-scene-source-locked.svg");
@@ -38,8 +39,7 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	applyFileIconToButton(videoCaptureButton, ":Qt/icons/16x16/camera-video.png");
 
 	auto setButtonProperties = [](QPushButton *button) {
-		button->setIconSize(QSize(20, 20));
-		button->setFixedSize(40, 40);
+		button->setIconSize(QSize(16, 16));
 		button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 	};
 
