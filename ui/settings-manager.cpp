@@ -244,10 +244,6 @@ void ShowSettingsDialog()
         pluginLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
         QPushButton* pluginButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsViewInstalledPlugins"), "info");
-        pluginButton->setStyleSheet(pluginButton->styleSheet() + QString(
-            "QPushButton {"
-            "min-width: 200px;"
-            "}"));
         
         // Connect plugin button to show plugins inline
         QObject::connect(pluginButton, &QPushButton::clicked, [scrollArea, contentWidget]() {
@@ -339,11 +335,6 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
     QHBoxLayout* headerLayout = new QHBoxLayout();
     
     QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back to Settings", "neutral");
-    backButton->setStyleSheet(backButton->styleSheet() + QString(
-        "QPushButton { font-size: %1px; padding: %2px %3px; }")
-        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
-        .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
     QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, pluginsWidget]() {
         // Safely switch back to original content
         scrollArea->takeWidget(); // Remove current widget

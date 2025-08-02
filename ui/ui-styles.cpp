@@ -91,24 +91,24 @@ QString GetContentLabelStyle() {
 QString GetButtonStyle(const QString& baseColor, const QString& hoverColor) {
     return QString(
         "QPushButton {"
-        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:1 %2);"
-        "color: white;"
-        "border: none;"
-        "padding: %3px %4px;"
-        "font-size: %5px;"
-        "font-weight: bold;"
-        "border-radius: %6px;"
-        "min-width: 100px;"
+        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:1 %2) !important;"
+        "color: white !important;"
+        "border: none !important;"
+        "padding: 0px 12px !important;"
+        "font-size: 13px !important;"
+        "font-weight: bold !important;"
+        "border-radius: 15px !important;"
+        "min-width: 80px !important;"
+        "max-width: none !important;"
+        "height: 30px !important;"
+        "min-height: 30px !important;"
+        "max-height: 30px !important;"
         "}"
         "QPushButton:hover {"
-        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %7, stop:1 %1);"
+        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %3, stop:1 %1) !important;"
         "}")
         .arg(baseColor)
         .arg(hoverColor)
-        .arg(Sizes::PADDING_MEDIUM)
-        .arg(Sizes::PADDING_XL + 4)
-        .arg(Sizes::FONT_SIZE_NORMAL)
-        .arg(6)
         .arg(hoverColor);
 }
 
@@ -295,6 +295,7 @@ void ApplyScrollAreaContentSizing(QScrollArea* scrollArea, int maxHeight) {
         }
     });
 }
+
 
 } // namespace UIStyles
 } // namespace StreamUP
