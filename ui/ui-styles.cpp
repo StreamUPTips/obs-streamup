@@ -9,6 +9,7 @@
 #include <QHBoxLayout>
 #include <QTimer>
 #include <QObject>
+#include <QSizePolicy>
 
 namespace StreamUP {
 namespace UIStyles {
@@ -88,7 +89,8 @@ QString GetContentLabelStyle() {
         .arg(Sizes::FONT_SIZE_SMALL);
 }
 
-QString GetButtonStyle(const QString& baseColor, const QString& hoverColor) {
+QString GetButtonStyle(const QString& baseColor, const QString& hoverColor, int height) {
+    int radius = height / 2;  // Perfect pill shape: radius = half height
     return QString(
         "QPushButton {"
         "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:1 %2) !important;"
@@ -97,19 +99,19 @@ QString GetButtonStyle(const QString& baseColor, const QString& hoverColor) {
         "padding: 0px 12px !important;"
         "font-size: 13px !important;"
         "font-weight: bold !important;"
-        "border-radius: 15px !important;"
-        "min-width: 80px !important;"
-        "max-width: none !important;"
-        "height: 30px !important;"
-        "min-height: 30px !important;"
-        "max-height: 30px !important;"
+        "border-radius: %4px !important;"
+        "height: %5px !important;"
+        "min-height: %5px !important;"
+        "max-height: %5px !important;"
         "}"
         "QPushButton:hover {"
         "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %3, stop:1 %1) !important;"
         "}")
         .arg(baseColor)
         .arg(hoverColor)
-        .arg(hoverColor);
+        .arg(hoverColor)
+        .arg(radius)
+        .arg(height);
 }
 
 QString GetScrollAreaStyle() {
@@ -186,8 +188,11 @@ QLabel* CreateStyledContent(const QString& text) {
     return label;
 }
 
-QPushButton* CreateStyledButton(const QString& text, const QString& type) {
+QPushButton* CreateStyledButton(const QString& text, const QString& type, int height) {
     QPushButton* button = new QPushButton(text);
+    
+    // Set size policy to fit content width
+    button->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     
     QString baseColor, hoverColor;
     if (type == "success") {
@@ -207,7 +212,7 @@ QPushButton* CreateStyledButton(const QString& text, const QString& type) {
         hoverColor = Colors::NEUTRAL_HOVER;
     }
     
-    button->setStyleSheet(GetButtonStyle(baseColor, hoverColor));
+    button->setStyleSheet(GetButtonStyle(baseColor, hoverColor, height));
     return button;
 }
 

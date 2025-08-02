@@ -72,7 +72,7 @@ QString GetTitleLabelStyle();
 QString GetDescriptionLabelStyle();
 QString GetGroupBoxStyle(const QString& borderColor, const QString& titleColor);
 QString GetContentLabelStyle();
-QString GetButtonStyle(const QString& baseColor, const QString& hoverColor);
+QString GetButtonStyle(const QString& baseColor, const QString& hoverColor, int height = 30);
 QString GetScrollAreaStyle();
 QString GetTableStyle();
 
@@ -81,7 +81,7 @@ QDialog* CreateStyledDialog(const QString& title);
 QLabel* CreateStyledTitle(const QString& text);
 QLabel* CreateStyledDescription(const QString& text);
 QLabel* CreateStyledContent(const QString& text);
-QPushButton* CreateStyledButton(const QString& text, const QString& type = "neutral");
+QPushButton* CreateStyledButton(const QString& text, const QString& type = "neutral", int height = 30);
 QGroupBox* CreateStyledGroupBox(const QString& title, const QString& type = "info");
 QScrollArea* CreateStyledScrollArea();
 
