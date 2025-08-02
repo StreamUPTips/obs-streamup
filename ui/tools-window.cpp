@@ -33,7 +33,7 @@ void ShowToolsWindow()
         QWidget* headerWidget = new QWidget();
         headerWidget->setObjectName("headerWidget");
         headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px; }")
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK)
+            .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
             .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
         
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
@@ -179,7 +179,7 @@ void ShowToolsWindow()
         // Bottom button area
         QWidget* buttonWidget = new QWidget();
         buttonWidget->setStyleSheet(QString("background: %1; padding: %2px;")
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK)
+            .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
             .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
         QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
         buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0, 

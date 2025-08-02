@@ -26,7 +26,9 @@
 #include <fstream>
 #include <iostream>
 #include <regex>
+#include <functional>
 #include <util/platform.h>
+#include <obs-frontend-api.h>
 
 // UI functions now accessed through StreamUP::UIHelpers namespace
 extern char *GetFilePath();
@@ -107,9 +109,9 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 	}
 }
 
-void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
+void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, std::function<void()> continueCallback)
 {
-	StreamUP::UIHelpers::ShowDialogOnUIThread([errorMsgMissing, errorMsgUpdate]() {
+	StreamUP::UIHelpers::ShowDialogOnUIThread([errorMsgMissing, errorMsgUpdate, continueCallback]() {
 		// Create styled dialog with dynamic title
 		bool hasMissing = (errorMsgMissing != "NULL");
 		bool hasUpdates = (!errorMsgUpdate.empty());
@@ -136,7 +138,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(titleText);
 		dialogLayout->addWidget(titleLabel);
 
-		// Add styled description
+		// Add styled description with warning
 		QString descText;
 		if (hasMissing && hasUpdates) {
 			descText = "Some required plugins are missing and others need updates to work correctly.";
@@ -148,6 +150,31 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		
 		QLabel *descLabel = StreamUP::UIStyles::CreateStyledDescription(descText);
 		dialogLayout->addWidget(descLabel);
+
+		// Add warning message if there's a continue callback (meaning this is for install product)
+		if (continueCallback) {
+			QLabel *warningLabel = StreamUP::UIStyles::CreateStyledDescription(
+				"⚠️ Warning: Pressing the button below will prompt you to select a StreamUP file for installation.\n\n"
+				"Continuing at this stage may result in incomplete functionality or unexpected behavior. "
+				"You may also need to reinstall the StreamUP file after the required plugins are installed."
+			);
+			warningLabel->setStyleSheet(QString(
+				"QLabel {"
+				"background: %1;"
+				"color: %2;"
+				"border: 1px solid %3;"
+				"border-radius: %4px;"
+				"padding: %5px;"
+				"margin: %6px 0px;"
+				"}")
+				.arg("#2d3748")  // Background
+				.arg("#fbb6ce")  // Text color (warning pink)
+				.arg("#f56565")  // Border color (warning red)
+				.arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS)
+				.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+				.arg(StreamUP::UIStyles::Sizes::SPACING_SMALL));
+			dialogLayout->addWidget(warningLabel);
+		}
 
 		// Create styled scroll area
 		QScrollArea *scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
@@ -187,11 +214,21 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		scrollArea->setWidget(contentWidget);
 		dialogLayout->addWidget(scrollArea);
 
-		// Add styled button
+		// Add styled buttons
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 		buttonLayout->addStretch();
 		
-		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("OK"), "neutral");
+		// Add Continue Anyway button if callback is provided
+		if (continueCallback) {
+			QPushButton *continueButton = StreamUP::UIStyles::CreateStyledButton("Continue Anyway", "warning");
+			QObject::connect(continueButton, &QPushButton::clicked, [dialog, continueCallback]() {
+				dialog->close();
+				continueCallback();
+			});
+			buttonLayout->addWidget(continueButton);
+		}
+		
+		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton("OK", "neutral");
 		QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
 		buttonLayout->addWidget(okButton);
 
@@ -202,6 +239,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		StreamUP::UIStyles::ApplyAutoSizing(dialog);
 	});
 }
+
 
 //-------------------PLUGIN UPDATE FUNCTIONS-------------------
 void CheckAllPluginsForUpdates(bool manuallyTriggered)
@@ -328,6 +366,71 @@ void InitialiseRequiredModules()
 		if (OBSWrappers::GetBoolProperty(plugin.get(), "required")) {
 			StreamUP::PluginState::Instance().AddRequiredPlugin(name, info);
 		}
+	}
+}
+
+bool CheckrequiredOBSPluginsWithoutUI(bool isLoadStreamUpFile)
+{
+	const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
+	if (requiredPlugins.empty()) {
+		StreamUP::ErrorHandler::LogError("Required plugins list is empty", StreamUP::ErrorHandler::Category::Plugin);
+		return false;
+	}
+
+	std::map<std::string, std::string> missing_modules;
+	std::map<std::string, std::string> version_mismatch_modules;
+	char *filepath = GetFilePath();
+	if (filepath == NULL) {
+		return false;
+	}
+
+	for (const auto &module : requiredPlugins) {
+		const std::string &plugin_name = module.first;
+		const StreamUP::PluginInfo &plugin_info = module.second;
+		const std::string &required_version = plugin_info.version;
+		const std::string &search_string = plugin_info.searchString;
+
+		if (search_string.find("[ignore]") != std::string::npos) {
+			continue; // Skip to the next iteration
+		}
+
+		std::string installed_version = SearchStringInFileForVersion(filepath, search_string.c_str());
+
+		if (installed_version.empty() && plugin_info.required) {
+			missing_modules.emplace(plugin_name, required_version);
+		} else if (!installed_version.empty() && installed_version != required_version && plugin_info.required &&
+			   VersionUtils::IsVersionLessThan(installed_version, required_version)) {
+			version_mismatch_modules.emplace(plugin_name, installed_version);
+		}
+	}
+
+	bfree(filepath);
+
+	bool hasUpdates = !version_mismatch_modules.empty();
+	bool hasMissingPlugins = !missing_modules.empty();
+
+	if (hasUpdates || hasMissingPlugins) {
+		// Log the issues without showing UI
+		if (hasMissingPlugins) {
+			for (const auto &module : missing_modules) {
+				StreamUP::ErrorHandler::LogWarning("Missing required plugin: " + module.first + " (required version: " + module.second + ")", 
+					StreamUP::ErrorHandler::Category::Plugin);
+			}
+		}
+		if (hasUpdates) {
+			for (const auto &module : version_mismatch_modules) {
+				StreamUP::ErrorHandler::LogWarning("Plugin needs update: " + module.first + " (installed: " + module.second + ")", 
+					StreamUP::ErrorHandler::Category::Plugin);
+			}
+		}
+		
+		missing_modules.clear();
+		version_mismatch_modules.clear();
+		return false;
+	} else {
+		// Log success without showing UI
+		StreamUP::ErrorHandler::LogInfo("All required plugins are up to date", StreamUP::ErrorHandler::Category::Plugin);
+		return true;
 	}
 }
 

@@ -75,7 +75,23 @@ void WebsocketRequestCheckPlugins(obs_data_t *request_data, obs_data_t *response
 {
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
-	bool pluginsUpToDate = StreamUP::PluginManager::CheckrequiredOBSPlugins(true);
+	
+	bool pluginsUpToDate;
+	
+	// Check if OBS is currently recording or streaming
+	bool isRecording = obs_frontend_recording_active();
+	bool isStreaming = obs_frontend_streaming_active();
+	
+	if (isRecording || isStreaming) {
+		// Don't show UI when recording/streaming, just check silently
+		pluginsUpToDate = StreamUP::PluginManager::CheckrequiredOBSPluginsWithoutUI(true);
+		blog(LOG_INFO, "[StreamUP] Plugin check via WebSocket completed without UI (recording: %s, streaming: %s)", 
+			isRecording ? "active" : "inactive", isStreaming ? "active" : "inactive");
+	} else {
+		// Show UI normally when not recording/streaming
+		pluginsUpToDate = StreamUP::PluginManager::CheckrequiredOBSPlugins(true);
+	}
+	
 	obs_data_set_bool(response_data, "success", pluginsUpToDate);
 }
 

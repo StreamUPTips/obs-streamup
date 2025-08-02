@@ -128,17 +128,17 @@ void ShowSettingsDialog()
         }
 
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsTitle"));
-        dialog->setFixedSize(600, 400);
+        dialog->setFixedSize(900, 650);
         
         QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
         mainLayout->setContentsMargins(0, 0, 0, 0);
         mainLayout->setSpacing(0);
 
-        // Header section with title
+        // Header section
         QWidget* headerWidget = new QWidget();
         headerWidget->setObjectName("headerWidget");
         headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px; }")
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK)
+            .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
             .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
         
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
@@ -149,13 +149,15 @@ void ShowSettingsDialog()
         
         mainLayout->addWidget(headerWidget);
 
-        // Content area
+        // Content area with scroll
+        QScrollArea* scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+
         QWidget* contentWidget = new QWidget();
         contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
         QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
-        contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 10, 
+        contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
             StreamUP::UIStyles::Sizes::PADDING_XL, 
-            StreamUP::UIStyles::Sizes::PADDING_XL + 10, 
+            StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
             StreamUP::UIStyles::Sizes::PADDING_XL);
         contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
 
@@ -246,7 +248,11 @@ void ShowSettingsDialog()
             "QPushButton {"
             "min-width: 200px;"
             "}"));
-        QObject::connect(pluginButton, &QPushButton::clicked, ShowInstalledPluginsDialog);
+        
+        // Connect plugin button to show plugins inline
+        QObject::connect(pluginButton, &QPushButton::clicked, [scrollArea, contentWidget]() {
+            ShowInstalledPluginsInline(scrollArea, contentWidget);
+        });
         
         QHBoxLayout* pluginButtonLayout = new QHBoxLayout();
         pluginButtonLayout->addStretch();
@@ -257,12 +263,13 @@ void ShowSettingsDialog()
         contentLayout->addWidget(pluginGroup);
         contentLayout->addStretch();
         
-        mainLayout->addWidget(contentWidget);
+        scrollArea->setWidget(contentWidget);
+        mainLayout->addWidget(scrollArea);
 
         // Bottom button area
         QWidget* buttonWidget = new QWidget();
         buttonWidget->setStyleSheet(QString("background: %1; padding: %2px;")
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK)
+            .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
             .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
         QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
         buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 0, 
@@ -313,7 +320,166 @@ void SetNotificationsMuted(bool muted)
     UpdateSettings(settings);
 }
 
-void ShowInstalledPluginsDialog()
+void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalContent)
+{
+    // Store the current widget temporarily
+    QWidget* currentWidget = scrollArea->takeWidget();
+    
+    // Create replacement content widget
+    QWidget* pluginsWidget = new QWidget();
+    pluginsWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
+    QVBoxLayout* pluginsLayout = new QVBoxLayout(pluginsWidget);
+    pluginsLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+        StreamUP::UIStyles::Sizes::PADDING_XL, 
+        StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+        StreamUP::UIStyles::Sizes::PADDING_XL);
+    pluginsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+    
+    // Back button and title section
+    QHBoxLayout* headerLayout = new QHBoxLayout();
+    
+    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back to Settings", "neutral");
+    backButton->setStyleSheet(backButton->styleSheet() + QString(
+        "QPushButton { font-size: %1px; padding: %2px %3px; }")
+        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
+        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
+        .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
+    QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, pluginsWidget]() {
+        // Safely switch back to original content
+        scrollArea->takeWidget(); // Remove current widget
+        scrollArea->setWidget(originalContent);
+        pluginsWidget->deleteLater(); // Schedule for deletion
+    });
+    
+    headerLayout->addWidget(backButton);
+    headerLayout->addStretch();
+    
+    pluginsLayout->addLayout(headerLayout);
+    
+    // Title
+    QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("🔌 Installed Plugins");
+    pluginsLayout->addWidget(titleLabel);
+    
+    // Description
+    QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription("Overview of plugins detected by StreamUP's update checker");
+    pluginsLayout->addWidget(descLabel);
+    
+    // Info section - more compact
+    QLabel* infoLabel = new QLabel("Plugins are tracked for updates and categorized by compatibility with our service.");
+    infoLabel->setStyleSheet(QString(
+        "QLabel {"
+        "color: %1;"
+        "font-size: %2px;"
+        "line-height: 1.3;"
+        "padding: %3px;"
+        "background: %4;"
+        "border: 1px solid %5;"
+        "border-radius: %6px;"
+        "}")
+        .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
+        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
+        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2)
+        .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
+        .arg(StreamUP::UIStyles::Colors::BACKGROUND_HOVER)
+        .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS));
+    infoLabel->setWordWrap(true);
+    pluginsLayout->addWidget(infoLabel);
+
+    auto installedPlugins = StreamUP::PluginManager::GetInstalledPlugins();
+    
+    QString compatiblePluginsString;
+    if (installedPlugins.empty()) {
+        compatiblePluginsString = obs_module_text("WindowSettingsInstalledPlugins");
+    } else {
+        for (const auto& plugin : installedPlugins) {
+            const auto& pluginName = plugin.first;
+            const auto& pluginVersion = plugin.second;
+            const QString forumLink = GetForumLink(pluginName);
+
+            compatiblePluginsString += "<a href=\"" + forumLink + "\" style=\"color: #60a5fa; text-decoration: none;\">" + 
+                                     QString::fromStdString(pluginName) +
+                                     "</a> <span style=\"color: #9ca3af;\">("+ QString::fromStdString(pluginVersion) + ")</span><br>";
+        }
+        if (compatiblePluginsString.endsWith("<br>")) {
+            compatiblePluginsString.chop(4);
+        }
+    }
+
+    QLabel* compatiblePluginsList = new QLabel(compatiblePluginsString);
+    compatiblePluginsList->setOpenExternalLinks(true);
+    compatiblePluginsList->setStyleSheet(QString(
+        "QLabel {"
+        "color: %1;"
+        "font-size: %2px;"
+        "line-height: 1.4;"
+        "padding: %3px;"
+        "background: transparent;"
+        "}")
+        .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
+        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2));
+    compatiblePluginsList->setWordWrap(true);
+
+    QGroupBox* compatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("✅ Compatible Plugins", "success");
+    
+    QVBoxLayout* compatiblePluginsBoxLayout = new QVBoxLayout(compatiblePluginsBox);
+    compatiblePluginsBoxLayout->setContentsMargins(0, 12, 0, 8);
+    compatiblePluginsBoxLayout->addWidget(compatiblePluginsList);
+
+    QScrollArea* compatibleScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+    compatibleScrollArea->setWidget(compatiblePluginsBox);
+    compatibleScrollArea->setMinimumWidth(300);
+    compatibleScrollArea->setStyleSheet(compatibleScrollArea->styleSheet() + 
+        "QScrollArea { background: transparent; }");
+    
+    // Apply content-based sizing to minimize blank space
+    StreamUP::UIStyles::ApplyScrollAreaContentSizing(compatibleScrollArea, 250);
+
+    QLabel* incompatiblePluginsList = new QLabel;
+    char* filePath = GetFilePath();
+    SetLabelWithSortedModules(incompatiblePluginsList, SearchModulesInFile(filePath));
+    bfree(filePath);
+    incompatiblePluginsList->setStyleSheet(QString(
+        "QLabel {"
+        "color: %1;"
+        "font-size: %2px;"
+        "line-height: 1.4;"
+        "padding: %3px;"
+        "background: transparent;"
+        "}")
+        .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
+        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2));
+    incompatiblePluginsList->setWordWrap(true);
+
+    QGroupBox* incompatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("⚠️ Incompatible Plugins", "error");
+    
+    QVBoxLayout* incompatiblePluginsBoxLayout = new QVBoxLayout(incompatiblePluginsBox);
+    incompatiblePluginsBoxLayout->setContentsMargins(0, 12, 0, 8);
+    incompatiblePluginsBoxLayout->addWidget(incompatiblePluginsList);
+
+    QScrollArea* incompatibleScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+    incompatibleScrollArea->setWidget(incompatiblePluginsBox);
+    incompatibleScrollArea->setMinimumWidth(300);
+    incompatibleScrollArea->setStyleSheet(incompatibleScrollArea->styleSheet() + 
+        "QScrollArea { background: transparent; }");
+    
+    // Apply content-based sizing to minimize blank space
+    StreamUP::UIStyles::ApplyScrollAreaContentSizing(incompatibleScrollArea, 250);
+
+    QHBoxLayout* pluginBoxesLayout = new QHBoxLayout();
+    pluginBoxesLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+    pluginBoxesLayout->addWidget(compatibleScrollArea);
+    pluginBoxesLayout->addWidget(incompatibleScrollArea);
+
+    pluginsLayout->addLayout(pluginBoxesLayout);
+    pluginsLayout->addStretch();
+    
+    // Replace the content in the scroll area
+    scrollArea->setWidget(pluginsWidget);
+}
+
+void ShowInstalledPluginsPage()
 {
     StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
         auto installedPlugins = StreamUP::PluginManager::GetInstalledPlugins();
@@ -329,7 +495,7 @@ void ShowInstalledPluginsDialog()
         QWidget* headerWidget = new QWidget();
         headerWidget->setObjectName("headerWidget");
         headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px; }")
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK)
+            .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
             .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
         
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
@@ -400,12 +566,11 @@ void ShowInstalledPluginsDialog()
             "font-size: %2px;"
             "line-height: 1.4;"
             "padding: %3px;"
-            "background: %4;"
+            "background: transparent;"
             "}")
             .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
             .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-            .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2)
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_INPUT));
+            .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2));
         compatiblePluginsList->setWordWrap(true);
 
         QGroupBox* compatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("✅ Compatible Plugins", "success");
@@ -433,12 +598,11 @@ void ShowInstalledPluginsDialog()
             "font-size: %2px;"
             "line-height: 1.4;"
             "padding: %3px;"
-            "background: %4;"
+            "background: transparent;"
             "}")
             .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
             .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-            .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2)
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_INPUT));
+            .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2));
         incompatiblePluginsList->setWordWrap(true);
 
         QGroupBox* incompatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("⚠️ Incompatible Plugins", "error");
@@ -467,7 +631,7 @@ void ShowInstalledPluginsDialog()
         // Bottom button area
         QWidget* buttonWidget = new QWidget();
         buttonWidget->setStyleSheet(QString("background: %1; padding: %2px;")
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK)
+            .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
             .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
         QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
         buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0, 

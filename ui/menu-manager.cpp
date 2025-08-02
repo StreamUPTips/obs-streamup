@@ -71,7 +71,12 @@ void LoadMenuItems(QMenu* menu)
     if (strcmp(PLATFORM_NAME, "windows") == 0) {
         action = menu->addAction(obs_module_text("MenuInstallProduct"));
         QObject::connect(action, &QAction::triggered, []() { 
-            StreamUP::FileManager::LoadStreamupFile(QApplication::keyboardModifiers() & Qt::ShiftModifier); 
+            // Check if Shift is held to force load
+            if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
+                StreamUP::FileManager::LoadStreamupFile(true);
+            } else {
+                StreamUP::FileManager::LoadStreamupFileWithWarning();
+            }
         });
         
         action = menu->addAction(obs_module_text("MenuDownloadProduct"));
