@@ -17,6 +17,11 @@
 #include <QHBoxLayout>
 #include <QStyle>
 #include <QLabel>
+#include <QGroupBox>
+#include <QScrollArea>
+#include <QPushButton>
+#include <QObject>
+#include <QTimer>
 #include <fstream>
 #include <iostream>
 #include <regex>
@@ -39,18 +44,59 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 {
 	if (manuallyTriggered) {
 		StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
-			QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowUpToDateTitle");
-			QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-			dialogLayout->setContentsMargins(20, 15, 20, 10);
-
-			dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_DialogApplyButton, "WindowUpToDateMessage"));
-
-			QHBoxLayout *buttonLayout = new QHBoxLayout();
-			StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
-
-			dialogLayout->addLayout(buttonLayout);
-			dialog->setLayout(dialogLayout);
-			dialog->show();
+			QDialog *toast = new QDialog();
+			toast->setWindowTitle("StreamUP");
+			toast->setWindowFlags(Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint | Qt::WindowStaysOnTopHint);
+			toast->setAttribute(Qt::WA_DeleteOnClose);
+			toast->setStyleSheet("QDialog { background: #22c55e; border-radius: 8px; }");
+			toast->resize(400, 100);
+			toast->setFixedSize(400, 100);
+			
+			QVBoxLayout *toastLayout = new QVBoxLayout(toast);
+			toastLayout->setContentsMargins(20, 15, 20, 15);
+			toastLayout->setSpacing(8);
+			
+			QLabel *messageLabel = new QLabel("✓ All plugins are up to date!");
+			messageLabel->setStyleSheet(
+				"QLabel {"
+				"color: white;"
+				"font-size: 16px;"
+				"font-weight: bold;"
+				"background: transparent;"
+				"border: none;"
+				"}");
+			messageLabel->setAlignment(Qt::AlignCenter);
+			toastLayout->addWidget(messageLabel);
+			
+			QLabel *countdownLabel = new QLabel("Auto closing in 3 seconds");
+			countdownLabel->setStyleSheet(
+				"QLabel {"
+				"color: rgba(255, 255, 255, 0.8);"
+				"font-size: 12px;"
+				"background: transparent;"
+				"border: none;"
+				"}");
+			countdownLabel->setAlignment(Qt::AlignCenter);
+			toastLayout->addWidget(countdownLabel);
+			
+			toast->setLayout(toastLayout);
+			toast->show();
+			
+			// Create countdown timer
+			QTimer *countdownTimer = new QTimer(toast);
+			int *remainingSeconds = new int(3);
+			
+			QObject::connect(countdownTimer, &QTimer::timeout, [countdownLabel, remainingSeconds, toast, countdownTimer]() {
+				(*remainingSeconds)--;
+				if (*remainingSeconds > 0) {
+					countdownLabel->setText(QString("Auto closing in %1 seconds").arg(*remainingSeconds));
+				} else {
+					countdownTimer->stop();
+					toast->close();
+				}
+			});
+			
+			countdownTimer->start(1000); // Update every second
 		});
 	}
 }
@@ -59,38 +105,217 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 {
 	StreamUP::UIHelpers::ShowDialogOnUIThread([errorMsgMissing, errorMsgUpdate]() {
 		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowPluginErrorTitle");
+		dialog->setStyleSheet("QDialog { background: #13171f; }");
+		
+		// Dynamic sizing based on content
+		int maxHeight = 600;
+		int minHeight = 150;
+		int maxWidth = 900;
+		int minWidth = 700;
+		
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(20, 15, 20, 20);
+		dialogLayout->setContentsMargins(20, 15, 20, 15);
+		dialogLayout->setSpacing(15);
 
-		const char *errorText = (errorMsgMissing != "NULL") ? "WindowPluginErrorMissing" : "WindowPluginErrorUpdating";
-		dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_MessageBoxWarning, errorText));
-		dialogLayout->addSpacing(10);
-
-		if (errorMsgMissing != "NULL") {
-			QLabel *label = new QLabel(QString::fromStdString(errorMsgMissing));
-			label->setTextFormat(Qt::RichText);
-			label->setWordWrap(true);
-			label->setOpenExternalLinks(true);
-			label->setAlignment(Qt::AlignTop);
-			dialogLayout->addWidget(label);
-			dialogLayout->addSpacing(10);
+		// Dynamic title based on what issues exist
+		QString titleText;
+		bool hasMissing = (errorMsgMissing != "NULL");
+		bool hasUpdates = (!errorMsgUpdate.empty());
+		
+		if (hasMissing && hasUpdates) {
+			titleText = "Missing Plugins & Updates Available";
+		} else if (hasMissing) {
+			titleText = "Missing Required Plugins";
+		} else if (hasUpdates) {
+			titleText = "Plugin Updates Available";
 		}
 
-		if (!errorMsgUpdate.empty()) {
-			QLabel *label = new QLabel(QString::fromStdString(errorMsgUpdate));
-			label->setTextFormat(Qt::RichText);
-			label->setWordWrap(true);
-			label->setOpenExternalLinks(true);
-			label->setAlignment(Qt::AlignTop);
-			dialogLayout->addWidget(label);
+		// Header section
+		QLabel *titleLabel = new QLabel(titleText);
+		titleLabel->setStyleSheet(
+			"QLabel {"
+			"color: white;"
+			"font-size: 20px;"
+			"font-weight: bold;"
+			"margin: 0px 0px 10px 0px;"
+			"padding: 0px;"
+			"}");
+		titleLabel->setAlignment(Qt::AlignCenter);
+		dialogLayout->addWidget(titleLabel);
+
+		// Dynamic description based on content
+		QString descText;
+		if (hasMissing && hasUpdates) {
+			descText = "Some required plugins are missing and others need updates to work correctly.";
+		} else if (hasMissing) {
+			descText = "The following plugins are required but not installed.";
+		} else if (hasUpdates) {
+			descText = "The following plugins have updates available.";
+		}
+		
+		QLabel *descLabel = new QLabel(descText);
+		descLabel->setStyleSheet(
+			"QLabel {"
+			"color: #9ca3af;"
+			"font-size: 14px;"
+			"margin: 0px 0px 10px 0px;"
+			"padding: 0px;"
+			"}");
+		descLabel->setWordWrap(true);
+		descLabel->setAlignment(Qt::AlignCenter);
+		dialogLayout->addWidget(descLabel);
+
+		// Scrollable content area
+		QScrollArea *scrollArea = new QScrollArea();
+		scrollArea->setWidgetResizable(true);
+		scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+		scrollArea->setStyleSheet(
+			"QScrollArea {"
+			"border: none;"
+			"background: #13171f;"
+			"}"
+			"QScrollBar:vertical {"
+			"background: #374151;"
+			"width: 12px;"
+			"border-radius: 6px;"
+			"}"
+			"QScrollBar::handle:vertical {"
+			"background: #6b7280;"
+			"border-radius: 6px;"
+			"min-height: 20px;"
+			"}"
+			"QScrollBar::handle:vertical:hover {"
+			"background: #9ca3af;"
+			"}");
+
+		QWidget *contentWidget = new QWidget();
+		contentWidget->setStyleSheet("background: #13171f;");
+		QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
+		contentLayout->setContentsMargins(5, 5, 5, 5);
+		contentLayout->setSpacing(10);
+
+		if (hasMissing) {
+			QGroupBox *missingGroup = new QGroupBox("Missing Plugins");
+			missingGroup->setStyleSheet(
+				"QGroupBox {"
+				"color: white;"
+				"font-size: 16px;"
+				"font-weight: bold;"
+				"border: 2px solid #ef4444;"
+				"border-radius: 10px;"
+				"margin-top: 14px;"
+				"padding-top: 10px;"
+				"background: #1f2937;"
+				"}"
+				"QGroupBox::title {"
+				"subcontrol-origin: margin;"
+				"left: 15px;"
+				"padding: 0 8px 0 8px;"
+				"color: #ef4444;"
+				"}");
+			
+			QVBoxLayout *missingLayout = new QVBoxLayout(missingGroup);
+			missingLayout->setContentsMargins(10, 10, 10, 10);
+			
+			QLabel *missingLabel = new QLabel(QString::fromStdString(errorMsgMissing));
+			missingLabel->setTextFormat(Qt::RichText);
+			missingLabel->setWordWrap(true);
+			missingLabel->setOpenExternalLinks(true);
+			missingLabel->setStyleSheet(
+				"QLabel {"
+				"color: #f3f4f6;"
+				"font-size: 13px;"
+				"background: transparent;"
+				"border: none;"
+				"}");
+			missingLayout->addWidget(missingLabel);
+			contentLayout->addWidget(missingGroup);
 		}
 
+		if (hasUpdates) {
+			QGroupBox *updateGroup = new QGroupBox("Plugin Updates Available");
+			updateGroup->setStyleSheet(
+				"QGroupBox {"
+				"color: white;"
+				"font-size: 16px;"
+				"font-weight: bold;"
+				"border: 2px solid #f59e0b;"
+				"border-radius: 10px;"
+				"margin-top: 14px;"
+				"padding-top: 10px;"
+				"background: #1f2937;"
+				"}"
+				"QGroupBox::title {"
+				"subcontrol-origin: margin;"
+				"left: 15px;"
+				"padding: 0 8px 0 8px;"
+				"color: #f59e0b;"
+				"}");
+			
+			QVBoxLayout *updateLayout = new QVBoxLayout(updateGroup);
+			updateLayout->setContentsMargins(10, 10, 10, 10);
+			
+			QLabel *updateLabel = new QLabel(QString::fromStdString(errorMsgUpdate));
+			updateLabel->setTextFormat(Qt::RichText);
+			updateLabel->setWordWrap(true);
+			updateLabel->setOpenExternalLinks(true);
+			updateLabel->setStyleSheet(
+				"QLabel {"
+				"color: #f3f4f6;"
+				"font-size: 13px;"
+				"background: transparent;"
+				"border: none;"
+				"}");
+			updateLayout->addWidget(updateLabel);
+			contentLayout->addWidget(updateGroup);
+		}
+
+		scrollArea->setWidget(contentWidget);
+		dialogLayout->addWidget(scrollArea);
+
+		// Button section
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
+		buttonLayout->addStretch();
+		
+		QPushButton *okButton = new QPushButton(obs_module_text("OK"));
+		okButton->setStyleSheet(
+			"QPushButton {"
+			"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #64748b, stop:1 #475569);"
+			"color: white;"
+			"border: none;"
+			"padding: 12px 24px;"
+			"font-size: 14px;"
+			"font-weight: bold;"
+			"border-radius: 6px;"
+			"min-width: 100px;"
+			"}"
+			"QPushButton:hover {"
+			"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #74859b, stop:1 #576579);"
+			"}");
+		QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
+		buttonLayout->addWidget(okButton);
 
 		dialogLayout->addLayout(buttonLayout);
 		dialog->setLayout(dialogLayout);
+		
+		// Set initial size and show
 		dialog->show();
+		
+		// Calculate proper size after layout is complete
+		QTimer::singleShot(10, [dialog, dialogLayout, maxHeight, minHeight, maxWidth, minWidth]() {
+			// Force layout calculation
+			dialog->adjustSize();
+			QSize sizeHint = dialog->sizeHint();
+			
+			// Calculate appropriate size based on content
+			int width = qMax(minWidth, qMin(sizeHint.width() + 20, maxWidth));
+			int height = qMax(minHeight, qMin(sizeHint.height() + 10, maxHeight));
+			
+			dialog->resize(width, height);
+			dialog->setMaximumSize(maxWidth, maxHeight);
+			dialog->setMinimumSize(minWidth, minHeight);
+		});
 	});
 }
 
@@ -133,13 +358,13 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 	}
 
 	if (!version_mismatch_modules.empty()) {
-		errorMsgUpdate += "<div style=\"text-align: center;\">"
-				  "<table style=\"border-collapse: collapse; width: 100%;\">"
-				  "<tr style=\"background-color: #212121;\">"
-				  "<th style=\"padding: 4px 10px; text-align: center;\">Plugin Name</th>"
-				  "<th style=\"padding: 4px 10px; text-align: center;\">Installed</th>"
-				  "<th style=\"padding: 4px 10px; text-align: center;\">Current</th>"
-				  "<th style=\"padding: 4px 10px; text-align: center;\">Direct Download</th>"
+		errorMsgUpdate += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
+				  "<tr style=\"background: #4a5568; font-weight: bold;\">"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">Plugin Name</td>"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">Installed Version</td>"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">Current Version</td>"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">Download Link</td>"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">Website Link</td>"
 				  "</tr>";
 
 		for (const auto &module : version_mismatch_modules) {
@@ -153,23 +378,16 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 				QString::fromStdString(plugin_info.linuxURL),
 				QString::fromStdString(plugin_info.generalURL)).toStdString();
 
-			errorMsgUpdate += "<tr style=\"border: 1px solid #ddd;\">"
-					  "<td style=\"padding: 2px 10px; text-align: left;\"><a href=\"" +
-					  forum_link + "\">" + module.first +
-					  "</a></td>"
-					  "<td style=\"padding: 2px 10px; text-align: center;\">" +
-					  module.second +
-					  "</td>"
-					  "<td style=\"padding: 2px 10px; text-align: center;\">" +
-					  required_version +
-					  "</td>"
-					  "<td style=\"padding: 2px 10px; text-align: center;\"><a href=\"" +
-					  direct_download_link +
-					  "\">Download</a></td>"
+			errorMsgUpdate += "<tr>"
+					  "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
+					  "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">v" + module.second + "</td>"
+					  "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
+					  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">Download</a></td>"
+					  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">Website</a></td>"
 					  "</tr>";
 		}
 
-		errorMsgUpdate += "</table></div>";
+		errorMsgUpdate += "</table>";
 		PluginsHaveIssue("NULL", errorMsgUpdate);
 		version_mismatch_modules.clear();
 	} else {
@@ -273,13 +491,13 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 
 	if (hasUpdates || hasMissingPlugins) {
 		if (hasUpdates) {
-			errorMsgUpdate += "<div style=\"text-align: center;\">"
-					  "<table style=\"border-collapse: collapse; width: 100%;\">"
-					  "<tr style=\"background-color: #212121;\">"
-					  "<th style=\"padding: 4px 10px; text-align: center;\">Plugin Name</th>"
-					  "<th style=\"padding: 4px 10px; text-align: center;\">Installed</th>"
-					  "<th style=\"padding: 4px 10px; text-align: center;\">Current</th>"
-					  "<th style=\"padding: 4px 10px; text-align: center;\">Direct Download</th>"
+			errorMsgUpdate += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
+					  "<tr style=\"background: #4a5568; font-weight: bold;\">"
+					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Plugin Name</td>"
+					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Installed Version</td>"
+					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Current Version</td>"
+					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Download Link</td>"
+					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Website Link</td>"
 					  "</tr>";
 
 			for (const auto &module : version_mismatch_modules) {
@@ -293,23 +511,16 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 					QString::fromStdString(plugin_info.linuxURL),
 					QString::fromStdString(plugin_info.generalURL)).toStdString();
 
-				errorMsgUpdate += "<tr style=\"border: 1px solid #ddd;\">"
-						  "<td style=\"padding: 2px 10px; text-align: left;\"><a href=\"" +
-						  forum_link + "\">" + module.first +
-						  "</a></td>"
-						  "<td style=\"padding: 2px 10px; text-align: center;\">" +
-						  module.second +
-						  "</td>"
-						  "<td style=\"padding: 2px 10px; text-align: center;\">" +
-						  required_version +
-						  "</td>"
-						  "<td style=\"padding: 2px 10px; text-align: center;\"><a href=\"" +
-						  direct_download_link +
-						  "\">Download</a></td>"
+				errorMsgUpdate += "<tr>"
+						  "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
+						  "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">v" + module.second + "</td>"
+						  "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
+						  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">Download</a></td>"
+						  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">Website</a></td>"
 						  "</tr>";
 			}
 
-			errorMsgUpdate += "</table></div>";
+			errorMsgUpdate += "</table>";
 
 			if (!errorMsgUpdate.empty() && errorMsgUpdate.substr(errorMsgUpdate.length() - 4) == "<br>") {
 				errorMsgUpdate = errorMsgUpdate.substr(0, errorMsgUpdate.length() - 4);
@@ -317,11 +528,13 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 		}
 
 		if (hasMissingPlugins) {
-			errorMsgMissing += "<div style=\"text-align: center;\">"
-					   "<table style=\"border-collapse: collapse; width: 100%;\">"
-					   "<tr style=\"background-color: #212121;\">"
-					   "<th style=\"padding: 4px 10px; text-align: center;\">Plugin Name</th>"
-					   "<th style=\"padding: 4px 10px; text-align: center;\">Direct Download</th>"
+			errorMsgMissing += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
+					   "<tr style=\"background: #4a5568; font-weight: bold;\">"
+					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Plugin Name</td>"
+					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Status</td>"
+					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Current Version</td>"
+					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Download Link</td>"
+					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Website Link</td>"
 					   "</tr>";
 
 			for (auto it = missing_modules.begin(); it != missing_modules.end(); ++it) {
@@ -329,23 +542,23 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 				const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
 				const StreamUP::PluginInfo &pluginInfo = requiredPlugins.at(moduleName);
 				const std::string &forum_link = pluginInfo.generalURL;
+				const std::string &required_version = pluginInfo.version;
 				const std::string &direct_download_link = StringUtils::GetPlatformURL(
 					QString::fromStdString(pluginInfo.windowsURL),
 					QString::fromStdString(pluginInfo.macURL),
 					QString::fromStdString(pluginInfo.linuxURL),
 					QString::fromStdString(pluginInfo.generalURL)).toStdString();
 
-				errorMsgMissing += "<tr style=\"border: 1px solid #ddd;\">"
-						   "<td style=\"padding: 2px 10px; text-align: left;\"><a href=\"" +
-						   forum_link + "\">" + moduleName +
-						   "</a></td>"
-						   "<td style=\"padding: 2px 10px; text-align: center;\"><a href=\"" +
-						   direct_download_link +
-						   "\">Download</a></td>"
+				errorMsgMissing += "<tr>"
+						   "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + moduleName + "</td>"
+						   "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">MISSING</td>"
+						   "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
+						   "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">Download</a></td>"
+						   "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">Website</a></td>"
 						   "</tr>";
 			}
 
-			errorMsgMissing += "</table></div>";
+			errorMsgMissing += "</table>";
 
 			if (!errorMsgMissing.empty() && errorMsgMissing.substr(errorMsgMissing.length() - 4) == "<br>") {
 				errorMsgMissing = errorMsgMissing.substr(0, errorMsgMissing.length() - 4);

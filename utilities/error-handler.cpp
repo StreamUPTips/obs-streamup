@@ -9,6 +9,8 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QStyle>
+#include <QGroupBox>
+#include <QObject>
 #include <unordered_map>
 #include <vector>
 
@@ -105,16 +107,80 @@ ErrorResult UIError(const std::string& message) {
 void ShowErrorDialog(const std::string& title, const std::string& message) {
     StreamUP::UIHelpers::ShowDialogOnUIThread([title, message]() {
         QDialog* dialog = StreamUP::UIHelpers::CreateDialogWindow(title.c_str());
+        dialog->setStyleSheet("QDialog { background: #13171f; }");
+        dialog->resize(500, 300);
+        dialog->setMinimumSize(450, 250);
+        
         QVBoxLayout* layout = new QVBoxLayout(dialog);
-        layout->setContentsMargins(20, 15, 20, 10);
+        layout->setContentsMargins(25, 20, 25, 20);
+        layout->setSpacing(20);
         
-        layout->addLayout(StreamUP::UIHelpers::AddIconAndText(
-            QStyle::SP_MessageBoxCritical, message.c_str()));
+        // Header section
+        QLabel* titleLabel = new QLabel(QString::fromStdString(title));
+        titleLabel->setStyleSheet(
+            "QLabel {"
+            "color: white;"
+            "font-size: 20px;"
+            "font-weight: bold;"
+            "margin: 0px 0px 15px 0px;"
+            "padding: 0px;"
+            "}");
+        titleLabel->setAlignment(Qt::AlignCenter);
+        layout->addWidget(titleLabel);
         
+        // Message section with red border for errors
+        QGroupBox* messageGroup = new QGroupBox();
+        messageGroup->setStyleSheet(
+            "QGroupBox {"
+            "border: 2px solid #ef4444;"
+            "border-radius: 10px;"
+            "padding-top: 15px;"
+            "background: #1f2937;"
+            "}");
+        
+        QVBoxLayout* messageLayout = new QVBoxLayout(messageGroup);
+        messageLayout->setContentsMargins(15, 15, 15, 15);
+        messageLayout->addStretch();
+        
+        QLabel* messageLabel = new QLabel(QString::fromStdString(message));
+        messageLabel->setStyleSheet(
+            "QLabel {"
+            "color: #f3f4f6;"
+            "font-size: 14px;"
+            "margin: 0px;"
+            "padding: 0px;"
+            "background: transparent;"
+            "border: none;"
+            "text-align: center;"
+            "}");
+        messageLabel->setWordWrap(true);
+        messageLabel->setAlignment(Qt::AlignCenter);
+        messageLayout->addWidget(messageLabel, 0, Qt::AlignCenter);
+        messageLayout->addStretch();
+        layout->addWidget(messageGroup);
+        
+        // Button section
         QHBoxLayout* buttonLayout = new QHBoxLayout();
-        StreamUP::UIHelpers::CreateButton(buttonLayout, "OK", [dialog]() { 
-            dialog->close(); 
-        });
+        buttonLayout->addStretch();
+        
+        QPushButton* okButton = new QPushButton("OK");
+        okButton->setStyleSheet(
+            "QPushButton {"
+            "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #64748b, stop:1 #475569);"
+            "color: white;"
+            "border: none;"
+            "padding: 12px 24px;"
+            "font-size: 14px;"
+            "font-weight: bold;"
+            "border-radius: 6px;"
+            "min-width: 100px;"
+            "}"
+            "QPushButton:hover {"
+            "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #74859b, stop:1 #576579);"
+            "}");
+        QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
+        buttonLayout->addWidget(okButton);
+        buttonLayout->addStretch();
         
         layout->addLayout(buttonLayout);
         dialog->setLayout(layout);
@@ -125,16 +191,80 @@ void ShowErrorDialog(const std::string& title, const std::string& message) {
 void ShowWarningDialog(const std::string& title, const std::string& message) {
     StreamUP::UIHelpers::ShowDialogOnUIThread([title, message]() {
         QDialog* dialog = StreamUP::UIHelpers::CreateDialogWindow(title.c_str());
+        dialog->setStyleSheet("QDialog { background: #13171f; }");
+        dialog->resize(500, 300);
+        dialog->setMinimumSize(450, 250);
+        
         QVBoxLayout* layout = new QVBoxLayout(dialog);
-        layout->setContentsMargins(20, 15, 20, 10);
+        layout->setContentsMargins(25, 20, 25, 20);
+        layout->setSpacing(20);
         
-        layout->addLayout(StreamUP::UIHelpers::AddIconAndText(
-            QStyle::SP_MessageBoxWarning, message.c_str()));
+        // Header section
+        QLabel* titleLabel = new QLabel(QString::fromStdString(title));
+        titleLabel->setStyleSheet(
+            "QLabel {"
+            "color: white;"
+            "font-size: 20px;"
+            "font-weight: bold;"
+            "margin: 0px 0px 15px 0px;"
+            "padding: 0px;"
+            "}");
+        titleLabel->setAlignment(Qt::AlignCenter);
+        layout->addWidget(titleLabel);
         
+        // Message section with orange border for warnings
+        QGroupBox* messageGroup = new QGroupBox();
+        messageGroup->setStyleSheet(
+            "QGroupBox {"
+            "border: 2px solid #f59e0b;"
+            "border-radius: 10px;"
+            "padding-top: 15px;"
+            "background: #1f2937;"
+            "}");
+        
+        QVBoxLayout* messageLayout = new QVBoxLayout(messageGroup);
+        messageLayout->setContentsMargins(15, 15, 15, 15);
+        messageLayout->addStretch();
+        
+        QLabel* messageLabel = new QLabel(QString::fromStdString(message));
+        messageLabel->setStyleSheet(
+            "QLabel {"
+            "color: #f3f4f6;"
+            "font-size: 14px;"
+            "margin: 0px;"
+            "padding: 0px;"
+            "background: transparent;"
+            "border: none;"
+            "text-align: center;"
+            "}");
+        messageLabel->setWordWrap(true);
+        messageLabel->setAlignment(Qt::AlignCenter);
+        messageLayout->addWidget(messageLabel, 0, Qt::AlignCenter);
+        messageLayout->addStretch();
+        layout->addWidget(messageGroup);
+        
+        // Button section
         QHBoxLayout* buttonLayout = new QHBoxLayout();
-        StreamUP::UIHelpers::CreateButton(buttonLayout, "OK", [dialog]() { 
-            dialog->close(); 
-        });
+        buttonLayout->addStretch();
+        
+        QPushButton* okButton = new QPushButton("OK");
+        okButton->setStyleSheet(
+            "QPushButton {"
+            "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #d69e2e, stop:1 #b45309);"
+            "color: white;"
+            "border: none;"
+            "padding: 12px 24px;"
+            "font-size: 14px;"
+            "font-weight: bold;"
+            "border-radius: 6px;"
+            "min-width: 100px;"
+            "}"
+            "QPushButton:hover {"
+            "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #eab308, stop:1 #ca8a04);"
+            "}");
+        QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
+        buttonLayout->addWidget(okButton);
+        buttonLayout->addStretch();
         
         layout->addLayout(buttonLayout);
         dialog->setLayout(layout);
@@ -145,16 +275,80 @@ void ShowWarningDialog(const std::string& title, const std::string& message) {
 void ShowInfoDialog(const std::string& title, const std::string& message) {
     StreamUP::UIHelpers::ShowDialogOnUIThread([title, message]() {
         QDialog* dialog = StreamUP::UIHelpers::CreateDialogWindow(title.c_str());
+        dialog->setStyleSheet("QDialog { background: #13171f; }");
+        dialog->resize(500, 300);
+        dialog->setMinimumSize(450, 250);
+        
         QVBoxLayout* layout = new QVBoxLayout(dialog);
-        layout->setContentsMargins(20, 15, 20, 10);
+        layout->setContentsMargins(25, 20, 25, 20);
+        layout->setSpacing(20);
         
-        layout->addLayout(StreamUP::UIHelpers::AddIconAndText(
-            QStyle::SP_DialogApplyButton, message.c_str()));
+        // Header section
+        QLabel* titleLabel = new QLabel(QString::fromStdString(title));
+        titleLabel->setStyleSheet(
+            "QLabel {"
+            "color: white;"
+            "font-size: 20px;"
+            "font-weight: bold;"
+            "margin: 0px 0px 15px 0px;"
+            "padding: 0px;"
+            "}");
+        titleLabel->setAlignment(Qt::AlignCenter);
+        layout->addWidget(titleLabel);
         
+        // Message section with blue border for info
+        QGroupBox* messageGroup = new QGroupBox();
+        messageGroup->setStyleSheet(
+            "QGroupBox {"
+            "border: 2px solid #3b82f6;"
+            "border-radius: 10px;"
+            "padding-top: 15px;"
+            "background: #1f2937;"
+            "}");
+        
+        QVBoxLayout* messageLayout = new QVBoxLayout(messageGroup);
+        messageLayout->setContentsMargins(15, 15, 15, 15);
+        messageLayout->addStretch();
+        
+        QLabel* messageLabel = new QLabel(QString::fromStdString(message));
+        messageLabel->setStyleSheet(
+            "QLabel {"
+            "color: #f3f4f6;"
+            "font-size: 14px;"
+            "margin: 0px;"
+            "padding: 0px;"
+            "background: transparent;"
+            "border: none;"
+            "text-align: center;"
+            "}");
+        messageLabel->setWordWrap(true);
+        messageLabel->setAlignment(Qt::AlignCenter);
+        messageLayout->addWidget(messageLabel, 0, Qt::AlignCenter);
+        messageLayout->addStretch();
+        layout->addWidget(messageGroup);
+        
+        // Button section
         QHBoxLayout* buttonLayout = new QHBoxLayout();
-        StreamUP::UIHelpers::CreateButton(buttonLayout, "OK", [dialog]() { 
-            dialog->close(); 
-        });
+        buttonLayout->addStretch();
+        
+        QPushButton* okButton = new QPushButton("OK");
+        okButton->setStyleSheet(
+            "QPushButton {"
+            "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3b82f6, stop:1 #2563eb);"
+            "color: white;"
+            "border: none;"
+            "padding: 12px 24px;"
+            "font-size: 14px;"
+            "font-weight: bold;"
+            "border-radius: 6px;"
+            "min-width: 100px;"
+            "}"
+            "QPushButton:hover {"
+            "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #60a5fa, stop:1 #3b82f6);"
+            "}");
+        QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
+        buttonLayout->addWidget(okButton);
+        buttonLayout->addStretch();
         
         layout->addLayout(buttonLayout);
         dialog->setLayout(layout);
