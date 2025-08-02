@@ -778,7 +778,7 @@ void CreateSplashDialog()
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #e879f9, stop:1 #9333ea);
-                transform: translateY(-1px);
+                margin-top: 1px;
             }
         )");
         QObject::connect(patreonBtn, &QPushButton::clicked, []() {
@@ -803,7 +803,7 @@ void CreateSplashDialog()
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #2563eb, stop:1 #0891b2);
-                transform: translateY(-1px);
+                margin-top: 1px;
             }
         )");
         QObject::connect(kofiBtn, &QPushButton::clicked, []() {
@@ -828,7 +828,7 @@ void CreateSplashDialog()
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #f59e0b, stop:1 #b45309);
-                transform: translateY(-1px);
+                margin-top: 1px;
             }
         )");
         QObject::connect(beerBtn, &QPushButton::clicked, []() {
@@ -851,7 +851,7 @@ void CreateSplashDialog()
             }
             QPushButton:hover {
                 background: #111827;
-                transform: translateY(-1px);
+                margin-top: 1px;
             }
         )");
         QObject::connect(githubBtn, &QPushButton::clicked, []() {
