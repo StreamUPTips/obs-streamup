@@ -128,11 +128,11 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
 		
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
+		dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+			StreamUP::UIStyles::Sizes::PADDING_SMALL, 
 			StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
-			StreamUP::UIStyles::Sizes::PADDING_XL, 
-			StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
-		dialogLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+			StreamUP::UIStyles::Sizes::PADDING_SMALL);
+		dialogLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
 		// Add styled title
 		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(titleText);
@@ -151,10 +151,52 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 		QLabel *descLabel = StreamUP::UIStyles::CreateStyledDescription(descText);
 		dialogLayout->addWidget(descLabel);
 
-		// Add warning message if there's a continue callback (meaning this is for install product)
+
+		// Create styled scroll area
+		QScrollArea *scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+
+		QWidget *contentWidget = new QWidget();
+		contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
+		QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
+		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_TINY, 
+			StreamUP::UIStyles::Sizes::SPACING_TINY, 
+			StreamUP::UIStyles::Sizes::SPACING_TINY, 
+			StreamUP::UIStyles::Sizes::SPACING_TINY);
+		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
+
+		if (hasMissing) {
+			QGroupBox *missingGroup = StreamUP::UIStyles::CreateStyledGroupBox("Missing Plugins", "error");
+			QVBoxLayout *missingLayout = new QVBoxLayout(missingGroup);
+			missingLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_TINY, 
+				StreamUP::UIStyles::Sizes::SPACING_TINY, 
+				StreamUP::UIStyles::Sizes::SPACING_TINY, 
+				StreamUP::UIStyles::Sizes::SPACING_TINY);
+			
+			QLabel *missingLabel = StreamUP::UIStyles::CreateStyledContent(QString::fromStdString(errorMsgMissing));
+			missingLayout->addWidget(missingLabel);
+			contentLayout->addWidget(missingGroup);
+		}
+
+		if (hasUpdates) {
+			QGroupBox *updateGroup = StreamUP::UIStyles::CreateStyledGroupBox("Plugin Updates Available", "warning");
+			QVBoxLayout *updateLayout = new QVBoxLayout(updateGroup);
+			updateLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_TINY, 
+				StreamUP::UIStyles::Sizes::SPACING_TINY, 
+				StreamUP::UIStyles::Sizes::SPACING_TINY, 
+				StreamUP::UIStyles::Sizes::SPACING_TINY);
+			
+			QLabel *updateLabel = StreamUP::UIStyles::CreateStyledContent(QString::fromStdString(errorMsgUpdate));
+			updateLayout->addWidget(updateLabel);
+			contentLayout->addWidget(updateGroup);
+		}
+
+		scrollArea->setWidget(contentWidget);
+		dialogLayout->addWidget(scrollArea);
+
+		// Add warning message above buttons if there's a continue callback (meaning this is for install product)
 		if (continueCallback) {
 			QLabel *warningLabel = StreamUP::UIStyles::CreateStyledDescription(
-				"⚠️ Warning: Pressing the button below will prompt you to select a StreamUP file for installation.\n\n"
+				"⚠️ Warning: By pressing continue anyway you will be prompted to select a StreamUP file for installation.\n\n"
 				"Continuing at this stage may result in incomplete functionality or unexpected behavior. "
 				"You may also need to reinstall the StreamUP file after the required plugins are installed."
 			);
@@ -176,44 +218,6 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 			dialogLayout->addWidget(warningLabel);
 		}
 
-		// Create styled scroll area
-		QScrollArea *scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-
-		QWidget *contentWidget = new QWidget();
-		contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
-		QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
-		contentLayout->setContentsMargins(5, 5, 5, 5);
-		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
-
-		if (hasMissing) {
-			QGroupBox *missingGroup = StreamUP::UIStyles::CreateStyledGroupBox("Missing Plugins", "error");
-			QVBoxLayout *missingLayout = new QVBoxLayout(missingGroup);
-			missingLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_SMALL, 
-				StreamUP::UIStyles::Sizes::SPACING_SMALL, 
-				StreamUP::UIStyles::Sizes::SPACING_SMALL, 
-				StreamUP::UIStyles::Sizes::SPACING_SMALL);
-			
-			QLabel *missingLabel = StreamUP::UIStyles::CreateStyledContent(QString::fromStdString(errorMsgMissing));
-			missingLayout->addWidget(missingLabel);
-			contentLayout->addWidget(missingGroup);
-		}
-
-		if (hasUpdates) {
-			QGroupBox *updateGroup = StreamUP::UIStyles::CreateStyledGroupBox("Plugin Updates Available", "warning");
-			QVBoxLayout *updateLayout = new QVBoxLayout(updateGroup);
-			updateLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_SMALL, 
-				StreamUP::UIStyles::Sizes::SPACING_SMALL, 
-				StreamUP::UIStyles::Sizes::SPACING_SMALL, 
-				StreamUP::UIStyles::Sizes::SPACING_SMALL);
-			
-			QLabel *updateLabel = StreamUP::UIStyles::CreateStyledContent(QString::fromStdString(errorMsgUpdate));
-			updateLayout->addWidget(updateLabel);
-			contentLayout->addWidget(updateGroup);
-		}
-
-		scrollArea->setWidget(contentWidget);
-		dialogLayout->addWidget(scrollArea);
-
 		// Add styled buttons
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 		buttonLayout->addStretch();
@@ -228,7 +232,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 			buttonLayout->addWidget(continueButton);
 		}
 		
-		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton("OK", "neutral");
+		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton("OK", "neutral", 30, 100);
 		QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
 		buttonLayout->addWidget(okButton);
 

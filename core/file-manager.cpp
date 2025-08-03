@@ -431,16 +431,14 @@ void LoadStreamupFile(bool forceLoad)
 
 void LoadStreamupFileWithWarning()
 {
-	// Try to check plugins first
-	if (StreamUP::PluginManager::CheckrequiredOBSPlugins(true)) {
+	// Try to check plugins first - use the non-UI version to avoid showing two dialogs
+	if (StreamUP::PluginManager::CheckrequiredOBSPluginsWithoutUI(true)) {
 		// Plugins are OK, proceed normally
 		LoadStreamupFile(false);
 		return;
 	}
 	
-	// Plugins have issues, we need to show the warning dialog with continue option
-	// The CheckrequiredOBSPlugins function will have already shown the PluginsHaveIssue dialog
-	// but without the continue callback. We need to call our own version.
+	// Plugins have issues, show the warning dialog with continue option
 	
 	// Get the plugin check results manually for the warning dialog
 	const std::map<std::string, StreamUP::PluginInfo>& requiredPlugins = StreamUP::GetRequiredPlugins(); 

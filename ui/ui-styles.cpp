@@ -10,6 +10,8 @@
 #include <QTimer>
 #include <QObject>
 #include <QSizePolicy>
+#include <QPropertyAnimation>
+#include <QEasingCurve>
 
 namespace StreamUP {
 namespace UIStyles {
@@ -29,7 +31,7 @@ QString GetTitleLabelStyle() {
         "}")
         .arg(Colors::TEXT_PRIMARY)
         .arg(Sizes::FONT_SIZE_LARGE)
-        .arg(Sizes::SPACING_SMALL);
+        .arg(Sizes::SPACING_TINY);
 }
 
 QString GetDescriptionLabelStyle() {
@@ -42,7 +44,7 @@ QString GetDescriptionLabelStyle() {
         "}")
         .arg(Colors::TEXT_MUTED)
         .arg(Sizes::FONT_SIZE_NORMAL)
-        .arg(Sizes::SPACING_SMALL);
+        .arg(Sizes::SPACING_TINY);
 }
 
 QString GetGroupBoxStyle(const QString& borderColor, const QString& titleColor) {
@@ -188,11 +190,16 @@ QLabel* CreateStyledContent(const QString& text) {
     return label;
 }
 
-QPushButton* CreateStyledButton(const QString& text, const QString& type, int height) {
+QPushButton* CreateStyledButton(const QString& text, const QString& type, int height, int minWidth) {
     QPushButton* button = new QPushButton(text);
     
     // Set size policy to fit content width
     button->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+    
+    // Set minimum width if specified
+    if (minWidth > 0) {
+        button->setMinimumWidth(minWidth);
+    }
     
     QString baseColor, hoverColor;
     if (type == "success") {
@@ -298,6 +305,45 @@ void ApplyScrollAreaContentSizing(QScrollArea* scrollArea, int maxHeight) {
             scrollArea->setMaximumHeight(newHeight);
             scrollArea->setMinimumHeight(qMin(newHeight, 100));
         }
+    });
+}
+
+void ApplyDynamicSizing(QDialog* dialog, int minWidth, int maxWidth, int minHeight, int maxHeight) {
+    // Set initial constraints
+    dialog->setMinimumSize(minWidth, minHeight);
+    dialog->setMaximumSize(maxWidth, maxHeight);
+    
+    // Store original resize behavior
+    dialog->setProperty("dynamicSizing", true);
+    
+    // Calculate optimal size after layout is complete
+    QTimer::singleShot(20, [dialog, minWidth, maxWidth, minHeight, maxHeight]() {
+        // Force layout calculation
+        dialog->layout()->activate();
+        dialog->adjustSize();
+        QSize sizeHint = dialog->sizeHint();
+        
+        // Calculate compact size based on content
+        int targetWidth = qMax(minWidth, qMin(sizeHint.width() + 80, maxWidth));
+        int targetHeight = qMax(minHeight, qMin(sizeHint.height() + 60, maxHeight));
+        
+        // Smooth animation to optimal size
+        QPropertyAnimation* animation = new QPropertyAnimation(dialog, "geometry");
+        animation->setDuration(250);
+        animation->setEasingCurve(QEasingCurve::OutCubic);
+        animation->setStartValue(dialog->geometry());
+        
+        QRect targetGeometry = dialog->geometry();
+        targetGeometry.setSize(QSize(targetWidth, targetHeight));
+        
+        // Center the dialog during resize
+        if (dialog->parentWidget()) {
+            QPoint parentCenter = dialog->parentWidget()->geometry().center();
+            targetGeometry.moveCenter(parentCenter);
+        }
+        
+        animation->setEndValue(targetGeometry);
+        animation->start(QPropertyAnimation::DeleteWhenStopped);
     });
 }
 
