@@ -14,6 +14,8 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QSpacerItem>
+#include <QTimer>
+#include <QSizePolicy>
 
 namespace StreamUP {
 namespace ToolsWindow {
@@ -39,8 +41,11 @@ void ShowToolsWindow()
         
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
         headerLayout->setContentsMargins(0, 0, 0, 0);
+        headerLayout->setProperty("isMainHeaderLayout", true); // Mark for later reference
         
         QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("🛠️ StreamUP Tools");
+        titleLabel->setAlignment(Qt::AlignCenter);
+        titleLabel->setProperty("isMainTitle", true);
         headerLayout->addWidget(titleLabel);
         
         QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription("Powerful tools to manage your OBS setup efficiently");
@@ -82,8 +87,8 @@ void ShowToolsWindow()
         // Lock Current Scene Sources button
         QPushButton* lockCurrentBtn = StreamUP::UIStyles::CreateStyledButton("Lock Current Scene Sources", "info");
         lockCurrentBtn->setMinimumHeight(70);
-        QObject::connect(lockCurrentBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
-            ShowToolDetailInline(scrollArea, contentWidget, "LockAllCurrentSources", 
+        QObject::connect(lockCurrentBtn, &QPushButton::clicked, [dialog, scrollArea, contentWidget]() { 
+            ShowToolDetailInline(dialog, scrollArea, contentWidget, "LockAllCurrentSources", 
                 "LockAllCurrentSourcesInfo1", "LockAllCurrentSourcesInfo2", "LockAllCurrentSourcesInfo3",
                 []() { StreamUP::SourceManager::ToggleLockSourcesInCurrentScene(); },
                 "LockAllCurrentSourcesHowTo1", "LockAllCurrentSourcesHowTo2", 
@@ -93,8 +98,8 @@ void ShowToolsWindow()
         // Lock All Sources button
         QPushButton* lockAllBtn = StreamUP::UIStyles::CreateStyledButton("Lock All Sources", "warning");
         lockAllBtn->setMinimumHeight(70);
-        QObject::connect(lockAllBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
-            ShowToolDetailInline(scrollArea, contentWidget, "LockAllSources", 
+        QObject::connect(lockAllBtn, &QPushButton::clicked, [dialog, scrollArea, contentWidget]() { 
+            ShowToolDetailInline(dialog, scrollArea, contentWidget, "LockAllSources", 
                 "LockAllSourcesInfo1", "LockAllSourcesInfo2", "LockAllSourcesInfo3",
                 []() { StreamUP::SourceManager::ToggleLockAllSources(); },
                 "LockAllSourcesHowTo1", "LockAllSourcesHowTo2", 
@@ -129,8 +134,8 @@ void ShowToolsWindow()
         // Refresh Audio Monitoring button
         QPushButton* audioBtn = StreamUP::UIStyles::CreateStyledButton("Refresh Audio Monitoring", "success");
         audioBtn->setMinimumHeight(70);
-        QObject::connect(audioBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
-            ShowToolDetailInline(scrollArea, contentWidget, "RefreshAudioMonitoring", 
+        QObject::connect(audioBtn, &QPushButton::clicked, [dialog, scrollArea, contentWidget]() { 
+            ShowToolDetailInline(dialog, scrollArea, contentWidget, "RefreshAudioMonitoring", 
                 "RefreshAudioMonitoringInfo1", "RefreshAudioMonitoringInfo2", "RefreshAudioMonitoringInfo3",
                 []() { obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr); },
                 "RefreshAudioMonitoringHowTo1", "RefreshAudioMonitoringHowTo2", 
@@ -140,8 +145,8 @@ void ShowToolsWindow()
         // Refresh Browser Sources button
         QPushButton* browserBtn = StreamUP::UIStyles::CreateStyledButton("Refresh Browser Sources", "error");
         browserBtn->setMinimumHeight(70);
-        QObject::connect(browserBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
-            ShowToolDetailInline(scrollArea, contentWidget, "RefreshBrowserSources", 
+        QObject::connect(browserBtn, &QPushButton::clicked, [dialog, scrollArea, contentWidget]() { 
+            ShowToolDetailInline(dialog, scrollArea, contentWidget, "RefreshBrowserSources", 
                 "RefreshBrowserSourcesInfo1", "RefreshBrowserSourcesInfo2", "RefreshBrowserSourcesInfo3",
                 []() { obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr); },
                 "RefreshBrowserSourcesHowTo1", "RefreshBrowserSourcesHowTo2", 
@@ -159,8 +164,8 @@ void ShowToolsWindow()
         // Manage Video Capture Devices button
         QPushButton* videoBtn = StreamUP::UIStyles::CreateStyledButton("Manage Video Capture Devices", "info");
         videoBtn->setMinimumHeight(70);
-        QObject::connect(videoBtn, &QPushButton::clicked, [scrollArea, contentWidget]() { 
-            ShowVideoDeviceOptionsInline(scrollArea, contentWidget);
+        QObject::connect(videoBtn, &QPushButton::clicked, [dialog, scrollArea, contentWidget]() { 
+            ShowVideoDeviceOptionsInline(dialog, scrollArea, contentWidget);
         });
         
         // Add spacer, button, spacer to center the video button
@@ -348,10 +353,63 @@ void ShowVideoDeviceOptions(QDialog* parentDialog)
     optionsDialog->exec();
 }
 
-void ShowVideoDeviceOptionsInline(QScrollArea* scrollArea, QWidget* originalContent)
+void ShowVideoDeviceOptionsInline(QDialog* parentDialog, QScrollArea* scrollArea, QWidget* originalContent)
 {
     // Store the current widget temporarily
     QWidget* currentWidget = scrollArea->takeWidget();
+    
+    // Find and update the main header with back button
+    if (parentDialog) {
+        QLabel* mainTitle = parentDialog->findChild<QLabel*>();
+        if (mainTitle && mainTitle->property("isMainTitle").toBool()) {
+            
+            // Get the header widget
+            QWidget* headerWidget = qobject_cast<QWidget*>(mainTitle->parent());
+            if (headerWidget) {
+                QVBoxLayout* headerLayout = qobject_cast<QVBoxLayout*>(headerWidget->layout());
+                if (headerLayout && headerLayout->property("isMainHeaderLayout").toBool()) {
+                    
+                    // Create back button with compact sizing
+                    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back", "neutral");
+                    backButton->setParent(headerWidget);
+                    backButton->setProperty("isBackButton", true);
+                    
+                    // Set explicit size to prevent stretching
+                    backButton->setFixedSize(80, 30);
+                    backButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+                    
+                    backButton->show();
+                    
+                    // Position back button absolutely on the left
+                    backButton->move(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+                                   (headerWidget->height() - backButton->height()) / 2);
+                    
+                    QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, parentDialog, backButton, headerLayout]() {
+                        // Remove back button
+                        if (backButton) {
+                            backButton->hide();
+                            backButton->deleteLater();
+                        }
+                        
+                        // Restore original content
+                        QWidget* currentWidget = scrollArea->takeWidget();
+                        if (currentWidget) {
+                            currentWidget->deleteLater();
+                        }
+                        scrollArea->setWidget(originalContent);
+                    });
+                    
+                    // Ensure back button is positioned correctly after layout updates
+                    QTimer::singleShot(10, [backButton, headerWidget]() {
+                        if (backButton && headerWidget) {
+                            backButton->move(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+                                           (headerWidget->height() - backButton->height()) / 2);
+                        }
+                    });
+                }
+            }
+        }
+    }
     
     // Create replacement content widget
     QWidget* optionsWidget = new QWidget();
@@ -361,31 +419,17 @@ void ShowVideoDeviceOptionsInline(QScrollArea* scrollArea, QWidget* originalCont
         StreamUP::UIStyles::Sizes::PADDING_XL, 
         StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
         StreamUP::UIStyles::Sizes::PADDING_XL);
-    optionsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+    optionsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM); // Reduce spacing
     
-    // Back button and title section
-    QHBoxLayout* headerLayout = new QHBoxLayout();
-    
-    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back to Tools", "neutral");
-    QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, optionsWidget]() {
-        // Safely switch back to original content
-        scrollArea->takeWidget(); // Remove current widget
-        scrollArea->setWidget(originalContent);
-        optionsWidget->deleteLater(); // Schedule for deletion
-    });
-    
-    headerLayout->addWidget(backButton);
-    headerLayout->addStretch();
-    
-    optionsLayout->addLayout(headerLayout);
-    
-    // Title
+    // Title and description - closer together
     QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("🎥 Video Capture Device Management");
     optionsLayout->addWidget(titleLabel);
     
-    // Description
-    QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription("Choose an action to perform on all video capture devices in your scenes:");
+    QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription("Choose an action to perform on all video capture devices in your scenes");
     optionsLayout->addWidget(descLabel);
+    
+    // Reduce spacing after header
+    optionsLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
     
     // Options group
     QGroupBox* optionsGroup = StreamUP::UIStyles::CreateStyledGroupBox("Device Actions", "info");
@@ -436,13 +480,72 @@ void ShowVideoDeviceOptionsInline(QScrollArea* scrollArea, QWidget* originalCont
     scrollArea->setWidget(optionsWidget);
 }
 
-void ShowToolDetailInline(QScrollArea* scrollArea, QWidget* originalContent, const char* titleKey,
+void ShowToolDetailInline(QDialog* parentDialog, QScrollArea* scrollArea, QWidget* originalContent, const char* titleKey,
                          const char* info1Key, const char* info2Key, const char* info3Key,
                          std::function<void()> action, const char* howTo1Key, const char* howTo2Key,
                          const char* howTo3Key, const char* howTo4Key, const char* websocketCommand)
 {
     // Store the current widget temporarily
     QWidget* currentWidget = scrollArea->takeWidget();
+    
+    QString titleStr = obs_module_text(titleKey);
+    
+    // Find and update the main header with back button
+    if (parentDialog) {
+        QLabel* mainTitle = parentDialog->findChild<QLabel*>();
+        if (mainTitle && mainTitle->property("isMainTitle").toBool()) {
+            
+            // Get the header widget
+            QWidget* headerWidget = qobject_cast<QWidget*>(mainTitle->parent());
+            if (headerWidget) {
+                QVBoxLayout* headerLayout = qobject_cast<QVBoxLayout*>(headerWidget->layout());
+                if (headerLayout && headerLayout->property("isMainHeaderLayout").toBool()) {
+                    
+                    // Create back button with compact sizing
+                    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back", "neutral");
+                    backButton->setParent(headerWidget);
+                    backButton->setProperty("isBackButton", true);
+                    
+                    // Set explicit size to prevent stretching
+                    backButton->setFixedSize(80, 30);
+                    backButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+                    
+                    backButton->show();
+                    
+                    // Position back button absolutely on the left
+                    backButton->move(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+                                   (headerWidget->height() - backButton->height()) / 2);
+                    
+                    QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, parentDialog, backButton, headerLayout]() {
+                        // Remove back button
+                        if (backButton) {
+                            backButton->hide();
+                            backButton->deleteLater();
+                        }
+                        
+                        // Don't remove original subtitle - preserve it
+                        
+                        // Restore original content
+                        QWidget* currentWidget = scrollArea->takeWidget();
+                        if (currentWidget) {
+                            currentWidget->deleteLater();
+                        }
+                        scrollArea->setWidget(originalContent);
+                    });
+                    
+                    // Don't modify the original subtitle - preserve "Powerful tools to manage your OBS setup efficiently"
+                    
+                    // Ensure back button is positioned correctly after layout updates
+                    QTimer::singleShot(10, [backButton, headerWidget]() {
+                        if (backButton && headerWidget) {
+                            backButton->move(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+                                           (headerWidget->height() - backButton->height()) / 2);
+                        }
+                    });
+                }
+            }
+        }
+    }
     
     // Create replacement content widget
     QWidget* detailWidget = new QWidget();
@@ -452,28 +555,18 @@ void ShowToolDetailInline(QScrollArea* scrollArea, QWidget* originalContent, con
         StreamUP::UIStyles::Sizes::PADDING_XL, 
         StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
         StreamUP::UIStyles::Sizes::PADDING_XL);
-    detailLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+    detailLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM); // Reduce spacing
     
-    // Back button and title section
-    QHBoxLayout* headerLayout = new QHBoxLayout();
-    
-    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back to Tools", "neutral");
-    QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, detailWidget]() {
-        // Safely switch back to original content
-        scrollArea->takeWidget(); // Remove current widget
-        scrollArea->setWidget(originalContent);
-        detailWidget->deleteLater(); // Schedule for deletion
-    });
-    
-    headerLayout->addWidget(backButton);
-    headerLayout->addStretch();
-    
-    detailLayout->addLayout(headerLayout);
-    
-    // Title
-    QString titleStr = obs_module_text(titleKey);
-    QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("🛠️ " + titleStr);
+    // Title and description - closer together
+    QString toolTitle = obs_module_text(titleKey);
+    QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("🛠️ " + toolTitle);
     detailLayout->addWidget(titleLabel);
+    
+    QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription("Detailed information and execution options for this tool");
+    detailLayout->addWidget(descLabel);
+    
+    // Reduce spacing after header
+    detailLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
     
     // Main info section
     QGroupBox* infoGroup = StreamUP::UIStyles::CreateStyledGroupBox("Tool Information", "info");

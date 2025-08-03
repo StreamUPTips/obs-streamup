@@ -36,13 +36,15 @@ void ShowVideoDeviceOptions(QDialog* parentDialog);
 
 /**
  * @brief Shows video device management options inline within the same window
+ * @param parentDialog The parent dialog for header modification
  * @param scrollArea The scroll area to replace content in
  * @param originalContent The original content widget to restore later
  */
-void ShowVideoDeviceOptionsInline(QScrollArea* scrollArea, QWidget* originalContent);
+void ShowVideoDeviceOptionsInline(QDialog* parentDialog, QScrollArea* scrollArea, QWidget* originalContent);
 
 /**
  * @brief Shows tool detail view inline within the same window
+ * @param parentDialog The parent dialog for header modification
  * @param scrollArea The scroll area to replace content in
  * @param originalContent The original content widget to restore later
  * @param titleKey The localization key for the tool title
@@ -55,7 +57,7 @@ void ShowVideoDeviceOptionsInline(QScrollArea* scrollArea, QWidget* originalCont
  * @param howTo3Key How-to step 3 localization key
  * @param howTo4Key How-to step 4 localization key
  */
-void ShowToolDetailInline(QScrollArea* scrollArea, QWidget* originalContent, const char* titleKey,
+void ShowToolDetailInline(QDialog* parentDialog, QScrollArea* scrollArea, QWidget* originalContent, const char* titleKey,
                          const char* info1Key, const char* info2Key, const char* info3Key,
                          std::function<void()> action, const char* howTo1Key, const char* howTo2Key,
                          const char* howTo3Key, const char* howTo4Key, const char* websocketCommand = nullptr);
