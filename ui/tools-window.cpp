@@ -22,8 +22,9 @@ void ShowToolsWindow()
 {
     StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP Tools");
-        dialog->resize(900, 650);
-        dialog->setMinimumSize(800, 550);
+        
+        // Start with compact size - will expand based on content
+        dialog->resize(600, 450);
         
         QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
         mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -194,6 +195,9 @@ void ShowToolsWindow()
         mainLayout->addWidget(buttonWidget);
 
         dialog->setLayout(mainLayout);
+        
+        // Apply dynamic sizing for tools window
+        StreamUP::UIStyles::ApplyDynamicSizing(dialog, 600, 1000, 450, 700);
         dialog->show();
     });
 }

@@ -128,7 +128,9 @@ void ShowSettingsDialog()
         }
 
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsTitle"));
-        dialog->setFixedSize(900, 650);
+        
+        // Start with compact initial size - will expand based on content
+        dialog->resize(500, 400);
         
         QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
         mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -245,9 +247,9 @@ void ShowSettingsDialog()
 
         QPushButton* pluginButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsViewInstalledPlugins"), "info");
         
-        // Connect plugin button to show plugins inline
-        QObject::connect(pluginButton, &QPushButton::clicked, [scrollArea, contentWidget]() {
-            ShowInstalledPluginsInline(scrollArea, contentWidget);
+        // Connect plugin button to show plugins inline with dynamic sizing
+        QObject::connect(pluginButton, &QPushButton::clicked, [dialog, scrollArea, contentWidget]() {
+            StreamUP::SettingsManager::ShowInstalledPluginsInline(scrollArea, contentWidget, dialog);
         });
         
         QHBoxLayout* pluginButtonLayout = new QHBoxLayout();
@@ -297,6 +299,8 @@ void ShowSettingsDialog()
             obs_properties_destroy(props);
         });
 
+        // Apply dynamic sizing that hugs content with smooth transitions
+        StreamUP::UIStyles::ApplyDynamicSizing(dialog, 500, 900, 400, 650);
         dialog->show();
     });
 }
@@ -316,7 +320,7 @@ void SetNotificationsMuted(bool muted)
     UpdateSettings(settings);
 }
 
-void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalContent)
+void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalContent, QDialog* parentDialog)
 {
     // Store the current widget temporarily
     QWidget* currentWidget = scrollArea->takeWidget();
@@ -335,11 +339,16 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
     QHBoxLayout* headerLayout = new QHBoxLayout();
     
     QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back to Settings", "neutral");
-    QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, pluginsWidget]() {
+    QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, pluginsWidget, parentDialog]() {
         // Safely switch back to original content
         scrollArea->takeWidget(); // Remove current widget
         scrollArea->setWidget(originalContent);
         pluginsWidget->deleteLater(); // Schedule for deletion
+        
+        // Resize dialog back to compact settings size if available
+        if (parentDialog && parentDialog->property("dynamicSizing").toBool()) {
+            StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 500, 900, 400, 650);
+        }
     });
     
     headerLayout->addWidget(backButton);
@@ -468,6 +477,11 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
     
     // Replace the content in the scroll area
     scrollArea->setWidget(pluginsWidget);
+    
+    // Expand dialog to accommodate plugin content if available
+    if (parentDialog && parentDialog->property("dynamicSizing").toBool()) {
+        StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 700, 1000, 500, 750);
+    }
 }
 
 void ShowInstalledPluginsPage()

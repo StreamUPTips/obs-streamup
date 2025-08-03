@@ -6,6 +6,7 @@
 // Forward declarations
 class QScrollArea;
 class QWidget;
+class QDialog;
 
 namespace StreamUP {
 namespace SettingsManager {
@@ -71,8 +72,9 @@ void SetNotificationsMuted(bool muted);
  * @brief Show the installed plugins page inline within the same window
  * @param scrollArea The scroll area to replace content in
  * @param originalContent The original content widget to restore later
+ * @param parentDialog Optional parent dialog for dynamic resizing
  */
-void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalContent);
+void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalContent, QDialog* parentDialog = nullptr);
 
 /**
  * @brief Show the installed plugins page in a separate window

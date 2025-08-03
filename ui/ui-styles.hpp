@@ -81,7 +81,7 @@ QDialog* CreateStyledDialog(const QString& title);
 QLabel* CreateStyledTitle(const QString& text);
 QLabel* CreateStyledDescription(const QString& text);
 QLabel* CreateStyledContent(const QString& text);
-QPushButton* CreateStyledButton(const QString& text, const QString& type = "neutral", int height = 30);
+QPushButton* CreateStyledButton(const QString& text, const QString& type = "neutral", int height = 30, int minWidth = 0);
 QGroupBox* CreateStyledGroupBox(const QString& title, const QString& type = "info");
 QScrollArea* CreateStyledScrollArea();
 
@@ -89,6 +89,7 @@ QScrollArea* CreateStyledScrollArea();
 void ApplyAutoSizing(QDialog* dialog, int minWidth = 700, int maxWidth = 900, int minHeight = 150, int maxHeight = 600);
 void ApplyContentBasedSizing(QDialog* dialog);
 void ApplyScrollAreaContentSizing(QScrollArea* scrollArea, int maxHeight = 300);
+void ApplyDynamicSizing(QDialog* dialog, int minWidth = 500, int maxWidth = 900, int minHeight = 400, int maxHeight = 650);
 
 } // namespace UIStyles
 } // namespace StreamUP
