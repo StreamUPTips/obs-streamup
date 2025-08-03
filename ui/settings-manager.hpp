@@ -81,6 +81,14 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
  */
 void ShowInstalledPluginsPage();
 
+/**
+ * @brief Show the hotkeys management page inline within the same window
+ * @param scrollArea The scroll area to replace content in
+ * @param originalContent The original content widget to restore later
+ * @param parentDialog Optional parent dialog for dynamic resizing
+ */
+void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialog* parentDialog = nullptr);
+
 } // namespace SettingsManager
 } // namespace StreamUP
 

@@ -127,6 +127,32 @@ void RegisterHotkeys();
  */
 void UnregisterHotkeys();
 
+/**
+ * Reset all StreamUP hotkeys to have no key combinations assigned
+ */
+void ResetAllHotkeys();
+
+/**
+ * Get the current hotkey combination for a specific StreamUP hotkey
+ * @param hotkeyName The OBS hotkey name (e.g., "streamup_refresh_browser_sources")
+ * @return obs_data_array_t* Array containing the current key combination (caller must release)
+ */
+obs_data_array_t* GetHotkeyBinding(const char* hotkeyName);
+
+/**
+ * Set a hotkey combination for a specific StreamUP hotkey
+ * @param hotkeyName The OBS hotkey name (e.g., "streamup_refresh_browser_sources") 
+ * @param keyData Array containing the key combination to set
+ */
+void SetHotkeyBinding(const char* hotkeyName, obs_data_array_t* keyData);
+
+/**
+ * Get the hotkey ID for a given hotkey name
+ * @param hotkeyName The OBS hotkey name (e.g., "streamup_refresh_browser_sources")
+ * @return obs_hotkey_id The corresponding hotkey ID, or OBS_INVALID_HOTKEY_ID if not found
+ */
+obs_hotkey_id GetHotkeyId(const char* hotkeyName);
+
 } // namespace HotkeyManager
 } // namespace StreamUP
 

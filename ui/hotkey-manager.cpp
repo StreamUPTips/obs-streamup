@@ -250,6 +250,18 @@ void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 		hotkeySaveArray = obs_hotkey_save(open_scene_filters_hotkey_id);
 		obs_data_set_array(save_data, "open_scene_filters_hotkey", hotkeySaveArray);
 		obs_data_array_release(hotkeySaveArray);
+
+		hotkeySaveArray = obs_hotkey_save(activate_video_capture_devices_hotkey_id);
+		obs_data_set_array(save_data, "activate_video_capture_devices_hotkey", hotkeySaveArray);
+		obs_data_array_release(hotkeySaveArray);
+
+		hotkeySaveArray = obs_hotkey_save(deactivate_video_capture_devices_hotkey_id);
+		obs_data_set_array(save_data, "deactivate_video_capture_devices_hotkey", hotkeySaveArray);
+		obs_data_array_release(hotkeySaveArray);
+
+		hotkeySaveArray = obs_hotkey_save(refresh_video_capture_devices_hotkey_id);
+		obs_data_set_array(save_data, "refresh_video_capture_devices_hotkey", hotkeySaveArray);
+		obs_data_array_release(hotkeySaveArray);
 	} else {
 		// load hotkeys
 		obs_data_array_t *hotkeyLoadArray;
@@ -284,6 +296,18 @@ void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 
 		hotkeyLoadArray = obs_data_get_array(save_data, "open_scene_filters_hotkey");
 		obs_hotkey_load(open_scene_filters_hotkey_id, hotkeyLoadArray);
+		obs_data_array_release(hotkeyLoadArray);
+
+		hotkeyLoadArray = obs_data_get_array(save_data, "activate_video_capture_devices_hotkey");
+		obs_hotkey_load(activate_video_capture_devices_hotkey_id, hotkeyLoadArray);
+		obs_data_array_release(hotkeyLoadArray);
+
+		hotkeyLoadArray = obs_data_get_array(save_data, "deactivate_video_capture_devices_hotkey");
+		obs_hotkey_load(deactivate_video_capture_devices_hotkey_id, hotkeyLoadArray);
+		obs_data_array_release(hotkeyLoadArray);
+
+		hotkeyLoadArray = obs_data_get_array(save_data, "refresh_video_capture_devices_hotkey");
+		obs_hotkey_load(refresh_video_capture_devices_hotkey_id, hotkeyLoadArray);
 		obs_data_array_release(hotkeyLoadArray);
 	}
 }
@@ -328,6 +352,83 @@ void UnregisterHotkeys()
 	obs_hotkey_unregister(activate_video_capture_devices_hotkey_id);
 	obs_hotkey_unregister(deactivate_video_capture_devices_hotkey_id);
 	obs_hotkey_unregister(refresh_video_capture_devices_hotkey_id);
+}
+
+void ResetAllHotkeys()
+{
+	// Create empty data arrays to clear hotkey assignments
+	obs_data_array_t *emptyArray = obs_data_array_create();
+	
+	// Reset all StreamUP hotkeys to empty assignments
+	obs_hotkey_load(refresh_browser_sources_hotkey_id, emptyArray);
+	obs_hotkey_load(refresh_audio_monitoring_hotkey_id, emptyArray);
+	obs_hotkey_load(lock_all_sources_hotkey_id, emptyArray);
+	obs_hotkey_load(lock_current_sources_hotkey_id, emptyArray);
+	obs_hotkey_load(open_source_properties_hotkey_id, emptyArray);
+	obs_hotkey_load(open_source_filters_hotkey_id, emptyArray);
+	obs_hotkey_load(open_source_interact_hotkey_id, emptyArray);
+	obs_hotkey_load(open_scene_filters_hotkey_id, emptyArray);
+	obs_hotkey_load(activate_video_capture_devices_hotkey_id, emptyArray);
+	obs_hotkey_load(deactivate_video_capture_devices_hotkey_id, emptyArray);
+	obs_hotkey_load(refresh_video_capture_devices_hotkey_id, emptyArray);
+	
+	obs_data_array_release(emptyArray);
+	
+	blog(LOG_INFO, "[StreamUP] All hotkeys have been reset to no key assignments");
+}
+
+obs_hotkey_id GetHotkeyId(const char* hotkeyName)
+{
+	if (strcmp(hotkeyName, "streamup_refresh_browser_sources") == 0)
+		return refresh_browser_sources_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_refresh_audio_monitoring") == 0)
+		return refresh_audio_monitoring_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_lock_all_sources") == 0)
+		return lock_all_sources_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_lock_current_sources") == 0)
+		return lock_current_sources_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_open_source_properties") == 0)
+		return open_source_properties_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_open_source_filters") == 0)
+		return open_source_filters_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_open_source_interact") == 0)
+		return open_source_interact_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_open_scene_filters") == 0)
+		return open_scene_filters_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_activate_video_capture_devices") == 0)
+		return activate_video_capture_devices_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_deactivate_video_capture_devices") == 0)
+		return deactivate_video_capture_devices_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_refresh_video_capture_devices") == 0)
+		return refresh_video_capture_devices_hotkey_id;
+	
+	return OBS_INVALID_HOTKEY_ID;
+}
+
+obs_data_array_t* GetHotkeyBinding(const char* hotkeyName)
+{
+	obs_hotkey_id hotkeyId = GetHotkeyId(hotkeyName);
+	if (hotkeyId == OBS_INVALID_HOTKEY_ID) {
+		blog(LOG_WARNING, "[StreamUP] Invalid hotkey name: %s", hotkeyName);
+		return nullptr;
+	}
+	
+	return obs_hotkey_save(hotkeyId);
+}
+
+void SetHotkeyBinding(const char* hotkeyName, obs_data_array_t* keyData) 
+{
+	obs_hotkey_id hotkeyId = GetHotkeyId(hotkeyName);
+	if (hotkeyId == OBS_INVALID_HOTKEY_ID) {
+		blog(LOG_WARNING, "[StreamUP] Invalid hotkey name: %s", hotkeyName);
+		return;
+	}
+	
+	obs_hotkey_load(hotkeyId, keyData);
+	blog(LOG_INFO, "[StreamUP] Updated hotkey binding for: %s", hotkeyName);
+	
+	// Force OBS to save the scene collection to persist hotkey changes
+	obs_frontend_save();
 }
 
 } // namespace HotkeyManager
