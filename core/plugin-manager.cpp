@@ -23,6 +23,7 @@
 #include <QPushButton>
 #include <QObject>
 #include <QTimer>
+#include <QSizePolicy>
 #include <fstream>
 #include <iostream>
 #include <regex>
@@ -127,6 +128,10 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
 		
+		// Set larger minimum size to accommodate expanded boxes
+		dialog->setMinimumSize(600, 400);
+		dialog->resize(700, 500);
+		
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 		dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
 			StreamUP::UIStyles::Sizes::PADDING_SMALL, 
@@ -152,46 +157,61 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 		dialogLayout->addWidget(descLabel);
 
 
-		// Create styled scroll area
-		QScrollArea *scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-
-		QWidget *contentWidget = new QWidget();
-		contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
-		QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
+		// Content area - direct layout without main scrolling
+		QVBoxLayout *contentLayout = new QVBoxLayout();
 		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_TINY, 
 			StreamUP::UIStyles::Sizes::SPACING_TINY, 
 			StreamUP::UIStyles::Sizes::SPACING_TINY, 
 			StreamUP::UIStyles::Sizes::SPACING_TINY);
 		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
+		
+		dialogLayout->addLayout(contentLayout);
 
 		if (hasMissing) {
-			QGroupBox *missingGroup = StreamUP::UIStyles::CreateStyledGroupBox("Missing Plugins", "error");
-			QVBoxLayout *missingLayout = new QVBoxLayout(missingGroup);
-			missingLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_TINY, 
-				StreamUP::UIStyles::Sizes::SPACING_TINY, 
-				StreamUP::UIStyles::Sizes::SPACING_TINY, 
-				StreamUP::UIStyles::Sizes::SPACING_TINY);
+			// Create expandable GroupBox with internal scrolling
+			QGroupBox *missingGroup = StreamUP::UIStyles::CreateStyledGroupBox("Missing", "error");
+			missingGroup->setMinimumWidth(500);
+			missingGroup->setMinimumHeight(150);
+			// Let it expand to fill available space
+			missingGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 			
+			QVBoxLayout *missingLayout = new QVBoxLayout(missingGroup);
+			missingLayout->setContentsMargins(8, 20, 8, 8);
+			
+			// ScrollArea goes INSIDE the GroupBox
+			QScrollArea *missingScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 			QLabel *missingLabel = StreamUP::UIStyles::CreateStyledContent(QString::fromStdString(errorMsgMissing));
-			missingLayout->addWidget(missingLabel);
+			missingScrollArea->setWidget(missingLabel);
+			missingScrollArea->setStyleSheet(missingScrollArea->styleSheet() + 
+				"QScrollArea { background: transparent; border: none; }");
+			
+			missingLayout->addWidget(missingScrollArea);
 			contentLayout->addWidget(missingGroup);
 		}
 
 		if (hasUpdates) {
-			QGroupBox *updateGroup = StreamUP::UIStyles::CreateStyledGroupBox("Plugin Updates Available", "warning");
-			QVBoxLayout *updateLayout = new QVBoxLayout(updateGroup);
-			updateLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_TINY, 
-				StreamUP::UIStyles::Sizes::SPACING_TINY, 
-				StreamUP::UIStyles::Sizes::SPACING_TINY, 
-				StreamUP::UIStyles::Sizes::SPACING_TINY);
+			// Create expandable GroupBox with internal scrolling
+			QGroupBox *updateGroup = StreamUP::UIStyles::CreateStyledGroupBox("Updates Available", "warning");
+			updateGroup->setMinimumWidth(500);
+			updateGroup->setMinimumHeight(150);
+			// Let it expand to fill available space
+			updateGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 			
+			QVBoxLayout *updateLayout = new QVBoxLayout(updateGroup);
+			updateLayout->setContentsMargins(8, 20, 8, 8);
+			
+			// ScrollArea goes INSIDE the GroupBox
+			QScrollArea *updateScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 			QLabel *updateLabel = StreamUP::UIStyles::CreateStyledContent(QString::fromStdString(errorMsgUpdate));
-			updateLayout->addWidget(updateLabel);
+			updateScrollArea->setWidget(updateLabel);
+			updateScrollArea->setStyleSheet(updateScrollArea->styleSheet() + 
+				"QScrollArea { background: transparent; border: none; }");
+			
+			updateLayout->addWidget(updateScrollArea);
 			contentLayout->addWidget(updateGroup);
 		}
 
-		scrollArea->setWidget(contentWidget);
-		dialogLayout->addWidget(scrollArea);
+		// Content is now directly in the dialog layout
 
 		// Add warning message above buttons if there's a continue callback (meaning this is for install product)
 		if (continueCallback) {

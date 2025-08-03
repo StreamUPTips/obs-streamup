@@ -14,6 +14,8 @@
 #include <QSpacerItem>
 #include <QGroupBox>
 #include <QScrollArea>
+#include <QTimer>
+#include <QSizePolicy>
 #include <util/platform.h>
 
 // Forward declarations for functions that may need to be moved from streamup.cpp
@@ -145,8 +147,11 @@ void ShowSettingsDialog()
         
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
         headerLayout->setContentsMargins(0, 0, 0, 0);
+        headerLayout->setProperty("isMainHeaderLayout", true); // Mark for later reference
         
         QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("⚙️ Settings");
+        titleLabel->setAlignment(Qt::AlignCenter);
+        titleLabel->setProperty("isMainTitle", true);
         headerLayout->addWidget(titleLabel);
         
         mainLayout->addWidget(headerWidget);
@@ -325,6 +330,68 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
     // Store the current widget temporarily
     QWidget* currentWidget = scrollArea->takeWidget();
     
+    // Find and update the main header with back button
+    if (parentDialog) {
+        QLabel* mainTitle = parentDialog->findChild<QLabel*>();
+        if (mainTitle && mainTitle->property("isMainTitle").toBool()) {
+            
+            // Get the header widget
+            QWidget* headerWidget = qobject_cast<QWidget*>(mainTitle->parent());
+            if (headerWidget) {
+                QVBoxLayout* headerLayout = qobject_cast<QVBoxLayout*>(headerWidget->layout());
+                if (headerLayout && headerLayout->property("isMainHeaderLayout").toBool()) {
+                    
+                    // Create back button with compact sizing
+                    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back", "neutral");
+                    backButton->setParent(headerWidget);
+                    backButton->setProperty("isBackButton", true);
+                    
+                    // Set explicit size to prevent stretching
+                    backButton->setFixedSize(80, 30);
+                    backButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+                    
+                    backButton->show();
+                    
+                    // Position back button absolutely on the left
+                    backButton->move(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+                                   (headerWidget->height() - backButton->height()) / 2);
+                    
+                    QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, parentDialog, backButton, headerLayout]() {
+                        // Remove back button
+                        if (backButton) {
+                            backButton->hide();
+                            backButton->deleteLater();
+                        }
+                        
+                        // No subtitle cleanup needed since we don't add one
+                        
+                        // Restore original content
+                        QWidget* currentWidget = scrollArea->takeWidget();
+                        if (currentWidget) {
+                            currentWidget->deleteLater();
+                        }
+                        scrollArea->setWidget(originalContent);
+                        
+                        // Resize dialog back to compact settings size
+                        if (parentDialog && parentDialog->property("dynamicSizing").toBool()) {
+                            StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 500, 900, 400, 650);
+                        }
+                    });
+                    
+                    // Don't add subtitle to header - it will be in the content area instead
+                    
+                    // Ensure back button is positioned correctly after layout updates
+                    QTimer::singleShot(10, [backButton, headerWidget]() {
+                        if (backButton && headerWidget) {
+                            backButton->move(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+                                           (headerWidget->height() - backButton->height()) / 2);
+                        }
+                    });
+                }
+            }
+        }
+    }
+    
     // Create replacement content widget
     QWidget* pluginsWidget = new QWidget();
     pluginsWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
@@ -335,36 +402,17 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
         StreamUP::UIStyles::Sizes::PADDING_XL);
     pluginsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
     
-    // Back button and title section
-    QHBoxLayout* headerLayout = new QHBoxLayout();
-    
-    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back to Settings", "neutral");
-    QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, pluginsWidget, parentDialog]() {
-        // Safely switch back to original content
-        scrollArea->takeWidget(); // Remove current widget
-        scrollArea->setWidget(originalContent);
-        pluginsWidget->deleteLater(); // Schedule for deletion
-        
-        // Resize dialog back to compact settings size if available
-        if (parentDialog && parentDialog->property("dynamicSizing").toBool()) {
-            StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 500, 900, 400, 650);
-        }
-    });
-    
-    headerLayout->addWidget(backButton);
-    headerLayout->addStretch();
-    
-    pluginsLayout->addLayout(headerLayout);
-    
-    // Title
+    // Title and description - closer together
     QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("🔌 Installed Plugins");
     pluginsLayout->addWidget(titleLabel);
     
-    // Description
     QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription("Overview of plugins detected by StreamUP's update checker");
     pluginsLayout->addWidget(descLabel);
     
-    // Info section - more compact
+    // Reduce spacing after header
+    pluginsLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+    
+    // Info section - fit to UI width
     QLabel* infoLabel = new QLabel("Plugins are tracked for updates and categorized by compatibility with our service.");
     infoLabel->setStyleSheet(QString(
         "QLabel {"
@@ -420,20 +468,22 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
         .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2));
     compatiblePluginsList->setWordWrap(true);
 
-    QGroupBox* compatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("✅ Compatible Plugins", "success");
+    // Create GroupBox with prioritized width and internal scrolling
+    QGroupBox* compatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("✅ Compatible", "success");
+    compatiblePluginsBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    compatiblePluginsBox->setMinimumWidth(300);
+    compatiblePluginsBox->setMaximumHeight(300);
     
     QVBoxLayout* compatiblePluginsBoxLayout = new QVBoxLayout(compatiblePluginsBox);
-    compatiblePluginsBoxLayout->setContentsMargins(0, 12, 0, 8);
-    compatiblePluginsBoxLayout->addWidget(compatiblePluginsList);
-
-    QScrollArea* compatibleScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-    compatibleScrollArea->setWidget(compatiblePluginsBox);
-    compatibleScrollArea->setMinimumWidth(300);
-    compatibleScrollArea->setStyleSheet(compatibleScrollArea->styleSheet() + 
-        "QScrollArea { background: transparent; }");
+    compatiblePluginsBoxLayout->setContentsMargins(8, 20, 8, 8);
     
-    // Apply content-based sizing to minimize blank space
-    StreamUP::UIStyles::ApplyScrollAreaContentSizing(compatibleScrollArea, 250);
+    // ScrollArea goes INSIDE the GroupBox
+    QScrollArea* compatibleScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+    compatibleScrollArea->setWidget(compatiblePluginsList);
+    compatibleScrollArea->setStyleSheet(compatibleScrollArea->styleSheet() + 
+        "QScrollArea { background: transparent; border: none; }");
+    
+    compatiblePluginsBoxLayout->addWidget(compatibleScrollArea);
 
     QLabel* incompatiblePluginsList = new QLabel;
     char* filePath = GetFilePath();
@@ -452,25 +502,27 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
         .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2));
     incompatiblePluginsList->setWordWrap(true);
 
-    QGroupBox* incompatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("⚠️ Incompatible Plugins", "error");
+    // Create GroupBox with smaller fixed width for incompatible
+    QGroupBox* incompatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("⚠️ Incompatible", "error");
+    incompatiblePluginsBox->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    incompatiblePluginsBox->setFixedWidth(200);
+    incompatiblePluginsBox->setMaximumHeight(300);
     
     QVBoxLayout* incompatiblePluginsBoxLayout = new QVBoxLayout(incompatiblePluginsBox);
-    incompatiblePluginsBoxLayout->setContentsMargins(0, 12, 0, 8);
-    incompatiblePluginsBoxLayout->addWidget(incompatiblePluginsList);
-
-    QScrollArea* incompatibleScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-    incompatibleScrollArea->setWidget(incompatiblePluginsBox);
-    incompatibleScrollArea->setMinimumWidth(300);
-    incompatibleScrollArea->setStyleSheet(incompatibleScrollArea->styleSheet() + 
-        "QScrollArea { background: transparent; }");
+    incompatiblePluginsBoxLayout->setContentsMargins(8, 20, 8, 8);
     
-    // Apply content-based sizing to minimize blank space
-    StreamUP::UIStyles::ApplyScrollAreaContentSizing(incompatibleScrollArea, 250);
+    // ScrollArea goes INSIDE the GroupBox
+    QScrollArea* incompatibleScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+    incompatibleScrollArea->setWidget(incompatiblePluginsList);
+    incompatibleScrollArea->setStyleSheet(incompatibleScrollArea->styleSheet() + 
+        "QScrollArea { background: transparent; border: none; }");
+    
+    incompatiblePluginsBoxLayout->addWidget(incompatibleScrollArea);
 
     QHBoxLayout* pluginBoxesLayout = new QHBoxLayout();
     pluginBoxesLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-    pluginBoxesLayout->addWidget(compatibleScrollArea);
-    pluginBoxesLayout->addWidget(incompatibleScrollArea);
+    pluginBoxesLayout->addWidget(compatiblePluginsBox, 3); // Give compatible box more space
+    pluginBoxesLayout->addWidget(incompatiblePluginsBox, 1); // Give incompatible box less space
 
     pluginsLayout->addLayout(pluginBoxesLayout);
     pluginsLayout->addStretch();
@@ -490,7 +542,9 @@ void ShowInstalledPluginsPage()
         auto installedPlugins = StreamUP::PluginManager::GetInstalledPlugins();
 
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsInstalledPlugins"));
-        dialog->setMinimumSize(650, 400);
+        
+        // Start compact and let it grow based on content
+        dialog->resize(650, 400);
         
         QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
         mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -514,17 +568,17 @@ void ShowInstalledPluginsPage()
         
         mainLayout->addWidget(headerWidget);
 
-        // Content area
-        QWidget* contentWidget = new QWidget();
-        contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
-        QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
+        // Content area - direct layout without scrolling
+        QVBoxLayout* contentLayout = new QVBoxLayout();
         contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
             StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
             StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
             StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
         contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        
+        mainLayout->addLayout(contentLayout);
 
-        // Info section - more compact
+        // Info section - fit to UI width
         QLabel* infoLabel = new QLabel("Plugins are tracked for updates and categorized by compatibility with our service.");
         infoLabel->setStyleSheet(QString(
             "QLabel {"
@@ -578,20 +632,22 @@ void ShowInstalledPluginsPage()
             .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2));
         compatiblePluginsList->setWordWrap(true);
 
-        QGroupBox* compatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("✅ Compatible Plugins", "success");
+        // Create GroupBox with prioritized width and internal scrolling
+        QGroupBox* compatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("✅ Compatible", "success");
+        compatiblePluginsBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        compatiblePluginsBox->setMinimumWidth(300);
+        compatiblePluginsBox->setMaximumHeight(300);
         
         QVBoxLayout* compatiblePluginsBoxLayout = new QVBoxLayout(compatiblePluginsBox);
-        compatiblePluginsBoxLayout->setContentsMargins(0, 12, 0, 8);
-        compatiblePluginsBoxLayout->addWidget(compatiblePluginsList);
-
-        QScrollArea* compatibleScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-        compatibleScrollArea->setWidget(compatiblePluginsBox);
-        compatibleScrollArea->setMinimumWidth(300);
-        compatibleScrollArea->setStyleSheet(compatibleScrollArea->styleSheet() + 
-            "QScrollArea { background: transparent; }");
+        compatiblePluginsBoxLayout->setContentsMargins(8, 20, 8, 8);
         
-        // Apply content-based sizing to minimize blank space
-        StreamUP::UIStyles::ApplyScrollAreaContentSizing(compatibleScrollArea, 250);
+        // ScrollArea goes INSIDE the GroupBox
+        QScrollArea* compatibleScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+        compatibleScrollArea->setWidget(compatiblePluginsList);
+        compatibleScrollArea->setStyleSheet(compatibleScrollArea->styleSheet() + 
+            "QScrollArea { background: transparent; border: none; }");
+        
+        compatiblePluginsBoxLayout->addWidget(compatibleScrollArea);
 
         QLabel* incompatiblePluginsList = new QLabel;
         char* filePath = GetFilePath();
@@ -610,28 +666,29 @@ void ShowInstalledPluginsPage()
             .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2));
         incompatiblePluginsList->setWordWrap(true);
 
-        QGroupBox* incompatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("⚠️ Incompatible Plugins", "error");
+        // Create GroupBox with smaller fixed width for incompatible
+        QGroupBox* incompatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("⚠️ Incompatible", "error");
+        incompatiblePluginsBox->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        incompatiblePluginsBox->setFixedWidth(200);
+        incompatiblePluginsBox->setMaximumHeight(300);
         
         QVBoxLayout* incompatiblePluginsBoxLayout = new QVBoxLayout(incompatiblePluginsBox);
-        incompatiblePluginsBoxLayout->setContentsMargins(0, 12, 0, 8);
-        incompatiblePluginsBoxLayout->addWidget(incompatiblePluginsList);
-
-        QScrollArea* incompatibleScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-        incompatibleScrollArea->setWidget(incompatiblePluginsBox);
-        incompatibleScrollArea->setMinimumWidth(300);
-        incompatibleScrollArea->setStyleSheet(incompatibleScrollArea->styleSheet() + 
-            "QScrollArea { background: transparent; }");
+        incompatiblePluginsBoxLayout->setContentsMargins(8, 20, 8, 8);
         
-        // Apply content-based sizing to minimize blank space
-        StreamUP::UIStyles::ApplyScrollAreaContentSizing(incompatibleScrollArea, 250);
+        // ScrollArea goes INSIDE the GroupBox
+        QScrollArea* incompatibleScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+        incompatibleScrollArea->setWidget(incompatiblePluginsList);
+        incompatibleScrollArea->setStyleSheet(incompatibleScrollArea->styleSheet() + 
+            "QScrollArea { background: transparent; border: none; }");
+        
+        incompatiblePluginsBoxLayout->addWidget(incompatibleScrollArea);
 
         QHBoxLayout* pluginBoxesLayout = new QHBoxLayout();
         pluginBoxesLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-        pluginBoxesLayout->addWidget(compatibleScrollArea);
-        pluginBoxesLayout->addWidget(incompatibleScrollArea);
+        pluginBoxesLayout->addWidget(compatiblePluginsBox, 3); // Give compatible box more space
+        pluginBoxesLayout->addWidget(incompatiblePluginsBox, 1); // Give incompatible box less space
 
         contentLayout->addLayout(pluginBoxesLayout);
-        mainLayout->addWidget(contentWidget);
 
         // Bottom button area
         QWidget* buttonWidget = new QWidget();
@@ -652,8 +709,9 @@ void ShowInstalledPluginsPage()
 
         dialog->setLayout(mainLayout);
         
-        // Apply content-based sizing to eliminate excess blank space
-        StreamUP::UIStyles::ApplyContentBasedSizing(dialog);
+        // Apply dynamic sizing that adjusts to actual content size
+        StreamUP::UIStyles::ApplyDynamicSizing(dialog, 650, 1000, 400, 800);
+        dialog->show();
     });
 }
 
