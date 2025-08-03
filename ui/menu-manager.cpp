@@ -3,7 +3,6 @@
 #include "file-manager.hpp"
 #include "plugin-manager.hpp"
 #include "splash-screen.hpp"
-#include "tools-window.hpp"
 #include "websocket-window.hpp"
 #include <obs-module.h>
 #include <obs-frontend-api.h>
@@ -99,10 +98,49 @@ void LoadMenuItems(QMenu* menu)
         StreamUP::PluginManager::CheckAllPluginsForUpdates(true); 
     });
 
-    // Tools window
-    action = menu->addAction(obs_module_text("MenuTools"));
+    // Tools submenu
+    QMenu* toolsMenu = menu->addMenu(obs_module_text("MenuTools"));
+    
+    // Source Management tools
+    action = toolsMenu->addAction(obs_module_text("MenuLockAllSources"));
     QObject::connect(action, &QAction::triggered, []() { 
-        StreamUP::ToolsWindow::ShowToolsWindow(); 
+        StreamUP::SourceManager::ToggleLockAllSources(); 
+    });
+    
+    action = toolsMenu->addAction(obs_module_text("MenuLockAllCurrentSources"));
+    QObject::connect(action, &QAction::triggered, []() { 
+        StreamUP::SourceManager::ToggleLockSourcesInCurrentScene(); 
+    });
+    
+    toolsMenu->addSeparator();
+    
+    // Audio/Video tools
+    action = toolsMenu->addAction(obs_module_text("MenuRefreshAudioMonitoring"));
+    QObject::connect(action, &QAction::triggered, []() { 
+        obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr); 
+    });
+    
+    action = toolsMenu->addAction(obs_module_text("MenuRefreshBrowserSources"));
+    QObject::connect(action, &QAction::triggered, []() { 
+        obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr); 
+    });
+    
+    // Video device management submenu
+    QMenu* videoDeviceMenu = toolsMenu->addMenu("Video Capture Devices");
+    
+    action = videoDeviceMenu->addAction(obs_module_text("MenuActivateVideoCaptureDevices"));
+    QObject::connect(action, &QAction::triggered, []() { 
+        StreamUP::SourceManager::ActivateAllVideoCaptureDevicesDialog(); 
+    });
+    
+    action = videoDeviceMenu->addAction(obs_module_text("MenuDeactivateVideoCaptureDevices"));
+    QObject::connect(action, &QAction::triggered, []() { 
+        StreamUP::SourceManager::DeactivateAllVideoCaptureDevicesDialog(); 
+    });
+    
+    action = videoDeviceMenu->addAction(obs_module_text("MenuRefreshVideoCaptureDevices"));
+    QObject::connect(action, &QAction::triggered, []() { 
+        StreamUP::SourceManager::RefreshAllVideoCaptureDevicesDialog(); 
     });
 
     menu->addSeparator();
