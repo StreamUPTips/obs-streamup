@@ -304,9 +304,10 @@ QWidget* CreateCommandWidget(const QString& command, const QString& description)
     
     // OBS Raw copy button
     QString obsRawJson = QString(R"({"requestType":"CallVendorRequest","requestData":{"vendorName":"streamup","requestType":"%1","requestData":{}}})").arg(command);
-    QPushButton* obsRawBtn = StreamUP::UIStyles::CreateStyledButton("OBS Raw", "info", 28, 70);
+    QPushButton* obsRawBtn = StreamUP::UIStyles::CreateStyledButton("OBS Raw", "info", 28, 80);
+    obsRawBtn->setFixedSize(80, 28); // Set static size - bigger for "OBS Raw" text
     obsRawBtn->setToolTip("Copy standard WebSocket JSON format for obs-websocket");
-    QObject::connect(obsRawBtn, &QPushButton::clicked, [obsRawBtn, obsRawJson, command]() {
+    QObject::connect(obsRawBtn, &QPushButton::clicked, [obsRawBtn, obsRawJson]() {
         QApplication::clipboard()->setText(obsRawJson);
         
         // Visual feedback: briefly change button text and style
@@ -326,17 +327,14 @@ QWidget* CreateCommandWidget(const QString& command, const QString& description)
             obsRawBtn->setStyleSheet(StreamUP::UIStyles::GetButtonStyle(
                 StreamUP::UIStyles::Colors::INFO, StreamUP::UIStyles::Colors::INFO_HOVER, 28));
         });
-        
-        // Send notification with command name
-        StreamUP::NotificationManager::SendInfoNotification("OBS Raw Copied", 
-            QString("WebSocket command '%1' copied to clipboard").arg(command));
     });
     
     // CPH copy button  
     QString cphCommand = QString(R"(CPH.ObsSendRaw("CallVendorRequest", "{\"vendorName\":\"streamup\",\"requestType\":\"%1\",\"requestData\":{}}", 0);)").arg(command);
     QPushButton* cphBtn = StreamUP::UIStyles::CreateStyledButton("CPH", "info", 28, 70);
+    cphBtn->setFixedSize(70, 28); // Set static size
     cphBtn->setToolTip("Copy Streamer.Bot format for use with CPH.ObsSendRaw() function");
-    QObject::connect(cphBtn, &QPushButton::clicked, [cphBtn, cphCommand, command]() {
+    QObject::connect(cphBtn, &QPushButton::clicked, [cphBtn, cphCommand]() {
         QApplication::clipboard()->setText(cphCommand);
         
         // Visual feedback: briefly change button text and style
@@ -356,10 +354,6 @@ QWidget* CreateCommandWidget(const QString& command, const QString& description)
             cphBtn->setStyleSheet(StreamUP::UIStyles::GetButtonStyle(
                 StreamUP::UIStyles::Colors::INFO, StreamUP::UIStyles::Colors::INFO_HOVER, 28));
         });
-        
-        // Send notification with command name
-        StreamUP::NotificationManager::SendInfoNotification("CPH Copied", 
-            QString("Streamer.Bot command '%1' copied to clipboard").arg(command));
     });
     
     buttonLayout->addWidget(obsRawBtn);

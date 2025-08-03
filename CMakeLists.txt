@@ -73,8 +73,6 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/notification-manager.cpp
   ui/splash-screen.hpp
   ui/splash-screen.cpp
-  ui/tools-window.hpp
-  ui/tools-window.cpp
   ui/websocket-window.hpp
   ui/websocket-window.cpp
   ui/dock/streamup-dock.hpp
@@ -138,8 +136,6 @@ source_group("UI" FILES
   ui/notification-manager.cpp
   ui/splash-screen.hpp
   ui/splash-screen.cpp
-  ui/tools-window.hpp
-  ui/tools-window.cpp
   ui/websocket-window.hpp
   ui/websocket-window.cpp)
 
