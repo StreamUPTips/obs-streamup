@@ -12,6 +12,8 @@
 #include <QSizePolicy>
 #include <QPropertyAnimation>
 #include <QEasingCurve>
+#include <QGuiApplication>
+#include <QScreen>
 
 namespace StreamUP {
 namespace UIStyles {
@@ -316,8 +318,14 @@ void ApplyDynamicSizing(QDialog* dialog, int minWidth, int maxWidth, int minHeig
     // Store original resize behavior
     dialog->setProperty("dynamicSizing", true);
     
-    // Calculate optimal size after layout is complete
-    QTimer::singleShot(20, [dialog, minWidth, maxWidth, minHeight, maxHeight]() {
+    // Hide dialog initially to prevent flashing
+    bool wasVisible = dialog->isVisible();
+    if (wasVisible) {
+        dialog->hide();
+    }
+    
+    // Calculate optimal size immediately after layout is complete
+    QTimer::singleShot(1, [dialog, minWidth, maxWidth, minHeight, maxHeight, wasVisible]() {
         // Force layout calculation
         dialog->layout()->activate();
         dialog->adjustSize();
@@ -327,23 +335,26 @@ void ApplyDynamicSizing(QDialog* dialog, int minWidth, int maxWidth, int minHeig
         int targetWidth = qMax(minWidth, qMin(sizeHint.width() + 80, maxWidth));
         int targetHeight = qMax(minHeight, qMin(sizeHint.height() + 60, maxHeight));
         
-        // Smooth animation to optimal size
-        QPropertyAnimation* animation = new QPropertyAnimation(dialog, "geometry");
-        animation->setDuration(250);
-        animation->setEasingCurve(QEasingCurve::OutCubic);
-        animation->setStartValue(dialog->geometry());
-        
+        // Set the size directly without animation initially
         QRect targetGeometry = dialog->geometry();
         targetGeometry.setSize(QSize(targetWidth, targetHeight));
         
-        // Center the dialog during resize
+        // Center the dialog
         if (dialog->parentWidget()) {
             QPoint parentCenter = dialog->parentWidget()->geometry().center();
             targetGeometry.moveCenter(parentCenter);
+        } else {
+            // Center on screen if no parent
+            QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
+            targetGeometry.moveCenter(screenGeometry.center());
         }
         
-        animation->setEndValue(targetGeometry);
-        animation->start(QPropertyAnimation::DeleteWhenStopped);
+        dialog->setGeometry(targetGeometry);
+        
+        // Show the dialog after sizing is complete
+        if (wasVisible) {
+            dialog->show();
+        }
     });
 }
 
