@@ -304,7 +304,7 @@ void ShowSettingsDialog()
             obs_properties_destroy(props);
         });
 
-        // Apply dynamic sizing that hugs content with smooth transitions
+        // Apply dynamic sizing that hugs content (this will handle showing the dialog)
         StreamUP::UIStyles::ApplyDynamicSizing(dialog, 500, 900, 400, 650);
         dialog->show();
     });

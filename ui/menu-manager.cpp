@@ -4,6 +4,7 @@
 #include "plugin-manager.hpp"
 #include "splash-screen.hpp"
 #include "tools-window.hpp"
+#include "websocket-window.hpp"
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <QApplication>
@@ -106,9 +107,16 @@ void LoadMenuItems(QMenu* menu)
 
     menu->addSeparator();
 
-    // About and Settings
+    // About, WebSocket, and Settings
     action = menu->addAction(obs_module_text("MenuAbout"));
     QObject::connect(action, &QAction::triggered, []() { StreamUP::SplashScreen::ShowSplashScreen(); });
+
+    action = menu->addAction(obs_module_text("MenuWebSocket"));
+    QObject::connect(action, &QAction::triggered, []() { 
+        // Check if Shift is held to show internal tools
+        bool showInternalTools = QApplication::keyboardModifiers() & Qt::ShiftModifier;
+        StreamUP::WebSocketWindow::ShowWebSocketWindow(showInternalTools); 
+    });
 
     action = menu->addAction(obs_module_text("MenuSettings"));
     QObject::connect(action, &QAction::triggered, []() { SettingsDialog(); });

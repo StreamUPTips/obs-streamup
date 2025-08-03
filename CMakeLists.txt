@@ -75,6 +75,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/splash-screen.cpp
   ui/tools-window.hpp
   ui/tools-window.cpp
+  ui/websocket-window.hpp
+  ui/websocket-window.cpp
   ui/dock/streamup-dock.hpp
   ui/dock/streamup-dock.cpp)
 
@@ -137,7 +139,9 @@ source_group("UI" FILES
   ui/splash-screen.hpp
   ui/splash-screen.cpp
   ui/tools-window.hpp
-  ui/tools-window.cpp)
+  ui/tools-window.cpp
+  ui/websocket-window.hpp
+  ui/websocket-window.cpp)
 
 source_group("UI\\Dock" FILES
   ui/dock/streamup-dock.hpp

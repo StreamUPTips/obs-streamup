@@ -201,7 +201,7 @@ void ShowToolsWindow()
 
         dialog->setLayout(mainLayout);
         
-        // Apply dynamic sizing for tools window
+        // Apply dynamic sizing for tools window (this will handle showing the dialog)
         StreamUP::UIStyles::ApplyDynamicSizing(dialog, 600, 1000, 450, 700);
         dialog->show();
     });
