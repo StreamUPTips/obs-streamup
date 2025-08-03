@@ -2,8 +2,11 @@
 #include "ui-helpers.hpp"
 #include "ui-styles.hpp"
 #include "plugin-manager.hpp"
+#include "hotkey-manager.hpp"
+#include "hotkey-widget.hpp"
 #include <obs-module.h>
 #include <obs-properties.h>
+#include <obs-frontend-api.h>
 #include <QDialog>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -264,6 +267,27 @@ void ShowSettingsDialog()
         pluginLayout->addLayout(pluginButtonLayout);
         
         contentLayout->addWidget(pluginGroup);
+
+        // Hotkeys Group
+        QGroupBox* hotkeysGroup = StreamUP::UIStyles::CreateStyledGroupBox("Hotkeys", "info");
+        
+        QVBoxLayout* hotkeysLayout = new QVBoxLayout(hotkeysGroup);
+        hotkeysLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+        QPushButton* hotkeysButton = StreamUP::UIStyles::CreateStyledButton("Manage Hotkeys", "info");
+        
+        // Connect hotkeys button to show hotkeys inline with dynamic sizing
+        QObject::connect(hotkeysButton, &QPushButton::clicked, [dialog, scrollArea, contentWidget]() {
+            StreamUP::SettingsManager::ShowHotkeysInline(scrollArea, contentWidget, dialog);
+        });
+        
+        QHBoxLayout* hotkeysButtonLayout = new QHBoxLayout();
+        hotkeysButtonLayout->addStretch();
+        hotkeysButtonLayout->addWidget(hotkeysButton);
+        hotkeysButtonLayout->addStretch();
+        hotkeysLayout->addLayout(hotkeysButtonLayout);
+        
+        contentLayout->addWidget(hotkeysGroup);
         contentLayout->addStretch();
         
         scrollArea->setWidget(contentWidget);
@@ -392,9 +416,9 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
         }
     }
     
-    // Create replacement content widget
+    // Create replacement content widget  
     QWidget* pluginsWidget = new QWidget();
-    pluginsWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
+    pluginsWidget->setStyleSheet(QString("background: transparent;")); // Remove dark background
     QVBoxLayout* pluginsLayout = new QVBoxLayout(pluginsWidget);
     pluginsLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
         StreamUP::UIStyles::Sizes::PADDING_XL, 
@@ -530,9 +554,14 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
     // Replace the content in the scroll area
     scrollArea->setWidget(pluginsWidget);
     
-    // Expand dialog to accommodate plugin content if available
+    // Make scroll area fit content height to prevent dual scrollbars
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    
+    // Expand dialog significantly to accommodate plugin content without main scrolling
     if (parentDialog && parentDialog->property("dynamicSizing").toBool()) {
-        StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 700, 1000, 500, 750);
+        StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 800, 1200, 600, 900);
     }
 }
 
@@ -713,6 +742,350 @@ void ShowInstalledPluginsPage()
         StreamUP::UIStyles::ApplyDynamicSizing(dialog, 650, 1000, 400, 800);
         dialog->show();
     });
+}
+
+void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialog* parentDialog)
+{
+    // Store the current widget temporarily
+    QWidget* currentWidget = scrollArea->takeWidget();
+    
+    // Find and update the main header with back button
+    if (parentDialog) {
+        QLabel* mainTitle = parentDialog->findChild<QLabel*>();
+        if (mainTitle && mainTitle->property("isMainTitle").toBool()) {
+            
+            // Get the header widget
+            QWidget* headerWidget = qobject_cast<QWidget*>(mainTitle->parent());
+            if (headerWidget) {
+                QVBoxLayout* headerLayout = qobject_cast<QVBoxLayout*>(headerWidget->layout());
+                if (headerLayout && headerLayout->property("isMainHeaderLayout").toBool()) {
+                    
+                    // Create back button with compact sizing
+                    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back", "neutral");
+                    backButton->setParent(headerWidget);
+                    backButton->setProperty("isBackButton", true);
+                    
+                    // Set explicit size to prevent stretching
+                    backButton->setFixedSize(80, 30);
+                    backButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+                    
+                    backButton->show();
+                    
+                    // Position back button absolutely on the left
+                    backButton->move(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+                                   (headerWidget->height() - backButton->height()) / 2);
+                    
+                    QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, parentDialog, backButton, headerLayout]() {
+                        // Remove back button
+                        if (backButton) {
+                            backButton->hide();
+                            backButton->deleteLater();
+                        }
+                        
+                        // Restore original content
+                        QWidget* currentWidget = scrollArea->takeWidget();
+                        if (currentWidget) {
+                            currentWidget->deleteLater();
+                        }
+                        scrollArea->setWidget(originalContent);
+                        
+                        // Resize dialog back to compact settings size
+                        if (parentDialog && parentDialog->property("dynamicSizing").toBool()) {
+                            StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 500, 900, 400, 650);
+                        }
+                    });
+                    
+                    // Ensure back button is positioned correctly after layout updates
+                    QTimer::singleShot(10, [backButton, headerWidget]() {
+                        if (backButton && headerWidget) {
+                            backButton->move(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+                                           (headerWidget->height() - backButton->height()) / 2);
+                        }
+                    });
+                }
+            }
+        }
+    }
+    
+    // Create replacement content widget
+    QWidget* hotkeysWidget = new QWidget();
+    hotkeysWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
+    QVBoxLayout* hotkeysLayout = new QVBoxLayout(hotkeysWidget);
+    hotkeysLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+        StreamUP::UIStyles::Sizes::PADDING_XL, 
+        StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+        StreamUP::UIStyles::Sizes::PADDING_XL);
+    hotkeysLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+    
+    // Title and description
+    QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("⌨️ StreamUP Hotkeys");
+    hotkeysLayout->addWidget(titleLabel);
+    
+    QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription("Manage hotkeys for StreamUP features. These link directly to OBS hotkey settings.");
+    hotkeysLayout->addWidget(descLabel);
+    
+    // Reduce spacing after header
+    hotkeysLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+    
+    // Info section
+    QLabel* infoLabel = new QLabel("Click on a hotkey to modify it. Changes are saved immediately to OBS hotkey settings.");
+    infoLabel->setStyleSheet(QString(
+        "QLabel {"
+        "color: %1;"
+        "font-size: %2px;"
+        "line-height: 1.3;"
+        "padding: %3px;"
+        "background: %4;"
+        "border: 1px solid %5;"
+        "border-radius: %6px;"
+        "}")
+        .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
+        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
+        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2)
+        .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
+        .arg(StreamUP::UIStyles::Colors::BACKGROUND_HOVER)
+        .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS));
+    infoLabel->setWordWrap(true);
+    hotkeysLayout->addWidget(infoLabel);
+
+    // Create GroupBox for hotkeys
+    QGroupBox* hotkeysGroup = StreamUP::UIStyles::CreateStyledGroupBox("⚡ StreamUP Hotkeys", "info");
+    
+    QVBoxLayout* hotkeysGroupLayout = new QVBoxLayout(hotkeysGroup);
+    hotkeysGroupLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+    
+    // Define hotkey information structure
+    struct HotkeyInfo {
+        QString name;
+        QString description;
+        QString obsHotkeyName;
+    };
+    
+    // List of all StreamUP hotkeys
+    std::vector<HotkeyInfo> streamupHotkeys = {
+        {"Refresh Browser Sources", "Refreshes all browser sources in your scenes", "streamup_refresh_browser_sources"},
+        {"Refresh Audio Monitoring", "Refreshes audio monitoring settings for sources", "streamup_refresh_audio_monitoring"},
+        {"Lock/Unlock All Sources", "Toggles lock state for all sources across scenes", "streamup_lock_all_sources"},
+        {"Lock/Unlock Current Scene Sources", "Toggles lock state for sources in current scene only", "streamup_lock_current_sources"},
+        {"Open Selected Source Properties", "Opens properties window for currently selected source", "streamup_open_source_properties"},
+        {"Open Selected Source Filters", "Opens filters window for currently selected source", "streamup_open_source_filters"},
+        {"Open Selected Source Interact", "Opens interact window for currently selected source", "streamup_open_source_interact"},
+        {"Open Current Scene Filters", "Opens filters window for the current scene", "streamup_open_scene_filters"},
+        {"Activate All Video Capture Devices", "Activates all video capture device sources", "streamup_activate_video_capture_devices"},
+        {"Deactivate All Video Capture Devices", "Deactivates all video capture device sources", "streamup_deactivate_video_capture_devices"},
+        {"Refresh All Video Capture Devices", "Refreshes all video capture device sources", "streamup_refresh_video_capture_devices"}
+    };
+    
+    // Create direct layout for hotkeys (no scrolling, fit to content)
+    QVBoxLayout* hotkeyContentLayout = new QVBoxLayout();
+    hotkeyContentLayout->setSpacing(0); // No spacing, separators will handle it
+    hotkeyContentLayout->setContentsMargins(0, 0, 0, 0); // No padding inside the box (like WebSocket UI)
+    
+    // Add each hotkey as a row with actual hotkey widget (WebSocket UI style)
+    for (int i = 0; i < streamupHotkeys.size(); ++i) {
+        const auto& hotkey = streamupHotkeys[i];
+        
+        QWidget* hotkeyRow = new QWidget();
+        // Use transparent background with no border (like WebSocket UI)
+        hotkeyRow->setStyleSheet(QString(
+            "QWidget {"
+            "background: transparent;"
+            "border: none;"
+            "padding: 0px;"
+            "}"));
+        
+        QHBoxLayout* hotkeyRowLayout = new QHBoxLayout(hotkeyRow);
+        // Match WebSocket UI margins: tight vertical padding, medium horizontal spacing
+        hotkeyRowLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3, 0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3);
+        hotkeyRowLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        
+        // Text section - vertical layout with tight spacing (like WebSocket UI)
+        QVBoxLayout* textLayout = new QVBoxLayout();
+        textLayout->setSpacing(2); // Very tight spacing between name and description
+        textLayout->setContentsMargins(0, 0, 0, 0);
+        
+        // Hotkey name - use same styling as WebSocket UI
+        QLabel* nameLabel = new QLabel(hotkey.name);
+        nameLabel->setStyleSheet(QString(
+            "QLabel {"
+            "color: %1;"
+            "font-size: %2px;"
+            "font-weight: bold;"
+            "background: transparent;"
+            "border: none;"
+            "margin: 0px;"
+            "padding: 0px;"
+            "}")
+            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+        
+        // Hotkey description - use same styling as WebSocket UI
+        QLabel* descLabel = new QLabel(hotkey.description);
+        descLabel->setStyleSheet(QString(
+            "QLabel {"
+            "color: %1;"
+            "font-size: %2px;"
+            "background: transparent;"
+            "border: none;"
+            "margin: 0px;"
+            "padding: 0px;"
+            "}")
+            .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+        descLabel->setWordWrap(true);
+        
+        textLayout->addWidget(nameLabel);
+        textLayout->addWidget(descLabel);
+        
+        // Create a wrapper widget for text info that centers the content vertically (like WebSocket UI)
+        QWidget* textWrapper = new QWidget();
+        QVBoxLayout* wrapperLayout = new QVBoxLayout(textWrapper);
+        wrapperLayout->setContentsMargins(0, 0, 0, 0);
+        wrapperLayout->addStretch(); // Add stretch above
+        wrapperLayout->addLayout(textLayout);
+        wrapperLayout->addStretch(); // Add stretch below
+        
+        hotkeyRowLayout->addWidget(textWrapper, 1);
+        
+        // Hotkey configuration widget section - also center vertically
+        QVBoxLayout* hotkeyWrapperLayout = new QVBoxLayout();
+        hotkeyWrapperLayout->setContentsMargins(0, 0, 0, 0);
+        hotkeyWrapperLayout->addStretch(); // Add stretch above
+        
+        StreamUP::UI::HotkeyWidget* hotkeyWidget = new StreamUP::UI::HotkeyWidget(hotkey.obsHotkeyName, hotkeyRow);
+        
+        // Load current hotkey binding
+        obs_data_array_t* currentBinding = StreamUP::HotkeyManager::GetHotkeyBinding(hotkey.obsHotkeyName.toUtf8().constData());
+        if (currentBinding) {
+            hotkeyWidget->SetHotkey(currentBinding);
+            obs_data_array_release(currentBinding);
+        }
+        
+        // Connect to save changes immediately
+        QObject::connect(hotkeyWidget, &StreamUP::UI::HotkeyWidget::HotkeyChanged, 
+            [](const QString& hotkeyName, obs_data_array_t* hotkeyData) {
+                if (hotkeyData) {
+                    StreamUP::HotkeyManager::SetHotkeyBinding(hotkeyName.toUtf8().constData(), hotkeyData);
+                } else {
+                    // Clear the hotkey
+                    obs_data_array_t* emptyArray = obs_data_array_create();
+                    StreamUP::HotkeyManager::SetHotkeyBinding(hotkeyName.toUtf8().constData(), emptyArray);
+                    obs_data_array_release(emptyArray);
+                }
+            });
+        
+        hotkeyWrapperLayout->addWidget(hotkeyWidget);
+        hotkeyWrapperLayout->addStretch(); // Add stretch below
+        
+        hotkeyRowLayout->addLayout(hotkeyWrapperLayout);
+        
+        hotkeyContentLayout->addWidget(hotkeyRow);
+        
+        // Add separator line between hotkeys (but not after the last one) - like WebSocket UI
+        if (i < streamupHotkeys.size() - 1) {
+            QFrame* separator = new QFrame();
+            separator->setFrameShape(QFrame::HLine);
+            separator->setFrameShadow(QFrame::Plain);
+            separator->setStyleSheet(QString(
+                "QFrame {"
+                "color: rgba(113, 128, 150, 0.3);"
+                "background-color: rgba(113, 128, 150, 0.3);"
+                "border: none;"
+                "margin: 0px;"
+                "max-height: 1px;"
+                "}"));
+            hotkeyContentLayout->addWidget(separator);
+        }
+    }
+    
+    hotkeysGroupLayout->addLayout(hotkeyContentLayout);
+    
+    // Action buttons section
+    QHBoxLayout* actionLayout = new QHBoxLayout();
+    actionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+    
+    QPushButton* resetButton = StreamUP::UIStyles::CreateStyledButton("Reset All StreamUP Hotkeys", "error");
+    
+    // Store all hotkey widgets so we can refresh them after reset
+    QList<StreamUP::UI::HotkeyWidget*> allHotkeyWidgets;
+    
+    // Collect all hotkey widgets from the layout
+    for (int i = 0; i < hotkeyContentLayout->count(); i++) {
+        QLayoutItem* item = hotkeyContentLayout->itemAt(i);
+        if (item && item->widget()) {
+            QWidget* widget = item->widget();
+            // Skip separators (QFrame), only process hotkey rows
+            if (QString(widget->metaObject()->className()) != "QFrame") {
+                StreamUP::UI::HotkeyWidget* hotkeyWidget = widget->findChild<StreamUP::UI::HotkeyWidget*>();
+                if (hotkeyWidget) {
+                    allHotkeyWidgets.append(hotkeyWidget);
+                }
+            }
+        }
+    }
+    
+    QObject::connect(resetButton, &QPushButton::clicked, [allHotkeyWidgets]() {
+        // Show confirmation dialog for reset
+        StreamUP::UIHelpers::ShowDialogOnUIThread([allHotkeyWidgets]() {
+            QDialog* confirmDialog = StreamUP::UIStyles::CreateStyledDialog("Reset Hotkeys");
+            confirmDialog->resize(400, 200);
+            
+            QVBoxLayout* layout = new QVBoxLayout(confirmDialog);
+            
+            QLabel* warningLabel = new QLabel("⚠️ Are you sure you want to reset all StreamUP hotkeys?\n\nThis will clear all assigned key combinations.");
+            warningLabel->setStyleSheet(QString("color: %1; font-size: %2px; padding: %3px;")
+                .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+                .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)
+                .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
+            warningLabel->setWordWrap(true);
+            warningLabel->setAlignment(Qt::AlignCenter);
+            
+            layout->addWidget(warningLabel);
+            
+            QHBoxLayout* buttonLayout = new QHBoxLayout();
+            
+            QPushButton* cancelBtn = StreamUP::UIStyles::CreateStyledButton("Cancel", "neutral");
+            QPushButton* resetBtn = StreamUP::UIStyles::CreateStyledButton("Reset Hotkeys", "error");
+            
+            QObject::connect(cancelBtn, &QPushButton::clicked, confirmDialog, &QDialog::close);
+            QObject::connect(resetBtn, &QPushButton::clicked, [confirmDialog, allHotkeyWidgets]() {
+                // Clear all StreamUP hotkeys
+                StreamUP::HotkeyManager::ResetAllHotkeys();
+                
+                // Refresh all hotkey widgets in the UI
+                for (StreamUP::UI::HotkeyWidget* widget : allHotkeyWidgets) {
+                    if (widget) {
+                        widget->ClearHotkey();
+                    }
+                }
+                
+                confirmDialog->close();
+            });
+            
+            buttonLayout->addStretch();
+            buttonLayout->addWidget(cancelBtn);
+            buttonLayout->addWidget(resetBtn);
+            
+            layout->addLayout(buttonLayout);
+            
+            confirmDialog->show();
+        });
+    });
+    
+    actionLayout->addStretch();
+    actionLayout->addWidget(resetButton);
+    
+    hotkeysGroupLayout->addLayout(actionLayout);
+    hotkeysLayout->addWidget(hotkeysGroup);
+    hotkeysLayout->addStretch();
+    
+    // Replace the content in the scroll area
+    scrollArea->setWidget(hotkeysWidget);
+    
+    // Expand dialog to accommodate hotkeys content
+    if (parentDialog && parentDialog->property("dynamicSizing").toBool()) {
+        StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 700, 1000, 500, 750);
+    }
 }
 
 } // namespace SettingsManager
