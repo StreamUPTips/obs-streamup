@@ -1,6 +1,7 @@
 #include "ui-helpers.hpp"
 #include "ui-styles.hpp"
 #include <obs-module.h>
+#include <obs-frontend-api.h>
 #include <util/platform.h>
 #include <QApplication>
 #include <QClipboard>
@@ -37,10 +38,18 @@ void ShowDialogOnUIThread(const std::function<void()> &dialogFunction)
 
 QDialog *CreateDialogWindow(const char *windowTitle)
 {
-	QDialog *dialog = new QDialog();
+	// Get OBS main window as parent to ensure dialog opens on same monitor
+	QWidget *parent = static_cast<QWidget *>(obs_frontend_get_main_window());
+	QDialog *dialog = new QDialog(parent);
 	dialog->setWindowTitle(obs_module_text(windowTitle));
-	dialog->setWindowFlags(Qt::Window);
+	dialog->setWindowFlags(Qt::Dialog); // Use Dialog instead of Window for better positioning
 	dialog->setAttribute(Qt::WA_DeleteOnClose);
+	
+	// Center the dialog relative to OBS main window
+	if (parent) {
+		dialog->move(parent->geometry().center() - dialog->rect().center());
+	}
+	
 	return dialog;
 }
 

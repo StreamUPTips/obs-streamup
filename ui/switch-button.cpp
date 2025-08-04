@@ -2,6 +2,7 @@
 #include "ui-styles.hpp"
 #include <QPainter>
 #include <QMouseEvent>
+#include <QEnterEvent>
 #include <QFontMetrics>
 #include <QPropertyAnimation>
 #include <QEasingCurve>
@@ -13,10 +14,12 @@ namespace UIStyles {
 SwitchButton::SwitchButton(QWidget* parent)
     : QWidget(parent)
     , m_checked(false)
+    , m_hovered(false)
+    , m_initializing(true)
     , m_offset(MARGIN)
     , m_animation(nullptr)
 {
-    setMinimumSize(SWITCH_WIDTH + 20, SWITCH_HEIGHT + 4); // Minimum size
+    setMinimumSize(SWITCH_WIDTH + 20, SWITCH_HEIGHT + 4); // Minimum size with padding for shorter switch
     setCursor(Qt::PointingHandCursor);
     
     // Create animation for smooth toggle
@@ -27,26 +30,36 @@ SwitchButton::SwitchButton(QWidget* parent)
 
 void SwitchButton::setChecked(bool checked)
 {
-    if (m_checked != checked) {
-        bool wasFirstTime = (m_animation->state() == QPropertyAnimation::Stopped);
-        m_checked = checked;
+    bool stateChanged = (m_checked != checked);
+    m_checked = checked;
+    
+    int endOffset = checked ? (SWITCH_WIDTH - KNOB_WIDTH - MARGIN) : MARGIN;
+    
+    if (m_initializing) {
+        // Set initial position without animation
+        m_offset = endOffset;
+        m_initializing = false;  // Mark as no longer initializing
+        update();
         
-        int endOffset = checked ? (SWITCH_WIDTH - KNOB_SIZE - MARGIN) : MARGIN;
-        
-        if (wasFirstTime) {
-            // Set initial position without animation
-            m_offset = endOffset;
-            update();
-        } else {
+        // Only emit signal if state actually changed
+        if (stateChanged) {
+            emit toggled(checked);
+        }
+    } else {
+        if (stateChanged) {
             // Animate the change
             int startOffset = m_offset;
             m_animation->stop();
             m_animation->setStartValue(startOffset);
             m_animation->setEndValue(endOffset);
             m_animation->start();
+            
+            emit toggled(checked);
+        } else {
+            // State didn't change, but force visual update in case of display issues
+            m_offset = endOffset;
+            update();
         }
-        
-        emit toggled(checked);
     }
 }
 
@@ -69,6 +82,7 @@ void SwitchButton::setText(const QString& text)
 
 void SwitchButton::toggle()
 {
+    m_initializing = false;  // Ensure we're not in initializing mode when user toggles
     setChecked(!m_checked);
 }
 
@@ -99,22 +113,50 @@ void SwitchButton::paintEvent(QPaintEvent* event)
     int switchX = textWidth;
     int switchY = (height() - SWITCH_HEIGHT) / 2;
     
-    // Draw switch background track
+    // Ultra-flat iOS 26 track design
     QRect trackRect(switchX, switchY, SWITCH_WIDTH, SWITCH_HEIGHT);
     painter.setPen(Qt::NoPen);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    
+    // iOS 26 colors with subtle inner gradient to match other UI buttons
+    QColor trackColorOff = m_hovered ? QColor("#404852") : QColor("#3c4043");
+    QColor trackColorOn = m_hovered ? QColor("#32d74b") : QColor("#34c759");
+    
+    // Create subtle gradient for depth (matching other button styles)
+    QLinearGradient gradient(trackRect.topLeft(), trackRect.bottomLeft());
     
     if (m_checked) {
-        painter.setBrush(QColor(Colors::SUCCESS));
+        // Subtle gradient for ON state - slightly lighter at top
+        gradient.setColorAt(0.0, trackColorOn.lighter(108));  // 8% lighter at top
+        gradient.setColorAt(1.0, trackColorOn.darker(105));   // 5% darker at bottom
     } else {
-        painter.setBrush(QColor(Colors::BACKGROUND_INPUT));
+        // Subtle gradient for OFF state - slightly lighter at top  
+        gradient.setColorAt(0.0, trackColorOff.lighter(110)); // 10% lighter at top
+        gradient.setColorAt(1.0, trackColorOff.darker(108));  // 8% darker at bottom
     }
     
+    painter.setBrush(gradient);
     painter.drawRoundedRect(trackRect, SWITCH_HEIGHT / 2, SWITCH_HEIGHT / 2);
     
-    // Draw switch knob
-    QRect knobRect(switchX + m_offset, switchY + MARGIN, KNOB_SIZE, KNOB_SIZE);
-    painter.setBrush(QColor(Colors::TEXT_PRIMARY));
-    painter.drawEllipse(knobRect);
+    // Draw ultra-minimal iOS 26 pill-shaped knob (wider than tall)
+    QRect knobRect(switchX + m_offset, switchY + MARGIN, KNOB_WIDTH, KNOB_HEIGHT);
+    
+    // iOS 26 style - minimal shadow for edge definition
+    painter.setBrush(QColor(0, 0, 0, 8));
+    QRect shadowRect = knobRect.adjusted(0, 0.5, 0, 0.5);
+    // Use height for corner radius to make it truly pill-shaped
+    painter.drawRoundedRect(shadowRect, KNOB_HEIGHT / 2, KNOB_HEIGHT / 2);
+    
+    // Draw the main knob with subtle gradient to match other buttons
+    QLinearGradient knobGradient(knobRect.topLeft(), knobRect.bottomLeft());
+    knobGradient.setColorAt(0.0, QColor("#ffffff"));        // Pure white at top
+    knobGradient.setColorAt(1.0, QColor("#f8f9fa"));        // Very slightly darker at bottom
+    
+    painter.setBrush(knobGradient);
+    // Corner radius based on height to create proper pill shape
+    painter.drawRoundedRect(knobRect, KNOB_HEIGHT / 2, KNOB_HEIGHT / 2);
+    
+    // No inner shadows or additional effects for iOS 26 flat design
 }
 
 void SwitchButton::mousePressEvent(QMouseEvent* event)
@@ -128,6 +170,20 @@ void SwitchButton::mousePressEvent(QMouseEvent* event)
 void SwitchButton::mouseReleaseEvent(QMouseEvent* event)
 {
     QWidget::mouseReleaseEvent(event);
+}
+
+void SwitchButton::enterEvent(QEnterEvent* event)
+{
+    m_hovered = true;
+    update();
+    QWidget::enterEvent(event);
+}
+
+void SwitchButton::leaveEvent(QEvent* event)
+{
+    m_hovered = false;
+    update();
+    QWidget::leaveEvent(event);
 }
 
 QSize SwitchButton::sizeHint() const

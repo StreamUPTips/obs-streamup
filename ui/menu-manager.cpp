@@ -130,17 +130,17 @@ void LoadMenuItems(QMenu* menu)
     
     action = videoDeviceMenu->addAction(obs_module_text("MenuActivateVideoCaptureDevices"));
     QObject::connect(action, &QAction::triggered, []() { 
-        StreamUP::SourceManager::ActivateAllVideoCaptureDevicesDialog(); 
+        StreamUP::SourceManager::ActivateAllVideoCaptureDevices(); 
     });
     
     action = videoDeviceMenu->addAction(obs_module_text("MenuDeactivateVideoCaptureDevices"));
     QObject::connect(action, &QAction::triggered, []() { 
-        StreamUP::SourceManager::DeactivateAllVideoCaptureDevicesDialog(); 
+        StreamUP::SourceManager::DeactivateAllVideoCaptureDevices(); 
     });
     
     action = videoDeviceMenu->addAction(obs_module_text("MenuRefreshVideoCaptureDevices"));
     QObject::connect(action, &QAction::triggered, []() { 
-        StreamUP::SourceManager::RefreshAllVideoCaptureDevicesDialog(); 
+        StreamUP::SourceManager::RefreshAllVideoCaptureDevices(); 
     });
 
     menu->addSeparator();

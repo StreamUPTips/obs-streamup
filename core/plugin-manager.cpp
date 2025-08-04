@@ -133,17 +133,28 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 		dialog->resize(700, 500);
 		
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
-			StreamUP::UIStyles::Sizes::PADDING_SMALL, 
-			StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
-			StreamUP::UIStyles::Sizes::PADDING_SMALL);
-		dialogLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+		dialogLayout->setContentsMargins(0, 0, 0, 0);
+		dialogLayout->setSpacing(0);
 
-		// Add styled title
-		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(titleText);
-		dialogLayout->addWidget(titleLabel);
-
-		// Add styled description with warning
+		// Header section (same style as WebSocket Commands)
+		QWidget* headerWidget = new QWidget();
+		headerWidget->setObjectName("headerWidget");
+		headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
+			.arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
+			.arg(StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM) // More padding at top
+			.arg(StreamUP::UIStyles::Sizes::PADDING_XL)
+			.arg(StreamUP::UIStyles::Sizes::PADDING_XL)); // Standard padding at bottom
+		
+		QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
+		headerLayout->setContentsMargins(0, 0, 0, 0);
+		
+		QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(titleText);
+		titleLabel->setAlignment(Qt::AlignCenter);
+		headerLayout->addWidget(titleLabel);
+		
+		// Add reduced spacing between title and description
+		headerLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
+		
 		QString descText;
 		if (hasMissing && hasUpdates) {
 			descText = obs_module_text("SomePluginsMissingAndNeedUpdates");
@@ -153,23 +164,25 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 			descText = obs_module_text("FollowingPluginsHaveUpdatesAvailable");
 		}
 		
-		QLabel *descLabel = StreamUP::UIStyles::CreateStyledDescription(descText);
-		dialogLayout->addWidget(descLabel);
+		QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(descText);
+		headerLayout->addWidget(subtitleLabel);
+		
+		dialogLayout->addWidget(headerWidget);
 
 
 		// Content area - direct layout without main scrolling
 		QVBoxLayout *contentLayout = new QVBoxLayout();
-		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_TINY, 
-			StreamUP::UIStyles::Sizes::SPACING_TINY, 
-			StreamUP::UIStyles::Sizes::SPACING_TINY, 
-			StreamUP::UIStyles::Sizes::SPACING_TINY);
-		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
+		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+			StreamUP::UIStyles::Sizes::PADDING_XL, 
+			StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+			StreamUP::UIStyles::Sizes::PADDING_XL);
+		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
 		
 		dialogLayout->addLayout(contentLayout);
 
 		if (hasMissing) {
 			// Create expandable GroupBox with internal scrolling
-			QGroupBox *missingGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Missing"), "error");
+			QGroupBox *missingGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowPluginErrorMissingGroup"), "error");
 			missingGroup->setMinimumWidth(500);
 			missingGroup->setMinimumHeight(150);
 			// Let it expand to fill available space
@@ -215,24 +228,26 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 
 		// Add warning message above buttons if there's a continue callback (meaning this is for install product)
 		if (continueCallback) {
-			QLabel *warningLabel = StreamUP::UIStyles::CreateStyledDescription(
-				obs_module_text("WarningContinueAnyway")
-			);
+			// Add spacing before warning
+			dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+			
+			QLabel *warningLabel = new QLabel("⚠️ " + QString(obs_module_text("WarningContinueAnyway")));
+			warningLabel->setWordWrap(true);
 			warningLabel->setStyleSheet(QString(
 				"QLabel {"
-				"background: %1;"
-				"color: %2;"
-				"border: 1px solid %3;"
-				"border-radius: %4px;"
-				"padding: %5px;"
-				"margin: %6px 0px;"
+				"background: rgba(45, 55, 72, 0.8);"
+				"color: #fbbf24;"
+				"border: 1px solid #f59e0b;"
+				"border-radius: %1px;"
+				"padding: %2px;"
+				"margin: %3px 0px;"
+				"font-size: %4px;"
+				"line-height: 1.4;"
 				"}")
-				.arg("#2d3748")  // Background
-				.arg("#fbb6ce")  // Text color (warning pink)
-				.arg("#f56565")  // Border color (warning red)
 				.arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS)
 				.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
-				.arg(StreamUP::UIStyles::Sizes::SPACING_SMALL));
+				.arg(StreamUP::UIStyles::Sizes::SPACING_SMALL)
+				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
 			dialogLayout->addWidget(warningLabel);
 		}
 

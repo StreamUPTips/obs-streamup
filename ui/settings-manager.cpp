@@ -111,7 +111,10 @@ PluginSettings GetCurrentSettings()
             settings.dockTools.showRefreshBrowserSources = obs_data_get_bool(dockData, "show_refresh_browser_sources");
             settings.dockTools.showRefreshAudioMonitoring = obs_data_get_bool(dockData, "show_refresh_audio_monitoring");
             settings.dockTools.showVideoCaptureOptions = obs_data_get_bool(dockData, "show_video_capture_options");
+            
             obs_data_release(dockData);
+        } else {
+            blog(LOG_INFO, "[StreamUP Settings] No dock_tools data found, using defaults");
         }
         
         obs_data_release(data);
@@ -133,6 +136,7 @@ void UpdateSettings(const PluginSettings& settings)
     obs_data_set_bool(dockData, "show_refresh_browser_sources", settings.dockTools.showRefreshBrowserSources);
     obs_data_set_bool(dockData, "show_refresh_audio_monitoring", settings.dockTools.showRefreshAudioMonitoring);
     obs_data_set_bool(dockData, "show_video_capture_options", settings.dockTools.showVideoCaptureOptions);
+    
     obs_data_set_obj(data, "dock_tools", dockData);
     obs_data_release(dockData);
     
@@ -179,19 +183,21 @@ void ShowSettingsDialog()
 
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsTitle"));
         
-        // Start with compact initial size - will expand based on content
-        dialog->resize(500, 400);
+        // Start with better initial size that fits content better
+        dialog->resize(580, 500);
         
         QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
         mainLayout->setContentsMargins(0, 0, 0, 0);
         mainLayout->setSpacing(0);
 
-        // Header section
+        // Header section - minimal padding since title creates the spacing
         QWidget* headerWidget = new QWidget();
         headerWidget->setObjectName("headerWidget");
-        headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px; }")
+        headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
             .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
-            .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
+            .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL) // 8px padding at top
+            .arg(StreamUP::UIStyles::Sizes::PADDING_XL)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)); // 8px padding at bottom
         
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
         headerLayout->setContentsMargins(0, 0, 0, 0);
@@ -201,6 +207,12 @@ void ShowSettingsDialog()
         titleLabel->setAlignment(Qt::AlignCenter);
         titleLabel->setProperty("isMainTitle", true);
         headerLayout->addWidget(titleLabel);
+        
+        // Add reduced spacing between title and description (same as WebSocket Commands)
+        headerLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
+        
+        QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsMainDescription"));
+        headerLayout->addWidget(subtitleLabel);
         
         mainLayout->addWidget(headerWidget);
 
@@ -232,7 +244,7 @@ void ShowSettingsDialog()
         QHBoxLayout* runAtStartupLayout = new QHBoxLayout();
         
         QLabel* runAtStartupLabel = new QLabel(obs_module_text("WindowSettingsRunOnStartup"));
-        runAtStartupLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+        runAtStartupLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
             .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
             .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
         
@@ -240,9 +252,11 @@ void ShowSettingsDialog()
             "", obs_data_get_bool(settings, obs_property_name(runAtStartupProp))
         );
         
-        QObject::connect(runAtStartupSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [=](bool checked) {
-            obs_data_set_bool(settings, obs_property_name(runAtStartupProp), checked);
-            SaveSettings(settings);
+        QObject::connect(runAtStartupSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+            // Use modern settings system to avoid conflicts with dock settings
+            PluginSettings currentSettings = GetCurrentSettings();
+            currentSettings.runAtStartup = checked;
+            UpdateSettings(currentSettings);
         });
 
         runAtStartupLayout->addWidget(runAtStartupLabel);
@@ -258,7 +272,7 @@ void ShowSettingsDialog()
         QHBoxLayout* notificationsLayout = new QHBoxLayout();
         
         QLabel* notificationsLabel = new QLabel(obs_module_text("WindowSettingsNotificationsMute"));
-        notificationsLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+        notificationsLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
             .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
             .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
         notificationsLabel->setToolTip(obs_module_text("WindowSettingsNotificationsMuteTooltip"));
@@ -268,10 +282,11 @@ void ShowSettingsDialog()
         );
         notificationsMuteSwitch->setToolTip(obs_module_text("WindowSettingsNotificationsMuteTooltip"));
         
-        QObject::connect(notificationsMuteSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [=](bool checked) {
-            obs_data_set_bool(settings, obs_property_name(notificationsMuteProp), checked);
-            notificationsMuted = checked;
-            SaveSettings(settings);
+        QObject::connect(notificationsMuteSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+            // Use modern settings system to avoid conflicts with dock settings
+            PluginSettings currentSettings = GetCurrentSettings();
+            currentSettings.notificationsMute = checked;
+            UpdateSettings(currentSettings);
         });
 
         notificationsLayout->addWidget(notificationsLabel);
@@ -347,31 +362,62 @@ void ShowSettingsDialog()
         scrollArea->setWidget(contentWidget);
         mainLayout->addWidget(scrollArea);
 
-        // Bottom button area
+        // Bottom button area - no background bar, just padded button
         QWidget* buttonWidget = new QWidget();
-        buttonWidget->setStyleSheet(QString("background: %1; padding: %2px;")
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
-            .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
+        buttonWidget->setStyleSheet("background: transparent;"); // Remove background bar
         QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
-        buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 0, 
-            StreamUP::UIStyles::Sizes::PADDING_XL, 0);
+        buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
+            StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+            StreamUP::UIStyles::Sizes::PADDING_XL, 
+            StreamUP::UIStyles::Sizes::PADDING_MEDIUM); // Consistent padding
 
-        QPushButton* cancelButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Cancel"), "neutral");
-        QObject::connect(cancelButton, &QPushButton::clicked, [dialog, settings]() {
+        QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Close"), "neutral");
+        QObject::connect(closeButton, &QPushButton::clicked, [=]() {
             obs_data_release(settings);
-            dialog->close();
-        });
-
-        QPushButton* saveButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Save"), "success");
-        QObject::connect(saveButton, &QPushButton::clicked, [=]() {
-            SaveSettings(settings);
-            dialog->close();
+            
+            // Navigate back to main page if we're on a sub-page
+            QWidget* currentWidget = scrollArea->widget();
+            if (currentWidget != contentWidget) {
+                // We're on a sub-page, go back to main content
+                scrollArea->takeWidget();
+                scrollArea->setWidget(contentWidget);
+                
+                // Reset the header title
+                if (dialog) {
+                    QLabel* mainTitle = dialog->findChild<QLabel*>();
+                    if (mainTitle && mainTitle->property("isMainTitle").toBool()) {
+                        mainTitle->setText(obs_module_text("WindowSettingsMainTitle"));
+                        
+                        // Remove back button if it exists
+                        QWidget* headerWidget = qobject_cast<QWidget*>(mainTitle->parent());
+                        if (headerWidget) {
+                            QHBoxLayout* headerLayout = qobject_cast<QHBoxLayout*>(headerWidget->layout());
+                            if (headerLayout) {
+                                // Find and remove back button
+                                for (int i = 0; i < headerLayout->count(); ++i) {
+                                    QLayoutItem* item = headerLayout->itemAt(i);
+                                    if (item && item->widget()) {
+                                        QPushButton* button = qobject_cast<QPushButton*>(item->widget());
+                                        if (button && button->property("isBackButton").toBool()) {
+                                            headerLayout->removeWidget(button);
+                                            button->deleteLater();
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // We're on main page, just close
+                dialog->close();
+            }
         });
 
         buttonLayout->addStretch();
-        buttonLayout->addWidget(cancelButton);
-        buttonLayout->addSpacing(10);
-        buttonLayout->addWidget(saveButton);
+        buttonLayout->addWidget(closeButton);
+        buttonLayout->addStretch();
         
         mainLayout->addWidget(buttonWidget);
 
@@ -386,7 +432,7 @@ void ShowSettingsDialog()
         settingsDialog = dialog;
         
         // Apply dynamic sizing that hugs content (this will handle showing the dialog)
-        StreamUP::UIStyles::ApplyDynamicSizing(dialog, 500, 900, 400, 650);
+        StreamUP::UIStyles::ApplyDynamicSizing(dialog, 580, 900, 500, 750);
         dialog->show();
     });
 }
@@ -433,7 +479,7 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
                     
                     backButton->show();
                     
-                    // Position back button absolutely on the left
+                    // Position back button absolutely on the left, centered vertically in header
                     backButton->move(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
                                    (headerWidget->height() - backButton->height()) / 2);
                     
@@ -455,7 +501,7 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
                         
                         // Resize dialog back to compact settings size
                         if (parentDialog && parentDialog->property("dynamicSizing").toBool()) {
-                            StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 500, 900, 400, 650);
+                            StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 580, 900, 500, 750);
                         }
                     });
                     
@@ -478,9 +524,9 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
     pluginsWidget->setStyleSheet(QString("background: transparent;")); // Remove dark background
     QVBoxLayout* pluginsLayout = new QVBoxLayout(pluginsWidget);
     pluginsLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
-        StreamUP::UIStyles::Sizes::PADDING_XL, 
+        StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM, // More padding at top
         StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
-        StreamUP::UIStyles::Sizes::PADDING_XL);
+        StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM); // More padding at bottom
     pluginsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
     
     // Title and description - closer together
@@ -828,7 +874,7 @@ void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialo
                     
                     backButton->show();
                     
-                    // Position back button absolutely on the left
+                    // Position back button absolutely on the left, centered vertically in header
                     backButton->move(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
                                    (headerWidget->height() - backButton->height()) / 2);
                     
@@ -844,11 +890,11 @@ void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialo
                         if (currentWidget) {
                             currentWidget->deleteLater();
                         }
-                        scrollArea->setWidget(originalContent);
+	                        scrollArea->setWidget(originalContent);
                         
                         // Resize dialog back to compact settings size
                         if (parentDialog && parentDialog->property("dynamicSizing").toBool()) {
-                            StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 500, 900, 400, 650);
+                            StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 580, 900, 500, 750);
                         }
                     });
                     
@@ -869,9 +915,9 @@ void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialo
     hotkeysWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
     QVBoxLayout* hotkeysLayout = new QVBoxLayout(hotkeysWidget);
     hotkeysLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
-        StreamUP::UIStyles::Sizes::PADDING_XL, 
+        StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM, // More padding at top
         StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
-        StreamUP::UIStyles::Sizes::PADDING_XL);
+        StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM); // More padding at bottom
     hotkeysLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
     
     // Title and description
@@ -1188,7 +1234,7 @@ void ShowDockConfigInline(QScrollArea* scrollArea, QWidget* originalContent, QDi
                     
                     backButton->show();
                     
-                    // Position back button absolutely on the left
+                    // Position back button absolutely on the left, centered vertically in header
                     backButton->move(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
                                    (headerWidget->height() - backButton->height()) / 2);
                     
@@ -1208,7 +1254,7 @@ void ShowDockConfigInline(QScrollArea* scrollArea, QWidget* originalContent, QDi
                         
                         // Resize dialog back to compact settings size
                         if (parentDialog && parentDialog->property("dynamicSizing").toBool()) {
-                            StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 500, 900, 400, 650);
+                            StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 580, 900, 500, 750);
                         }
                     });
                     
@@ -1229,9 +1275,9 @@ void ShowDockConfigInline(QScrollArea* scrollArea, QWidget* originalContent, QDi
     dockConfigWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
     QVBoxLayout* dockConfigLayout = new QVBoxLayout(dockConfigWidget);
     dockConfigLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
-        StreamUP::UIStyles::Sizes::PADDING_XL, 
+        StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM, // More padding at top
         StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
-        StreamUP::UIStyles::Sizes::PADDING_XL);
+        StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM); // More padding at bottom
     dockConfigLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
     
     // Title and description
@@ -1364,7 +1410,7 @@ void ShowDockConfigInline(QScrollArea* scrollArea, QWidget* originalContent, QDi
         switchWrapperLayout->setContentsMargins(0, 0, 0, 0);
         switchWrapperLayout->addStretch(); // Add stretch above
         
-        // Get fresh settings to ensure we have the latest values
+        // Force fresh settings load every time to ensure we have the latest values
         DockToolSettings freshSettings = GetDockToolSettings();
         bool currentValue = false;
         
@@ -1377,7 +1423,13 @@ void ShowDockConfigInline(QScrollArea* scrollArea, QWidget* originalContent, QDi
             case 4: currentValue = freshSettings.showVideoCaptureOptions; break;
         }
         
+        // Create switch with explicit initial state
         StreamUP::UIStyles::SwitchButton* toolSwitch = StreamUP::UIStyles::CreateStyledSwitch("", currentValue);
+        
+        // Force a visual refresh after the UI is fully constructed
+        QTimer::singleShot(0, [toolSwitch, currentValue]() {
+            toolSwitch->setChecked(currentValue);
+        });
         
         // Update settings immediately when switch changes  
         QObject::connect(toolSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [tool, toolSwitch](bool checked) {
