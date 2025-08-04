@@ -32,6 +32,8 @@ protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
+    void enterEvent(QEnterEvent* event) override;
+    void leaveEvent(QEvent* event) override;
     QSize sizeHint() const override;
 
 private slots:
@@ -42,14 +44,17 @@ private:
     int offset() const { return m_offset; }
 
     bool m_checked;
+    bool m_hovered;
+    bool m_initializing;
     QString m_text;
     int m_offset;
     QPropertyAnimation* m_animation;
     
-    static constexpr int SWITCH_WIDTH = 50;
-    static constexpr int SWITCH_HEIGHT = 24;
-    static constexpr int KNOB_SIZE = 18;
-    static constexpr int MARGIN = 3;
+    static constexpr int SWITCH_WIDTH = 48;   // Slightly narrower overall switch
+    static constexpr int SWITCH_HEIGHT = 23;
+    static constexpr int KNOB_WIDTH = 28;     // Keep knob same size (now bigger relative to track)
+    static constexpr int KNOB_HEIGHT = 19;    // Shorter for pill shape
+    static constexpr int MARGIN = 2;
 };
 
 // Utility function for creating styled switches

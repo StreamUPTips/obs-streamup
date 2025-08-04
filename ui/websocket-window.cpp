@@ -107,9 +107,11 @@ void ShowWebSocketWindow(bool showInternalTools)
         // Header section
         QWidget* headerWidget = new QWidget();
         headerWidget->setObjectName("headerWidget");
-        headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px; }")
+        headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
             .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
-            .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
+            .arg(StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM) // More padding at top
+            .arg(StreamUP::UIStyles::Sizes::PADDING_XL)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_XL)); // Standard padding at bottom
         
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
         headerLayout->setContentsMargins(0, 0, 0, 0);
@@ -117,6 +119,9 @@ void ShowWebSocketWindow(bool showInternalTools)
         QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WebSocket.Window.Header"));
         titleLabel->setAlignment(Qt::AlignCenter);
         headerLayout->addWidget(titleLabel);
+        
+        // Add reduced spacing between title and description
+        headerLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
         
         QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WebSocket.Window.Description"));
         headerLayout->addWidget(subtitleLabel);
@@ -225,20 +230,21 @@ void ShowWebSocketWindow(bool showInternalTools)
         scrollArea->setWidget(contentWidget);
         mainLayout->addWidget(scrollArea);
 
-        // Bottom button area
+        // Bottom button area - no background bar, just padded button
         QWidget* buttonWidget = new QWidget();
-        buttonWidget->setStyleSheet(QString("background: %1; padding: %2px;")
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
-            .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
+        buttonWidget->setStyleSheet("background: transparent;"); // Remove background bar
         QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
-        buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0, 
-            StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
+        buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+            StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+            StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+            StreamUP::UIStyles::Sizes::PADDING_MEDIUM); // Add padding all around
 
         QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WebSocket.Button.Close"), "neutral");
         QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
 
         buttonLayout->addStretch();
         buttonLayout->addWidget(closeButton);
+        buttonLayout->addStretch(); // Center the button
         
         mainLayout->addWidget(buttonWidget);
 
