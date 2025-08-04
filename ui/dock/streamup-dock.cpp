@@ -4,6 +4,7 @@
 #include "../../flow-layout.hpp"
 #include "../../video-capture-popup.hpp"
 #include "../ui-styles.hpp"
+#include "../settings-manager.hpp"
 #include <obs.h>
 #include <obs-frontend-api.h>
 #include <obs-module.h>
@@ -14,6 +15,14 @@
 #include <QStyle>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QMenu>
+#include <QAction>
+#include <QContextMenuEvent>
+#include <QList>
+#include <QMetaObject>
+
+// Static list to track all dock instances
+static QList<StreamUPDock*> dockInstances;
 
 void StreamUPDock::applyFileIconToButton(QPushButton *button, const QString &filePath)
 {
@@ -81,10 +90,17 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	setupObsSignals();
 
 	updateButtonIcons();
+	updateToolVisibility();
+	
+	// Add this dock to the static list for notifications
+	dockInstances.append(this);
 }
 
 StreamUPDock::~StreamUPDock()
 {
+	// Remove this dock from the static list
+	dockInstances.removeAll(this);
+	
 	signal_handler_t *sh = obs_get_signal_handler();
 	signal_handler_disconnect(sh, "item_add", onSceneItemAdded, this);
 	signal_handler_disconnect(sh, "item_remove", onSceneItemRemoved, this);
@@ -320,4 +336,54 @@ void StreamUPDock::onItemLockChanged(void *param, calldata_t *data)
 	if (self->isProcessing)
 		return;
 	self->updateButtonIcons();
+}
+
+void StreamUPDock::updateToolVisibility()
+{
+	StreamUP::SettingsManager::DockToolSettings settings = StreamUP::SettingsManager::GetDockToolSettings();
+	
+	button1->setVisible(settings.showLockAllSources);
+	button2->setVisible(settings.showLockCurrentSources);
+	button3->setVisible(settings.showRefreshBrowserSources);
+	button4->setVisible(settings.showRefreshAudioMonitoring);
+	videoCaptureButton->setVisible(settings.showVideoCaptureOptions);
+	
+	// Force layout update and repaint
+	if (mainDockLayout) {
+		mainDockLayout->update();
+	}
+	this->update();
+	this->repaint();
+}
+
+void StreamUPDock::showContextMenu(const QPoint& position)
+{
+	QMenu contextMenu(this);
+	
+	QAction* configureAction = contextMenu.addAction(obs_module_text("DockContextMenuConfigure"));
+	connect(configureAction, &QAction::triggered, []() {
+		StreamUP::SettingsManager::ShowSettingsDialog();
+	});
+	
+	contextMenu.exec(mapToGlobal(position));
+}
+
+void StreamUPDock::contextMenuEvent(QContextMenuEvent* event)
+{
+	showContextMenu(event->pos());
+}
+
+void StreamUPDock::onSettingsChanged()
+{
+	updateToolVisibility();
+}
+
+void StreamUPDock::NotifyAllDocksSettingsChanged()
+{
+	for (StreamUPDock* dock : dockInstances) {
+		if (dock) {
+			// Use Qt's queued connection to ensure we're on the correct thread
+			QMetaObject::invokeMethod(dock, "onSettingsChanged", Qt::QueuedConnection);
+		}
+	}
 }

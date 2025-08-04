@@ -12,11 +12,30 @@ namespace StreamUP {
 namespace SettingsManager {
 
 /**
+ * @brief Dock tool visibility settings
+ */
+struct DockToolSettings {
+    bool showLockAllSources;
+    bool showLockCurrentSources;
+    bool showRefreshBrowserSources;
+    bool showRefreshAudioMonitoring;
+    bool showVideoCaptureOptions;
+    
+    DockToolSettings() : 
+        showLockAllSources(true),
+        showLockCurrentSources(true), 
+        showRefreshBrowserSources(true),
+        showRefreshAudioMonitoring(true),
+        showVideoCaptureOptions(true) {}
+};
+
+/**
  * @brief Settings structure to hold plugin configuration
  */
 struct PluginSettings {
     bool runAtStartup;
     bool notificationsMute;
+    DockToolSettings dockTools;
     
     PluginSettings() : runAtStartup(true), notificationsMute(false) {}
 };
@@ -88,6 +107,26 @@ void ShowInstalledPluginsPage();
  * @param parentDialog Optional parent dialog for dynamic resizing
  */
 void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialog* parentDialog = nullptr);
+
+/**
+ * @brief Get current dock tool settings
+ * @return DockToolSettings Current dock tool visibility configuration
+ */
+DockToolSettings GetDockToolSettings();
+
+/**
+ * @brief Update dock tool settings
+ * @param dockSettings The new dock tool settings to apply
+ */
+void UpdateDockToolSettings(const DockToolSettings& dockSettings);
+
+/**
+ * @brief Show dock configuration settings inline within the same window
+ * @param scrollArea The scroll area to replace content in
+ * @param originalContent The original content widget to restore later
+ * @param parentDialog Optional parent dialog for dynamic resizing
+ */
+void ShowDockConfigInline(QScrollArea* scrollArea, QWidget* originalContent, QDialog* parentDialog = nullptr);
 
 } // namespace SettingsManager
 } // namespace StreamUP

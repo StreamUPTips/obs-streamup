@@ -4,6 +4,7 @@
 #include "plugin-manager.hpp"
 #include "hotkey-manager.hpp"
 #include "hotkey-widget.hpp"
+#include "dock/streamup-dock.hpp"
 #include <obs-module.h>
 #include <obs-properties.h>
 #include <obs-frontend-api.h>
@@ -54,6 +55,16 @@ obs_data_t* LoadSettings()
         obs_data_set_bool(data, "run_at_startup", true);
         obs_data_set_bool(data, "notifications_mute", false);
         
+        // Set default dock tool settings
+        obs_data_t* dockData = obs_data_create();
+        obs_data_set_bool(dockData, "show_lock_all_sources", true);
+        obs_data_set_bool(dockData, "show_lock_current_sources", true);
+        obs_data_set_bool(dockData, "show_refresh_browser_sources", true);
+        obs_data_set_bool(dockData, "show_refresh_audio_monitoring", true);
+        obs_data_set_bool(dockData, "show_video_capture_options", true);
+        obs_data_set_obj(data, "dock_tools", dockData);
+        obs_data_release(dockData);
+        
         if (obs_data_save_json(data, configPath)) {
             blog(LOG_INFO, "[StreamUP] Default settings saved to %s", configPath);
         } else {
@@ -91,6 +102,18 @@ PluginSettings GetCurrentSettings()
     if (data) {
         settings.runAtStartup = obs_data_get_bool(data, "run_at_startup");
         settings.notificationsMute = obs_data_get_bool(data, "notifications_mute");
+        
+        // Load dock tool settings
+        obs_data_t* dockData = obs_data_get_obj(data, "dock_tools");
+        if (dockData) {
+            settings.dockTools.showLockAllSources = obs_data_get_bool(dockData, "show_lock_all_sources");
+            settings.dockTools.showLockCurrentSources = obs_data_get_bool(dockData, "show_lock_current_sources");
+            settings.dockTools.showRefreshBrowserSources = obs_data_get_bool(dockData, "show_refresh_browser_sources");
+            settings.dockTools.showRefreshAudioMonitoring = obs_data_get_bool(dockData, "show_refresh_audio_monitoring");
+            settings.dockTools.showVideoCaptureOptions = obs_data_get_bool(dockData, "show_video_capture_options");
+            obs_data_release(dockData);
+        }
+        
         obs_data_release(data);
     }
     
@@ -102,6 +125,16 @@ void UpdateSettings(const PluginSettings& settings)
     obs_data_t* data = obs_data_create();
     obs_data_set_bool(data, "run_at_startup", settings.runAtStartup);
     obs_data_set_bool(data, "notifications_mute", settings.notificationsMute);
+    
+    // Save dock tool settings
+    obs_data_t* dockData = obs_data_create();
+    obs_data_set_bool(dockData, "show_lock_all_sources", settings.dockTools.showLockAllSources);
+    obs_data_set_bool(dockData, "show_lock_current_sources", settings.dockTools.showLockCurrentSources);
+    obs_data_set_bool(dockData, "show_refresh_browser_sources", settings.dockTools.showRefreshBrowserSources);
+    obs_data_set_bool(dockData, "show_refresh_audio_monitoring", settings.dockTools.showRefreshAudioMonitoring);
+    obs_data_set_bool(dockData, "show_video_capture_options", settings.dockTools.showVideoCaptureOptions);
+    obs_data_set_obj(data, "dock_tools", dockData);
+    obs_data_release(dockData);
     
     SaveSettings(data);
     
@@ -300,6 +333,27 @@ void ShowSettingsDialog()
         hotkeysLayout->addLayout(hotkeysButtonLayout);
         
         contentLayout->addWidget(hotkeysGroup);
+
+        // Dock Configuration Group
+        QGroupBox* dockConfigGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsDockConfigGroup"), "info");
+        
+        QVBoxLayout* dockConfigLayout = new QVBoxLayout(dockConfigGroup);
+        dockConfigLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+        QPushButton* dockConfigButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsManageDockConfig"), "info");
+        
+        // Connect dock config button to show dock config inline with dynamic sizing
+        QObject::connect(dockConfigButton, &QPushButton::clicked, [dialog, scrollArea, contentWidget]() {
+            StreamUP::SettingsManager::ShowDockConfigInline(scrollArea, contentWidget, dialog);
+        });
+        
+        QHBoxLayout* dockConfigButtonLayout = new QHBoxLayout();
+        dockConfigButtonLayout->addStretch();
+        dockConfigButtonLayout->addWidget(dockConfigButton);
+        dockConfigButtonLayout->addStretch();
+        dockConfigLayout->addLayout(dockConfigButtonLayout);
+        
+        contentLayout->addWidget(dockConfigGroup);
         contentLayout->addStretch();
         
         scrollArea->setWidget(contentWidget);
@@ -1100,6 +1154,393 @@ void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialo
     // Expand dialog to accommodate hotkeys content
     if (parentDialog && parentDialog->property("dynamicSizing").toBool()) {
         StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 700, 1000, 500, 750);
+    }
+}
+
+DockToolSettings GetDockToolSettings()
+{
+    PluginSettings settings = GetCurrentSettings();
+    return settings.dockTools;
+}
+
+void UpdateDockToolSettings(const DockToolSettings& dockSettings)
+{
+    PluginSettings settings = GetCurrentSettings();
+    settings.dockTools = dockSettings;
+    UpdateSettings(settings);
+    
+    // Notify all dock instances to update their visibility
+    StreamUPDock::NotifyAllDocksSettingsChanged();
+}
+
+void ShowDockConfigInline(QScrollArea* scrollArea, QWidget* originalContent, QDialog* parentDialog)
+{
+    // Store the current widget temporarily
+    QWidget* currentWidget = scrollArea->takeWidget();
+    
+    // Find and update the main header with back button
+    if (parentDialog) {
+        QLabel* mainTitle = parentDialog->findChild<QLabel*>();
+        if (mainTitle && mainTitle->property("isMainTitle").toBool()) {
+            
+            // Get the header widget
+            QWidget* headerWidget = qobject_cast<QWidget*>(mainTitle->parent());
+            if (headerWidget) {
+                QVBoxLayout* headerLayout = qobject_cast<QVBoxLayout*>(headerWidget->layout());
+                if (headerLayout && headerLayout->property("isMainHeaderLayout").toBool()) {
+                    
+                    // Create back button with compact sizing
+                    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsBackButton"), "neutral");
+                    backButton->setParent(headerWidget);
+                    backButton->setProperty("isBackButton", true);
+                    
+                    // Set explicit size to prevent stretching
+                    backButton->setFixedSize(80, 30);
+                    backButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+                    
+                    backButton->show();
+                    
+                    // Position back button absolutely on the left
+                    backButton->move(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+                                   (headerWidget->height() - backButton->height()) / 2);
+                    
+                    QObject::connect(backButton, &QPushButton::clicked, [scrollArea, originalContent, parentDialog, backButton]() {
+                        // Remove back button
+                        if (backButton) {
+                            backButton->hide();
+                            backButton->deleteLater();
+                        }
+                        
+                        // Restore original content
+                        QWidget* currentWidget = scrollArea->takeWidget();
+                        if (currentWidget) {
+                            currentWidget->deleteLater();
+                        }
+                        scrollArea->setWidget(originalContent);
+                        
+                        // Resize dialog back to compact settings size
+                        if (parentDialog && parentDialog->property("dynamicSizing").toBool()) {
+                            StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 500, 900, 400, 650);
+                        }
+                    });
+                    
+                    // Ensure back button is positioned correctly after layout updates
+                    QTimer::singleShot(10, [backButton, headerWidget]() {
+                        if (backButton && headerWidget) {
+                            backButton->move(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+                                           (headerWidget->height() - backButton->height()) / 2);
+                        }
+                    });
+                }
+            }
+        }
+    }
+    
+    // Create replacement content widget
+    QWidget* dockConfigWidget = new QWidget();
+    dockConfigWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
+    QVBoxLayout* dockConfigLayout = new QVBoxLayout(dockConfigWidget);
+    dockConfigLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+        StreamUP::UIStyles::Sizes::PADDING_XL, 
+        StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+        StreamUP::UIStyles::Sizes::PADDING_XL);
+    dockConfigLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+    
+    // Title and description
+    QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsDockConfigTitle"));
+    dockConfigLayout->addWidget(titleLabel);
+    
+    QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsDockConfigDesc"));
+    dockConfigLayout->addWidget(descLabel);
+    
+    // Reduce spacing after header
+    dockConfigLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+    
+    // Info section
+    QLabel* infoLabel = new QLabel(obs_module_text("WindowSettingsDockConfigInfo"));
+    infoLabel->setStyleSheet(QString(
+        "QLabel {"
+        "color: %1;"
+        "font-size: %2px;"
+        "line-height: 1.3;"
+        "padding: %3px;"
+        "background: %4;"
+        "border: 1px solid %5;"
+        "border-radius: %6px;"
+        "}")
+        .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
+        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
+        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2)
+        .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
+        .arg(StreamUP::UIStyles::Colors::BACKGROUND_HOVER)
+        .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS));
+    infoLabel->setWordWrap(true);
+    dockConfigLayout->addWidget(infoLabel);
+
+    // Create GroupBox for dock tools configuration
+    QGroupBox* toolsGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsDockToolsGroupTitle"), "info");
+    
+    QVBoxLayout* toolsGroupLayout = new QVBoxLayout(toolsGroup);
+    toolsGroupLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+        0, // No top padding
+        StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+        0); // No bottom padding
+    toolsGroupLayout->setSpacing(0); // No spacing since we handle it in the widget padding
+    
+    // Get current dock settings
+    DockToolSettings currentSettings = GetDockToolSettings();
+    
+    // Define tool information structure
+    struct ToolInfo {
+        QString name;
+        QString description;
+        bool* settingPtr;
+        int toolIndex; // Add index to identify which tool this is
+    };
+    
+    // List of all dock tools with pointers to their settings
+    std::vector<ToolInfo> dockTools = {
+        {obs_module_text("DockToolLockAllSources"), obs_module_text("DockToolLockAllSourcesDesc"), &currentSettings.showLockAllSources, 0},
+        {obs_module_text("DockToolLockCurrentSources"), obs_module_text("DockToolLockCurrentSourcesDesc"), &currentSettings.showLockCurrentSources, 1},
+        {obs_module_text("DockToolRefreshBrowserSources"), obs_module_text("DockToolRefreshBrowserSourcesDesc"), &currentSettings.showRefreshBrowserSources, 2},
+        {obs_module_text("DockToolRefreshAudioMonitoring"), obs_module_text("DockToolRefreshAudioMonitoringDesc"), &currentSettings.showRefreshAudioMonitoring, 3},
+        {obs_module_text("DockToolVideoCaptureOptions"), obs_module_text("DockToolVideoCaptureOptionsDesc"), &currentSettings.showVideoCaptureOptions, 4}
+    };
+    
+    // Create tool rows matching WebSocket/hotkeys UI pattern
+    for (int i = 0; i < dockTools.size(); ++i) {
+        const auto& tool = dockTools[i];
+        
+        QWidget* toolRow = new QWidget();
+        toolRow->setStyleSheet(QString(
+            "QWidget {"
+            "background: transparent;"
+            "border: none;"
+            "padding: 0px;"
+            "}"));
+        
+        QHBoxLayout* toolRowLayout = new QHBoxLayout(toolRow);
+        toolRowLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3, 0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3);
+        toolRowLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        
+        // Text section - vertical layout with tight spacing (like WebSocket/hotkeys UI)
+        QVBoxLayout* textLayout = new QVBoxLayout();
+        textLayout->setSpacing(2); // Very tight spacing between name and description
+        textLayout->setContentsMargins(0, 0, 0, 0);
+        
+        // Tool name - use same styling as WebSocket/hotkeys UI
+        QLabel* nameLabel = new QLabel(tool.name);
+        nameLabel->setStyleSheet(QString(
+            "QLabel {"
+            "color: %1;"
+            "font-size: %2px;"
+            "font-weight: bold;"
+            "background: transparent;"
+            "border: none;"
+            "margin: 0px;"
+            "padding: 0px;"
+            "}")
+            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+        
+        // Tool description - use same styling as WebSocket/hotkeys UI
+        QLabel* descLabel = new QLabel(tool.description);
+        descLabel->setStyleSheet(QString(
+            "QLabel {"
+            "color: %1;"
+            "font-size: %2px;"
+            "background: transparent;"
+            "border: none;"
+            "margin: 0px;"
+            "padding: 0px;"
+            "}")
+            .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+        descLabel->setWordWrap(true);
+        
+        textLayout->addWidget(nameLabel);
+        textLayout->addWidget(descLabel);
+        
+        // Create a wrapper widget for text info that centers the content vertically (like WebSocket/hotkeys UI)
+        QWidget* textWrapper = new QWidget();
+        QVBoxLayout* wrapperLayout = new QVBoxLayout(textWrapper);
+        wrapperLayout->setContentsMargins(0, 0, 0, 0);
+        wrapperLayout->addStretch(); // Add stretch above
+        wrapperLayout->addLayout(textLayout);
+        wrapperLayout->addStretch(); // Add stretch below
+        
+        toolRowLayout->addWidget(textWrapper, 1);
+        
+        // Checkbox section - also center vertically
+        QVBoxLayout* checkboxWrapperLayout = new QVBoxLayout();
+        checkboxWrapperLayout->setContentsMargins(0, 0, 0, 0);
+        checkboxWrapperLayout->addStretch(); // Add stretch above
+        
+        QCheckBox* toolCheckBox = new QCheckBox();
+        toolCheckBox->setChecked(*tool.settingPtr);
+        
+        QString checkboxStyle = QString(
+            "QCheckBox::indicator {"
+            "width: 18px;"
+            "height: 18px;"
+            "border: 2px solid %1;"
+            "border-radius: 3px;"
+            "background: %2;"
+            "}"
+            "QCheckBox::indicator:checked {"
+            "background: %3;"
+            "border: 2px solid %3;"
+            "}"
+            "QCheckBox::indicator:checked:hover {"
+            "background: %4;"
+            "}")
+            .arg(StreamUP::UIStyles::Colors::BORDER_LIGHT)
+            .arg(StreamUP::UIStyles::Colors::BACKGROUND_INPUT)
+            .arg(StreamUP::UIStyles::Colors::INFO)
+            .arg(StreamUP::UIStyles::Colors::INFO_HOVER);
+        
+        toolCheckBox->setStyleSheet(checkboxStyle);
+        
+        // Update settings immediately when checkbox changes
+        QObject::connect(toolCheckBox, 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+            &QCheckBox::checkStateChanged,
+#else
+            &QCheckBox::stateChanged,
+#endif
+            [toolCheckBox, tool](int state) {
+                // Get current settings from persistent storage
+                DockToolSettings settings = GetDockToolSettings();
+                
+                // Update the specific setting based on tool index
+                switch (tool.toolIndex) {
+                    case 0: settings.showLockAllSources = (state == Qt::Checked); break;
+                    case 1: settings.showLockCurrentSources = (state == Qt::Checked); break;
+                    case 2: settings.showRefreshBrowserSources = (state == Qt::Checked); break;
+                    case 3: settings.showRefreshAudioMonitoring = (state == Qt::Checked); break;
+                    case 4: settings.showVideoCaptureOptions = (state == Qt::Checked); break;
+                }
+                
+                // Update the local pointer too for UI consistency
+                *tool.settingPtr = (state == Qt::Checked);
+                
+                // Save the updated settings immediately (this calls NotifyAllDocksSettingsChanged)
+                UpdateDockToolSettings(settings);
+            });
+        
+        checkboxWrapperLayout->addWidget(toolCheckBox);
+        checkboxWrapperLayout->addStretch(); // Add stretch below
+        
+        toolRowLayout->addLayout(checkboxWrapperLayout);
+        
+        toolsGroupLayout->addWidget(toolRow);
+        
+        // Add separator line between tools (but not after the last one) - like WebSocket/hotkeys UI
+        if (i < dockTools.size() - 1) {
+            QFrame* separator = new QFrame();
+            separator->setFrameShape(QFrame::HLine);
+            separator->setFrameShadow(QFrame::Plain);
+            separator->setStyleSheet(QString(
+                "QFrame {"
+                "color: rgba(113, 128, 150, 0.3);"
+                "background-color: rgba(113, 128, 150, 0.3);"
+                "border: none;"
+                "margin: 0px;"
+                "max-height: 1px;"
+                "}"));
+            toolsGroupLayout->addWidget(separator);
+        }
+    }
+    
+    // Action buttons section - only reset button, no save (like hotkeys UI)
+    QHBoxLayout* actionLayout = new QHBoxLayout();
+    actionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+    actionLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3, 0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3);
+    
+    QPushButton* resetButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsResetDockConfig"), "error");
+    
+    // Store all checkboxes so we can update them after reset
+    QList<QCheckBox*> allCheckboxes;
+    for (int i = 0; i < toolsGroupLayout->count(); i++) {
+        QLayoutItem* item = toolsGroupLayout->itemAt(i);
+        if (item && item->widget()) {
+            QWidget* widget = item->widget();
+            if (QString(widget->metaObject()->className()) != "QFrame") {
+                QCheckBox* checkbox = widget->findChild<QCheckBox*>();
+                if (checkbox) {
+                    allCheckboxes.append(checkbox);
+                }
+            }
+        }
+    }
+    
+    QObject::connect(resetButton, &QPushButton::clicked, [allCheckboxes, dockTools]() {
+        // Show confirmation dialog for reset (matching hotkeys pattern)
+        StreamUP::UIHelpers::ShowDialogOnUIThread([allCheckboxes, dockTools]() {
+            QDialog* confirmDialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsResetDockConfigTitle"));
+            confirmDialog->resize(400, 200);
+            
+            QVBoxLayout* layout = new QVBoxLayout(confirmDialog);
+            
+            QLabel* warningLabel = new QLabel(obs_module_text("WindowSettingsResetDockConfigWarning"));
+            warningLabel->setStyleSheet(QString("color: %1; font-size: %2px; padding: %3px;")
+                .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+                .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)
+                .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
+            warningLabel->setWordWrap(true);
+            warningLabel->setAlignment(Qt::AlignCenter);
+            
+            layout->addWidget(warningLabel);
+            
+            QHBoxLayout* buttonLayout = new QHBoxLayout();
+            
+            QPushButton* cancelBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Cancel"), "neutral");
+            QPushButton* resetBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsResetDockConfigButton"), "error");
+            
+            QObject::connect(cancelBtn, &QPushButton::clicked, confirmDialog, &QDialog::close);
+            QObject::connect(resetBtn, &QPushButton::clicked, [confirmDialog, allCheckboxes, dockTools]() {
+                // Reset all dock tools to default (visible)
+                DockToolSettings defaultSettings;
+                UpdateDockToolSettings(defaultSettings);
+                
+                // Update all checkboxes to checked state
+                for (QCheckBox* checkbox : allCheckboxes) {
+                    if (checkbox) {
+                        checkbox->setChecked(true);
+                    }
+                }
+                
+                // Update the tool setting pointers
+                for (const auto& tool : dockTools) {
+                    *tool.settingPtr = true;
+                }
+                
+                confirmDialog->close();
+            });
+            
+            buttonLayout->addStretch();
+            buttonLayout->addWidget(cancelBtn); 
+            buttonLayout->addWidget(resetBtn);
+            
+            layout->addLayout(buttonLayout);
+            
+            confirmDialog->show();
+        });
+    });
+    
+    actionLayout->addStretch();
+    actionLayout->addWidget(resetButton);
+    
+    toolsGroupLayout->addLayout(actionLayout);
+    dockConfigLayout->addWidget(toolsGroup);
+    dockConfigLayout->addStretch();
+    
+    // Replace the content in the scroll area
+    scrollArea->setWidget(dockConfigWidget);
+    
+    // Expand dialog to accommodate dock config content
+    if (parentDialog && parentDialog->property("dynamicSizing").toBool()) {
+        StreamUP::UIStyles::ApplyDynamicSizing(parentDialog, 600, 900, 450, 700);
     }
 }
 
