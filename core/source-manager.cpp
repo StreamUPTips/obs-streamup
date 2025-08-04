@@ -159,66 +159,71 @@ bool FindSelected(obs_scene_t *scene, obs_sceneitem_t *item, void *param)
 //-------------------SOURCE LOCKING FUNCTIONS-------------------
 bool CheckGroupItemsIfAnyUnlocked(obs_source_t *group_source)
 {
+	if (!group_source) return false;
+	
 	obs_scene_t *group_scene = obs_group_from_source(group_source);
-	if (!group_scene) {
-		return false;
-	}
-
-	return CheckIfAnyUnlocked(group_scene);
+	return group_scene ? CheckIfAnyUnlocked(group_scene) : false;
 }
 
 bool CheckIfAnyUnlocked(obs_scene_t *scene)
 {
+	if (!scene) return false;
+	
 	bool any_unlocked = false;
 	obs_scene_enum_items(
 		scene,
-		[](obs_scene_t *scene, obs_sceneitem_t *item, void *param) {
+		[](obs_scene_t *, obs_sceneitem_t *item, void *param) -> bool {
 			bool *any_unlocked = static_cast<bool *>(param);
+			
+			// Early termination if already found unlocked item
+			if (*any_unlocked) return false;
+			
 			obs_source_t *source = obs_sceneitem_get_source(item);
+			if (!source) return true;
 
-			UNUSED_PARAMETER(scene);
-
+			// Check groups recursively with early termination
 			if (obs_source_get_type(source) == OBS_SOURCE_TYPE_SCENE) {
 				if (CheckGroupItemsIfAnyUnlocked(source)) {
 					*any_unlocked = true;
-					return false; // Stop enumeration
+					return false;
 				}
 			}
 
+			// Check if current item is unlocked
 			if (!obs_sceneitem_locked(item)) {
 				*any_unlocked = true;
-				return false; // Stop enumeration
+				return false;
 			}
-			return true; // Continue enumeration
+			return true;
 		},
 		&any_unlocked);
 	return any_unlocked;
 }
 
-bool ToggleLockSceneItemCallback(obs_scene_t *scene, obs_sceneitem_t *item, void *param)
+bool ToggleLockSceneItemCallback(obs_scene_t *, obs_sceneitem_t *item, void *param)
 {
-	UNUSED_PARAMETER(scene);
-
 	bool *lock = static_cast<bool *>(param);
 	obs_source_t *source = obs_sceneitem_get_source(item);
+	
+	if (!source) return true;
 
+	// Handle groups first, then set item lock state
 	if (obs_source_get_type(source) == OBS_SOURCE_TYPE_SCENE) {
 		ToggleLockGroupItems(source, *lock);
 	}
 
 	obs_sceneitem_set_locked(item, *lock);
-
-	return true; // Return true to continue enumeration
+	return true;
 }
 
 void ToggleLockGroupItems(obs_source_t *group, bool lock)
 {
+	if (!group) return;
+	
 	obs_scene_t *group_scene = obs_group_from_source(group);
-	if (!group_scene) {
-		return;
+	if (group_scene) {
+		obs_scene_enum_items(group_scene, ToggleLockSceneItemCallback, &lock);
 	}
-
-	obs_scene_enum_items(group_scene, ToggleLockSceneItemCallback, &lock);
 }
 
 bool ToggleLockSceneItems(obs_scene_t *scene, bool lock)
@@ -231,18 +236,28 @@ bool ToggleLockSourcesInCurrentScene(bool sendNotification)
 {
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	if (!current_scene) {
-		blog(LOG_WARNING, "[StreamUP] No current scene found.");
+		if (sendNotification) {
+			StreamUP::ErrorHandler::LogError("No current scene found", 
+				StreamUP::ErrorHandler::Category::Source);
+		}
 		return false;
 	}
 
 	obs_scene_t *scene = obs_scene_from_source(current_scene);
 	if (!scene) {
 		obs_source_release(current_scene);
+		if (sendNotification) {
+			StreamUP::ErrorHandler::LogError("Invalid scene source", 
+				StreamUP::ErrorHandler::Category::Source);
+		}
 		return false;
 	}
 
+	// Single-pass optimized check and toggle
 	bool any_unlocked = CheckIfAnyUnlocked(scene);
-	ToggleLockSceneItems(scene, any_unlocked);
+	bool lock_state = any_unlocked; // Lock if any unlocked, unlock if all locked
+	
+	ToggleLockSceneItems(scene, lock_state);
 	obs_source_release(current_scene);
 
 	if (sendNotification) {
@@ -260,47 +275,86 @@ bool ToggleLockSourcesInCurrentScene(bool sendNotification)
 	return any_unlocked;
 }
 
-// Helper callbacks for all scenes operations
-static bool CheckIfAnyUnlockedCallback(void *param, obs_source_t *source)
-{
-	bool *any_unlocked = static_cast<bool *>(param);
-	obs_scene_t *scene = obs_scene_from_source(source);
+// Optimized structure for combined operations
+struct LockOperationData {
+	bool any_unlocked = false;
+	bool lock_determined = false;
+	bool lock_state = false;
+	bool check_only = false;
+};
 
-	if (CheckIfAnyUnlocked(scene)) {
-		*any_unlocked = true;
-		return false; // Stop enumeration
+// Optimized single-pass callback for all scenes operations
+static bool OptimizedLockCallback(void *param, obs_source_t *source)
+{
+	LockOperationData *data = static_cast<LockOperationData *>(param);
+	obs_scene_t *scene = obs_scene_from_source(source);
+	if (!scene) return true;
+
+	// First pass: determine lock state if not already determined
+	if (!data->lock_determined && !data->check_only) {
+		if (CheckIfAnyUnlocked(scene)) {
+			data->any_unlocked = true;
+			data->lock_state = true; // Lock because unlocked items found
+			data->lock_determined = true;
+		}
+	}
+	
+	// For check-only operations
+	if (data->check_only) {
+		if (CheckIfAnyUnlocked(scene)) {
+			data->any_unlocked = true;
+			return false; // Early termination for check-only
+		}
+		return true;
 	}
 
-	return true; // Continue enumeration
-}
+	// Apply lock operation if state is determined
+	if (data->lock_determined) {
+		ToggleLockSceneItems(scene, data->lock_state);
+	}
 
-static bool ToggleLockSceneItemsCallback(void *param, obs_source_t *source)
-{
-	bool *lock = static_cast<bool *>(param);
-	obs_scene_t *scene = obs_scene_from_source(source);
-	ToggleLockSceneItems(scene, *lock);
-	return true; // Continue enumeration
+	return true;
 }
 
 bool CheckIfAnyUnlockedInAllScenes()
 {
-	bool any_unlocked = false;
-	obs_enum_scenes(CheckIfAnyUnlockedCallback, &any_unlocked);
-	return any_unlocked;
+	LockOperationData data;
+	data.check_only = true;
+	obs_enum_scenes(OptimizedLockCallback, &data);
+	return data.any_unlocked;
 }
 
 static void ToggleLockSourcesInAllScenes(bool lock)
 {
-	obs_enum_scenes(ToggleLockSceneItemsCallback, &lock);
+	LockOperationData data;
+	data.lock_determined = true;
+	data.lock_state = lock;
+	obs_enum_scenes(OptimizedLockCallback, &data);
 }
 
 bool ToggleLockAllSources(bool sendNotification)
 {
-	bool any_unlocked = CheckIfAnyUnlockedInAllScenes();
-	ToggleLockSourcesInAllScenes(any_unlocked);
+	// Optimized single-pass operation
+	LockOperationData data;
+	
+	// First pass: determine lock state
+	obs_enum_scenes(OptimizedLockCallback, &data);
+	
+	// If no unlocked items found, unlock all (toggle behavior)
+	if (!data.any_unlocked) {
+		data.lock_state = false; // Unlock all
+		data.lock_determined = true;
+	} else {
+		data.lock_state = true; // Lock all (already determined)
+		data.lock_determined = true;
+	}
+	
+	// Second pass: apply the determined lock state
+	data.check_only = false;
+	obs_enum_scenes(OptimizedLockCallback, &data);
 
 	if (sendNotification) {
-		if (any_unlocked) {
+		if (data.any_unlocked) {
 			blog(LOG_INFO, "[StreamUP] All sources in all scenes have been locked.");
 			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("SourceLockSystem"),
 					     obs_module_text("LockedAllSources"));
@@ -311,7 +365,7 @@ bool ToggleLockAllSources(bool sendNotification)
 		}
 	}
 
-	return any_unlocked;
+	return data.any_unlocked;
 }
 
 void LockAllSourcesDialog()
@@ -389,20 +443,17 @@ const char *GetSelectedSourceFromCurrentScene()
 bool AreAllSourcesLockedInCurrentScene()
 {
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
-	if (!current_scene) {
-		return false;
-	}
+	if (!current_scene) return false;
 
 	obs_scene_t *scene = obs_scene_from_source(current_scene);
-	if (!scene) {
-		obs_source_release(current_scene);
-		return false;
+	bool result = false;
+	
+	if (scene) {
+		result = !CheckIfAnyUnlocked(scene);
 	}
-
-	bool any_unlocked = CheckIfAnyUnlocked(scene);
+	
 	obs_source_release(current_scene);
-
-	return !any_unlocked;
+	return result;
 }
 
 bool AreAllSourcesLockedInAllScenes()
