@@ -356,7 +356,7 @@ std::string LoadLocalPluginInfo()
 
 std::string LoadLocalPatchNotes()
 {
-    QFile file(":patch-notes.md");
+    QFile file(":patch-notes-summary.md");
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         ErrorHandler::LogWarning("Failed to open local patch notes file", ErrorHandler::Category::UI);
         return "";
@@ -535,8 +535,7 @@ void CreateSplashDialog()
         // Header section in scrollable area
         QWidget* headerWidget = new QWidget();
         headerWidget->setObjectName("headerWidget");
-        headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px; }")
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK)
+        headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: transparent; padding: %1px; }")
             .arg(StreamUP::UIStyles::Sizes::PADDING_XL)); // Even padding all around
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
         headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
@@ -702,7 +701,7 @@ void CreateSplashDialog()
         patchNotesCard->setStyleSheet(QString(
             "QWidget {"
             "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-            "stop:0 rgba(55, 65, 81, 0.6), stop:1 rgba(75, 85, 99, 0.4));"
+            "stop:0 rgba(30, 30, 35, 0.8), stop:1 rgba(40, 40, 45, 0.6));"
             "border: none;"
             "border-radius: 0px;"
             "padding: 0px;"
@@ -727,7 +726,7 @@ void CreateSplashDialog()
         supportCard->setStyleSheet(QString(
             "QWidget {"
             "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-            "stop:0 rgba(59, 130, 246, 0.3), stop:1 rgba(99, 102, 241, 0.2));"
+            "stop:0 rgba(25, 30, 40, 0.8), stop:1 rgba(35, 40, 50, 0.6));"
             "border: none;"
             "border-radius: 0px;"
             "padding: 0px;"
@@ -794,7 +793,7 @@ void CreateSplashDialog()
         supportersCard->setStyleSheet(QString(
             "QWidget {"
             "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-            "stop:0 rgba(88, 28, 135, 0.4), stop:1 rgba(147, 51, 234, 0.3));"
+            "stop:0 rgba(30, 25, 35, 0.8), stop:1 rgba(40, 35, 45, 0.6));"
             "border: none;"
             "border-radius: 0px;"
             "padding: 0px;"
@@ -821,7 +820,7 @@ void CreateSplashDialog()
         linksCard->setStyleSheet(QString(
             "QWidget {"
             "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-            "stop:0 rgba(55, 65, 81, 0.6), stop:1 rgba(75, 85, 99, 0.4));"
+            "stop:0 rgba(25, 30, 35, 0.8), stop:1 rgba(35, 40, 45, 0.6));"
             "border: none;"
             "border-radius: 0px;"
             "padding: 0px;"
@@ -875,8 +874,7 @@ void CreateSplashDialog()
 
         // Add Get Started button to the scrollable content at the bottom
         QWidget* buttonWidget = new QWidget();
-        buttonWidget->setStyleSheet(QString("background: %1; padding: %2px;")
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK)
+        buttonWidget->setStyleSheet(QString("background: transparent; padding: %1px;")
             .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
         QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
         buttonLayout->setContentsMargins(0, 0, 0, 0);
