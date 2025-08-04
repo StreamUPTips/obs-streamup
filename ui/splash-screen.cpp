@@ -13,7 +13,6 @@
 #include <QPixmap>
 #include <QStyleOption>
 #include <QStyle>
-#include <QCheckBox>
 #include <QScrollBar>
 #include <QMouseEvent>
 #include <QFile>
@@ -857,8 +856,6 @@ void CreateSplashDialog()
         });
         
         QPushButton* websiteBtn = StreamUP::UIStyles::CreateStyledButton("🌐 Website", "error");
-        websiteBtn->setIcon(QIcon(":images/icons/streamup-logo.svg"));
-        websiteBtn->setIconSize(QSize(16, 16));
         QObject::connect(websiteBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.tips"));
         });

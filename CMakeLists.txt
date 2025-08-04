@@ -67,6 +67,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/ui-helpers.cpp
   ui/ui-styles.hpp
   ui/ui-styles.cpp
+  ui/switch-button.hpp
+  ui/switch-button.cpp
   ui/menu-manager.hpp
   ui/menu-manager.cpp
   ui/settings-manager.hpp
@@ -132,6 +134,8 @@ source_group("UI" FILES
   ui/ui-helpers.cpp
   ui/ui-styles.hpp
   ui/ui-styles.cpp
+  ui/switch-button.hpp
+  ui/switch-button.cpp
   ui/menu-manager.hpp
   ui/menu-manager.cpp
   ui/settings-manager.hpp
