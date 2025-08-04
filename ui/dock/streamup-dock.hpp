@@ -3,6 +3,7 @@
 #include <QFrame>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QMenu>
 #include <obs.h>
 #include <obs-frontend-api.h>
 
@@ -21,6 +22,8 @@ class StreamUPDock : public QFrame {
 public:
 	explicit StreamUPDock(QWidget *parent = nullptr);
 	~StreamUPDock();
+	
+	static void NotifyAllDocksSettingsChanged();
 
 private:
 	Ui::StreamUPDock *ui;
@@ -51,9 +54,17 @@ private:
 	void setupObsSignals();
 	void connectSceneSignals();
 	void disconnectSceneSignals();
+	void updateToolVisibility();
+	void showContextMenu(const QPoint& position);
+
+public slots:
+	void onSettingsChanged();
 
 	static void onFrontendEvent(enum obs_frontend_event event, void *private_data);
 	static void onSceneItemAdded(void *param, calldata_t *data);
 	static void onSceneItemRemoved(void *param, calldata_t *data);
 	static void onItemLockChanged(void *param, calldata_t *data);
+
+protected:
+	void contextMenuEvent(QContextMenuEvent* event) override;
 };
