@@ -1,6 +1,7 @@
 #include "settings-manager.hpp"
 #include "ui-helpers.hpp"
 #include "ui-styles.hpp"
+#include "switch-button.hpp"
 #include "plugin-manager.hpp"
 #include "hotkey-manager.hpp"
 #include "hotkey-widget.hpp"
@@ -12,7 +13,6 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
-#include <QCheckBox>
 #include <QPushButton>
 #include <QLabel>
 #include <QSpacerItem>
@@ -228,68 +228,56 @@ void ShowSettingsDialog()
         obs_property_t* runAtStartupProp =
             obs_properties_add_bool(props, "run_at_startup", obs_module_text("WindowSettingsRunOnStartup"));
 
-        QString checkboxStyle = QString(
-            "QCheckBox {"
-            "color: %1;"
-            "font-size: %2px;"
-            "spacing: %3px;"
-            "}"
-            "QCheckBox::indicator {"
-            "width: 18px;"
-            "height: 18px;"
-            "border: 2px solid %4;"
-            "border-radius: 3px;"
-            "background: %5;"
-            "}"
-            "QCheckBox::indicator:checked {"
-            "background: %6;"
-            "border: 2px solid %6;"
-            "}"
-            "QCheckBox::indicator:checked:hover {"
-            "background: %7;"
-            "}")
+        // Create horizontal layout for run at startup setting
+        QHBoxLayout* runAtStartupLayout = new QHBoxLayout();
+        
+        QLabel* runAtStartupLabel = new QLabel(obs_module_text("WindowSettingsRunOnStartup"));
+        runAtStartupLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
             .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-            .arg(StreamUP::UIStyles::Sizes::SPACING_SMALL)
-            .arg(StreamUP::UIStyles::Colors::BORDER_LIGHT)
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_INPUT)
-            .arg(StreamUP::UIStyles::Colors::INFO)
-            .arg(StreamUP::UIStyles::Colors::INFO_HOVER);
-            
-        QCheckBox* runAtStartupCheckBox = new QCheckBox(obs_module_text("WindowSettingsRunOnStartup"));
-        runAtStartupCheckBox->setChecked(obs_data_get_bool(settings, obs_property_name(runAtStartupProp)));
-        runAtStartupCheckBox->setStyleSheet(checkboxStyle);
-
-#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
-        QObject::connect(runAtStartupCheckBox, &QCheckBox::checkStateChanged, [=](int state) {
-#else
-        QObject::connect(runAtStartupCheckBox, &QCheckBox::stateChanged, [=](int state) {
-#endif
-            obs_data_set_bool(settings, obs_property_name(runAtStartupProp), state == Qt::Checked);
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+        
+        StreamUP::UIStyles::SwitchButton* runAtStartupSwitch = StreamUP::UIStyles::CreateStyledSwitch(
+            "", obs_data_get_bool(settings, obs_property_name(runAtStartupProp))
+        );
+        
+        QObject::connect(runAtStartupSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [=](bool checked) {
+            obs_data_set_bool(settings, obs_property_name(runAtStartupProp), checked);
+            SaveSettings(settings);
         });
 
-        generalLayout->addWidget(runAtStartupCheckBox);
+        runAtStartupLayout->addWidget(runAtStartupLabel);
+        runAtStartupLayout->addStretch();
+        runAtStartupLayout->addWidget(runAtStartupSwitch);
+        generalLayout->addLayout(runAtStartupLayout);
 
         // Notifications mute setting
         obs_property_t* notificationsMuteProp =
             obs_properties_add_bool(props, "notifications_mute", obs_module_text("WindowSettingsNotificationsMute"));
 
-        QCheckBox* notificationsMuteCheckBox = new QCheckBox(obs_module_text("WindowSettingsNotificationsMute"));
-        notificationsMuteCheckBox->setChecked(obs_data_get_bool(settings, obs_property_name(notificationsMuteProp)));
-        notificationsMuteCheckBox->setToolTip(obs_module_text("WindowSettingsNotificationsMuteTooltip"));
-        notificationsMuteCheckBox->setStyleSheet(checkboxStyle);
-
-#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
-        QObject::connect(notificationsMuteCheckBox, &QCheckBox::checkStateChanged, [=](int state) {
-#else
-        QObject::connect(notificationsMuteCheckBox, &QCheckBox::stateChanged, [=](int state) {
-#endif
-            bool isChecked = (state == Qt::Checked);
-            obs_data_set_bool(settings, obs_property_name(notificationsMuteProp), isChecked);
-            notificationsMuted = isChecked;
+        // Create horizontal layout for notifications setting
+        QHBoxLayout* notificationsLayout = new QHBoxLayout();
+        
+        QLabel* notificationsLabel = new QLabel(obs_module_text("WindowSettingsNotificationsMute"));
+        notificationsLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+        notificationsLabel->setToolTip(obs_module_text("WindowSettingsNotificationsMuteTooltip"));
+        
+        StreamUP::UIStyles::SwitchButton* notificationsMuteSwitch = StreamUP::UIStyles::CreateStyledSwitch(
+            "", obs_data_get_bool(settings, obs_property_name(notificationsMuteProp))
+        );
+        notificationsMuteSwitch->setToolTip(obs_module_text("WindowSettingsNotificationsMuteTooltip"));
+        
+        QObject::connect(notificationsMuteSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [=](bool checked) {
+            obs_data_set_bool(settings, obs_property_name(notificationsMuteProp), checked);
+            notificationsMuted = checked;
+            SaveSettings(settings);
         });
 
-        generalLayout->addWidget(notificationsMuteCheckBox);
+        notificationsLayout->addWidget(notificationsLabel);
+        notificationsLayout->addStretch();
+        notificationsLayout->addWidget(notificationsMuteSwitch);
+        generalLayout->addLayout(notificationsLayout);
         contentLayout->addWidget(generalGroup);
 
         // Plugin Management Group
@@ -1371,67 +1359,51 @@ void ShowDockConfigInline(QScrollArea* scrollArea, QWidget* originalContent, QDi
         
         toolRowLayout->addWidget(textWrapper, 1);
         
-        // Checkbox section - also center vertically
-        QVBoxLayout* checkboxWrapperLayout = new QVBoxLayout();
-        checkboxWrapperLayout->setContentsMargins(0, 0, 0, 0);
-        checkboxWrapperLayout->addStretch(); // Add stretch above
+        // Switch section - also center vertically
+        QVBoxLayout* switchWrapperLayout = new QVBoxLayout();
+        switchWrapperLayout->setContentsMargins(0, 0, 0, 0);
+        switchWrapperLayout->addStretch(); // Add stretch above
         
-        QCheckBox* toolCheckBox = new QCheckBox();
-        toolCheckBox->setChecked(*tool.settingPtr);
+        // Get fresh settings to ensure we have the latest values
+        DockToolSettings freshSettings = GetDockToolSettings();
+        bool currentValue = false;
         
-        QString checkboxStyle = QString(
-            "QCheckBox::indicator {"
-            "width: 18px;"
-            "height: 18px;"
-            "border: 2px solid %1;"
-            "border-radius: 3px;"
-            "background: %2;"
-            "}"
-            "QCheckBox::indicator:checked {"
-            "background: %3;"
-            "border: 2px solid %3;"
-            "}"
-            "QCheckBox::indicator:checked:hover {"
-            "background: %4;"
-            "}")
-            .arg(StreamUP::UIStyles::Colors::BORDER_LIGHT)
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_INPUT)
-            .arg(StreamUP::UIStyles::Colors::INFO)
-            .arg(StreamUP::UIStyles::Colors::INFO_HOVER);
+        // Get the current value based on tool index
+        switch (tool.toolIndex) {
+            case 0: currentValue = freshSettings.showLockAllSources; break;
+            case 1: currentValue = freshSettings.showLockCurrentSources; break;
+            case 2: currentValue = freshSettings.showRefreshBrowserSources; break;
+            case 3: currentValue = freshSettings.showRefreshAudioMonitoring; break;
+            case 4: currentValue = freshSettings.showVideoCaptureOptions; break;
+        }
         
-        toolCheckBox->setStyleSheet(checkboxStyle);
+        StreamUP::UIStyles::SwitchButton* toolSwitch = StreamUP::UIStyles::CreateStyledSwitch("", currentValue);
         
-        // Update settings immediately when checkbox changes
-        QObject::connect(toolCheckBox, 
-#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
-            &QCheckBox::checkStateChanged,
-#else
-            &QCheckBox::stateChanged,
-#endif
-            [toolCheckBox, tool](int state) {
+        // Update settings immediately when switch changes  
+        QObject::connect(toolSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [tool, toolSwitch](bool checked) {
                 // Get current settings from persistent storage
                 DockToolSettings settings = GetDockToolSettings();
                 
                 // Update the specific setting based on tool index
                 switch (tool.toolIndex) {
-                    case 0: settings.showLockAllSources = (state == Qt::Checked); break;
-                    case 1: settings.showLockCurrentSources = (state == Qt::Checked); break;
-                    case 2: settings.showRefreshBrowserSources = (state == Qt::Checked); break;
-                    case 3: settings.showRefreshAudioMonitoring = (state == Qt::Checked); break;
-                    case 4: settings.showVideoCaptureOptions = (state == Qt::Checked); break;
+                    case 0: settings.showLockAllSources = checked; break;
+                    case 1: settings.showLockCurrentSources = checked; break;
+                    case 2: settings.showRefreshBrowserSources = checked; break;
+                    case 3: settings.showRefreshAudioMonitoring = checked; break;
+                    case 4: settings.showVideoCaptureOptions = checked; break;
                 }
                 
                 // Update the local pointer too for UI consistency
-                *tool.settingPtr = (state == Qt::Checked);
+                *tool.settingPtr = checked;
                 
                 // Save the updated settings immediately (this calls NotifyAllDocksSettingsChanged)
                 UpdateDockToolSettings(settings);
             });
         
-        checkboxWrapperLayout->addWidget(toolCheckBox);
-        checkboxWrapperLayout->addStretch(); // Add stretch below
+        switchWrapperLayout->addWidget(toolSwitch);
+        switchWrapperLayout->addStretch(); // Add stretch below
         
-        toolRowLayout->addLayout(checkboxWrapperLayout);
+        toolRowLayout->addLayout(switchWrapperLayout);
         
         toolsGroupLayout->addWidget(toolRow);
         
@@ -1459,24 +1431,24 @@ void ShowDockConfigInline(QScrollArea* scrollArea, QWidget* originalContent, QDi
     
     QPushButton* resetButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsResetDockConfig"), "error");
     
-    // Store all checkboxes so we can update them after reset
-    QList<QCheckBox*> allCheckboxes;
+    // Store all switches so we can update them after reset
+    QList<StreamUP::UIStyles::SwitchButton*> allSwitches;
     for (int i = 0; i < toolsGroupLayout->count(); i++) {
         QLayoutItem* item = toolsGroupLayout->itemAt(i);
         if (item && item->widget()) {
             QWidget* widget = item->widget();
             if (QString(widget->metaObject()->className()) != "QFrame") {
-                QCheckBox* checkbox = widget->findChild<QCheckBox*>();
-                if (checkbox) {
-                    allCheckboxes.append(checkbox);
+                StreamUP::UIStyles::SwitchButton* switchButton = widget->findChild<StreamUP::UIStyles::SwitchButton*>();
+                if (switchButton) {
+                    allSwitches.append(switchButton);
                 }
             }
         }
     }
     
-    QObject::connect(resetButton, &QPushButton::clicked, [allCheckboxes, dockTools]() {
+    QObject::connect(resetButton, &QPushButton::clicked, [allSwitches, dockTools]() {
         // Show confirmation dialog for reset (matching hotkeys pattern)
-        StreamUP::UIHelpers::ShowDialogOnUIThread([allCheckboxes, dockTools]() {
+        StreamUP::UIHelpers::ShowDialogOnUIThread([allSwitches, dockTools]() {
             QDialog* confirmDialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsResetDockConfigTitle"));
             confirmDialog->resize(400, 200);
             
@@ -1498,15 +1470,15 @@ void ShowDockConfigInline(QScrollArea* scrollArea, QWidget* originalContent, QDi
             QPushButton* resetBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsResetDockConfigButton"), "error");
             
             QObject::connect(cancelBtn, &QPushButton::clicked, confirmDialog, &QDialog::close);
-            QObject::connect(resetBtn, &QPushButton::clicked, [confirmDialog, allCheckboxes, dockTools]() {
+            QObject::connect(resetBtn, &QPushButton::clicked, [confirmDialog, allSwitches, dockTools]() {
                 // Reset all dock tools to default (visible)
                 DockToolSettings defaultSettings;
                 UpdateDockToolSettings(defaultSettings);
                 
-                // Update all checkboxes to checked state
-                for (QCheckBox* checkbox : allCheckboxes) {
-                    if (checkbox) {
-                        checkbox->setChecked(true);
+                // Update all switches to checked state
+                for (StreamUP::UIStyles::SwitchButton* switchButton : allSwitches) {
+                    if (switchButton) {
+                        switchButton->setChecked(true);
                     }
                 }
                 
