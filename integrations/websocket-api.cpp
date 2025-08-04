@@ -169,6 +169,16 @@ void WebsocketRequestGetOutputFilePath(obs_data_t *request_data, obs_data_t *res
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
 
+	// NOTE: This custom command is DEPRECATED as of OBS WebSocket 5.0+
+	// The official OBS WebSocket API now provides "GetRecordDirectory" which serves the same purpose.
+	// This command is maintained for backward compatibility only.
+	// New implementations should use the official "GetRecordDirectory" command instead.
+	//
+	// Differences:
+	// - Our custom command: Returns "outputFilePath" field
+	// - Official command: Returns recording directory path
+	// - Functionality: Both retrieve the current recording output directory
+
 	char *path = obs_frontend_get_current_record_output_path();
 	obs_data_set_string(response_data, "outputFilePath", path);
 }
