@@ -18,6 +18,7 @@
 		<file>images/icons/discord.svg</file>
 		<file>images/icons/streamup-logo.svg</file>
 		<file>patch-notes.md</file>
+		<file>patch-notes-summary.md</file>
 		<file>plugin-info.md</file>
 		<file>support-info.md</file>
 	</qresource>
