@@ -126,7 +126,7 @@ void LoadMenuItems(QMenu* menu)
     });
     
     // Video device management submenu
-    QMenu* videoDeviceMenu = toolsMenu->addMenu("Video Capture Devices");
+    QMenu* videoDeviceMenu = toolsMenu->addMenu(obs_module_text("MenuVideoCaptureDevices"));
     
     action = videoDeviceMenu->addAction(obs_module_text("MenuActivateVideoCaptureDevices"));
     QObject::connect(action, &QAction::triggered, []() { 

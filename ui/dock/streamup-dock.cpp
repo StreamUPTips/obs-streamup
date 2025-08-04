@@ -25,11 +25,11 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	ui->setupUi(this);
 
 	// Create buttons
-	button1 = StreamUP::UIStyles::CreateStyledButton("", "neutral");
-	button2 = StreamUP::UIStyles::CreateStyledButton("", "neutral");
-	button3 = StreamUP::UIStyles::CreateStyledButton("", "neutral");
-	button4 = StreamUP::UIStyles::CreateStyledButton("", "neutral");
-	videoCaptureButton = StreamUP::UIStyles::CreateStyledButton("", "neutral");
+	button1 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 40);
+	button2 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 40);
+	button3 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 40);
+	button4 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 40);
+	videoCaptureButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 40);
 
 	// Apply initial icons to buttons
 	applyFileIconToButton(button1, ":images/all-scene-source-locked.svg");
@@ -39,7 +39,8 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	applyFileIconToButton(videoCaptureButton, ":Qt/icons/16x16/camera-video.png");
 
 	auto setButtonProperties = [](QPushButton *button) {
-		button->setIconSize(QSize(16, 16));
+		button->setIconSize(QSize(22, 22));
+		button->setFixedSize(40, 40);  // Explicitly enforce square size
 		button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 	};
 
@@ -55,7 +56,7 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	button2->setToolTip(obs_module_text("LockAllCurrentSources"));
 	button3->setToolTip(obs_module_text("RefreshBrowserSources"));
 	button4->setToolTip(obs_module_text("RefreshAudioMonitoring"));
-	videoCaptureButton->setToolTip("Video Capture Device Options");
+	videoCaptureButton->setToolTip(obs_module_text("VideoCaptureDeviceOptions"));
 
 	// Create a flow layout to hold the buttons
 	mainDockLayout = new FlowLayout(this, 5, 5, 5);

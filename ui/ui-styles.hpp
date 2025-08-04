@@ -73,6 +73,7 @@ QString GetDescriptionLabelStyle();
 QString GetGroupBoxStyle(const QString& borderColor, const QString& titleColor);
 QString GetContentLabelStyle();
 QString GetButtonStyle(const QString& baseColor, const QString& hoverColor, int height = 30);
+QString GetSquircleButtonStyle(const QString& baseColor, const QString& hoverColor, int size = 32);
 QString GetScrollAreaStyle();
 QString GetTableStyle();
 
@@ -82,6 +83,7 @@ QLabel* CreateStyledTitle(const QString& text);
 QLabel* CreateStyledDescription(const QString& text);
 QLabel* CreateStyledContent(const QString& text);
 QPushButton* CreateStyledButton(const QString& text, const QString& type = "neutral", int height = 30, int minWidth = 0);
+QPushButton* CreateStyledSquircleButton(const QString& text, const QString& type = "neutral", int size = 32);
 QGroupBox* CreateStyledGroupBox(const QString& title, const QString& type = "info");
 QScrollArea* CreateStyledScrollArea();
 

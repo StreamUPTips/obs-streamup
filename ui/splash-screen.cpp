@@ -18,11 +18,15 @@
 #include <QMouseEvent>
 #include <QFile>
 #include <QTextStream>
+#include <QPointer>
 #include <util/platform.h>
 #include <sstream>
 
 namespace StreamUP {
 namespace SplashScreen {
+
+// Static pointer to track open splash dialog
+static QPointer<QDialog> splashDialog;
 
 // Monthly supporters list (you'll want to update this regularly)
 static const char* MONTHLY_SUPPORTERS = R"(
@@ -511,6 +515,14 @@ void UpdateVersionTracking()
 
 void CreateSplashDialog()
 {
+    // Check if splash dialog is already open
+    if (!splashDialog.isNull() && splashDialog->isVisible()) {
+        // Bring existing dialog to front
+        splashDialog->raise();
+        splashDialog->activateWindow();
+        return;
+    }
+
     UIHelpers::ShowDialogOnUIThread([]() {
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP");
         dialog->setModal(false);
@@ -626,7 +638,7 @@ void CreateSplashDialog()
         blueskyIcon->setStyleSheet(socialIconStyle);
         blueskyIcon->setCursor(Qt::PointingHandCursor);
         QObject::connect(blueskyIcon, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://bsky.app/profile/streamuptips.bsky.social"));
+            QDesktopServices::openUrl(QUrl("https://bsky.app/profile/streamup.tips"));
         });
         
         QPushButton* dorasIcon = new QPushButton();
@@ -689,12 +701,12 @@ void CreateSplashDialog()
         QWidget* patchNotesCard = new QWidget();
         patchNotesCard->setStyleSheet(QString(
             "QWidget {"
-            "background: %1;"
+            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+            "stop:0 rgba(55, 65, 81, 0.6), stop:1 rgba(75, 85, 99, 0.4));"
             "border: none;"
             "border-radius: 0px;"
             "padding: 0px;"
-            "}")
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_HOVER));
+            "}"));
         QVBoxLayout* patchNotesLayout = new QVBoxLayout(patchNotesCard);
         patchNotesLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
             StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
@@ -714,12 +726,12 @@ void CreateSplashDialog()
         QWidget* supportCard = new QWidget();
         supportCard->setStyleSheet(QString(
             "QWidget {"
-            "background: %1;"
+            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+            "stop:0 rgba(59, 130, 246, 0.3), stop:1 rgba(99, 102, 241, 0.2));"
             "border: none;"
             "border-radius: 0px;"
             "padding: 0px;"
-            "}")
-            .arg(StreamUP::UIStyles::Colors::INFO));
+            "}"));
         QVBoxLayout* supportLayout = new QVBoxLayout(supportCard);
         supportLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
             StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
@@ -753,14 +765,14 @@ void CreateSplashDialog()
             QDesktopServices::openUrl(QUrl("https://ko-fi.com/streamup"));
         });
         
-        QPushButton* beerBtn = StreamUP::UIStyles::CreateStyledButton("🍺 Buy a Beer", "warning");
+        QPushButton* beerBtn = StreamUP::UIStyles::CreateStyledButton("Buy a Beer", "warning");
         beerBtn->setIcon(QIcon(":images/icons/beer.svg"));
         beerBtn->setIconSize(QSize(16, 16));
         QObject::connect(beerBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.lemonsqueezy.com/buy/15f64c2f-8b8c-443e-bd6c-e8bf49a0fc97"));
         });
         
-        QPushButton* githubBtn = StreamUP::UIStyles::CreateStyledButton("⭐ Star Project", "neutral");
+        QPushButton* githubBtn = StreamUP::UIStyles::CreateStyledButton("Star Project", "neutral");
         githubBtn->setIcon(QIcon(":images/icons/github.svg"));
         githubBtn->setIconSize(QSize(16, 16));
         QObject::connect(githubBtn, &QPushButton::clicked, []() {
@@ -781,12 +793,12 @@ void CreateSplashDialog()
         QWidget* supportersCard = new QWidget();
         supportersCard->setStyleSheet(QString(
             "QWidget {"
-            "background: %1;"
+            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+            "stop:0 rgba(88, 28, 135, 0.4), stop:1 rgba(147, 51, 234, 0.3));"
             "border: none;"
             "border-radius: 0px;"
             "padding: 0px;"
-            "}")
-            .arg("#581c87")); // Custom purple color for supporters
+            "}"));
         QVBoxLayout* supportersLayout = new QVBoxLayout(supportersCard);
         supportersLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
             StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
@@ -808,12 +820,12 @@ void CreateSplashDialog()
         QWidget* linksCard = new QWidget();
         linksCard->setStyleSheet(QString(
             "QWidget {"
-            "background: %1;"
+            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
+            "stop:0 rgba(55, 65, 81, 0.6), stop:1 rgba(75, 85, 99, 0.4));"
             "border: none;"
             "border-radius: 0px;"
             "padding: 0px;"
-            "}")
-            .arg(StreamUP::UIStyles::Colors::BACKGROUND_HOVER));
+            "}"));
         QVBoxLayout* linksCardLayout = new QVBoxLayout(linksCard);
         linksCardLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
             StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
@@ -835,15 +847,19 @@ void CreateSplashDialog()
         
         QPushButton* docsBtn = StreamUP::UIStyles::CreateStyledButton("📖 Documentation", "success");
         QObject::connect(docsBtn, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://docs.streamup.tips"));
+            QDesktopServices::openUrl(QUrl("https://streamup.doras.click/docs"));
         });
         
         QPushButton* discordBtn = StreamUP::UIStyles::CreateStyledButton("💬 Discord Community", "info");
+        discordBtn->setIcon(QIcon(":images/icons/discord.svg"));
+        discordBtn->setIconSize(QSize(16, 16));
         QObject::connect(discordBtn, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://discord.gg/streamup"));
+            QDesktopServices::openUrl(QUrl("https://discord.com/invite/RnDKRaVCEu"));
         });
         
         QPushButton* websiteBtn = StreamUP::UIStyles::CreateStyledButton("🌐 Website", "error");
+        websiteBtn->setIcon(QIcon(":images/icons/streamup-logo.svg"));
+        websiteBtn->setIconSize(QSize(16, 16));
         QObject::connect(websiteBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.tips"));
         });
@@ -883,6 +899,9 @@ void CreateSplashDialog()
         
         mainLayout->addWidget(scrollArea);
 
+        // Store the dialog reference
+        splashDialog = dialog;
+        
         dialog->setLayout(mainLayout);
         dialog->show();
     });

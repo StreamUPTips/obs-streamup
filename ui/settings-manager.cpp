@@ -19,6 +19,7 @@
 #include <QScrollArea>
 #include <QTimer>
 #include <QSizePolicy>
+#include <QPointer>
 #include <util/platform.h>
 
 // Forward declarations for functions that may need to be moved from streamup.cpp
@@ -32,6 +33,9 @@ namespace SettingsManager {
 
 // Global settings state
 static bool notificationsMuted = false;
+
+// Static pointer to track open settings dialog
+static QPointer<QDialog> settingsDialog;
 
 obs_data_t* LoadSettings()
 {
@@ -126,6 +130,14 @@ void InitializeSettingsSystem()
 
 void ShowSettingsDialog()
 {
+    // Check if settings dialog is already open
+    if (!settingsDialog.isNull() && settingsDialog->isVisible()) {
+        // Bring existing dialog to front
+        settingsDialog->raise();
+        settingsDialog->activateWindow();
+        return;
+    }
+
     StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
         obs_data_t* settings = LoadSettings();
         if (!settings) {
@@ -152,7 +164,7 @@ void ShowSettingsDialog()
         headerLayout->setContentsMargins(0, 0, 0, 0);
         headerLayout->setProperty("isMainHeaderLayout", true); // Mark for later reference
         
-        QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("⚙️ Settings");
+        QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsMainTitle"));
         titleLabel->setAlignment(Qt::AlignCenter);
         titleLabel->setProperty("isMainTitle", true);
         headerLayout->addWidget(titleLabel);
@@ -174,7 +186,7 @@ void ShowSettingsDialog()
         obs_properties_t* props = obs_properties_create();
 
         // General Settings Group
-        QGroupBox* generalGroup = StreamUP::UIStyles::CreateStyledGroupBox("General Settings", "info");
+        QGroupBox* generalGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsGeneralGroup"), "info");
         
         QVBoxLayout* generalLayout = new QVBoxLayout(generalGroup);
         generalLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
@@ -248,7 +260,7 @@ void ShowSettingsDialog()
         contentLayout->addWidget(generalGroup);
 
         // Plugin Management Group
-        QGroupBox* pluginGroup = StreamUP::UIStyles::CreateStyledGroupBox("Plugin Management", "info");
+        QGroupBox* pluginGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsPluginManagementGroup"), "info");
         
         QVBoxLayout* pluginLayout = new QVBoxLayout(pluginGroup);
         pluginLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
@@ -269,12 +281,12 @@ void ShowSettingsDialog()
         contentLayout->addWidget(pluginGroup);
 
         // Hotkeys Group
-        QGroupBox* hotkeysGroup = StreamUP::UIStyles::CreateStyledGroupBox("Hotkeys", "info");
+        QGroupBox* hotkeysGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsHotkeysGroup"), "info");
         
         QVBoxLayout* hotkeysLayout = new QVBoxLayout(hotkeysGroup);
         hotkeysLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
-        QPushButton* hotkeysButton = StreamUP::UIStyles::CreateStyledButton("Manage Hotkeys", "info");
+        QPushButton* hotkeysButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsManageHotkeys"), "info");
         
         // Connect hotkeys button to show hotkeys inline with dynamic sizing
         QObject::connect(hotkeysButton, &QPushButton::clicked, [dialog, scrollArea, contentWidget]() {
@@ -328,6 +340,9 @@ void ShowSettingsDialog()
             obs_properties_destroy(props);
         });
 
+        // Store the dialog reference
+        settingsDialog = dialog;
+        
         // Apply dynamic sizing that hugs content (this will handle showing the dialog)
         StreamUP::UIStyles::ApplyDynamicSizing(dialog, 500, 900, 400, 650);
         dialog->show();
@@ -366,7 +381,7 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
                 if (headerLayout && headerLayout->property("isMainHeaderLayout").toBool()) {
                     
                     // Create back button with compact sizing
-                    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back", "neutral");
+                    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsBackButton"), "neutral");
                     backButton->setParent(headerWidget);
                     backButton->setProperty("isBackButton", true);
                     
@@ -427,17 +442,17 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
     pluginsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
     
     // Title and description - closer together
-    QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("🔌 Installed Plugins");
+    QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsInstalledPluginsTitle"));
     pluginsLayout->addWidget(titleLabel);
     
-    QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription("Overview of plugins detected by StreamUP's update checker");
+    QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsInstalledPluginsDesc"));
     pluginsLayout->addWidget(descLabel);
     
     // Reduce spacing after header
     pluginsLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
     
     // Info section - fit to UI width
-    QLabel* infoLabel = new QLabel("Plugins are tracked for updates and categorized by compatibility with our service.");
+    QLabel* infoLabel = new QLabel(obs_module_text("WindowSettingsInstalledPluginsInfo"));
     infoLabel->setStyleSheet(QString(
         "QLabel {"
         "color: %1;"
@@ -493,7 +508,7 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
     compatiblePluginsList->setWordWrap(true);
 
     // Create GroupBox with prioritized width and internal scrolling
-    QGroupBox* compatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("✅ Compatible", "success");
+    QGroupBox* compatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsCompatiblePlugins"), "success");
     compatiblePluginsBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     compatiblePluginsBox->setMinimumWidth(300);
     compatiblePluginsBox->setMaximumHeight(300);
@@ -527,7 +542,7 @@ void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalConten
     incompatiblePluginsList->setWordWrap(true);
 
     // Create GroupBox with smaller fixed width for incompatible
-    QGroupBox* incompatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("⚠️ Incompatible", "error");
+    QGroupBox* incompatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsIncompatiblePlugins"), "error");
     incompatiblePluginsBox->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     incompatiblePluginsBox->setFixedWidth(200);
     incompatiblePluginsBox->setMaximumHeight(300);
@@ -589,10 +604,10 @@ void ShowInstalledPluginsPage()
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
         headerLayout->setContentsMargins(0, 0, 0, 0);
         
-        QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("🔌 Installed Plugins");
+        QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsInstalledPluginsTitle"));
         headerLayout->addWidget(titleLabel);
         
-        QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription("Overview of plugins detected by StreamUP's update checker");
+        QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsInstalledPluginsDesc"));
         headerLayout->addWidget(subtitleLabel);
         
         mainLayout->addWidget(headerWidget);
@@ -608,7 +623,7 @@ void ShowInstalledPluginsPage()
         mainLayout->addLayout(contentLayout);
 
         // Info section - fit to UI width
-        QLabel* infoLabel = new QLabel("Plugins are tracked for updates and categorized by compatibility with our service.");
+        QLabel* infoLabel = new QLabel(obs_module_text("WindowSettingsInstalledPluginsInfo"));
         infoLabel->setStyleSheet(QString(
             "QLabel {"
             "color: %1;"
@@ -662,7 +677,7 @@ void ShowInstalledPluginsPage()
         compatiblePluginsList->setWordWrap(true);
 
         // Create GroupBox with prioritized width and internal scrolling
-        QGroupBox* compatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("✅ Compatible", "success");
+        QGroupBox* compatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsCompatiblePlugins"), "success");
         compatiblePluginsBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         compatiblePluginsBox->setMinimumWidth(300);
         compatiblePluginsBox->setMaximumHeight(300);
@@ -696,7 +711,7 @@ void ShowInstalledPluginsPage()
         incompatiblePluginsList->setWordWrap(true);
 
         // Create GroupBox with smaller fixed width for incompatible
-        QGroupBox* incompatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox("⚠️ Incompatible", "error");
+        QGroupBox* incompatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsIncompatiblePlugins"), "error");
         incompatiblePluginsBox->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
         incompatiblePluginsBox->setFixedWidth(200);
         incompatiblePluginsBox->setMaximumHeight(300);
@@ -761,7 +776,7 @@ void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialo
                 if (headerLayout && headerLayout->property("isMainHeaderLayout").toBool()) {
                     
                     // Create back button with compact sizing
-                    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton("← Back", "neutral");
+                    QPushButton* backButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsBackButton"), "neutral");
                     backButton->setParent(headerWidget);
                     backButton->setProperty("isBackButton", true);
                     
@@ -818,17 +833,17 @@ void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialo
     hotkeysLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
     
     // Title and description
-    QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("⌨️ StreamUP Hotkeys");
+    QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsHotkeysTitle"));
     hotkeysLayout->addWidget(titleLabel);
     
-    QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription("Manage hotkeys for StreamUP features. These link directly to OBS hotkey settings.");
+    QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsHotkeysDesc"));
     hotkeysLayout->addWidget(descLabel);
     
     // Reduce spacing after header
     hotkeysLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
     
     // Info section
-    QLabel* infoLabel = new QLabel("Click on a hotkey to modify it. Changes are saved immediately to OBS hotkey settings.");
+    QLabel* infoLabel = new QLabel(obs_module_text("WindowSettingsHotkeysInfo"));
     infoLabel->setStyleSheet(QString(
         "QLabel {"
         "color: %1;"
@@ -849,7 +864,7 @@ void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialo
     hotkeysLayout->addWidget(infoLabel);
 
     // Create GroupBox for hotkeys
-    QGroupBox* hotkeysGroup = StreamUP::UIStyles::CreateStyledGroupBox("⚡ StreamUP Hotkeys", "info");
+    QGroupBox* hotkeysGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsHotkeysGroupTitle"), "info");
     
     QVBoxLayout* hotkeysGroupLayout = new QVBoxLayout(hotkeysGroup);
     hotkeysGroupLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
@@ -863,17 +878,17 @@ void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialo
     
     // List of all StreamUP hotkeys
     std::vector<HotkeyInfo> streamupHotkeys = {
-        {"Refresh Browser Sources", "Refreshes all browser sources in your scenes", "streamup_refresh_browser_sources"},
-        {"Refresh Audio Monitoring", "Refreshes audio monitoring settings for sources", "streamup_refresh_audio_monitoring"},
-        {"Lock/Unlock All Sources", "Toggles lock state for all sources across scenes", "streamup_lock_all_sources"},
-        {"Lock/Unlock Current Scene Sources", "Toggles lock state for sources in current scene only", "streamup_lock_current_sources"},
-        {"Open Selected Source Properties", "Opens properties window for currently selected source", "streamup_open_source_properties"},
-        {"Open Selected Source Filters", "Opens filters window for currently selected source", "streamup_open_source_filters"},
-        {"Open Selected Source Interact", "Opens interact window for currently selected source", "streamup_open_source_interact"},
-        {"Open Current Scene Filters", "Opens filters window for the current scene", "streamup_open_scene_filters"},
-        {"Activate All Video Capture Devices", "Activates all video capture device sources", "streamup_activate_video_capture_devices"},
-        {"Deactivate All Video Capture Devices", "Deactivates all video capture device sources", "streamup_deactivate_video_capture_devices"},
-        {"Refresh All Video Capture Devices", "Refreshes all video capture device sources", "streamup_refresh_video_capture_devices"}
+        {obs_module_text("HotkeyRefreshBrowserSources"), obs_module_text("HotkeyRefreshBrowserSourcesDesc"), "streamup_refresh_browser_sources"},
+        {obs_module_text("HotkeyRefreshAudioMonitoring"), obs_module_text("HotkeyRefreshAudioMonitoringDesc"), "streamup_refresh_audio_monitoring"},
+        {obs_module_text("HotkeyLockAllSources"), obs_module_text("HotkeyLockAllSourcesDesc"), "streamup_lock_all_sources"},
+        {obs_module_text("HotkeyLockCurrentSources"), obs_module_text("HotkeyLockCurrentSourcesDesc"), "streamup_lock_current_sources"},
+        {obs_module_text("HotkeyOpenSourceProperties"), obs_module_text("HotkeyOpenSourcePropertiesDesc"), "streamup_open_source_properties"},
+        {obs_module_text("HotkeyOpenSourceFilters"), obs_module_text("HotkeyOpenSourceFiltersDesc"), "streamup_open_source_filters"},
+        {obs_module_text("HotkeyOpenSourceInteract"), obs_module_text("HotkeyOpenSourceInteractDesc"), "streamup_open_source_interact"},
+        {obs_module_text("HotkeyOpenSceneFilters"), obs_module_text("HotkeyOpenSceneFiltersDesc"), "streamup_open_scene_filters"},
+        {obs_module_text("HotkeyActivateVideoCaptureDevices"), obs_module_text("HotkeyActivateVideoCaptureDevicesDesc"), "streamup_activate_video_capture_devices"},
+        {obs_module_text("HotkeyDeactivateVideoCaptureDevices"), obs_module_text("HotkeyDeactivateVideoCaptureDevicesDesc"), "streamup_deactivate_video_capture_devices"},
+        {obs_module_text("HotkeyRefreshVideoCaptureDevices"), obs_module_text("HotkeyRefreshVideoCaptureDevicesDesc"), "streamup_refresh_video_capture_devices"}
     };
     
     // Create direct layout for hotkeys (no scrolling, fit to content)
@@ -1004,7 +1019,7 @@ void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialo
     QHBoxLayout* actionLayout = new QHBoxLayout();
     actionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
     
-    QPushButton* resetButton = StreamUP::UIStyles::CreateStyledButton("Reset All StreamUP Hotkeys", "error");
+    QPushButton* resetButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsResetAllHotkeys"), "error");
     
     // Store all hotkey widgets so we can refresh them after reset
     QList<StreamUP::UI::HotkeyWidget*> allHotkeyWidgets;
@@ -1027,12 +1042,12 @@ void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialo
     QObject::connect(resetButton, &QPushButton::clicked, [allHotkeyWidgets]() {
         // Show confirmation dialog for reset
         StreamUP::UIHelpers::ShowDialogOnUIThread([allHotkeyWidgets]() {
-            QDialog* confirmDialog = StreamUP::UIStyles::CreateStyledDialog("Reset Hotkeys");
+            QDialog* confirmDialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsResetHotkeysTitle"));
             confirmDialog->resize(400, 200);
             
             QVBoxLayout* layout = new QVBoxLayout(confirmDialog);
             
-            QLabel* warningLabel = new QLabel("⚠️ Are you sure you want to reset all StreamUP hotkeys?\n\nThis will clear all assigned key combinations.");
+            QLabel* warningLabel = new QLabel(obs_module_text("WindowSettingsResetHotkeysWarning"));
             warningLabel->setStyleSheet(QString("color: %1; font-size: %2px; padding: %3px;")
                 .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
                 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)
@@ -1044,8 +1059,8 @@ void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialo
             
             QHBoxLayout* buttonLayout = new QHBoxLayout();
             
-            QPushButton* cancelBtn = StreamUP::UIStyles::CreateStyledButton("Cancel", "neutral");
-            QPushButton* resetBtn = StreamUP::UIStyles::CreateStyledButton("Reset Hotkeys", "error");
+            QPushButton* cancelBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Cancel"), "neutral");
+            QPushButton* resetBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsResetHotkeysButton"), "error");
             
             QObject::connect(cancelBtn, &QPushButton::clicked, confirmDialog, &QDialog::close);
             QObject::connect(resetBtn, &QPushButton::clicked, [confirmDialog, allHotkeyWidgets]() {
