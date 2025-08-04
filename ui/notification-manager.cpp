@@ -29,7 +29,7 @@ void SendTrayNotification(QSystemTrayIcon::MessageIcon icon, const QString& titl
             void* systemTrayPtr = obs_frontend_get_system_tray();
             if (systemTrayPtr) {
                 auto systemTray = static_cast<QSystemTrayIcon*>(systemTrayPtr);
-                QString prefixedTitle = "[StreamUP] " + notification->title;
+                QString prefixedTitle = QString("[%1] %2").arg(obs_module_text("StreamUP")).arg(notification->title);
                 systemTray->showMessage(prefixedTitle, notification->body, notification->icon);
             }
             delete notification;

@@ -17,9 +17,14 @@
 #include <QClipboard>
 #include <QFrame>
 #include <QTimer>
+#include <QPointer>
 
 namespace StreamUP {
 namespace WebSocketWindow {
+
+// Static pointers to track open dialogs
+static QPointer<QDialog> normalWebSocketDialog;
+static QPointer<QDialog> internalWebSocketDialog;
 
 struct WebSocketCommand {
     QString name;
@@ -31,56 +36,66 @@ struct WebSocketCommand {
 // Define all available WebSocket commands organized by category
 static const QList<WebSocketCommand> websocketCommands = {
     // Utility Commands
-    {"GetStreamBitrate", "Get current stream bitrate in kbits/sec", "Utility", false},
-    {"GetPluginVersion", "Get StreamUP plugin version", "Utility", true}, // Internal tool
+    {"GetStreamBitrate", "WebSocket.Command.GetStreamBitrate.Description", "WebSocket.Category.Utility", false},
+    {"GetPluginVersion", "WebSocket.Command.GetPluginVersion.Description", "WebSocket.Category.Utility", true}, // Internal tool
     
     // Plugin Management
-    {"CheckRequiredPlugins", "Check if required OBS plugins are installed and up to date", "Plugin Management", true}, // Internal tool
+    {"CheckRequiredPlugins", "WebSocket.Command.CheckRequiredPlugins.Description", "WebSocket.Category.PluginManagement", true}, // Internal tool
     
     // Source Management
-    {"ToggleLockAllSources", "Toggle lock state for all sources across all scenes", "Source Management", false},
-    {"ToggleLockCurrentSceneSources", "Toggle lock state for sources in current scene only", "Source Management", false},
-    {"RefreshAudioMonitoring", "Refresh audio monitoring settings for all audio sources", "Source Management", false},
-    {"RefreshBrowserSources", "Refresh all browser sources to reload their content", "Source Management", false},
-    {"GetSelectedSource", "Get the name of currently selected source in current scene", "Source Management", false},
+    {"ToggleLockAllSources", "WebSocket.Command.ToggleLockAllSources.Description", "WebSocket.Category.SourceManagement", false},
+    {"ToggleLockCurrentSceneSources", "WebSocket.Command.ToggleLockCurrentSceneSources.Description", "WebSocket.Category.SourceManagement", false},
+    {"RefreshAudioMonitoring", "WebSocket.Command.RefreshAudioMonitoring.Description", "WebSocket.Category.SourceManagement", false},
+    {"RefreshBrowserSources", "WebSocket.Command.RefreshBrowserSources.Description", "WebSocket.Category.SourceManagement", false},
+    {"GetSelectedSource", "WebSocket.Command.GetSelectedSource.Description", "WebSocket.Category.SourceManagement", false},
     
     // Transition Management
-    {"GetShowTransition", "Get the show transition settings for scene items", "Transition Management", false},
-    {"GetHideTransition", "Get the hide transition settings for scene items", "Transition Management", false},
-    {"SetShowTransition", "Set the show transition settings for scene items", "Transition Management", false},
-    {"SetHideTransition", "Set the hide transition settings for scene items", "Transition Management", false},
+    {"GetShowTransition", "WebSocket.Command.GetShowTransition.Description", "WebSocket.Category.TransitionManagement", false},
+    {"GetHideTransition", "WebSocket.Command.GetHideTransition.Description", "WebSocket.Category.TransitionManagement", false},
+    {"SetShowTransition", "WebSocket.Command.SetShowTransition.Description", "WebSocket.Category.TransitionManagement", false},
+    {"SetHideTransition", "WebSocket.Command.SetHideTransition.Description", "WebSocket.Category.TransitionManagement", false},
     
     // Source Properties
-    {"GetBlendingMethod", "Get blending method for a specific source in scene", "Source Properties", false},
-    {"SetBlendingMethod", "Set blending method for a specific source in scene", "Source Properties", false},
-    {"GetDeinterlacing", "Get deinterlacing settings for a source", "Source Properties", false},
-    {"SetDeinterlacing", "Set deinterlacing settings for a source", "Source Properties", false},
-    {"GetScaleFiltering", "Get scale filtering method for a source in scene", "Source Properties", false},
-    {"SetScaleFiltering", "Set scale filtering method for a source in scene", "Source Properties", false},
-    {"GetDownmixMono", "Get mono downmix setting for an audio source", "Source Properties", false},
-    {"SetDownmixMono", "Set mono downmix setting for an audio source", "Source Properties", false},
+    {"GetBlendingMethod", "WebSocket.Command.GetBlendingMethod.Description", "WebSocket.Category.SourceProperties", false},
+    {"SetBlendingMethod", "WebSocket.Command.SetBlendingMethod.Description", "WebSocket.Category.SourceProperties", false},
+    {"GetDeinterlacing", "WebSocket.Command.GetDeinterlacing.Description", "WebSocket.Category.SourceProperties", false},
+    {"SetDeinterlacing", "WebSocket.Command.SetDeinterlacing.Description", "WebSocket.Category.SourceProperties", false},
+    {"GetScaleFiltering", "WebSocket.Command.GetScaleFiltering.Description", "WebSocket.Category.SourceProperties", false},
+    {"SetScaleFiltering", "WebSocket.Command.SetScaleFiltering.Description", "WebSocket.Category.SourceProperties", false},
+    {"GetDownmixMono", "WebSocket.Command.GetDownmixMono.Description", "WebSocket.Category.SourceProperties", false},
+    {"SetDownmixMono", "WebSocket.Command.SetDownmixMono.Description", "WebSocket.Category.SourceProperties", false},
     
     // File Management
-    {"GetRecordingOutputPath", "Get current recording output file path", "File Management", true}, // Internal tool
-    {"GetVLCCurrentFile", "Get current file/title from VLC source", "File Management", false},
-    {"LoadStreamUpFile", "Load a .streamup file from specified path", "File Management", true}, // Internal tool
+    {"GetRecordingOutputPath", "WebSocket.Command.GetRecordingOutputPath.Description", "WebSocket.Category.FileManagement", true}, // Internal tool
+    {"GetVLCCurrentFile", "WebSocket.Command.GetVLCCurrentFile.Description", "WebSocket.Category.FileManagement", false},
+    {"LoadStreamUpFile", "WebSocket.Command.LoadStreamUpFile.Description", "WebSocket.Category.FileManagement", true}, // Internal tool
     
     // UI Interaction
-    {"OpenSourceProperties", "Open properties dialog for currently selected source", "UI Interaction", false},
-    {"OpenSourceFilters", "Open filters dialog for currently selected source", "UI Interaction", false},
-    {"OpenSourceInteraction", "Open interaction window for currently selected source", "UI Interaction", false},
-    {"OpenSceneFilters", "Open filters dialog for current scene", "UI Interaction", false},
+    {"OpenSourceProperties", "WebSocket.Command.OpenSourceProperties.Description", "WebSocket.Category.UIInteraction", false},
+    {"OpenSourceFilters", "WebSocket.Command.OpenSourceFilters.Description", "WebSocket.Category.UIInteraction", false},
+    {"OpenSourceInteraction", "WebSocket.Command.OpenSourceInteraction.Description", "WebSocket.Category.UIInteraction", false},
+    {"OpenSceneFilters", "WebSocket.Command.OpenSceneFilters.Description", "WebSocket.Category.UIInteraction", false},
     
     // Video Capture Device Management
-    {"ActivateAllVideoCaptureDevices", "Activate all video capture devices in all scenes", "Video Device Management", false},
-    {"DeactivateAllVideoCaptureDevices", "Deactivate all video capture devices in all scenes", "Video Device Management", false},
-    {"RefreshAllVideoCaptureDevices", "Refresh all video capture devices in all scenes", "Video Device Management", false}
+    {"ActivateAllVideoCaptureDevices", "WebSocket.Command.ActivateAllVideoCaptureDevices.Description", "WebSocket.Category.VideoDeviceManagement", false},
+    {"DeactivateAllVideoCaptureDevices", "WebSocket.Command.DeactivateAllVideoCaptureDevices.Description", "WebSocket.Category.VideoDeviceManagement", false},
+    {"RefreshAllVideoCaptureDevices", "WebSocket.Command.RefreshAllVideoCaptureDevices.Description", "WebSocket.Category.VideoDeviceManagement", false}
 };
 
 void ShowWebSocketWindow(bool showInternalTools)
 {
-    StreamUP::UIHelpers::ShowDialogOnUIThread([showInternalTools]() {
-        QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP WebSocket Commands");
+    // Check if the appropriate dialog is already open
+    QPointer<QDialog>& dialogRef = showInternalTools ? internalWebSocketDialog : normalWebSocketDialog;
+    
+    if (!dialogRef.isNull() && dialogRef->isVisible()) {
+        // Bring existing dialog to front
+        dialogRef->raise();
+        dialogRef->activateWindow();
+        return;
+    }
+
+    StreamUP::UIHelpers::ShowDialogOnUIThread([showInternalTools, &dialogRef]() {
+        QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WebSocket.Window.Title"));
         
         // Start with compact size - will expand based on content
         dialog->resize(700, 500);
@@ -99,11 +114,11 @@ void ShowWebSocketWindow(bool showInternalTools)
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
         headerLayout->setContentsMargins(0, 0, 0, 0);
         
-        QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("WebSocket Commands");
+        QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WebSocket.Window.Header"));
         titleLabel->setAlignment(Qt::AlignCenter);
         headerLayout->addWidget(titleLabel);
         
-        QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription("Complete list of available WebSocket commands for external control");
+        QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WebSocket.Window.Description"));
         headerLayout->addWidget(subtitleLabel);
         
         mainLayout->addWidget(headerWidget);
@@ -127,12 +142,13 @@ void ShowWebSocketWindow(bool showInternalTools)
             if (cmd.isInternalTool && !showInternalTools) {
                 continue;
             }
-            commandsByCategory[cmd.category].append(cmd);
+            QString translatedCategory = obs_module_text(cmd.category.toUtf8().constData());
+            commandsByCategory[translatedCategory].append(cmd);
         }
 
         // Create sections for each category
-        QStringList categoryOrder = {"Utility", "Plugin Management", "Source Management", "Source Properties", 
-                                   "Transition Management", "File Management", "UI Interaction", "Video Device Management"};
+        QStringList categoryOrder = {obs_module_text("WebSocket.Category.Utility"), obs_module_text("WebSocket.Category.PluginManagement"), obs_module_text("WebSocket.Category.SourceManagement"), obs_module_text("WebSocket.Category.SourceProperties"), 
+                                   obs_module_text("WebSocket.Category.TransitionManagement"), obs_module_text("WebSocket.Category.FileManagement"), obs_module_text("WebSocket.Category.UIInteraction"), obs_module_text("WebSocket.Category.VideoDeviceManagement")};
         
         for (const QString& category : categoryOrder) {
             if (!commandsByCategory.contains(category) || commandsByCategory[category].isEmpty()) continue;
@@ -140,28 +156,28 @@ void ShowWebSocketWindow(bool showInternalTools)
             // Category icon mapping
             QString categoryIcon;
             QString categoryStyle;
-            if (category == "Utility") {
+            if (category == obs_module_text("WebSocket.Category.Utility")) {
                 categoryIcon = "⚙️";
                 categoryStyle = "info";
-            } else if (category == "Plugin Management") {
+            } else if (category == obs_module_text("WebSocket.Category.PluginManagement")) {
                 categoryIcon = "🔌";
                 categoryStyle = "success";
-            } else if (category == "Source Management") {
+            } else if (category == obs_module_text("WebSocket.Category.SourceManagement")) {
                 categoryIcon = "🎭";
                 categoryStyle = "info";
-            } else if (category == "Source Properties") {
+            } else if (category == obs_module_text("WebSocket.Category.SourceProperties")) {
                 categoryIcon = "🎨";
                 categoryStyle = "warning";
-            } else if (category == "Transition Management") {
+            } else if (category == obs_module_text("WebSocket.Category.TransitionManagement")) {
                 categoryIcon = "🔄";
                 categoryStyle = "info";
-            } else if (category == "File Management") {
+            } else if (category == obs_module_text("WebSocket.Category.FileManagement")) {
                 categoryIcon = "📁";
                 categoryStyle = "success";
-            } else if (category == "UI Interaction") {
+            } else if (category == obs_module_text("WebSocket.Category.UIInteraction")) {
                 categoryIcon = "🖱️";
                 categoryStyle = "warning";
-            } else if (category == "Video Device Management") {
+            } else if (category == obs_module_text("WebSocket.Category.VideoDeviceManagement")) {
                 categoryIcon = "🎥";
                 categoryStyle = "error";
             }
@@ -179,7 +195,8 @@ void ShowWebSocketWindow(bool showInternalTools)
             const auto& commands = commandsByCategory[category];
             for (int i = 0; i < commands.size(); ++i) {
                 const auto& cmd = commands[i];
-                QWidget* commandWidget = CreateCommandWidget(cmd.name, cmd.description);
+                QString translatedDescription = obs_module_text(cmd.description.toUtf8().constData());
+                QWidget* commandWidget = CreateCommandWidget(cmd.name, translatedDescription);
                 categoryLayout->addWidget(commandWidget);
                 
                 // Add separator line between commands (but not after the last one)
@@ -217,7 +234,7 @@ void ShowWebSocketWindow(bool showInternalTools)
         buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0, 
             StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
 
-        QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton("Close", "neutral");
+        QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WebSocket.Button.Close"), "neutral");
         QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
 
         buttonLayout->addStretch();
@@ -226,6 +243,9 @@ void ShowWebSocketWindow(bool showInternalTools)
         mainLayout->addWidget(buttonWidget);
 
         dialog->setLayout(mainLayout);
+        
+        // Store the dialog reference
+        dialogRef = dialog;
         
         // Apply dynamic sizing for websocket window
         StreamUP::UIStyles::ApplyDynamicSizing(dialog, 700, 1100, 500, 800);
@@ -306,13 +326,13 @@ QWidget* CreateCommandWidget(const QString& command, const QString& description)
     QString obsRawJson = QString(R"({"requestType":"CallVendorRequest","requestData":{"vendorName":"streamup","requestType":"%1","requestData":{}}})").arg(command);
     QPushButton* obsRawBtn = StreamUP::UIStyles::CreateStyledButton("OBS Raw", "info", 28, 80);
     obsRawBtn->setFixedSize(80, 28); // Set static size - bigger for "OBS Raw" text
-    obsRawBtn->setToolTip("Copy standard WebSocket JSON format for obs-websocket");
+    obsRawBtn->setToolTip(obs_module_text("WebSocket.Button.OBSRaw.Tooltip"));
     QObject::connect(obsRawBtn, &QPushButton::clicked, [obsRawBtn, obsRawJson]() {
         QApplication::clipboard()->setText(obsRawJson);
         
         // Visual feedback: briefly change button text and style
         QString originalText = obsRawBtn->text();
-        obsRawBtn->setText("Copied!");
+        obsRawBtn->setText(obs_module_text("WebSocket.Button.Copied"));
         obsRawBtn->setEnabled(false);
         
         // Change to success style temporarily
@@ -333,13 +353,13 @@ QWidget* CreateCommandWidget(const QString& command, const QString& description)
     QString cphCommand = QString(R"(CPH.ObsSendRaw("CallVendorRequest", "{\"vendorName\":\"streamup\",\"requestType\":\"%1\",\"requestData\":{}}", 0);)").arg(command);
     QPushButton* cphBtn = StreamUP::UIStyles::CreateStyledButton("CPH", "info", 28, 70);
     cphBtn->setFixedSize(70, 28); // Set static size
-    cphBtn->setToolTip("Copy Streamer.Bot format for use with CPH.ObsSendRaw() function");
+    cphBtn->setToolTip(obs_module_text("WebSocket.Button.CPH.Tooltip"));
     QObject::connect(cphBtn, &QPushButton::clicked, [cphBtn, cphCommand]() {
         QApplication::clipboard()->setText(cphCommand);
         
         // Visual feedback: briefly change button text and style
         QString originalText = cphBtn->text();
-        cphBtn->setText("Copied!");
+        cphBtn->setText(obs_module_text("WebSocket.Button.Copied"));
         cphBtn->setEnabled(false);
         
         // Change to success style temporarily

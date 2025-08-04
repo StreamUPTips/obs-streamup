@@ -40,7 +40,7 @@ namespace PluginManager {
 //-------------------ERROR HANDLING FUNCTIONS-------------------
 void ErrorDialog(const QString &errorMessage)
 {
-	std::string message = errorMessage.isEmpty() ? "Unknown error occurred." : errorMessage.toStdString();
+	std::string message = errorMessage.isEmpty() ? obs_module_text("UnknownErrorOccurred") : errorMessage.toStdString();
 	StreamUP::ErrorHandler::ShowErrorDialog("Plugin Error", message);
 }
 
@@ -49,7 +49,7 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 	if (manuallyTriggered) {
 		StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
 			QDialog *toast = new QDialog();
-			toast->setWindowTitle("StreamUP");
+			toast->setWindowTitle(obs_module_text("StreamUP"));
 			toast->setWindowFlags(Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint | Qt::WindowStaysOnTopHint);
 			toast->setAttribute(Qt::WA_DeleteOnClose);
 			toast->setStyleSheet(QString("QDialog { background: %1; border-radius: %2px; }")
@@ -65,7 +65,7 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 				StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
 			toastLayout->setSpacing(8);
 			
-			QLabel *messageLabel = new QLabel("✓ All plugins are up to date!");
+			QLabel *messageLabel = new QLabel(obs_module_text("AllPluginsUpToDate"));
 			messageLabel->setStyleSheet(QString(
 				"QLabel {"
 				"color: white;"
@@ -77,7 +77,7 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 			messageLabel->setAlignment(Qt::AlignCenter);
 			toastLayout->addWidget(messageLabel);
 			
-			QLabel *countdownLabel = new QLabel("Auto closing in 3 seconds");
+			QLabel *countdownLabel = new QLabel(obs_module_text("AutoClosingIn3Seconds"));
 			countdownLabel->setStyleSheet(QString(
 				"QLabel {"
 				"color: rgba(255, 255, 255, 0.8);"
@@ -98,7 +98,7 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 			QObject::connect(countdownTimer, &QTimer::timeout, [countdownLabel, remainingSeconds, toast, countdownTimer]() {
 				(*remainingSeconds)--;
 				if (*remainingSeconds > 0) {
-					countdownLabel->setText(QString("Auto closing in %1 seconds").arg(*remainingSeconds));
+					countdownLabel->setText(QString(obs_module_text("AutoClosingInNSeconds")).arg(*remainingSeconds));
 				} else {
 					countdownTimer->stop();
 					toast->close();
@@ -119,11 +119,11 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 		
 		QString titleText;
 		if (hasMissing && hasUpdates) {
-			titleText = "Missing Plugins & Updates Available";
+			titleText = obs_module_text("MissingPluginsAndUpdatesAvailable");
 		} else if (hasMissing) {
-			titleText = "Missing Required Plugins";
+			titleText = obs_module_text("MissingRequiredPlugins");
 		} else if (hasUpdates) {
-			titleText = "Plugin Updates Available";
+			titleText = obs_module_text("PluginUpdatesAvailable");
 		}
 
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
@@ -146,11 +146,11 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 		// Add styled description with warning
 		QString descText;
 		if (hasMissing && hasUpdates) {
-			descText = "Some required plugins are missing and others need updates to work correctly.";
+			descText = obs_module_text("SomePluginsMissingAndNeedUpdates");
 		} else if (hasMissing) {
-			descText = "The following plugins are required but not installed.";
+			descText = obs_module_text("FollowingPluginsRequiredNotInstalled");
 		} else if (hasUpdates) {
-			descText = "The following plugins have updates available.";
+			descText = obs_module_text("FollowingPluginsHaveUpdatesAvailable");
 		}
 		
 		QLabel *descLabel = StreamUP::UIStyles::CreateStyledDescription(descText);
@@ -169,7 +169,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 
 		if (hasMissing) {
 			// Create expandable GroupBox with internal scrolling
-			QGroupBox *missingGroup = StreamUP::UIStyles::CreateStyledGroupBox("Missing", "error");
+			QGroupBox *missingGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Missing"), "error");
 			missingGroup->setMinimumWidth(500);
 			missingGroup->setMinimumHeight(150);
 			// Let it expand to fill available space
@@ -191,7 +191,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 
 		if (hasUpdates) {
 			// Create expandable GroupBox with internal scrolling
-			QGroupBox *updateGroup = StreamUP::UIStyles::CreateStyledGroupBox("Updates Available", "warning");
+			QGroupBox *updateGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("UpdatesAvailable"), "warning");
 			updateGroup->setMinimumWidth(500);
 			updateGroup->setMinimumHeight(150);
 			// Let it expand to fill available space
@@ -216,9 +216,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 		// Add warning message above buttons if there's a continue callback (meaning this is for install product)
 		if (continueCallback) {
 			QLabel *warningLabel = StreamUP::UIStyles::CreateStyledDescription(
-				"⚠️ Warning: By pressing continue anyway you will be prompted to select a StreamUP file for installation.\n\n"
-				"Continuing at this stage may result in incomplete functionality or unexpected behavior. "
-				"You may also need to reinstall the StreamUP file after the required plugins are installed."
+				obs_module_text("WarningContinueAnyway")
 			);
 			warningLabel->setStyleSheet(QString(
 				"QLabel {"
@@ -244,7 +242,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 		
 		// Add Continue Anyway button if callback is provided
 		if (continueCallback) {
-			QPushButton *continueButton = StreamUP::UIStyles::CreateStyledButton("Continue Anyway", "warning");
+			QPushButton *continueButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("ContinueAnyway"), "warning");
 			QObject::connect(continueButton, &QPushButton::clicked, [dialog, continueCallback]() {
 				dialog->close();
 				continueCallback();
@@ -252,7 +250,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 			buttonLayout->addWidget(continueButton);
 		}
 		
-		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton("OK", "neutral", 30, 100);
+		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("OK"), "neutral", 30, 100);
 		QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
 		buttonLayout->addWidget(okButton);
 
@@ -306,11 +304,11 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 	if (!version_mismatch_modules.empty()) {
 		errorMsgUpdate += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
 				  "<tr style=\"background: #4a5568; font-weight: bold;\">"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">Plugin Name</td>"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">Installed Version</td>"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">Current Version</td>"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">Download Link</td>"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">Website Link</td>"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("PluginName")) + "</td>"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("InstalledVersion")) + "</td>"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("CurrentVersion")) + "</td>"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("DownloadLink")) + "</td>"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("WebsiteLink")) + "</td>"
 				  "</tr>";
 
 		for (const auto &module : version_mismatch_modules) {
@@ -328,8 +326,8 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 					  "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
 					  "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">v" + module.second + "</td>"
 					  "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
-					  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">Download</a></td>"
-					  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">Website</a></td>"
+					  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Download")) + "</a></td>"
+					  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Website")) + "</a></td>"
 					  "</tr>";
 		}
 
@@ -504,11 +502,11 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 		if (hasUpdates) {
 			errorMsgUpdate += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
 					  "<tr style=\"background: #4a5568; font-weight: bold;\">"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Plugin Name</td>"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Installed Version</td>"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Current Version</td>"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Download Link</td>"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Website Link</td>"
+					  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("PluginName")) + "</td>"
+					  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("InstalledVersion")) + "</td>"
+					  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("CurrentVersion")) + "</td>"
+					  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("DownloadLink")) + "</td>"
+					  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("WebsiteLink")) + "</td>"
 					  "</tr>";
 
 			for (const auto &module : version_mismatch_modules) {
@@ -526,8 +524,8 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 						  "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
 						  "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">v" + module.second + "</td>"
 						  "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
-						  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">Download</a></td>"
-						  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">Website</a></td>"
+						  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Download")) + "</a></td>"
+						  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Website")) + "</a></td>"
 						  "</tr>";
 			}
 
@@ -541,11 +539,11 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 		if (hasMissingPlugins) {
 			errorMsgMissing += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
 					   "<tr style=\"background: #4a5568; font-weight: bold;\">"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Plugin Name</td>"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Status</td>"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Current Version</td>"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Download Link</td>"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Website Link</td>"
+					   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("PluginName")) + "</td>"
+					   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("Status")) + "</td>"
+					   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("CurrentVersion")) + "</td>"
+					   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("DownloadLink")) + "</td>"
+					   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("WebsiteLink")) + "</td>"
 					   "</tr>";
 
 			for (auto it = missing_modules.begin(); it != missing_modules.end(); ++it) {
@@ -562,10 +560,10 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 
 				errorMsgMissing += "<tr>"
 						   "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + moduleName + "</td>"
-						   "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">MISSING</td>"
+						   "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">" + std::string(obs_module_text("MISSING")) + "</td>"
 						   "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
-						   "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">Download</a></td>"
-						   "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">Website</a></td>"
+						   "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Download")) + "</a></td>"
+						   "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Website")) + "</a></td>"
 						   "</tr>";
 			}
 

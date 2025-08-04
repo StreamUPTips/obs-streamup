@@ -913,7 +913,7 @@ static void LoadStreamUPDock()
 
 	auto *dock_widget = new StreamUPDock(main_window);
 
-	const QString title = QString::fromUtf8(obs_module_text("StreamUP Dock"));
+	const QString title = QString::fromUtf8(obs_module_text("StreamUPDock"));
 	const auto name = "StreamUPDock";
 
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)

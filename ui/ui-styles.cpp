@@ -118,30 +118,46 @@ QString GetButtonStyle(const QString& baseColor, const QString& hoverColor, int 
         .arg(height);
 }
 
+QString GetSquircleButtonStyle(const QString& baseColor, const QString& hoverColor, int size) {
+    // True squircle radius: approximately 40% of size for smooth, organic curves
+    int radius = static_cast<int>(size * 0.4);
+    return QString(
+        "QPushButton {"
+        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:1 %2) !important;"
+        "color: white !important;"
+        "border: none !important;"
+        "padding: 0px !important;"
+        "margin: 0px !important;"
+        "font-size: 13px !important;"
+        "font-weight: bold !important;"
+        "border-radius: %4px !important;"
+        "width: %5px !important;"
+        "height: %5px !important;"
+        "min-width: %5px !important;"
+        "max-width: %5px !important;"
+        "min-height: %5px !important;"
+        "max-height: %5px !important;"
+        "qproperty-sizePolicy: Fixed Fixed !important;"
+        "}"
+        "QPushButton:hover {"
+        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %3, stop:1 %1) !important;"
+        "}")
+        .arg(baseColor)
+        .arg(hoverColor)
+        .arg(hoverColor)
+        .arg(radius)
+        .arg(size);
+}
+
 QString GetScrollAreaStyle() {
     return QString(
         "QScrollArea {"
         "border: none;"
         "background: %1;"
-        "}"
-        "QScrollBar:vertical {"
-        "background: %2;"
-        "width: 12px;"
-        "border-radius: 6px;"
-        "}"
-        "QScrollBar::handle:vertical {"
-        "background: %3;"
-        "border-radius: 6px;"
-        "min-height: 20px;"
-        "}"
-        "QScrollBar::handle:vertical:hover {"
-        "background: %4;"
         "}")
-        .arg(Colors::BACKGROUND_DARK)
-        .arg(Colors::BACKGROUND_HOVER)
-        .arg(Colors::TEXT_DISABLED)
-        .arg(Colors::TEXT_MUTED);
+        .arg(Colors::BACKGROUND_DARK);
 }
+
 
 QString GetTableStyle() {
     return QString(
@@ -225,6 +241,35 @@ QPushButton* CreateStyledButton(const QString& text, const QString& type, int he
     return button;
 }
 
+QPushButton* CreateStyledSquircleButton(const QString& text, const QString& type, int size) {
+    QPushButton* button = new QPushButton(text);
+    
+    // Enforce fixed square size
+    button->setFixedSize(size, size);
+    button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    
+    QString baseColor, hoverColor;
+    if (type == "success") {
+        baseColor = Colors::SUCCESS;
+        hoverColor = Colors::SUCCESS_HOVER;
+    } else if (type == "error") {
+        baseColor = Colors::ERROR;
+        hoverColor = Colors::ERROR_HOVER;
+    } else if (type == "warning") {
+        baseColor = Colors::WARNING;
+        hoverColor = Colors::WARNING_HOVER;
+    } else if (type == "info") {
+        baseColor = Colors::INFO;
+        hoverColor = Colors::INFO_HOVER;
+    } else { // neutral
+        baseColor = Colors::NEUTRAL;
+        hoverColor = Colors::NEUTRAL_HOVER;
+    }
+    
+    button->setStyleSheet(GetSquircleButtonStyle(baseColor, hoverColor, size));
+    return button;
+}
+
 QGroupBox* CreateStyledGroupBox(const QString& title, const QString& type) {
     QGroupBox* groupBox = new QGroupBox(title);
     
@@ -251,6 +296,7 @@ QScrollArea* CreateStyledScrollArea() {
     scrollArea->setStyleSheet(GetScrollAreaStyle());
     return scrollArea;
 }
+
 
 void ApplyAutoSizing(QDialog* dialog, int minWidth, int maxWidth, int minHeight, int maxHeight) {
     // Set initial size and show
