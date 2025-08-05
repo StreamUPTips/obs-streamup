@@ -136,6 +136,7 @@ void UpdateDockToolSettings(const DockToolSettings& dockSettings);
  */
 void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents& components);
 
+
 } // namespace SettingsManager
 } // namespace StreamUP
 

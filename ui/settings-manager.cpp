@@ -21,6 +21,7 @@
 #include <QTimer>
 #include <QSizePolicy>
 #include <QPointer>
+#include <memory>
 #include <util/platform.h>
 
 // Forward declarations for functions that may need to be moved from streamup.cpp
@@ -399,14 +400,14 @@ void ShowSettingsDialog()
             QWidget* currentWidget = scrollAreaPtr->widget();
             if (currentWidget != originalContentWidget.data()) {
                 // We're on a sub-page, go back to main content
-                QWidget* widgetToDelete = scrollAreaPtr->takeWidget();
+                QWidget* widgetToRemove = scrollAreaPtr->takeWidget();
                 if (!originalContentWidget.isNull()) {
                     scrollAreaPtr->setWidget(originalContentWidget.data());
                 }
                 
                 // Properly delete the widget that was removed to prevent memory leaks and crashes
-                if (widgetToDelete && widgetToDelete != originalContentWidget.data()) {
-                    widgetToDelete->deleteLater();
+                if (widgetToRemove && widgetToRemove != originalContentWidget.data()) {
+                    widgetToRemove->deleteLater();
                 }
                 
                 // Main header stays unchanged - "StreamUP Settings" throughout
@@ -1415,6 +1416,7 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents& co
     
     // Don't resize dialog when switching to sub-menus to maintain consistent header appearance
 }
+
 
 } // namespace SettingsManager
 } // namespace StreamUP
