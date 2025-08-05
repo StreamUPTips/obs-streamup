@@ -328,39 +328,58 @@ void ShowSettingsDialog()
         QTimer* buttonUpdateTimer = new QTimer(dialog);
         buttonUpdateTimer->setInterval(100); // Check every 100ms
         
-        QWidget* originalContentWidget = contentWidget; // Store reference for timer
+        QPointer<QWidget> originalContentWidget = contentWidget; // Use QPointer for safe reference tracking
         
-        QObject::connect(buttonUpdateTimer, &QTimer::timeout, [components, originalContentWidget]() {
-            QWidget* currentWidget = components.scrollArea->widget();
-            if (currentWidget != originalContentWidget) {
+        // Capture specific pointers safely to avoid reference issues
+        QPointer<QScrollArea> scrollAreaPtr = components.scrollArea;
+        QPointer<QPushButton> mainButtonPtr = components.mainButton;
+        QPointer<QDialog> dialogPtr = components.dialog;
+        
+        QObject::connect(buttonUpdateTimer, &QTimer::timeout, [scrollAreaPtr, mainButtonPtr, originalContentWidget]() {
+            if (scrollAreaPtr.isNull() || mainButtonPtr.isNull()) {
+                return;
+            }
+            
+            QWidget* currentWidget = scrollAreaPtr->widget();
+            if (currentWidget != originalContentWidget.data()) {
                 // We're on a sub-page, show Back button
-                if (components.mainButton->text() != obs_module_text("WindowSettingsBackButton")) {
-                    components.mainButton->setText(obs_module_text("WindowSettingsBackButton"));
+                if (mainButtonPtr->text() != obs_module_text("WindowSettingsBackButton")) {
+                    mainButtonPtr->setText(obs_module_text("WindowSettingsBackButton"));
                 }
             } else {
                 // We're on main page, show Close button
-                if (components.mainButton->text() != obs_module_text("Close")) {
-                    components.mainButton->setText(obs_module_text("Close"));
+                if (mainButtonPtr->text() != obs_module_text("Close")) {
+                    mainButtonPtr->setText(obs_module_text("Close"));
                 }
             }
         });
         buttonUpdateTimer->start();
         
         // Setup dialog navigation using template system
-        StreamUP::UIStyles::SetupDialogNavigation(components, [components, originalContentWidget, settings]() {
-            obs_data_release(settings);
+        StreamUP::UIStyles::SetupDialogNavigation(components, [scrollAreaPtr, dialogPtr, originalContentWidget]() {
+            // Add null pointer checks to prevent crashes
+            if (scrollAreaPtr.isNull() || dialogPtr.isNull()) {
+                return;
+            }
             
             // Navigate back to main page if we're on a sub-page
-            QWidget* currentWidget = components.scrollArea->widget();
-            if (currentWidget != originalContentWidget) {
+            QWidget* currentWidget = scrollAreaPtr->widget();
+            if (currentWidget != originalContentWidget.data()) {
                 // We're on a sub-page, go back to main content
-                components.scrollArea->takeWidget();
-                components.scrollArea->setWidget(originalContentWidget);
+                QWidget* widgetToDelete = scrollAreaPtr->takeWidget();
+                if (!originalContentWidget.isNull()) {
+                    scrollAreaPtr->setWidget(originalContentWidget.data());
+                }
+                
+                // Properly delete the widget that was removed to prevent memory leaks and crashes
+                if (widgetToDelete && widgetToDelete != originalContentWidget.data()) {
+                    widgetToDelete->deleteLater();
+                }
                 
                 // Main header stays unchanged - "StreamUP Settings" throughout
             } else {
                 // We're on main page, just close
-                components.dialog->close();
+                dialogPtr->close();
             }
         });
         
