@@ -448,8 +448,8 @@ void ApplyConsistentSizing(QDialog* dialog, int preferredWidth, int maxWidth, in
             targetWidth = qMin(sizeHint.width() + 60, maxWidth);
         }
         
-        // Calculate height to fit content without scrolling
-        int targetHeight = qMax(minHeight, qMin(sizeHint.height() + 30, maxHeight));
+        // Calculate height to fit content without scrolling - be more generous
+        int targetHeight = qMax(minHeight, qMin(sizeHint.height() + 80, maxHeight));
         
         // Apply the calculated size
         dialog->resize(targetWidth, targetHeight);
@@ -458,8 +458,8 @@ void ApplyConsistentSizing(QDialog* dialog, int preferredWidth, int maxWidth, in
         QTimer::singleShot(10, [dialog, targetWidth, targetHeight, wasVisible]() {
             QSize finalSizeHint = dialog->sizeHint();
             if (finalSizeHint.height() > targetHeight) {
-                // Only adjust height if content doesn't fit
-                int adjustedHeight = qMin(finalSizeHint.height() + 15, dialog->maximumHeight());
+                // Only adjust height if content doesn't fit - be more generous
+                int adjustedHeight = qMin(finalSizeHint.height() + 60, dialog->maximumHeight());
                 dialog->resize(targetWidth, adjustedHeight);
             }
             
