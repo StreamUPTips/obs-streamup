@@ -604,7 +604,7 @@ void CreateSplashDialog()
         // Social media icons - icon only buttons
         QHBoxLayout* socialIconsLayout = new QHBoxLayout();
         socialIconsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL + 2);
-        socialIconsLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::SPACING_SMALL, 0, 0);
+        socialIconsLayout->setContentsMargins(0, 0, 0, 0);
         
         QString socialIconStyle = QString(
             "QPushButton {"
@@ -697,14 +697,7 @@ void CreateSplashDialog()
 
         // Patch Notes Section - Much more compact
         QWidget* patchNotesCard = new QWidget();
-        patchNotesCard->setStyleSheet(QString(
-            "QWidget {"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-            "stop:0 rgba(30, 30, 35, 0.8), stop:1 rgba(40, 40, 45, 0.6));"
-            "border: none;"
-            "border-radius: 0px;"
-            "padding: 0px;"
-            "}"));
+        patchNotesCard->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
         QVBoxLayout* patchNotesLayout = new QVBoxLayout(patchNotesCard);
         patchNotesLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
             StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
@@ -722,14 +715,7 @@ void CreateSplashDialog()
         // Support Section - Much more compact
 
         QWidget* supportCard = new QWidget();
-        supportCard->setStyleSheet(QString(
-            "QWidget {"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-            "stop:0 rgba(25, 30, 40, 0.8), stop:1 rgba(35, 40, 50, 0.6));"
-            "border: none;"
-            "border-radius: 0px;"
-            "padding: 0px;"
-            "}"));
+        supportCard->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
         QVBoxLayout* supportLayout = new QVBoxLayout(supportCard);
         supportLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
             StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
@@ -789,14 +775,7 @@ void CreateSplashDialog()
 
         // Supporters Section - Much more compact
         QWidget* supportersCard = new QWidget();
-        supportersCard->setStyleSheet(QString(
-            "QWidget {"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-            "stop:0 rgba(30, 25, 35, 0.8), stop:1 rgba(40, 35, 45, 0.6));"
-            "border: none;"
-            "border-radius: 0px;"
-            "padding: 0px;"
-            "}"));
+        supportersCard->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
         QVBoxLayout* supportersLayout = new QVBoxLayout(supportersCard);
         supportersLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
             StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
@@ -816,14 +795,7 @@ void CreateSplashDialog()
 
         // Additional links - More compact
         QWidget* linksCard = new QWidget();
-        linksCard->setStyleSheet(QString(
-            "QWidget {"
-            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, "
-            "stop:0 rgba(25, 30, 35, 0.8), stop:1 rgba(35, 40, 45, 0.6));"
-            "border: none;"
-            "border-radius: 0px;"
-            "padding: 0px;"
-            "}"));
+        linksCard->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
         QVBoxLayout* linksCardLayout = new QVBoxLayout(linksCard);
         linksCardLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
             StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
@@ -848,7 +820,7 @@ void CreateSplashDialog()
             QDesktopServices::openUrl(QUrl("https://streamup.doras.click/docs"));
         });
         
-        QPushButton* discordBtn = StreamUP::UIStyles::CreateStyledButton("💬 Discord Community", "info");
+        QPushButton* discordBtn = StreamUP::UIStyles::CreateStyledButton("Discord", "info");
         discordBtn->setIcon(QIcon(":images/icons/discord.svg"));
         discordBtn->setIconSize(QSize(16, 16));
         QObject::connect(discordBtn, &QPushButton::clicked, []() {
@@ -860,13 +832,46 @@ void CreateSplashDialog()
             QDesktopServices::openUrl(QUrl("https://streamup.tips"));
         });
         
+        QPushButton* twitterBtn = StreamUP::UIStyles::CreateStyledButton("Twitter", "neutral");
+        twitterBtn->setIcon(QIcon(":images/icons/twitter.svg"));
+        twitterBtn->setIconSize(QSize(16, 16));
+        QObject::connect(twitterBtn, &QPushButton::clicked, []() {
+            QDesktopServices::openUrl(QUrl("https://twitter.com/StreamUPTips"));
+        });
+        
+        QPushButton* blueskyBtn = StreamUP::UIStyles::CreateStyledButton("Bluesky", "neutral");
+        blueskyBtn->setIcon(QIcon(":images/icons/bluesky.svg"));
+        blueskyBtn->setIconSize(QSize(16, 16));
+        QObject::connect(blueskyBtn, &QPushButton::clicked, []() {
+            QDesktopServices::openUrl(QUrl("https://bsky.app/profile/streamup.tips"));
+        });
+        
+        QPushButton* dorasBtn = StreamUP::UIStyles::CreateStyledButton("Doras", "neutral");
+        dorasBtn->setIcon(QIcon(":images/icons/doras.svg"));
+        dorasBtn->setIconSize(QSize(16, 16));
+        QObject::connect(dorasBtn, &QPushButton::clicked, []() {
+            QDesktopServices::openUrl(QUrl("https://doras.to/streamup"));
+        });
+
         linksLayout->addStretch();
         linksLayout->addWidget(docsBtn);
         linksLayout->addWidget(discordBtn);
         linksLayout->addWidget(websiteBtn);
         linksLayout->addStretch();
         
+        // Second row for social media buttons
+        QHBoxLayout* socialLinksLayout = new QHBoxLayout();
+        socialLinksLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+        socialLinksLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::SPACING_SMALL, 0, 0);
+        
+        socialLinksLayout->addStretch();
+        socialLinksLayout->addWidget(twitterBtn);
+        socialLinksLayout->addWidget(blueskyBtn);
+        socialLinksLayout->addWidget(dorasBtn);
+        socialLinksLayout->addStretch();
+        
         linksCardLayout->addLayout(linksLayout);
+        linksCardLayout->addLayout(socialLinksLayout);
         contentLayout->addWidget(linksCard);
 
         // Add Get Started button to the scrollable content at the bottom

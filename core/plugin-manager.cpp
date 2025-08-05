@@ -240,19 +240,25 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 				"border: 1px solid #f59e0b;"
 				"border-radius: %1px;"
 				"padding: %2px;"
-				"margin: %3px 0px;"
-				"font-size: %4px;"
+				"margin: %3px %4px;"
+				"font-size: %5px;"
 				"line-height: 1.4;"
 				"}")
 				.arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS)
 				.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
 				.arg(StreamUP::UIStyles::Sizes::SPACING_SMALL)
+				.arg(StreamUP::UIStyles::Sizes::PADDING_XL + 5)
 				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
 			dialogLayout->addWidget(warningLabel);
 		}
 
 		// Add styled buttons
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
+		buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+			StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
+			StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+			StreamUP::UIStyles::Sizes::PADDING_XL);
+		buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 		buttonLayout->addStretch();
 		
 		// Add Continue Anyway button if callback is provided
