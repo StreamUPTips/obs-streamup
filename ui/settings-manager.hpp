@@ -41,9 +41,10 @@ struct DockToolSettings {
 struct PluginSettings {
     bool runAtStartup;
     bool notificationsMute;
+    bool showCPHIntegration;
     DockToolSettings dockTools;
     
-    PluginSettings() : runAtStartup(true), notificationsMute(false) {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true) {}
 };
 
 /**
@@ -92,6 +93,12 @@ bool AreNotificationsMuted();
  * @param muted True to mute notifications, false to enable them
  */
 void SetNotificationsMuted(bool muted);
+
+/**
+ * @brief Check if CPH integration is enabled
+ * @return bool True if CPH integration should be shown
+ */
+bool IsCPHIntegrationEnabled();
 
 /**
  * @brief Show the installed plugins page inline within the same window

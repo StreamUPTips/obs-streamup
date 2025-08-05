@@ -54,6 +54,7 @@ obs_data_t* LoadSettings()
         data = obs_data_create();
         obs_data_set_bool(data, "run_at_startup", true);
         obs_data_set_bool(data, "notifications_mute", false);
+        obs_data_set_bool(data, "show_cph_integration", true);
         
         // Set default dock tool settings
         obs_data_t* dockData = obs_data_create();
@@ -102,6 +103,7 @@ PluginSettings GetCurrentSettings()
     if (data) {
         settings.runAtStartup = obs_data_get_bool(data, "run_at_startup");
         settings.notificationsMute = obs_data_get_bool(data, "notifications_mute");
+        settings.showCPHIntegration = obs_data_get_bool(data, "show_cph_integration");
         
         // Load dock tool settings
         obs_data_t* dockData = obs_data_get_obj(data, "dock_tools");
@@ -128,6 +130,7 @@ void UpdateSettings(const PluginSettings& settings)
     obs_data_t* data = obs_data_create();
     obs_data_set_bool(data, "run_at_startup", settings.runAtStartup);
     obs_data_set_bool(data, "notifications_mute", settings.notificationsMute);
+    obs_data_set_bool(data, "show_cph_integration", settings.showCPHIntegration);
     
     // Save dock tool settings
     obs_data_t* dockData = obs_data_create();
@@ -258,6 +261,36 @@ void ShowSettingsDialog()
         notificationsLayout->addStretch();
         notificationsLayout->addWidget(notificationsMuteSwitch);
         generalLayout->addLayout(notificationsLayout);
+
+        // CPH Integration setting
+        obs_property_t* cphIntegrationProp =
+            obs_properties_add_bool(props, "show_cph_integration", obs_module_text("WindowSettingsCPHIntegration"));
+
+        // Create horizontal layout for CPH integration setting
+        QHBoxLayout* cphLayout = new QHBoxLayout();
+        
+        QLabel* cphLabel = new QLabel(obs_module_text("WindowSettingsCPHIntegration"));
+        cphLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+        cphLabel->setToolTip(obs_module_text("WindowSettingsCPHIntegrationTooltip"));
+        
+        StreamUP::UIStyles::SwitchButton* cphIntegrationSwitch = StreamUP::UIStyles::CreateStyledSwitch(
+            "", obs_data_get_bool(settings, obs_property_name(cphIntegrationProp))
+        );
+        cphIntegrationSwitch->setToolTip(obs_module_text("WindowSettingsCPHIntegrationTooltip"));
+        
+        QObject::connect(cphIntegrationSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+            // Use modern settings system to avoid conflicts with dock settings
+            PluginSettings currentSettings = GetCurrentSettings();
+            currentSettings.showCPHIntegration = checked;
+            UpdateSettings(currentSettings);
+        });
+
+        cphLayout->addWidget(cphLabel);
+        cphLayout->addStretch();
+        cphLayout->addWidget(cphIntegrationSwitch);
+        generalLayout->addLayout(cphLayout);
         contentLayout->addWidget(generalGroup);
 
         // Plugin Management Group
@@ -415,6 +448,12 @@ void SetNotificationsMuted(bool muted)
     PluginSettings settings = GetCurrentSettings();
     settings.notificationsMute = muted;
     UpdateSettings(settings);
+}
+
+bool IsCPHIntegrationEnabled()
+{
+    PluginSettings settings = GetCurrentSettings();
+    return settings.showCPHIntegration;
 }
 
 void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponents& components)
