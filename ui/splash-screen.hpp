@@ -33,7 +33,7 @@ ShowCondition CheckSplashCondition();
 void UpdateVersionTracking();
 
 // Internal dialog creation
-void CreateSplashDialog();
+void CreateSplashDialog(ShowCondition condition = ShowCondition::VersionUpdate);
 
 } // namespace SplashScreen
 } // namespace StreamUP
