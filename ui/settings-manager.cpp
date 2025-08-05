@@ -396,8 +396,8 @@ void ShowSettingsDialog()
         // Store the dialog reference
         settingsDialog = dialog;
         
-        // Apply dynamic sizing that hugs content (also centers dialog after sizing)
-        StreamUP::UIStyles::ApplyDynamicSizing(dialog, 580, 900, 500, 750);
+        // Apply consistent sizing with larger width for complex subpages like hotkeys
+        StreamUP::UIStyles::ApplyConsistentSizing(dialog, 650, 1000, 500, 750);
         dialog->show();
     });
 }
@@ -434,20 +434,24 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
         StreamUP::UIStyles::Sizes::PADDING_XL);
     pluginsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
     
-    // Sub-page title and description (within content area)
+    // Create separate header section with same spacing as main header
+    QWidget* headerSection = new QWidget();
+    QVBoxLayout* headerSectionLayout = new QVBoxLayout(headerSection);
+    headerSectionLayout->setContentsMargins(0, 0, 0, 0);
+    headerSectionLayout->setSpacing(0); // Same as main header - no base spacing
+    
     QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsInstalledPluginsTitle"));
     titleLabel->setAlignment(Qt::AlignCenter);
-    pluginsLayout->addWidget(titleLabel);
+    headerSectionLayout->addWidget(titleLabel);
     
-    // Reduce spacing between title and description
-    pluginsLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
+    // Add small spacing between title and description for readability
+    //headerSectionLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
     
     QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsInstalledPluginsDesc"));
     descLabel->setAlignment(Qt::AlignCenter);
-    pluginsLayout->addWidget(descLabel);
+    headerSectionLayout->addWidget(descLabel);
     
-    // Reduce spacing after header
-    pluginsLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+    pluginsLayout->addWidget(headerSection);
     
     // Info section - constrain width properly
     QLabel* infoLabel = new QLabel(obs_module_text("WindowSettingsInstalledPluginsInfo"));
@@ -744,8 +748,8 @@ void ShowInstalledPluginsPage(QWidget* parentWidget)
 
         dialog->setLayout(mainLayout);
         
-        // Apply dynamic sizing that adjusts to actual content size (also centers dialog after sizing)
-        StreamUP::UIStyles::ApplyDynamicSizing(dialog, 650, 1000, 400, 800);
+        // Apply consistent sizing that adjusts to actual content size (also centers dialog after sizing)
+        StreamUP::UIStyles::ApplyConsistentSizing(dialog, 650, 1000, 400, 800);
         dialog->show();
     });
 }
@@ -767,20 +771,24 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents& compo
         StreamUP::UIStyles::Sizes::PADDING_XL);
     hotkeysLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
     
-    // Sub-page title and description (within content area)
+    // Create separate header section with same spacing as main header
+    QWidget* headerSection = new QWidget();
+    QVBoxLayout* headerSectionLayout = new QVBoxLayout(headerSection);
+    headerSectionLayout->setContentsMargins(0, 0, 0, 0);
+    headerSectionLayout->setSpacing(0); // Same as main header - no base spacing
+    
     QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsHotkeysTitle"));
     titleLabel->setAlignment(Qt::AlignCenter);
-    hotkeysLayout->addWidget(titleLabel);
+    headerSectionLayout->addWidget(titleLabel);
     
-    // Reduce spacing between title and description
-    hotkeysLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
+    // Add small spacing between title and description for readability
+    // headerSectionLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
     
     QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsHotkeysDesc"));
     descLabel->setAlignment(Qt::AlignCenter);
-    hotkeysLayout->addWidget(descLabel);
+    headerSectionLayout->addWidget(descLabel);
     
-    // Reduce spacing after header
-    hotkeysLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+    hotkeysLayout->addWidget(headerSection);
     
     // Info section
     QLabel* infoLabel = new QLabel(obs_module_text("WindowSettingsHotkeysInfo"));
@@ -1074,20 +1082,24 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents& co
         StreamUP::UIStyles::Sizes::PADDING_XL);
     dockConfigLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
     
-    // Sub-page title and description (within content area)
+    // Create separate header section with same spacing as main header
+    QWidget* headerSection = new QWidget();
+    QVBoxLayout* headerSectionLayout = new QVBoxLayout(headerSection);
+    headerSectionLayout->setContentsMargins(0, 0, 0, 0);
+    headerSectionLayout->setSpacing(0); // Same as main header - no base spacing
+    
     QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsDockConfigTitle"));
     titleLabel->setAlignment(Qt::AlignCenter);
-    dockConfigLayout->addWidget(titleLabel);
+    headerSectionLayout->addWidget(titleLabel);
     
-    // Reduce spacing between title and description
-    dockConfigLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
+    // Add small spacing between title and description for readability
+    // headerSectionLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
     
     QLabel* descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsDockConfigDesc"));
     descLabel->setAlignment(Qt::AlignCenter);
-    dockConfigLayout->addWidget(descLabel);
+    headerSectionLayout->addWidget(descLabel);
     
-    // Reduce spacing after header
-    dockConfigLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+    dockConfigLayout->addWidget(headerSection);
     
     // Info section
     QLabel* infoLabel = new QLabel(obs_module_text("WindowSettingsDockConfigInfo"));

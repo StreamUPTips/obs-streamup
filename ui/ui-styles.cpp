@@ -378,31 +378,99 @@ void ApplyDynamicSizing(QDialog* dialog, int minWidth, int maxWidth, int minHeig
         dialog->hide();
     }
     
-    // Calculate optimal size immediately after layout is complete
+    // Calculate optimal size with multiple passes for accuracy
     QTimer::singleShot(1, [dialog, minWidth, maxWidth, minHeight, maxHeight, wasVisible]() {
+        // Force multiple layout calculations to ensure accurate sizing
+        dialog->layout()->activate();
+        dialog->adjustSize();
+        
+        // Second pass for better accuracy
+        QTimer::singleShot(5, [dialog, minWidth, maxWidth, minHeight, maxHeight, wasVisible]() {
+            dialog->layout()->activate();
+            dialog->adjustSize();
+            QSize sizeHint = dialog->sizeHint();
+            
+            // Get the actual required size from layout with better padding calculation
+            int contentWidth = sizeHint.width();
+            int contentHeight = sizeHint.height();
+            
+            // Add minimal padding to prevent content from being cut off or requiring scroll
+            int targetWidth = qMax(minWidth, qMin(contentWidth + 40, maxWidth));
+            int targetHeight = qMax(minHeight, qMin(contentHeight + 20, maxHeight));
+            
+            // Ensure the dialog fits its content without needing scroll
+            dialog->resize(targetWidth, targetHeight);
+            
+            // Final adjustment to ensure no scrolling is needed
+            QTimer::singleShot(10, [dialog, targetWidth, targetHeight, wasVisible]() {
+                // Double-check that content fits without scrolling
+                QSize finalSizeHint = dialog->sizeHint();
+                if (finalSizeHint.height() > targetHeight || finalSizeHint.width() > targetWidth) {
+                    int adjustedWidth = qMax(targetWidth, finalSizeHint.width() + 20);
+                    int adjustedHeight = qMax(targetHeight, finalSizeHint.height() + 10);
+                    dialog->resize(adjustedWidth, adjustedHeight);
+                }
+                
+                // Center the dialog using our standardized function
+                StreamUP::UIHelpers::CenterDialog(dialog);
+                
+                // Show the dialog after sizing is complete
+                if (wasVisible) {
+                    dialog->show();
+                }
+            });
+        });
+    });
+}
+
+void ApplyConsistentSizing(QDialog* dialog, int preferredWidth, int maxWidth, int minHeight, int maxHeight) {
+    // Set initial constraints
+    dialog->setMinimumSize(preferredWidth, minHeight);
+    dialog->setMaximumSize(maxWidth, maxHeight);
+    
+    // Hide dialog initially to prevent flashing
+    bool wasVisible = dialog->isVisible();
+    if (wasVisible) {
+        dialog->hide();
+    }
+    
+    // Calculate optimal size with consistent width approach
+    QTimer::singleShot(1, [dialog, preferredWidth, maxWidth, minHeight, maxHeight, wasVisible]() {
         // Force layout calculation
         dialog->layout()->activate();
         dialog->adjustSize();
         QSize sizeHint = dialog->sizeHint();
         
-        // Calculate compact size based on content
-        int targetWidth = qMax(minWidth, qMin(sizeHint.width() + 80, maxWidth));
-        int targetHeight = qMax(minHeight, qMin(sizeHint.height() + 60, maxHeight));
+        // Use preferred width as the standard, but expand more generously for content that needs it
+        int targetWidth = preferredWidth;
+        if (sizeHint.width() > preferredWidth) {
+            // Give more margin for complex UI elements like hotkey controls
+            targetWidth = qMin(sizeHint.width() + 60, maxWidth);
+        }
         
-        // Set the size directly without animation initially
-        QRect targetGeometry = dialog->geometry();
-        targetGeometry.setSize(QSize(targetWidth, targetHeight));
+        // Calculate height to fit content without scrolling
+        int targetHeight = qMax(minHeight, qMin(sizeHint.height() + 30, maxHeight));
         
-        // Set size first, then center
+        // Apply the calculated size
         dialog->resize(targetWidth, targetHeight);
         
-        // Center the dialog using our standardized function
-        StreamUP::UIHelpers::CenterDialog(dialog);
-        
-        // Show the dialog after sizing is complete
-        if (wasVisible) {
-            dialog->show();
-        }
+        // Final validation pass
+        QTimer::singleShot(10, [dialog, targetWidth, targetHeight, wasVisible]() {
+            QSize finalSizeHint = dialog->sizeHint();
+            if (finalSizeHint.height() > targetHeight) {
+                // Only adjust height if content doesn't fit
+                int adjustedHeight = qMin(finalSizeHint.height() + 15, dialog->maximumHeight());
+                dialog->resize(targetWidth, adjustedHeight);
+            }
+            
+            // Center the dialog
+            StreamUP::UIHelpers::CenterDialog(dialog);
+            
+            // Show the dialog after sizing is complete
+            if (wasVisible) {
+                dialog->show();
+            }
+        });
     });
 }
 

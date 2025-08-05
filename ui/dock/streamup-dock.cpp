@@ -326,7 +326,7 @@ void ShowDockConfigDialog()
 		mainLayout->addWidget(buttonWidget);
 
 		dialog->setLayout(mainLayout);
-		StreamUP::UIStyles::ApplyDynamicSizing(dialog, 600, 900, 450, 700);
+		StreamUP::UIStyles::ApplyConsistentSizing(dialog, 600, 900, 450, 700);
 		dialog->show();
 	});
 }
