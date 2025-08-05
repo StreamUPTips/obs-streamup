@@ -96,6 +96,7 @@ void ApplyAutoSizing(QDialog* dialog, int minWidth = 700, int maxWidth = 900, in
 void ApplyContentBasedSizing(QDialog* dialog);
 void ApplyScrollAreaContentSizing(QScrollArea* scrollArea, int maxHeight = 300);
 void ApplyDynamicSizing(QDialog* dialog, int minWidth = 500, int maxWidth = 900, int minHeight = 400, int maxHeight = 650);
+void ApplyConsistentSizing(QDialog* dialog, int preferredWidth = 580, int maxWidth = 900, int minHeight = 400, int maxHeight = 750);
 
 // Standardized dialog template system
 struct StandardDialogComponents {

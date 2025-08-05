@@ -253,8 +253,8 @@ void ShowWebSocketWindow(bool showInternalTools)
         // Store the dialog reference
         dialogRef = dialog;
         
-        // Apply dynamic sizing for websocket window
-        StreamUP::UIStyles::ApplyDynamicSizing(dialog, 700, 1100, 500, 800);
+        // Apply consistent sizing for websocket window
+        StreamUP::UIStyles::ApplyConsistentSizing(dialog, 700, 1100, 500, 800);
         dialog->show();
     });
 }
