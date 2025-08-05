@@ -48,12 +48,12 @@ HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
     
     // Record button
     m_recordButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("HotkeyWidget.Set"), "info");
-    m_recordButton->setFixedWidth(60);
+    m_recordButton->setFixedWidth(70);
     connect(m_recordButton, &QPushButton::clicked, this, &HotkeyWidget::OnRecordButtonClicked);
     
     // Clear button  
     m_clearButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("HotkeyWidget.Clear"), "neutral");
-    m_clearButton->setFixedWidth(60);
+    m_clearButton->setFixedWidth(70);
     connect(m_clearButton, &QPushButton::clicked, this, &HotkeyWidget::OnClearButtonClicked);
     
     layout->addWidget(m_displayLabel, 1);
