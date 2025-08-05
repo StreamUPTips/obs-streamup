@@ -292,6 +292,7 @@ void ShowDockConfigDialog()
 				layout->addLayout(buttonLayout);
 				
 				confirmDialog->show();
+				StreamUP::UIHelpers::CenterDialog(confirmDialog);
 			});
 		});
 		

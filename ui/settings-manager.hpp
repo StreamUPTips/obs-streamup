@@ -101,8 +101,9 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
 
 /**
  * @brief Show the installed plugins page in a separate window
+ * @param parentWidget Optional parent widget for proper positioning
  */
-void ShowInstalledPluginsPage();
+void ShowInstalledPluginsPage(QWidget* parentWidget = nullptr);
 
 /**
  * @brief Show the hotkeys management page inline within the same window

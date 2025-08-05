@@ -82,7 +82,7 @@ QString GetScrollAreaStyle();
 QString GetTableStyle();
 
 // Utility functions for creating styled components
-QDialog* CreateStyledDialog(const QString& title);
+QDialog* CreateStyledDialog(const QString& title, QWidget* parentWidget = nullptr);
 QLabel* CreateStyledTitle(const QString& text);
 QLabel* CreateStyledDescription(const QString& text);
 QLabel* CreateStyledContent(const QString& text);
@@ -109,7 +109,7 @@ struct StandardDialogComponents {
     QPushButton* mainButton;
 };
 
-StandardDialogComponents CreateStandardDialog(const QString& windowTitle, const QString& headerTitle, const QString& headerDescription);
+StandardDialogComponents CreateStandardDialog(const QString& windowTitle, const QString& headerTitle, const QString& headerDescription, QWidget* parentWidget = nullptr);
 void UpdateDialogHeader(StandardDialogComponents& components, const QString& title, const QString& description);
 void SetupDialogNavigation(StandardDialogComponents& components, std::function<void()> onMainButton);
 
