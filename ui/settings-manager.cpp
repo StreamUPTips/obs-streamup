@@ -396,8 +396,8 @@ void ShowSettingsDialog()
         // Store the dialog reference
         settingsDialog = dialog;
         
-        // Apply consistent sizing with larger width for complex subpages like hotkeys
-        StreamUP::UIStyles::ApplyConsistentSizing(dialog, 650, 1000, 500, 750);
+        // Apply consistent sizing that fits content without scrolling - use very generous height
+        StreamUP::UIStyles::ApplyConsistentSizing(dialog, 650, 1000, 300, 1200);
         dialog->show();
     });
 }
