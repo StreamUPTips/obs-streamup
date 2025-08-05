@@ -180,8 +180,8 @@ QString GetTableStyle() {
         .arg(Sizes::BORDER_RADIUS);
 }
 
-QDialog* CreateStyledDialog(const QString& title) {
-    QDialog* dialog = StreamUP::UIHelpers::CreateDialogWindow(title.toUtf8().constData());
+QDialog* CreateStyledDialog(const QString& title, QWidget* parentWidget) {
+    QDialog* dialog = StreamUP::UIHelpers::CreateDialogWindow(title.toUtf8().constData(), parentWidget);
     dialog->setStyleSheet(GetDialogStyle());
     return dialog;
 }
@@ -317,6 +317,9 @@ void ApplyAutoSizing(QDialog* dialog, int minWidth, int maxWidth, int minHeight,
         dialog->resize(width, height);
         dialog->setMaximumSize(maxWidth, maxHeight);
         dialog->setMinimumSize(minWidth, minHeight);
+        
+        // Center the dialog after resizing
+        StreamUP::UIHelpers::CenterDialog(dialog);
     });
 }
 
@@ -339,6 +342,9 @@ void ApplyContentBasedSizing(QDialog* dialog) {
         // Set constraints but allow some flexibility
         dialog->setMinimumSize(650, 400);
         dialog->setMaximumSize(1000, 800);
+        
+        // Center the dialog after resizing
+        StreamUP::UIHelpers::CenterDialog(dialog);
     });
 }
 
@@ -387,17 +393,11 @@ void ApplyDynamicSizing(QDialog* dialog, int minWidth, int maxWidth, int minHeig
         QRect targetGeometry = dialog->geometry();
         targetGeometry.setSize(QSize(targetWidth, targetHeight));
         
-        // Center the dialog
-        if (dialog->parentWidget()) {
-            QPoint parentCenter = dialog->parentWidget()->geometry().center();
-            targetGeometry.moveCenter(parentCenter);
-        } else {
-            // Center on screen if no parent
-            QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
-            targetGeometry.moveCenter(screenGeometry.center());
-        }
+        // Set size first, then center
+        dialog->resize(targetWidth, targetHeight);
         
-        dialog->setGeometry(targetGeometry);
+        // Center the dialog using our standardized function
+        StreamUP::UIHelpers::CenterDialog(dialog);
         
         // Show the dialog after sizing is complete
         if (wasVisible) {
@@ -407,12 +407,12 @@ void ApplyDynamicSizing(QDialog* dialog, int minWidth, int maxWidth, int minHeig
 }
 
 
-StandardDialogComponents CreateStandardDialog(const QString& windowTitle, const QString& headerTitle, const QString& headerDescription)
+StandardDialogComponents CreateStandardDialog(const QString& windowTitle, const QString& headerTitle, const QString& headerDescription, QWidget* parentWidget)
 {
     StandardDialogComponents components;
     
     // Create main dialog
-    components.dialog = CreateStyledDialog(windowTitle);
+    components.dialog = CreateStyledDialog(windowTitle, parentWidget);
     components.dialog->resize(700, 500);
     
     QVBoxLayout* mainLayout = new QVBoxLayout(components.dialog);

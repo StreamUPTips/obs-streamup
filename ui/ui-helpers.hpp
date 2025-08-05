@@ -24,9 +24,24 @@ void ShowDialogOnUIThread(const std::function<void()> &dialogFunction);
 /**
  * Create a standard dialog window with common properties
  * @param windowTitle The window title (obs_module_text key)
+ * @param parentWidget Optional parent widget for positioning (defaults to OBS main window)
  * @return QDialog* Pointer to the created dialog
  */
-QDialog *CreateDialogWindow(const char *windowTitle);
+QDialog *CreateDialogWindow(const char *windowTitle, QWidget *parentWidget = nullptr);
+
+/**
+ * Center a dialog on its parent widget or screen
+ * @param dialog The dialog to center
+ * @param parentWidget The parent widget to center on (nullptr for screen center)
+ */
+void CenterDialog(QDialog *dialog, QWidget *parentWidget = nullptr);
+
+/**
+ * Show a dialog with proper positioning after a brief delay to ensure proper sizing
+ * @param dialog The dialog to show and center
+ * @param parentWidget Optional parent widget for positioning
+ */
+void ShowDialogCentered(QDialog *dialog, QWidget *parentWidget = nullptr);
 
 /**
  * Create a tool dialog with multiple information sections

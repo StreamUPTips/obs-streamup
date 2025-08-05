@@ -904,6 +904,7 @@ void CreateSplashDialog()
         
         dialog->setLayout(mainLayout);
         dialog->show();
+        StreamUP::UIHelpers::CenterDialog(dialog);
     });
 }
 

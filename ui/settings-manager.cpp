@@ -396,7 +396,7 @@ void ShowSettingsDialog()
         // Store the dialog reference
         settingsDialog = dialog;
         
-        // Apply dynamic sizing that hugs content (this will handle showing the dialog)
+        // Apply dynamic sizing that hugs content (also centers dialog after sizing)
         StreamUP::UIStyles::ApplyDynamicSizing(dialog, 580, 900, 500, 750);
         dialog->show();
     });
@@ -571,12 +571,12 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
     // Don't modify scroll area properties to prevent resizing
 }
 
-void ShowInstalledPluginsPage()
+void ShowInstalledPluginsPage(QWidget* parentWidget)
 {
-    StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
+    StreamUP::UIHelpers::ShowDialogOnUIThread([parentWidget]() {
         auto installedPlugins = StreamUP::PluginManager::GetInstalledPlugins();
 
-        QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsInstalledPlugins"));
+        QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsInstalledPlugins"), parentWidget);
         
         // Start compact and let it grow based on content
         dialog->resize(650, 400);
@@ -744,7 +744,7 @@ void ShowInstalledPluginsPage()
 
         dialog->setLayout(mainLayout);
         
-        // Apply dynamic sizing that adjusts to actual content size
+        // Apply dynamic sizing that adjusts to actual content size (also centers dialog after sizing)
         StreamUP::UIStyles::ApplyDynamicSizing(dialog, 650, 1000, 400, 800);
         dialog->show();
     });
@@ -1024,6 +1024,7 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents& compo
             layout->addLayout(buttonLayout);
             
             confirmDialog->show();
+            StreamUP::UIHelpers::CenterDialog(confirmDialog);
         });
     });
     
@@ -1347,6 +1348,7 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents& co
             layout->addLayout(buttonLayout);
             
             confirmDialog->show();
+            StreamUP::UIHelpers::CenterDialog(confirmDialog);
         });
     });
     

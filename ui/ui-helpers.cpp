@@ -12,6 +12,8 @@
 #include <QGroupBox>
 #include <QGridLayout>
 #include <QObject>
+#include <QScreen>
+#include <QTimer>
 // QSystemTrayIcon now handled by NotificationManager module
 
 #if defined(_WIN32)
@@ -36,21 +38,68 @@ void ShowDialogOnUIThread(const std::function<void()> &dialogFunction)
 	QMetaObject::invokeMethod(qApp, dialogFunction, Qt::QueuedConnection);
 }
 
-QDialog *CreateDialogWindow(const char *windowTitle)
+QDialog *CreateDialogWindow(const char *windowTitle, QWidget *parentWidget)
 {
-	// Get OBS main window as parent to ensure dialog opens on same monitor
-	QWidget *parent = static_cast<QWidget *>(obs_frontend_get_main_window());
+	// Use provided parent or fallback to OBS main window
+	QWidget *parent = parentWidget ? parentWidget : static_cast<QWidget *>(obs_frontend_get_main_window());
 	QDialog *dialog = new QDialog(parent);
 	dialog->setWindowTitle(obs_module_text(windowTitle));
 	dialog->setWindowFlags(Qt::Dialog); // Use Dialog instead of Window for better positioning
 	dialog->setAttribute(Qt::WA_DeleteOnClose);
 	
-	// Center the dialog relative to OBS main window
-	if (parent) {
-		dialog->move(parent->geometry().center() - dialog->rect().center());
-	}
+	// Note: Positioning is deferred to CenterDialog() after dialog is properly sized
 	
 	return dialog;
+}
+
+void CenterDialog(QDialog *dialog, QWidget *parentWidget)
+{
+	if (!dialog) return;
+	
+	// Use provided parent, dialog's parent, or OBS main window as fallback
+	QWidget *parent = parentWidget;
+	if (!parent) {
+		parent = dialog->parentWidget();
+	}
+	if (!parent) {
+		parent = static_cast<QWidget *>(obs_frontend_get_main_window());
+	}
+	
+	if (parent && parent->isVisible()) {
+		// Center on parent widget
+		QRect parentGeometry = parent->geometry();
+		QRect dialogGeometry = dialog->geometry();
+		
+		int x = parentGeometry.x() + (parentGeometry.width() - dialogGeometry.width()) / 2;
+		int y = parentGeometry.y() + (parentGeometry.height() - dialogGeometry.height()) / 2;
+		
+		dialog->move(x, y);
+	} else {
+		// Center on screen if no valid parent
+		QScreen *screen = QApplication::primaryScreen();
+		if (screen) {
+			QRect screenGeometry = screen->geometry();
+			QRect dialogGeometry = dialog->geometry();
+			
+			int x = screenGeometry.x() + (screenGeometry.width() - dialogGeometry.width()) / 2;
+			int y = screenGeometry.y() + (screenGeometry.height() - dialogGeometry.height()) / 2;
+			
+			dialog->move(x, y);
+		}
+	}
+}
+
+void ShowDialogCentered(QDialog *dialog, QWidget *parentWidget)
+{
+	if (!dialog) return;
+	
+	// Show the dialog first
+	dialog->show();
+	
+	// Use a small delay to ensure the dialog is properly sized before centering
+	QTimer::singleShot(10, [dialog, parentWidget]() {
+		CenterDialog(dialog, parentWidget);
+	});
 }
 
 void CreateToolDialog(const char *infoText1, const char *infoText2, const char *infoText3, const QString &titleText,
