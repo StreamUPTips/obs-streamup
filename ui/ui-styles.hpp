@@ -8,6 +8,10 @@ class QLabel;
 class QPushButton;
 class QGroupBox;
 class QScrollArea;
+class QWidget;
+class QVBoxLayout;
+
+#include <functional>
 
 namespace StreamUP {
 namespace UIStyles {
@@ -92,6 +96,22 @@ void ApplyAutoSizing(QDialog* dialog, int minWidth = 700, int maxWidth = 900, in
 void ApplyContentBasedSizing(QDialog* dialog);
 void ApplyScrollAreaContentSizing(QScrollArea* scrollArea, int maxHeight = 300);
 void ApplyDynamicSizing(QDialog* dialog, int minWidth = 500, int maxWidth = 900, int minHeight = 400, int maxHeight = 650);
+
+// Standardized dialog template system
+struct StandardDialogComponents {
+    QDialog* dialog;
+    QWidget* headerWidget;
+    QLabel* titleLabel;
+    QLabel* subtitleLabel;
+    QScrollArea* scrollArea;
+    QWidget* contentWidget;
+    QVBoxLayout* contentLayout;
+    QPushButton* mainButton;
+};
+
+StandardDialogComponents CreateStandardDialog(const QString& windowTitle, const QString& headerTitle, const QString& headerDescription);
+void UpdateDialogHeader(StandardDialogComponents& components, const QString& title, const QString& description);
+void SetupDialogNavigation(StandardDialogComponents& components, std::function<void()> onMainButton);
 
 } // namespace UIStyles
 } // namespace StreamUP

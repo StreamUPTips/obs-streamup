@@ -14,6 +14,8 @@
 #include <QEasingCurve>
 #include <QGuiApplication>
 #include <QScreen>
+#include <functional>
+#include <obs-module.h>
 
 namespace StreamUP {
 namespace UIStyles {
@@ -404,6 +406,90 @@ void ApplyDynamicSizing(QDialog* dialog, int minWidth, int maxWidth, int minHeig
     });
 }
 
+
+StandardDialogComponents CreateStandardDialog(const QString& windowTitle, const QString& headerTitle, const QString& headerDescription)
+{
+    StandardDialogComponents components;
+    
+    // Create main dialog
+    components.dialog = CreateStyledDialog(windowTitle);
+    components.dialog->resize(700, 500);
+    
+    QVBoxLayout* mainLayout = new QVBoxLayout(components.dialog);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(0);
+
+    // Header section - exact WebSocket UI pattern
+    components.headerWidget = new QWidget();
+    components.headerWidget->setObjectName("headerWidget");
+    components.headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
+        .arg(Colors::BACKGROUND_CARD)
+        .arg(Sizes::PADDING_XL + Sizes::PADDING_MEDIUM) // More padding at top
+        .arg(Sizes::PADDING_XL)
+        .arg(Sizes::PADDING_XL)); // Standard padding at bottom
+    
+    QVBoxLayout* headerLayout = new QVBoxLayout(components.headerWidget);
+    headerLayout->setContentsMargins(0, 0, 0, 0);
+    
+    components.titleLabel = CreateStyledTitle(headerTitle);
+    components.titleLabel->setAlignment(Qt::AlignCenter);
+    headerLayout->addWidget(components.titleLabel);
+    
+    // Add reduced spacing between title and description
+    headerLayout->addSpacing(-Sizes::SPACING_SMALL);
+    
+    components.subtitleLabel = CreateStyledDescription(headerDescription);
+    headerLayout->addWidget(components.subtitleLabel);
+    
+    mainLayout->addWidget(components.headerWidget);
+
+    // Content area with scroll
+    components.scrollArea = CreateStyledScrollArea();
+
+    components.contentWidget = new QWidget();
+    components.contentWidget->setStyleSheet(QString("background: %1;").arg(Colors::BACKGROUND_DARK));
+    components.contentLayout = new QVBoxLayout(components.contentWidget);
+    components.contentLayout->setContentsMargins(Sizes::PADDING_XL + 5, 
+        Sizes::PADDING_XL, 
+        Sizes::PADDING_XL + 5, 
+        Sizes::PADDING_XL);
+    components.contentLayout->setSpacing(Sizes::SPACING_XL);
+
+    components.scrollArea->setWidget(components.contentWidget);
+    mainLayout->addWidget(components.scrollArea);
+
+    // Bottom button area
+    QWidget* buttonWidget = new QWidget();
+    buttonWidget->setStyleSheet("background: transparent;");
+    QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
+    buttonLayout->setContentsMargins(Sizes::PADDING_XL, 
+        Sizes::PADDING_MEDIUM, 
+        Sizes::PADDING_XL, 
+        Sizes::PADDING_MEDIUM);
+
+    components.mainButton = CreateStyledButton("Close", "neutral");
+    
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(components.mainButton);
+    buttonLayout->addStretch();
+    
+    mainLayout->addWidget(buttonWidget);
+    
+    return components;
+}
+
+void UpdateDialogHeader(StandardDialogComponents& components, const QString& title, const QString& description)
+{
+    components.titleLabel->setText(title);
+    components.subtitleLabel->setText(description);
+}
+
+void SetupDialogNavigation(StandardDialogComponents& components, std::function<void()> onMainButton)
+{
+    QObject::connect(components.mainButton, &QPushButton::clicked, [onMainButton]() {
+        onMainButton();
+    });
+}
 
 } // namespace UIStyles
 } // namespace StreamUP

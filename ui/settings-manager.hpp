@@ -9,6 +9,12 @@ class QWidget;
 class QDialog;
 
 namespace StreamUP {
+namespace UIStyles {
+    struct StandardDialogComponents;
+}
+}
+
+namespace StreamUP {
 namespace SettingsManager {
 
 /**
@@ -89,11 +95,9 @@ void SetNotificationsMuted(bool muted);
 
 /**
  * @brief Show the installed plugins page inline within the same window
- * @param scrollArea The scroll area to replace content in
- * @param originalContent The original content widget to restore later
- * @param parentDialog Optional parent dialog for dynamic resizing
+ * @param components The dialog components from the template system
  */
-void ShowInstalledPluginsInline(QScrollArea* scrollArea, QWidget* originalContent, QDialog* parentDialog = nullptr);
+void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponents& components);
 
 /**
  * @brief Show the installed plugins page in a separate window
@@ -102,11 +106,9 @@ void ShowInstalledPluginsPage();
 
 /**
  * @brief Show the hotkeys management page inline within the same window
- * @param scrollArea The scroll area to replace content in
- * @param originalContent The original content widget to restore later
- * @param parentDialog Optional parent dialog for dynamic resizing
+ * @param components The dialog components from the template system
  */
-void ShowHotkeysInline(QScrollArea* scrollArea, QWidget* originalContent, QDialog* parentDialog = nullptr);
+void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents& components);
 
 /**
  * @brief Get current dock tool settings
@@ -122,11 +124,9 @@ void UpdateDockToolSettings(const DockToolSettings& dockSettings);
 
 /**
  * @brief Show dock configuration settings inline within the same window
- * @param scrollArea The scroll area to replace content in
- * @param originalContent The original content widget to restore later
- * @param parentDialog Optional parent dialog for dynamic resizing
+ * @param components The dialog components from the template system
  */
-void ShowDockConfigInline(QScrollArea* scrollArea, QWidget* originalContent, QDialog* parentDialog = nullptr);
+void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents& components);
 
 } // namespace SettingsManager
 } // namespace StreamUP
