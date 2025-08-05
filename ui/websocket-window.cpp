@@ -2,6 +2,7 @@
 #include "ui-helpers.hpp"
 #include "ui-styles.hpp"
 #include "notification-manager.hpp"
+#include "settings-manager.hpp"
 #include "../version.h"
 #include <obs-module.h>
 #include <QApplication>
@@ -383,7 +384,11 @@ QWidget* CreateCommandWidget(const QString& command, const QString& description)
     });
     
     buttonLayout->addWidget(obsRawBtn);
-    buttonLayout->addWidget(cphBtn);
+    
+    // Only add CPH button if CPH integration is enabled
+    if (StreamUP::SettingsManager::IsCPHIntegrationEnabled()) {
+        buttonLayout->addWidget(cphBtn);
+    }
     
     buttonWrapperLayout->addLayout(buttonLayout);
     buttonWrapperLayout->addStretch(); // Add stretch below
