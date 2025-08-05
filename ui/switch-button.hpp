@@ -50,10 +50,10 @@ private:
     int m_offset;
     QPropertyAnimation* m_animation;
     
-    static constexpr int SWITCH_WIDTH = 48;   // Slightly narrower overall switch
-    static constexpr int SWITCH_HEIGHT = 23;
-    static constexpr int KNOB_WIDTH = 28;     // Keep knob same size (now bigger relative to track)
-    static constexpr int KNOB_HEIGHT = 19;    // Shorter for pill shape
+    static constexpr int SWITCH_WIDTH = 54;   // Slightly narrower overall switch
+    static constexpr int SWITCH_HEIGHT = 22;
+    static constexpr int KNOB_WIDTH = 32;     // Keep knob same size (now bigger relative to track)
+    static constexpr int KNOB_HEIGHT = 18;    // Shorter for pill shape
     static constexpr int MARGIN = 2;
 };
 
