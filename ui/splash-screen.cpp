@@ -353,6 +353,47 @@ std::string LoadLocalPluginInfo()
     return formattedNotes;
 }
 
+std::string GetWelcomeMessage()
+{
+    return std::string(R"(
+<div style="color: #d1d5db; line-height: 1.4; font-size: 14px;">
+    <h2 style="color: #3b82f6; margin: 18px 0 12px 0; font-size: 20px; font-weight: 600;">🎉 Welcome to StreamUP!</h2>
+    
+    <p style="margin: 12px 0; color: #f9fafb; font-size: 15px;">
+        <strong>Thank you for installing StreamUP!</strong> You've just unlocked a powerful toolkit designed to supercharge your OBS Studio experience.
+    </p>
+    
+    <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;">✨ What is StreamUP?</h3>
+    <p style="margin: 8px 0;">
+        StreamUP is an advanced plugin that provides essential tools for content creators, streamers, and anyone using OBS Studio. From source management and plugin updates to WebSocket API control and automated workflows - StreamUP streamlines your creative process.
+    </p>
+    
+    <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;">📚 Getting Started</h3>
+    <p style="margin: 8px 0;">
+        Ready to dive in? Check out our comprehensive documentation to learn about all the amazing features at your fingertips:
+    </p>
+    <p style="margin: 8px 0;">
+        <a href="https://streamup.doras.click/docs" style="color: #60a5fa; text-decoration: underline; font-weight: 500;">📖 Read the Documentation</a>
+    </p>
+    
+    <h3 style="color: #fbbf24; margin: 16px 0 8px 0; font-size: 16px;">💖 Support Our Development</h3>
+    <p style="margin: 8px 0;">
+        StreamUP is a passion project created with love for the OBS community. If you find it useful, please consider supporting our development efforts. Your support helps us continue adding new features and maintaining compatibility with the latest OBS versions.
+    </p>
+    <p style="margin: 8px 0;">
+        Every contribution, no matter how small, makes a real difference and keeps this project thriving!
+    </p>
+    
+    <div style="margin: 16px 0; padding: 12px; background: rgba(139, 92, 246, 0.1); border-left: 4px solid #a855f7; border-radius: 4px;">
+        <p style="margin: 0; color: #e9d5ff; font-style: italic;">
+            💜 Love from <strong>Andi (Andilippi)</strong><br>
+            <a href="https://doras.to/andi" style="color: #c4b5fd; text-decoration: underline;">https://doras.to/andi</a>
+        </p>
+    </div>
+</div>
+    )");
+}
+
 std::string LoadLocalPatchNotes()
 {
     QFile file(":patch-notes-summary.md");
@@ -512,7 +553,7 @@ void UpdateVersionTracking()
     obs_data_release(settings);
 }
 
-void CreateSplashDialog()
+void CreateSplashDialog(ShowCondition condition)
 {
     // Check if splash dialog is already open
     if (!splashDialog.isNull() && splashDialog->isVisible()) {
@@ -522,7 +563,7 @@ void CreateSplashDialog()
         return;
     }
 
-    UIHelpers::ShowDialogOnUIThread([]() {
+    UIHelpers::ShowDialogOnUIThread([condition]() {
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP");
         dialog->setModal(false);
         dialog->setFixedSize(800, 600);
@@ -695,22 +736,29 @@ void CreateSplashDialog()
         // Add header to the scrollable content
         contentLayout->addWidget(headerWidget);
 
-        // Patch Notes Section - Much more compact
-        QWidget* patchNotesCard = new QWidget();
-        patchNotesCard->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
-        QVBoxLayout* patchNotesLayout = new QVBoxLayout(patchNotesCard);
-        patchNotesLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
+        // Main Content Section - Welcome message or Patch Notes based on condition
+        QWidget* mainContentCard = new QWidget();
+        mainContentCard->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
+        QVBoxLayout* mainContentLayout = new QVBoxLayout(mainContentCard);
+        mainContentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
             StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
             StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
             StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
         
-        // Load patch notes from local markdown file
-        std::string dynamicPatchNotes = GetPatchNotes();
-        QString modernPatchNotes = QString::fromStdString(dynamicPatchNotes);
+        QString mainContent;
+        if (condition == ShowCondition::FirstInstall) {
+            // Show welcome message for first install
+            std::string welcomeMessage = GetWelcomeMessage();
+            mainContent = QString::fromStdString(welcomeMessage);
+        } else {
+            // Show patch notes for version updates
+            std::string dynamicPatchNotes = GetPatchNotes();
+            mainContent = QString::fromStdString(dynamicPatchNotes);
+        }
         
-        QLabel* patchNotesLabel = UIHelpers::CreateRichTextLabel(modernPatchNotes, false, true);
-        patchNotesLayout->addWidget(patchNotesLabel);
-        contentLayout->addWidget(patchNotesCard);
+        QLabel* mainContentLabel = UIHelpers::CreateRichTextLabel(mainContent, false, true);
+        mainContentLayout->addWidget(mainContentLabel);
+        contentLayout->addWidget(mainContentCard);
 
         // Support Section - Much more compact
 
@@ -881,7 +929,9 @@ void CreateSplashDialog()
         QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
         buttonLayout->setContentsMargins(0, 0, 0, 0);
         
-        QPushButton* closeBtn = StreamUP::UIStyles::CreateStyledButton("Get Started! 🚀", "info");
+        QString buttonText = (condition == ShowCondition::FirstInstall) ? 
+            "Get Started! 🚀" : "Continue! ✨";
+        QPushButton* closeBtn = StreamUP::UIStyles::CreateStyledButton(buttonText, "info");
         closeBtn->setDefault(true);
         
         QObject::connect(closeBtn, &QPushButton::clicked, [dialog]() {
@@ -910,12 +960,6 @@ void CreateSplashDialog()
 
 void ShowSplashScreenIfNeeded()
 {
-    // TESTING: Always show splash screen for development/testing
-    CreateSplashDialog();
-    ErrorHandler::LogInfo("Splash screen shown for testing (version " + std::string(PROJECT_VERSION) + ")", 
-                         ErrorHandler::Category::UI);
-    
-    /* PRODUCTION CODE (commented out for testing):
     ShowCondition condition = CheckSplashCondition();
     if (condition == ShowCondition::Never) {
         return;
@@ -931,16 +975,15 @@ void ShowSplashScreenIfNeeded()
     }
     if (settings) obs_data_release(settings);
 
-    CreateSplashDialog();
+    CreateSplashDialog(condition);
     
     ErrorHandler::LogInfo("Splash screen shown for version " + std::string(PROJECT_VERSION), 
                          ErrorHandler::Category::UI);
-    */
 }
 
 void ShowSplashScreen()
 {
-    CreateSplashDialog();
+    CreateSplashDialog(ShowCondition::VersionUpdate);
 }
 
 } // namespace SplashScreen
