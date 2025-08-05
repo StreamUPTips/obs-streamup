@@ -948,27 +948,45 @@ bool obs_module_load()
 	return true;
 }
 
+static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+	
+	if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
+		blog(LOG_INFO, "[StreamUP] OBS finished loading, initializing plugin data...");
+		
+		// Remove the event callback since we only need this to run once
+		obs_frontend_remove_event_callback(OnOBSFinishedLoading, nullptr);
+		
+		// Run initialization asynchronously to avoid any potential blocking
+		std::thread initThread([]() {
+			// Initialize plugin data from API
+			StreamUP::PluginManager::InitialiseRequiredModules();
+			
+			// Schedule splash screen to show on UI thread with delay
+			StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
+				QTimer::singleShot(2000, []() {
+					StreamUP::SplashScreen::ShowSplashScreenIfNeeded();
+				});
+			});
+			
+			// Check for plugin updates on startup if enabled
+			StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+			if (settings.runAtStartup) {
+				StreamUP::PluginManager::CheckAllPluginsForUpdates(false);
+			}
+		});
+		initThread.detach();
+	}
+}
+
 void obs_module_post_load(void)
 {
-	StreamUP::PluginManager::InitialiseRequiredModules();
-
-	// Initialize settings system
+	// Initialize settings system immediately (this is lightweight)
 	StreamUP::SettingsManager::InitializeSettingsSystem();
 	
-	// Show splash screen if needed (first install or version update) with slight delay
-	QTimer::singleShot(1000, []() {
-		StreamUP::SplashScreen::ShowSplashScreenIfNeeded();
-	});
-	
-	// Check for plugin updates on startup if enabled (asynchronously to avoid blocking OBS startup)
-	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-	if (settings.runAtStartup) {
-		// Run update check on separate thread to avoid blocking OBS startup
-		std::thread updateThread([]() {
-			StreamUP::PluginManager::CheckAllPluginsForUpdates(false);
-		});
-		updateThread.detach(); // Detach so thread can run independently
-	}
+	// Register callback to defer heavy initialization until OBS has finished loading
+	obs_frontend_add_event_callback(OnOBSFinishedLoading, nullptr);
 }
 
 //--------------------EXIT COMMANDS--------------------
