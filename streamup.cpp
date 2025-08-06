@@ -18,6 +18,7 @@
 #include "string-utils.hpp"
 #include "version-utils.hpp"
 #include "ui/splash-screen.hpp"
+#include "ui/patch-notes-window.hpp"
 #include <cctype>
 #include <curl/curl.h>
 #include <filesystem>
@@ -967,19 +968,37 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 			// This ensures cached data is available even if startup check is disabled
 			StreamUP::PluginManager::PerformPluginCheckAndCache();
 			
-			// Schedule splash screen to show on UI thread with delay
+			// Schedule startup UI to show on UI thread with delay
 			StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
 				QTimer::singleShot(2000, []() {
-					StreamUP::SplashScreen::ShowSplashScreenIfNeeded();
+					// Check splash screen condition
+					StreamUP::SplashScreen::ShowCondition condition = StreamUP::SplashScreen::CheckSplashCondition();
+					
+					if (condition == StreamUP::SplashScreen::ShowCondition::FirstInstall) {
+						// Show welcome screen for first install
+						StreamUP::SplashScreen::ShowSplashScreenIfNeeded();
+					} else if (condition == StreamUP::SplashScreen::ShowCondition::VersionUpdate) {
+						// Show patch notes popup for version updates
+						StreamUP::SplashScreen::ShowSplashScreenIfNeeded();
+					}
+					// If Never, don't show anything
 				});
 			});
 			
-			// Check for plugin updates on startup if enabled, but stay silent if up to date
-			StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-			if (settings.runAtStartup) {
-				// Use the silent version that only shows dialogs if there are actual updates
-				StreamUP::PluginManager::ShowCachedPluginUpdatesDialogSilent();
-			}
+			// Schedule plugin update check with delay to allow welcome/patch notes windows to be shown first
+			StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
+				QTimer::singleShot(5000, []() {
+					// Check for plugin updates on startup if enabled, but stay silent if up to date
+					// Only show if no splash screen or patch notes window is open
+					if (!StreamUP::SplashScreen::IsSplashScreenOpen() && !StreamUP::PatchNotesWindow::IsPatchNotesWindowOpen()) {
+						StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+						if (settings.runAtStartup) {
+							// Use the silent version that only shows dialogs if there are actual updates
+							StreamUP::PluginManager::ShowCachedPluginUpdatesDialogSilent();
+						}
+					}
+				});
+			});
 		});
 		initThread.detach();
 	}

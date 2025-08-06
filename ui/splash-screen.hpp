@@ -32,8 +32,14 @@ ShowCondition CheckSplashCondition();
 // Update version tracking after splash is shown
 void UpdateVersionTracking();
 
+// Check if splash screen is currently open
+bool IsSplashScreenOpen();
+
 // Internal dialog creation
 void CreateSplashDialog(ShowCondition condition = ShowCondition::VersionUpdate);
+
+// Function to load local patch notes (exposed for patch notes window)
+std::string LoadLocalPatchNotes();
 
 } // namespace SplashScreen
 } // namespace StreamUP
