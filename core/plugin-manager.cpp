@@ -287,8 +287,13 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 //-------------------PLUGIN UPDATE FUNCTIONS-------------------
 void CheckAllPluginsForUpdates(bool manuallyTriggered)
 {
+	StreamUP::ErrorHandler::LogInfo("Starting plugin update check (manually triggered: " + std::string(manuallyTriggered ? "true" : "false") + ")", StreamUP::ErrorHandler::Category::Plugin);
+	
 	const auto& allPlugins = StreamUP::GetAllPlugins();
+	StreamUP::ErrorHandler::LogInfo("Loaded " + std::to_string(allPlugins.size()) + " plugins from registry", StreamUP::ErrorHandler::Category::Plugin);
+	
 	if (allPlugins.empty()) {
+		StreamUP::ErrorHandler::LogError("No plugins loaded from registry - this should not happen", StreamUP::ErrorHandler::Category::Plugin);
 		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
 		return;
 	}
@@ -296,16 +301,34 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 	std::map<std::string, std::string> version_mismatch_modules;
 	std::string errorMsgUpdate = "";
 	std::vector<std::pair<std::string, std::string>> installedPlugins = GetInstalledPlugins();
+	StreamUP::ErrorHandler::LogInfo("Found " + std::to_string(installedPlugins.size()) + " installed plugins", StreamUP::ErrorHandler::Category::Plugin);
 
 	for (const auto &plugin : installedPlugins) {
 		const std::string &plugin_name = plugin.first;
 		const std::string &installed_version = plugin.second;
+		StreamUP::ErrorHandler::LogInfo("Checking plugin: " + plugin_name + " (installed: v" + installed_version + ")", StreamUP::ErrorHandler::Category::Plugin);
+		
 		const auto& allPlugins = StreamUP::GetAllPlugins();
-		const StreamUP::PluginInfo &plugin_info = allPlugins.at(plugin_name);
+		auto plugin_it = allPlugins.find(plugin_name);
+		if (plugin_it == allPlugins.end()) {
+			StreamUP::ErrorHandler::LogWarning("Plugin \"" + plugin_name + "\" not found in registry - skipping update check", StreamUP::ErrorHandler::Category::Plugin);
+			continue;
+		}
+		
+		const StreamUP::PluginInfo &plugin_info = plugin_it->second;
 		const std::string &required_version = plugin_info.version;
+		StreamUP::ErrorHandler::LogInfo("Plugin \"" + plugin_name + "\" registry version: v" + required_version, StreamUP::ErrorHandler::Category::Plugin);
 
-		if (installed_version != required_version && VersionUtils::IsVersionLessThan(installed_version, required_version)) {
-			version_mismatch_modules.emplace(plugin_name, installed_version);
+		if (installed_version != required_version) {
+			StreamUP::ErrorHandler::LogInfo("Version mismatch detected for \"" + plugin_name + "\" - checking if update needed", StreamUP::ErrorHandler::Category::Plugin);
+			if (VersionUtils::IsVersionLessThan(installed_version, required_version)) {
+				StreamUP::ErrorHandler::LogInfo("Plugin \"" + plugin_name + "\" needs update: v" + installed_version + " -> v" + required_version, StreamUP::ErrorHandler::Category::Plugin);
+				version_mismatch_modules.emplace(plugin_name, installed_version);
+			} else {
+				StreamUP::ErrorHandler::LogInfo("Plugin \"" + plugin_name + "\" is newer than registry version (v" + installed_version + " > v" + required_version + ")", StreamUP::ErrorHandler::Category::Plugin);
+			}
+		} else {
+			StreamUP::ErrorHandler::LogInfo("Plugin \"" + plugin_name + "\" is up to date (v" + installed_version + ")", StreamUP::ErrorHandler::Category::Plugin);
 		}
 	}
 
@@ -322,6 +345,8 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 		std::cerr << "Error: Unable to open file for writing.\n";
 	}
 
+	StreamUP::ErrorHandler::LogInfo("Update check complete - found " + std::to_string(version_mismatch_modules.size()) + " plugins needing updates", StreamUP::ErrorHandler::Category::Plugin);
+	
 	if (!version_mismatch_modules.empty()) {
 		errorMsgUpdate += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
 				  "<tr style=\"background: #4a5568; font-weight: bold;\">"
@@ -356,6 +381,7 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 		PluginsHaveIssue("NULL", errorMsgUpdate);
 		version_mismatch_modules.clear();
 	} else {
+		StreamUP::ErrorHandler::LogInfo("All plugins are up to date", StreamUP::ErrorHandler::Category::Plugin);
 		PluginsUpToDateOutput(manuallyTriggered);
 	}
 }
@@ -364,8 +390,12 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 
 void InitialiseRequiredModules()
 {
+	StreamUP::ErrorHandler::LogInfo("Starting plugin registry initialization", StreamUP::ErrorHandler::Category::Plugin);
+	
 	std::string api_response;
 	const std::string url = "https://api.streamup.tips/plugins";
+	
+	StreamUP::ErrorHandler::LogInfo("Fetching plugins from API: " + url, StreamUP::ErrorHandler::Category::Network);
 	
 	if (!StreamUP::HttpClient::MakeGetRequest(url, api_response)) {
 		StreamUP::ErrorHandler::LogWarning("Failed to fetch plugins from API: " + url, StreamUP::ErrorHandler::Category::Network);
@@ -373,6 +403,7 @@ void InitialiseRequiredModules()
 	}
 
 	if (api_response.find("Error:") != std::string::npos) {
+		StreamUP::ErrorHandler::LogError("API returned error: " + api_response, StreamUP::ErrorHandler::Category::Network);
 		StreamUP::ErrorHandler::ShowErrorDialog("API Error", api_response);
 		return;
 	}
@@ -382,11 +413,17 @@ void InitialiseRequiredModules()
 		StreamUP::ErrorHandler::ShowErrorDialog("Plugin Load Error", obs_module_text("WindowErrorLoadIssue"));
 		return;
 	}
+	
+	StreamUP::ErrorHandler::LogInfo("Successfully received API response, parsing JSON...", StreamUP::ErrorHandler::Category::Network);
 
 	auto data = OBSWrappers::MakeOBSDataFromJson(api_response.c_str());
 	auto plugins = OBSWrappers::GetArrayProperty(data.get(), "plugins");
 
 	size_t count = obs_data_array_count(plugins.get());
+	StreamUP::ErrorHandler::LogInfo("Found " + std::to_string(count) + " plugins in API response", StreamUP::ErrorHandler::Category::Plugin);
+	
+	int required_count = 0;
+	
 	for (size_t i = 0; i < count; ++i) {
 		auto plugin = OBSWrappers::OBSDataPtr(obs_data_array_item(plugins.get(), i));
 
@@ -403,18 +440,29 @@ void InitialiseRequiredModules()
 		info.searchString = OBSWrappers::GetStringProperty(plugin.get(), "searchString");
 		info.generalURL = OBSWrappers::GetStringProperty(plugin.get(), "url");
 		info.moduleName = OBSWrappers::GetStringProperty(plugin.get(), "moduleName");
+		info.required = OBSWrappers::GetBoolProperty(plugin.get(), "required");
+
+		StreamUP::ErrorHandler::LogInfo("Loading plugin: \"" + name + "\" (version: v" + info.version + ", required: " + (info.required ? "true" : "false") + ")", StreamUP::ErrorHandler::Category::Plugin);
+		StreamUP::ErrorHandler::LogInfo("Search string for \"" + name + "\": \"" + info.searchString + "\"", StreamUP::ErrorHandler::Category::Plugin);
 
 		StreamUP::PluginState::Instance().AddPlugin(name, info);
 
-		if (OBSWrappers::GetBoolProperty(plugin.get(), "required")) {
+		if (info.required) {
 			StreamUP::PluginState::Instance().AddRequiredPlugin(name, info);
+			required_count++;
 		}
 	}
+	
+	StreamUP::ErrorHandler::LogInfo("Plugin registry initialization complete: " + std::to_string(count) + " total plugins, " + std::to_string(required_count) + " required plugins", StreamUP::ErrorHandler::Category::Plugin);
 }
 
 bool CheckrequiredOBSPluginsWithoutUI(bool isLoadStreamUpFile)
 {
+	StreamUP::ErrorHandler::LogInfo("Starting required plugins check without UI (isLoadStreamUpFile: " + std::string(isLoadStreamUpFile ? "true" : "false") + ")", StreamUP::ErrorHandler::Category::Plugin);
+	
 	const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
+	StreamUP::ErrorHandler::LogInfo("Loaded " + std::to_string(requiredPlugins.size()) + " required plugins from registry", StreamUP::ErrorHandler::Category::Plugin);
+	
 	if (requiredPlugins.empty()) {
 		StreamUP::ErrorHandler::LogError("Required plugins list is empty", StreamUP::ErrorHandler::Category::Plugin);
 		return false;
@@ -423,7 +471,10 @@ bool CheckrequiredOBSPluginsWithoutUI(bool isLoadStreamUpFile)
 	std::map<std::string, std::string> missing_modules;
 	std::map<std::string, std::string> version_mismatch_modules;
 	char *filepath = GetFilePath();
+	StreamUP::ErrorHandler::LogInfo("OBS log file path: " + std::string(filepath ? filepath : "NULL"), StreamUP::ErrorHandler::Category::Plugin);
+	
 	if (filepath == NULL) {
+		StreamUP::ErrorHandler::LogError("Failed to get OBS log file path", StreamUP::ErrorHandler::Category::Plugin);
 		return false;
 	}
 
@@ -433,17 +484,26 @@ bool CheckrequiredOBSPluginsWithoutUI(bool isLoadStreamUpFile)
 		const std::string &required_version = plugin_info.version;
 		const std::string &search_string = plugin_info.searchString;
 
+		StreamUP::ErrorHandler::LogInfo("Checking required plugin: \"" + plugin_name + "\" (required: v" + required_version + ")", StreamUP::ErrorHandler::Category::Plugin);
+		StreamUP::ErrorHandler::LogInfo("Search string for \"" + plugin_name + "\": \"" + search_string + "\"", StreamUP::ErrorHandler::Category::Plugin);
+
 		if (search_string.find("[ignore]") != std::string::npos) {
+			StreamUP::ErrorHandler::LogInfo("Plugin \"" + plugin_name + "\" has [ignore] flag - skipping check", StreamUP::ErrorHandler::Category::Plugin);
 			continue; // Skip to the next iteration
 		}
 
 		std::string installed_version = SearchStringInFileForVersion(filepath, search_string.c_str());
+		StreamUP::ErrorHandler::LogInfo("Search result for \"" + plugin_name + "\": " + (installed_version.empty() ? "NOT FOUND" : "v" + installed_version), StreamUP::ErrorHandler::Category::Plugin);
 
 		if (installed_version.empty() && plugin_info.required) {
+			StreamUP::ErrorHandler::LogWarning("Required plugin \"" + plugin_name + "\" is MISSING", StreamUP::ErrorHandler::Category::Plugin);
 			missing_modules.emplace(plugin_name, required_version);
 		} else if (!installed_version.empty() && installed_version != required_version && plugin_info.required &&
 			   VersionUtils::IsVersionLessThan(installed_version, required_version)) {
+			StreamUP::ErrorHandler::LogWarning("Required plugin \"" + plugin_name + "\" needs UPDATE: v" + installed_version + " -> v" + required_version, StreamUP::ErrorHandler::Category::Plugin);
 			version_mismatch_modules.emplace(plugin_name, installed_version);
+		} else if (!installed_version.empty()) {
+			StreamUP::ErrorHandler::LogInfo("Required plugin \"" + plugin_name + "\" is OK: v" + installed_version + " (required: v" + required_version + ")", StreamUP::ErrorHandler::Category::Plugin);
 		}
 	}
 
@@ -452,27 +512,32 @@ bool CheckrequiredOBSPluginsWithoutUI(bool isLoadStreamUpFile)
 	bool hasUpdates = !version_mismatch_modules.empty();
 	bool hasMissingPlugins = !missing_modules.empty();
 
+	StreamUP::ErrorHandler::LogInfo("Plugin check summary: " + std::to_string(missing_modules.size()) + " missing, " + std::to_string(version_mismatch_modules.size()) + " need updates", StreamUP::ErrorHandler::Category::Plugin);
+
 	if (hasUpdates || hasMissingPlugins) {
 		// Log the issues without showing UI
 		if (hasMissingPlugins) {
+			StreamUP::ErrorHandler::LogError("MISSING REQUIRED PLUGINS:", StreamUP::ErrorHandler::Category::Plugin);
 			for (const auto &module : missing_modules) {
-				StreamUP::ErrorHandler::LogWarning("Missing required plugin: " + module.first + " (required version: " + module.second + ")", 
+				StreamUP::ErrorHandler::LogError("  - " + module.first + " (required version: v" + module.second + ")", 
 					StreamUP::ErrorHandler::Category::Plugin);
 			}
 		}
 		if (hasUpdates) {
+			StreamUP::ErrorHandler::LogError("PLUGINS NEED UPDATES:", StreamUP::ErrorHandler::Category::Plugin);
 			for (const auto &module : version_mismatch_modules) {
-				StreamUP::ErrorHandler::LogWarning("Plugin needs update: " + module.first + " (installed: " + module.second + ")", 
+				StreamUP::ErrorHandler::LogError("  - " + module.first + " (installed: v" + module.second + ")", 
 					StreamUP::ErrorHandler::Category::Plugin);
 			}
 		}
 		
 		missing_modules.clear();
 		version_mismatch_modules.clear();
+		StreamUP::ErrorHandler::LogError("Required plugin check FAILED - returning false", StreamUP::ErrorHandler::Category::Plugin);
 		return false;
 	} else {
 		// Log success without showing UI
-		StreamUP::ErrorHandler::LogInfo("All required plugins are up to date", StreamUP::ErrorHandler::Category::Plugin);
+		StreamUP::ErrorHandler::LogInfo("All required plugins are up to date - returning true", StreamUP::ErrorHandler::Category::Plugin);
 		return true;
 	}
 }
@@ -611,14 +676,21 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 
 std::string SearchStringInFileForVersion(const char *path, const char *search)
 {
+	StreamUP::ErrorHandler::LogInfo("Searching for plugin version in file", StreamUP::ErrorHandler::Category::Plugin);
+	StreamUP::ErrorHandler::LogInfo("Search path: " + std::string(path ? path : "NULL"), StreamUP::ErrorHandler::Category::Plugin);
+	StreamUP::ErrorHandler::LogInfo("Search string: \"" + std::string(search ? search : "NULL") + "\"", StreamUP::ErrorHandler::Category::Plugin);
+	
 	QString filepath = PathUtils::GetMostRecentFile(QString::fromLocal8Bit(path));
+	StreamUP::ErrorHandler::LogInfo("Most recent file found: " + filepath.toStdString(), StreamUP::ErrorHandler::Category::Plugin);
 	
 	if (filepath.isEmpty()) {
+		StreamUP::ErrorHandler::LogWarning("No recent file found at path", StreamUP::ErrorHandler::Category::Plugin);
 		return "";
 	}
 	
 	FILE *file = fopen(filepath.toLocal8Bit().constData(), "r+");
 	if (!file) {
+		StreamUP::ErrorHandler::LogWarning("Failed to open file: " + filepath.toStdString(), StreamUP::ErrorHandler::Category::Plugin);
 		return "";
 	}
 	
@@ -626,22 +698,42 @@ std::string SearchStringInFileForVersion(const char *path, const char *search)
 	std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
 	std::regex version_regex_double("[0-9]+\\.[0-9]+");
 
+	int line_count = 0;
+	bool found_search_string = false;
+	
 	while (fgets(line, sizeof(line), file)) {
+		line_count++;
 		char *found_ptr = strstr(line, search);
 		if (found_ptr) {
+			found_search_string = true;
+			StreamUP::ErrorHandler::LogInfo("Found search string at line " + std::to_string(line_count) + ": \"" + std::string(line).substr(0, 100) + "...\"", StreamUP::ErrorHandler::Category::Plugin);
+			
 			std::string remaining_line = std::string(found_ptr + strlen(search));
+			StreamUP::ErrorHandler::LogInfo("Text after search string: \"" + remaining_line.substr(0, 50) + "...\"", StreamUP::ErrorHandler::Category::Plugin);
+			
 			std::smatch match;
 
 			if (std::regex_search(remaining_line, match, version_regex_triple) && match.size() > 0) {
+				std::string version = match.str(0);
+				StreamUP::ErrorHandler::LogInfo("Found triple version number: v" + version, StreamUP::ErrorHandler::Category::Plugin);
 				fclose(file);
-				return match.str(0);
+				return version;
 			}
 
 			if (std::regex_search(remaining_line, match, version_regex_double) && match.size() > 0) {
+				std::string version = match.str(0);
+				StreamUP::ErrorHandler::LogInfo("Found double version number: v" + version, StreamUP::ErrorHandler::Category::Plugin);
 				fclose(file);
-				return match.str(0);
+				return version;
 			}
+			
+			StreamUP::ErrorHandler::LogWarning("Found search string but no version number in remaining text", StreamUP::ErrorHandler::Category::Plugin);
 		}
+	}
+
+	StreamUP::ErrorHandler::LogInfo("Finished scanning " + std::to_string(line_count) + " lines", StreamUP::ErrorHandler::Category::Plugin);
+	if (!found_search_string) {
+		StreamUP::ErrorHandler::LogWarning("Search string \"" + std::string(search) + "\" not found in file", StreamUP::ErrorHandler::Category::Plugin);
 	}
 
 	fclose(file);
@@ -650,27 +742,40 @@ std::string SearchStringInFileForVersion(const char *path, const char *search)
 
 std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 {
+	StreamUP::ErrorHandler::LogInfo("Starting GetInstalledPlugins scan", StreamUP::ErrorHandler::Category::Plugin);
+	
 	std::vector<std::pair<std::string, std::string>> installedPlugins;
 	char *filepath = GetFilePath();
+	StreamUP::ErrorHandler::LogInfo("OBS log file path: " + std::string(filepath ? filepath : "NULL"), StreamUP::ErrorHandler::Category::Plugin);
+	
 	if (filepath == NULL) {
+		StreamUP::ErrorHandler::LogError("Failed to get OBS log file path for plugin scan", StreamUP::ErrorHandler::Category::Plugin);
 		return installedPlugins;
 	}
 
 	const auto& allPlugins = StreamUP::GetAllPlugins();
+	StreamUP::ErrorHandler::LogInfo("Scanning " + std::to_string(allPlugins.size()) + " plugins for installation status", StreamUP::ErrorHandler::Category::Plugin);
+	
 	for (const auto &module : allPlugins) {
 		const std::string &plugin_name = module.first;
 		const StreamUP::PluginInfo &plugin_info = module.second;
 		const std::string &search_string = plugin_info.searchString;
 
+		StreamUP::ErrorHandler::LogInfo("Scanning for plugin: \"" + plugin_name + "\"", StreamUP::ErrorHandler::Category::Plugin);
+
 		std::string installed_version = SearchStringInFileForVersion(filepath, search_string.c_str());
 
 		if (!installed_version.empty()) {
+			StreamUP::ErrorHandler::LogInfo("Plugin \"" + plugin_name + "\" FOUND - v" + installed_version, StreamUP::ErrorHandler::Category::Plugin);
 			installedPlugins.emplace_back(plugin_name, installed_version);
+		} else {
+			StreamUP::ErrorHandler::LogInfo("Plugin \"" + plugin_name + "\" NOT FOUND", StreamUP::ErrorHandler::Category::Plugin);
 		}
 	}
 
 	bfree(filepath);
 
+	StreamUP::ErrorHandler::LogInfo("GetInstalledPlugins complete - found " + std::to_string(installedPlugins.size()) + " installed plugins", StreamUP::ErrorHandler::Category::Plugin);
 	return installedPlugins;
 }
 
