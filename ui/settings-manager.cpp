@@ -3,6 +3,7 @@
 #include "ui-styles.hpp"
 #include "switch-button.hpp"
 #include "plugin-manager.hpp"
+#include "plugin-state.hpp"
 #include "hotkey-manager.hpp"
 #include "hotkey-widget.hpp"
 #include "dock/streamup-dock.hpp"
@@ -21,6 +22,16 @@
 #include <QTimer>
 #include <QSizePolicy>
 #include <QPointer>
+#include <QTableWidget>
+#include <QHeaderView>
+#include <QTableWidgetItem>
+#include <QAbstractItemView>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QMenu>
+#include <QAction>
+#include <QClipboard>
+#include <QApplication>
 #include <memory>
 #include <util/platform.h>
 
@@ -35,6 +46,229 @@ namespace SettingsManager {
 
 // Global settings state
 static bool notificationsMuted = false;
+
+// Helper function to extract domain from URL
+QString ExtractDomain(const QString& url) {
+    QUrl qurl(url);
+    QString host = qurl.host();
+    if (host.startsWith("www.")) {
+        host = host.mid(4); // Remove "www."
+    }
+    return host.isEmpty() ? url : host;
+}
+
+// Custom table widget with context menu
+class PluginTableWidget : public QTableWidget {
+public:
+    PluginTableWidget(QWidget* parent = nullptr) : QTableWidget(parent) {
+        setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(this, &QWidget::customContextMenuRequested, this, &PluginTableWidget::showContextMenu);
+    }
+
+private slots:
+    void showContextMenu(const QPoint& pos) {
+        QTableWidgetItem* item = itemAt(pos);
+        if (!item) return;
+
+        QMenu contextMenu(this);
+        
+        // Copy cell content
+        QAction* copyAction = contextMenu.addAction("Copy");
+        connect(copyAction, &QAction::triggered, [this, item]() {
+            QApplication::clipboard()->setText(item->text());
+        });
+        
+        // Copy entire row
+        QAction* copyRowAction = contextMenu.addAction("Copy Row");
+        connect(copyRowAction, &QAction::triggered, [this, item]() {
+            int row = item->row();
+            QStringList rowData;
+            for (int col = 0; col < columnCount(); ++col) {
+                QTableWidgetItem* cellItem = this->item(row, col);
+                rowData << (cellItem ? cellItem->text() : "");
+            }
+            QApplication::clipboard()->setText(rowData.join("\t"));
+        });
+
+        contextMenu.exec(mapToGlobal(pos));
+    }
+};
+
+// Helper function to create styled plugin table
+PluginTableWidget* CreatePluginTable() {
+    PluginTableWidget* table = new PluginTableWidget();
+    
+    // Set column headers
+    QStringList headers;
+    headers << "Status" 
+            << "Plugin Name"
+            << "Module Name"
+            << "Version"
+            << "Website";
+    table->setColumnCount(5);
+    table->setHorizontalHeaderLabels(headers);
+    
+    // Configure table appearance
+    table->setAlternatingRowColors(true);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setSortingEnabled(false);
+    table->setShowGrid(false);
+    
+    // Header styling - stretch last section to fill available space
+    table->horizontalHeader()->setStretchLastSection(true);
+    table->verticalHeader()->setVisible(false);
+    
+    // Set most columns to fixed width, but allow last column to stretch
+    table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch); // Website column stretches
+    
+    // Apply styling using existing UI styles with proper border radius
+    QString tableStyle = QString(
+        "QTableWidget {"
+        "background-color: %1;"
+        "alternate-background-color: %2;"
+        "color: %3;"
+        "border: 1px solid %4;"
+        "border-radius: %5px;"
+        "gridline-color: %4;"
+        "outline: none;"
+        "}"
+        "QTableWidget::item {"
+        "padding: 10px 8px;"
+        "border: none;"
+        "}"
+        "QTableWidget::item:selected {"
+        "background-color: %6;"
+        "}"
+        "QHeaderView {"
+        "background-color: transparent;"
+        "}"
+        "QHeaderView::section {"
+        "background-color: %2;"
+        "color: %3;"
+        "padding: 12px 8px;"
+        "border: none;"
+        "font-weight: bold;"
+        "}"
+        "QHeaderView::section:first {"
+        "border-top-left-radius: %5px;"
+        "}"
+        "QHeaderView::section:last {"
+        "border-top-right-radius: %5px;"
+        "}"
+    ).arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
+     .arg(StreamUP::UIStyles::Colors::BACKGROUND_INPUT)
+     .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+     .arg(StreamUP::UIStyles::Colors::BORDER_LIGHT)
+     .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS)
+     .arg(StreamUP::UIStyles::Colors::BACKGROUND_HOVER);
+     
+    table->setStyleSheet(tableStyle);
+    return table;
+}
+
+// Helper function to add compatible plugin row
+void AddCompatiblePluginRow(QTableWidget* table, const std::string& pluginName, const std::string& version) {
+    const auto& allPlugins = StreamUP::GetAllPlugins();
+    auto it = allPlugins.find(pluginName);
+    
+    int row = table->rowCount();
+    table->insertRow(row);
+    
+    // Status column - Compatible
+    QTableWidgetItem* statusItem = new QTableWidgetItem("✅ Compatible");
+    statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::SUCCESS));
+    table->setItem(row, 0, statusItem);
+    
+    // Plugin Name column
+    table->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(pluginName)));
+    
+    // Module Name column  
+    QString moduleName = "N/A";
+    if (it != allPlugins.end() && !it->second.moduleName.empty()) {
+        moduleName = QString::fromStdString(it->second.moduleName);
+    }
+    table->setItem(row, 2, new QTableWidgetItem(moduleName));
+    
+    // Version column
+    table->setItem(row, 3, new QTableWidgetItem(QString::fromStdString(version)));
+    
+    // Website column - Show domain name
+    QString forumLink = GetForumLink(pluginName);
+    QString domainName = ExtractDomain(forumLink);
+    QTableWidgetItem* websiteItem = new QTableWidgetItem(domainName);
+    websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::INFO));
+    websiteItem->setData(Qt::UserRole, forumLink);
+    table->setItem(row, 4, websiteItem);
+}
+
+// Helper function to add incompatible plugin row  
+void AddIncompatiblePluginRow(QTableWidget* table, const std::string& moduleName) {
+    int row = table->rowCount();
+    table->insertRow(row);
+    
+    // Status column - Incompatible
+    QTableWidgetItem* statusItem = new QTableWidgetItem("❌ Incompatible");
+    statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::ERROR));
+    table->setItem(row, 0, statusItem);
+    
+    // Plugin Name column - N/A for incompatible
+    QTableWidgetItem* nameItem = new QTableWidgetItem("N/A");
+    nameItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
+    table->setItem(row, 1, nameItem);
+    
+    // Module Name column
+    table->setItem(row, 2, new QTableWidgetItem(QString::fromStdString(moduleName)));
+    
+    // Version column - N/A for incompatible
+    QTableWidgetItem* versionItem = new QTableWidgetItem("N/A");
+    versionItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
+    table->setItem(row, 3, versionItem);
+    
+    // Website column - N/A for incompatible
+    QTableWidgetItem* websiteItem = new QTableWidgetItem("N/A");
+    websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
+    table->setItem(row, 4, websiteItem);
+}
+
+// Helper function to handle table clicks
+void HandlePluginTableClick(QTableWidget* table, int row, int column) {
+    if (column == 4) { // Website column
+        QTableWidgetItem* item = table->item(row, column);
+        if (item && item->data(Qt::UserRole).isValid()) {
+            QString url = item->data(Qt::UserRole).toString();
+            QDesktopServices::openUrl(QUrl(url));
+        }
+    }
+}
+
+// Helper function to auto-resize columns to content
+void AutoResizeTableColumns(QTableWidget* table) {
+    // First, resize columns to contents tightly
+    table->resizeColumnsToContents();
+    
+    // Add minimal padding only for fixed columns (0-3), skip last column (4) as it stretches
+    for (int col = 0; col < table->columnCount() - 1; ++col) {
+        int currentWidth = table->columnWidth(col);
+        // Add minimal padding (8px) for readability, no artificial minimums
+        int finalWidth = currentWidth + 16; // 8px padding each side
+        table->setColumnWidth(col, finalWidth);
+    }
+    
+    // Calculate minimum width needed for fixed columns only
+    int fixedColumnsWidth = 0;
+    for (int col = 0; col < table->columnCount() - 1; ++col) {
+        fixedColumnsWidth += table->columnWidth(col);
+    }
+    
+    // Add minimum width for the stretch column and borders
+    int minStretchWidth = 120; // Minimum width for website column
+    int totalMinWidth = fixedColumnsWidth + minStretchWidth + 10; // Include border space
+    
+    // Set the table's minimum width - last column will stretch to fill any extra space
+    table->setMinimumWidth(totalMinWidth);
+}
 
 // Static pointer to track open settings dialog
 static QPointer<QDialog> settingsDialog;
@@ -467,10 +701,11 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
     // Create replacement content widget with sub-page header
     QWidget* pluginsWidget = new QWidget();
     pluginsWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
+    pluginsWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     QVBoxLayout* pluginsLayout = new QVBoxLayout(pluginsWidget);
-    pluginsLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+    pluginsLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_SMALL, 
         StreamUP::UIStyles::Sizes::PADDING_XL, 
-        StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+        StreamUP::UIStyles::Sizes::PADDING_SMALL, 
         StreamUP::UIStyles::Sizes::PADDING_XL);
     pluginsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
     
@@ -512,107 +747,102 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
         .arg(StreamUP::UIStyles::Colors::BACKGROUND_HOVER)
         .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS));
     infoLabel->setWordWrap(true);
-    infoLabel->setMaximumWidth(500);
-    infoLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+    infoLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
     pluginsLayout->addWidget(infoLabel);
 
+    // Create plugin table
+    QTableWidget* pluginTable = CreatePluginTable();
+    
+    // Add compatible plugins
     auto installedPlugins = StreamUP::PluginManager::GetInstalledPluginsCached();
-    
-    QString compatiblePluginsString;
-    if (installedPlugins.empty()) {
-        compatiblePluginsString = obs_module_text("WindowSettingsInstalledPlugins");
-    } else {
-        for (const auto& plugin : installedPlugins) {
-            const auto& pluginName = plugin.first;
-            const auto& pluginVersion = plugin.second;
-            const QString forumLink = GetForumLink(pluginName);
-
-            compatiblePluginsString += "<a href=\"" + forumLink + "\" style=\"color: #60a5fa; text-decoration: none;\">" + 
-                                     QString::fromStdString(pluginName) +
-                                     "</a> <span style=\"color: #9ca3af;\">("+ QString::fromStdString(pluginVersion) + ")</span><br>";
-        }
-        if (compatiblePluginsString.endsWith("<br>")) {
-            compatiblePluginsString.chop(4);
-        }
+    for (const auto& plugin : installedPlugins) {
+        AddCompatiblePluginRow(pluginTable, plugin.first, plugin.second);
     }
-
-    QLabel* compatiblePluginsList = new QLabel(compatiblePluginsString);
-    compatiblePluginsList->setOpenExternalLinks(true);
-    compatiblePluginsList->setStyleSheet(QString(
-        "QLabel {"
-        "color: %1;"
-        "font-size: %2px;"
-        "line-height: 1.4;"
-        "padding: %3px;"
-        "background: transparent;"
-        "}")
-        .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2));
-    compatiblePluginsList->setWordWrap(true);
-
-    // Create GroupBox without width constraints to allow natural sizing
-    QGroupBox* compatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsCompatiblePlugins"), "success");
-    compatiblePluginsBox->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    compatiblePluginsBox->setMaximumHeight(200);
     
-    QVBoxLayout* compatiblePluginsBoxLayout = new QVBoxLayout(compatiblePluginsBox);
-    compatiblePluginsBoxLayout->setContentsMargins(8, 20, 8, 8);
-    
-    // ScrollArea goes INSIDE the GroupBox
-    QScrollArea* compatibleScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-    compatibleScrollArea->setWidget(compatiblePluginsList);
-    compatibleScrollArea->setStyleSheet(compatibleScrollArea->styleSheet() + 
-        "QScrollArea { background: transparent; border: none; }");
-    
-    compatiblePluginsBoxLayout->addWidget(compatibleScrollArea);
-
-    QLabel* incompatiblePluginsList = new QLabel;
+    // Add incompatible plugins
     char* filePath = GetFilePath();
-    SetLabelWithSortedModules(incompatiblePluginsList, SearchModulesInFile(filePath));
+    std::vector<std::string> incompatibleModules = SearchModulesInFile(filePath);
     bfree(filePath);
-    incompatiblePluginsList->setStyleSheet(QString(
-        "QLabel {"
-        "color: %1;"
-        "font-size: %2px;"
-        "line-height: 1.4;"
-        "padding: %3px;"
-        "background: transparent;"
-        "}")
-        .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-        .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2));
-    incompatiblePluginsList->setWordWrap(true);
-
-    // Create GroupBox without width constraints for incompatible
-    QGroupBox* incompatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsIncompatiblePlugins"), "error");
-    incompatiblePluginsBox->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    incompatiblePluginsBox->setMaximumHeight(150);
     
-    QVBoxLayout* incompatiblePluginsBoxLayout = new QVBoxLayout(incompatiblePluginsBox);
-    incompatiblePluginsBoxLayout->setContentsMargins(8, 20, 8, 8);
+    for (const std::string& moduleName : incompatibleModules) {
+        AddIncompatiblePluginRow(pluginTable, moduleName);
+    }
     
-    // ScrollArea goes INSIDE the GroupBox
-    QScrollArea* incompatibleScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-    incompatibleScrollArea->setWidget(incompatiblePluginsList);
-    incompatibleScrollArea->setStyleSheet(incompatibleScrollArea->styleSheet() + 
-        "QScrollArea { background: transparent; border: none; }");
-    
-    incompatiblePluginsBoxLayout->addWidget(incompatibleScrollArea);
-
-    // Use vertical layout to stack the plugin boxes and allow better width control
-    QVBoxLayout* pluginBoxesLayout = new QVBoxLayout();
-    pluginBoxesLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-    pluginBoxesLayout->addWidget(compatiblePluginsBox);
-    pluginBoxesLayout->addWidget(incompatiblePluginsBox);
-
-    pluginsLayout->addLayout(pluginBoxesLayout);
+    // Set appropriate height based on content
+    int totalRows = pluginTable->rowCount();
+    if (totalRows == 0) {
+        // Show empty state
+        QLabel* emptyLabel = new QLabel(obs_module_text("WindowSettingsInstalledPlugins"));
+        emptyLabel->setAlignment(Qt::AlignCenter);
+        emptyLabel->setStyleSheet(QString(
+            "QLabel {"
+            "color: %1;"
+            "font-size: %2px;"
+            "padding: 20px;"
+            "}")
+            .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+        pluginsLayout->addWidget(emptyLabel);
+    } else {
+        // Auto-resize columns to fit content perfectly
+        AutoResizeTableColumns(pluginTable);
+        
+        // Configure table height based on content
+        int maxVisibleRows = std::min(totalRows, 8);
+        int headerHeight = pluginTable->horizontalHeader()->height();
+        int rowHeight = pluginTable->rowHeight(0);
+        int tableHeight = headerHeight + (rowHeight * maxVisibleRows) + 10; // 10px padding
+        
+        pluginTable->setMinimumHeight(std::min(tableHeight, 300));
+        pluginTable->setMaximumHeight(400);
+        
+        // Connect click handler for website links
+        QObject::connect(pluginTable, &QTableWidget::cellClicked, 
+                        [pluginTable](int row, int column) {
+            HandlePluginTableClick(pluginTable, row, column);
+        });
+        
+        pluginsLayout->addWidget(pluginTable, 0, Qt::AlignTop);
+        
+        // Set container to accommodate table width plus minimal padding
+        int tableWidth = pluginTable->minimumWidth();
+        int containerWidth = tableWidth + (StreamUP::UIStyles::Sizes::PADDING_SMALL * 2);
+        pluginsWidget->setMinimumWidth(containerWidth);
+        // Remove maximum width constraint to allow UI expansion
+    }
     pluginsLayout->addStretch();
     
-    // Replace the content in the scroll area
+    // Replace the content in the scroll area and configure for horizontal expansion
     components.scrollArea->setWidget(pluginsWidget);
     
-    // Don't modify scroll area properties to prevent resizing
+    // Configure scroll area to expand horizontally to fit content
+    components.scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    components.scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    components.scrollArea->setWidgetResizable(true);
+    
+    // Ensure the scroll area itself can expand and respect minimum sizes
+    components.scrollArea->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Preferred);
+    
+    // Fix header stretching issue by setting fixed size policy
+    if (components.headerWidget) {
+        components.headerWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        components.headerWidget->setMaximumHeight(components.headerWidget->sizeHint().height());
+    }
+    
+    // Adjust the main dialog size to accommodate the table
+    if (components.dialog && pluginTable->rowCount() > 0) {
+        int tableWidth = pluginTable->minimumWidth();
+        int currentDialogWidth = components.dialog->width();
+        int requiredWidth = tableWidth + 100; // Add padding for dialog margins
+        
+        if (requiredWidth > currentDialogWidth) {
+            QSize currentSize = components.dialog->size();
+            components.dialog->resize(requiredWidth, currentSize.height());
+        }
+    }
+    
+    // Force the scroll area to consider the widget's size hints
+    components.scrollArea->updateGeometry();
 }
 
 void ShowInstalledPluginsPage(QWidget* parentWidget)
@@ -622,8 +852,8 @@ void ShowInstalledPluginsPage(QWidget* parentWidget)
 
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsInstalledPlugins"), parentWidget);
         
-        // Start compact and let it grow based on content
-        dialog->resize(650, 400);
+        // Start smaller - will be resized based on content
+        dialog->resize(600, 500);
         
         QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
         mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -647,11 +877,11 @@ void ShowInstalledPluginsPage(QWidget* parentWidget)
         
         mainLayout->addWidget(headerWidget);
 
-        // Content area - direct layout without scrolling
+        // Content area - direct layout without scrolling  
         QVBoxLayout* contentLayout = new QVBoxLayout();
-        contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+        contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
             StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
+            StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
             StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
         contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
         
@@ -678,96 +908,59 @@ void ShowInstalledPluginsPage(QWidget* parentWidget)
         infoLabel->setWordWrap(true);
         contentLayout->addWidget(infoLabel);
 
-        QString compatiblePluginsString;
-        if (installedPlugins.empty()) {
-            compatiblePluginsString = obs_module_text("WindowSettingsInstalledPlugins");
-        } else {
-            for (const auto& plugin : installedPlugins) {
-                const auto& pluginName = plugin.first;
-                const auto& pluginVersion = plugin.second;
-                const QString forumLink = GetForumLink(pluginName);
-
-                compatiblePluginsString += "<a href=\"" + forumLink + "\" style=\"color: #60a5fa; text-decoration: none;\">" + 
-                                         QString::fromStdString(pluginName) +
-                                         "</a> <span style=\"color: #9ca3af;\">(" + QString::fromStdString(pluginVersion) + ")</span><br>";
-            }
-            if (compatiblePluginsString.endsWith("<br>")) {
-                compatiblePluginsString.chop(4);
-            }
+        // Create plugin table for the dialog
+        QTableWidget* pluginTable = CreatePluginTable();
+        
+        // Add compatible plugins
+        for (const auto& plugin : installedPlugins) {
+            AddCompatiblePluginRow(pluginTable, plugin.first, plugin.second);
         }
-
-        QLabel* compatiblePluginsList = new QLabel(compatiblePluginsString);
-        compatiblePluginsList->setOpenExternalLinks(true);
-        compatiblePluginsList->setStyleSheet(QString(
-            "QLabel {"
-            "color: %1;"
-            "font-size: %2px;"
-            "line-height: 1.4;"
-            "padding: %3px;"
-            "background: transparent;"
-            "}")
-            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-            .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2));
-        compatiblePluginsList->setWordWrap(true);
-
-        // Create GroupBox with prioritized width and internal scrolling
-        QGroupBox* compatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsCompatiblePlugins"), "success");
-        compatiblePluginsBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        compatiblePluginsBox->setMinimumWidth(300);
-        compatiblePluginsBox->setMaximumHeight(300);
         
-        QVBoxLayout* compatiblePluginsBoxLayout = new QVBoxLayout(compatiblePluginsBox);
-        compatiblePluginsBoxLayout->setContentsMargins(8, 20, 8, 8);
-        
-        // ScrollArea goes INSIDE the GroupBox
-        QScrollArea* compatibleScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-        compatibleScrollArea->setWidget(compatiblePluginsList);
-        compatibleScrollArea->setStyleSheet(compatibleScrollArea->styleSheet() + 
-            "QScrollArea { background: transparent; border: none; }");
-        
-        compatiblePluginsBoxLayout->addWidget(compatibleScrollArea);
-
-        QLabel* incompatiblePluginsList = new QLabel;
+        // Add incompatible plugins
         char* filePath = GetFilePath();
-        SetLabelWithSortedModules(incompatiblePluginsList, SearchModulesInFile(filePath));
+        std::vector<std::string> incompatibleModules = SearchModulesInFile(filePath);
         bfree(filePath);
-        incompatiblePluginsList->setStyleSheet(QString(
-            "QLabel {"
-            "color: %1;"
-            "font-size: %2px;"
-            "line-height: 1.4;"
-            "padding: %3px;"
-            "background: transparent;"
-            "}")
-            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-            .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2));
-        incompatiblePluginsList->setWordWrap(true);
-
-        // Create GroupBox with smaller fixed width for incompatible
-        QGroupBox* incompatiblePluginsBox = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsIncompatiblePlugins"), "error");
-        incompatiblePluginsBox->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-        incompatiblePluginsBox->setFixedWidth(200);
-        incompatiblePluginsBox->setMaximumHeight(300);
         
-        QVBoxLayout* incompatiblePluginsBoxLayout = new QVBoxLayout(incompatiblePluginsBox);
-        incompatiblePluginsBoxLayout->setContentsMargins(8, 20, 8, 8);
+        for (const std::string& moduleName : incompatibleModules) {
+            AddIncompatiblePluginRow(pluginTable, moduleName);
+        }
         
-        // ScrollArea goes INSIDE the GroupBox
-        QScrollArea* incompatibleScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-        incompatibleScrollArea->setWidget(incompatiblePluginsList);
-        incompatibleScrollArea->setStyleSheet(incompatibleScrollArea->styleSheet() + 
-            "QScrollArea { background: transparent; border: none; }");
-        
-        incompatiblePluginsBoxLayout->addWidget(incompatibleScrollArea);
-
-        QHBoxLayout* pluginBoxesLayout = new QHBoxLayout();
-        pluginBoxesLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-        pluginBoxesLayout->addWidget(compatiblePluginsBox, 3); // Give compatible box more space
-        pluginBoxesLayout->addWidget(incompatiblePluginsBox, 1); // Give incompatible box less space
-
-        contentLayout->addLayout(pluginBoxesLayout);
+        // Configure table for dialog - larger size and better layout
+        int totalRows = pluginTable->rowCount();
+        if (totalRows == 0) {
+            // Show empty state
+            QLabel* emptyLabel = new QLabel(obs_module_text("WindowSettingsInstalledPlugins"));
+            emptyLabel->setAlignment(Qt::AlignCenter);
+            emptyLabel->setStyleSheet(QString(
+                "QLabel {"
+                "color: %1;"
+                "font-size: %2px;"
+                "padding: 20px;"
+                "}")
+                .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
+                .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+            contentLayout->addWidget(emptyLabel);
+        } else {
+            // Auto-resize columns to fit content perfectly
+            AutoResizeTableColumns(pluginTable);
+            
+            // Set appropriate height for dialog
+            pluginTable->setMinimumHeight(300);
+            pluginTable->setMaximumHeight(500);
+            
+            // Connect click handler for website links
+            QObject::connect(pluginTable, &QTableWidget::cellClicked, 
+                            [pluginTable](int row, int column) {
+                HandlePluginTableClick(pluginTable, row, column);
+            });
+            
+            // Adjust dialog size to exactly fit table content
+            int tableWidth = pluginTable->minimumWidth();
+            int dialogWidth = std::max(tableWidth + 80, 600); // Minimal padding, lower minimum
+            dialog->resize(dialogWidth, 650);
+            
+            contentLayout->addWidget(pluginTable);
+        }
 
         // Bottom button area
         QWidget* buttonWidget = new QWidget();
