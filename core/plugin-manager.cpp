@@ -779,5 +779,287 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 	return installedPlugins;
 }
 
+//-------------------EFFICIENT CACHING FUNCTIONS-------------------
+void PerformPluginCheckAndCache()
+{
+	StreamUP::ErrorHandler::LogInfo("Performing one-time plugin check and caching results", StreamUP::ErrorHandler::Category::Plugin);
+	
+	const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
+	if (requiredPlugins.empty()) {
+		StreamUP::ErrorHandler::LogWarning("Required plugins list is empty during cache operation", StreamUP::ErrorHandler::Category::Plugin);
+		return;
+	}
+
+	std::map<std::string, std::string> missing_modules;
+	std::map<std::string, std::string> version_mismatch_modules;
+	char *filepath = GetFilePath();
+	if (filepath == NULL) {
+		StreamUP::ErrorHandler::LogError("Failed to get OBS log file path during cache operation", StreamUP::ErrorHandler::Category::Plugin);
+		return;
+	}
+
+	// Check all required plugins
+	for (const auto &module : requiredPlugins) {
+		const std::string &plugin_name = module.first;
+		const StreamUP::PluginInfo &plugin_info = module.second;
+		const std::string &required_version = plugin_info.version;
+		const std::string &search_string = plugin_info.searchString;
+
+		if (search_string.find("[ignore]") != std::string::npos) {
+			continue;
+		}
+
+		std::string installed_version = SearchStringInFileForVersion(filepath, search_string.c_str());
+
+		if (installed_version.empty() && plugin_info.required) {
+			missing_modules.emplace(plugin_name, required_version);
+		} else if (!installed_version.empty() && installed_version != required_version && plugin_info.required &&
+			   VersionUtils::IsVersionLessThan(installed_version, required_version)) {
+			version_mismatch_modules.emplace(plugin_name, installed_version);
+		}
+	}
+
+	bfree(filepath);
+
+	// Get all installed plugins for cache
+	std::vector<std::pair<std::string, std::string>> installedPlugins = GetInstalledPlugins();
+
+	// Cache the results
+	StreamUP::PluginState::PluginCheckResults results;
+	results.missingPlugins = missing_modules;
+	results.outdatedPlugins = version_mismatch_modules;
+	results.installedPlugins = installedPlugins;
+	results.allRequiredUpToDate = missing_modules.empty() && version_mismatch_modules.empty();
+
+	StreamUP::PluginState::Instance().SetPluginStatus(results);
+
+	StreamUP::ErrorHandler::LogInfo("Plugin check cache updated - Missing: " + std::to_string(missing_modules.size()) + 
+		", Outdated: " + std::to_string(version_mismatch_modules.size()) + 
+		", All up to date: " + (results.allRequiredUpToDate ? "true" : "false"), StreamUP::ErrorHandler::Category::Plugin);
+}
+
+bool IsAllPluginsUpToDateCached()
+{
+	if (!StreamUP::PluginState::Instance().IsPluginStatusCached()) {
+		StreamUP::ErrorHandler::LogWarning("Plugin status requested but cache is invalid - performing fresh check", StreamUP::ErrorHandler::Category::Plugin);
+		PerformPluginCheckAndCache();
+	}
+
+	const auto& status = StreamUP::PluginState::Instance().GetCachedPluginStatus();
+	StreamUP::ErrorHandler::LogInfo("Returning cached plugin status: " + std::string(status.allRequiredUpToDate ? "all up to date" : "issues found"), StreamUP::ErrorHandler::Category::Plugin);
+	
+	return status.allRequiredUpToDate;
+}
+
+void ShowCachedPluginIssuesDialog(std::function<void()> continueCallback)
+{
+	if (!StreamUP::PluginState::Instance().IsPluginStatusCached()) {
+		StreamUP::ErrorHandler::LogWarning("Attempting to show cached plugin issues but cache is invalid - performing fresh check", StreamUP::ErrorHandler::Category::Plugin);
+		PerformPluginCheckAndCache();
+	}
+
+	const auto& status = StreamUP::PluginState::Instance().GetCachedPluginStatus();
+	
+	if (status.allRequiredUpToDate) {
+		StreamUP::ErrorHandler::LogInfo("No plugin issues to show - all plugins are up to date", StreamUP::ErrorHandler::Category::Plugin);
+		PluginsUpToDateOutput(true);
+		return;
+	}
+
+	// Build error messages same as existing functions
+	std::string errorMsgMissing = "";
+	std::string errorMsgUpdate = "";
+
+	if (!status.outdatedPlugins.empty()) {
+		errorMsgUpdate += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
+				  "<tr style=\"background: #4a5568; font-weight: bold;\">"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("PluginName")) + "</td>"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("InstalledVersion")) + "</td>"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("CurrentVersion")) + "</td>"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("DownloadLink")) + "</td>"
+				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("WebsiteLink")) + "</td>"
+				  "</tr>";
+
+		for (const auto &module : status.outdatedPlugins) {
+			const auto& allPlugins = StreamUP::GetAllPlugins();
+			const StreamUP::PluginInfo &plugin_info = allPlugins.at(module.first);
+			const std::string &required_version = plugin_info.version;
+			const std::string &forum_link = plugin_info.generalURL;
+			const std::string &direct_download_link = StringUtils::GetPlatformURL(
+				QString::fromStdString(plugin_info.windowsURL),
+				QString::fromStdString(plugin_info.macURL),
+				QString::fromStdString(plugin_info.linuxURL),
+				QString::fromStdString(plugin_info.generalURL)).toStdString();
+
+			errorMsgUpdate += "<tr>"
+					  "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
+					  "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">v" + module.second + "</td>"
+					  "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
+					  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Download")) + "</a></td>"
+					  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Website")) + "</a></td>"
+					  "</tr>";
+		}
+		errorMsgUpdate += "</table>";
+	}
+
+	if (!status.missingPlugins.empty()) {
+		errorMsgMissing += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
+				   "<tr style=\"background: #4a5568; font-weight: bold;\">"
+				   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("PluginName")) + "</td>"
+				   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("Status")) + "</td>"
+				   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("CurrentVersion")) + "</td>"
+				   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("DownloadLink")) + "</td>"
+				   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("WebsiteLink")) + "</td>"
+				   "</tr>";
+
+		for (const auto &module : status.missingPlugins) {
+			const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
+			const StreamUP::PluginInfo &pluginInfo = requiredPlugins.at(module.first);
+			const std::string &forum_link = pluginInfo.generalURL;
+			const std::string &required_version = pluginInfo.version;
+			const std::string &direct_download_link = StringUtils::GetPlatformURL(
+				QString::fromStdString(pluginInfo.windowsURL),
+				QString::fromStdString(pluginInfo.macURL),
+				QString::fromStdString(pluginInfo.linuxURL),
+				QString::fromStdString(pluginInfo.generalURL)).toStdString();
+
+			errorMsgMissing += "<tr>"
+					   "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
+					   "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">" + std::string(obs_module_text("MISSING")) + "</td>"
+					   "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
+					   "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Download")) + "</a></td>"
+					   "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Website")) + "</a></td>"
+					   "</tr>";
+		}
+		errorMsgMissing += "</table>";
+	}
+
+	StreamUP::ErrorHandler::LogInfo("Showing cached plugin issues dialog", StreamUP::ErrorHandler::Category::Plugin);
+	PluginsHaveIssue(status.missingPlugins.empty() ? "NULL" : errorMsgMissing, errorMsgUpdate, continueCallback);
+}
+
+void ShowCachedPluginUpdatesDialog()
+{
+	if (!StreamUP::PluginState::Instance().IsPluginStatusCached()) {
+		StreamUP::ErrorHandler::LogWarning("Manual update check requested but cache is invalid - performing fresh check", StreamUP::ErrorHandler::Category::Plugin);
+		PerformPluginCheckAndCache();
+	}
+
+	const auto& status = StreamUP::PluginState::Instance().GetCachedPluginStatus();
+	
+	if (status.outdatedPlugins.empty()) {
+		StreamUP::ErrorHandler::LogInfo("No plugin updates available", StreamUP::ErrorHandler::Category::Plugin);
+		PluginsUpToDateOutput(true);
+		return;
+	}
+
+	// Build update message from cached results
+	std::string errorMsgUpdate = "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
+			  "<tr style=\"background: #4a5568; font-weight: bold;\">"
+			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("PluginName")) + "</td>"
+			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("InstalledVersion")) + "</td>"
+			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("CurrentVersion")) + "</td>"
+			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("DownloadLink")) + "</td>"
+			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("WebsiteLink")) + "</td>"
+			  "</tr>";
+
+	for (const auto &module : status.outdatedPlugins) {
+		const auto& allPlugins = StreamUP::GetAllPlugins();
+		const StreamUP::PluginInfo &plugin_info = allPlugins.at(module.first);
+		const std::string &required_version = plugin_info.version;
+		const std::string &forum_link = plugin_info.generalURL;
+		const std::string &direct_download_link = StringUtils::GetPlatformURL(
+			QString::fromStdString(plugin_info.windowsURL),
+			QString::fromStdString(plugin_info.macURL),
+			QString::fromStdString(plugin_info.linuxURL),
+			QString::fromStdString(plugin_info.generalURL)).toStdString();
+
+		errorMsgUpdate += "<tr>"
+				  "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
+				  "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">v" + module.second + "</td>"
+				  "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
+				  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Download")) + "</a></td>"
+				  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Website")) + "</a></td>"
+				  "</tr>";
+	}
+
+	errorMsgUpdate += "</table>";
+	
+	StreamUP::ErrorHandler::LogInfo("Showing cached plugin updates dialog", StreamUP::ErrorHandler::Category::Plugin);
+	PluginsHaveIssue("NULL", errorMsgUpdate);
+}
+
+void ShowCachedPluginUpdatesDialogSilent()
+{
+	if (!StreamUP::PluginState::Instance().IsPluginStatusCached()) {
+		StreamUP::ErrorHandler::LogWarning("Silent startup check requested but cache is invalid - performing fresh check", StreamUP::ErrorHandler::Category::Plugin);
+		PerformPluginCheckAndCache();
+	}
+
+	const auto& status = StreamUP::PluginState::Instance().GetCachedPluginStatus();
+	
+	if (status.outdatedPlugins.empty()) {
+		StreamUP::ErrorHandler::LogInfo("No plugin updates available on startup - staying silent", StreamUP::ErrorHandler::Category::Plugin);
+		return; // Silent success - don't show any dialog
+	}
+
+	// Only show dialog if there are actual updates
+	StreamUP::ErrorHandler::LogInfo("Plugin updates found on startup - showing dialog", StreamUP::ErrorHandler::Category::Plugin);
+
+	// Build update message from cached results
+	std::string errorMsgUpdate = "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
+			  "<tr style=\"background: #4a5568; font-weight: bold;\">"
+			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("PluginName")) + "</td>"
+			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("InstalledVersion")) + "</td>"
+			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("CurrentVersion")) + "</td>"
+			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("DownloadLink")) + "</td>"
+			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("WebsiteLink")) + "</td>"
+			  "</tr>";
+
+	for (const auto &module : status.outdatedPlugins) {
+		const auto& allPlugins = StreamUP::GetAllPlugins();
+		const StreamUP::PluginInfo &plugin_info = allPlugins.at(module.first);
+		const std::string &required_version = plugin_info.version;
+		const std::string &forum_link = plugin_info.generalURL;
+		const std::string &direct_download_link = StringUtils::GetPlatformURL(
+			QString::fromStdString(plugin_info.windowsURL),
+			QString::fromStdString(plugin_info.macURL),
+			QString::fromStdString(plugin_info.linuxURL),
+			QString::fromStdString(plugin_info.generalURL)).toStdString();
+
+		errorMsgUpdate += "<tr>"
+				  "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
+				  "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">v" + module.second + "</td>"
+				  "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
+				  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Download")) + "</a></td>"
+				  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Website")) + "</a></td>"
+				  "</tr>";
+	}
+
+	errorMsgUpdate += "</table>";
+	
+	StreamUP::ErrorHandler::LogInfo("Showing startup plugin updates dialog", StreamUP::ErrorHandler::Category::Plugin);
+	PluginsHaveIssue("NULL", errorMsgUpdate);
+}
+
+void InvalidatePluginCache()
+{
+	StreamUP::ErrorHandler::LogInfo("Invalidating plugin status cache", StreamUP::ErrorHandler::Category::Plugin);
+	StreamUP::PluginState::Instance().InvalidatePluginStatus();
+}
+
+std::vector<std::pair<std::string, std::string>> GetInstalledPluginsCached()
+{
+	if (!StreamUP::PluginState::Instance().IsPluginStatusCached()) {
+		StreamUP::ErrorHandler::LogWarning("Installed plugins requested but cache is invalid - performing fresh check", StreamUP::ErrorHandler::Category::Plugin);
+		PerformPluginCheckAndCache();
+	}
+
+	const auto& status = StreamUP::PluginState::Instance().GetCachedPluginStatus();
+	StreamUP::ErrorHandler::LogInfo("Returning cached installed plugins: " + std::to_string(status.installedPlugins.size()) + " plugins", StreamUP::ErrorHandler::Category::Plugin);
+	
+	return status.installedPlugins;
+}
+
 } // namespace PluginManager
 } // namespace StreamUP

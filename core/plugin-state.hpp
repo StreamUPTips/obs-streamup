@@ -6,6 +6,8 @@
 #include <string>
 #include <memory>
 #include <mutex>
+#include <chrono>
+#include <vector>
 
 namespace StreamUP {
 
@@ -25,6 +27,21 @@ public:
     bool IsInitialized() const { return m_initialized; }
     void SetInitialized(bool initialized) { m_initialized = initialized; }
     
+    // Plugin status caching
+    struct PluginCheckResults {
+        bool allRequiredUpToDate = false;
+        std::map<std::string, std::string> missingPlugins; // name -> required version
+        std::map<std::string, std::string> outdatedPlugins; // name -> installed version
+        std::vector<std::pair<std::string, std::string>> installedPlugins; // name, version pairs
+        std::chrono::system_clock::time_point lastChecked;
+        bool isValid = false;
+    };
+    
+    const PluginCheckResults& GetCachedPluginStatus() const;
+    void SetPluginStatus(const PluginCheckResults& results);
+    void InvalidatePluginStatus();
+    bool IsPluginStatusCached() const;
+    
     // Prevent copying and assignment
     PluginState(const PluginState&) = delete;
     PluginState& operator=(const PluginState&) = delete;
@@ -40,6 +57,7 @@ private:
     std::map<std::string, PluginInfo> m_allPlugins;
     std::map<std::string, PluginInfo> m_requiredPlugins;
     bool m_initialized = false;
+    PluginCheckResults m_cachedStatus;
 };
 
 // Convenience access functions

@@ -86,7 +86,11 @@ void LoadMenuItems(QMenu* menu)
 
         action = menu->addAction(obs_module_text("MenuCheckRequirements"));
         QObject::connect(action, &QAction::triggered, []() { 
-            StreamUP::PluginManager::CheckrequiredOBSPlugins(); 
+            // Hold Shift to force refresh cache
+            if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
+                StreamUP::PluginManager::PerformPluginCheckAndCache();
+            }
+            StreamUP::PluginManager::ShowCachedPluginIssuesDialog(); 
         });
         
         menu->addSeparator();
@@ -95,7 +99,11 @@ void LoadMenuItems(QMenu* menu)
     // Plugin updates (all platforms)
     action = menu->addAction(obs_module_text("MenuCheckPluginUpdates"));
     QObject::connect(action, &QAction::triggered, []() { 
-        StreamUP::PluginManager::CheckAllPluginsForUpdates(true); 
+        // Hold Shift to force refresh cache
+        if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
+            StreamUP::PluginManager::PerformPluginCheckAndCache();
+        }
+        StreamUP::PluginManager::ShowCachedPluginUpdatesDialog(); 
     });
 
     // Tools submenu

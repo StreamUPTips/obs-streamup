@@ -74,6 +74,47 @@ std::string SearchStringInFileForVersion(const char *path, const char *search);
  */
 std::vector<std::pair<std::string, std::string>> GetInstalledPlugins();
 
+//-------------------EFFICIENT CACHING FUNCTIONS-------------------
+/**
+ * Perform plugin check once and cache results for future use
+ * This should be called after OBS is fully loaded
+ */
+void PerformPluginCheckAndCache();
+
+/**
+ * Check if all plugins are up to date using cached results
+ * @return bool True if cached results show all plugins are up to date
+ */
+bool IsAllPluginsUpToDateCached();
+
+/**
+ * Show plugin issues dialog using cached results
+ * @param continueCallback Optional callback to execute when "Continue Anyway" is pressed
+ */
+void ShowCachedPluginIssuesDialog(std::function<void()> continueCallback = nullptr);
+
+/**
+ * Show plugin updates dialog using cached results (for manual update checks)
+ */
+void ShowCachedPluginUpdatesDialog();
+
+/**
+ * Show plugin updates dialog only if there are updates (silent if up to date)
+ * Used for startup checks to avoid showing "everything is fine" notifications
+ */
+void ShowCachedPluginUpdatesDialogSilent();
+
+/**
+ * Invalidate cached plugin status (call when plugins might have changed)
+ */
+void InvalidatePluginCache();
+
+/**
+ * Get installed plugins from cached results (much faster than scanning files)
+ * @return std::vector containing pairs of plugin names and versions from cache
+ */
+std::vector<std::pair<std::string, std::string>> GetInstalledPluginsCached();
+
 } // namespace PluginManager
 } // namespace StreamUP
 

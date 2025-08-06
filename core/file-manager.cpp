@@ -431,137 +431,18 @@ void LoadStreamupFile(bool forceLoad)
 
 void LoadStreamupFileWithWarning()
 {
-	// Try to check plugins first - use the non-UI version to avoid showing two dialogs
-	if (StreamUP::PluginManager::CheckrequiredOBSPluginsWithoutUI(true)) {
+	// Use cached plugin status for instant response
+	if (StreamUP::PluginManager::IsAllPluginsUpToDateCached()) {
 		// Plugins are OK, proceed normally
 		LoadStreamupFile(false);
 		return;
 	}
 	
-	// Plugins have issues, show the warning dialog with continue option
-	
-	// Get the plugin check results manually for the warning dialog
-	const std::map<std::string, StreamUP::PluginInfo>& requiredPlugins = StreamUP::GetRequiredPlugins(); 
-	if (requiredPlugins.empty()) {
-		StreamUP::PluginManager::ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
-		return;
-	}
-
-	std::map<std::string, std::string> missing_modules;
-	std::map<std::string, std::string> version_mismatch_modules;
-	std::string errorMsgMissing = "";
-	std::string errorMsgUpdate = "";
-	char *filepath = GetFilePath();
-	if (filepath == NULL) {
-		return;
-	}
-
-	// Check for missing and outdated plugins
-	for (const auto &module : requiredPlugins) {
-		const std::string &plugin_name = module.first;
-		const StreamUP::PluginInfo &plugin_info = module.second;
-		const std::string &required_version = plugin_info.version;
-		const std::string &search_string = plugin_info.searchString;
-
-		if (search_string.find("[ignore]") != std::string::npos) {
-			continue;
-		}
-
-		std::string installed_version = StreamUP::PluginManager::SearchStringInFileForVersion(filepath, search_string.c_str());
-
-		if (installed_version.empty() && plugin_info.required) {
-			missing_modules.emplace(plugin_name, required_version);
-		} else if (!installed_version.empty() && installed_version != required_version && plugin_info.required &&
-			   VersionUtils::IsVersionLessThan(installed_version, required_version)) {
-			version_mismatch_modules.emplace(plugin_name, installed_version);
-		}
-	}
-
-	bfree(filepath);
-
-	bool hasUpdates = !version_mismatch_modules.empty();
-	bool hasMissingPlugins = !missing_modules.empty();
-
-	if (hasUpdates || hasMissingPlugins) {
-		// Build error messages same as CheckrequiredOBSPlugins does
-		if (hasUpdates) {
-			errorMsgUpdate += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
-					  "<tr style=\"background: #4a5568; font-weight: bold;\">"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Plugin Name</td>"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Installed Version</td>"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Current Version</td>"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Download Link</td>"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">Website Link</td>"
-					  "</tr>";
-
-			for (const auto &module : version_mismatch_modules) {
-				const std::map<std::string, StreamUP::PluginInfo>& allPlugins = StreamUP::GetAllPlugins();
-				const StreamUP::PluginInfo &plugin_info = allPlugins.at(module.first);
-				const std::string &required_version = plugin_info.version;
-				const std::string &forum_link = plugin_info.generalURL;
-				const std::string &direct_download_link = StringUtils::GetPlatformURL(
-					QString::fromStdString(plugin_info.windowsURL),
-					QString::fromStdString(plugin_info.macURL),
-					QString::fromStdString(plugin_info.linuxURL),
-					QString::fromStdString(plugin_info.generalURL)).toStdString();
-
-				errorMsgUpdate += "<tr>"
-						  "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
-						  "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">v" + module.second + "</td>"
-						  "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
-						  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">Download</a></td>"
-						  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">Website</a></td>"
-						  "</tr>";
-			}
-			errorMsgUpdate += "</table>";
-		}
-
-		if (hasMissingPlugins) {
-			errorMsgMissing += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
-					   "<tr style=\"background: #4a5568; font-weight: bold;\">"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Plugin Name</td>"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Status</td>"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Current Version</td>"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Download Link</td>"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">Website Link</td>"
-					   "</tr>";
-
-			for (auto it = missing_modules.begin(); it != missing_modules.end(); ++it) {
-				const std::string &moduleName = it->first;
-				const std::map<std::string, StreamUP::PluginInfo>& requiredPlugins = StreamUP::GetRequiredPlugins();
-				const StreamUP::PluginInfo &pluginInfo = requiredPlugins.at(moduleName);
-				const std::string &forum_link = pluginInfo.generalURL;
-				const std::string &required_version = pluginInfo.version;
-				const std::string &direct_download_link = StringUtils::GetPlatformURL(
-					QString::fromStdString(pluginInfo.windowsURL),
-					QString::fromStdString(pluginInfo.macURL),
-					QString::fromStdString(pluginInfo.linuxURL),
-					QString::fromStdString(pluginInfo.generalURL)).toStdString();
-
-				errorMsgMissing += "<tr>"
-						   "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + moduleName + "</td>"
-						   "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">MISSING</td>"
-						   "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
-						   "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">Download</a></td>"
-						   "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">Website</a></td>"
-						   "</tr>";
-			}
-			errorMsgMissing += "</table>";
-		}
-
-		// Show the plugin issue dialog with continue callback
-		StreamUP::PluginManager::PluginsHaveIssue(
-			hasMissingPlugins ? errorMsgMissing : "NULL", 
-			errorMsgUpdate,
-			[]() {
-				// Continue anyway callback - load with force
-				LoadStreamupFile(true);
-			}
-		);
-	} else {
-		// No issues, proceed normally
-		LoadStreamupFile(false);
-	}
+	// Plugins have issues, show cached plugin issues dialog with continue callback
+	StreamUP::PluginManager::ShowCachedPluginIssuesDialog([]() {
+		// Continue anyway callback - load with force
+		LoadStreamupFile(true);
+	});
 }
 
 } // namespace FileManager
