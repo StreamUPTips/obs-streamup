@@ -5,8 +5,8 @@
 #include "version-utils.hpp"
 #include "path-utils.hpp"
 #include "http-client.hpp"
-#include "ui-helpers.hpp"
-#include "ui-styles.hpp"
+#include "../ui/ui-helpers.hpp"
+#include "../ui/ui-styles.hpp"
 #include "obs-wrappers.hpp"
 #include "error-handler.hpp"
 #include <obs-module.h>
@@ -18,6 +18,10 @@
 #include <QHBoxLayout>
 #include <QStyle>
 #include <QLabel>
+#include <QTableWidget>
+#include <QTableWidgetItem>
+#include <QHeaderView>
+#include <QUrl>
 #include <QGroupBox>
 #include <QScrollArea>
 #include <QPushButton>
@@ -28,6 +32,7 @@
 #include <iostream>
 #include <regex>
 #include <functional>
+#include <algorithm>
 #include <util/platform.h>
 #include <obs-frontend-api.h>
 
@@ -36,6 +41,152 @@ extern char *GetFilePath();
 
 namespace StreamUP {
 namespace PluginManager {
+
+//-------------------TABLE WIDGET HELPERS-------------------
+QString ExtractDomainFromUrl(const QString& url) {
+	QUrl qurl(url);
+	QString host = qurl.host();
+	
+	// Remove www. prefix if present
+	if (host.startsWith("www.")) {
+		host = host.mid(4);
+	}
+	
+	// If no host found, try to extract manually
+	if (host.isEmpty()) {
+		QString cleanUrl = url;
+		if (cleanUrl.contains("://")) {
+			cleanUrl = cleanUrl.split("://").last();
+		}
+		if (cleanUrl.contains("/")) {
+			cleanUrl = cleanUrl.split("/").first();
+		}
+		if (cleanUrl.startsWith("www.")) {
+			cleanUrl = cleanUrl.mid(4);
+		}
+		return cleanUrl;
+	}
+	
+	return host;
+}
+QTableWidget* CreateMissingPluginsTable(const std::map<std::string, std::string>& missing_modules) {
+	QStringList headers = {
+		obs_module_text("PluginName"),
+		obs_module_text("Status"), 
+		obs_module_text("CurrentVersion"),
+		obs_module_text("DownloadLink"),
+		obs_module_text("WebsiteLink")
+	};
+	
+	QTableWidget* table = StreamUP::UIStyles::CreateStyledTable(headers);
+	table->setRowCount(static_cast<int>(missing_modules.size()));
+	
+	int row = 0;
+	const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
+	
+	for (const auto& module : missing_modules) {
+		const std::string& moduleName = module.first;
+		const StreamUP::PluginInfo& pluginInfo = requiredPlugins.at(moduleName);
+		const std::string& required_version = pluginInfo.version;
+		const std::string& forum_link = pluginInfo.generalURL;
+		const std::string& direct_download_link = StringUtils::GetPlatformURL(
+			QString::fromStdString(pluginInfo.windowsURL),
+			QString::fromStdString(pluginInfo.macURL),
+			QString::fromStdString(pluginInfo.linuxURL),
+			QString::fromStdString(pluginInfo.generalURL)).toStdString();
+		
+		// Plugin Name column
+		table->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(moduleName)));
+		
+		// Status column - Missing
+		QTableWidgetItem* statusItem = new QTableWidgetItem("❌ " + QString(obs_module_text("MISSING")));
+		statusItem->setForeground(QColor("#ef4444"));
+		table->setItem(row, 1, statusItem);
+		
+		// Version column
+		QTableWidgetItem* versionItem = new QTableWidgetItem("v" + QString::fromStdString(required_version));
+		versionItem->setForeground(QColor("#22c55e"));
+		table->setItem(row, 2, versionItem);
+		
+		// Download Link column
+		QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("Download"));
+		downloadItem->setForeground(QColor("#3b82f6"));
+		downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
+		table->setItem(row, 3, downloadItem);
+		
+		// Website Link column - show domain name
+		QString domainName = ExtractDomainFromUrl(QString::fromStdString(forum_link));
+		QTableWidgetItem* websiteItem = new QTableWidgetItem(domainName);
+		websiteItem->setForeground(QColor("#3b82f6"));
+		websiteItem->setData(Qt::UserRole, QString::fromStdString(forum_link));
+		table->setItem(row, 4, websiteItem);
+		
+		row++;
+	}
+	
+	StreamUP::UIStyles::AutoResizeTableColumns(table);
+	return table;
+}
+
+QTableWidget* CreateUpdatesTable(const std::map<std::string, std::string>& version_mismatch_modules) {
+	QStringList headers = {
+		obs_module_text("PluginName"),
+		obs_module_text("InstalledVersion"),
+		obs_module_text("CurrentVersion"), 
+		obs_module_text("DownloadLink"),
+		obs_module_text("WebsiteLink")
+	};
+	
+	QTableWidget* table = StreamUP::UIStyles::CreateStyledTable(headers);
+	table->setRowCount(static_cast<int>(version_mismatch_modules.size()));
+	
+	int row = 0;
+	const auto& allPlugins = StreamUP::GetAllPlugins();
+	
+	for (const auto& module : version_mismatch_modules) {
+		const std::string& moduleName = module.first;
+		const std::string& installed_version = module.second;
+		const StreamUP::PluginInfo& plugin_info = allPlugins.at(moduleName);
+		const std::string& required_version = plugin_info.version;
+		const std::string& forum_link = plugin_info.generalURL;
+		const std::string& direct_download_link = StringUtils::GetPlatformURL(
+			QString::fromStdString(plugin_info.windowsURL),
+			QString::fromStdString(plugin_info.macURL),
+			QString::fromStdString(plugin_info.linuxURL),
+			QString::fromStdString(plugin_info.generalURL)).toStdString();
+		
+		// Plugin Name column
+		table->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(moduleName)));
+		
+		// Installed Version column
+		QTableWidgetItem* installedItem = new QTableWidgetItem("v" + QString::fromStdString(installed_version));
+		installedItem->setForeground(QColor("#ef4444"));
+		table->setItem(row, 1, installedItem);
+		
+		// Current Version column
+		QTableWidgetItem* currentItem = new QTableWidgetItem("v" + QString::fromStdString(required_version));
+		currentItem->setForeground(QColor("#22c55e"));
+		table->setItem(row, 2, currentItem);
+		
+		// Download Link column
+		QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("Download"));
+		downloadItem->setForeground(QColor("#3b82f6"));
+		downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
+		table->setItem(row, 3, downloadItem);
+		
+		// Website Link column - show domain name
+		QString domainName = ExtractDomainFromUrl(QString::fromStdString(forum_link));
+		QTableWidgetItem* websiteItem = new QTableWidgetItem(domainName);
+		websiteItem->setForeground(QColor("#3b82f6"));
+		websiteItem->setData(Qt::UserRole, QString::fromStdString(forum_link));
+		table->setItem(row, 4, websiteItem);
+		
+		row++;
+	}
+	
+	StreamUP::UIStyles::AutoResizeTableColumns(table);
+	return table;
+}
 
 //-------------------ERROR HANDLING FUNCTIONS-------------------
 void ErrorDialog(const QString &errorMessage)
@@ -110,12 +261,12 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 	}
 }
 
-void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, std::function<void()> continueCallback)
+void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, std::function<void()> continueCallback)
 {
-	StreamUP::UIHelpers::ShowDialogOnUIThread([errorMsgMissing, errorMsgUpdate, continueCallback]() {
+	StreamUP::UIHelpers::ShowDialogOnUIThread([missing_modules, version_mismatch_modules, continueCallback]() {
 		// Create styled dialog with dynamic title
-		bool hasMissing = (errorMsgMissing != "NULL");
-		bool hasUpdates = (!errorMsgUpdate.empty());
+		bool hasMissing = !missing_modules.empty();
+		bool hasUpdates = !version_mismatch_modules.empty();
 		
 		QString titleText;
 		if (hasMissing && hasUpdates) {
@@ -128,9 +279,9 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
 		
-		// Set larger minimum size to accommodate expanded boxes
-		dialog->setMinimumSize(600, 400);
-		dialog->resize(700, 500);
+		// Initial size - will be adjusted after content is added
+		dialog->setMinimumWidth(700);
+		dialog->setMaximumWidth(900);
 		
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 		dialogLayout->setContentsMargins(0, 0, 0, 0);
@@ -181,46 +332,120 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, s
 		dialogLayout->addLayout(contentLayout);
 
 		if (hasMissing) {
-			// Create expandable GroupBox with internal scrolling
+			// Create expandable GroupBox with table
 			QGroupBox *missingGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowPluginErrorMissingGroup"), "error");
 			missingGroup->setMinimumWidth(500);
-			missingGroup->setMinimumHeight(150);
-			// Let it expand to fill available space
-			missingGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+			missingGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
 			
 			QVBoxLayout *missingLayout = new QVBoxLayout(missingGroup);
-			missingLayout->setContentsMargins(8, 20, 8, 8);
+			missingLayout->setContentsMargins(8, 8, 8, 8); // Reduced top margin from 20 to 8
+			missingLayout->setSpacing(0); // Remove spacing around table
 			
-			// ScrollArea goes INSIDE the GroupBox
-			QScrollArea *missingScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-			QLabel *missingLabel = StreamUP::UIStyles::CreateStyledContent(QString::fromStdString(errorMsgMissing));
-			missingScrollArea->setWidget(missingLabel);
-			missingScrollArea->setStyleSheet(missingScrollArea->styleSheet() + 
-				"QScrollArea { background: transparent; border: none; }");
+			// Create modern table widget
+			QTableWidget *missingTable = CreateMissingPluginsTable(missing_modules);
 			
-			missingLayout->addWidget(missingScrollArea);
+			// Dynamic height calculation: max 10 rows, auto-size otherwise
+			int rowCount = missingTable->rowCount();
+			int maxVisibleRows = std::min(rowCount, 10);
+			int headerHeight = 35; // Standard header height
+			int rowHeight = 30; // Standard row height for consistency
+			int tableHeight = headerHeight + (rowHeight * maxVisibleRows) + 6; // +6 for borders
+			
+			missingTable->setFixedHeight(tableHeight);
+			if (rowCount > 10) {
+				missingTable->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+			} else {
+				missingTable->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+			}
+			
+			// Remove table border and background to blend with group box
+			missingTable->setStyleSheet(
+				missingTable->styleSheet() +
+				"QTableWidget { "
+				"border: none; "
+				"background: transparent; "
+				"border-radius: 8px; "
+				"} "
+				"QTableWidget::item { "
+				"border-bottom: 1px solid #374151; "
+				"} "
+				"QTableWidget::item:last { "
+				"border-bottom: none; "
+				"} "
+				"QHeaderView::section:first { "
+				"border-top-left-radius: 8px; "
+				"} "
+				"QHeaderView::section:last { "
+				"border-top-right-radius: 8px; "
+				"}"
+			);
+			
+			// Connect click handler for website/download links
+			QObject::connect(missingTable, &QTableWidget::cellClicked, 
+							[missingTable](int row, int column) {
+				StreamUP::UIStyles::HandleTableCellClick(missingTable, row, column);
+			});
+			
+			missingLayout->addWidget(missingTable);
 			contentLayout->addWidget(missingGroup);
 		}
 
 		if (hasUpdates) {
-			// Create expandable GroupBox with internal scrolling
+			// Create expandable GroupBox with table
 			QGroupBox *updateGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("UpdatesAvailable"), "warning");
 			updateGroup->setMinimumWidth(500);
-			updateGroup->setMinimumHeight(150);
-			// Let it expand to fill available space
-			updateGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+			updateGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
 			
 			QVBoxLayout *updateLayout = new QVBoxLayout(updateGroup);
-			updateLayout->setContentsMargins(8, 20, 8, 8);
+			updateLayout->setContentsMargins(8, 8, 8, 8); // Reduced top margin from 20 to 8
+			updateLayout->setSpacing(0); // Remove spacing around table
 			
-			// ScrollArea goes INSIDE the GroupBox
-			QScrollArea *updateScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-			QLabel *updateLabel = StreamUP::UIStyles::CreateStyledContent(QString::fromStdString(errorMsgUpdate));
-			updateScrollArea->setWidget(updateLabel);
-			updateScrollArea->setStyleSheet(updateScrollArea->styleSheet() + 
-				"QScrollArea { background: transparent; border: none; }");
+			// Create modern table widget
+			QTableWidget *updateTable = CreateUpdatesTable(version_mismatch_modules);
 			
-			updateLayout->addWidget(updateScrollArea);
+			// Dynamic height calculation: max 10 rows, auto-size otherwise
+			int rowCount = updateTable->rowCount();
+			int maxVisibleRows = std::min(rowCount, 10);
+			int headerHeight = 35; // Standard header height
+			int rowHeight = 30; // Standard row height for consistency
+			int tableHeight = headerHeight + (rowHeight * maxVisibleRows) + 6; // +6 for borders
+			
+			updateTable->setFixedHeight(tableHeight);
+			if (rowCount > 10) {
+				updateTable->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+			} else {
+				updateTable->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+			}
+			
+			// Remove table border and background to blend with group box
+			updateTable->setStyleSheet(
+				updateTable->styleSheet() +
+				"QTableWidget { "
+				"border: none; "
+				"background: transparent; "
+				"border-radius: 8px; "
+				"} "
+				"QTableWidget::item { "
+				"border-bottom: 1px solid #374151; "
+				"} "
+				"QTableWidget::item:last { "
+				"border-bottom: none; "
+				"} "
+				"QHeaderView::section:first { "
+				"border-top-left-radius: 8px; "
+				"} "
+				"QHeaderView::section:last { "
+				"border-top-right-radius: 8px; "
+				"}"
+			);
+			
+			// Connect click handler for website/download links
+			QObject::connect(updateTable, &QTableWidget::cellClicked, 
+							[updateTable](int row, int column) {
+				StreamUP::UIStyles::HandleTableCellClick(updateTable, row, column);
+			});
+			
+			updateLayout->addWidget(updateTable);
 			contentLayout->addWidget(updateGroup);
 		}
 
@@ -326,37 +551,8 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 	}
 	
 	if (!version_mismatch_modules.empty()) {
-		errorMsgUpdate += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
-				  "<tr style=\"background: #4a5568; font-weight: bold;\">"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("PluginName")) + "</td>"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("InstalledVersion")) + "</td>"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("CurrentVersion")) + "</td>"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("DownloadLink")) + "</td>"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("WebsiteLink")) + "</td>"
-				  "</tr>";
-
-		for (const auto &module : version_mismatch_modules) {
-			const auto& allPlugins = StreamUP::GetAllPlugins();
-			const StreamUP::PluginInfo &plugin_info = allPlugins.at(module.first);
-			const std::string &required_version = plugin_info.version;
-			const std::string &forum_link = plugin_info.generalURL;
-			const std::string &direct_download_link = StringUtils::GetPlatformURL(
-				QString::fromStdString(plugin_info.windowsURL),
-				QString::fromStdString(plugin_info.macURL),
-				QString::fromStdString(plugin_info.linuxURL),
-				QString::fromStdString(plugin_info.generalURL)).toStdString();
-
-			errorMsgUpdate += "<tr>"
-					  "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
-					  "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">v" + module.second + "</td>"
-					  "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
-					  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Download")) + "</a></td>"
-					  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Website")) + "</a></td>"
-					  "</tr>";
-		}
-
-		errorMsgUpdate += "</table>";
-		PluginsHaveIssue("NULL", errorMsgUpdate);
+		std::map<std::string, std::string> empty_missing_modules;
+		PluginsHaveIssue(empty_missing_modules, version_mismatch_modules, nullptr);
 		version_mismatch_modules.clear();
 	} else {
 		PluginsUpToDateOutput(manuallyTriggered);
@@ -497,82 +693,7 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 	bool hasMissingPlugins = !missing_modules.empty();
 
 	if (hasUpdates || hasMissingPlugins) {
-		if (hasUpdates) {
-			errorMsgUpdate += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
-					  "<tr style=\"background: #4a5568; font-weight: bold;\">"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("PluginName")) + "</td>"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("InstalledVersion")) + "</td>"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("CurrentVersion")) + "</td>"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("DownloadLink")) + "</td>"
-					  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("WebsiteLink")) + "</td>"
-					  "</tr>";
-
-			for (const auto &module : version_mismatch_modules) {
-				const auto& allPlugins = StreamUP::GetAllPlugins();
-			const StreamUP::PluginInfo &plugin_info = allPlugins.at(module.first);
-				const std::string &required_version = plugin_info.version;
-				const std::string &forum_link = plugin_info.generalURL;
-				const std::string &direct_download_link = StringUtils::GetPlatformURL(
-					QString::fromStdString(plugin_info.windowsURL),
-					QString::fromStdString(plugin_info.macURL),
-					QString::fromStdString(plugin_info.linuxURL),
-					QString::fromStdString(plugin_info.generalURL)).toStdString();
-
-				errorMsgUpdate += "<tr>"
-						  "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
-						  "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">v" + module.second + "</td>"
-						  "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
-						  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Download")) + "</a></td>"
-						  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Website")) + "</a></td>"
-						  "</tr>";
-			}
-
-			errorMsgUpdate += "</table>";
-
-			if (!errorMsgUpdate.empty() && errorMsgUpdate.substr(errorMsgUpdate.length() - 4) == "<br>") {
-				errorMsgUpdate = errorMsgUpdate.substr(0, errorMsgUpdate.length() - 4);
-			}
-		}
-
-		if (hasMissingPlugins) {
-			errorMsgMissing += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
-					   "<tr style=\"background: #4a5568; font-weight: bold;\">"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("PluginName")) + "</td>"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("Status")) + "</td>"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("CurrentVersion")) + "</td>"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("DownloadLink")) + "</td>"
-					   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("WebsiteLink")) + "</td>"
-					   "</tr>";
-
-			for (auto it = missing_modules.begin(); it != missing_modules.end(); ++it) {
-				const std::string &moduleName = it->first;
-				const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
-				const StreamUP::PluginInfo &pluginInfo = requiredPlugins.at(moduleName);
-				const std::string &forum_link = pluginInfo.generalURL;
-				const std::string &required_version = pluginInfo.version;
-				const std::string &direct_download_link = StringUtils::GetPlatformURL(
-					QString::fromStdString(pluginInfo.windowsURL),
-					QString::fromStdString(pluginInfo.macURL),
-					QString::fromStdString(pluginInfo.linuxURL),
-					QString::fromStdString(pluginInfo.generalURL)).toStdString();
-
-				errorMsgMissing += "<tr>"
-						   "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + moduleName + "</td>"
-						   "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">" + std::string(obs_module_text("MISSING")) + "</td>"
-						   "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
-						   "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Download")) + "</a></td>"
-						   "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Website")) + "</a></td>"
-						   "</tr>";
-			}
-
-			errorMsgMissing += "</table>";
-
-			if (!errorMsgMissing.empty() && errorMsgMissing.substr(errorMsgMissing.length() - 4) == "<br>") {
-				errorMsgMissing = errorMsgMissing.substr(0, errorMsgMissing.length() - 4);
-			}
-		}
-
-		PluginsHaveIssue(hasMissingPlugins ? errorMsgMissing : "NULL", errorMsgUpdate);
+		PluginsHaveIssue(missing_modules, version_mismatch_modules, nullptr);
 
 		missing_modules.clear();
 		version_mismatch_modules.clear();
@@ -800,75 +921,8 @@ void ShowCachedPluginIssuesDialog(std::function<void()> continueCallback)
 		return;
 	}
 
-	// Build error messages same as existing functions
-	std::string errorMsgMissing = "";
-	std::string errorMsgUpdate = "";
-
-	if (!status.outdatedPlugins.empty()) {
-		errorMsgUpdate += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
-				  "<tr style=\"background: #4a5568; font-weight: bold;\">"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("PluginName")) + "</td>"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("InstalledVersion")) + "</td>"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("CurrentVersion")) + "</td>"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("DownloadLink")) + "</td>"
-				  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("WebsiteLink")) + "</td>"
-				  "</tr>";
-
-		for (const auto &module : status.outdatedPlugins) {
-			const auto& allPlugins = StreamUP::GetAllPlugins();
-			const StreamUP::PluginInfo &plugin_info = allPlugins.at(module.first);
-			const std::string &required_version = plugin_info.version;
-			const std::string &forum_link = plugin_info.generalURL;
-			const std::string &direct_download_link = StringUtils::GetPlatformURL(
-				QString::fromStdString(plugin_info.windowsURL),
-				QString::fromStdString(plugin_info.macURL),
-				QString::fromStdString(plugin_info.linuxURL),
-				QString::fromStdString(plugin_info.generalURL)).toStdString();
-
-			errorMsgUpdate += "<tr>"
-					  "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
-					  "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">v" + module.second + "</td>"
-					  "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
-					  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Download")) + "</a></td>"
-					  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Website")) + "</a></td>"
-					  "</tr>";
-		}
-		errorMsgUpdate += "</table>";
-	}
-
-	if (!status.missingPlugins.empty()) {
-		errorMsgMissing += "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
-				   "<tr style=\"background: #4a5568; font-weight: bold;\">"
-				   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("PluginName")) + "</td>"
-				   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("Status")) + "</td>"
-				   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("CurrentVersion")) + "</td>"
-				   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("DownloadLink")) + "</td>"
-				   "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("WebsiteLink")) + "</td>"
-				   "</tr>";
-
-		for (const auto &module : status.missingPlugins) {
-			const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
-			const StreamUP::PluginInfo &pluginInfo = requiredPlugins.at(module.first);
-			const std::string &forum_link = pluginInfo.generalURL;
-			const std::string &required_version = pluginInfo.version;
-			const std::string &direct_download_link = StringUtils::GetPlatformURL(
-				QString::fromStdString(pluginInfo.windowsURL),
-				QString::fromStdString(pluginInfo.macURL),
-				QString::fromStdString(pluginInfo.linuxURL),
-				QString::fromStdString(pluginInfo.generalURL)).toStdString();
-
-			errorMsgMissing += "<tr>"
-					   "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
-					   "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">" + std::string(obs_module_text("MISSING")) + "</td>"
-					   "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
-					   "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Download")) + "</a></td>"
-					   "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Website")) + "</a></td>"
-					   "</tr>";
-		}
-		errorMsgMissing += "</table>";
-	}
-
-	PluginsHaveIssue(status.missingPlugins.empty() ? "NULL" : errorMsgMissing, errorMsgUpdate, continueCallback);
+	// Use modern table display for cached results
+	PluginsHaveIssue(status.missingPlugins, status.outdatedPlugins, continueCallback);
 }
 
 void ShowCachedPluginUpdatesDialog()
@@ -884,38 +938,9 @@ void ShowCachedPluginUpdatesDialog()
 		return;
 	}
 
-	// Build update message from cached results
-	std::string errorMsgUpdate = "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
-			  "<tr style=\"background: #4a5568; font-weight: bold;\">"
-			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("PluginName")) + "</td>"
-			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("InstalledVersion")) + "</td>"
-			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("CurrentVersion")) + "</td>"
-			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("DownloadLink")) + "</td>"
-			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("WebsiteLink")) + "</td>"
-			  "</tr>";
-
-	for (const auto &module : status.outdatedPlugins) {
-		const auto& allPlugins = StreamUP::GetAllPlugins();
-		const StreamUP::PluginInfo &plugin_info = allPlugins.at(module.first);
-		const std::string &required_version = plugin_info.version;
-		const std::string &forum_link = plugin_info.generalURL;
-		const std::string &direct_download_link = StringUtils::GetPlatformURL(
-			QString::fromStdString(plugin_info.windowsURL),
-			QString::fromStdString(plugin_info.macURL),
-			QString::fromStdString(plugin_info.linuxURL),
-			QString::fromStdString(plugin_info.generalURL)).toStdString();
-
-		errorMsgUpdate += "<tr>"
-				  "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
-				  "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">v" + module.second + "</td>"
-				  "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
-				  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Download")) + "</a></td>"
-				  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Website")) + "</a></td>"
-				  "</tr>";
-	}
-
-	errorMsgUpdate += "</table>";
-	PluginsHaveIssue("NULL", errorMsgUpdate);
+	// Use modern table display for cached results
+	std::map<std::string, std::string> empty_missing_modules;
+	PluginsHaveIssue(empty_missing_modules, status.outdatedPlugins, nullptr);
 }
 
 void ShowCachedPluginUpdatesDialogSilent()
@@ -930,38 +955,9 @@ void ShowCachedPluginUpdatesDialogSilent()
 		return; // Silent success - don't show any dialog
 	}
 
-	// Build update message from cached results
-	std::string errorMsgUpdate = "<table width=\"100%\" border=\"1\" cellpadding=\"8\" cellspacing=\"0\" style=\"border-collapse: collapse; background: #2d3748; color: white; border-radius: 8px; overflow: hidden;\">"
-			  "<tr style=\"background: #4a5568; font-weight: bold;\">"
-			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("PluginName")) + "</td>"
-			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("InstalledVersion")) + "</td>"
-			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("CurrentVersion")) + "</td>"
-			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("DownloadLink")) + "</td>"
-			  "<td style=\"padding: 10px; border: 1px solid #718096;\">" + std::string(obs_module_text("WebsiteLink")) + "</td>"
-			  "</tr>";
-
-	for (const auto &module : status.outdatedPlugins) {
-		const auto& allPlugins = StreamUP::GetAllPlugins();
-		const StreamUP::PluginInfo &plugin_info = allPlugins.at(module.first);
-		const std::string &required_version = plugin_info.version;
-		const std::string &forum_link = plugin_info.generalURL;
-		const std::string &direct_download_link = StringUtils::GetPlatformURL(
-			QString::fromStdString(plugin_info.windowsURL),
-			QString::fromStdString(plugin_info.macURL),
-			QString::fromStdString(plugin_info.linuxURL),
-			QString::fromStdString(plugin_info.generalURL)).toStdString();
-
-		errorMsgUpdate += "<tr>"
-				  "<td style=\"padding: 8px; border: 1px solid #718096; font-weight: bold;\">" + module.first + "</td>"
-				  "<td style=\"padding: 8px; border: 1px solid #718096; color: #fc8181;\">v" + module.second + "</td>"
-				  "<td style=\"padding: 8px; border: 1px solid #718096; color: #68d391;\">v" + required_version + "</td>"
-				  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + direct_download_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Download")) + "</a></td>"
-				  "<td style=\"padding: 8px; border: 1px solid #718096;\"><a href=\"" + forum_link + "\" style=\"color: #60a5fa;\">" + std::string(obs_module_text("Website")) + "</a></td>"
-				  "</tr>";
-	}
-
-	errorMsgUpdate += "</table>";
-	PluginsHaveIssue("NULL", errorMsgUpdate);
+	// Use modern table display for cached results
+	std::map<std::string, std::string> empty_missing_modules;
+	PluginsHaveIssue(empty_missing_modules, status.outdatedPlugins, nullptr);
 }
 
 void InvalidatePluginCache()

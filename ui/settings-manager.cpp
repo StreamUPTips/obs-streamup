@@ -23,15 +23,8 @@
 #include <QSizePolicy>
 #include <QPointer>
 #include <QTableWidget>
-#include <QHeaderView>
 #include <QTableWidgetItem>
-#include <QAbstractItemView>
-#include <QDesktopServices>
-#include <QUrl>
-#include <QMenu>
-#include <QAction>
-#include <QClipboard>
-#include <QApplication>
+#include <QHeaderView>
 #include <memory>
 #include <util/platform.h>
 
@@ -57,46 +50,10 @@ QString ExtractDomain(const QString& url) {
     return host.isEmpty() ? url : host;
 }
 
-// Custom table widget with context menu
-class PluginTableWidget : public QTableWidget {
-public:
-    PluginTableWidget(QWidget* parent = nullptr) : QTableWidget(parent) {
-        setContextMenuPolicy(Qt::CustomContextMenu);
-        connect(this, &QWidget::customContextMenuRequested, this, &PluginTableWidget::showContextMenu);
-    }
-
-private slots:
-    void showContextMenu(const QPoint& pos) {
-        QTableWidgetItem* item = itemAt(pos);
-        if (!item) return;
-
-        QMenu contextMenu(this);
-        
-        // Copy cell content
-        QAction* copyAction = contextMenu.addAction("Copy");
-        connect(copyAction, &QAction::triggered, [this, item]() {
-            QApplication::clipboard()->setText(item->text());
-        });
-        
-        // Copy entire row
-        QAction* copyRowAction = contextMenu.addAction("Copy Row");
-        connect(copyRowAction, &QAction::triggered, [this, item]() {
-            int row = item->row();
-            QStringList rowData;
-            for (int col = 0; col < columnCount(); ++col) {
-                QTableWidgetItem* cellItem = this->item(row, col);
-                rowData << (cellItem ? cellItem->text() : "");
-            }
-            QApplication::clipboard()->setText(rowData.join("\t"));
-        });
-
-        contextMenu.exec(mapToGlobal(pos));
-    }
-};
 
 // Helper function to create styled plugin table
-PluginTableWidget* CreatePluginTable() {
-    PluginTableWidget* table = new PluginTableWidget();
+QTableWidget* CreatePluginTable() {
+    QTableWidget* table = StreamUP::UIStyles::CreateStyledTableWidget();
     
     // Set column headers
     QStringList headers;
@@ -108,63 +65,9 @@ PluginTableWidget* CreatePluginTable() {
     table->setColumnCount(5);
     table->setHorizontalHeaderLabels(headers);
     
-    // Configure table appearance
-    table->setAlternatingRowColors(true);
-    table->setSelectionBehavior(QAbstractItemView::SelectRows);
-    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    table->setSortingEnabled(false);
-    table->setShowGrid(false);
+    // Configure last column to stretch (Website column)
+    table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
     
-    // Header styling - stretch last section to fill available space
-    table->horizontalHeader()->setStretchLastSection(true);
-    table->verticalHeader()->setVisible(false);
-    
-    // Set most columns to fixed width, but allow last column to stretch
-    table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
-    table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch); // Website column stretches
-    
-    // Apply styling using existing UI styles with proper border radius
-    QString tableStyle = QString(
-        "QTableWidget {"
-        "background-color: %1;"
-        "alternate-background-color: %2;"
-        "color: %3;"
-        "border: 1px solid %4;"
-        "border-radius: %5px;"
-        "gridline-color: %4;"
-        "outline: none;"
-        "}"
-        "QTableWidget::item {"
-        "padding: 10px 8px;"
-        "border: none;"
-        "}"
-        "QTableWidget::item:selected {"
-        "background-color: %6;"
-        "}"
-        "QHeaderView {"
-        "background-color: transparent;"
-        "}"
-        "QHeaderView::section {"
-        "background-color: %2;"
-        "color: %3;"
-        "padding: 12px 8px;"
-        "border: none;"
-        "font-weight: bold;"
-        "}"
-        "QHeaderView::section:first {"
-        "border-top-left-radius: %5px;"
-        "}"
-        "QHeaderView::section:last {"
-        "border-top-right-radius: %5px;"
-        "}"
-    ).arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
-     .arg(StreamUP::UIStyles::Colors::BACKGROUND_INPUT)
-     .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-     .arg(StreamUP::UIStyles::Colors::BORDER_LIGHT)
-     .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS)
-     .arg(StreamUP::UIStyles::Colors::BACKGROUND_HOVER);
-     
-    table->setStyleSheet(tableStyle);
     return table;
 }
 
@@ -232,43 +135,6 @@ void AddIncompatiblePluginRow(QTableWidget* table, const std::string& moduleName
     table->setItem(row, 4, websiteItem);
 }
 
-// Helper function to handle table clicks
-void HandlePluginTableClick(QTableWidget* table, int row, int column) {
-    if (column == 4) { // Website column
-        QTableWidgetItem* item = table->item(row, column);
-        if (item && item->data(Qt::UserRole).isValid()) {
-            QString url = item->data(Qt::UserRole).toString();
-            QDesktopServices::openUrl(QUrl(url));
-        }
-    }
-}
-
-// Helper function to auto-resize columns to content
-void AutoResizeTableColumns(QTableWidget* table) {
-    // First, resize columns to contents tightly
-    table->resizeColumnsToContents();
-    
-    // Add minimal padding only for fixed columns (0-3), skip last column (4) as it stretches
-    for (int col = 0; col < table->columnCount() - 1; ++col) {
-        int currentWidth = table->columnWidth(col);
-        // Add minimal padding (8px) for readability, no artificial minimums
-        int finalWidth = currentWidth + 16; // 8px padding each side
-        table->setColumnWidth(col, finalWidth);
-    }
-    
-    // Calculate minimum width needed for fixed columns only
-    int fixedColumnsWidth = 0;
-    for (int col = 0; col < table->columnCount() - 1; ++col) {
-        fixedColumnsWidth += table->columnWidth(col);
-    }
-    
-    // Add minimum width for the stretch column and borders
-    int minStretchWidth = 120; // Minimum width for website column
-    int totalMinWidth = fixedColumnsWidth + minStretchWidth + 10; // Include border space
-    
-    // Set the table's minimum width - last column will stretch to fill any extra space
-    table->setMinimumWidth(totalMinWidth);
-}
 
 // Static pointer to track open settings dialog
 static QPointer<QDialog> settingsDialog;
@@ -785,7 +651,7 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
         pluginsLayout->addWidget(emptyLabel);
     } else {
         // Auto-resize columns to fit content perfectly
-        AutoResizeTableColumns(pluginTable);
+        StreamUP::UIStyles::AutoResizeTableColumns(pluginTable);
         
         // Configure table height based on content
         int maxVisibleRows = std::min(totalRows, 8);
@@ -799,7 +665,7 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
         // Connect click handler for website links
         QObject::connect(pluginTable, &QTableWidget::cellClicked, 
                         [pluginTable](int row, int column) {
-            HandlePluginTableClick(pluginTable, row, column);
+            StreamUP::UIStyles::HandleTableCellClick(pluginTable, row, column);
         });
         
         pluginsLayout->addWidget(pluginTable, 0, Qt::AlignTop);
@@ -942,7 +808,7 @@ void ShowInstalledPluginsPage(QWidget* parentWidget)
             contentLayout->addWidget(emptyLabel);
         } else {
             // Auto-resize columns to fit content perfectly
-            AutoResizeTableColumns(pluginTable);
+            StreamUP::UIStyles::AutoResizeTableColumns(pluginTable);
             
             // Set appropriate height for dialog
             pluginTable->setMinimumHeight(300);
@@ -951,7 +817,7 @@ void ShowInstalledPluginsPage(QWidget* parentWidget)
             // Connect click handler for website links
             QObject::connect(pluginTable, &QTableWidget::cellClicked, 
                             [pluginTable](int row, int column) {
-                HandlePluginTableClick(pluginTable, row, column);
+                StreamUP::UIStyles::HandleTableCellClick(pluginTable, row, column);
             });
             
             // Adjust dialog size to exactly fit table content

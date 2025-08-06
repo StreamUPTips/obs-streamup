@@ -10,6 +10,8 @@ class QGroupBox;
 class QScrollArea;
 class QWidget;
 class QVBoxLayout;
+class QTableWidget;
+class QPoint;
 
 #include <functional>
 
@@ -90,6 +92,15 @@ QPushButton* CreateStyledButton(const QString& text, const QString& type = "neut
 QPushButton* CreateStyledSquircleButton(const QString& text, const QString& type = "neutral", int size = 32);
 QGroupBox* CreateStyledGroupBox(const QString& title, const QString& type = "info");
 QScrollArea* CreateStyledScrollArea();
+
+// Table utilities - consistent styling across the plugin
+// Usage: 
+//   auto table = CreateStyledTable({"Name", "Value", "Status"});
+//   // Add rows, then call AutoResizeTableColumns(table) for tight sizing
+QTableWidget* CreateStyledTableWidget(QWidget* parent = nullptr);
+QTableWidget* CreateStyledTable(const QStringList& headers, QWidget* parent = nullptr);
+void AutoResizeTableColumns(QTableWidget* table);
+void HandleTableCellClick(QTableWidget* table, int row, int column);
 
 // Auto-sizing utilities
 void ApplyAutoSizing(QDialog* dialog, int minWidth = 700, int maxWidth = 900, int minHeight = 150, int maxHeight = 600);

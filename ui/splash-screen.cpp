@@ -602,10 +602,10 @@ void CreateSplashDialog(ShowCondition condition)
         QPixmap textLogoPixmap;
         
         QStringList textLogoPaths = {
-            ":/images/text_logo.png",
-            "images/text_logo.png",
-            "../images/text_logo.png",
-            "./images/text_logo.png"
+            ":/images/icons/social/streamup-logo-text.svg",
+            ":/media/logo.png",
+            "images/icons/social/streamup-logo-text.svg",
+            "media/logo.png"
         };
         
         bool textLogoLoaded = false;
@@ -661,7 +661,7 @@ void CreateSplashDialog(ShowCondition condition)
             .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY);
             
         QPushButton* twitterIcon = new QPushButton();
-        twitterIcon->setIcon(QIcon(":images/icons/twitter.svg"));
+        twitterIcon->setIcon(QIcon(":images/icons/social/twitter.svg"));
         twitterIcon->setIconSize(QSize(20, 20));
         twitterIcon->setFixedSize(20, 20);
         twitterIcon->setStyleSheet(socialIconStyle);
@@ -671,7 +671,7 @@ void CreateSplashDialog(ShowCondition condition)
         });
         
         QPushButton* blueskyIcon = new QPushButton();
-        blueskyIcon->setIcon(QIcon(":images/icons/bluesky.svg"));
+        blueskyIcon->setIcon(QIcon(":images/icons/social/bluesky.svg"));
         blueskyIcon->setIconSize(QSize(20, 20));
         blueskyIcon->setFixedSize(20, 20);
         blueskyIcon->setStyleSheet(socialIconStyle);
@@ -681,7 +681,7 @@ void CreateSplashDialog(ShowCondition condition)
         });
         
         QPushButton* dorasIcon = new QPushButton();
-        dorasIcon->setIcon(QIcon(":images/icons/doras.svg"));
+        dorasIcon->setIcon(QIcon(":images/icons/social/doras.svg"));
         dorasIcon->setIconSize(QSize(20, 20));
         dorasIcon->setFixedSize(20, 20);
         dorasIcon->setStyleSheet(socialIconStyle);
@@ -784,28 +784,28 @@ void CreateSplashDialog(ShowCondition condition)
         
             
         QPushButton* patreonBtn = StreamUP::UIStyles::CreateStyledButton("Patreon", "info");
-        patreonBtn->setIcon(QIcon(":images/icons/patreon.svg"));
+        patreonBtn->setIcon(QIcon(":images/icons/social/patreon.svg"));
         patreonBtn->setIconSize(QSize(16, 16));
         QObject::connect(patreonBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://www.patreon.com/streamup"));
         });
         
         QPushButton* kofiBtn = StreamUP::UIStyles::CreateStyledButton("Ko-Fi", "info");
-        kofiBtn->setIcon(QIcon(":images/icons/kofi.svg"));
+        kofiBtn->setIcon(QIcon(":images/icons/social/kofi.svg"));
         kofiBtn->setIconSize(QSize(16, 16));
         QObject::connect(kofiBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://ko-fi.com/streamup"));
         });
         
         QPushButton* beerBtn = StreamUP::UIStyles::CreateStyledButton("Buy a Beer", "warning");
-        beerBtn->setIcon(QIcon(":images/icons/beer.svg"));
+        beerBtn->setIcon(QIcon(":images/icons/social/beer.svg"));
         beerBtn->setIconSize(QSize(16, 16));
         QObject::connect(beerBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.lemonsqueezy.com/buy/15f64c2f-8b8c-443e-bd6c-e8bf49a0fc97"));
         });
         
         QPushButton* githubBtn = StreamUP::UIStyles::CreateStyledButton("Star Project", "neutral");
-        githubBtn->setIcon(QIcon(":images/icons/github.svg"));
+        githubBtn->setIcon(QIcon(":images/icons/social/github.svg"));
         githubBtn->setIconSize(QSize(16, 16));
         QObject::connect(githubBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://github.com/StreamUPTips/obs-streamup"));
@@ -869,7 +869,7 @@ void CreateSplashDialog(ShowCondition condition)
         });
         
         QPushButton* discordBtn = StreamUP::UIStyles::CreateStyledButton("Discord", "info");
-        discordBtn->setIcon(QIcon(":images/icons/discord.svg"));
+        discordBtn->setIcon(QIcon(":images/icons/social/discord.svg"));
         discordBtn->setIconSize(QSize(16, 16));
         QObject::connect(discordBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://discord.com/invite/RnDKRaVCEu"));
@@ -881,21 +881,21 @@ void CreateSplashDialog(ShowCondition condition)
         });
         
         QPushButton* twitterBtn = StreamUP::UIStyles::CreateStyledButton("Twitter", "neutral");
-        twitterBtn->setIcon(QIcon(":images/icons/twitter.svg"));
+        twitterBtn->setIcon(QIcon(":images/icons/social/twitter.svg"));
         twitterBtn->setIconSize(QSize(16, 16));
         QObject::connect(twitterBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://twitter.com/StreamUPTips"));
         });
         
         QPushButton* blueskyBtn = StreamUP::UIStyles::CreateStyledButton("Bluesky", "neutral");
-        blueskyBtn->setIcon(QIcon(":images/icons/bluesky.svg"));
+        blueskyBtn->setIcon(QIcon(":images/icons/social/bluesky.svg"));
         blueskyBtn->setIconSize(QSize(16, 16));
         QObject::connect(blueskyBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://bsky.app/profile/streamup.tips"));
         });
         
         QPushButton* dorasBtn = StreamUP::UIStyles::CreateStyledButton("Doras", "neutral");
-        dorasBtn->setIcon(QIcon(":images/icons/doras.svg"));
+        dorasBtn->setIcon(QIcon(":images/icons/social/doras.svg"));
         dorasBtn->setIconSize(QSize(16, 16));
         QObject::connect(dorasBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://doras.to/streamup"));

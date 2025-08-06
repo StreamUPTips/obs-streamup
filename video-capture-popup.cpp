@@ -16,9 +16,9 @@ VideoCapturePopup::VideoCapturePopup(QWidget *parent)
 	refreshButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "info", 40);
 	
 	// Apply icons
-	applyFileIconToButton(activateButton, ":Qt/icons/16x16/media-playback-start.png");
-	applyFileIconToButton(deactivateButton, ":Qt/icons/16x16/media-playback-stop.png");
-	applyFileIconToButton(refreshButton, ":Qt/icons/16x16/view-refresh.png");
+	applyFileIconToButton(activateButton, ":images/icons/ui/video-capture-device-activate.svg");
+	applyFileIconToButton(deactivateButton, ":images/icons/ui/video-capture-device-deactivate.svg");
+	applyFileIconToButton(refreshButton, ":images/icons/ui/video-capture-device-refresh.svg");
 	
 	// Set button properties for squircle style
 	auto setButtonProperties = [](QPushButton *button) {

@@ -348,10 +348,10 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	videoCaptureButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 40);
 
 	// Apply initial icons to buttons
-	applyFileIconToButton(button1, ":images/all-scene-source-locked.svg");
-	applyFileIconToButton(button2, ":images/current-scene-source-locked.svg");
-	applyFileIconToButton(button3, ":images/refresh-browser-sources.svg");
-	applyFileIconToButton(button4, ":images/refresh-audio-monitoring.svg");
+	applyFileIconToButton(button1, ":images/icons/ui/all-scene-source-locked.svg");
+	applyFileIconToButton(button2, ":images/icons/ui/current-scene-source-locked.svg");
+	applyFileIconToButton(button3, ":images/icons/ui/refresh-browser-sources.svg");
+	applyFileIconToButton(button4, ":images/icons/ui/refresh-audio-monitoring.svg");
 	applyFileIconToButton(videoCaptureButton, ":Qt/icons/16x16/camera-video.png");
 
 	auto setButtonProperties = [](QPushButton *button) {
@@ -536,16 +536,16 @@ void StreamUPDock::updateButtonIcons()
 {
 	// Update button1 icon based on whether all sources are locked in all scenes
 	if (StreamUP::SourceManager::AreAllSourcesLockedInAllScenes()) {
-		applyFileIconToButton(button1, ":images/all-scene-source-locked.svg");
+		applyFileIconToButton(button1, ":images/icons/ui/all-scene-source-locked.svg");
 	} else {
-		applyFileIconToButton(button1, ":images/all-scene-source-unlocked.svg");
+		applyFileIconToButton(button1, ":images/icons/ui/all-scene-source-unlocked.svg");
 	}
 
 	// Update button2 icon based on whether all sources are locked in the current scene
 	if (StreamUP::SourceManager::AreAllSourcesLockedInCurrentScene()) {
-		applyFileIconToButton(button2, ":images/current-scene-source-locked.svg");
+		applyFileIconToButton(button2, ":images/icons/ui/current-scene-source-locked.svg");
 	} else {
-		applyFileIconToButton(button2, ":images/current-scene-source-unlocked.svg");
+		applyFileIconToButton(button2, ":images/icons/ui/current-scene-source-unlocked.svg");
 	}
 
 }

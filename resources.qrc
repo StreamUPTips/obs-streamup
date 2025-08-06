@@ -1,21 +1,34 @@
 <RCC>
 	<qresource prefix="/">
-		<file>images/all-scene-source-locked.svg</file>
-		<file>images/all-scene-source-unlocked.svg</file>
-		<file>images/current-scene-source-locked.svg</file>
-		<file>images/current-scene-source-unlocked.svg</file>
-		<file>images/refresh-browser-sources.svg</file>
-		<file>images/refresh-audio-monitoring.svg</file>
-		<file>images/square_logo.png</file>
-		<file>images/text_logo.png</file>
-		<file>images/icons/patreon.svg</file>
-		<file>images/icons/kofi.svg</file>
-		<file>images/icons/beer.svg</file>
-		<file>images/icons/github.svg</file>
-		<file>images/icons/twitter.svg</file>
-		<file>images/icons/bluesky.svg</file>
-		<file>images/icons/doras.svg</file>
-		<file>images/icons/discord.svg</file>
+		<!-- UI Icons -->
+		<file>images/icons/ui/all-scene-source-locked.svg</file>
+		<file>images/icons/ui/all-scene-source-unlocked.svg</file>
+		<file>images/icons/ui/current-scene-source-locked.svg</file>
+		<file>images/icons/ui/current-scene-source-unlocked.svg</file>
+		<file>images/icons/ui/refresh-browser-sources.svg</file>
+		<file>images/icons/ui/refresh-audio-monitoring.svg</file>
+		<file>images/icons/ui/video-capture-device-activate.svg</file>
+		<file>images/icons/ui/video-capture-device-deactivate.svg</file>
+		<file>images/icons/ui/video-capture-device-refresh.svg</file>
+		
+		<!-- Social Media Icons -->
+		<file>images/icons/social/patreon.svg</file>
+		<file>images/icons/social/kofi.svg</file>
+		<file>images/icons/social/beer.svg</file>
+		<file>images/icons/social/github.svg</file>
+		<file>images/icons/social/twitter.svg</file>
+		<file>images/icons/social/bluesky.svg</file>
+		<file>images/icons/social/doras.svg</file>
+		<file>images/icons/social/discord.svg</file>
+		<file>images/icons/social/streamup-logo-button.svg</file>
+		<file>images/icons/social/streamup-logo-stacked.svg</file>
+		<file>images/icons/social/streamup-logo-text.svg</file>
+		
+		<!-- Media Assets -->
+		<file>media/logo.png</file>
+		<file>media/icon.ico</file>
+		
+		<!-- Documentation -->
 		<file>patch-notes.md</file>
 		<file>patch-notes-summary.md</file>
 		<file>plugin-info.md</file>
