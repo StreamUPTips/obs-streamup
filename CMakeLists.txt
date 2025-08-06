@@ -194,7 +194,7 @@ elseif(OS_MACOS)
 endif()
 
 # Find Qt components
-find_package(Qt6 REQUIRED COMPONENTS Widgets Gui)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES AUTOMOC ON AUTOUIC ON AUTORCC ON)
 set(UI_FILES StreamUPDock.ui)
@@ -202,6 +202,7 @@ set(UI_FILES StreamUPDock.ui)
 target_link_libraries(${PROJECT_NAME}
 		OBS::${OBS_FRONTEND_API_NAME}
     CURL::libcurl
+		Qt6::Core
 		Qt6::Widgets
     Qt6::Gui
 		OBS::libobs)

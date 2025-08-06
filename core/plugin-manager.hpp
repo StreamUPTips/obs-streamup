@@ -4,6 +4,7 @@
 #include <QString>
 #include <string>
 #include <vector>
+#include <map>
 #include <functional>
 
 namespace StreamUP {
@@ -28,7 +29,7 @@ void PluginsUpToDateOutput(bool manuallyTriggered);
  * @param errorMsgUpdate String containing update errors
  * @param continueCallback Optional callback to execute when "Continue Anyway" is pressed
  */
-void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate, std::function<void()> continueCallback = nullptr);
+void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, std::function<void()> continueCallback = nullptr);
 
 //-------------------PLUGIN UPDATE FUNCTIONS-------------------
 /**

@@ -14,6 +14,16 @@
 #include <QEasingCurve>
 #include <QGuiApplication>
 #include <QScreen>
+#include <QTableWidget>
+#include <QHeaderView>
+#include <QTableWidgetItem>
+#include <QAbstractItemView>
+#include <QMenu>
+#include <QAction>
+#include <QApplication>
+#include <QClipboard>
+#include <QDesktopServices>
+#include <QUrl>
 #include <functional>
 #include <obs-module.h>
 
@@ -163,21 +173,44 @@ QString GetScrollAreaStyle() {
 
 QString GetTableStyle() {
     return QString(
-        "table {"
-        "width: 100%;"
-        "border: 1px solid %1;"
-        "cellpadding: %2px;"
-        "cellspacing: 0;"
-        "border-collapse: collapse;"
-        "background: %3;"
-        "color: white;"
-        "border-radius: %4px;"
-        "overflow: hidden;"
+        "QTableWidget {"
+        "background-color: %1;"
+        "alternate-background-color: %2;"
+        "color: %3;"
+        "border: 1px solid %4;"
+        "border-radius: %5px;"
+        "gridline-color: %4;"
+        "outline: none;"
+        "}"
+        "QTableWidget::item {"
+        "padding: 10px 8px;"
+        "border: none;"
+        "}"
+        "QTableWidget::item:selected {"
+        "background-color: %6;"
+        "}"
+        "QHeaderView {"
+        "background-color: transparent;"
+        "}"
+        "QHeaderView::section {"
+        "background-color: %2;"
+        "color: %3;"
+        "padding: 12px 8px;"
+        "border: none;"
+        "font-weight: bold;"
+        "}"
+        "QHeaderView::section:first {"
+        "border-top-left-radius: %5px;"
+        "}"
+        "QHeaderView::section:last {"
+        "border-top-right-radius: %5px;"
         "}")
-        .arg(Colors::BORDER_LIGHT)
-        .arg(Sizes::PADDING_SMALL)
+        .arg(Colors::BACKGROUND_CARD)
         .arg(Colors::BACKGROUND_INPUT)
-        .arg(Sizes::BORDER_RADIUS);
+        .arg(Colors::TEXT_PRIMARY)
+        .arg(Colors::BORDER_LIGHT)
+        .arg(Sizes::BORDER_RADIUS)
+        .arg(Colors::BACKGROUND_HOVER);
 }
 
 QDialog* CreateStyledDialog(const QString& title, QWidget* parentWidget) {
@@ -299,6 +332,113 @@ QScrollArea* CreateStyledScrollArea() {
     return scrollArea;
 }
 
+// Table utility functions
+QTableWidget* CreateStyledTableWidget(QWidget* parent) {
+    QTableWidget* table = new QTableWidget(parent);
+    
+    // Configure table appearance
+    table->setAlternatingRowColors(true);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setSortingEnabled(false);
+    table->setShowGrid(false);
+    
+    // Header styling - stretch last section to fill available space
+    table->horizontalHeader()->setStretchLastSection(true);
+    table->verticalHeader()->setVisible(false);
+    
+    // Set most columns to fixed width, but allow last column to stretch
+    table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    
+    // Apply consistent styling
+    table->setStyleSheet(GetTableStyle());
+    
+    // Add context menu support for copying
+    table->setContextMenuPolicy(Qt::CustomContextMenu);
+    QObject::connect(table, &QWidget::customContextMenuRequested, [table](const QPoint& pos) {
+        QTableWidgetItem* item = table->itemAt(pos);
+        if (!item) return;
+
+        QMenu contextMenu(table);
+        
+        // Copy cell content
+        QAction* copyAction = contextMenu.addAction("Copy");
+        QObject::connect(copyAction, &QAction::triggered, [table, item]() {
+            QApplication::clipboard()->setText(item->text());
+        });
+        
+        // Copy entire row
+        QAction* copyRowAction = contextMenu.addAction("Copy Row");
+        QObject::connect(copyRowAction, &QAction::triggered, [table, item]() {
+            int row = item->row();
+            QStringList rowData;
+            for (int col = 0; col < table->columnCount(); ++col) {
+                QTableWidgetItem* cellItem = table->item(row, col);
+                rowData << (cellItem ? cellItem->text() : "");
+            }
+            QApplication::clipboard()->setText(rowData.join("\t"));
+        });
+
+        contextMenu.exec(table->mapToGlobal(pos));
+    });
+    
+    return table;
+}
+
+QTableWidget* CreateStyledTable(const QStringList& headers, QWidget* parent) {
+    QTableWidget* table = CreateStyledTableWidget(parent);
+    
+    // Set headers if provided
+    if (!headers.isEmpty()) {
+        table->setColumnCount(headers.count());
+        table->setHorizontalHeaderLabels(headers);
+        
+        // Configure last column to stretch by default
+        if (headers.count() > 0) {
+            table->horizontalHeader()->setSectionResizeMode(headers.count() - 1, QHeaderView::Stretch);
+        }
+    }
+    
+    return table;
+}
+
+void AutoResizeTableColumns(QTableWidget* table) {
+    // First, resize columns to contents tightly
+    table->resizeColumnsToContents();
+    
+    // Add minimal padding only for fixed columns (0 to n-1), skip last column as it stretches
+    for (int col = 0; col < table->columnCount() - 1; ++col) {
+        int currentWidth = table->columnWidth(col);
+        // Add minimal padding (8px) for readability, no artificial minimums
+        int finalWidth = currentWidth + 16; // 8px padding each side
+        table->setColumnWidth(col, finalWidth);
+    }
+    
+    // Calculate minimum width needed for fixed columns only
+    int fixedColumnsWidth = 0;
+    for (int col = 0; col < table->columnCount() - 1; ++col) {
+        fixedColumnsWidth += table->columnWidth(col);
+    }
+    
+    // Add minimum width for the stretch column and borders
+    int minStretchWidth = 120; // Minimum width for last column
+    int totalMinWidth = fixedColumnsWidth + minStretchWidth + 10; // Include border space
+    
+    // Set the table's minimum width - last column will stretch to fill any extra space
+    table->setMinimumWidth(totalMinWidth);
+}
+
+void HandleTableCellClick(QTableWidget* table, int row, int column) {
+    // Default implementation - can be overridden for specific table needs
+    QTableWidgetItem* item = table->item(row, column);
+    if (!item) return;
+    
+    // Check if item has URL data for clickable links
+    QVariant urlData = item->data(Qt::UserRole);
+    if (urlData.isValid()) {
+        QDesktopServices::openUrl(QUrl(urlData.toString()));
+    }
+}
 
 void ApplyAutoSizing(QDialog* dialog, int minWidth, int maxWidth, int minHeight, int maxHeight) {
     // Set initial size and show

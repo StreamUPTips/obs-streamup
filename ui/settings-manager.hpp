@@ -7,6 +7,7 @@
 class QScrollArea;
 class QWidget;
 class QDialog;
+class QTableWidget;
 
 namespace StreamUP {
 namespace UIStyles {
