@@ -1,8 +1,10 @@
 #include "splash-screen.hpp"
 #include "ui-helpers.hpp"
 #include "ui-styles.hpp"
+#include "patch-notes-window.hpp"
 #include "settings-manager.hpp"
 #include "../utilities/error-handler.hpp"
+#include "../core/plugin-manager.hpp"
 #include "../version.h"
 #include <obs-module.h>
 #include <QApplication>
@@ -736,7 +738,32 @@ void CreateSplashDialog(ShowCondition condition)
         // Add header to the scrollable content
         contentLayout->addWidget(headerWidget);
 
-        // Main Content Section - Welcome message or Patch Notes based on condition
+        // Action buttons section near the top
+        QWidget* actionButtonsCard = new QWidget();
+        actionButtonsCard->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
+        QVBoxLayout* actionButtonsLayout = new QVBoxLayout(actionButtonsCard);
+        actionButtonsLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
+            StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
+            StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
+            StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        
+        QHBoxLayout* actionLayout = new QHBoxLayout();
+        actionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+        actionLayout->setContentsMargins(0, 0, 0, 0);
+        
+        QPushButton* patchNotesBtn = StreamUP::UIStyles::CreateStyledButton("📋 View Patch Notes", "success");
+        QObject::connect(patchNotesBtn, &QPushButton::clicked, []() {
+            StreamUP::PatchNotesWindow::ShowPatchNotesWindow();
+        });
+        
+        actionLayout->addStretch();
+        actionLayout->addWidget(patchNotesBtn);
+        actionLayout->addStretch();
+        
+        actionButtonsLayout->addLayout(actionLayout);
+        contentLayout->addWidget(actionButtonsCard);
+
+        // Main Content Section - Always show welcome message (no more patch notes here)
         QWidget* mainContentCard = new QWidget();
         mainContentCard->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
         QVBoxLayout* mainContentLayout = new QVBoxLayout(mainContentCard);
@@ -745,16 +772,9 @@ void CreateSplashDialog(ShowCondition condition)
             StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
             StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
         
-        QString mainContent;
-        if (condition == ShowCondition::FirstInstall) {
-            // Show welcome message for first install
-            std::string welcomeMessage = GetWelcomeMessage();
-            mainContent = QString::fromStdString(welcomeMessage);
-        } else {
-            // Show patch notes for version updates
-            std::string dynamicPatchNotes = GetPatchNotes();
-            mainContent = QString::fromStdString(dynamicPatchNotes);
-        }
+        // Always show welcome message
+        std::string welcomeMessage = GetWelcomeMessage();
+        QString mainContent = QString::fromStdString(welcomeMessage);
         
         QLabel* mainContentLabel = UIHelpers::CreateRichTextLabel(mainContent, false, true);
         mainContentLayout->addWidget(mainContentLabel);
@@ -922,24 +942,31 @@ void CreateSplashDialog(ShowCondition condition)
         linksCardLayout->addLayout(socialLinksLayout);
         contentLayout->addWidget(linksCard);
 
-        // Add Get Started button to the scrollable content at the bottom
+        // Bottom button area with two buttons
         QWidget* buttonWidget = new QWidget();
         buttonWidget->setStyleSheet(QString("background: transparent; padding: %1px;")
             .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
         QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
         buttonLayout->setContentsMargins(0, 0, 0, 0);
+        buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
         
-        QString buttonText = (condition == ShowCondition::FirstInstall) ? 
-            "Get Started! 🚀" : "Continue! ✨";
-        QPushButton* closeBtn = StreamUP::UIStyles::CreateStyledButton(buttonText, "info");
+        // Check for Plugin Update button
+        QPushButton* updateBtn = StreamUP::UIStyles::CreateStyledButton("Check for Plugin Update", "info");
+        QObject::connect(updateBtn, &QPushButton::clicked, [dialog]() {
+            UpdateVersionTracking();
+            StreamUP::PluginManager::ShowCachedPluginUpdatesDialog();
+        });
+        
+        // Close button
+        QPushButton* closeBtn = StreamUP::UIStyles::CreateStyledButton("Close", "neutral");
         closeBtn->setDefault(true);
-        
         QObject::connect(closeBtn, &QPushButton::clicked, [dialog]() {
             UpdateVersionTracking();
             dialog->close();
         });
         
         buttonLayout->addStretch();
+        buttonLayout->addWidget(updateBtn);
         buttonLayout->addWidget(closeBtn);
         buttonLayout->addStretch();
         
@@ -984,6 +1011,11 @@ void ShowSplashScreenIfNeeded()
 void ShowSplashScreen()
 {
     CreateSplashDialog(ShowCondition::VersionUpdate);
+}
+
+bool IsSplashScreenOpen()
+{
+    return !splashDialog.isNull() && splashDialog->isVisible();
 }
 
 } // namespace SplashScreen

@@ -837,11 +837,14 @@ void ShowInstalledPluginsPage(QWidget* parentWidget)
         buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0, 
             StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
 
-        QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Close"), "neutral");
-        QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
+        QPushButton* updateButton = StreamUP::UIStyles::CreateStyledButton("Check for Plugin Update", "info");
+        QObject::connect(updateButton, &QPushButton::clicked, [dialog]() { 
+            StreamUP::PluginManager::ShowCachedPluginUpdatesDialog();
+            dialog->close(); 
+        });
 
         buttonLayout->addStretch();
-        buttonLayout->addWidget(closeButton);
+        buttonLayout->addWidget(updateButton);
         
         mainLayout->addWidget(buttonWidget);
 

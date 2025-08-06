@@ -3,6 +3,7 @@
 #include "file-manager.hpp"
 #include "plugin-manager.hpp"
 #include "splash-screen.hpp"
+#include "patch-notes-window.hpp"
 #include "websocket-window.hpp"
 #include <obs-module.h>
 #include <obs-frontend-api.h>
@@ -153,10 +154,7 @@ void LoadMenuItems(QMenu* menu)
 
     menu->addSeparator();
 
-    // About, WebSocket, and Settings
-    action = menu->addAction(obs_module_text("MenuAbout"));
-    QObject::connect(action, &QAction::triggered, []() { StreamUP::SplashScreen::ShowSplashScreen(); });
-
+    // WebSocket Commands, Settings, Patch Notes, About (in requested order)
     action = menu->addAction(obs_module_text("MenuWebSocket"));
     QObject::connect(action, &QAction::triggered, []() { 
         // Check if Shift is held to show internal tools
@@ -166,6 +164,12 @@ void LoadMenuItems(QMenu* menu)
 
     action = menu->addAction(obs_module_text("MenuSettings"));
     QObject::connect(action, &QAction::triggered, []() { SettingsDialog(); });
+
+    action = menu->addAction(obs_module_text("MenuPatchNotes"));
+    QObject::connect(action, &QAction::triggered, []() { StreamUP::PatchNotesWindow::ShowPatchNotesWindow(); });
+
+    action = menu->addAction(obs_module_text("MenuAbout"));
+    QObject::connect(action, &QAction::triggered, []() { StreamUP::SplashScreen::ShowSplashScreen(); });
 }
 
 
