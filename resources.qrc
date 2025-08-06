@@ -3,6 +3,7 @@
 		<!-- UI Icons -->
 		<file>images/icons/ui/all-scene-source-locked.svg</file>
 		<file>images/icons/ui/all-scene-source-unlocked.svg</file>
+		<file>images/icons/ui/camera.svg</file>
 		<file>images/icons/ui/current-scene-source-locked.svg</file>
 		<file>images/icons/ui/current-scene-source-unlocked.svg</file>
 		<file>images/icons/ui/refresh-browser-sources.svg</file>

@@ -52,6 +52,7 @@ namespace Colors {
 namespace Sizes {
     constexpr int BORDER_RADIUS = 8;
     constexpr int BORDER_RADIUS_LARGE = 10;
+    constexpr int BORDER_RADIUS_XL = 14;
     constexpr int BORDER_WIDTH = 2;
     
     constexpr int FONT_SIZE_LARGE = 20;

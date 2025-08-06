@@ -352,7 +352,7 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	applyFileIconToButton(button2, ":images/icons/ui/current-scene-source-locked.svg");
 	applyFileIconToButton(button3, ":images/icons/ui/refresh-browser-sources.svg");
 	applyFileIconToButton(button4, ":images/icons/ui/refresh-audio-monitoring.svg");
-	applyFileIconToButton(videoCaptureButton, ":Qt/icons/16x16/camera-video.png");
+	applyFileIconToButton(videoCaptureButton, ":images/icons/ui/camera.svg");
 
 	auto setButtonProperties = [](QPushButton *button) {
 		button->setIconSize(QSize(22, 22));
@@ -494,7 +494,14 @@ void StreamUPDock::ButtonShowVideoCapturePopup()
 	if (isProcessing)
 		return;
 
-	// Close existing popup if open
+	// Toggle functionality: if popup is already open, close it
+	if (videoCapturePopup && videoCapturePopup->isVisible()) {
+		videoCapturePopup->deleteLater();
+		videoCapturePopup = nullptr;
+		return;
+	}
+
+	// Close existing popup if open but not visible
 	if (videoCapturePopup) {
 		videoCapturePopup->deleteLater();
 		videoCapturePopup = nullptr;
