@@ -45,7 +45,30 @@ void PluginState::Reset() {
     m_allPlugins.clear();
     m_requiredPlugins.clear();
     m_initialized = false;
+    m_cachedStatus = PluginCheckResults(); // Reset cached status
     blog(LOG_INFO, "[StreamUP] Plugin state reset");
+}
+
+const PluginState::PluginCheckResults& PluginState::GetCachedPluginStatus() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_cachedStatus;
+}
+
+void PluginState::SetPluginStatus(const PluginCheckResults& results) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_cachedStatus = results;
+    m_cachedStatus.lastChecked = std::chrono::system_clock::now();
+    m_cachedStatus.isValid = true;
+}
+
+void PluginState::InvalidatePluginStatus() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_cachedStatus.isValid = false;
+}
+
+bool PluginState::IsPluginStatusCached() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_cachedStatus.isValid;
 }
 
 } // namespace StreamUP

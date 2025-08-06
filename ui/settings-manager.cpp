@@ -516,7 +516,7 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
     infoLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
     pluginsLayout->addWidget(infoLabel);
 
-    auto installedPlugins = StreamUP::PluginManager::GetInstalledPlugins();
+    auto installedPlugins = StreamUP::PluginManager::GetInstalledPluginsCached();
     
     QString compatiblePluginsString;
     if (installedPlugins.empty()) {
@@ -618,7 +618,7 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
 void ShowInstalledPluginsPage(QWidget* parentWidget)
 {
     StreamUP::UIHelpers::ShowDialogOnUIThread([parentWidget]() {
-        auto installedPlugins = StreamUP::PluginManager::GetInstalledPlugins();
+        auto installedPlugins = StreamUP::PluginManager::GetInstalledPluginsCached();
 
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsInstalledPlugins"), parentWidget);
         

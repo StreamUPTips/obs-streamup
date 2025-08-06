@@ -963,6 +963,10 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 			// Initialize plugin data from API
 			StreamUP::PluginManager::InitialiseRequiredModules();
 			
+			// Always perform initial plugin check and cache results for efficiency
+			// This ensures cached data is available even if startup check is disabled
+			StreamUP::PluginManager::PerformPluginCheckAndCache();
+			
 			// Schedule splash screen to show on UI thread with delay
 			StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
 				QTimer::singleShot(2000, []() {
@@ -970,10 +974,11 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 				});
 			});
 			
-			// Check for plugin updates on startup if enabled
+			// Check for plugin updates on startup if enabled, but stay silent if up to date
 			StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 			if (settings.runAtStartup) {
-				StreamUP::PluginManager::CheckAllPluginsForUpdates(false);
+				// Use the silent version that only shows dialogs if there are actual updates
+				StreamUP::PluginManager::ShowCachedPluginUpdatesDialogSilent();
 			}
 		});
 		initThread.detach();
