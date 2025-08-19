@@ -258,7 +258,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		dialogLayout->addWidget(info2, 0, Qt::AlignTop);
 		dialogLayout->addSpacing(10);
 
-		QGroupBox *info3Box = new QGroupBox(obs_module_text("HowToUse"));
+		QGroupBox *info3Box = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("HowToUse"), "info");
 		info3Box->setMinimumWidth(350);
 		QVBoxLayout *info3BoxLayout = StreamUP::UIHelpers::CreateVBoxLayout(info3Box);
 		QLabel *info3 = StreamUP::UIHelpers::CreateRichTextLabel(infoText3Str, false, true);
@@ -460,7 +460,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		if (!errorMsgUpdate.empty()) {
 			QLabel *pluginsToUpdateList =
 				StreamUP::UIHelpers::CreateRichTextLabel(QString::fromStdString(errorMsgUpdate), false, false, Qt::AlignCenter);
-			QGroupBox *pluginsToUpdateBox = new QGroupBox(obs_module_text("WindowPluginErrorUpdateGroup"));
+			QGroupBox *pluginsToUpdateBox = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowPluginErrorUpdateGroup"), "warning");
 			QVBoxLayout *pluginsToUpdateBoxLayout = new QVBoxLayout(pluginsToUpdateBox);
 			pluginsToUpdateBoxLayout->addWidget(pluginsToUpdateList);
 			dialogLayout->addWidget(pluginsToUpdateBox);
@@ -472,7 +472,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		if (errorMsgMissing != "NULL") {
 			QLabel *pluginsMissingList =
 				StreamUP::UIHelpers::CreateRichTextLabel(QString::fromStdString(errorMsgMissing), false, false, Qt::AlignCenter);
-			QGroupBox *pluginsMissingBox = new QGroupBox(obs_module_text("WindowPluginErrorMissingGroup"));
+			QGroupBox *pluginsMissingBox = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowPluginErrorMissingGroup"), "error");
 			QVBoxLayout *pluginsMissingBoxLayout = new QVBoxLayout(pluginsMissingBox);
 			pluginsMissingBoxLayout->addWidget(pluginsMissingList);
 			dialogLayout->addWidget(pluginsMissingBox);

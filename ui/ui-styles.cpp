@@ -31,8 +31,14 @@ namespace StreamUP {
 namespace UIStyles {
 
 QString GetDialogStyle() {
-    // Let the StreamUP theme handle dialog styling
-    return "";
+    // Modern StreamUP dialog styling matching OBSBasicSettings
+    return QString(
+        "QDialog {"
+        "    background-color: %1;"
+        "    border-radius: %2px;"
+        "}"
+    ).arg(Colors::BG_DARKEST)
+     .arg(Sizes::RADIUS_DOCK);
 }
 
 QString GetTitleLabelStyle() {
@@ -46,10 +52,42 @@ QString GetDescriptionLabelStyle() {
 }
 
 QString GetGroupBoxStyle(const QString& borderColor, const QString& titleColor) {
-    // Let the StreamUP theme handle group box styling
+    // Modern StreamUP group box styling matching OBSBasicSettings
     Q_UNUSED(borderColor)
     Q_UNUSED(titleColor)
-    return "";
+    
+    return QString(
+        "QGroupBox {"
+        "    padding: %1px;"
+        "    padding-top: %2px;"
+        "    margin-right: %3px;"
+        "    margin-top: %4px;"
+        "    margin-bottom: %1px;"
+        "    outline: none;"
+        "    border-radius: %5px;"
+        "    background-color: %6;"
+        "}"
+        "QGroupBox::title {"
+        "    background-color: %6;"
+        "    color: %7;"
+        "    padding: %8px %9px %9px %9px;"
+        "    margin: %3px 0 %3px 0;"
+        "    border-top-left-radius: %5px;"
+        "    border-top-right-radius: %10px;"
+        "    subcontrol-origin: margin;"
+        "    subcontrol-position: top left;"
+        "    top: -%8px;"
+        "}"
+    ).arg(Sizes::PADDING_LARGE)         // General padding (20px)
+     .arg(Sizes::PADDING_LARGE + 10)   // Top padding (30px)  
+     .arg(Sizes::SPACE_10)             // Margin right (10px)
+     .arg(Sizes::SPACE_14 + 1)         // Margin top (15px)
+     .arg(Sizes::RADIUS_DOCK)          // Border radius (22px)
+     .arg(Colors::BG_PRIMARY)          // Background color
+     .arg(Colors::TEXT_PRIMARY)        // Title text color
+     .arg(Sizes::SPACE_4)              // Title padding vertical (4px)
+     .arg(Sizes::SPACE_16)             // Title padding horizontal (16px)
+     .arg(Sizes::RADIUS_LG);           // Title top-right radius (14px)
 }
 
 QString GetContentLabelStyle() {
@@ -182,7 +220,8 @@ QString GetTableStyle() {
 
 QDialog* CreateStyledDialog(const QString& title, QWidget* parentWidget) {
     QDialog* dialog = StreamUP::UIHelpers::CreateDialogWindow(title.toUtf8().constData(), parentWidget);
-    // No custom styling - inherit from StreamUP theme
+    // Apply modern StreamUP dialog styling
+    dialog->setStyleSheet(GetDialogStyle());
     return dialog;
 }
 
@@ -246,7 +285,8 @@ QPushButton* CreateStyledSquircleButton(const QString& text, const QString& type
 QGroupBox* CreateStyledGroupBox(const QString& title, const QString& type) {
     QGroupBox* groupBox = new QGroupBox(title);
     
-    // No custom styling - let StreamUP theme handle group box appearance
+    // Apply modern StreamUP group box styling
+    groupBox->setStyleSheet(GetGroupBoxStyle("", ""));
     Q_UNUSED(type)
     
     return groupBox;
