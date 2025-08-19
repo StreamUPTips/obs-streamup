@@ -340,12 +340,12 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 {
 	ui->setupUi(this);
 
-	// Create buttons
-	button1 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 40);
-	button2 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 40);
-	button3 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 40);
-	button4 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 40);
-	videoCaptureButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 40);
+	// Create buttons with more appropriate dock size
+	button1 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
+	button2 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
+	button3 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
+	button4 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
+	videoCaptureButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
 
 	// Apply initial icons to buttons
 	applyFileIconToButton(button1, ":images/icons/ui/all-scene-source-locked.svg");
@@ -355,9 +355,14 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	applyFileIconToButton(videoCaptureButton, ":images/icons/ui/camera.svg");
 
 	auto setButtonProperties = [](QPushButton *button) {
-		button->setIconSize(QSize(22, 22));
-		button->setFixedSize(40, 40);  // Explicitly enforce square size
+		button->setIconSize(QSize(16, 16));  // Smaller icon for smaller button
+		// Force square dimensions aggressively
+		button->setFixedSize(28, 28);
+		button->setMinimumSize(28, 28);
+		button->setMaximumSize(28, 28);
 		button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+		// Remove any padding/margins that might stretch the button
+		button->setContentsMargins(0, 0, 0, 0);
 	};
 
 	// Set properties for each button

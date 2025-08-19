@@ -14,21 +14,20 @@ VideoCapturePopup::VideoCapturePopup(QWidget *parent)
 	setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
 	setAttribute(Qt::WA_TranslucentBackground);
 	
-	// Create buttons using squircle style with neutral color to match dock buttons
-	activateButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 40);
-	deactivateButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 40);
-	refreshButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 40);
+	// Create buttons using standardized squircle style to match dock buttons
+	activateButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
+	deactivateButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
+	refreshButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
 	
 	// Apply icons
 	applyFileIconToButton(activateButton, ":images/icons/ui/video-capture-device-activate.svg");
 	applyFileIconToButton(deactivateButton, ":images/icons/ui/video-capture-device-deactivate.svg");
 	applyFileIconToButton(refreshButton, ":images/icons/ui/video-capture-device-refresh.svg");
 	
-	// Set button properties for squircle style
+	// Set button properties for standardized squircle style
 	auto setButtonProperties = [](QPushButton *button) {
-		button->setIconSize(QSize(22, 22));
-		button->setFixedSize(40, 40);  // Explicitly enforce square size
-		button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+		button->setIconSize(QSize(16, 16));  // Match dock button icon size
+		// Size is set by CreateStyledSquircleButton, don't override
 	};
 	
 	setButtonProperties(activateButton);
