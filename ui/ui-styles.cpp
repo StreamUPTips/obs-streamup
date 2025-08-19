@@ -31,191 +31,61 @@ namespace StreamUP {
 namespace UIStyles {
 
 QString GetDialogStyle() {
-    return QString("QDialog { background: %1; }").arg(Colors::BACKGROUND_DARK);
+    // Let the StreamUP theme handle dialog styling
+    return "";
 }
 
 QString GetTitleLabelStyle() {
-    return QString(
-        "QLabel {"
-        "color: %1;"
-        "font-size: %2px;"
-        "font-weight: bold;"
-        "margin: 0px 0px %3px 0px;"
-        "padding: 0px;"
-        "}")
-        .arg(Colors::TEXT_PRIMARY)
-        .arg(Sizes::FONT_SIZE_LARGE)
-        .arg(Sizes::SPACING_TINY);
+    // Minimal styling - let theme handle most of it
+    return "QLabel { font-weight: bold; }";
 }
 
 QString GetDescriptionLabelStyle() {
-    return QString(
-        "QLabel {"
-        "color: %1;"
-        "font-size: %2px;"
-        "margin: 0px 0px %3px 0px;"
-        "padding: 0px;"
-        "}")
-        .arg(Colors::TEXT_MUTED)
-        .arg(Sizes::FONT_SIZE_NORMAL)
-        .arg(Sizes::SPACING_TINY);
+    // Minimal styling - let theme handle colors and fonts
+    return "";
 }
 
 QString GetGroupBoxStyle(const QString& borderColor, const QString& titleColor) {
-    return QString(
-        "QGroupBox {"
-        "color: %1;"
-        "font-size: %2px;"
-        "font-weight: bold;"
-        "border: %3px solid %4;"
-        "border-radius: %5px;"
-        "margin-top: %6px;"
-        "padding-top: %7px;"
-        "background: %8;"
-        "}"
-        "QGroupBox::title {"
-        "subcontrol-origin: margin;"
-        "left: %9px;"
-        "padding: 0 %10px 0 %10px;"
-        "color: %11;"
-        "}")
-        .arg(Colors::TEXT_PRIMARY)
-        .arg(Sizes::FONT_SIZE_MEDIUM)
-        .arg(Sizes::BORDER_WIDTH)
-        .arg(borderColor)
-        .arg(Sizes::BORDER_RADIUS_LARGE)
-        .arg(Sizes::SPACING_MEDIUM)
-        .arg(Sizes::SPACING_SMALL)
-        .arg(Colors::BACKGROUND_CARD)
-        .arg(Sizes::PADDING_MEDIUM)
-        .arg(Sizes::PADDING_SMALL)
-        .arg(titleColor);
+    // Let the StreamUP theme handle group box styling
+    Q_UNUSED(borderColor)
+    Q_UNUSED(titleColor)
+    return "";
 }
 
 QString GetContentLabelStyle() {
-    return QString(
-        "QLabel {"
-        "color: %1;"
-        "font-size: %2px;"
-        "background: transparent;"
-        "border: none;"
-        "text-align: center;"
-        "}")
-        .arg(Colors::TEXT_SECONDARY)
-        .arg(Sizes::FONT_SIZE_SMALL);
+    // No custom styling - inherit from theme
+    return "";
 }
 
 QString GetButtonStyle(const QString& baseColor, const QString& hoverColor, int height) {
-    int radius = height / 2;  // Perfect pill shape: radius = half height
-    return QString(
-        "QPushButton {"
-        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:1 %2) !important;"
-        "color: white !important;"
-        "border: none !important;"
-        "padding: 0px 12px !important;"
-        "font-size: 13px !important;"
-        "font-weight: bold !important;"
-        "border-radius: %4px !important;"
-        "height: %5px !important;"
-        "min-height: %5px !important;"
-        "max-height: %5px !important;"
-        "}"
-        "QPushButton:hover {"
-        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %3, stop:1 %1) !important;"
-        "}")
-        .arg(baseColor)
-        .arg(hoverColor)
-        .arg(hoverColor)
-        .arg(radius)
-        .arg(height);
+    // No custom styling - let StreamUP theme handle all button styling
+    Q_UNUSED(baseColor)
+    Q_UNUSED(hoverColor)
+    Q_UNUSED(height)
+    return "";
 }
 
 QString GetSquircleButtonStyle(const QString& baseColor, const QString& hoverColor, int size) {
-    // True squircle radius: approximately 40% of size for smooth, organic curves
-    int radius = static_cast<int>(size * 0.4);
-    return QString(
-        "QPushButton {"
-        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %1, stop:1 %2) !important;"
-        "color: white !important;"
-        "border: none !important;"
-        "padding: 0px !important;"
-        "margin: 0px !important;"
-        "font-size: 13px !important;"
-        "font-weight: bold !important;"
-        "border-radius: %4px !important;"
-        "width: %5px !important;"
-        "height: %5px !important;"
-        "min-width: %5px !important;"
-        "max-width: %5px !important;"
-        "min-height: %5px !important;"
-        "max-height: %5px !important;"
-        "qproperty-sizePolicy: Fixed Fixed !important;"
-        "}"
-        "QPushButton:hover {"
-        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 %3, stop:1 %1) !important;"
-        "}")
-        .arg(baseColor)
-        .arg(hoverColor)
-        .arg(hoverColor)
-        .arg(radius)
-        .arg(size);
+    // No custom styling - let StreamUP theme handle icon buttons
+    Q_UNUSED(baseColor)
+    Q_UNUSED(hoverColor)
+    Q_UNUSED(size)
+    return "";
 }
 
 QString GetScrollAreaStyle() {
-    return QString(
-        "QScrollArea {"
-        "border: none;"
-        "background: %1;"
-        "}")
-        .arg(Colors::BACKGROUND_DARK);
+    // Let StreamUP theme handle scrollbar styling
+    return "";
 }
 
-
 QString GetTableStyle() {
-    return QString(
-        "QTableWidget {"
-        "background-color: %1;"
-        "alternate-background-color: %2;"
-        "color: %3;"
-        "border: 1px solid %4;"
-        "border-radius: %5px;"
-        "gridline-color: %4;"
-        "outline: none;"
-        "}"
-        "QTableWidget::item {"
-        "padding: 10px 8px;"
-        "border: none;"
-        "}"
-        "QTableWidget::item:selected {"
-        "background-color: %6;"
-        "}"
-        "QHeaderView {"
-        "background-color: transparent;"
-        "}"
-        "QHeaderView::section {"
-        "background-color: %2;"
-        "color: %3;"
-        "padding: 12px 8px;"
-        "border: none;"
-        "font-weight: bold;"
-        "}"
-        "QHeaderView::section:first {"
-        "border-top-left-radius: %5px;"
-        "}"
-        "QHeaderView::section:last {"
-        "border-top-right-radius: %5px;"
-        "}")
-        .arg(Colors::BACKGROUND_CARD)
-        .arg(Colors::BACKGROUND_INPUT)
-        .arg(Colors::TEXT_PRIMARY)
-        .arg(Colors::BORDER_LIGHT)
-        .arg(Sizes::BORDER_RADIUS)
-        .arg(Colors::BACKGROUND_HOVER);
+    // Let StreamUP theme handle table styling
+    return "";
 }
 
 QDialog* CreateStyledDialog(const QString& title, QWidget* parentWidget) {
     QDialog* dialog = StreamUP::UIHelpers::CreateDialogWindow(title.toUtf8().constData(), parentWidget);
-    dialog->setStyleSheet(GetDialogStyle());
+    // No custom styling - inherit from StreamUP theme
     return dialog;
 }
 
@@ -228,7 +98,6 @@ QLabel* CreateStyledTitle(const QString& text) {
 
 QLabel* CreateStyledDescription(const QString& text) {
     QLabel* label = new QLabel(text);
-    label->setStyleSheet(GetDescriptionLabelStyle());
     label->setWordWrap(true);
     label->setAlignment(Qt::AlignCenter);
     return label;
@@ -236,7 +105,6 @@ QLabel* CreateStyledDescription(const QString& text) {
 
 QLabel* CreateStyledContent(const QString& text) {
     QLabel* label = new QLabel(text);
-    label->setStyleSheet(GetContentLabelStyle());
     label->setTextFormat(Qt::RichText);
     label->setWordWrap(true);
     label->setOpenExternalLinks(true);
@@ -246,7 +114,7 @@ QLabel* CreateStyledContent(const QString& text) {
 QPushButton* CreateStyledButton(const QString& text, const QString& type, int height, int minWidth) {
     QPushButton* button = new QPushButton(text);
     
-    // Set size policy to fit content width
+    // Basic size policy
     button->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     
     // Set minimum width if specified
@@ -254,72 +122,32 @@ QPushButton* CreateStyledButton(const QString& text, const QString& type, int he
         button->setMinimumWidth(minWidth);
     }
     
-    QString baseColor, hoverColor;
-    if (type == "success") {
-        baseColor = Colors::SUCCESS;
-        hoverColor = Colors::SUCCESS_HOVER;
-    } else if (type == "error") {
-        baseColor = Colors::ERROR;
-        hoverColor = Colors::ERROR_HOVER;
-    } else if (type == "warning") {
-        baseColor = Colors::WARNING;
-        hoverColor = Colors::WARNING_HOVER;
-    } else if (type == "info") {
-        baseColor = Colors::INFO;
-        hoverColor = Colors::INFO_HOVER;
-    } else { // neutral
-        baseColor = Colors::NEUTRAL;
-        hoverColor = Colors::NEUTRAL_HOVER;
-    }
+    // No custom styling - let StreamUP theme handle button appearance
+    Q_UNUSED(type)
+    Q_UNUSED(height)
     
-    button->setStyleSheet(GetButtonStyle(baseColor, hoverColor, height));
     return button;
 }
 
 QPushButton* CreateStyledSquircleButton(const QString& text, const QString& type, int size) {
     QPushButton* button = new QPushButton(text);
     
-    // Enforce fixed square size
+    // Set fixed size for icon buttons
     button->setFixedSize(size, size);
     button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     
-    QString baseColor, hoverColor;
-    if (type == "success") {
-        baseColor = Colors::SUCCESS;
-        hoverColor = Colors::SUCCESS_HOVER;
-    } else if (type == "error") {
-        baseColor = Colors::ERROR;
-        hoverColor = Colors::ERROR_HOVER;
-    } else if (type == "warning") {
-        baseColor = Colors::WARNING;
-        hoverColor = Colors::WARNING_HOVER;
-    } else if (type == "info") {
-        baseColor = Colors::INFO;
-        hoverColor = Colors::INFO_HOVER;
-    } else { // neutral
-        baseColor = Colors::NEUTRAL;
-        hoverColor = Colors::NEUTRAL_HOVER;
-    }
+    // No custom styling - let StreamUP theme handle icon button appearance
+    Q_UNUSED(type)
     
-    button->setStyleSheet(GetSquircleButtonStyle(baseColor, hoverColor, size));
     return button;
 }
 
 QGroupBox* CreateStyledGroupBox(const QString& title, const QString& type) {
     QGroupBox* groupBox = new QGroupBox(title);
     
-    QString borderColor, titleColor;
-    if (type == "success") {
-        borderColor = titleColor = Colors::SUCCESS;
-    } else if (type == "error") {
-        borderColor = titleColor = Colors::ERROR;
-    } else if (type == "warning") {
-        borderColor = titleColor = Colors::WARNING;
-    } else { // info
-        borderColor = titleColor = Colors::INFO;
-    }
+    // No custom styling - let StreamUP theme handle group box appearance
+    Q_UNUSED(type)
     
-    groupBox->setStyleSheet(GetGroupBoxStyle(borderColor, titleColor));
     return groupBox;
 }
 
@@ -328,7 +156,7 @@ QScrollArea* CreateStyledScrollArea() {
     scrollArea->setWidgetResizable(true);
     scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scrollArea->setStyleSheet(GetScrollAreaStyle());
+    // No custom styling - let StreamUP theme handle scrollbar appearance
     return scrollArea;
 }
 
@@ -336,22 +164,19 @@ QScrollArea* CreateStyledScrollArea() {
 QTableWidget* CreateStyledTableWidget(QWidget* parent) {
     QTableWidget* table = new QTableWidget(parent);
     
-    // Configure table appearance
+    // Configure table behavior (not styling)
     table->setAlternatingRowColors(true);
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSortingEnabled(false);
     table->setShowGrid(false);
     
-    // Header styling - stretch last section to fill available space
+    // Header configuration
     table->horizontalHeader()->setStretchLastSection(true);
     table->verticalHeader()->setVisible(false);
-    
-    // Set most columns to fixed width, but allow last column to stretch
     table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     
-    // Apply consistent styling
-    table->setStyleSheet(GetTableStyle());
+    // No custom styling - let StreamUP theme handle table appearance
     
     // Add context menu support for copying
     table->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -614,7 +439,6 @@ void ApplyConsistentSizing(QDialog* dialog, int preferredWidth, int maxWidth, in
     });
 }
 
-
 StandardDialogComponents CreateStandardDialog(const QString& windowTitle, const QString& headerTitle, const QString& headerDescription, QWidget* parentWidget)
 {
     StandardDialogComponents components;
@@ -627,24 +451,19 @@ StandardDialogComponents CreateStandardDialog(const QString& windowTitle, const 
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
 
-    // Header section - exact WebSocket UI pattern
+    // Header section - no custom styling, inherit from theme
     components.headerWidget = new QWidget();
     components.headerWidget->setObjectName("headerWidget");
-    components.headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
-        .arg(Colors::BACKGROUND_CARD)
-        .arg(Sizes::PADDING_XL + Sizes::PADDING_MEDIUM) // More padding at top
-        .arg(Sizes::PADDING_XL)
-        .arg(Sizes::PADDING_XL)); // Standard padding at bottom
+    // No custom styling - let StreamUP theme handle header appearance
     
     QVBoxLayout* headerLayout = new QVBoxLayout(components.headerWidget);
-    headerLayout->setContentsMargins(0, 0, 0, 0);
+    headerLayout->setContentsMargins(20, 20, 20, 20);
     
     components.titleLabel = CreateStyledTitle(headerTitle);
     components.titleLabel->setAlignment(Qt::AlignCenter);
     headerLayout->addWidget(components.titleLabel);
     
-    // Add reduced spacing between title and description
-    headerLayout->addSpacing(-Sizes::SPACING_SMALL);
+    headerLayout->addSpacing(5);
     
     components.subtitleLabel = CreateStyledDescription(headerDescription);
     headerLayout->addWidget(components.subtitleLabel);
@@ -655,25 +474,19 @@ StandardDialogComponents CreateStandardDialog(const QString& windowTitle, const 
     components.scrollArea = CreateStyledScrollArea();
 
     components.contentWidget = new QWidget();
-    components.contentWidget->setStyleSheet(QString("background: %1;").arg(Colors::BACKGROUND_DARK));
+    // No custom styling - inherit from theme
     components.contentLayout = new QVBoxLayout(components.contentWidget);
-    components.contentLayout->setContentsMargins(Sizes::PADDING_XL + 5, 
-        Sizes::PADDING_XL, 
-        Sizes::PADDING_XL + 5, 
-        Sizes::PADDING_XL);
-    components.contentLayout->setSpacing(Sizes::SPACING_XL);
+    components.contentLayout->setContentsMargins(20, 20, 20, 20);
+    components.contentLayout->setSpacing(20);
 
     components.scrollArea->setWidget(components.contentWidget);
     mainLayout->addWidget(components.scrollArea);
 
     // Bottom button area
     QWidget* buttonWidget = new QWidget();
-    buttonWidget->setStyleSheet("background: transparent;");
+    // No custom styling - inherit from theme
     QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
-    buttonLayout->setContentsMargins(Sizes::PADDING_XL, 
-        Sizes::PADDING_MEDIUM, 
-        Sizes::PADDING_XL, 
-        Sizes::PADDING_MEDIUM);
+    buttonLayout->setContentsMargins(20, 10, 20, 10);
 
     components.mainButton = CreateStyledButton("Close", "neutral");
     

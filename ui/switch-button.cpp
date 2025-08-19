@@ -67,9 +67,9 @@ void SwitchButton::setText(const QString& text)
 {
     m_text = text;
     
-    // Calculate required width based on text
+    // Calculate required width based on text using standard font
     if (!m_text.isEmpty()) {
-        QFontMetrics fm(QFont("Arial", Sizes::FONT_SIZE_NORMAL));
+        QFontMetrics fm(QFont("Arial", Sizes::FONT_SIZE_NORMAL, Sizes::FONT_WEIGHT_NORMAL));
         int textWidth = fm.horizontalAdvance(m_text) + 20; // Extra padding
         int totalWidth = textWidth + SWITCH_WIDTH + 20; // Text + switch + padding
         setFixedSize(totalWidth, SWITCH_HEIGHT + 4);
@@ -99,11 +99,11 @@ void SwitchButton::paintEvent(QPaintEvent* event)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
     
-    // Draw text label if present
+    // Draw text label if present using standard font
     int textWidth = 0;
     if (!m_text.isEmpty()) {
-        painter.setPen(QColor(Colors::TEXT_PRIMARY));
-        painter.setFont(QFont("Arial", Sizes::FONT_SIZE_NORMAL));
+        painter.setPen(palette().text().color()); // Use system text color
+        painter.setFont(QFont("Arial", Sizes::FONT_SIZE_NORMAL, Sizes::FONT_WEIGHT_NORMAL));
         QFontMetrics fm(painter.font());
         textWidth = fm.horizontalAdvance(m_text) + 10;
         painter.drawText(QRect(0, 0, textWidth, height()), Qt::AlignLeft | Qt::AlignVCenter, m_text);
@@ -118,9 +118,9 @@ void SwitchButton::paintEvent(QPaintEvent* event)
     painter.setPen(Qt::NoPen);
     painter.setRenderHint(QPainter::Antialiasing, true);
     
-    // iOS 26 colors with subtle inner gradient to match other UI buttons
-    QColor trackColorOff = m_hovered ? QColor("#404852") : QColor("#3c4043");
-    QColor trackColorOn = m_hovered ? QColor("#32d74b") : QColor("#34c759");
+    // Use standard colors that will work with any theme
+    QColor trackColorOff = m_hovered ? QColor(64, 64, 64) : QColor(48, 48, 48);
+    QColor trackColorOn = m_hovered ? QColor(0, 150, 0) : QColor(0, 120, 0);
     
     // Create subtle gradient for depth (matching other button styles)
     QLinearGradient gradient(trackRect.topLeft(), trackRect.bottomLeft());
@@ -189,7 +189,7 @@ void SwitchButton::leaveEvent(QEvent* event)
 QSize SwitchButton::sizeHint() const
 {
     if (!m_text.isEmpty()) {
-        QFontMetrics fm(QFont("Arial", Sizes::FONT_SIZE_NORMAL));
+        QFontMetrics fm(QFont("Arial", Sizes::FONT_SIZE_NORMAL, Sizes::FONT_WEIGHT_NORMAL));
         int textWidth = fm.horizontalAdvance(m_text) + 20; // Extra padding
         int totalWidth = textWidth + SWITCH_WIDTH + 20; // Text + switch + padding
         return QSize(totalWidth, SWITCH_HEIGHT + 4);
