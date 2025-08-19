@@ -740,7 +740,7 @@ void CreateSplashDialog(ShowCondition condition)
         std::string welcomeMessage = GetWelcomeMessage();
         QString mainContent = QString::fromStdString(welcomeMessage);
         
-        QLabel* mainContentLabel = UIHelpers::CreateRichTextLabel(mainContent, false, true);
+        QLabel* mainContentLabel = UIHelpers::CreateRichTextLabel(mainContent, false, true, Qt::Alignment(), true);
         welcomeLayout->addWidget(mainContentLabel);
         contentLayout->addWidget(welcomeGroup);
 
@@ -753,7 +753,7 @@ void CreateSplashDialog(ShowCondition condition)
         std::string supportContent = LoadLocalSupportInfo();
         QString supportText = QString::fromStdString(supportContent);
         
-        QLabel* supportLabel = UIHelpers::CreateRichTextLabel(supportText, false, true);
+        QLabel* supportLabel = UIHelpers::CreateRichTextLabel(supportText, false, true, Qt::Alignment(), true);
         supportLayout->addWidget(supportLabel);
         
         // More compact donation buttons
@@ -811,7 +811,7 @@ void CreateSplashDialog(ShowCondition condition)
 </div>
         )";
         
-        QLabel* supportersLabel = UIHelpers::CreateRichTextLabel(modernSupporters, false, true);
+        QLabel* supportersLabel = UIHelpers::CreateRichTextLabel(modernSupporters, false, true, Qt::Alignment(), true);
         supportersLayout->addWidget(supportersLabel);
         contentLayout->addWidget(supportersGroup);
 

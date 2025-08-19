@@ -191,16 +191,38 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 }
 
 //-------------------LABEL CREATION FUNCTIONS-------------------
-QLabel *CreateRichTextLabel(const QString &text, bool bold, bool wrap, Qt::Alignment alignment)
+QLabel *CreateRichTextLabel(const QString &text, bool bold, bool wrap, Qt::Alignment alignment, bool roundedBackground)
 {
 	QLabel *label = new QLabel;
 	label->setText(text);
 	label->setTextFormat(Qt::RichText);
 	label->setTextInteractionFlags(Qt::TextBrowserInteraction);
 	label->setOpenExternalLinks(true);
-	if (bold) {
-		label->setStyleSheet("font-weight: bold; font-size: 14px;");
+	
+	// Build style sheet with optional rounded background
+	QString styleSheet;
+	if (roundedBackground) {
+		styleSheet = QString(
+			"QLabel {"
+			"background-color: %1;"
+			"border-radius: %2px;"
+			"padding: %3px;"
+			"border: 1px solid %4;"
+		).arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
+		 .arg(StreamUP::UIStyles::Sizes::RADIUS_MD)
+		 .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+		 .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE);
+	} else {
+		styleSheet = "QLabel {";
 	}
+	
+	if (bold) {
+		styleSheet += "font-weight: bold; font-size: 14px;";
+	}
+	
+	styleSheet += "}";
+	label->setStyleSheet(styleSheet);
+	
 	if (wrap) {
 		label->setWordWrap(true);
 	}
