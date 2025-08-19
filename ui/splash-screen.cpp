@@ -649,45 +649,36 @@ void CreateSplashDialog(ShowCondition condition)
         socialIconsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL + 2);
         socialIconsLayout->setContentsMargins(0, 0, 0, 0);
         
-        QString socialIconStyle = QString(
-            "QPushButton {"
-            "background: transparent;"
-            "border: none;"
-            "padding: 0px;"
-            "color: %1;"
-            "border-radius: 15px;"
-            "}"
-            "QPushButton:hover {"
-            "opacity: 0.7;"
-            "}")
-            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY);
-            
-        QPushButton* twitterIcon = new QPushButton();
+        // Create pill-shaped social media icon buttons
+        QPushButton* twitterIcon = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 20);
         twitterIcon->setIcon(QIcon(":images/icons/social/twitter.svg"));
-        twitterIcon->setIconSize(QSize(20, 20));
-        twitterIcon->setFixedSize(20, 20);
-        twitterIcon->setStyleSheet(socialIconStyle);
+        twitterIcon->setIconSize(QSize(16, 16));
         twitterIcon->setCursor(Qt::PointingHandCursor);
+        // Additional styling for transparency - keep borders for pill shape visibility
+        twitterIcon->setStyleSheet(twitterIcon->styleSheet() + 
+            QString("QPushButton { background: transparent; color: %1; }").arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
         QObject::connect(twitterIcon, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://twitter.com/StreamUPTips"));
         });
         
-        QPushButton* blueskyIcon = new QPushButton();
+        QPushButton* blueskyIcon = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 20);
         blueskyIcon->setIcon(QIcon(":images/icons/social/bluesky.svg"));
-        blueskyIcon->setIconSize(QSize(20, 20));
-        blueskyIcon->setFixedSize(20, 20);
-        blueskyIcon->setStyleSheet(socialIconStyle);
+        blueskyIcon->setIconSize(QSize(16, 16));
         blueskyIcon->setCursor(Qt::PointingHandCursor);
+        // Additional styling for transparency - keep borders for pill shape visibility
+        blueskyIcon->setStyleSheet(blueskyIcon->styleSheet() + 
+            QString("QPushButton { background: transparent; color: %1; }").arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
         QObject::connect(blueskyIcon, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://bsky.app/profile/streamup.tips"));
         });
         
-        QPushButton* dorasIcon = new QPushButton();
+        QPushButton* dorasIcon = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 20);
         dorasIcon->setIcon(QIcon(":images/icons/social/doras.svg"));
-        dorasIcon->setIconSize(QSize(20, 20));
-        dorasIcon->setFixedSize(20, 20);
-        dorasIcon->setStyleSheet(socialIconStyle);
+        dorasIcon->setIconSize(QSize(16, 16));
         dorasIcon->setCursor(Qt::PointingHandCursor);
+        // Additional styling for transparency - keep borders for pill shape visibility
+        dorasIcon->setStyleSheet(dorasIcon->styleSheet() + 
+            QString("QPushButton { background: transparent; color: %1; }").arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
         QObject::connect(dorasIcon, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://doras.to/streamup"));
         });

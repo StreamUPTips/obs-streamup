@@ -253,7 +253,7 @@ void CreateLabelWithLink(QLayout *layout, const QString &text, const QString &ur
 
 void CreateButton(QLayout *layout, const QString &text, const std::function<void()> &onClick)
 {
-	QPushButton *button = new QPushButton(text);
+	QPushButton *button = StreamUP::UIStyles::CreateStyledButton(text, "neutral");
 	QObject::connect(button, &QPushButton::clicked, onClick);
 	layout->addWidget(button);
 }
