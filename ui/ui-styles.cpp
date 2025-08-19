@@ -31,14 +31,16 @@ namespace StreamUP {
 namespace UIStyles {
 
 QString GetDialogStyle() {
-    // Modern StreamUP dialog styling matching OBSBasicSettings
+    // Modern StreamUP dialog styling with darkest background
     return QString(
         "QDialog {"
         "    background-color: %1;"
         "    border-radius: %2px;"
+        "    padding: %3px;"
         "}"
     ).arg(Colors::BG_DARKEST)
-     .arg(Sizes::RADIUS_DOCK);
+     .arg(Sizes::RADIUS_DOCK)
+     .arg(Sizes::PADDING_LARGE); // 20px padding around edges
 }
 
 QString GetTitleLabelStyle() {

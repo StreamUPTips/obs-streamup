@@ -69,7 +69,7 @@ void ShowDockConfigDialog()
 
 		// Content area
 		QWidget* contentWidget = new QWidget();
-		contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
+		contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
 		QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
 		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
 			StreamUP::UIStyles::Sizes::PADDING_XL, 
