@@ -691,34 +691,8 @@ void CreateSplashDialog(ShowCondition condition)
         
         headerLayout->addLayout(socialIconsLayout);
 
-        // Content area with dark mode scrolling and overlay scrollbar
+        // Content area with modern StreamUP scrollbar styling
         QScrollArea* scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-        // Override with enhanced styling for splash screen
-        scrollArea->setStyleSheet(scrollArea->styleSheet() + QString(
-            "QScrollArea::corner { background: transparent; }"
-            "QScrollBar:vertical {"
-            "background: rgba(55, 65, 81, 0.8);"
-            "border-radius: 15px;"
-            "margin: 0px;"
-            "position: absolute;"
-            "right: 2px;"
-            "}"
-            "QScrollBar::handle:vertical {"
-            "background: rgba(107, 114, 128, 0.9);"
-            "border-radius: 15px;"
-            "margin: 2px;"
-            "}"
-            "QScrollBar::handle:vertical:hover {"
-            "background: rgba(156, 163, 175, 0.9);"
-            "}"
-            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
-            "border: none;"
-            "background: none;"
-            "height: 0px;"
-            "}"
-            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
-            "background: transparent;"
-            "}"));
         
         QWidget* contentWidget = new QWidget();
         contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
