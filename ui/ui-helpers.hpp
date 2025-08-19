@@ -63,7 +63,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
  * @param alignment Text alignment (optional)
  * @return QLabel* Pointer to the created label
  */
-QLabel *CreateRichTextLabel(const QString &text, bool bold, bool wrap, Qt::Alignment alignment = Qt::Alignment());
+QLabel *CreateRichTextLabel(const QString &text, bool bold, bool wrap, Qt::Alignment alignment = Qt::Alignment(), bool roundedBackground = false);
 
 /**
  * Create a label with an icon

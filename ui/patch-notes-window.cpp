@@ -49,42 +49,64 @@ void CreatePatchNotesDialog()
         
         if (patchNotesText.isEmpty()) {
             patchNotesText = QString(R"(
-<div style="color: %1; line-height: 1.6; font-size: 14px; font-family: -apple-system, system-ui;">
-    <div style="background: %2; padding: 20px; border-radius: 10px; margin: 10px 0;">
-        <h2 style="color: %3; margin: 0 0 15px 0; font-size: 20px; font-weight: 700;">🚀 StreamUP v%4 - Complete Redesign</h2>
-        <p style="margin: 8px 0; color: %5; font-size: 13px;">⚠️ Unable to load patch notes from local file</p>
-        <div style="margin: 15px 0;">
-            <h3 style="color: %6; font-size: 16px; font-weight: 600; margin: 12px 0 8px 0;">✨ Key Features</h3>
-            <ul style="margin: 8px 0; padding-left: 20px; line-height: 1.8;">
-                <li><strong>Modular Architecture:</strong> Complete restructuring for better performance</li>
-                <li><strong>Enhanced WebSocket API:</strong> Modern PascalCase commands</li>
-                <li><strong>Improved UI/UX:</strong> Beautiful interfaces with consistent design</li>
-                <li><strong>Advanced Settings:</strong> Comprehensive configuration options</li>
-                <li><strong>Better Notifications:</strong> Enhanced user feedback system</li>
-            </ul>
-        </div>
+<div style="color: %1; line-height: 1.6; font-size: 14px;">
+    <h2 style="color: %2; margin: 0 0 15px 0; font-size: 20px; font-weight: 700;">🚀 StreamUP v%3 - Complete Redesign</h2>
+    <p style="margin: 8px 0; color: %4; font-size: 13px;">⚠️ Unable to load patch notes from local file</p>
+    <div style="margin: 15px 0;">
+        <h3 style="color: %5; font-size: 16px; font-weight: 600; margin: 12px 0 8px 0;">✨ Key Features</h3>
+        <ul style="margin: 8px 0; padding-left: 20px; line-height: 1.8;">
+            <li><strong>Modular Architecture:</strong> Complete restructuring for better performance</li>
+            <li><strong>Enhanced WebSocket API:</strong> Modern PascalCase commands</li>
+            <li><strong>Improved UI/UX:</strong> Beautiful interfaces with consistent design</li>
+            <li><strong>Advanced Settings:</strong> Comprehensive configuration options</li>
+            <li><strong>Better Notifications:</strong> Enhanced user feedback system</li>
+        </ul>
     </div>
 </div>
             )")
                 .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-                .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
-                .arg(StreamUP::UIStyles::Colors::INFO)
+                .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR)
                 .arg(PROJECT_VERSION)
                 .arg(StreamUP::UIStyles::Colors::WARNING)
                 .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY);
         }
         
-        // Add patch notes content to scrollable area
-        QLabel* patchNotesLabel = UIHelpers::CreateRichTextLabel(patchNotesText, false, true);
-        components.contentLayout->addWidget(patchNotesLabel);
+        // Create main patch notes group box
+        QGroupBox* patchNotesGroup = StreamUP::UIStyles::CreateStyledGroupBox("📋 Latest Updates", "success");
+        QVBoxLayout* patchNotesLayout = new QVBoxLayout(patchNotesGroup);
+        patchNotesLayout->setContentsMargins(0, 0, 0, 0);
         
-        // Add some spacing
-        components.contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+        // Add patch notes content to group box
+        QLabel* patchNotesLabel = UIHelpers::CreateRichTextLabel(patchNotesText, false, true, Qt::Alignment(), true);
+        patchNotesLayout->addWidget(patchNotesLabel);
+        
+        components.contentLayout->addWidget(patchNotesGroup);
+        
+        // Add version and build information section
+        QGroupBox* versionGroup = StreamUP::UIStyles::CreateStyledGroupBox("ℹ️ Version Information", "warning");
+        QVBoxLayout* versionLayout = new QVBoxLayout(versionGroup);
+        versionLayout->setContentsMargins(0, 0, 0, 0);
+        
+        QString versionInfo = QString(R"(
+<div style="color: %1; line-height: 1.5; font-size: 13px;">
+    <p style="margin: 4px 0;"><strong>Version:</strong> %2</p>
+    <p style="margin: 4px 0;"><strong>Build:</strong> Release</p>
+    <p style="margin: 4px 0;"><strong>Platform:</strong> Windows x64</p>
+    <p style="margin: 4px 0; color: %3;">For the latest updates and community support, check out our links below!</p>
+</div>
+        )")
+            .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
+            .arg(PROJECT_VERSION)
+            .arg(StreamUP::UIStyles::Colors::TEXT_MUTED);
+        
+        QLabel* versionLabel = UIHelpers::CreateRichTextLabel(versionInfo, false, true, Qt::Alignment(), true);
+        versionLayout->addWidget(versionLabel);
+        components.contentLayout->addWidget(versionGroup);
         
         // Create links section with modern card styling
         QGroupBox* linksGroup = StreamUP::UIStyles::CreateStyledGroupBox("🔗 Useful Links", "info");
-        QVBoxLayout* linksLayout = new QVBoxLayout();
-        linksLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        QVBoxLayout* linksGroupLayout = new QVBoxLayout(linksGroup);
+        linksGroupLayout->setContentsMargins(0, 0, 0, 0);
         
         // Link buttons with improved layout
         QHBoxLayout* buttonsLayout = new QHBoxLayout();
@@ -115,9 +137,8 @@ void CreatePatchNotesDialog()
         buttonsLayout->addWidget(websiteBtn);
         buttonsLayout->addStretch();
         
-        linksLayout->addLayout(buttonsLayout);
-        linksGroup->setLayout(linksLayout);
-        components.contentLayout->addWidget(static_cast<QWidget*>(linksGroup));
+        linksGroupLayout->addLayout(buttonsLayout);
+        components.contentLayout->addWidget(linksGroup);
         
         // Setup dialog navigation with close button
         QDialog* dialog = components.dialog; // Capture dialog pointer safely
