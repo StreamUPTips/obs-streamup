@@ -10,6 +10,7 @@
 #include "websocket-api.hpp"
 #include "hotkey-manager.hpp"
 #include "ui-helpers.hpp"
+#include "ui/ui-styles.hpp"
 #include "menu-manager.hpp"
 #include "settings-manager.hpp"
 #include "notification-manager.hpp"
@@ -272,7 +273,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		info3BoxLayout->addWidget(howTo3);
 		info3BoxLayout->addWidget(howTo4);
 
-		QPushButton *copyJsonButton = new QPushButton(obs_module_text("CopyWebsocketJson"));
+		QPushButton *copyJsonButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("CopyWebsocketJson"), "neutral");
 		copyJsonButton->setToolTip(obs_module_text("CopyWebsocketJsonTooltip"));
 		QObject::connect(copyJsonButton, &QPushButton::clicked, [=]() { StreamUP::UIHelpers::CopyToClipboard(jsonString); });
 		info3BoxLayout->addWidget(copyJsonButton);
@@ -488,7 +489,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 		StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
 
 		if (errorMsgMissing != "NULL") {
-			QPushButton *pluginstallerButton = new QPushButton(obs_module_text("MenuDownloadPluginstaller"));
+			QPushButton *pluginstallerButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("MenuDownloadPluginstaller"), "neutral");
 			QObject::connect(pluginstallerButton, &QPushButton::clicked, []() {
 				QDesktopServices::openUrl(QUrl("https://streamup.tips/product/plugin-installer"));
 			});

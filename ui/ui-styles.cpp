@@ -58,19 +58,60 @@ QString GetContentLabelStyle() {
 }
 
 QString GetButtonStyle(const QString& baseColor, const QString& hoverColor, int height) {
-    // No custom styling - let StreamUP theme handle all button styling
+    // Apply rounded pill shape with visible border and solid hover effect
     Q_UNUSED(baseColor)
     Q_UNUSED(hoverColor)
-    Q_UNUSED(height)
-    return "";
+    
+    // Use standardized height for perfect pill shape
+    int buttonHeight = 24; // Reduced height for better pill proportions
+    int borderWidth = 2;
+    int pillRadius = (buttonHeight / 2) + borderWidth; // Perfect pill: radius accounts for border
+    
+    return QString(
+        "QPushButton {"
+        "    border-radius: %1px;"
+        "    border: 2px solid %5;"
+        "    padding: 0px %2px;"
+        "    min-height: %3px;"
+        "    max-height: %3px;"
+        "    height: %3px;"
+        "    background: transparent;"
+        "}"
+        "QPushButton:hover {"
+        "    background: %4 !important;"
+        "    border-color: %4 !important;"
+        "    opacity: 1.0;"
+        "}"
+    ).arg(pillRadius).arg(Sizes::SPACE_12).arg(buttonHeight).arg(Colors::PRIMARY_COLOR).arg(Colors::PRIMARY_COLOR);
 }
 
 QString GetSquircleButtonStyle(const QString& baseColor, const QString& hoverColor, int size) {
-    // No custom styling - let StreamUP theme handle icon buttons
+    // Apply rounded pill shape for icon buttons with visible border and solid hover effect
     Q_UNUSED(baseColor)
     Q_UNUSED(hoverColor)
-    Q_UNUSED(size)
-    return "";
+    
+    int buttonSize = size > 0 ? size : Sizes::ICON_BUTTON_SIZE;
+    int borderWidth = 2;
+    int pillRadius = (buttonSize / 2) + borderWidth; // Perfect pill: radius accounts for border
+    
+    return QString(
+        "QPushButton {"
+        "    border-radius: %1px;"
+        "    border: 2px solid %4;"
+        "    min-width: %2px;"
+        "    max-width: %2px;"
+        "    min-height: %2px;"
+        "    max-height: %2px;"
+        "    width: %2px;"
+        "    height: %2px;"
+        "    background: transparent;"
+        "}"
+        "QPushButton:hover {"
+        "    background: %3 !important;"
+        "    border-color: %3 !important;"
+        "    opacity: 1.0;"
+        "}"
+    ).arg(pillRadius).arg(buttonSize).arg(Colors::PRIMARY_COLOR).arg(Colors::PRIMARY_COLOR);
 }
 
 QString GetScrollAreaStyle() {
@@ -122,9 +163,11 @@ QPushButton* CreateStyledButton(const QString& text, const QString& type, int he
         button->setMinimumWidth(minWidth);
     }
     
-    // No custom styling - let StreamUP theme handle button appearance
+    // Apply pill shape styling - ignore height parameter to ensure consistency
+    button->setStyleSheet(GetButtonStyle("", "", 0));
+    
     Q_UNUSED(type)
-    Q_UNUSED(height)
+    Q_UNUSED(height) // Ignored for consistency
     
     return button;
 }
@@ -136,7 +179,9 @@ QPushButton* CreateStyledSquircleButton(const QString& text, const QString& type
     button->setFixedSize(size, size);
     button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     
-    // No custom styling - let StreamUP theme handle icon button appearance
+    // Apply pill/circular shape styling for square icon buttons
+    button->setStyleSheet(GetSquircleButtonStyle("", "", size));
+    
     Q_UNUSED(type)
     
     return button;
