@@ -566,7 +566,7 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
     
     // Create replacement content widget with sub-page header
     QWidget* pluginsWidget = new QWidget();
-    pluginsWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
+    pluginsWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
     pluginsWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     QVBoxLayout* pluginsLayout = new QVBoxLayout(pluginsWidget);
     pluginsLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_SMALL, 
@@ -865,7 +865,7 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents& compo
     
     // Create replacement content widget with sub-page header
     QWidget* hotkeysWidget = new QWidget();
-    hotkeysWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
+    hotkeysWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
     QVBoxLayout* hotkeysLayout = new QVBoxLayout(hotkeysWidget);
     hotkeysLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
         StreamUP::UIStyles::Sizes::PADDING_XL, 
@@ -1176,7 +1176,7 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents& co
     
     // Create replacement content widget with sub-page header
     QWidget* dockConfigWidget = new QWidget();
-    dockConfigWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
+    dockConfigWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
     QVBoxLayout* dockConfigLayout = new QVBoxLayout(dockConfigWidget);
     dockConfigLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
         StreamUP::UIStyles::Sizes::PADDING_XL, 

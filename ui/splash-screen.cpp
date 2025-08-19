@@ -695,10 +695,13 @@ void CreateSplashDialog(ShowCondition condition)
         QScrollArea* scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
         
         QWidget* contentWidget = new QWidget();
-        contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BACKGROUND_DARK));
+        contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
         QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
-        contentLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 0, StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-        contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_LARGE, 
+            StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
+            StreamUP::UIStyles::Sizes::PADDING_LARGE, 
+            StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
 
         // Add header to the scrollable content
         contentLayout->addWidget(headerWidget);
@@ -728,32 +731,23 @@ void CreateSplashDialog(ShowCondition condition)
         actionButtonsLayout->addLayout(actionLayout);
         contentLayout->addWidget(actionButtonsCard);
 
-        // Main Content Section - Always show welcome message (no more patch notes here)
-        QWidget* mainContentCard = new QWidget();
-        mainContentCard->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
-        QVBoxLayout* mainContentLayout = new QVBoxLayout(mainContentCard);
-        mainContentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        // Welcome Section - Using modern group box
+        QGroupBox* welcomeGroup = StreamUP::UIStyles::CreateStyledGroupBox("Welcome to StreamUP", "info");
+        QVBoxLayout* welcomeLayout = new QVBoxLayout(welcomeGroup);
+        welcomeLayout->setContentsMargins(0, 0, 0, 0);
         
         // Always show welcome message
         std::string welcomeMessage = GetWelcomeMessage();
         QString mainContent = QString::fromStdString(welcomeMessage);
         
         QLabel* mainContentLabel = UIHelpers::CreateRichTextLabel(mainContent, false, true);
-        mainContentLayout->addWidget(mainContentLabel);
-        contentLayout->addWidget(mainContentCard);
+        welcomeLayout->addWidget(mainContentLabel);
+        contentLayout->addWidget(welcomeGroup);
 
-        // Support Section - Much more compact
-
-        QWidget* supportCard = new QWidget();
-        supportCard->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
-        QVBoxLayout* supportLayout = new QVBoxLayout(supportCard);
-        supportLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        // Support Section - Using modern group box
+        QGroupBox* supportGroup = StreamUP::UIStyles::CreateStyledGroupBox("Support StreamUP", "success");
+        QVBoxLayout* supportLayout = new QVBoxLayout(supportGroup);
+        supportLayout->setContentsMargins(0, 0, 0, 0);
         
         // Load support info from local markdown file
         std::string supportContent = LoadLocalSupportInfo();
@@ -804,49 +798,31 @@ void CreateSplashDialog(ShowCondition condition)
         donationLayout->addStretch();
         
         supportLayout->addLayout(donationLayout);
-        contentLayout->addWidget(supportCard);
+        contentLayout->addWidget(supportGroup);
 
-        // Supporters Section - Much more compact
-        QWidget* supportersCard = new QWidget();
-        supportersCard->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
-        QVBoxLayout* supportersLayout = new QVBoxLayout(supportersCard);
-        supportersLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        // Supporters Section - Using modern group box
+        QGroupBox* supportersGroup = StreamUP::UIStyles::CreateStyledGroupBox("Thank You to Our Supporters!", "warning");
+        QVBoxLayout* supportersLayout = new QVBoxLayout(supportersGroup);
+        supportersLayout->setContentsMargins(0, 0, 0, 0);
         
         QString modernSupporters = R"(
 <div style="color: #e9d5ff; line-height: 1.4; font-size: 13px;">
-    <h3 style="font-size: 16px; font-weight: 600; color: #f9fafb; margin: 0 0 10px 0;">🙏 Thank You to Our Supporters!</h3>
     <p style="margin: 0; color: #d8b4fe;">Awaiting Waldo to make an API end point.</p>
 </div>
         )";
         
         QLabel* supportersLabel = UIHelpers::CreateRichTextLabel(modernSupporters, false, true);
         supportersLayout->addWidget(supportersLabel);
-        contentLayout->addWidget(supportersCard);
+        contentLayout->addWidget(supportersGroup);
 
-        // Additional links - More compact
-        QWidget* linksCard = new QWidget();
-        linksCard->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
-        QVBoxLayout* linksCardLayout = new QVBoxLayout(linksCard);
-        linksCardLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        // Useful Links Section - Using modern group box
+        QGroupBox* linksGroup = StreamUP::UIStyles::CreateStyledGroupBox("Useful Links", "info");
+        QVBoxLayout* linksGroupLayout = new QVBoxLayout(linksGroup);
+        linksGroupLayout->setContentsMargins(0, 0, 0, 0);
         
-        QString linksText = R"(
-<div style="color: #d1d5db; line-height: 1.3; font-size: 12px;">
-    <h3 style="font-size: 16px; font-weight: 600; color: #f9fafb; margin: 0 0 10px 0;">🔗 Useful Links</h3>
-</div>
-        )";
-        
-        QLabel* linksLabel = UIHelpers::CreateRichTextLabel(linksText, false, true);
-        linksCardLayout->addWidget(linksLabel);
-        
-        QHBoxLayout* linksLayout = new QHBoxLayout();
-        linksLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
-        linksLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::SPACING_SMALL, 0, 0);
+        QHBoxLayout* linksButtonLayout = new QHBoxLayout();
+        linksButtonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+        linksButtonLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::SPACING_SMALL, 0, 0);
         
         QPushButton* docsBtn = StreamUP::UIStyles::CreateStyledButton("📖 Documentation", "success");
         QObject::connect(docsBtn, &QPushButton::clicked, []() {
@@ -886,11 +862,11 @@ void CreateSplashDialog(ShowCondition condition)
             QDesktopServices::openUrl(QUrl("https://doras.to/streamup"));
         });
 
-        linksLayout->addStretch();
-        linksLayout->addWidget(docsBtn);
-        linksLayout->addWidget(discordBtn);
-        linksLayout->addWidget(websiteBtn);
-        linksLayout->addStretch();
+        linksButtonLayout->addStretch();
+        linksButtonLayout->addWidget(docsBtn);
+        linksButtonLayout->addWidget(discordBtn);
+        linksButtonLayout->addWidget(websiteBtn);
+        linksButtonLayout->addStretch();
         
         // Second row for social media buttons
         QHBoxLayout* socialLinksLayout = new QHBoxLayout();
@@ -903,9 +879,9 @@ void CreateSplashDialog(ShowCondition condition)
         socialLinksLayout->addWidget(dorasBtn);
         socialLinksLayout->addStretch();
         
-        linksCardLayout->addLayout(linksLayout);
-        linksCardLayout->addLayout(socialLinksLayout);
-        contentLayout->addWidget(linksCard);
+        linksGroupLayout->addLayout(linksButtonLayout);
+        linksGroupLayout->addLayout(socialLinksLayout);
+        contentLayout->addWidget(linksGroup);
 
         // Bottom button area with two buttons
         QWidget* buttonWidget = new QWidget();
