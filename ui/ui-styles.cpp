@@ -118,13 +118,66 @@ QString GetSquircleButtonStyle(const QString& baseColor, const QString& hoverCol
 }
 
 QString GetScrollAreaStyle() {
-    // Let StreamUP theme handle scrollbar styling
-    return "";
+    // Modern StreamUP scrollbar styling
+    return QString(
+        "QScrollBar {"
+        "    background-color: %1;"
+        "    margin: 0px;"
+        "    border-radius: 3px;"
+        "}"
+        "QScrollArea::corner {"
+        "    background-color: %1;"
+        "    border: none;"
+        "}"
+        "QScrollBar:vertical {"
+        "    width: 6px;"
+        "}"
+        "QScrollBar::add-line:vertical,"
+        "QScrollBar::sub-line:vertical {"
+        "    border: none;"
+        "    background: none;"
+        "    height: 0px;"
+        "}"
+        "QScrollBar::up-arrow:vertical,"
+        "QScrollBar::down-arrow:vertical,"
+        "QScrollBar::add-page:vertical,"
+        "QScrollBar::sub-page:vertical {"
+        "    border: none;"
+        "    background: none;"
+        "    color: none;"
+        "}"
+        "QScrollBar:horizontal {"
+        "    height: 6px;"
+        "}"
+        "QScrollBar::add-line:horizontal,"
+        "QScrollBar::sub-line:horizontal {"
+        "    border: none;"
+        "    background: none;"
+        "    width: 0px;"
+        "}"
+        "QScrollBar::left-arrow:horizontal,"
+        "QScrollBar::right-arrow:horizontal,"
+        "QScrollBar::add-page:horizontal,"
+        "QScrollBar::sub-page:horizontal {"
+        "    border: none;"
+        "    background: none;"
+        "    color: none;"
+        "}"
+        "QScrollBar::handle {"
+        "    background-color: %2;"
+        "    border-radius: 3px;"
+        "}"
+        "QScrollBar::handle:hover {"
+        "    background-color: %3;"
+        "}"
+    ).arg(Colors::BG_SECONDARY)
+     .arg(Colors::PRIMARY_COLOR)  
+     .arg(Colors::PRIMARY_HOVER);
 }
 
 QString GetTableStyle() {
-    // Let StreamUP theme handle table styling
-    return "";
+    // Apply modern scrollbar styling to tables
+    return GetScrollAreaStyle();
 }
 
 QDialog* CreateStyledDialog(const QString& title, QWidget* parentWidget) {
@@ -204,7 +257,8 @@ QScrollArea* CreateStyledScrollArea() {
     scrollArea->setWidgetResizable(true);
     scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    // No custom styling - let StreamUP theme handle scrollbar appearance
+    // Apply modern StreamUP scrollbar styling
+    scrollArea->setStyleSheet(GetScrollAreaStyle());
     return scrollArea;
 }
 
@@ -224,7 +278,8 @@ QTableWidget* CreateStyledTableWidget(QWidget* parent) {
     table->verticalHeader()->setVisible(false);
     table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
     
-    // No custom styling - let StreamUP theme handle table appearance
+    // Apply modern scrollbar styling to table
+    table->setStyleSheet(GetTableStyle());
     
     // Add context menu support for copying
     table->setContextMenuPolicy(Qt::CustomContextMenu);
