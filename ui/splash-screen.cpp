@@ -649,8 +649,8 @@ void CreateSplashDialog(ShowCondition condition)
         socialIconsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL + 2);
         socialIconsLayout->setContentsMargins(0, 0, 0, 0);
         
-        // Create pill-shaped social media icon buttons
-        QPushButton* twitterIcon = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 20);
+        // Create standardized squircle social media icon buttons (same size as dock)
+        QPushButton* twitterIcon = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
         twitterIcon->setIcon(QIcon(":images/icons/social/twitter.svg"));
         twitterIcon->setIconSize(QSize(16, 16));
         twitterIcon->setCursor(Qt::PointingHandCursor);
@@ -661,7 +661,7 @@ void CreateSplashDialog(ShowCondition condition)
             QDesktopServices::openUrl(QUrl("https://twitter.com/StreamUPTips"));
         });
         
-        QPushButton* blueskyIcon = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 20);
+        QPushButton* blueskyIcon = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
         blueskyIcon->setIcon(QIcon(":images/icons/social/bluesky.svg"));
         blueskyIcon->setIconSize(QSize(16, 16));
         blueskyIcon->setCursor(Qt::PointingHandCursor);
@@ -672,7 +672,7 @@ void CreateSplashDialog(ShowCondition condition)
             QDesktopServices::openUrl(QUrl("https://bsky.app/profile/streamup.tips"));
         });
         
-        QPushButton* dorasIcon = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 20);
+        QPushButton* dorasIcon = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
         dorasIcon->setIcon(QIcon(":images/icons/social/doras.svg"));
         dorasIcon->setIconSize(QSize(16, 16));
         dorasIcon->setCursor(Qt::PointingHandCursor);

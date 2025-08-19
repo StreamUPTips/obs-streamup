@@ -92,18 +92,21 @@ QString GetSquircleButtonStyle(const QString& baseColor, const QString& hoverCol
     
     int buttonSize = size > 0 ? size : Sizes::ICON_BUTTON_SIZE;
     int borderWidth = 2;
-    int pillRadius = (buttonSize / 2) + borderWidth; // Perfect pill: radius accounts for border
+    // For squircle: use larger radius for more rounded appearance
+    int squircleRadius = 12 + borderWidth; // Fixed 10px radius creates more rounded squircle
     
     return QString(
         "QPushButton {"
         "    border-radius: %1px;"
         "    border: 2px solid %4;"
-        "    min-width: %2px;"
-        "    max-width: %2px;"
-        "    min-height: %2px;"
-        "    max-height: %2px;"
-        "    width: %2px;"
-        "    height: %2px;"
+        "    min-width: %2px !important;"
+        "    max-width: %2px !important;"
+        "    min-height: %2px !important;"
+        "    max-height: %2px !important;"
+        "    width: %2px !important;"
+        "    height: %2px !important;"
+        "    padding: 0px !important;"
+        "    margin: 0px !important;"
         "    background: transparent;"
         "}"
         "QPushButton:hover {"
@@ -111,7 +114,7 @@ QString GetSquircleButtonStyle(const QString& baseColor, const QString& hoverCol
         "    border-color: %3 !important;"
         "    opacity: 1.0;"
         "}"
-    ).arg(pillRadius).arg(buttonSize).arg(Colors::PRIMARY_COLOR).arg(Colors::PRIMARY_COLOR);
+    ).arg(squircleRadius).arg(buttonSize).arg(Colors::PRIMARY_COLOR).arg(Colors::PRIMARY_COLOR);
 }
 
 QString GetScrollAreaStyle() {
