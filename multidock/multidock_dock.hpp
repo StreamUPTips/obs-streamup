@@ -57,8 +57,7 @@ public:
      */
     void LoadState();
 
-private slots:
-    void OnLayoutChanged();
+    // No slots needed - we save on OBS shutdown
 
 private:
     void SetupUi();
