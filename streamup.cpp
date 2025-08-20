@@ -20,6 +20,7 @@
 #include "version-utils.hpp"
 #include "ui/splash-screen.hpp"
 #include "ui/patch-notes-window.hpp"
+#include "multidock/multidock_manager.hpp"
 #include <cctype>
 #include <curl/curl.h>
 #include <filesystem>
@@ -947,6 +948,9 @@ bool obs_module_load()
 
 	LoadStreamUPDock();
 
+	// Initialize MultiDock system
+	StreamUP::MultiDock::MultiDockManager::Initialize();
+
 	return true;
 }
 
@@ -1019,6 +1023,9 @@ void obs_module_unload()
 {
 	obs_frontend_remove_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
 	StreamUP::HotkeyManager::UnregisterHotkeys();
+	
+	// Shutdown MultiDock system
+	StreamUP::MultiDock::MultiDockManager::Shutdown();
 }
 
 MODULE_EXPORT const char *obs_module_description(void)
