@@ -4,6 +4,7 @@
 #include "persistence.hpp"
 #include <QObject>
 #include <QHash>
+#include <obs-frontend-api.h>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -86,8 +87,12 @@ private:
     QString GenerateUniqueId() const;
     void RegisterWithObs(MultiDockDock* multiDock);
     void UnregisterFromObs(MultiDockDock* multiDock);
+    
+    // Event callback for OBS frontend events
+    static void OnFrontendEvent(enum obs_frontend_event event, void* private_data);
 
     QHash<QString, MultiDockDock*> m_multiDocks;
+    QHash<QString, MultiDockInfo> m_persistentInfo; // Maintains info even after widgets are destroyed
     
     static MultiDockManager* s_instance;
 };

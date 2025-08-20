@@ -6,8 +6,6 @@
 #include <QWidget>
 #include <QLabel>
 #include <QSizePolicy>
-#include <QEvent>
-#include <QMouseEvent>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -21,15 +19,11 @@ InnerDockHost::InnerDockHost(const QString& multiDockId, QWidget* parent)
     , m_closeDockAction(nullptr)
     , m_statusLabel(nullptr)
     , m_currentDock(nullptr)
-    , m_autoSaveTimer(new QTimer(this))
 {
     SetupDockOptions();
     SetupToolBar();
     
-    // Setup auto-save timer
-    m_autoSaveTimer->setSingleShot(true);
-    m_autoSaveTimer->setInterval(AUTO_SAVE_DELAY_MS);
-    connect(m_autoSaveTimer, &QTimer::timeout, this, &InnerDockHost::LayoutChanged);
+    // No timers - we save on OBS shutdown and update UI immediately when needed
     
     // Initialize the toolbar state after toolbar is created
     UpdateToolBarState();
@@ -44,46 +38,14 @@ InnerDockHost::~InnerDockHost()
          m_multiDockId.toUtf8().constData());
 }
 
-bool InnerDockHost::eventFilter(QObject* watched, QEvent* event)
-{
-    // Track focus events to update current dock selection
-    if (event->type() == QEvent::FocusIn || event->type() == QEvent::MouseButtonPress) {
-        // Find which dock this object belongs to
-        QWidget* widget = qobject_cast<QWidget*>(watched);
-        if (widget) {
-            QDockWidget* dock = nullptr;
-            
-            // If the watched object is a dock widget itself
-            if ((dock = qobject_cast<QDockWidget*>(watched))) {
-                // Direct dock widget
-            } else {
-                // Search up the parent hierarchy to find the dock widget
-                QWidget* parent = widget;
-                while (parent && !dock) {
-                    parent = parent->parentWidget();
-                    dock = qobject_cast<QDockWidget*>(parent);
-                }
-            }
-            
-            // Update current dock if we found a valid captured dock
-            if (dock && m_capturedDocks.contains(GenerateDockId(dock))) {
-                if (m_currentDock != dock) {
-                    m_currentDock = dock;
-                    UpdateToolBarState();
-                    blog(LOG_INFO, "[StreamUP MultiDock] Current dock changed to '%s'", 
-                         dock->windowTitle().toUtf8().constData());
-                }
-            }
-        }
-    }
-    
-    return QMainWindow::eventFilter(watched, event);
-}
 
 void InnerDockHost::SetupDockOptions()
 {
     setDockOptions(AllowTabbedDocks | AllowNestedDocks | AnimatedDocks);
     setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
+    
+    // Make background transparent to show theme styling
+    setStyleSheet("QMainWindow { background: transparent; }");
 }
 
 void InnerDockHost::SetupToolBar()
@@ -138,7 +100,7 @@ void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)
         return;
     }
     
-    // Record original placement
+    // Record original placement and size information
     OriginalPlacement original;
     original.main = qobject_cast<QMainWindow*>(dock->parent());
     if (original.main) {
@@ -149,13 +111,18 @@ void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)
         original.wasFloating = false;
     }
     
+    // Store original size constraints
+    original.minimumSize = dock->minimumSize();
+    original.maximumSize = dock->maximumSize();
+    original.sizeHint = dock->sizeHint();
+    
     // Store captured dock info
     CapturedDock captured;
     captured.widget = dock;
     captured.original = original;
     m_capturedDocks[dockId] = captured;
     
-    // Move dock to this host
+    // Move dock to this host - let it behave naturally
     addDockWidget(area, dock);
     ConnectDockSignals(dock);
     
@@ -165,7 +132,6 @@ void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)
     dock->raise();
     
     UpdateToolBarState();
-    TriggerAutoSave();
     
     blog(LOG_INFO, "[StreamUP MultiDock] Added dock '%s' to MultiDock '%s'", 
          dock->windowTitle().toUtf8().constData(), m_multiDockId.toUtf8().constData());
@@ -184,6 +150,10 @@ void InnerDockHost::RemoveDock(QDockWidget* dock)
     
     CapturedDock captured = m_capturedDocks[dockId];
     DisconnectDockSignals(dock);
+    
+    // Restore original size constraints
+    dock->setMinimumSize(captured.original.minimumSize);
+    dock->setMaximumSize(captured.original.maximumSize);
     
     // Remove from this host
     removeDockWidget(dock);
@@ -208,7 +178,6 @@ void InnerDockHost::RemoveDock(QDockWidget* dock)
     }
     
     UpdateToolBarState();
-    TriggerAutoSave();
     
     blog(LOG_INFO, "[StreamUP MultiDock] Removed dock '%s' from MultiDock '%s'", 
          dock->windowTitle().toUtf8().constData(), m_multiDockId.toUtf8().constData());
@@ -271,14 +240,8 @@ void InnerDockHost::CloseCurrentDock()
 {
     if (m_currentDock) {
         m_currentDock->hide();
-        TriggerAutoSave();
+        UpdateToolBarState();
     }
-}
-
-void InnerDockHost::OnDockLocationChanged(Qt::DockWidgetArea area)
-{
-    Q_UNUSED(area)
-    TriggerAutoSave();
 }
 
 void InnerDockHost::OnTabifiedDockActivated(QDockWidget* dock)
@@ -287,49 +250,21 @@ void InnerDockHost::OnTabifiedDockActivated(QDockWidget* dock)
     UpdateToolBarState();
 }
 
-void InnerDockHost::OnDockVisibilityChanged(bool visible)
-{
-    Q_UNUSED(visible)
-    TriggerAutoSave();
-}
-
-void InnerDockHost::TriggerAutoSave()
-{
-    m_autoSaveTimer->start();
-}
-
 void InnerDockHost::ConnectDockSignals(QDockWidget* dock)
 {
     if (!dock) {
         return;
     }
     
-    connect(dock, &QDockWidget::dockLocationChanged, this, &InnerDockHost::OnDockLocationChanged);
-    connect(dock, &QDockWidget::visibilityChanged, this, &InnerDockHost::OnDockVisibilityChanged);
-    
-    // Connect to the dock's focus events to track current selection
-    dock->installEventFilter(this);
-    
-    // Also connect to the dock's widget focus if it has one
-    if (dock->widget()) {
-        dock->widget()->installEventFilter(this);
-    }
+    // Only track tab activation for current dock selection
+    // Let Qt handle all the normal docking behavior
+    connect(this, &QMainWindow::tabifiedDockWidgetActivated, this, &InnerDockHost::OnTabifiedDockActivated);
 }
 
 void InnerDockHost::DisconnectDockSignals(QDockWidget* dock)
 {
-    if (!dock) {
-        return;
-    }
-    
-    disconnect(dock, &QDockWidget::dockLocationChanged, this, &InnerDockHost::OnDockLocationChanged);
-    disconnect(dock, &QDockWidget::visibilityChanged, this, &InnerDockHost::OnDockVisibilityChanged);
-    
-    // Remove event filters
-    dock->removeEventFilter(this);
-    if (dock->widget()) {
-        dock->widget()->removeEventFilter(this);
-    }
+    // Nothing special to disconnect - Qt handles it all
+    Q_UNUSED(dock)
 }
 
 void InnerDockHost::UpdateToolBarState()
@@ -361,6 +296,7 @@ void InnerDockHost::UpdateToolBarState()
         }
     }
 }
+
 
 } // namespace MultiDock
 } // namespace StreamUP

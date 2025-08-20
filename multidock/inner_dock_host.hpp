@@ -5,7 +5,6 @@
 #include <QMainWindow>
 #include <QToolBar>
 #include <QAction>
-#include <QTimer>
 #include <QHash>
 
 class QLabel;
@@ -71,11 +70,6 @@ public:
      */
     QStringList GetCapturedDockIds() const;
 
-protected:
-    /**
-     * @brief Event filter to track dock focus events
-     */
-    bool eventFilter(QObject* watched, QEvent* event) override;
 
 public slots:
     /**
@@ -93,17 +87,10 @@ public slots:
      */
     void CloseCurrentDock();
 
-signals:
-    /**
-     * @brief Emitted when the layout changes and should be saved
-     */
-    void LayoutChanged();
+    // No signals needed - we save on OBS shutdown
 
 private slots:
-    void OnDockLocationChanged(Qt::DockWidgetArea area);
     void OnTabifiedDockActivated(QDockWidget* dock);
-    void OnDockVisibilityChanged(bool visible);
-    void TriggerAutoSave();
 
 private:
     void SetupToolBar();
@@ -122,8 +109,7 @@ private:
     QHash<DockId, CapturedDock> m_capturedDocks;
     QPointer<QDockWidget> m_currentDock;
     
-    QTimer* m_autoSaveTimer;
-    static const int AUTO_SAVE_DELAY_MS = 500;
+    // Removed timers - we save on OBS shutdown instead
 };
 
 } // namespace MultiDock

@@ -45,14 +45,14 @@ void MultiDockDock::SetupUi()
     // Add inner host to the main layout
     mainLayout->addWidget(m_innerHost);
     
-    // Connect layout change signal for auto-save
-    connect(m_innerHost, &InnerDockHost::LayoutChanged, this, &MultiDockDock::OnLayoutChanged);
+    // No auto-save - we save on OBS shutdown
     
     // Set minimum size to ensure usability
     setMinimumSize(400, 300);
     
-    // Set frame style to be minimal but visible
-    setFrameStyle(QFrame::StyledPanel);
+    // Make background transparent to show theme's rounded corners
+    setStyleSheet("QFrame { background: transparent; border: none; }");
+    setFrameStyle(QFrame::NoFrame);
 }
 
 void MultiDockDock::SetName(const QString& name)
@@ -133,11 +133,6 @@ void MultiDockDock::LoadState()
          restoredCount, capturedDockIds.size(), m_id.toUtf8().constData());
 }
 
-void MultiDockDock::OnLayoutChanged()
-{
-    // Auto-save when layout changes
-    SaveState();
-}
 
 } // namespace MultiDock
 } // namespace StreamUP

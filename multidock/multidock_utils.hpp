@@ -17,6 +17,9 @@ struct OriginalPlacement {
     QPointer<QMainWindow> main;
     Qt::DockWidgetArea area;
     bool wasFloating;
+    QSize minimumSize;
+    QSize maximumSize;
+    QSize sizeHint;
 };
 
 struct CapturedDock {
