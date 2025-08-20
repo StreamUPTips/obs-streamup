@@ -1,6 +1,7 @@
 #include "inner_dock_host.hpp"
 #include "add_dock_dialog.hpp"
 #include "persistence.hpp"
+#include "../ui/ui-styles.hpp"
 #include <obs-module.h>
 #include <QApplication>
 #include <QWidget>
@@ -44,8 +45,9 @@ void InnerDockHost::SetupDockOptions()
     setDockOptions(AllowTabbedDocks | AllowNestedDocks | AnimatedDocks);
     setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
     
-    // Make background transparent to show theme styling
-    setStyleSheet("QMainWindow { background: transparent; }");
+    // Use darkest theme color for background
+    QString bgColor = StreamUP::UIStyles::Colors::BG_DARKEST;
+    setStyleSheet(QString("QMainWindow { background-color: %1; }").arg(bgColor));
 }
 
 void InnerDockHost::SetupToolBar()
@@ -126,6 +128,9 @@ void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)
     addDockWidget(area, dock);
     ConnectDockSignals(dock);
     
+    // Hide any duplicate toolbars from the captured dock to prevent conflicts
+    HideDockToolBars(dock);
+    
     // Set as current dock and make it visible/focused
     m_currentDock = dock;
     dock->show();
@@ -154,6 +159,9 @@ void InnerDockHost::RemoveDock(QDockWidget* dock)
     // Restore original size constraints
     dock->setMinimumSize(captured.original.minimumSize);
     dock->setMaximumSize(captured.original.maximumSize);
+    
+    // Restore toolbars before removing
+    RestoreDockToolBars(dock);
     
     // Remove from this host
     removeDockWidget(dock);
@@ -292,6 +300,47 @@ void InnerDockHost::UpdateToolBarState()
             if (!currentTitle.isEmpty()) {
                 m_statusLabel->setText(m_statusLabel->text() + 
                                      QString(" | Selected: %1").arg(currentTitle));
+            }
+        }
+    }
+}
+
+void InnerDockHost::HideDockToolBars(QDockWidget* dock)
+{
+    if (!dock) {
+        return;
+    }
+    
+    // Find any QToolBar widgets inside the captured dock and hide them
+    // This prevents duplicate toolbars (e.g., mixer controls) from appearing
+    QWidget* dockWidget = dock->widget();
+    if (dockWidget) {
+        QList<QToolBar*> toolBars = dockWidget->findChildren<QToolBar*>();
+        for (QToolBar* toolBar : toolBars) {
+            if (toolBar) {
+                toolBar->hide();
+                blog(LOG_INFO, "[StreamUP MultiDock] Hidden toolbar in captured dock: %s", 
+                     toolBar->objectName().toUtf8().constData());
+            }
+        }
+    }
+}
+
+void InnerDockHost::RestoreDockToolBars(QDockWidget* dock)
+{
+    if (!dock) {
+        return;
+    }
+    
+    // Find any QToolBar widgets inside the dock and show them again
+    QWidget* dockWidget = dock->widget();
+    if (dockWidget) {
+        QList<QToolBar*> toolBars = dockWidget->findChildren<QToolBar*>();
+        for (QToolBar* toolBar : toolBars) {
+            if (toolBar) {
+                toolBar->show();
+                blog(LOG_INFO, "[StreamUP MultiDock] Restored toolbar in returned dock: %s", 
+                     toolBar->objectName().toUtf8().constData());
             }
         }
     }

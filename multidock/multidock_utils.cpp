@@ -68,7 +68,26 @@ bool IsMultiDockContainer(QDockWidget* dock)
     
     // Check if this dock's objectName indicates it's a MultiDock container
     QString objectName = dock->objectName();
-    return objectName.startsWith("streamup_multidock_");
+    if (objectName.startsWith("streamup_multidock_")) {
+        return true;
+    }
+    
+    // For OBS versions that wrap widgets in QDockWidget, check the contained widget
+    QWidget* containedWidget = dock->widget();
+    if (containedWidget) {
+        QString containedObjectName = containedWidget->objectName();
+        if (containedObjectName.startsWith("streamup_multidock_")) {
+            return true;
+        }
+        
+        // Check widget class name as backup
+        QString className = containedWidget->metaObject()->className();
+        if (className.contains("MultiDockDock")) {
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 } // namespace MultiDock
