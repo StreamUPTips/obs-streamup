@@ -4,6 +4,7 @@
 #include "patch-notes-window.hpp"
 #include "settings-manager.hpp"
 #include "../utilities/error-handler.hpp"
+#include "../utilities/http-client.hpp"
 #include "../core/plugin-manager.hpp"
 #include "../version.h"
 #include <obs-module.h>
@@ -20,14 +21,38 @@
 #include <QFile>
 #include <QTextStream>
 #include <QPointer>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QTimer>
 #include <util/platform.h>
 #include <sstream>
+#include <algorithm>
 
 namespace StreamUP {
 namespace SplashScreen {
 
 // Static pointer to track open splash dialog
 static QPointer<QDialog> splashDialog;
+
+// Supporter data structures
+struct Supporter {
+    QString userId;
+    QString displayName;
+    
+    bool operator<(const Supporter& other) const {
+        return displayName.toLower() < other.displayName.toLower();
+    }
+};
+
+struct SupportersData {
+    std::vector<Supporter> andiSupporters;
+    std::vector<Supporter> streamupSupporters;
+    bool loaded = false;
+    QString errorMessage;
+};
+
+static SupportersData supportersData;
 
 // Monthly supporters list (you'll want to update this regularly)
 static const char* MONTHLY_SUPPORTERS = R"(
@@ -140,6 +165,149 @@ std::string ProcessInlineFormatting(const std::string& text)
     }
     
     return result;
+}
+
+void LoadSupportersData() 
+{
+    StreamUP::HttpClient::MakeAsyncGetRequest("https://streamup.tips/api/supporters", 
+        [](const std::string& url, const std::string& response, bool success) {
+            if (!success) {
+                supportersData.errorMessage = "Failed to fetch supporters data";
+                supportersData.loaded = true;
+                ErrorHandler::LogWarning("Failed to fetch supporters API: " + response, ErrorHandler::Category::Network);
+                return;
+            }
+
+            QJsonParseError parseError;
+            QJsonDocument doc = QJsonDocument::fromJson(response.c_str(), &parseError);
+            
+            if (parseError.error != QJsonParseError::NoError) {
+                supportersData.errorMessage = "Failed to parse supporters JSON: " + parseError.errorString();
+                supportersData.loaded = true;
+                ErrorHandler::LogWarning("Failed to parse supporters JSON: " + parseError.errorString().toStdString(), ErrorHandler::Category::Network);
+                return;
+            }
+
+            QJsonObject rootObj = doc.object();
+            
+            // Parse Andi supporters
+            if (rootObj.contains("andilippi") && rootObj["andilippi"].isObject()) {
+                QJsonObject andiObj = rootObj["andilippi"].toObject();
+                if (andiObj.contains("supporters") && andiObj["supporters"].isArray()) {
+                    QJsonArray andiSupportersArray = andiObj["supporters"].toArray();
+                    for (const QJsonValue& value : andiSupportersArray) {
+                        if (value.isObject()) {
+                            QJsonObject supporterObj = value.toObject();
+                            Supporter supporter;
+                            supporter.userId = supporterObj["userId"].toString();
+                            supporter.displayName = supporterObj["displayName"].toString();
+                            supportersData.andiSupporters.push_back(supporter);
+                        }
+                    }
+                }
+            }
+
+            // Parse StreamUP supporters
+            if (rootObj.contains("streamUP") && rootObj["streamUP"].isObject()) {
+                QJsonObject streamupObj = rootObj["streamUP"].toObject();
+                if (streamupObj.contains("supporters") && streamupObj["supporters"].isArray()) {
+                    QJsonArray streamupSupportersArray = streamupObj["supporters"].toArray();
+                    for (const QJsonValue& value : streamupSupportersArray) {
+                        if (value.isObject()) {
+                            QJsonObject supporterObj = value.toObject();
+                            Supporter supporter;
+                            supporter.userId = supporterObj["userId"].toString();
+                            supporter.displayName = supporterObj["displayName"].toString();
+                            supportersData.streamupSupporters.push_back(supporter);
+                        }
+                    }
+                }
+            }
+
+            // Sort supporters alphabetically
+            std::sort(supportersData.andiSupporters.begin(), supportersData.andiSupporters.end());
+            std::sort(supportersData.streamupSupporters.begin(), supportersData.streamupSupporters.end());
+
+            supportersData.loaded = true;
+            
+            ErrorHandler::LogInfo(QString("Loaded %1 Andi supporters and %2 StreamUP supporters")
+                .arg(supportersData.andiSupporters.size())
+                .arg(supportersData.streamupSupporters.size()).toStdString(), ErrorHandler::Category::Network);
+        });
+}
+
+QString GenerateSupportersHTML() 
+{
+    if (!supportersData.loaded) {
+        return R"(
+<div style="color: #e9d5ff; line-height: 1.4; font-size: 13px;">
+    <p style="margin: 0; color: #d8b4fe;">Loading supporters...</p>
+</div>
+        )";
+    }
+
+    if (!supportersData.errorMessage.isEmpty()) {
+        return QString(R"(
+<div style="color: #e9d5ff; line-height: 1.4; font-size: 13px;">
+    <p style="margin: 0; color: #fca5a5;">Unable to load supporters at this time.</p>
+</div>
+        )");
+    }
+
+    QString html = R"(<div style="color: #e9d5ff; line-height: 1.4; font-size: 13px;">)";
+
+    // Andi's supporters section
+    if (!supportersData.andiSupporters.empty()) {
+        html += R"(<h4 style="color: #fbbf24; margin: 12px 0 8px 0; font-size: 14px;">💛 Andi's Supporters</h4>)";
+        html += R"(<p style="margin: 8px 0; line-height: 1.8;">)";
+        
+        for (size_t i = 0; i < supportersData.andiSupporters.size(); ++i) {
+            const auto& supporter = supportersData.andiSupporters[i];
+            html += QString(R"(<span style="background-color: rgba(251, 191, 36, 0.2); color: #fde68a; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">%1</span>)")
+                .arg(supporter.displayName.toHtmlEscaped());
+            
+            // Add spacing between names
+            if (i < supportersData.andiSupporters.size() - 1) {
+                html += "&nbsp;&nbsp;&nbsp;"; // Add some spaces between names
+            }
+        }
+        html += R"(</p>)";
+    }
+
+    // StreamUP supporters section
+    if (!supportersData.streamupSupporters.empty()) {
+        html += R"(<h4 style="color: #a855f7; margin: 12px 0 8px 0; font-size: 14px;">💜 StreamUP Supporters</h4>)";
+        html += R"(<p style="margin: 8px 0; line-height: 1.8;">)";
+        
+        for (size_t i = 0; i < supportersData.streamupSupporters.size(); ++i) {
+            const auto& supporter = supportersData.streamupSupporters[i];
+            html += QString(R"(<span style="background-color: rgba(168, 85, 247, 0.2); color: #e9d5ff; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">%1</span>)")
+                .arg(supporter.displayName.toHtmlEscaped());
+                
+            // Add spacing between names
+            if (i < supportersData.streamupSupporters.size() - 1) {
+                html += "&nbsp;&nbsp;&nbsp;"; // Add some spaces between names
+            }
+        }
+        html += R"(</p>)";
+    }
+
+    // If both lists are empty
+    if (supportersData.andiSupporters.empty() && supportersData.streamupSupporters.empty()) {
+        html += R"(<p style="margin: 0; color: #d8b4fe; font-style: italic;">No public supporters to display at this time.</p>)";
+    }
+
+    // Opt-in message
+    html += R"(<div style="margin: 16px 0 0 0; padding: 12px; background: rgba(168, 85, 247, 0.1); border-left: 3px solid #a855f7; border-radius: 4px;">)";
+    html += R"(<p style="margin: 0; color: #e9d5ff; font-size: 12px;">)";
+    html += R"(<strong>If you're a supporter and your name is not here:</strong><br>)";
+    html += R"(This is an opt-in feature which you can enable in your account settings.<br>)";
+    html += R"(You can opt-in right now and choose exactly how your name will appear<br>)";
+    html += R"(👉 <a href="https://streamup.tips/Identity/Account/Manage" style="color: #c4b5fd; text-decoration: underline;">https://streamup.tips/Identity/Account/Manage</a>)";
+    html += R"(</p></div>)";
+
+    html += R"(</div>)";
+    return html;
 }
 
 std::string LoadLocalSupportInfo()
@@ -565,6 +733,11 @@ void CreateSplashDialog(ShowCondition condition)
         return;
     }
 
+    // Start loading supporters data if not already loaded or in progress
+    if (!supportersData.loaded && supportersData.errorMessage.isEmpty()) {
+        LoadSupportersData();
+    }
+
     UIHelpers::ShowDialogOnUIThread([condition]() {
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP");
         dialog->setModal(false);
@@ -805,15 +978,21 @@ void CreateSplashDialog(ShowCondition condition)
         QVBoxLayout* supportersLayout = new QVBoxLayout(supportersGroup);
         supportersLayout->setContentsMargins(0, 0, 0, 0);
         
-        QString modernSupporters = R"(
-<div style="color: #e9d5ff; line-height: 1.4; font-size: 13px;">
-    <p style="margin: 0; color: #d8b4fe;">Awaiting Waldo to make an API end point.</p>
-</div>
-        )";
-        
-        QLabel* supportersLabel = UIHelpers::CreateRichTextLabel(modernSupporters, false, true, Qt::Alignment(), true);
+        // Create supporters label that will be updated dynamically
+        QLabel* supportersLabel = UIHelpers::CreateRichTextLabel(GenerateSupportersHTML(), false, true, Qt::Alignment(), true);
+        supportersLabel->setObjectName("supportersLabel"); // Give it an object name for easy updates
         supportersLayout->addWidget(supportersLabel);
         contentLayout->addWidget(supportersGroup);
+        
+        // Set up a timer to refresh the supporters display every 2 seconds until loaded
+        QTimer* refreshTimer = new QTimer(dialog);
+        QObject::connect(refreshTimer, &QTimer::timeout, [supportersLabel, refreshTimer]() {
+            supportersLabel->setText(GenerateSupportersHTML());
+            if (supportersData.loaded) {
+                refreshTimer->stop(); // Stop refreshing once data is loaded
+            }
+        });
+        refreshTimer->start(2000); // Refresh every 2 seconds
 
         // Useful Links Section - Using modern group box
         QGroupBox* linksGroup = StreamUP::UIStyles::CreateStyledGroupBox("Useful Links", "info");
