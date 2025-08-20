@@ -1,7 +1,7 @@
 #ifndef STREAMUP_MULTIDOCK_DOCK_HPP
 #define STREAMUP_MULTIDOCK_DOCK_HPP
 
-#include <QDockWidget>
+#include <QFrame>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -9,13 +9,13 @@ namespace MultiDock {
 class InnerDockHost;
 
 /**
- * @brief The outer QDockWidget container registered with OBS
+ * @brief The main MultiDock widget registered with OBS
  * 
- * This is the dock that appears in OBS's View->Docks menu and can be
- * docked alongside other OBS docks. It contains an InnerDockHost as
- * its central widget.
+ * This is the widget that appears in OBS's View->Docks menu and can be
+ * docked alongside other OBS docks. It contains an InnerDockHost that
+ * provides the inner docking functionality.
  */
-class MultiDockDock : public QDockWidget
+class MultiDockDock : public QFrame
 {
     Q_OBJECT
 
@@ -47,7 +47,6 @@ public:
      */
     void SetName(const QString& name);
 
-public slots:
     /**
      * @brief Save the current state to persistent storage
      */

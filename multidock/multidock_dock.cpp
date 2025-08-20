@@ -3,14 +3,13 @@
 #include "persistence.hpp"
 #include "multidock_utils.hpp"
 #include <obs-module.h>
-#include <QFrame>
 #include <QVBoxLayout>
 
 namespace StreamUP {
 namespace MultiDock {
 
 MultiDockDock::MultiDockDock(const QString& id, const QString& name, QWidget* parent)
-    : QDockWidget(parent)
+    : QFrame(parent)
     , m_id(id)
     , m_name(name)
     , m_innerHost(nullptr)
@@ -29,44 +28,37 @@ MultiDockDock::~MultiDockDock()
 
 void MultiDockDock::SetupUi()
 {
-    // Set object name for identification
+    // Set object name for identification  
     setObjectName(QString("streamup_multidock_%1").arg(m_id));
     
-    // Set window title
-    setWindowTitle(m_name);
+    // Create main layout directly on this QFrame
+    QVBoxLayout* mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(0);
     
-    // Create main container frame
-    QFrame* containerFrame = new QFrame(this);
-    containerFrame->setFrameStyle(QFrame::StyledPanel | QFrame::Raised);
+    // Create inner host as a direct child
+    m_innerHost = new InnerDockHost(m_id, this);
     
-    // Create layout for the container
-    QVBoxLayout* containerLayout = new QVBoxLayout(containerFrame);
-    containerLayout->setContentsMargins(2, 2, 2, 2);
-    containerLayout->setSpacing(2);
-    
-    // Create inner host without parent initially
-    m_innerHost = new InnerDockHost(m_id, nullptr);
-    
-    // Remove the inner host's window frame and make it look integrated
+    // Remove window flags to make it look integrated
     m_innerHost->setWindowFlags(Qt::Widget);
     
-    // Add inner host to container layout
-    containerLayout->addWidget(m_innerHost);
-    
-    // Set the container as the dock widget's main widget
-    setWidget(containerFrame);
+    // Add inner host to the main layout
+    mainLayout->addWidget(m_innerHost);
     
     // Connect layout change signal for auto-save
     connect(m_innerHost, &InnerDockHost::LayoutChanged, this, &MultiDockDock::OnLayoutChanged);
     
     // Set minimum size to ensure usability
-    setMinimumSize(350, 250);
+    setMinimumSize(400, 300);
+    
+    // Set frame style to be minimal but visible
+    setFrameStyle(QFrame::StyledPanel);
 }
 
 void MultiDockDock::SetName(const QString& name)
 {
     m_name = name;
-    setWindowTitle(m_name);
+    // OBS will handle the title when this widget is registered as a dock
     
     blog(LOG_INFO, "[StreamUP MultiDock] Renamed MultiDock '%s' to '%s'", 
          m_id.toUtf8().constData(), m_name.toUtf8().constData());
