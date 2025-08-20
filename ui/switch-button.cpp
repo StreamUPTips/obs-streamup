@@ -118,9 +118,9 @@ void SwitchButton::paintEvent(QPaintEvent* event)
     painter.setPen(Qt::NoPen);
     painter.setRenderHint(QPainter::Antialiasing, true);
     
-    // Use standard colors that will work with any theme
-    QColor trackColorOff = m_hovered ? QColor(64, 64, 64) : QColor(48, 48, 48);
-    QColor trackColorOn = m_hovered ? QColor(0, 150, 0) : QColor(0, 120, 0);
+    // Use StreamUP theme colors from toggle SVG files
+    QColor trackColorOff = m_hovered ? QColor(58, 58, 61).lighter(110) : QColor(58, 58, 61);  // #3A3A3D from toggle-off.svg
+    QColor trackColorOn = m_hovered ? QColor(101, 196, 102).lighter(110) : QColor(101, 196, 102);  // #65C466 from toggle-on.svg
     
     // Create subtle gradient for depth (matching other button styles)
     QLinearGradient gradient(trackRect.topLeft(), trackRect.bottomLeft());

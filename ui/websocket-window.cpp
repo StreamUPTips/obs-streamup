@@ -331,8 +331,8 @@ QWidget* CreateCommandWidget(const QString& command, const QString& description)
     
     // OBS Raw copy button
     QString obsRawJson = QString(R"({"requestType":"CallVendorRequest","requestData":{"vendorName":"streamup","requestType":"%1","requestData":{}}})").arg(command);
-    QPushButton* obsRawBtn = StreamUP::UIStyles::CreateStyledButton("OBS Raw", "info", 28, 80);
-    obsRawBtn->setFixedSize(80, 28); // Set static size - bigger for "OBS Raw" text
+    QPushButton* obsRawBtn = StreamUP::UIStyles::CreateStyledButton("OBS Raw", "info", 0, 95);
+    obsRawBtn->setFixedSize(95, 28); // Set static size - bigger for "OBS Raw" text
     obsRawBtn->setToolTip(obs_module_text("WebSocket.Button.OBSRaw.Tooltip"));
     QObject::connect(obsRawBtn, &QPushButton::clicked, [obsRawBtn, obsRawJson]() {
         QApplication::clipboard()->setText(obsRawJson);
