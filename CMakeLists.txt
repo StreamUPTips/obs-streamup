@@ -79,6 +79,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/splash-screen.cpp
   ui/patch-notes-window.hpp
   ui/patch-notes-window.cpp
+  ui/theme-window.hpp
+  ui/theme-window.cpp
   ui/websocket-window.hpp
   ui/websocket-window.cpp
   ui/dock/streamup-dock.hpp

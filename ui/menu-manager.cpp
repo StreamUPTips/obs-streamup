@@ -4,6 +4,7 @@
 #include "plugin-manager.hpp"
 #include "splash-screen.hpp"
 #include "patch-notes-window.hpp"
+#include "theme-window.hpp"
 #include "websocket-window.hpp"
 #include <obs-module.h>
 #include <obs-frontend-api.h>
@@ -154,7 +155,10 @@ void LoadMenuItems(QMenu* menu)
 
     menu->addSeparator();
 
-    // WebSocket Commands, Settings, Patch Notes, About (in requested order)
+    // Theme, WebSocket Commands, Settings, Patch Notes, About (in requested order)
+    action = menu->addAction(obs_module_text("MenuTheme"));
+    QObject::connect(action, &QAction::triggered, []() { StreamUP::ThemeWindow::ShowThemeWindow(); });
+
     action = menu->addAction(obs_module_text("MenuWebSocket"));
     QObject::connect(action, &QAction::triggered, []() { 
         // Check if Shift is held to show internal tools
