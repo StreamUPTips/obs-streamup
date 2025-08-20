@@ -6,6 +6,7 @@
 #include "patch-notes-window.hpp"
 #include "theme-window.hpp"
 #include "websocket-window.hpp"
+#include "../multidock/multidock_dialogs.hpp"
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <QApplication>
@@ -151,6 +152,19 @@ void LoadMenuItems(QMenu* menu)
     action = videoDeviceMenu->addAction(obs_module_text("MenuRefreshVideoCaptureDevices"));
     QObject::connect(action, &QAction::triggered, []() { 
         StreamUP::SourceManager::RefreshAllVideoCaptureDevices(); 
+    });
+
+    // MultiDock submenu
+    QMenu* multiDockMenu = menu->addMenu("MultiDock");
+    
+    action = multiDockMenu->addAction("New MultiDock...");
+    QObject::connect(action, &QAction::triggered, []() { 
+        StreamUP::MultiDock::ShowNewMultiDockDialog(); 
+    });
+    
+    action = multiDockMenu->addAction("Manage MultiDocks...");
+    QObject::connect(action, &QAction::triggered, []() { 
+        StreamUP::MultiDock::ShowManageMultiDocksDialog(); 
     });
 
     menu->addSeparator();

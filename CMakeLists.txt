@@ -91,6 +91,23 @@ target_sources(${PROJECT_NAME} PRIVATE
   integrations/websocket-api.hpp
   integrations/websocket-api.cpp)
 
+# MultiDock module files
+target_sources(${PROJECT_NAME} PRIVATE
+  multidock/multidock_utils.hpp
+  multidock/multidock_utils.cpp
+  multidock/multidock_dialogs.hpp
+  multidock/multidock_dialogs.cpp
+  multidock/persistence.hpp
+  multidock/persistence.cpp
+  multidock/inner_dock_host.hpp
+  multidock/inner_dock_host.cpp
+  multidock/add_dock_dialog.hpp
+  multidock/add_dock_dialog.cpp
+  multidock/multidock_dock.hpp
+  multidock/multidock_dock.cpp
+  multidock/multidock_manager.hpp
+  multidock/multidock_manager.cpp)
+
 # Create source groups for Visual Studio folder structure
 source_group("Root" FILES
 	streamup.cpp
@@ -161,6 +178,22 @@ source_group("Integrations" FILES
   integrations/websocket-api.hpp
   integrations/websocket-api.cpp)
 
+source_group("MultiDock" FILES
+  multidock/multidock_utils.hpp
+  multidock/multidock_utils.cpp
+  multidock/multidock_dialogs.hpp
+  multidock/multidock_dialogs.cpp
+  multidock/persistence.hpp
+  multidock/persistence.cpp
+  multidock/inner_dock_host.hpp
+  multidock/inner_dock_host.cpp
+  multidock/add_dock_dialog.hpp
+  multidock/add_dock_dialog.cpp
+  multidock/multidock_dock.hpp
+  multidock/multidock_dock.cpp
+  multidock/multidock_manager.hpp
+  multidock/multidock_manager.cpp)
+
 find_package(CURL REQUIRED)
 if(BUILD_OUT_OF_TREE)
     find_package(libobs REQUIRED)
@@ -171,7 +204,8 @@ if(BUILD_OUT_OF_TREE)
 		"${CMAKE_CURRENT_SOURCE_DIR}/core"
 		"${CMAKE_CURRENT_SOURCE_DIR}/utilities"
 		"${CMAKE_CURRENT_SOURCE_DIR}/ui"
-		"${CMAKE_CURRENT_SOURCE_DIR}/integrations")
+		"${CMAKE_CURRENT_SOURCE_DIR}/integrations"
+		"${CMAKE_CURRENT_SOURCE_DIR}/multidock")
 else()
     set(OBS_FRONTEND_API_NAME "frontend-api")
 endif()
@@ -232,7 +266,8 @@ else()
 		"${CMAKE_CURRENT_SOURCE_DIR}/core"
 		"${CMAKE_CURRENT_SOURCE_DIR}/utilities"
 		"${CMAKE_CURRENT_SOURCE_DIR}/ui"
-		"${CMAKE_CURRENT_SOURCE_DIR}/integrations")
+		"${CMAKE_CURRENT_SOURCE_DIR}/integrations"
+		"${CMAKE_CURRENT_SOURCE_DIR}/multidock")
 	if(OBS_CMAKE_VERSION VERSION_GREATER_EQUAL 3.0.0)
 		set_target_properties_obs(${PROJECT_NAME} PROPERTIES FOLDER "plugins/andilippi" PREFIX "")
 	else()
