@@ -4,6 +4,7 @@
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <QUuid>
+#include <QDockWidget>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -247,10 +248,12 @@ void MultiDockManager::RegisterWithObs(MultiDockDock* multiDock)
         return;
     }
     
-    // Register the dock with OBS using the modern API
     QString id = multiDock->GetId();
     QString title = multiDock->GetName();
+    QMainWindow* mainWindow = GetObsMainWindow();
     
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
+    // Modern API - register the widget directly
     bool success = obs_frontend_add_dock_by_id(id.toUtf8().constData(), 
                                                title.toUtf8().constData(), 
                                                multiDock);
@@ -262,6 +265,20 @@ void MultiDockManager::RegisterWithObs(MultiDockDock* multiDock)
         blog(LOG_ERROR, "[StreamUP MultiDock] Failed to register MultiDock '%s' with OBS", 
              title.toUtf8().constData());
     }
+#else
+    // Legacy API - wrap in QDockWidget
+    auto dock = new QDockWidget(mainWindow);
+    dock->setObjectName(id);
+    dock->setWindowTitle(title);
+    dock->setWidget(multiDock);
+    dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    dock->setFloating(true);
+    dock->hide();
+    obs_frontend_add_dock(dock);
+    
+    blog(LOG_INFO, "[StreamUP MultiDock] Registered MultiDock '%s' with OBS (legacy API)", 
+         title.toUtf8().constData());
+#endif
 }
 
 void MultiDockManager::UnregisterFromObs(MultiDockDock* multiDock)
