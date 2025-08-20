@@ -87,6 +87,11 @@ public slots:
      */
     void CloseCurrentDock();
 
+    /**
+     * @brief Update the toolbar state (make public for restoration)
+     */
+    void UpdateToolBarState();
+
     // No signals needed - we save on OBS shutdown
 
 private slots:
@@ -97,7 +102,8 @@ private:
     void SetupDockOptions();
     void ConnectDockSignals(QDockWidget* dock);
     void DisconnectDockSignals(QDockWidget* dock);
-    void UpdateToolBarState();
+    void HideDockToolBars(QDockWidget* dock);
+    void RestoreDockToolBars(QDockWidget* dock);
 
     QString m_multiDockId;
     QToolBar* m_toolBar;

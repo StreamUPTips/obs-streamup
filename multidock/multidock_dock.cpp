@@ -2,8 +2,10 @@
 #include "inner_dock_host.hpp"
 #include "persistence.hpp"
 #include "multidock_utils.hpp"
+#include "../ui/ui-styles.hpp"
 #include <obs-module.h>
 #include <QVBoxLayout>
+#include <QTimer>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -50,8 +52,9 @@ void MultiDockDock::SetupUi()
     // Set minimum size to ensure usability
     setMinimumSize(400, 300);
     
-    // Make background transparent to show theme's rounded corners
-    setStyleSheet("QFrame { background: transparent; border: none; }");
+    // Use darkest theme color for background
+    QString bgColor = StreamUP::UIStyles::Colors::BG_DARKEST;
+    setStyleSheet(QString("QFrame { background-color: %1; border: none; }").arg(bgColor));
     setFrameStyle(QFrame::NoFrame);
 }
 
@@ -127,6 +130,17 @@ void MultiDockDock::LoadState()
     // Restore layout after adding docks
     if (!layout.isEmpty()) {
         m_innerHost->RestoreLayout(layout);
+    }
+    
+    // Ensure the MultiDock is properly shown and toolbar state is updated
+    if (restoredCount > 0) {
+        // Make sure the inner host is visible
+        m_innerHost->show();
+        
+        // Update toolbar state to reflect restored docks
+        QTimer::singleShot(100, m_innerHost, [this]() {
+            m_innerHost->UpdateToolBarState();
+        });
     }
     
     blog(LOG_INFO, "[StreamUP MultiDock] Restored %d out of %d docks for MultiDock '%s'", 

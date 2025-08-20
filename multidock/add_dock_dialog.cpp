@@ -8,6 +8,7 @@
 #include <QListWidgetItem>
 #include <QMessageBox>
 #include <QPushButton>
+#include <algorithm>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -95,23 +96,32 @@ void AddDockDialog::PopulateAvailableDocks()
     
     QList<QDockWidget*> allDocks = FindAllObsDocks(mainWindow);
     
+    // Collect available docks with their display names
+    QList<QPair<QString, QDockWidget*>> docksWithNames;
+    
     for (QDockWidget* dock : allDocks) {
         if (IsDockAvailable(dock)) {
-            m_availableDocks.append(dock);
-            
             QString displayName = dock->windowTitle();
-            QString objectName = dock->objectName();
             
             if (displayName.isEmpty()) {
                 displayName = "(Unnamed Dock)";
             }
             
-            if (!objectName.isEmpty() && objectName != displayName) {
-                displayName += QString(" (%1)").arg(objectName);
-            }
-            
-            m_dockList->addItem(displayName);
+            // Only show the dock name, not the identifier
+            docksWithNames.append({displayName, dock});
         }
+    }
+    
+    // Sort alphabetically by display name
+    std::sort(docksWithNames.begin(), docksWithNames.end(), 
+              [](const QPair<QString, QDockWidget*>& a, const QPair<QString, QDockWidget*>& b) {
+                  return a.first.toLower() < b.first.toLower();
+              });
+    
+    // Add to list and available docks array
+    for (const auto& pair : docksWithNames) {
+        m_availableDocks.append(pair.second);
+        m_dockList->addItem(pair.first);
     }
     
     if (m_availableDocks.isEmpty()) {
