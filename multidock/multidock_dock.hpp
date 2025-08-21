@@ -3,6 +3,11 @@
 
 #include <QFrame>
 
+class QVBoxLayout;
+class QToolBar;
+class QAction;
+class QLabel;
+
 namespace StreamUP {
 namespace MultiDock {
 
@@ -57,14 +62,26 @@ public:
      */
     void LoadState();
 
+    /**
+     * @brief Update the toolbar state based on current docks
+     */
+    void UpdateToolbarState();
+
     // No slots needed - we save on OBS shutdown
 
 private:
     void SetupUi();
+    void CreateBottomToolbar(QVBoxLayout* layout);
 
     QString m_id;
     QString m_name;
     InnerDockHost* m_innerHost;
+    
+    // Toolbar references for status updates
+    QLabel* m_statusLabel;
+    QAction* m_addDockAction;
+    QAction* m_returnDockAction;
+    QAction* m_closeDockAction;
 };
 
 } // namespace MultiDock

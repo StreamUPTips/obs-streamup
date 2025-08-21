@@ -1,5 +1,6 @@
 #include "multidock_manager.hpp"
 #include "multidock_dock.hpp"
+#include "inner_dock_host.hpp"
 #include "multidock_utils.hpp"
 #include <obs-frontend-api.h>
 #include <obs-module.h>
@@ -137,22 +138,35 @@ bool MultiDockManager::RemoveMultiDock(const QString& id)
         return false;
     }
     
-    MultiDockDock* multiDock = m_multiDocks[id];
-    if (multiDock) {
-        QString name = multiDock->GetName();
+    MultiDockDock* multiDock = m_multiDocks.value(id, nullptr);
+    
+    // If we have the widget, return all captured docks first
+    if (multiDock && multiDock->GetInnerHost()) {
+        blog(LOG_INFO, "[StreamUP MultiDock] Returning all docks before removing MultiDock '%s'", id.toUtf8().constData());
         
-        UnregisterFromObs(multiDock);
-        multiDock->deleteLater();
+        // Get all captured docks and return them to main window
+        QList<QDockWidget*> allDocks = multiDock->GetInnerHost()->GetAllDocks();
+        for (QDockWidget* dock : allDocks) {
+            if (dock) {
+                blog(LOG_INFO, "[StreamUP MultiDock] Returning dock '%s'", dock->windowTitle().toUtf8().constData());
+                multiDock->GetInnerHost()->RemoveDock(dock);
+            }
+        }
         
-        blog(LOG_INFO, "[StreamUP MultiDock] Removed MultiDock '%s'", name.toUtf8().constData());
+        blog(LOG_INFO, "[StreamUP MultiDock] All docks returned, now removing MultiDock");
     }
     
+    // Remove from our tracking
     m_multiDocks.remove(id);
-    m_persistentInfo.remove(id); // Also remove from persistent info
+    m_persistentInfo.remove(id);
     
     // Remove from persistent storage
     RemoveMultiDockState(id);
     SaveAllMultiDocks();
+    
+    // Now unregister the empty MultiDock from OBS
+    obs_frontend_remove_dock(id.toUtf8().constData());
+    blog(LOG_INFO, "[StreamUP MultiDock] Unregistered empty MultiDock from OBS");
     
     return true;
 }
@@ -262,6 +276,10 @@ void MultiDockManager::SaveAllMultiDocks()
 
 void MultiDockManager::OnMultiDockDestroyed(QObject* obj)
 {
+    if (!obj) {
+        return;
+    }
+    
     // Find the destroyed MultiDock and set widget pointer to null
     // The persistent info is maintained separately
     for (auto it = m_multiDocks.begin(); it != m_multiDocks.end(); ++it) {
@@ -269,7 +287,11 @@ void MultiDockManager::OnMultiDockDestroyed(QObject* obj)
             QString id = it.key();
             blog(LOG_INFO, "[StreamUP MultiDock] Widget destroyed for MultiDock ID '%s', setting widget pointer to null", 
                  id.toUtf8().constData());
-            it.value() = nullptr; // Set widget pointer to null but keep the entry
+            
+            // Check if the entry still exists (it might have been removed by RemoveMultiDock)
+            if (m_multiDocks.contains(id)) {
+                it.value() = nullptr; // Set widget pointer to null but keep the entry
+            }
             
             // Persistent info is maintained in m_persistentInfo, so this MultiDock will be restored on next load
             break;

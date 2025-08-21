@@ -1,4 +1,5 @@
 #include "inner_dock_host.hpp"
+#include "multidock_dock.hpp"
 #include "add_dock_dialog.hpp"
 #include "persistence.hpp"
 #include "../ui/ui-styles.hpp"
@@ -7,6 +8,10 @@
 #include <QWidget>
 #include <QLabel>
 #include <QSizePolicy>
+#include <QEvent>
+#include <QMouseEvent>
+#include <QPushButton>
+#include <QHBoxLayout>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -22,12 +27,9 @@ InnerDockHost::InnerDockHost(const QString& multiDockId, QWidget* parent)
     , m_currentDock(nullptr)
 {
     SetupDockOptions();
-    SetupToolBar();
+    // Toolbar is now created by MultiDockDock instead
     
     // No timers - we save on OBS shutdown and update UI immediately when needed
-    
-    // Initialize the toolbar state after toolbar is created
-    UpdateToolBarState();
     
     blog(LOG_INFO, "[StreamUP MultiDock] Created InnerDockHost for '%s'", 
          m_multiDockId.toUtf8().constData());
@@ -43,23 +45,53 @@ InnerDockHost::~InnerDockHost()
 void InnerDockHost::SetupDockOptions()
 {
     setDockOptions(AllowTabbedDocks | AllowNestedDocks | AnimatedDocks);
-    setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::North);
+    setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::South);
     
-    // Use darkest theme color for background
-    QString bgColor = StreamUP::UIStyles::Colors::BG_DARKEST;
-    setStyleSheet(QString("QMainWindow { background-color: %1; }").arg(bgColor));
+    // Create a central widget for the docking area
+    // Margins are now handled by the parent MultiDockDock
+    QWidget* centralWidget = new QWidget();
+    centralWidget->setContentsMargins(0, 0, 0, 0);
+    setCentralWidget(centralWidget);
+    
+    // Set window flags to prevent overlap with parent title
+    setWindowFlags(Qt::Widget);
+    
+    // Set darker background only for the main window background (empty areas)
+    // Style dock separators and margins to use the same color
+    QString bgColor = "#0d0d0d";
+    setStyleSheet(QString(
+        "InnerDockHost { background-color: %1; }"
+        "QMainWindow { background-color: %1; }"
+        "QMainWindow::separator { background-color: %1; width: 6px; height: 6px; }"
+        "QSplitter::handle { background-color: %1; }"
+        "QTabWidget::pane { border: none; margin: 3px; }"
+        "QDockWidget { background-color: transparent; }"
+    ).arg(bgColor));
 }
 
 void InnerDockHost::SetupToolBar()
 {
-    m_toolBar = addToolBar("MultiDock Controls");
+    // Make sure we're starting clean - but do it safely
+    QList<QToolBar*> existingToolBars = findChildren<QToolBar*>();
+    for (QToolBar* tb : existingToolBars) {
+        if (tb && tb->parent() == this) {
+            tb->setParent(nullptr);
+            removeToolBar(tb);
+            tb->deleteLater();
+        }
+    }
+    
+    m_toolBar = new QToolBar("MultiDock Controls", this);
     m_toolBar->setMovable(false);
     m_toolBar->setFloatable(false);
     m_toolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    
-    // Make sure toolbar is always visible and at the top
-    addToolBarBreak();
     m_toolBar->setObjectName("MultiDockToolBar");
+    
+    // Explicitly add to bottom toolbar area
+    addToolBar(Qt::BottomToolBarArea, m_toolBar);
+    
+    // Make sure it stays at the bottom
+    insertToolBarBreak(m_toolBar);
     
     // Add Dock action with icon
     m_addDockAction = m_toolBar->addAction("➕ Add Dock");
@@ -128,14 +160,20 @@ void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)
     addDockWidget(area, dock);
     ConnectDockSignals(dock);
     
-    // Hide any duplicate toolbars from the captured dock to prevent conflicts
-    HideDockToolBars(dock);
+    // Keep dock completely original - no custom modifications
+    
+    // Don't hide toolbars - users expect to see them
+    
+    // Ensure proper positioning and prevent overlap with parent
+    dock->setFloating(false);
+    dock->setAllowedAreas(Qt::AllDockWidgetAreas);
     
     // Set as current dock and make it visible/focused
     m_currentDock = dock;
     dock->show();
     dock->raise();
     
+    // Update toolbar state
     UpdateToolBarState();
     
     blog(LOG_INFO, "[StreamUP MultiDock] Added dock '%s' to MultiDock '%s'", 
@@ -160,8 +198,9 @@ void InnerDockHost::RemoveDock(QDockWidget* dock)
     dock->setMinimumSize(captured.original.minimumSize);
     dock->setMaximumSize(captured.original.maximumSize);
     
-    // Restore toolbars before removing
-    RestoreDockToolBars(dock);
+    // Toolbars were not hidden, so no need to restore them
+    
+    // No custom modifications were made, so nothing to remove
     
     // Remove from this host
     removeDockWidget(dock);
@@ -185,6 +224,7 @@ void InnerDockHost::RemoveDock(QDockWidget* dock)
         }
     }
     
+    // Update toolbar state
     UpdateToolBarState();
     
     blog(LOG_INFO, "[StreamUP MultiDock] Removed dock '%s' from MultiDock '%s'", 
@@ -210,7 +250,38 @@ QList<QDockWidget*> InnerDockHost::GetAllDocks() const
 void InnerDockHost::RestoreLayout(const QByteArray& layout)
 {
     if (!layout.isEmpty()) {
+        // Skip toolbar-related restoration to avoid crashes
+        // Only restore dock positions and geometry
         restoreState(layout);
+        
+        // Clean up any toolbars that might have been restored, but do it safely
+        QList<QToolBar*> toolBars = findChildren<QToolBar*>();
+        for (QToolBar* tb : toolBars) {
+            if (tb && (tb->objectName() == "MultiDockToolBar" || tb->parent() == this)) {
+                // Safely remove toolbar without immediate deletion
+                tb->hide();
+                tb->setVisible(false);
+                removeToolBar(tb);
+                // Don't delete immediately - just hide and remove from layout
+                tb->setParent(nullptr);
+            }
+        }
+        
+        // Fix any dock positioning issues after restoration
+        QList<QDockWidget*> docks = GetAllDocks();
+        for (QDockWidget* dock : docks) {
+            if (dock) {
+                // Ensure docks are properly positioned and visible
+                dock->show();
+                dock->raise();
+                // Reset any size constraints that might cause overlap
+                dock->setFloating(false);
+            }
+        }
+        
+        // Update toolbar state after restoration
+        UpdateToolBarState();
+        
         blog(LOG_INFO, "[StreamUP MultiDock] Restored layout for MultiDock '%s'", 
              m_multiDockId.toUtf8().constData());
     }
@@ -218,6 +289,8 @@ void InnerDockHost::RestoreLayout(const QByteArray& layout)
 
 QByteArray InnerDockHost::SaveLayout() const
 {
+    // Just save the state as is - we'll handle cleanup during restore
+    // This avoids the complex const_cast operations that could cause issues
     return saveState();
 }
 
@@ -258,31 +331,96 @@ void InnerDockHost::OnTabifiedDockActivated(QDockWidget* dock)
     UpdateToolBarState();
 }
 
+bool InnerDockHost::eventFilter(QObject* obj, QEvent* event)
+{
+    if (event->type() == QEvent::MouseButtonPress || 
+        event->type() == QEvent::FocusIn ||
+        event->type() == QEvent::WindowActivate) {
+        
+        // Find which dock widget this object belongs to
+        QWidget* widget = qobject_cast<QWidget*>(obj);
+        if (widget) {
+            QDockWidget* dock = nullptr;
+            QWidget* parent = widget;
+            
+            // Walk up the parent chain to find the QDockWidget
+            while (parent && !dock) {
+                dock = qobject_cast<QDockWidget*>(parent);
+                parent = parent->parentWidget();
+            }
+            
+            if (dock && m_capturedDocks.contains(GenerateDockId(dock))) {
+                m_currentDock = dock;
+                UpdateToolBarState();
+            }
+        }
+    }
+    
+    return QMainWindow::eventFilter(obj, event);
+}
+
 void InnerDockHost::ConnectDockSignals(QDockWidget* dock)
 {
     if (!dock) {
         return;
     }
     
-    // Only track tab activation for current dock selection
-    // Let Qt handle all the normal docking behavior
+    // Track tab activation for current dock selection
     connect(this, &QMainWindow::tabifiedDockWidgetActivated, this, &InnerDockHost::OnTabifiedDockActivated);
+    
+    // Connect to dock widget's focus/visibility changes
+    connect(dock, &QDockWidget::visibilityChanged, this, [this, dock](bool visible) {
+        if (visible && dock->isActiveWindow()) {
+            m_currentDock = dock;
+        }
+        UpdateToolBarState(); // Update toolbar when visibility changes
+    });
+    
+    // Track when dock becomes active/focused by installing an event filter
+    if (dock->widget()) {
+        dock->widget()->installEventFilter(this);
+    }
 }
 
 void InnerDockHost::DisconnectDockSignals(QDockWidget* dock)
 {
-    // Nothing special to disconnect - Qt handles it all
-    Q_UNUSED(dock)
+    if (!dock) {
+        return;
+    }
+    
+    // Remove event filter from the dock's widget
+    if (dock->widget()) {
+        dock->widget()->removeEventFilter(this);
+    }
+    
+    // Qt handles the rest of the signal disconnections automatically
 }
 
 void InnerDockHost::UpdateToolBarState()
 {
+    // Safety check to prevent crashes during shutdown or destruction
+    if (!parent()) {
+        return;
+    }
+    
+    // Find the parent MultiDockDock and call its UpdateToolbarState method
+    MultiDockDock* parentDock = qobject_cast<MultiDockDock*>(parent());
+    if (parentDock) {
+        parentDock->UpdateToolbarState();
+        return;
+    }
+    
+    // Fallback: Legacy toolbar update for old toolbar (if any)
+    if (!m_returnDockAction || !m_closeDockAction) {
+        return; // No toolbar actions available
+    }
+    
     int dockCount = m_capturedDocks.size();
     bool hasCurrentDock = m_currentDock != nullptr;
     
     // Update action states
     m_returnDockAction->setEnabled(hasCurrentDock);
-    m_closeDockAction->setEnabled(hasCurrentDock && m_currentDock->isVisible());
+    m_closeDockAction->setEnabled(hasCurrentDock && m_currentDock && m_currentDock->isVisible());
     
     // Update status label
     if (m_statusLabel) {
@@ -345,6 +483,7 @@ void InnerDockHost::RestoreDockToolBars(QDockWidget* dock)
         }
     }
 }
+
 
 
 } // namespace MultiDock

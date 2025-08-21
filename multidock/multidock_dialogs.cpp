@@ -136,8 +136,8 @@ void ShowManageMultiDocksDialog()
     buttonLayout->addWidget(closeButton);
     layout->addLayout(buttonLayout);
     
-    // Connect signals
-    QObject::connect(listWidget, &QListWidget::itemSelectionChanged, [&]() {
+    // Connect signals - use explicit captures instead of [&]
+    QObject::connect(listWidget, &QListWidget::itemSelectionChanged, [listWidget, openButton, renameButton, deleteButton]() {
         bool hasValidSelection = listWidget->currentItem() != nullptr && 
                                !listWidget->currentItem()->data(Qt::UserRole).toString().isEmpty();
         openButton->setEnabled(hasValidSelection);
@@ -145,7 +145,7 @@ void ShowManageMultiDocksDialog()
         deleteButton->setEnabled(hasValidSelection);
     });
     
-    QObject::connect(openButton, &QPushButton::clicked, [&]() {
+    QObject::connect(openButton, &QPushButton::clicked, [listWidget, manager, &dialog]() {
         QListWidgetItem* item = listWidget->currentItem();
         if (item) {
             QString id = item->data(Qt::UserRole).toString();
@@ -161,22 +161,46 @@ void ShowManageMultiDocksDialog()
         }
     });
     
-    QObject::connect(deleteButton, &QPushButton::clicked, [&]() {
+    QObject::connect(deleteButton, &QPushButton::clicked, [listWidget, manager, &dialog, openButton, renameButton, deleteButton]() {
         QListWidgetItem* item = listWidget->currentItem();
-        if (item && manager) {
-            QString id = item->data(Qt::UserRole).toString();
-            QString name = item->text();
-            if (!id.isEmpty()) {
-                int result = QMessageBox::question(&dialog, "Delete MultiDock", 
-                    QString("Are you sure you want to delete the MultiDock '%1'?\n\nThis will return all captured docks to the main window.").arg(name),
-                    QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-                
-                if (result == QMessageBox::Yes) {
-                    if (manager->RemoveMultiDock(id)) {
-                        delete item;
-                    }
-                }
+        if (!item || !manager) {
+            return;
+        }
+        
+        QString id = item->data(Qt::UserRole).toString();
+        QString name = item->text();
+        if (id.isEmpty()) {
+            return;
+        }
+        
+        // Create a separate dialog for confirmation to avoid any lifecycle issues
+        QMessageBox confirmDialog(&dialog);
+        confirmDialog.setWindowTitle("Delete MultiDock");
+        confirmDialog.setText(QString("Are you sure you want to delete the MultiDock '%1'?").arg(name));
+        confirmDialog.setInformativeText("This will return all captured docks to the main window.");
+        confirmDialog.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+        confirmDialog.setDefaultButton(QMessageBox::No);
+        confirmDialog.setIcon(QMessageBox::Question);
+        
+        int result = confirmDialog.exec();
+        if (result != QMessageBox::Yes) {
+            return;
+        }
+        
+        // Simple immediate deletion
+        blog(LOG_INFO, "[StreamUP MultiDock] Attempting to remove MultiDock '%s'", name.toUtf8().constData());
+        
+        bool success = manager->RemoveMultiDock(id);
+        if (success) {
+            // Remove from the UI list
+            int row = listWidget->row(item);
+            if (row >= 0) {
+                delete listWidget->takeItem(row);
             }
+            blog(LOG_INFO, "[StreamUP MultiDock] Successfully removed MultiDock from UI");
+        } else {
+            blog(LOG_WARNING, "[StreamUP MultiDock] Failed to remove MultiDock");
+            QMessageBox::warning(&dialog, "Error", "Failed to delete MultiDock.");
         }
     });
     
