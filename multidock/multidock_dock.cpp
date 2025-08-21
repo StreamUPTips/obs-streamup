@@ -25,6 +25,8 @@ MultiDockDock::MultiDockDock(const QString& id, const QString& name, QWidget* pa
     , m_addDockAction(nullptr)
     , m_returnDockAction(nullptr)
     , m_closeDockAction(nullptr)
+    , m_lockDockAction(nullptr)
+    , m_docksLocked(false)
 {
     SetupUi();
     
@@ -160,7 +162,12 @@ void MultiDockDock::LoadState()
         // Make sure the inner host is visible
         m_innerHost->show();
         
-        // Docks restored - toolbar will be updated by layout
+        // Use a timer to reapply dock features after OBS finishes initialization
+        QTimer::singleShot(1000, [this]() {
+            if (m_innerHost) {
+                m_innerHost->ReapplyDockFeatures();
+            }
+        });
     }
     
     blog(LOG_INFO, "[StreamUP MultiDock] Restored %d out of %d docks for MultiDock '%s'", 
@@ -204,11 +211,26 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
         }
     });
     
+    // Lock Docks action
+    QAction* lockDockAction = toolBar->addAction("🔓 Unlock");
+    lockDockAction->setToolTip("Toggle dock locking (prevents moving/resizing when locked)");
+    lockDockAction->setCheckable(true);
+    connect(lockDockAction, &QAction::triggered, [this, lockDockAction](bool checked) {
+        m_docksLocked = checked;
+        lockDockAction->setText(m_docksLocked ? "🔒 Lock" : "🔓 Unlock");
+        lockDockAction->setToolTip(m_docksLocked ? "Docks are locked (click to unlock)" : "Docks are unlocked (click to lock)");
+        
+        if (m_innerHost) {
+            m_innerHost->SetDocksLocked(m_docksLocked);
+        }
+    });
+    
     // Store references for later access
     m_statusLabel = nullptr; // No status label anymore
     m_addDockAction = addDockAction;
     m_returnDockAction = nullptr; // No separate return action
     m_closeDockAction = closeDockAction;
+    m_lockDockAction = lockDockAction;
     
     // Add toolbar widget to the bottom of the layout
     layout->addWidget(toolBar, 0); // 0 means don't stretch

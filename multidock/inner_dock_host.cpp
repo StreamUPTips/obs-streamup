@@ -25,6 +25,7 @@ InnerDockHost::InnerDockHost(const QString& multiDockId, QWidget* parent)
     , m_closeDockAction(nullptr)
     , m_statusLabel(nullptr)
     , m_currentDock(nullptr)
+    , m_docksLocked(false)
 {
     SetupDockOptions();
     // Toolbar is now created by MultiDockDock instead
@@ -47,25 +48,27 @@ void InnerDockHost::SetupDockOptions()
     setDockOptions(AllowTabbedDocks | AllowNestedDocks | AnimatedDocks);
     setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::South);
     
-    // Create a central widget for the docking area
-    // Margins are now handled by the parent MultiDockDock
-    QWidget* centralWidget = new QWidget();
-    centralWidget->setContentsMargins(0, 0, 0, 0);
-    setCentralWidget(centralWidget);
+    // Don't create a central widget - let docks fill the entire space
+    // This allows dock widgets to use all available space
     
     // Set window flags to prevent overlap with parent title
     setWindowFlags(Qt::Widget);
     
     // Set darker background only for the main window background (empty areas)
-    // Style dock separators and margins to use the same color
+    // Style dock separators and margins to use the same color with 12px spacing
     QString bgColor = "#0d0d0d";
     setStyleSheet(QString(
         "InnerDockHost { background-color: %1; }"
         "QMainWindow { background-color: %1; }"
-        "QMainWindow::separator { background-color: %1; width: 6px; height: 6px; }"
-        "QSplitter::handle { background-color: %1; }"
-        "QTabWidget::pane { border: none; margin: 3px; }"
+        "QMainWindow::separator { background-color: %1; width: 12px; height: 12px; }"
+        "QSplitter::handle { background-color: %1; width: 12px; height: 12px; }"
+        "QTabWidget::pane { border: none; margin: 6px; }"
         "QDockWidget { background-color: transparent; }"
+        "QDockWidget::title { background-color: #161617; text-align: left; padding-left: 8px; }"
+        "QDockWidget::close-button { subcontrol-position: top right; right: 10px; top: 4px; }"
+        "QDockWidget::float-button { display: none; }"
+        "InnerDockHost QDockWidget::float-button { display: none; }"
+        "InnerDockHost > QDockWidget::float-button { display: none; }"
     ).arg(bgColor));
 }
 
@@ -167,6 +170,19 @@ void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)
     // Ensure proper positioning and prevent overlap with parent
     dock->setFloating(false);
     dock->setAllowedAreas(Qt::AllDockWidgetAreas);
+    
+    // Set dock features based on lock state
+    QDockWidget::DockWidgetFeatures features = QDockWidget::DockWidgetClosable;
+    if (!m_docksLocked) {
+        features |= QDockWidget::DockWidgetMovable;
+    }
+    dock->setFeatures(features);
+    
+    // Make dock fill available space
+    dock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    if (dock->widget()) {
+        dock->widget()->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    }
     
     // Set as current dock and make it visible/focused
     m_currentDock = dock;
@@ -276,11 +292,21 @@ void InnerDockHost::RestoreLayout(const QByteArray& layout)
                 dock->raise();
                 // Reset any size constraints that might cause overlap
                 dock->setFloating(false);
+                
+                // Reapply dock features to prevent popout buttons from reappearing
+                dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
+                dock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+                if (dock->widget()) {
+                    dock->widget()->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+                }
             }
         }
         
         // Update toolbar state after restoration
         UpdateToolBarState();
+        
+        // Reapply dock features immediately after layout restoration
+        ReapplyDockFeatures();
         
         blog(LOG_INFO, "[StreamUP MultiDock] Restored layout for MultiDock '%s'", 
              m_multiDockId.toUtf8().constData());
@@ -482,6 +508,54 @@ void InnerDockHost::RestoreDockToolBars(QDockWidget* dock)
             }
         }
     }
+}
+
+void InnerDockHost::ReapplyDockFeatures()
+{
+    QList<QDockWidget*> docks = GetAllDocks();
+    for (QDockWidget* dock : docks) {
+        if (dock) {
+            // Reapply dock features to prevent popout buttons from reappearing
+            QDockWidget::DockWidgetFeatures features = QDockWidget::DockWidgetClosable;
+            if (!m_docksLocked) {
+                features |= QDockWidget::DockWidgetMovable;
+            }
+            dock->setFeatures(features);
+            dock->setFloating(false);
+            dock->setAllowedAreas(Qt::AllDockWidgetAreas);
+            dock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+            if (dock->widget()) {
+                dock->widget()->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+            }
+            
+            blog(LOG_INFO, "[StreamUP MultiDock] Reapplied features to dock '%s' (locked: %s)", 
+                 dock->windowTitle().toUtf8().constData(), m_docksLocked ? "yes" : "no");
+        }
+    }
+}
+
+void InnerDockHost::SetDocksLocked(bool locked)
+{
+    m_docksLocked = locked;
+    
+    // Apply lock state to all current docks
+    QList<QDockWidget*> docks = GetAllDocks();
+    for (QDockWidget* dock : docks) {
+        if (dock) {
+            QDockWidget::DockWidgetFeatures features = QDockWidget::DockWidgetClosable;
+            if (!m_docksLocked) {
+                features |= QDockWidget::DockWidgetMovable;
+            }
+            dock->setFeatures(features);
+            
+            blog(LOG_INFO, "[StreamUP MultiDock] %s dock '%s'", 
+                 m_docksLocked ? "Locked" : "Unlocked", 
+                 dock->windowTitle().toUtf8().constData());
+        }
+    }
+    
+    blog(LOG_INFO, "[StreamUP MultiDock] Set docks locked state to: %s", 
+         m_docksLocked ? "locked" : "unlocked");
 }
 
 

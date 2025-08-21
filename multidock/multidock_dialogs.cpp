@@ -117,6 +117,7 @@ void ShowManageMultiDocksDialog()
     
     // Buttons
     QHBoxLayout* buttonLayout = new QHBoxLayout();
+    QPushButton* newButton = new QPushButton("New", &dialog);
     QPushButton* openButton = new QPushButton("Open", &dialog);
     QPushButton* renameButton = new QPushButton("Rename", &dialog);
     QPushButton* deleteButton = new QPushButton("Delete", &dialog);
@@ -129,6 +130,7 @@ void ShowManageMultiDocksDialog()
     renameButton->setEnabled(hasSelection);
     deleteButton->setEnabled(hasSelection);
     
+    buttonLayout->addWidget(newButton);
     buttonLayout->addWidget(openButton);
     buttonLayout->addWidget(renameButton);
     buttonLayout->addWidget(deleteButton);
@@ -202,6 +204,78 @@ void ShowManageMultiDocksDialog()
             blog(LOG_WARNING, "[StreamUP MultiDock] Failed to remove MultiDock");
             QMessageBox::warning(&dialog, "Error", "Failed to delete MultiDock.");
         }
+    });
+    
+    QObject::connect(newButton, &QPushButton::clicked, [listWidget, manager, &dialog]() {
+        // Show the new MultiDock dialog
+        QDialog newDialog(&dialog);
+        newDialog.setWindowTitle("New MultiDock");
+        newDialog.setModal(true);
+        newDialog.resize(300, 120);
+        
+        QVBoxLayout* newLayout = new QVBoxLayout(&newDialog);
+        
+        // Name input
+        newLayout->addWidget(new QLabel("MultiDock Name:"));
+        QLineEdit* nameEdit = new QLineEdit(&newDialog);
+        nameEdit->setPlaceholderText("Enter MultiDock name...");
+        newLayout->addWidget(nameEdit);
+        
+        // Buttons
+        QHBoxLayout* newButtonLayout = new QHBoxLayout();
+        QPushButton* createButton = new QPushButton("Create", &newDialog);
+        QPushButton* cancelButton = new QPushButton("Cancel", &newDialog);
+        
+        newButtonLayout->addWidget(createButton);
+        newButtonLayout->addWidget(cancelButton);
+        newLayout->addLayout(newButtonLayout);
+        
+        // Connect signals
+        QObject::connect(cancelButton, &QPushButton::clicked, &newDialog, &QDialog::reject);
+        QObject::connect(createButton, &QPushButton::clicked, [&newDialog, nameEdit, manager, listWidget]() {
+            QString name = nameEdit->text().trimmed();
+            if (name.isEmpty()) {
+                QMessageBox::warning(&newDialog, "Invalid Name", "Please enter a valid MultiDock name.");
+                return;
+            }
+            
+            if (!manager) {
+                QMessageBox::critical(&newDialog, "Error", "MultiDock system not initialized.");
+                return;
+            }
+            
+            QString id = manager->CreateMultiDock(name);
+            if (id.isEmpty()) {
+                QMessageBox::critical(&newDialog, "Error", "Failed to create MultiDock.");
+                return;
+            }
+            
+            // Add the new MultiDock to the list
+            QListWidgetItem* item = new QListWidgetItem(name);
+            item->setData(Qt::UserRole, id);
+            
+            // Remove placeholder text if it exists
+            if (listWidget->count() == 1) {
+                QListWidgetItem* firstItem = listWidget->item(0);
+                if (firstItem && firstItem->data(Qt::UserRole).toString().isEmpty()) {
+                    delete listWidget->takeItem(0);
+                }
+            }
+            
+            listWidget->addItem(item);
+            listWidget->setCurrentItem(item);
+            
+            blog(LOG_INFO, "[StreamUP MultiDock] Created MultiDock: '%s' with ID '%s'", 
+                 name.toUtf8().constData(), id.toUtf8().constData());
+            
+            newDialog.accept();
+        });
+        
+        // Make create button default
+        createButton->setDefault(true);
+        nameEdit->setFocus();
+        
+        newDialog.exec();
     });
     
     QObject::connect(closeButton, &QPushButton::clicked, &dialog, &QDialog::accept);

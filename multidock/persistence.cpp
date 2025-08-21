@@ -12,6 +12,7 @@
 namespace StreamUP {
 namespace MultiDock {
 
+
 static QString GetConfigPath()
 {
     // Use OBS module config path for better compatibility
@@ -189,6 +190,7 @@ void RemoveMultiDockState(const QString& id)
     
     blog(LOG_INFO, "[StreamUP MultiDock] Removed state for MultiDock '%s'", id.toUtf8().constData());
 }
+
 
 } // namespace MultiDock
 } // namespace StreamUP

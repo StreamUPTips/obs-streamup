@@ -48,6 +48,7 @@ void SaveMultiDockState(const QString& id, const QStringList& capturedDocks, con
  */
 void RemoveMultiDockState(const QString& id);
 
+
 } // namespace MultiDock
 } // namespace StreamUP
 

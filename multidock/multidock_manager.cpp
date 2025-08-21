@@ -2,6 +2,7 @@
 #include "multidock_dock.hpp"
 #include "inner_dock_host.hpp"
 #include "multidock_utils.hpp"
+#include "persistence.hpp"
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <QUuid>
@@ -123,10 +124,20 @@ QString MultiDockManager::CreateMultiDock(const QString& name)
     
     RegisterWithObs(multiDock);
     
+    // Auto-open the multidock after creation
+    if (mainWindow) {
+        // Find the dock widget that was just registered and show it
+        QDockWidget* obsDocWidget = mainWindow->findChild<QDockWidget*>(id);
+        if (obsDocWidget) {
+            obsDocWidget->show();
+            obsDocWidget->raise();
+        }
+    }
+    
     // Save the updated list
     SaveAllMultiDocks();
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Created MultiDock '%s' with ID '%s'", 
+    blog(LOG_INFO, "[StreamUP MultiDock] Created MultiDock '%s' with ID '%s' and auto-opened", 
          trimmedName.toUtf8().constData(), id.toUtf8().constData());
     
     return id;
