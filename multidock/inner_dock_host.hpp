@@ -91,6 +91,17 @@ public slots:
      * @brief Update the toolbar state (make public for restoration)
      */
     void UpdateToolBarState();
+    
+    /**
+     * @brief Reapply dock features to all captured docks
+     */
+    void ReapplyDockFeatures();
+    
+    /**
+     * @brief Set whether docks are locked (prevents moving/resizing)
+     * @param locked True to lock docks, false to unlock
+     */
+    void SetDocksLocked(bool locked);
 
     // No signals needed - we save on OBS shutdown
 
@@ -117,6 +128,7 @@ private:
     
     QHash<DockId, CapturedDock> m_capturedDocks;
     QPointer<QDockWidget> m_currentDock;
+    bool m_docksLocked;
     
     // Removed timers - we save on OBS shutdown instead
 };

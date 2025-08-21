@@ -82,6 +82,8 @@ private:
     QAction* m_addDockAction;
     QAction* m_returnDockAction;
     QAction* m_closeDockAction;
+    QAction* m_lockDockAction;
+    bool m_docksLocked;
 };
 
 } // namespace MultiDock
