@@ -12,9 +12,34 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QAction>
+#include <QIcon>
+#include <QPainter>
+#include <QPixmap>
+#include <QtSvg/QSvgRenderer>
 
 namespace StreamUP {
 namespace MultiDock {
+
+// Helper function to create colored icons from SVG resources
+static QIcon CreateColoredIcon(const QString& svgPath, const QColor& color, const QSize& size = QSize(16, 16))
+{
+    QPixmap pixmap(size);
+    pixmap.fill(Qt::transparent);
+    
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    
+    QSvgRenderer renderer(svgPath);
+    if (renderer.isValid()) {
+        renderer.render(&painter);
+        
+        // Apply color overlay
+        painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        painter.fillRect(pixmap.rect(), color);
+    }
+    
+    return QIcon(pixmap);
+}
 
 MultiDockDock::MultiDockDock(const QString& id, const QString& name, QWidget* parent)
     : QFrame(parent)
@@ -185,14 +210,42 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
     toolBar->setObjectName("MultiDockBottomToolbar");
     toolBar->setMovable(false);
     toolBar->setFloatable(false);
-    toolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    toolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     toolBar->setOrientation(Qt::Horizontal);
     
-    // Make it look more like a standard toolbar
+    // Make it look more like a standard OBS toolbar
     toolBar->setIconSize(QSize(16, 16));
     
-    // Add Dock action
-    QAction* addDockAction = toolBar->addAction("Add Dock");
+    // Apply exact OBS toolbar styling with correct colors and height
+    toolBar->setStyleSheet(
+        "QToolBar {"
+        "    background-color: #161617;"
+        "    min-height: 20px;"
+        "    max-height: 20px;"
+        "    border: none;"
+        "    padding: 2px 0 4px 4px;"
+        "}"
+        "QToolButton {"
+        "    background: transparent;"
+        "    border: none;"
+        "    border-radius: 6px;"
+        "    margin: 0 0 0 12px;"
+        "    min-width: 20px;"
+        "    min-height: 20px;"
+        "}"
+        "QToolButton:hover {"
+        "    background-color: #0f7bcf;"
+        "}"
+        "QToolButton:pressed {"
+        "    background-color: #0a5a9c;"
+        "}"
+        "QToolButton:disabled {"
+        "    background: transparent;"
+        "}"
+    );
+    
+    // Add Dock action with #fefefe plus icon
+    QAction* addDockAction = toolBar->addAction(CreateColoredIcon(":/res/images/plus.svg", QColor("#fefefe")), "");
     addDockAction->setToolTip("Add an OBS dock to this MultiDock");
     connect(addDockAction, &QAction::triggered, [this]() {
         if (m_innerHost) {
@@ -200,28 +253,23 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
         }
     });
     
-    toolBar->addSeparator();
-    
-    // Close Dock action (returns dock to original position)
-    QAction* closeDockAction = toolBar->addAction("Close Dock");
-    closeDockAction->setToolTip("Return the selected dock to the main OBS window");
-    connect(closeDockAction, &QAction::triggered, [this]() {
-        if (m_innerHost) {
-            m_innerHost->ReturnCurrentDock();
+    // Lock Docks action with colored lock icons (start unlocked with #3a3a3d)
+    QAction* lockDockAction = toolBar->addAction(CreateColoredIcon(":/res/images/unlocked.svg", QColor("#3a3a3d")), "");
+    lockDockAction->setToolTip("Docks are unlocked (click to lock)");
+    // Remove checkable to prevent blue background when locked
+    connect(lockDockAction, &QAction::triggered, [this, lockDockAction]() {
+        m_docksLocked = !m_docksLocked;
+        if (m_docksLocked) {
+            lockDockAction->setIcon(CreateColoredIcon(":/res/images/locked.svg", QColor("#fefefe")));
+        } else {
+            lockDockAction->setIcon(CreateColoredIcon(":/res/images/unlocked.svg", QColor("#3a3a3d")));
         }
-    });
-    
-    // Lock Docks action
-    QAction* lockDockAction = toolBar->addAction("🔓 Unlock");
-    lockDockAction->setToolTip("Toggle dock locking (prevents moving/resizing when locked)");
-    lockDockAction->setCheckable(true);
-    connect(lockDockAction, &QAction::triggered, [this, lockDockAction](bool checked) {
-        m_docksLocked = checked;
-        lockDockAction->setText(m_docksLocked ? "🔒 Lock" : "🔓 Unlock");
         lockDockAction->setToolTip(m_docksLocked ? "Docks are locked (click to unlock)" : "Docks are unlocked (click to lock)");
         
         if (m_innerHost) {
             m_innerHost->SetDocksLocked(m_docksLocked);
+            // Update toolbar state after lock change
+            UpdateToolbarState();
         }
     });
     
@@ -229,11 +277,14 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
     m_statusLabel = nullptr; // No status label anymore
     m_addDockAction = addDockAction;
     m_returnDockAction = nullptr; // No separate return action
-    m_closeDockAction = closeDockAction;
+    m_closeDockAction = nullptr; // No close dock action anymore
     m_lockDockAction = lockDockAction;
     
     // Add toolbar widget to the bottom of the layout
     layout->addWidget(toolBar, 0); // 0 means don't stretch
+    
+    // Initialize toolbar button states
+    UpdateToolbarState();
     
     blog(LOG_INFO, "[StreamUP MultiDock] Created bottom toolbar for MultiDock '%s'", 
          m_id.toUtf8().constData());
@@ -245,13 +296,16 @@ void MultiDockDock::UpdateToolbarState()
         return;
     }
     
-    QList<QDockWidget*> docks = m_innerHost->GetAllDocks();
-    QDockWidget* currentDock = m_innerHost->GetCurrentDock();
-    bool hasCurrentDock = currentDock != nullptr;
+    bool isLocked = m_docksLocked;
     
-    // Update close dock action state (only enabled when there's a current dock)
-    if (m_closeDockAction) {
-        m_closeDockAction->setEnabled(hasCurrentDock);
+    // Update button states based on lock status
+    if (m_addDockAction) {
+        m_addDockAction->setEnabled(!isLocked);
+        if (isLocked) {
+            m_addDockAction->setIcon(CreateColoredIcon(":/res/images/plus.svg", QColor("#3a3a3d")));
+        } else {
+            m_addDockAction->setIcon(CreateColoredIcon(":/res/images/plus.svg", QColor("#fefefe")));
+        }
     }
 }
 
