@@ -5,7 +5,13 @@
 #include "../ui/ui-styles.hpp"
 #include <obs-module.h>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QPushButton>
+#include <QLabel>
+#include <QFrame>
 #include <QTimer>
+#include <QToolBar>
+#include <QAction>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -15,6 +21,10 @@ MultiDockDock::MultiDockDock(const QString& id, const QString& name, QWidget* pa
     , m_id(id)
     , m_name(name)
     , m_innerHost(nullptr)
+    , m_statusLabel(nullptr)
+    , m_addDockAction(nullptr)
+    , m_returnDockAction(nullptr)
+    , m_closeDockAction(nullptr)
 {
     SetupUi();
     
@@ -38,23 +48,36 @@ void MultiDockDock::SetupUi()
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
     
+    // Create a container widget for the inner host with padding
+    QWidget* innerContainer = new QWidget();
+    innerContainer->setObjectName("MultiDockInnerContainer");
+    innerContainer->setStyleSheet("QWidget#MultiDockInnerContainer { background-color: #0d0d0d; }");
+    QVBoxLayout* innerLayout = new QVBoxLayout(innerContainer);
+    innerLayout->setContentsMargins(12, 12, 12, 12); // 12px padding on all sides
+    innerLayout->setSpacing(0);
+    
     // Create inner host as a direct child
     m_innerHost = new InnerDockHost(m_id, this);
     
     // Remove window flags to make it look integrated
     m_innerHost->setWindowFlags(Qt::Widget);
     
-    // Add inner host to the main layout
-    mainLayout->addWidget(m_innerHost);
+    // Add inner host to the container layout
+    innerLayout->addWidget(m_innerHost, 1);
+    
+    // Add container to main layout (takes most space)
+    mainLayout->addWidget(innerContainer, 1);
+    
+    // Create and add the toolbar at the bottom of our layout (no padding)
+    CreateBottomToolbar(mainLayout);
     
     // No auto-save - we save on OBS shutdown
     
     // Set minimum size to ensure usability
     setMinimumSize(400, 300);
     
-    // Use darkest theme color for background
-    QString bgColor = StreamUP::UIStyles::Colors::BG_DARKEST;
-    setStyleSheet(QString("QFrame { background-color: %1; border: none; }").arg(bgColor));
+    // Set the background color to #0d0d0d
+    setStyleSheet("MultiDockDock { background-color: #0d0d0d; }");
     setFrameStyle(QFrame::NoFrame);
 }
 
@@ -137,14 +160,77 @@ void MultiDockDock::LoadState()
         // Make sure the inner host is visible
         m_innerHost->show();
         
-        // Update toolbar state to reflect restored docks
-        QTimer::singleShot(100, m_innerHost, [this]() {
-            m_innerHost->UpdateToolBarState();
-        });
+        // Docks restored - toolbar will be updated by layout
     }
     
     blog(LOG_INFO, "[StreamUP MultiDock] Restored %d out of %d docks for MultiDock '%s'", 
          restoredCount, capturedDockIds.size(), m_id.toUtf8().constData());
+}
+
+void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
+{
+    if (!layout || !m_innerHost) {
+        return;
+    }
+    
+    // Create a proper QToolBar instead of a custom widget
+    QToolBar* toolBar = new QToolBar("MultiDock Controls", this);
+    toolBar->setObjectName("MultiDockBottomToolbar");
+    toolBar->setMovable(false);
+    toolBar->setFloatable(false);
+    toolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    toolBar->setOrientation(Qt::Horizontal);
+    
+    // Make it look more like a standard toolbar
+    toolBar->setIconSize(QSize(16, 16));
+    
+    // Add Dock action
+    QAction* addDockAction = toolBar->addAction("Add Dock");
+    addDockAction->setToolTip("Add an OBS dock to this MultiDock");
+    connect(addDockAction, &QAction::triggered, [this]() {
+        if (m_innerHost) {
+            m_innerHost->ShowAddDockDialog();
+        }
+    });
+    
+    toolBar->addSeparator();
+    
+    // Close Dock action (returns dock to original position)
+    QAction* closeDockAction = toolBar->addAction("Close Dock");
+    closeDockAction->setToolTip("Return the selected dock to the main OBS window");
+    connect(closeDockAction, &QAction::triggered, [this]() {
+        if (m_innerHost) {
+            m_innerHost->ReturnCurrentDock();
+        }
+    });
+    
+    // Store references for later access
+    m_statusLabel = nullptr; // No status label anymore
+    m_addDockAction = addDockAction;
+    m_returnDockAction = nullptr; // No separate return action
+    m_closeDockAction = closeDockAction;
+    
+    // Add toolbar widget to the bottom of the layout
+    layout->addWidget(toolBar, 0); // 0 means don't stretch
+    
+    blog(LOG_INFO, "[StreamUP MultiDock] Created bottom toolbar for MultiDock '%s'", 
+         m_id.toUtf8().constData());
+}
+
+void MultiDockDock::UpdateToolbarState()
+{
+    if (!m_innerHost) {
+        return;
+    }
+    
+    QList<QDockWidget*> docks = m_innerHost->GetAllDocks();
+    QDockWidget* currentDock = m_innerHost->GetCurrentDock();
+    bool hasCurrentDock = currentDock != nullptr;
+    
+    // Update close dock action state (only enabled when there's a current dock)
+    if (m_closeDockAction) {
+        m_closeDockAction->setEnabled(hasCurrentDock);
+    }
 }
 
 

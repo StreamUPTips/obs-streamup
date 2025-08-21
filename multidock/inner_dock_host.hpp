@@ -94,6 +94,9 @@ public slots:
 
     // No signals needed - we save on OBS shutdown
 
+protected:
+    bool eventFilter(QObject* obj, QEvent* event) override;
+
 private slots:
     void OnTabifiedDockActivated(QDockWidget* dock);
 
