@@ -40,11 +40,6 @@ public:
      */
     void RemoveDock(QDockWidget* dock);
 
-    /**
-     * @brief Get the currently selected/focused dock
-     * @return Currently focused dock, or nullptr if none
-     */
-    QDockWidget* GetCurrentDock() const;
 
     /**
      * @brief Get all captured docks
@@ -77,15 +72,6 @@ public slots:
      */
     void ShowAddDockDialog();
 
-    /**
-     * @brief Return the currently selected dock to main window
-     */
-    void ReturnCurrentDock();
-
-    /**
-     * @brief Close (hide) the currently selected dock
-     */
-    void CloseCurrentDock();
 
     /**
      * @brief Update the toolbar state (make public for restoration)
@@ -109,10 +95,8 @@ protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
 
 private slots:
-    void OnTabifiedDockActivated(QDockWidget* dock);
 
 private:
-    void SetupToolBar();
     void SetupDockOptions();
     void ConnectDockSignals(QDockWidget* dock);
     void DisconnectDockSignals(QDockWidget* dock);
@@ -127,7 +111,6 @@ private:
     QLabel* m_statusLabel;
     
     QHash<DockId, CapturedDock> m_capturedDocks;
-    QPointer<QDockWidget> m_currentDock;
     bool m_docksLocked;
     
     // Removed timers - we save on OBS shutdown instead

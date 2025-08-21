@@ -20,6 +20,7 @@ struct OriginalPlacement {
     QSize minimumSize;
     QSize maximumSize;
     QSize sizeHint;
+    Qt::ContextMenuPolicy contextMenuPolicy;
 };
 
 struct CapturedDock {

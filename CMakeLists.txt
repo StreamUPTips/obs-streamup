@@ -234,7 +234,7 @@ elseif(OS_MACOS)
 endif()
 
 # Find Qt components
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Svg)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES AUTOMOC ON AUTOUIC ON AUTORCC ON)
 set(UI_FILES StreamUPDock.ui)
@@ -245,6 +245,7 @@ target_link_libraries(${PROJECT_NAME}
 		Qt6::Core
 		Qt6::Widgets
     Qt6::Gui
+    Qt6::Svg
 		OBS::libobs)
 
 if(BUILD_OUT_OF_TREE)
