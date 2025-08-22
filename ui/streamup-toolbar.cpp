@@ -1,5 +1,6 @@
 #include "streamup-toolbar.hpp"
 #include "ui-styles.hpp"
+#include "settings-manager.hpp"
 #include <QIcon>
 #include <QHBoxLayout>
 #include <QWidget>
@@ -13,7 +14,8 @@
 StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent), 
 	streamButton(nullptr), recordButton(nullptr), pauseButton(nullptr), 
 	replayBufferButton(nullptr), saveReplayButton(nullptr), virtualCameraButton(nullptr), 
-	virtualCameraConfigButton(nullptr), studioModeButton(nullptr), settingsButton(nullptr)
+	virtualCameraConfigButton(nullptr), studioModeButton(nullptr), settingsButton(nullptr),
+	streamUPSettingsButton(nullptr)
 {
 	setObjectName("StreamUPToolbar");
 	setWindowTitle("StreamUP Controls");
@@ -174,6 +176,21 @@ void StreamUPToolbar::setupUI()
 	settingsButton->setCheckable(false); // Settings button is not checkable
 	connect(settingsButton, &QToolButton::clicked, this, &StreamUPToolbar::onSettingsButtonClicked);
 	layout->addWidget(settingsButton);
+	
+	// Add spacer to push StreamUP settings button to the right
+	layout->addStretch();
+	
+	// === STREAMUP SETTINGS SECTION (RIGHT SIDE) ===
+	// Create StreamUP settings button
+	streamUPSettingsButton = new QToolButton(centralWidget);
+	streamUPSettingsButton->setFixedSize(34, 34);
+	streamUPSettingsButton->setIcon(QIcon(":images/icons/social/streamup-logo-button.svg"));
+	streamUPSettingsButton->setIconSize(QSize(20, 20));
+	streamUPSettingsButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+	streamUPSettingsButton->setToolTip("Open StreamUP Settings");
+	streamUPSettingsButton->setCheckable(false);
+	connect(streamUPSettingsButton, &QToolButton::clicked, this, &StreamUPToolbar::onStreamUPSettingsButtonClicked);
+	layout->addWidget(streamUPSettingsButton);
 	
 	// Apply CSS styling for active states
 	setStyleSheet(R"(
@@ -356,6 +373,12 @@ void StreamUPToolbar::onSettingsButtonClicked()
 			settingsAction->trigger();
 		}
 	}
+}
+
+void StreamUPToolbar::onStreamUPSettingsButtonClicked()
+{
+	// Open StreamUP settings dialog
+	StreamUP::SettingsManager::ShowSettingsDialog();
 }
 
 void StreamUPToolbar::updateStreamButton()
