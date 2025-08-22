@@ -59,7 +59,7 @@ void StreamUPToolbar::setupUI()
 	// Create streaming button
 	streamButton = new QToolButton(centralWidget);
 	streamButton->setFixedSize(28, 28);
-	streamButton->setIcon(QIcon(":images/icons/ui/stream.svg"));
+	streamButton->setIcon(QIcon(":images/icons/ui/streaming-inactive.svg"));
 	streamButton->setIconSize(QSize(20, 20));
 	streamButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	streamButton->setToolTip("Start/Stop Streaming");
@@ -74,7 +74,7 @@ void StreamUPToolbar::setupUI()
 	// Create recording button
 	recordButton = new QToolButton(centralWidget);
 	recordButton->setFixedSize(28, 28);
-	recordButton->setIcon(QIcon(":images/icons/ui/record.svg"));
+	recordButton->setIcon(QIcon(":images/icons/ui/record-off.svg"));
 	recordButton->setIconSize(QSize(20, 20));
 	recordButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	recordButton->setToolTip("Start/Stop Recording");
@@ -101,7 +101,7 @@ void StreamUPToolbar::setupUI()
 	// Create replay buffer button
 	replayBufferButton = new QToolButton(centralWidget);
 	replayBufferButton->setFixedSize(28, 28);
-	replayBufferButton->setIcon(QIcon(":images/icons/ui/replay-buffer.svg"));
+	replayBufferButton->setIcon(QIcon(":images/icons/ui/replay-buffer-off.svg"));
 	replayBufferButton->setIconSize(QSize(20, 20));
 	replayBufferButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	replayBufferButton->setToolTip("Start/Stop Replay Buffer");
@@ -112,7 +112,7 @@ void StreamUPToolbar::setupUI()
 	// Create save replay button (initially hidden like OBS)
 	saveReplayButton = new QToolButton(centralWidget);
 	saveReplayButton->setFixedSize(28, 28);
-	saveReplayButton->setIcon(QIcon(":images/icons/ui/record.svg")); // Use record icon as save icon
+	saveReplayButton->setIcon(QIcon(":images/icons/ui/save-replay.svg"));
 	saveReplayButton->setIconSize(QSize(20, 20)); // Slightly smaller
 	saveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	saveReplayButton->setToolTip("Save Replay");
@@ -127,6 +127,7 @@ void StreamUPToolbar::setupUI()
 	// === VIRTUAL CAMERA SECTION ===
 	// Create virtual camera button
 	virtualCameraButton = new QToolButton(centralWidget);
+	virtualCameraButton->setObjectName("virtualCameraButton");
 	virtualCameraButton->setFixedSize(28, 28);
 	virtualCameraButton->setIcon(QIcon(":images/icons/ui/virtual-camera.svg"));
 	virtualCameraButton->setIconSize(QSize(20, 20));
@@ -139,7 +140,7 @@ void StreamUPToolbar::setupUI()
 	// Create virtual camera config button (like OBS controls dock)
 	virtualCameraConfigButton = new QToolButton(centralWidget);
 	virtualCameraConfigButton->setFixedSize(28, 28);
-	virtualCameraConfigButton->setIcon(QIcon(":images/icons/ui/settings.svg"));
+	virtualCameraConfigButton->setIcon(QIcon(":images/icons/ui/virtual-camera-settings.svg"));
 	virtualCameraConfigButton->setIconSize(QSize(20, 20)); // Slightly smaller icon
 	virtualCameraConfigButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	virtualCameraConfigButton->setToolTip("Virtual Camera Configuration");
@@ -153,6 +154,7 @@ void StreamUPToolbar::setupUI()
 	// === STUDIO MODE SECTION ===
 	// Create studio mode button
 	studioModeButton = new QToolButton(centralWidget);
+	studioModeButton->setObjectName("studioModeButton");
 	studioModeButton->setFixedSize(28, 28);
 	studioModeButton->setIcon(QIcon(":images/icons/ui/studio-mode.svg"));
 	studioModeButton->setIconSize(QSize(20, 20));
@@ -207,10 +209,25 @@ void StreamUPToolbar::setupUI()
 			background-color: rgba(255, 255, 255, 0.2);
 		}
 		QToolButton:checked {
+			background: transparent;
+			border: none;
+		}
+		QToolButton:checked:hover {
+			background-color: rgba(255, 255, 255, 0.1);
+		}
+		/* Special styling for virtual camera and studio mode buttons when active */
+		QToolButton[objectName="virtualCameraButton"]:checked {
 			background-color: #0f7bcf;
 			border: 1px solid #0a5a9c;
 		}
-		QToolButton:checked:hover {
+		QToolButton[objectName="virtualCameraButton"]:checked:hover {
+			background-color: #1584d6;
+		}
+		QToolButton[objectName="studioModeButton"]:checked {
+			background-color: #0f7bcf;
+			border: 1px solid #0a5a9c;
+		}
+		QToolButton[objectName="studioModeButton"]:checked:hover {
 			background-color: #1584d6;
 		}
 		QFrame {
@@ -386,6 +403,7 @@ void StreamUPToolbar::updateStreamButton()
 	if (streamButton) {
 		bool streaming = obs_frontend_streaming_active();
 		streamButton->setChecked(streaming);
+		streamButton->setIcon(QIcon(streaming ? ":images/icons/ui/streaming.svg" : ":images/icons/ui/streaming-inactive.svg"));
 		streamButton->setToolTip(streaming ? "Stop Streaming" : "Start Streaming");
 	}
 }
@@ -395,6 +413,7 @@ void StreamUPToolbar::updateRecordButton()
 	if (recordButton) {
 		bool recording = obs_frontend_recording_active();
 		recordButton->setChecked(recording);
+		recordButton->setIcon(QIcon(recording ? ":images/icons/ui/record-on.svg" : ":images/icons/ui/record-off.svg"));
 		recordButton->setToolTip(recording ? "Stop Recording" : "Start Recording");
 		
 		// Show/hide pause button based on recording state AND pausability (like OBS controls dock)
@@ -421,6 +440,7 @@ void StreamUPToolbar::updateReplayBufferButton()
 	if (replayBufferButton) {
 		bool active = obs_frontend_replay_buffer_active();
 		replayBufferButton->setChecked(active);
+		replayBufferButton->setIcon(QIcon(active ? ":images/icons/ui/replay-buffer-on.svg" : ":images/icons/ui/replay-buffer-off.svg"));
 		replayBufferButton->setToolTip(active ? "Stop Replay Buffer" : "Start Replay Buffer");
 		
 		// Show/hide save replay button based on replay buffer state (like OBS controls dock)
