@@ -38,7 +38,7 @@ QFrame* StreamUPToolbar::createSeparator()
 	QFrame* separator = new QFrame();
 	separator->setFrameShape(QFrame::VLine);
 	separator->setFrameShadow(QFrame::Sunken);
-	separator->setFixedSize(2, 24);
+	separator->setFixedSize(2, 14);
 	return separator;
 }
 
@@ -52,13 +52,13 @@ void StreamUPToolbar::setupUI()
 	// Create a central widget with horizontal layout
 	QWidget* centralWidget = new QWidget(this);
 	QHBoxLayout* layout = new QHBoxLayout(centralWidget);
-	layout->setContentsMargins(8, 4, 8, 4);
+	layout->setContentsMargins(8, 0, 8, 0);
 	layout->setSpacing(4);
 	
 	// === STREAMING SECTION ===
 	// Create streaming button
 	streamButton = new QToolButton(centralWidget);
-	streamButton->setFixedSize(34, 34);
+	streamButton->setFixedSize(28, 28);
 	streamButton->setIcon(QIcon(":images/icons/ui/stream.svg"));
 	streamButton->setIconSize(QSize(20, 20));
 	streamButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -73,7 +73,7 @@ void StreamUPToolbar::setupUI()
 	// === RECORDING SECTION ===
 	// Create recording button
 	recordButton = new QToolButton(centralWidget);
-	recordButton->setFixedSize(34, 34);
+	recordButton->setFixedSize(28, 28);
 	recordButton->setIcon(QIcon(":images/icons/ui/record.svg"));
 	recordButton->setIconSize(QSize(20, 20));
 	recordButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -84,7 +84,7 @@ void StreamUPToolbar::setupUI()
 	
 	// Create pause recording button (initially hidden like OBS)
 	pauseButton = new QToolButton(centralWidget);
-	pauseButton->setFixedSize(34, 34);
+	pauseButton->setFixedSize(28, 28);
 	pauseButton->setIcon(QIcon(":images/icons/ui/pause.svg"));
 	pauseButton->setIconSize(QSize(20, 20));
 	pauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -100,7 +100,7 @@ void StreamUPToolbar::setupUI()
 	// === REPLAY BUFFER SECTION ===
 	// Create replay buffer button
 	replayBufferButton = new QToolButton(centralWidget);
-	replayBufferButton->setFixedSize(34, 34);
+	replayBufferButton->setFixedSize(28, 28);
 	replayBufferButton->setIcon(QIcon(":images/icons/ui/replay-buffer.svg"));
 	replayBufferButton->setIconSize(QSize(20, 20));
 	replayBufferButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -111,9 +111,9 @@ void StreamUPToolbar::setupUI()
 	
 	// Create save replay button (initially hidden like OBS)
 	saveReplayButton = new QToolButton(centralWidget);
-	saveReplayButton->setFixedSize(34, 34);
+	saveReplayButton->setFixedSize(28, 28);
 	saveReplayButton->setIcon(QIcon(":images/icons/ui/record.svg")); // Use record icon as save icon
-	saveReplayButton->setIconSize(QSize(18, 18)); // Slightly smaller
+	saveReplayButton->setIconSize(QSize(20, 20)); // Slightly smaller
 	saveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	saveReplayButton->setToolTip("Save Replay");
 	saveReplayButton->setCheckable(false); // Save replay is not a toggle
@@ -127,7 +127,7 @@ void StreamUPToolbar::setupUI()
 	// === VIRTUAL CAMERA SECTION ===
 	// Create virtual camera button
 	virtualCameraButton = new QToolButton(centralWidget);
-	virtualCameraButton->setFixedSize(34, 34);
+	virtualCameraButton->setFixedSize(28, 28);
 	virtualCameraButton->setIcon(QIcon(":images/icons/ui/virtual-camera.svg"));
 	virtualCameraButton->setIconSize(QSize(20, 20));
 	virtualCameraButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -138,9 +138,9 @@ void StreamUPToolbar::setupUI()
 	
 	// Create virtual camera config button (like OBS controls dock)
 	virtualCameraConfigButton = new QToolButton(centralWidget);
-	virtualCameraConfigButton->setFixedSize(34, 34);
+	virtualCameraConfigButton->setFixedSize(28, 28);
 	virtualCameraConfigButton->setIcon(QIcon(":images/icons/ui/settings.svg"));
-	virtualCameraConfigButton->setIconSize(QSize(16, 16)); // Slightly smaller icon
+	virtualCameraConfigButton->setIconSize(QSize(20, 20)); // Slightly smaller icon
 	virtualCameraConfigButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	virtualCameraConfigButton->setToolTip("Virtual Camera Configuration");
 	virtualCameraConfigButton->setCheckable(false);
@@ -153,7 +153,7 @@ void StreamUPToolbar::setupUI()
 	// === STUDIO MODE SECTION ===
 	// Create studio mode button
 	studioModeButton = new QToolButton(centralWidget);
-	studioModeButton->setFixedSize(34, 34);
+	studioModeButton->setFixedSize(28, 28);
 	studioModeButton->setIcon(QIcon(":images/icons/ui/studio-mode.svg"));
 	studioModeButton->setIconSize(QSize(20, 20));
 	studioModeButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -168,7 +168,7 @@ void StreamUPToolbar::setupUI()
 	// === SETTINGS SECTION ===
 	// Create settings button
 	settingsButton = new QToolButton(centralWidget);
-	settingsButton->setFixedSize(34, 34);
+	settingsButton->setFixedSize(28, 28);
 	settingsButton->setIcon(QIcon(":images/icons/ui/settings.svg"));
 	settingsButton->setIconSize(QSize(20, 20));
 	settingsButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -183,7 +183,7 @@ void StreamUPToolbar::setupUI()
 	// === STREAMUP SETTINGS SECTION (RIGHT SIDE) ===
 	// Create StreamUP settings button
 	streamUPSettingsButton = new QToolButton(centralWidget);
-	streamUPSettingsButton->setFixedSize(34, 34);
+	streamUPSettingsButton->setFixedSize(28, 28);
 	streamUPSettingsButton->setIcon(QIcon(":images/icons/social/streamup-logo-button.svg"));
 	streamUPSettingsButton->setIconSize(QSize(20, 20));
 	streamUPSettingsButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
