@@ -6,22 +6,38 @@
 #include <QSizePolicy>
 #include <QMainWindow>
 #include <QAction>
+#include <QFrame>
+#include <QPushButton>
+#include <util/config-file.h>
 
 StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent), 
 	streamButton(nullptr), recordButton(nullptr), pauseButton(nullptr), 
-	replayBufferButton(nullptr), virtualCameraButton(nullptr), 
-	studioModeButton(nullptr), settingsButton(nullptr)
+	replayBufferButton(nullptr), saveReplayButton(nullptr), virtualCameraButton(nullptr), 
+	virtualCameraConfigButton(nullptr), studioModeButton(nullptr), settingsButton(nullptr)
 {
 	setObjectName("StreamUPToolbar");
 	setWindowTitle("StreamUP Controls");
 
 	setupUI();
 	updateAllButtons();
+	
+	// Register for OBS frontend events to update button states
+	obs_frontend_add_event_callback(OnFrontendEvent, this);
 }
 
 StreamUPToolbar::~StreamUPToolbar()
 {
-	// Simple cleanup
+	// Remove event callback
+	obs_frontend_remove_event_callback(OnFrontendEvent, this);
+}
+
+QFrame* StreamUPToolbar::createSeparator()
+{
+	QFrame* separator = new QFrame();
+	separator->setFrameShape(QFrame::VLine);
+	separator->setFrameShadow(QFrame::Sunken);
+	separator->setFixedSize(2, 24);
+	return separator;
 }
 
 void StreamUPToolbar::setupUI()
@@ -37,6 +53,7 @@ void StreamUPToolbar::setupUI()
 	layout->setContentsMargins(8, 4, 8, 4);
 	layout->setSpacing(4);
 	
+	// === STREAMING SECTION ===
 	// Create streaming button
 	streamButton = new QToolButton(centralWidget);
 	streamButton->setFixedSize(34, 34);
@@ -48,6 +65,10 @@ void StreamUPToolbar::setupUI()
 	connect(streamButton, &QToolButton::clicked, this, &StreamUPToolbar::onStreamButtonClicked);
 	layout->addWidget(streamButton);
 	
+	// Separator
+	layout->addWidget(createSeparator());
+	
+	// === RECORDING SECTION ===
 	// Create recording button
 	recordButton = new QToolButton(centralWidget);
 	recordButton->setFixedSize(34, 34);
@@ -59,7 +80,7 @@ void StreamUPToolbar::setupUI()
 	connect(recordButton, &QToolButton::clicked, this, &StreamUPToolbar::onRecordButtonClicked);
 	layout->addWidget(recordButton);
 	
-	// Create pause recording button
+	// Create pause recording button (initially hidden like OBS)
 	pauseButton = new QToolButton(centralWidget);
 	pauseButton->setFixedSize(34, 34);
 	pauseButton->setIcon(QIcon(":images/icons/ui/pause.svg"));
@@ -67,9 +88,14 @@ void StreamUPToolbar::setupUI()
 	pauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	pauseButton->setToolTip("Pause/Resume Recording");
 	pauseButton->setCheckable(true);
+	pauseButton->setVisible(false); // Hidden by default like OBS controls dock
 	connect(pauseButton, &QToolButton::clicked, this, &StreamUPToolbar::onPauseButtonClicked);
 	layout->addWidget(pauseButton);
 	
+	// Separator
+	layout->addWidget(createSeparator());
+	
+	// === REPLAY BUFFER SECTION ===
 	// Create replay buffer button
 	replayBufferButton = new QToolButton(centralWidget);
 	replayBufferButton->setFixedSize(34, 34);
@@ -81,6 +107,22 @@ void StreamUPToolbar::setupUI()
 	connect(replayBufferButton, &QToolButton::clicked, this, &StreamUPToolbar::onReplayBufferButtonClicked);
 	layout->addWidget(replayBufferButton);
 	
+	// Create save replay button (initially hidden like OBS)
+	saveReplayButton = new QToolButton(centralWidget);
+	saveReplayButton->setFixedSize(34, 34);
+	saveReplayButton->setIcon(QIcon(":images/icons/ui/record.svg")); // Use record icon as save icon
+	saveReplayButton->setIconSize(QSize(18, 18)); // Slightly smaller
+	saveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+	saveReplayButton->setToolTip("Save Replay");
+	saveReplayButton->setCheckable(false); // Save replay is not a toggle
+	saveReplayButton->setVisible(false); // Hidden by default like OBS controls dock
+	connect(saveReplayButton, &QToolButton::clicked, this, &StreamUPToolbar::onSaveReplayButtonClicked);
+	layout->addWidget(saveReplayButton);
+	
+	// Separator
+	layout->addWidget(createSeparator());
+	
+	// === VIRTUAL CAMERA SECTION ===
 	// Create virtual camera button
 	virtualCameraButton = new QToolButton(centralWidget);
 	virtualCameraButton->setFixedSize(34, 34);
@@ -92,6 +134,21 @@ void StreamUPToolbar::setupUI()
 	connect(virtualCameraButton, &QToolButton::clicked, this, &StreamUPToolbar::onVirtualCameraButtonClicked);
 	layout->addWidget(virtualCameraButton);
 	
+	// Create virtual camera config button (like OBS controls dock)
+	virtualCameraConfigButton = new QToolButton(centralWidget);
+	virtualCameraConfigButton->setFixedSize(34, 34);
+	virtualCameraConfigButton->setIcon(QIcon(":images/icons/ui/settings.svg"));
+	virtualCameraConfigButton->setIconSize(QSize(16, 16)); // Slightly smaller icon
+	virtualCameraConfigButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+	virtualCameraConfigButton->setToolTip("Virtual Camera Configuration");
+	virtualCameraConfigButton->setCheckable(false);
+	connect(virtualCameraConfigButton, &QToolButton::clicked, this, &StreamUPToolbar::onVirtualCameraConfigButtonClicked);
+	layout->addWidget(virtualCameraConfigButton);
+	
+	// Separator
+	layout->addWidget(createSeparator());
+	
+	// === STUDIO MODE SECTION ===
 	// Create studio mode button
 	studioModeButton = new QToolButton(centralWidget);
 	studioModeButton->setFixedSize(34, 34);
@@ -103,6 +160,10 @@ void StreamUPToolbar::setupUI()
 	connect(studioModeButton, &QToolButton::clicked, this, &StreamUPToolbar::onStudioModeButtonClicked);
 	layout->addWidget(studioModeButton);
 	
+	// Separator
+	layout->addWidget(createSeparator());
+	
+	// === SETTINGS SECTION ===
 	// Create settings button
 	settingsButton = new QToolButton(centralWidget);
 	settingsButton->setFixedSize(34, 34);
@@ -114,8 +175,84 @@ void StreamUPToolbar::setupUI()
 	connect(settingsButton, &QToolButton::clicked, this, &StreamUPToolbar::onSettingsButtonClicked);
 	layout->addWidget(settingsButton);
 	
+	// Apply CSS styling for active states
+	setStyleSheet(R"(
+		QToolButton {
+			background: transparent;
+			border: none;
+			border-radius: 4px;
+			padding: 2px;
+		}
+		QToolButton:hover {
+			background-color: rgba(255, 255, 255, 0.1);
+		}
+		QToolButton:pressed {
+			background-color: rgba(255, 255, 255, 0.2);
+		}
+		QToolButton:checked {
+			background-color: #0f7bcf;
+			border: 1px solid #0a5a9c;
+		}
+		QToolButton:checked:hover {
+			background-color: #1584d6;
+		}
+		QFrame {
+			color: #555555;
+		}
+	)");
+	
 	// Add the central widget to toolbar
 	addWidget(centralWidget);
+	
+	// Don't update button visibility immediately as OBS may not be fully initialized
+	// It will be updated when OBS_FRONTEND_EVENT_FINISHED_LOADING is received
+}
+
+bool StreamUPToolbar::isReplayBufferAvailable()
+{
+	// Check configuration to see if replay buffer is enabled
+	config_t* config = obs_frontend_get_profile_config();
+	if (!config) return false;
+	
+	// Check if using simple or advanced output mode
+	bool advancedMode = config_get_bool(config, "Output", "Mode");
+	
+	if (!advancedMode) {
+		// Simple output mode - check if replay buffer is enabled
+		return config_get_bool(config, "SimpleOutput", "RecRB");
+	} else {
+		// Advanced output mode - check if replay buffer is enabled
+		return config_get_bool(config, "AdvOut", "RecRB");
+	}
+}
+
+bool StreamUPToolbar::isRecordingPausable()
+{
+	// Check configuration to determine if recording is pausable
+	config_t* config = obs_frontend_get_profile_config();
+	if (!config) return false;
+	
+	// Check if using simple or advanced output mode
+	bool advancedMode = config_get_bool(config, "Output", "Mode");
+	
+	if (!advancedMode) {
+		// Simple output mode - check if quality is not "Stream" (shared encoder)
+		const char* quality = config_get_string(config, "SimpleOutput", "RecQuality");
+		return quality && strcmp(quality, "Stream") != 0;
+	} else {
+		// Advanced output mode - more complex logic, but generally pausable unless using stream encoder
+		// For now, assume advanced mode recordings are generally pausable
+		return true;
+	}
+}
+
+void StreamUPToolbar::updateButtonVisibility()
+{
+	if (replayBufferButton) {
+		replayBufferButton->setVisible(isReplayBufferAvailable());
+	}
+	
+	// Pause button visibility is handled in updateRecordButton based on recording state and pausability
 }
 
 void StreamUPToolbar::onStreamButtonClicked()
@@ -156,6 +293,13 @@ void StreamUPToolbar::onReplayBufferButtonClicked()
 		obs_frontend_replay_buffer_start();
 	}
 	updateReplayBufferButton();
+	updateSaveReplayButton();
+}
+
+void StreamUPToolbar::onSaveReplayButtonClicked()
+{
+	// Save the current replay buffer
+	obs_frontend_replay_buffer_save();
 }
 
 void StreamUPToolbar::onVirtualCameraButtonClicked()
@@ -173,6 +317,32 @@ void StreamUPToolbar::onStudioModeButtonClicked()
 	bool studioMode = obs_frontend_preview_program_mode_active();
 	obs_frontend_set_preview_program_mode(!studioMode);
 	updateStudioModeButton();
+}
+
+void StreamUPToolbar::onVirtualCameraConfigButtonClicked()
+{
+	// Find and trigger the virtual camera config action like OBS controls dock
+	QMainWindow* mainWindow = static_cast<QMainWindow*>(obs_frontend_get_main_window());
+	if (mainWindow) {
+		// Try multiple possible action names for virtual camera config
+		QAction* vcamConfigAction = mainWindow->findChild<QAction*>("actionVirtualCamConfig");
+		if (!vcamConfigAction) {
+			vcamConfigAction = mainWindow->findChild<QAction*>("action_VirtualCamConfig");
+		}
+		if (!vcamConfigAction) {
+			vcamConfigAction = mainWindow->findChild<QAction*>("virtualCamConfigAction");
+		}
+		
+		if (vcamConfigAction) {
+			vcamConfigAction->trigger();
+		} else {
+			// If no action found, try to find the virtual camera config button and trigger it
+			QPushButton* vcamConfigButton = mainWindow->findChild<QPushButton*>("virtualCamConfigButton");
+			if (vcamConfigButton) {
+				vcamConfigButton->click();
+			}
+		}
+	}
 }
 
 void StreamUPToolbar::onSettingsButtonClicked()
@@ -203,6 +373,12 @@ void StreamUPToolbar::updateRecordButton()
 		bool recording = obs_frontend_recording_active();
 		recordButton->setChecked(recording);
 		recordButton->setToolTip(recording ? "Stop Recording" : "Start Recording");
+		
+		// Show/hide pause button based on recording state AND pausability (like OBS controls dock)
+		if (pauseButton) {
+			bool showPause = recording && isRecordingPausable();
+			pauseButton->setVisible(showPause);
+		}
 	}
 }
 
@@ -223,6 +399,23 @@ void StreamUPToolbar::updateReplayBufferButton()
 		bool active = obs_frontend_replay_buffer_active();
 		replayBufferButton->setChecked(active);
 		replayBufferButton->setToolTip(active ? "Stop Replay Buffer" : "Start Replay Buffer");
+		
+		// Show/hide save replay button based on replay buffer state (like OBS controls dock)
+		if (saveReplayButton) {
+			saveReplayButton->setVisible(active);
+		}
+	}
+}
+
+void StreamUPToolbar::updateSaveReplayButton()
+{
+	if (saveReplayButton) {
+		bool replayActive = obs_frontend_replay_buffer_active();
+		saveReplayButton->setVisible(replayActive);
+		
+		// Enable/disable based on recording state (can't save during recording pause in some cases)
+		bool recordingPaused = obs_frontend_recording_paused();
+		saveReplayButton->setEnabled(!recordingPaused);
 	}
 }
 
@@ -250,8 +443,57 @@ void StreamUPToolbar::updateAllButtons()
 	updateRecordButton();
 	updatePauseButton();
 	updateReplayBufferButton();
+	updateSaveReplayButton();
 	updateVirtualCameraButton();
 	updateStudioModeButton();
+}
+
+void StreamUPToolbar::OnFrontendEvent(enum obs_frontend_event event, void *data)
+{
+	StreamUPToolbar* toolbar = static_cast<StreamUPToolbar*>(data);
+	if (!toolbar) return;
+	
+	switch (event) {
+	case OBS_FRONTEND_EVENT_STREAMING_STARTED:
+	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
+		toolbar->updateStreamButton();
+		break;
+		
+	case OBS_FRONTEND_EVENT_RECORDING_STARTED:
+	case OBS_FRONTEND_EVENT_RECORDING_STOPPED:
+	case OBS_FRONTEND_EVENT_RECORDING_PAUSED:
+	case OBS_FRONTEND_EVENT_RECORDING_UNPAUSED:
+		toolbar->updateRecordButton();
+		toolbar->updatePauseButton();
+		toolbar->updateSaveReplayButton(); // Save replay can be disabled during recording pause
+		break;
+		
+	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_STARTED:
+	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_STOPPED:
+		toolbar->updateReplayBufferButton();
+		toolbar->updateSaveReplayButton();
+		break;
+		
+	case OBS_FRONTEND_EVENT_VIRTUALCAM_STARTED:
+	case OBS_FRONTEND_EVENT_VIRTUALCAM_STOPPED:
+		toolbar->updateVirtualCameraButton();
+		break;
+		
+	case OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED:
+	case OBS_FRONTEND_EVENT_STUDIO_MODE_DISABLED:
+		toolbar->updateStudioModeButton();
+		break;
+		
+	case OBS_FRONTEND_EVENT_PROFILE_CHANGED:
+	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
+		// Settings may have changed, update button visibility
+		toolbar->updateButtonVisibility();
+		toolbar->updateAllButtons();
+		break;
+		
+	default:
+		break;
+	}
 }
 
 #include "streamup-toolbar.moc"
