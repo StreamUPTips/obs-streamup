@@ -11,6 +11,13 @@
 		<file>images/icons/ui/video-capture-device-activate.svg</file>
 		<file>images/icons/ui/video-capture-device-deactivate.svg</file>
 		<file>images/icons/ui/video-capture-device-refresh.svg</file>
+		<file>images/icons/ui/stream.svg</file>
+		<file>images/icons/ui/record.svg</file>
+		<file>images/icons/ui/pause.svg</file>
+		<file>images/icons/ui/replay-buffer.svg</file>
+		<file>images/icons/ui/virtual-camera.svg</file>
+		<file>images/icons/ui/settings.svg</file>
+		<file>images/icons/ui/studio-mode.svg</file>
 		
 		<!-- Social Media Icons -->
 		<file>images/icons/social/patreon.svg</file>

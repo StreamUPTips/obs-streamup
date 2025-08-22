@@ -43,9 +43,10 @@ struct PluginSettings {
     bool runAtStartup;
     bool notificationsMute;
     bool showCPHIntegration;
+    bool showToolbar;
     DockToolSettings dockTools;
     
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true) {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true) {}
 };
 
 /**

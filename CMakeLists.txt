@@ -84,7 +84,9 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/websocket-window.hpp
   ui/websocket-window.cpp
   ui/dock/streamup-dock.hpp
-  ui/dock/streamup-dock.cpp)
+  ui/dock/streamup-dock.cpp
+  ui/streamup-toolbar.hpp
+  ui/streamup-toolbar.cpp)
 
 # Integrations module files
 target_sources(${PROJECT_NAME} PRIVATE

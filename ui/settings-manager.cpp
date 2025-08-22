@@ -156,6 +156,7 @@ obs_data_t* LoadSettings()
         obs_data_set_bool(data, "run_at_startup", true);
         obs_data_set_bool(data, "notifications_mute", false);
         obs_data_set_bool(data, "show_cph_integration", true);
+        obs_data_set_bool(data, "show_toolbar", true);
         
         // Set default dock tool settings
         obs_data_t* dockData = obs_data_create();
@@ -205,6 +206,7 @@ PluginSettings GetCurrentSettings()
         settings.runAtStartup = obs_data_get_bool(data, "run_at_startup");
         settings.notificationsMute = obs_data_get_bool(data, "notifications_mute");
         settings.showCPHIntegration = obs_data_get_bool(data, "show_cph_integration");
+        settings.showToolbar = obs_data_get_bool(data, "show_toolbar");
         
         // Load dock tool settings
         obs_data_t* dockData = obs_data_get_obj(data, "dock_tools");
@@ -220,6 +222,7 @@ PluginSettings GetCurrentSettings()
             blog(LOG_INFO, "[StreamUP Settings] No dock_tools data found, using defaults");
         }
         
+        
         obs_data_release(data);
     }
     
@@ -232,6 +235,7 @@ void UpdateSettings(const PluginSettings& settings)
     obs_data_set_bool(data, "run_at_startup", settings.runAtStartup);
     obs_data_set_bool(data, "notifications_mute", settings.notificationsMute);
     obs_data_set_bool(data, "show_cph_integration", settings.showCPHIntegration);
+    obs_data_set_bool(data, "show_toolbar", settings.showToolbar);
     
     // Save dock tool settings
     obs_data_t* dockData = obs_data_create();
@@ -392,6 +396,41 @@ void ShowSettingsDialog()
         cphLayout->addStretch();
         cphLayout->addWidget(cphIntegrationSwitch);
         generalLayout->addLayout(cphLayout);
+
+        // Show toolbar setting
+        obs_property_t* showToolbarProp =
+            obs_properties_add_bool(props, "show_toolbar", "Show StreamUP Toolbar");
+
+        // Create horizontal layout for show toolbar setting
+        QHBoxLayout* showToolbarLayout = new QHBoxLayout();
+        
+        QLabel* showToolbarLabel = new QLabel("Show StreamUP Toolbar");
+        showToolbarLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+        showToolbarLabel->setToolTip("Show/hide the StreamUP controls toolbar");
+        
+        StreamUP::UIStyles::SwitchButton* showToolbarSwitch = StreamUP::UIStyles::CreateStyledSwitch(
+            "", obs_data_get_bool(settings, obs_property_name(showToolbarProp))
+        );
+        showToolbarSwitch->setToolTip("Show/hide the StreamUP controls toolbar");
+        
+        QObject::connect(showToolbarSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+            // Use modern settings system
+            PluginSettings currentSettings = GetCurrentSettings();
+            currentSettings.showToolbar = checked;
+            UpdateSettings(currentSettings);
+            
+            // Apply toolbar visibility
+            extern void ApplyToolbarVisibility();
+            ApplyToolbarVisibility();
+        });
+
+        showToolbarLayout->addWidget(showToolbarLabel);
+        showToolbarLayout->addStretch();
+        showToolbarLayout->addWidget(showToolbarSwitch);
+        generalLayout->addLayout(showToolbarLayout);
+
         contentLayout->addWidget(generalGroup);
 
         // Plugin Management Group
