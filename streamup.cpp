@@ -1,6 +1,8 @@
 #include "obs-websocket-api.h"
 #include "streamup.hpp"
 #include "ui/dock/streamup-dock.hpp"
+#include "ui/streamup-toolbar.hpp"
+#include "ui/settings-manager.hpp"
 #include "version.h"
 #include "streamup-common.hpp"
 #include "plugin-state.hpp"
@@ -935,6 +937,33 @@ static void LoadStreamUPDock()
 	obs_frontend_pop_ui_translation();
 }
 
+static StreamUPToolbar* globalToolbar = nullptr;
+
+// Forward declarations
+void ApplyToolbarVisibility();
+
+static void LoadStreamUPToolbar()
+{
+	const auto main_window = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	obs_frontend_push_ui_translation(obs_module_get_string);
+
+	globalToolbar = new StreamUPToolbar(main_window);
+	main_window->addToolBar(Qt::TopToolBarArea, globalToolbar);
+	
+	// Apply initial visibility setting
+	ApplyToolbarVisibility();
+
+	obs_frontend_pop_ui_translation();
+}
+
+void ApplyToolbarVisibility()
+{
+	if (globalToolbar) {
+		StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+		globalToolbar->setVisible(settings.showToolbar);
+	}
+}
+
 bool obs_module_load()
 {
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
@@ -947,6 +976,7 @@ bool obs_module_load()
 	obs_frontend_add_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
 
 	LoadStreamUPDock();
+	LoadStreamUPToolbar();
 
 	// Initialize MultiDock system
 	StreamUP::MultiDock::MultiDockManager::Initialize();
@@ -1023,6 +1053,9 @@ void obs_module_unload()
 {
 	obs_frontend_remove_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
 	StreamUP::HotkeyManager::UnregisterHotkeys();
+	
+	// Clean up toolbar - just nullify the pointer, let Qt/OBS handle destruction
+	globalToolbar = nullptr;
 	
 	// Shutdown MultiDock system
 	StreamUP::MultiDock::MultiDockManager::Shutdown();
