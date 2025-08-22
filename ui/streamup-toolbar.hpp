@@ -23,6 +23,7 @@ private slots:
     void onVirtualCameraConfigButtonClicked();
     void onStudioModeButtonClicked();
     void onSettingsButtonClicked();
+    void onStreamUPSettingsButtonClicked();
 
 private:
     void setupUI();
@@ -53,4 +54,5 @@ private:
     QToolButton* virtualCameraConfigButton;
     QToolButton* studioModeButton;
     QToolButton* settingsButton;
+    QToolButton* streamUPSettingsButton;
 };
