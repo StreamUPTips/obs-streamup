@@ -348,11 +348,11 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	videoCaptureButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
 
 	// Apply initial icons to buttons
-	applyFileIconToButton(button1, ":images/icons/ui/all-scene-source-locked.svg");
-	applyFileIconToButton(button2, ":images/icons/ui/current-scene-source-locked.svg");
-	applyFileIconToButton(button3, ":images/icons/ui/refresh-browser-sources.svg");
-	applyFileIconToButton(button4, ":images/icons/ui/refresh-audio-monitoring.svg");
-	applyFileIconToButton(videoCaptureButton, ":images/icons/ui/camera.svg");
+	applyFileIconToButton(button1, StreamUP::UIHelpers::GetThemedIconPath("all-scene-source-locked"));
+	applyFileIconToButton(button2, StreamUP::UIHelpers::GetThemedIconPath("current-scene-source-locked"));
+	applyFileIconToButton(button3, StreamUP::UIHelpers::GetThemedIconPath("refresh-browser-sources"));
+	applyFileIconToButton(button4, StreamUP::UIHelpers::GetThemedIconPath("refresh-audio-monitoring"));
+	applyFileIconToButton(videoCaptureButton, StreamUP::UIHelpers::GetThemedIconPath("camera"));
 
 	auto setButtonProperties = [](QPushButton *button) {
 		button->setIconSize(QSize(16, 16));  // Smaller icon for smaller button
@@ -548,17 +548,22 @@ void StreamUPDock::updateButtonIcons()
 {
 	// Update button1 icon based on whether all sources are locked in all scenes
 	if (StreamUP::SourceManager::AreAllSourcesLockedInAllScenes()) {
-		applyFileIconToButton(button1, ":images/icons/ui/all-scene-source-locked.svg");
+		applyFileIconToButton(button1, StreamUP::UIHelpers::GetThemedIconPath("all-scene-source-locked"));
 	} else {
-		applyFileIconToButton(button1, ":images/icons/ui/all-scene-source-unlocked.svg");
+		applyFileIconToButton(button1, StreamUP::UIHelpers::GetThemedIconPath("all-scene-source-unlocked"));
 	}
 
 	// Update button2 icon based on whether all sources are locked in the current scene
 	if (StreamUP::SourceManager::AreAllSourcesLockedInCurrentScene()) {
-		applyFileIconToButton(button2, ":images/icons/ui/current-scene-source-locked.svg");
+		applyFileIconToButton(button2, StreamUP::UIHelpers::GetThemedIconPath("current-scene-source-locked"));
 	} else {
-		applyFileIconToButton(button2, ":images/icons/ui/current-scene-source-unlocked.svg");
+		applyFileIconToButton(button2, StreamUP::UIHelpers::GetThemedIconPath("current-scene-source-unlocked"));
 	}
+
+	// Update static button icons that don't change based on state
+	applyFileIconToButton(button3, StreamUP::UIHelpers::GetThemedIconPath("refresh-browser-sources"));
+	applyFileIconToButton(button4, StreamUP::UIHelpers::GetThemedIconPath("refresh-audio-monitoring"));
+	applyFileIconToButton(videoCaptureButton, StreamUP::UIHelpers::GetThemedIconPath("camera"));
 
 }
 
@@ -623,6 +628,10 @@ void StreamUPDock::onFrontendEvent(enum obs_frontend_event event, void *private_
 	if (event == OBS_FRONTEND_EVENT_SCENE_CHANGED) {
 		dock->disconnectSceneSignals();
 		dock->connectSceneSignals();
+		dock->updateButtonIcons();
+	} else if (event == OBS_FRONTEND_EVENT_THEME_CHANGED) {
+		// Theme changed, update button icons for new theme
+		blog(LOG_INFO, "[StreamUP] Dock received OBS_FRONTEND_EVENT_THEME_CHANGED event");
 		dock->updateButtonIcons();
 	}
 }

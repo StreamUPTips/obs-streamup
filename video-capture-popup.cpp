@@ -1,5 +1,6 @@
 #include "video-capture-popup.hpp"
 #include "ui/ui-styles.hpp"
+#include "ui/ui-helpers.hpp"
 #include <QIcon>
 #include <QApplication>
 #include <QScreen>
@@ -19,10 +20,10 @@ VideoCapturePopup::VideoCapturePopup(QWidget *parent)
 	deactivateButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
 	refreshButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
 	
-	// Apply icons
-	applyFileIconToButton(activateButton, ":images/icons/ui/video-capture-device-activate.svg");
-	applyFileIconToButton(deactivateButton, ":images/icons/ui/video-capture-device-deactivate.svg");
-	applyFileIconToButton(refreshButton, ":images/icons/ui/video-capture-device-refresh.svg");
+	// Apply theme-aware icons
+	applyFileIconToButton(activateButton, StreamUP::UIHelpers::GetThemedIconPath("video-capture-device-activate"));
+	applyFileIconToButton(deactivateButton, StreamUP::UIHelpers::GetThemedIconPath("video-capture-device-deactivate"));
+	applyFileIconToButton(refreshButton, StreamUP::UIHelpers::GetThemedIconPath("video-capture-device-refresh"));
 	
 	// Set button properties for standardized squircle style
 	auto setButtonProperties = [](QPushButton *button) {
@@ -210,4 +211,12 @@ void VideoCapturePopup::paintEvent(QPaintEvent *event)
 	painter.drawPath(path);
 	
 	QWidget::paintEvent(event);
+}
+
+void VideoCapturePopup::updateIconsForTheme()
+{
+	// Update icons for the current theme
+	applyFileIconToButton(activateButton, StreamUP::UIHelpers::GetThemedIconPath("video-capture-device-activate"));
+	applyFileIconToButton(deactivateButton, StreamUP::UIHelpers::GetThemedIconPath("video-capture-device-deactivate"));
+	applyFileIconToButton(refreshButton, StreamUP::UIHelpers::GetThemedIconPath("video-capture-device-refresh"));
 }

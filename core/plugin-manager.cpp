@@ -813,10 +813,10 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 }
 
 //-------------------EFFICIENT CACHING FUNCTIONS-------------------
-void PerformPluginCheckAndCache()
+void PerformPluginCheckAndCache(bool checkAllPlugins)
 {
-	const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
-	if (requiredPlugins.empty()) {
+	const auto& pluginsToCheck = checkAllPlugins ? StreamUP::GetAllPlugins() : StreamUP::GetRequiredPlugins();
+	if (pluginsToCheck.empty()) {
 		return;
 	}
 
@@ -852,8 +852,8 @@ void PerformPluginCheckAndCache()
 	static const std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_double("[0-9]+\\.[0-9]+");
 
-	// Check all required plugins
-	for (const auto &module : requiredPlugins) {
+	// Check plugins based on parameter (all plugins or just required ones)
+	for (const auto &module : pluginsToCheck) {
 		const std::string &plugin_name = module.first;
 		const StreamUP::PluginInfo &plugin_info = module.second;
 		const std::string &required_version = plugin_info.version;
@@ -877,9 +877,12 @@ void PerformPluginCheckAndCache()
 			}
 		}
 
+		// For missing plugins, only add to missing list if it's a required plugin
 		if (installed_version.empty() && plugin_info.required) {
 			missing_modules.emplace(plugin_name, required_version);
-		} else if (!installed_version.empty() && installed_version != required_version && plugin_info.required &&
+		}
+		// For version mismatches, check ALL plugins (required and non-required)
+		else if (!installed_version.empty() && installed_version != required_version &&
 			   VersionUtils::IsVersionLessThan(installed_version, required_version)) {
 			version_mismatch_modules.emplace(plugin_name, installed_version);
 		}
@@ -901,7 +904,7 @@ void PerformPluginCheckAndCache()
 bool IsAllPluginsUpToDateCached()
 {
 	if (!StreamUP::PluginState::Instance().IsPluginStatusCached()) {
-		PerformPluginCheckAndCache();
+		PerformPluginCheckAndCache(false); // Check only required plugins for "up to date" status
 	}
 
 	const auto& status = StreamUP::PluginState::Instance().GetCachedPluginStatus();
@@ -911,27 +914,58 @@ bool IsAllPluginsUpToDateCached()
 void ShowCachedPluginIssuesDialog(std::function<void()> continueCallback)
 {
 	if (!StreamUP::PluginState::Instance().IsPluginStatusCached()) {
-		PerformPluginCheckAndCache();
+		PerformPluginCheckAndCache(false); // Only check required plugins
 	}
 
 	const auto& status = StreamUP::PluginState::Instance().GetCachedPluginStatus();
+	const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
 	
-	if (status.allRequiredUpToDate) {
+	// Filter cached results to only show required plugins
+	std::map<std::string, std::string> filteredMissing;
+	std::map<std::string, std::string> filteredOutdated;
+	
+	// Copy only required plugins from cached missing plugins
+	for (const auto& plugin : status.missingPlugins) {
+		if (requiredPlugins.find(plugin.first) != requiredPlugins.end()) {
+			filteredMissing[plugin.first] = plugin.second;
+		}
+	}
+	
+	// Copy only required plugins from cached outdated plugins
+	for (const auto& plugin : status.outdatedPlugins) {
+		if (requiredPlugins.find(plugin.first) != requiredPlugins.end()) {
+			filteredOutdated[plugin.first] = plugin.second;
+		}
+	}
+	
+	if (filteredMissing.empty() && filteredOutdated.empty()) {
 		PluginsUpToDateOutput(true);
 		return;
 	}
 
-	// Use modern table display for cached results
-	PluginsHaveIssue(status.missingPlugins, status.outdatedPlugins, continueCallback);
+	// Use modern table display for filtered results (only required plugins)
+	PluginsHaveIssue(filteredMissing, filteredOutdated, continueCallback);
 }
 
 void ShowCachedPluginUpdatesDialog()
 {
 	if (!StreamUP::PluginState::Instance().IsPluginStatusCached()) {
-		PerformPluginCheckAndCache();
+		PerformPluginCheckAndCache(true); // Check all plugins
 	}
 
 	const auto& status = StreamUP::PluginState::Instance().GetCachedPluginStatus();
+	
+	// Write outdated plugins list to file
+	QString appDataPath = PathUtils::GetLocalAppDataPath();
+	QString filePath = appDataPath + "/StreamUP-OutdatedPluginsList.txt";
+	
+	std::ofstream outFile(filePath.toStdString(), std::ios::out);
+	if (outFile.is_open()) {
+		for (const auto &module : status.outdatedPlugins) {
+			outFile << module.first << "\n";
+		}
+		outFile.close();
+	}
 	
 	if (status.outdatedPlugins.empty()) {
 		PluginsUpToDateOutput(true);
@@ -946,10 +980,22 @@ void ShowCachedPluginUpdatesDialog()
 void ShowCachedPluginUpdatesDialogSilent()
 {
 	if (!StreamUP::PluginState::Instance().IsPluginStatusCached()) {
-		PerformPluginCheckAndCache();
+		PerformPluginCheckAndCache(true); // Check all plugins
 	}
 
 	const auto& status = StreamUP::PluginState::Instance().GetCachedPluginStatus();
+	
+	// Always write outdated plugins list to file, even if silent
+	QString appDataPath = PathUtils::GetLocalAppDataPath();
+	QString filePath = appDataPath + "/StreamUP-OutdatedPluginsList.txt";
+	
+	std::ofstream outFile(filePath.toStdString(), std::ios::out);
+	if (outFile.is_open()) {
+		for (const auto &module : status.outdatedPlugins) {
+			outFile << module.first << "\n";
+		}
+		outFile.close();
+	}
 	
 	if (status.outdatedPlugins.empty()) {
 		return; // Silent success - don't show any dialog
@@ -968,7 +1014,7 @@ void InvalidatePluginCache()
 std::vector<std::pair<std::string, std::string>> GetInstalledPluginsCached()
 {
 	if (!StreamUP::PluginState::Instance().IsPluginStatusCached()) {
-		PerformPluginCheckAndCache();
+		PerformPluginCheckAndCache(true); // Check all plugins to get complete installed list
 	}
 
 	const auto& status = StreamUP::PluginState::Instance().GetCachedPluginStatus();

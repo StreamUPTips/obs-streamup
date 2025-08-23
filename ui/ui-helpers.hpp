@@ -114,6 +114,13 @@ void CreateButton(QLayout *layout, const QString &text, const std::function<void
  */
 void CopyToClipboard(const QString &text);
 
+/**
+ * Get theme-aware icon path for UI icons
+ * @param iconName The base name of the icon (without suffix)
+ * @return QString Full resource path to the appropriate light/dark icon
+ */
+QString GetThemedIconPath(const QString &iconName);
+
 } // namespace UIHelpers  
 } // namespace StreamUP
 

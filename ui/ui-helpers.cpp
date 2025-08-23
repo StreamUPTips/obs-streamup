@@ -287,5 +287,22 @@ void CopyToClipboard(const QString &text)
 	clipboard->setText(text);
 }
 
+QString GetThemedIconPath(const QString &iconName)
+{
+	// Check if we're using a dark theme (requires OBS 29.0.0+)
+	bool isDarkTheme = obs_frontend_is_theme_dark();
+	
+	// Use appropriate suffix based on theme
+	QString themeSuffix = isDarkTheme ? "-dark" : "-light";
+	QString iconPath = QString(":images/icons/ui/%1%2.svg").arg(iconName).arg(themeSuffix);
+	
+	// Debug log (can be removed later)
+	blog(LOG_DEBUG, "[StreamUP] Getting themed icon: %s -> %s (isDark: %s)", 
+		iconName.toUtf8().constData(), iconPath.toUtf8().constData(), 
+		isDarkTheme ? "true" : "false");
+	
+	return iconPath;
+}
+
 } // namespace UIHelpers
 } // namespace StreamUP

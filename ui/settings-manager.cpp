@@ -773,7 +773,7 @@ void ShowInstalledPluginsPage(QWidget* parentWidget)
         
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
         headerLayout->setContentsMargins(0, 0, 0, 0);
-        
+         
         QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsInstalledPluginsTitle"));
         headerLayout->addWidget(titleLabel);
         

@@ -1,5 +1,6 @@
 #include "streamup-toolbar.hpp"
 #include "ui-styles.hpp"
+#include "ui-helpers.hpp"
 #include "settings-manager.hpp"
 #include <QIcon>
 #include <QHBoxLayout>
@@ -23,6 +24,9 @@ StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent),
 	setupUI();
 	updateAllButtons();
 	
+	// Ensure icons are properly themed on startup
+	updateIconsForTheme();
+	
 	// Register for OBS frontend events to update button states
 	obs_frontend_add_event_callback(OnFrontendEvent, this);
 }
@@ -37,10 +41,11 @@ QFrame* StreamUPToolbar::createSeparator()
 {
 	QFrame* separator = new QFrame();
 	separator->setFrameShape(QFrame::VLine);
-	separator->setFrameShadow(QFrame::Sunken);
-	separator->setFixedSize(2, 14);
+	separator->setFrameShadow(QFrame::Plain);
+	separator->setFixedSize(1, 16);
+	separator->setLineWidth(1);
 	return separator;
-}
+} 
 
 void StreamUPToolbar::setupUI()
 {
@@ -59,7 +64,7 @@ void StreamUPToolbar::setupUI()
 	// Create streaming button
 	streamButton = new QToolButton(centralWidget);
 	streamButton->setFixedSize(28, 28);
-	streamButton->setIcon(QIcon(":images/icons/ui/streaming-inactive.svg"));
+	streamButton->setIcon(QIcon(getThemedIconPath("streaming-inactive")));
 	streamButton->setIconSize(QSize(20, 20));
 	streamButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	streamButton->setToolTip("Start/Stop Streaming");
@@ -74,7 +79,7 @@ void StreamUPToolbar::setupUI()
 	// Create recording button
 	recordButton = new QToolButton(centralWidget);
 	recordButton->setFixedSize(28, 28);
-	recordButton->setIcon(QIcon(":images/icons/ui/record-off.svg"));
+	recordButton->setIcon(QIcon(getThemedIconPath("record-off")));
 	recordButton->setIconSize(QSize(20, 20));
 	recordButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	recordButton->setToolTip("Start/Stop Recording");
@@ -85,7 +90,7 @@ void StreamUPToolbar::setupUI()
 	// Create pause recording button (initially hidden like OBS)
 	pauseButton = new QToolButton(centralWidget);
 	pauseButton->setFixedSize(28, 28);
-	pauseButton->setIcon(QIcon(":images/icons/ui/pause.svg"));
+	pauseButton->setIcon(QIcon(getThemedIconPath("pause")));
 	pauseButton->setIconSize(QSize(20, 20));
 	pauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	pauseButton->setToolTip("Pause/Resume Recording");
@@ -101,7 +106,7 @@ void StreamUPToolbar::setupUI()
 	// Create replay buffer button
 	replayBufferButton = new QToolButton(centralWidget);
 	replayBufferButton->setFixedSize(28, 28);
-	replayBufferButton->setIcon(QIcon(":images/icons/ui/replay-buffer-off.svg"));
+	replayBufferButton->setIcon(QIcon(getThemedIconPath("replay-buffer-off")));
 	replayBufferButton->setIconSize(QSize(20, 20));
 	replayBufferButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	replayBufferButton->setToolTip("Start/Stop Replay Buffer");
@@ -112,7 +117,7 @@ void StreamUPToolbar::setupUI()
 	// Create save replay button (initially hidden like OBS)
 	saveReplayButton = new QToolButton(centralWidget);
 	saveReplayButton->setFixedSize(28, 28);
-	saveReplayButton->setIcon(QIcon(":images/icons/ui/save-replay.svg"));
+	saveReplayButton->setIcon(QIcon(getThemedIconPath("save-replay")));
 	saveReplayButton->setIconSize(QSize(20, 20)); // Slightly smaller
 	saveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	saveReplayButton->setToolTip("Save Replay");
@@ -129,7 +134,7 @@ void StreamUPToolbar::setupUI()
 	virtualCameraButton = new QToolButton(centralWidget);
 	virtualCameraButton->setObjectName("virtualCameraButton");
 	virtualCameraButton->setFixedSize(28, 28);
-	virtualCameraButton->setIcon(QIcon(":images/icons/ui/virtual-camera.svg"));
+	virtualCameraButton->setIcon(QIcon(getThemedIconPath("virtual-camera")));
 	virtualCameraButton->setIconSize(QSize(20, 20));
 	virtualCameraButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	virtualCameraButton->setToolTip("Start/Stop Virtual Camera");
@@ -140,7 +145,7 @@ void StreamUPToolbar::setupUI()
 	// Create virtual camera config button (like OBS controls dock)
 	virtualCameraConfigButton = new QToolButton(centralWidget);
 	virtualCameraConfigButton->setFixedSize(28, 28);
-	virtualCameraConfigButton->setIcon(QIcon(":images/icons/ui/virtual-camera-settings.svg"));
+	virtualCameraConfigButton->setIcon(QIcon(getThemedIconPath("virtual-camera-settings")));
 	virtualCameraConfigButton->setIconSize(QSize(20, 20)); // Slightly smaller icon
 	virtualCameraConfigButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	virtualCameraConfigButton->setToolTip("Virtual Camera Configuration");
@@ -156,7 +161,7 @@ void StreamUPToolbar::setupUI()
 	studioModeButton = new QToolButton(centralWidget);
 	studioModeButton->setObjectName("studioModeButton");
 	studioModeButton->setFixedSize(28, 28);
-	studioModeButton->setIcon(QIcon(":images/icons/ui/studio-mode.svg"));
+	studioModeButton->setIcon(QIcon(getThemedIconPath("studio-mode")));
 	studioModeButton->setIconSize(QSize(20, 20));
 	studioModeButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	studioModeButton->setToolTip("Toggle Studio Mode");
@@ -171,7 +176,7 @@ void StreamUPToolbar::setupUI()
 	// Create settings button
 	settingsButton = new QToolButton(centralWidget);
 	settingsButton->setFixedSize(28, 28);
-	settingsButton->setIcon(QIcon(":images/icons/ui/settings.svg"));
+	settingsButton->setIcon(QIcon(getThemedIconPath("settings")));
 	settingsButton->setIconSize(QSize(20, 20));
 	settingsButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 	settingsButton->setToolTip("Open Settings");
@@ -231,7 +236,8 @@ void StreamUPToolbar::setupUI()
 			background-color: #1584d6;
 		}
 		QFrame {
-			color: #555555;
+			background-color: rgba(128, 128, 128, 0.3);
+			border: none;
 		}
 	)");
 	
@@ -403,7 +409,10 @@ void StreamUPToolbar::updateStreamButton()
 	if (streamButton) {
 		bool streaming = obs_frontend_streaming_active();
 		streamButton->setChecked(streaming);
-		streamButton->setIcon(QIcon(streaming ? ":images/icons/ui/streaming.svg" : ":images/icons/ui/streaming-inactive.svg"));
+		QString iconName = streaming ? "streaming" : "streaming-inactive";
+		QString iconPath = getThemedIconPath(iconName);
+		blog(LOG_DEBUG, "[StreamUP] Updating stream button icon: %s", iconPath.toUtf8().constData());
+		streamButton->setIcon(QIcon(iconPath));
 		streamButton->setToolTip(streaming ? "Stop Streaming" : "Start Streaming");
 	}
 }
@@ -413,7 +422,8 @@ void StreamUPToolbar::updateRecordButton()
 	if (recordButton) {
 		bool recording = obs_frontend_recording_active();
 		recordButton->setChecked(recording);
-		recordButton->setIcon(QIcon(recording ? ":images/icons/ui/record-on.svg" : ":images/icons/ui/record-off.svg"));
+		QString iconName = recording ? "record-on" : "record-off";
+		recordButton->setIcon(QIcon(getThemedIconPath(iconName)));
 		recordButton->setToolTip(recording ? "Stop Recording" : "Start Recording");
 		
 		// Show/hide pause button based on recording state AND pausability (like OBS controls dock)
@@ -431,6 +441,7 @@ void StreamUPToolbar::updatePauseButton()
 		bool paused = obs_frontend_recording_paused();
 		pauseButton->setEnabled(recording);
 		pauseButton->setChecked(paused);
+		pauseButton->setIcon(QIcon(getThemedIconPath("pause")));
 		pauseButton->setToolTip(paused ? "Resume Recording" : "Pause Recording");
 	}
 }
@@ -440,7 +451,8 @@ void StreamUPToolbar::updateReplayBufferButton()
 	if (replayBufferButton) {
 		bool active = obs_frontend_replay_buffer_active();
 		replayBufferButton->setChecked(active);
-		replayBufferButton->setIcon(QIcon(active ? ":images/icons/ui/replay-buffer-on.svg" : ":images/icons/ui/replay-buffer-off.svg"));
+		QString iconName = active ? "replay-buffer-on" : "replay-buffer-off";
+		replayBufferButton->setIcon(QIcon(getThemedIconPath(iconName)));
 		replayBufferButton->setToolTip(active ? "Stop Replay Buffer" : "Start Replay Buffer");
 		
 		// Show/hide save replay button based on replay buffer state (like OBS controls dock)
@@ -480,6 +492,28 @@ void StreamUPToolbar::updateStudioModeButton()
 	}
 }
 
+void StreamUPToolbar::updateVirtualCameraConfigButton()
+{
+	if (virtualCameraConfigButton) {
+		virtualCameraConfigButton->setIcon(QIcon(getThemedIconPath("virtual-camera-settings")));
+	}
+}
+
+void StreamUPToolbar::updateSettingsButton()
+{
+	if (settingsButton) {
+		settingsButton->setIcon(QIcon(getThemedIconPath("settings")));
+	}
+}
+
+void StreamUPToolbar::updateStreamUPSettingsButton()
+{
+	if (streamUPSettingsButton) {
+		// StreamUP logo button stays the same (social icon, not UI icon)
+		streamUPSettingsButton->setIcon(QIcon(":images/icons/social/streamup-logo-button.svg"));
+	}
+}
+
 void StreamUPToolbar::updateAllButtons()
 {
 	updateStreamButton();
@@ -488,7 +522,10 @@ void StreamUPToolbar::updateAllButtons()
 	updateReplayBufferButton();
 	updateSaveReplayButton();
 	updateVirtualCameraButton();
+	updateVirtualCameraConfigButton();
 	updateStudioModeButton();
+	updateSettingsButton();
+	updateStreamUPSettingsButton();
 }
 
 void StreamUPToolbar::OnFrontendEvent(enum obs_frontend_event event, void *data)
@@ -534,9 +571,101 @@ void StreamUPToolbar::OnFrontendEvent(enum obs_frontend_event event, void *data)
 		toolbar->updateAllButtons();
 		break;
 		
+	case OBS_FRONTEND_EVENT_THEME_CHANGED:
+		// Theme changed, update icons for new theme
+		blog(LOG_INFO, "[StreamUP] Received OBS_FRONTEND_EVENT_THEME_CHANGED event");
+		toolbar->updateIconsForTheme();
+		break;
+		
 	default:
 		break;
 	}
+}
+
+QString StreamUPToolbar::getThemedIconPath(const QString& iconName)
+{
+	// Use the centralized theme-aware icon helper
+	return StreamUP::UIHelpers::GetThemedIconPath(iconName);
+}
+
+void StreamUPToolbar::updateIconsForTheme()
+{
+	// Update all button icons for the current theme
+	bool isDark = obs_frontend_is_theme_dark();
+	blog(LOG_INFO, "[StreamUP] Theme changed, updating all toolbar icons (isDark: %s)", isDark ? "true" : "false");
+	
+	// Force icon cache clearing by creating new QIcon objects
+	if (streamButton) {
+		bool streaming = obs_frontend_streaming_active();
+		QString iconName = streaming ? "streaming" : "streaming-inactive";
+		QString iconPath = getThemedIconPath(iconName);
+		streamButton->setIcon(QIcon());  // Clear first
+		streamButton->setIcon(QIcon(iconPath));  // Set new icon
+		blog(LOG_DEBUG, "[StreamUP] Force updated stream button: %s", iconPath.toUtf8().constData());
+	}
+	
+	if (recordButton) {
+		bool recording = obs_frontend_recording_active();
+		QString iconName = recording ? "record-on" : "record-off";
+		QString iconPath = getThemedIconPath(iconName);
+		recordButton->setIcon(QIcon());
+		recordButton->setIcon(QIcon(iconPath));
+		blog(LOG_DEBUG, "[StreamUP] Force updated record button: %s", iconPath.toUtf8().constData());
+	}
+	
+	if (pauseButton) {
+		QString iconPath = getThemedIconPath("pause");
+		pauseButton->setIcon(QIcon());
+		pauseButton->setIcon(QIcon(iconPath));
+		blog(LOG_DEBUG, "[StreamUP] Force updated pause button: %s", iconPath.toUtf8().constData());
+	}
+	
+	if (replayBufferButton) {
+		bool active = obs_frontend_replay_buffer_active();
+		QString iconName = active ? "replay-buffer-on" : "replay-buffer-off";
+		QString iconPath = getThemedIconPath(iconName);
+		replayBufferButton->setIcon(QIcon());
+		replayBufferButton->setIcon(QIcon(iconPath));
+		blog(LOG_DEBUG, "[StreamUP] Force updated replay buffer button: %s", iconPath.toUtf8().constData());
+	}
+	
+	if (saveReplayButton && saveReplayButton->isVisible()) {
+		QString iconPath = getThemedIconPath("save-replay");
+		saveReplayButton->setIcon(QIcon());
+		saveReplayButton->setIcon(QIcon(iconPath));
+		blog(LOG_DEBUG, "[StreamUP] Force updated save replay button: %s", iconPath.toUtf8().constData());
+	}
+	
+	if (virtualCameraButton) {
+		QString iconPath = getThemedIconPath("virtual-camera");
+		virtualCameraButton->setIcon(QIcon());
+		virtualCameraButton->setIcon(QIcon(iconPath));
+		blog(LOG_DEBUG, "[StreamUP] Force updated virtual camera button: %s", iconPath.toUtf8().constData());
+	}
+	
+	if (virtualCameraConfigButton) {
+		QString iconPath = getThemedIconPath("virtual-camera-settings");
+		virtualCameraConfigButton->setIcon(QIcon());
+		virtualCameraConfigButton->setIcon(QIcon(iconPath));
+		blog(LOG_DEBUG, "[StreamUP] Force updated virtual camera config button: %s", iconPath.toUtf8().constData());
+	}
+	
+	if (studioModeButton) {
+		QString iconPath = getThemedIconPath("studio-mode");
+		studioModeButton->setIcon(QIcon());
+		studioModeButton->setIcon(QIcon(iconPath));
+		blog(LOG_DEBUG, "[StreamUP] Force updated studio mode button: %s", iconPath.toUtf8().constData());
+	}
+	
+	if (settingsButton) {
+		QString iconPath = getThemedIconPath("settings");
+		settingsButton->setIcon(QIcon());
+		settingsButton->setIcon(QIcon(iconPath));
+		blog(LOG_DEBUG, "[StreamUP] Force updated settings button: %s", iconPath.toUtf8().constData());
+	}
+	
+	// StreamUP settings button keeps its original icon (social icon)
+	blog(LOG_INFO, "[StreamUP] All toolbar icons force-updated for theme change");
 }
 
 #include "streamup-toolbar.moc"
