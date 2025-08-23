@@ -68,6 +68,21 @@ public:
     QList<MultiDockInfo> GetMultiDockInfoList() const;
 
     /**
+     * @brief Check if a MultiDock is currently visible
+     * @param id ID of the MultiDock to check
+     * @return True if visible, false if hidden or not found
+     */
+    bool IsMultiDockVisible(const QString& id) const;
+
+    /**
+     * @brief Show or hide a MultiDock
+     * @param id ID of the MultiDock to show/hide
+     * @param visible True to show, false to hide
+     * @return True if operation succeeded
+     */
+    bool SetMultiDockVisible(const QString& id, bool visible);
+
+    /**
      * @brief Load all MultiDocks from persistent storage
      */
     void LoadAllMultiDocks();

@@ -7,6 +7,7 @@
 #include "theme-window.hpp"
 #include "websocket-window.hpp"
 #include "../multidock/multidock_dialogs.hpp"
+#include "../multidock/multidock_manager.hpp"
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <QApplication>
@@ -166,6 +167,32 @@ void LoadMenuItems(QMenu* menu)
     QObject::connect(action, &QAction::triggered, []() { 
         StreamUP::MultiDock::ShowManageMultiDocksDialog(); 
     });
+    
+    // Get the MultiDockManager instance and add existing multidocks to menu
+    StreamUP::MultiDock::MultiDockManager* manager = StreamUP::MultiDock::MultiDockManager::Instance();
+    if (manager) {
+        QList<StreamUP::MultiDock::MultiDockInfo> multiDocks = manager->GetMultiDockInfoList();
+        
+        // Only add separator and multidocks if there are any
+        if (!multiDocks.isEmpty()) {
+            multiDockMenu->addSeparator();
+            
+            // Add each multidock as a checkable action
+            for (const StreamUP::MultiDock::MultiDockInfo& info : multiDocks) {
+                QAction* dockAction = multiDockMenu->addAction(info.name);
+                dockAction->setCheckable(true);
+                
+                // Check if the multidock is currently visible
+                bool isVisible = manager->IsMultiDockVisible(info.id);
+                dockAction->setChecked(isVisible);
+                
+                // Connect to toggle visibility
+                QObject::connect(dockAction, &QAction::triggered, [manager, info](bool checked) {
+                    manager->SetMultiDockVisible(info.id, checked);
+                });
+            }
+        }
+    }
 
     menu->addSeparator();
 
