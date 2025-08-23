@@ -162,7 +162,8 @@ void MultiDockDock::LoadState()
         
         // Try to find dock by ID
         for (QDockWidget* candidate : allDocks) {
-            if (GenerateDockId(candidate) == dockId) {
+            QString candidateId = GenerateDockId(candidate);
+            if (candidateId == dockId) {
                 dock = candidate;
                 break;
             }
@@ -171,9 +172,27 @@ void MultiDockDock::LoadState()
         if (dock && !IsMultiDockContainer(dock)) {
             m_innerHost->AddDock(dock);
             restoredCount++;
+            blog(LOG_INFO, "[StreamUP MultiDock] Successfully restored dock '%s' with ID '%s'", 
+                 dock->windowTitle().toUtf8().constData(), dockId.toUtf8().constData());
         } else {
+            // Enhanced debugging for failed dock restoration
             blog(LOG_WARNING, "[StreamUP MultiDock] Could not restore dock with ID '%s'", 
                  dockId.toUtf8().constData());
+            
+            // Log all available dock IDs for debugging
+            blog(LOG_INFO, "[StreamUP MultiDock] Available docks for debugging:");
+            for (QDockWidget* candidate : allDocks) {
+                QString candidateId = GenerateDockId(candidate);
+                QString objectName = candidate->objectName();
+                QString title = candidate->windowTitle();
+                bool isMultiDock = IsMultiDockContainer(candidate);
+                
+                blog(LOG_INFO, "[StreamUP MultiDock]   - ID:'%s' ObjectName:'%s' Title:'%s' IsMultiDock:%s", 
+                     candidateId.toUtf8().constData(), 
+                     objectName.toUtf8().constData(),
+                     title.toUtf8().constData(),
+                     isMultiDock ? "true" : "false");
+            }
         }
     }
     

@@ -92,6 +92,12 @@ public:
      */
     void SaveAllMultiDocks();
 
+    /**
+     * @brief Retry restoration for any MultiDocks that failed to fully restore
+     * Called after all plugins have finished loading
+     */
+    void RetryFailedRestorations();
+
 private slots:
     void OnMultiDockDestroyed(QObject* obj);
 
@@ -108,6 +114,8 @@ private:
 
     QHash<QString, MultiDockDock*> m_multiDocks;
     QHash<QString, MultiDockInfo> m_persistentInfo; // Maintains info even after widgets are destroyed
+    QStringList m_pendingRetryIds; // MultiDocks that need retry restoration
+    bool m_hasRetriedRestoration; // Track if we've already done the delayed retry
     
     static MultiDockManager* s_instance;
 };
