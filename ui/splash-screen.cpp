@@ -743,6 +743,11 @@ void CreateSplashDialog(ShowCondition condition)
         dialog->setModal(false);
         dialog->setFixedSize(800, 600);
         
+        // Ensure version tracking is updated when dialog closes (any way)
+        QObject::connect(dialog, &QDialog::finished, []() {
+            UpdateVersionTracking();
+        });
+        
         QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
         mainLayout->setContentsMargins(0, 0, 0, 0);
         mainLayout->setSpacing(0);
@@ -1073,7 +1078,6 @@ void CreateSplashDialog(ShowCondition condition)
         // Check for Plugin Update button
         QPushButton* updateBtn = StreamUP::UIStyles::CreateStyledButton("Check for Plugin Update", "info");
         QObject::connect(updateBtn, &QPushButton::clicked, [dialog]() {
-            UpdateVersionTracking();
             StreamUP::PluginManager::ShowCachedPluginUpdatesDialog();
         });
         
@@ -1081,7 +1085,6 @@ void CreateSplashDialog(ShowCondition condition)
         QPushButton* closeBtn = StreamUP::UIStyles::CreateStyledButton("Close", "neutral");
         closeBtn->setDefault(true);
         QObject::connect(closeBtn, &QPushButton::clicked, [dialog]() {
-            UpdateVersionTracking();
             dialog->close();
         });
         

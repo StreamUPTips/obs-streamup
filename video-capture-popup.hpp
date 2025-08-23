@@ -15,6 +15,7 @@ public:
 	explicit VideoCapturePopup(QWidget *parent = nullptr);
 	~VideoCapturePopup();
 	void showNearButton(const QPoint &buttonPos, const QSize &buttonSize);
+	void updateIconsForTheme();
 
 private slots:
 	void onActivateClicked();

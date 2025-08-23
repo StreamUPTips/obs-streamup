@@ -79,8 +79,9 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins();
 /**
  * Perform plugin check once and cache results for future use
  * This should be called after OBS is fully loaded
+ * @param checkAllPlugins If true, check all plugins; if false, only check required plugins
  */
-void PerformPluginCheckAndCache();
+void PerformPluginCheckAndCache(bool checkAllPlugins = true);
 
 /**
  * Check if all plugins are up to date using cached results

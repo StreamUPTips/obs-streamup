@@ -33,14 +33,21 @@ private:
     void updateReplayBufferButton();
     void updateSaveReplayButton();
     void updateVirtualCameraButton();
+    void updateVirtualCameraConfigButton();
     void updateStudioModeButton();
+    void updateSettingsButton();
+    void updateStreamUPSettingsButton();
     void updateAllButtons();
     void updateButtonVisibility();
+    void updateIconsForTheme();
     QFrame* createSeparator();
     
     // Helper functions to check button availability
     bool isReplayBufferAvailable();
     bool isRecordingPausable();
+    
+    // Theme-aware icon helper
+    QString getThemedIconPath(const QString& iconName);
     
     // OBS event handling
     static void OnFrontendEvent(enum obs_frontend_event event, void *data);
