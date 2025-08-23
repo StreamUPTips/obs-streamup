@@ -235,6 +235,45 @@ QList<MultiDockInfo> MultiDockManager::GetMultiDockInfoList() const
     return result;
 }
 
+bool MultiDockManager::IsMultiDockVisible(const QString& id) const
+{
+    QMainWindow* mainWindow = GetObsMainWindow();
+    if (!mainWindow) {
+        return false;
+    }
+    
+    // Find the QDockWidget by ID
+    QDockWidget* dockWidget = mainWindow->findChild<QDockWidget*>(id);
+    if (!dockWidget) {
+        return false;
+    }
+    
+    return dockWidget->isVisible();
+}
+
+bool MultiDockManager::SetMultiDockVisible(const QString& id, bool visible)
+{
+    QMainWindow* mainWindow = GetObsMainWindow();
+    if (!mainWindow) {
+        return false;
+    }
+    
+    // Find the QDockWidget by ID
+    QDockWidget* dockWidget = mainWindow->findChild<QDockWidget*>(id);
+    if (!dockWidget) {
+        return false;
+    }
+    
+    if (visible) {
+        dockWidget->show();
+        dockWidget->raise();
+    } else {
+        dockWidget->hide();
+    }
+    
+    return true;
+}
+
 void MultiDockManager::LoadAllMultiDocks()
 {
     QList<MultiDockInfo> multiDockList = LoadMultiDockList();
@@ -331,20 +370,27 @@ void MultiDockManager::RegisterWithObs(MultiDockDock* multiDock)
     QMainWindow* mainWindow = GetObsMainWindow();
     
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
-    // Modern API - register the widget directly
-    bool success = obs_frontend_add_dock_by_id(id.toUtf8().constData(), 
-                                               title.toUtf8().constData(), 
-                                               multiDock);
+    // Modern API - wrap in QDockWidget and use custom dock registration (no menu entry)
+    auto dock = new QDockWidget(mainWindow);
+    dock->setObjectName(id);
+    dock->setWindowTitle(title);
+    dock->setWidget(multiDock);
+    dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    dock->setFloating(true);
+    dock->hide();
+    
+    // Use custom dock registration to avoid appearing in OBS View > Docks menu
+    bool success = obs_frontend_add_custom_qdock(id.toUtf8().constData(), dock);
     
     if (success) {
-        blog(LOG_INFO, "[StreamUP MultiDock] Registered MultiDock '%s' with OBS (ID: %s)", 
+        blog(LOG_INFO, "[StreamUP MultiDock] Registered MultiDock '%s' with OBS as custom dock (hidden from menu, ID: %s)", 
              title.toUtf8().constData(), id.toUtf8().constData());
     } else {
         blog(LOG_ERROR, "[StreamUP MultiDock] Failed to register MultiDock '%s' with OBS", 
              title.toUtf8().constData());
     }
 #else
-    // Legacy API - wrap in QDockWidget
+    // Legacy API - wrap in QDockWidget and use regular dock registration
     auto dock = new QDockWidget(mainWindow);
     dock->setObjectName(id);
     dock->setWindowTitle(title);
@@ -354,7 +400,10 @@ void MultiDockManager::RegisterWithObs(MultiDockDock* multiDock)
     dock->hide();
     obs_frontend_add_dock(dock);
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Registered MultiDock '%s' with OBS (legacy API)", 
+    // Hide from dock menu after registration
+    dock->toggleViewAction()->setVisible(false);
+    
+    blog(LOG_INFO, "[StreamUP MultiDock] Registered MultiDock '%s' with OBS (hidden from menu)", 
          title.toUtf8().constData());
 #endif
 }
