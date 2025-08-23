@@ -55,6 +55,12 @@ DockId GenerateDockId(QDockWidget* dock);
  */
 bool IsMultiDockContainer(QDockWidget* dock);
 
+// Helper functions for cleaner dock identification
+bool IsQuickAccessUtilityDock(QDockWidget* dock);
+QString GetQuickAccessStableId(QDockWidget* dock);
+bool IsStableObjectName(const QString& objectName);
+QString CreateFallbackId(QDockWidget* dock);
+
 } // namespace MultiDock
 } // namespace StreamUP
 

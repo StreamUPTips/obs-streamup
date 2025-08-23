@@ -7,6 +7,7 @@
 #include <obs-module.h>
 #include <QUuid>
 #include <QDockWidget>
+#include <QTimer>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -15,6 +16,7 @@ MultiDockManager* MultiDockManager::s_instance = nullptr;
 
 MultiDockManager::MultiDockManager(QObject* parent)
     : QObject(parent)
+    , m_hasRetriedRestoration(false)
 {
     // Register for OBS frontend events to save state more reliably
     obs_frontend_add_event_callback(OnFrontendEvent, this);
@@ -55,13 +57,21 @@ void MultiDockManager::OnFrontendEvent(enum obs_frontend_event event, void *priv
         return;
     }
     
-    // Save on various events that indicate OBS is about to close or change state
     switch (event) {
     case OBS_FRONTEND_EVENT_EXIT:
     case OBS_FRONTEND_EVENT_PROFILE_CHANGING:
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING:
         blog(LOG_INFO, "[StreamUP MultiDock] Saving MultiDock states on frontend event %d", event);
         manager->SaveAllMultiDocks();
+        break;
+    case OBS_FRONTEND_EVENT_FINISHED_LOADING:
+        // Retry failed restorations after all plugins have loaded
+        if (!manager->m_hasRetriedRestoration && !manager->m_pendingRetryIds.isEmpty()) {
+            blog(LOG_INFO, "[StreamUP MultiDock] OBS finished loading, retrying failed restorations for %d MultiDocks", 
+                 manager->m_pendingRetryIds.size());
+            // Use a timer to ensure all dock widgets are fully initialized
+            QTimer::singleShot(2000, manager, &MultiDockManager::RetryFailedRestorations);
+        }
         break;
     default:
         // Ignore other events
@@ -299,8 +309,23 @@ void MultiDockManager::LoadAllMultiDocks()
         
         RegisterWithObs(multiDock);
         
-        // Load the saved state
+        // Load the saved state and check if retry is needed
         multiDock->LoadState();
+        
+        // Only add to retry list if there are missing docks to restore
+        QStringList capturedDockIds;
+        QByteArray layout;
+        if (LoadMultiDockState(info.id, capturedDockIds, layout) && !capturedDockIds.isEmpty()) {
+            int currentDockCount = multiDock->GetInnerHost()->GetAllDocks().size();
+            if (currentDockCount < capturedDockIds.size()) {
+                m_pendingRetryIds.append(info.id);
+                blog(LOG_INFO, "[StreamUP MultiDock] Added '%s' to retry list: has %d/%d docks", 
+                     info.name.toUtf8().constData(), currentDockCount, capturedDockIds.size());
+            } else {
+                blog(LOG_INFO, "[StreamUP MultiDock] Skipping retry for '%s': already has all %d docks", 
+                     info.name.toUtf8().constData(), capturedDockIds.size());
+            }
+        }
     }
     
     blog(LOG_INFO, "[StreamUP MultiDock] Loaded %d MultiDocks from persistent storage", 
@@ -322,6 +347,108 @@ void MultiDockManager::SaveAllMultiDocks()
     
     blog(LOG_INFO, "[StreamUP MultiDock] Saved %d MultiDocks to persistent storage", 
          multiDockList.size());
+}
+
+void MultiDockManager::RetryFailedRestorations()
+{
+    if (m_hasRetriedRestoration) {
+        return; // Already retried once
+    }
+    
+    m_hasRetriedRestoration = true;
+    
+    blog(LOG_INFO, "[StreamUP MultiDock] Starting retry restoration for %d MultiDocks after OBS finished loading", 
+         m_pendingRetryIds.size());
+    
+    QMainWindow* mainWindow = GetObsMainWindow();
+    if (!mainWindow) {
+        blog(LOG_ERROR, "[StreamUP MultiDock] Cannot retry restoration: main window not found");
+        return;
+    }
+    
+    // Get fresh list of all available docks (now including late-loading plugin docks)
+    QList<QDockWidget*> allDocks = FindAllObsDocks(mainWindow);
+    
+    // Pre-generate dock ID mappings to avoid redundant GenerateDockId() calls
+    QHash<QString, QDockWidget*> availableDockMap;
+    for (QDockWidget* dock : allDocks) {
+        if (!IsMultiDockContainer(dock)) {
+            QString dockId = GenerateDockId(dock);
+            availableDockMap[dockId] = dock;
+        }
+    }
+    
+    blog(LOG_INFO, "[StreamUP MultiDock] Pre-generated %d dock ID mappings for efficient retry restoration", 
+         availableDockMap.size());
+    
+    int totalRetryAttempts = 0;
+    int successfulRetries = 0;
+    
+    for (const QString& multiDockId : m_pendingRetryIds) {
+        MultiDockDock* multiDock = GetMultiDock(multiDockId);
+        if (!multiDock || !multiDock->GetInnerHost()) {
+            continue;
+        }
+        
+        // Check how many docks are currently in this MultiDock
+        int currentDockCount = multiDock->GetInnerHost()->GetAllDocks().size();
+        
+        // Load saved state to see how many docks should be restored
+        QStringList capturedDockIds;
+        QByteArray layout;
+        if (!LoadMultiDockState(multiDockId, capturedDockIds, layout)) {
+            continue; // No saved state
+        }
+        
+        // If we already have all expected docks, skip
+        if (currentDockCount >= capturedDockIds.size()) {
+            blog(LOG_INFO, "[StreamUP MultiDock] MultiDock '%s' already has %d/%d docks, skipping retry", 
+                 multiDockId.toUtf8().constData(), currentDockCount, capturedDockIds.size());
+            continue;
+        }
+        
+        blog(LOG_INFO, "[StreamUP MultiDock] Retrying restoration for MultiDock '%s': has %d/%d docks", 
+             multiDockId.toUtf8().constData(), currentDockCount, capturedDockIds.size());
+        
+        // Pre-generate existing dock IDs to avoid redundant GenerateDockId() calls
+        QSet<QString> existingDockIds;
+        for (QDockWidget* existingDock : multiDock->GetInnerHost()->GetAllDocks()) {
+            existingDockIds.insert(GenerateDockId(existingDock));
+        }
+        
+        // Try to find and add missing docks using pre-generated mapping
+        for (const QString& dockId : capturedDockIds) {
+            // Skip if dock is already in the MultiDock
+            if (existingDockIds.contains(dockId)) {
+                continue;
+            }
+            
+            totalRetryAttempts++;
+            
+            // Use the pre-generated mapping for O(1) lookup
+            if (availableDockMap.contains(dockId)) {
+                QDockWidget* dock = availableDockMap[dockId];
+                multiDock->GetInnerHost()->AddDock(dock);
+                successfulRetries++;
+                blog(LOG_INFO, "[StreamUP MultiDock] Successfully restored dock '%s' during retry", 
+                     dock->windowTitle().toUtf8().constData());
+            } else {
+                blog(LOG_WARNING, "[StreamUP MultiDock] Still could not find dock with ID '%s' during retry", 
+                     dockId.toUtf8().constData());
+            }
+        }
+        
+        // Restore layout if we added any docks
+        if (successfulRetries > 0 && !layout.isEmpty()) {
+            multiDock->GetInnerHost()->RestoreLayout(layout);
+        }
+    }
+    
+    blog(LOG_INFO, "[StreamUP MultiDock] Retry restoration completed: %d/%d dock restorations successful", 
+         successfulRetries, totalRetryAttempts);
+    
+    // Clear the retry list
+    m_pendingRetryIds.clear();
 }
 
 void MultiDockManager::OnMultiDockDestroyed(QObject* obj)
