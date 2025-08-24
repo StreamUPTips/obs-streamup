@@ -40,6 +40,7 @@ private:
     void updateAllButtons();
     void updateButtonVisibility();
     void updateIconsForTheme();
+    void updatePositionAwareTheme();
     QFrame* createSeparator();
     
     // Helper functions to check button availability

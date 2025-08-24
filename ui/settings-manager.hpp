@@ -37,6 +37,14 @@ struct DockToolSettings {
 };
 
 /**
+ * @brief Toolbar position options
+ */
+enum class ToolbarPosition {
+    Top,
+    Bottom
+};
+
+/**
  * @brief Settings structure to hold plugin configuration
  */
 struct PluginSettings {
@@ -44,9 +52,10 @@ struct PluginSettings {
     bool notificationsMute;
     bool showCPHIntegration;
     bool showToolbar;
+    ToolbarPosition toolbarPosition;
     DockToolSettings dockTools;
     
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true) {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), toolbarPosition(ToolbarPosition::Top) {}
 };
 
 /**

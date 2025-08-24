@@ -941,6 +941,7 @@ static StreamUPToolbar* globalToolbar = nullptr;
 
 // Forward declarations
 void ApplyToolbarVisibility();
+void ApplyToolbarPosition();
 
 static void LoadStreamUPToolbar()
 {
@@ -948,7 +949,15 @@ static void LoadStreamUPToolbar()
 	obs_frontend_push_ui_translation(obs_module_get_string);
 
 	globalToolbar = new StreamUPToolbar(main_window);
-	main_window->addToolBar(Qt::TopToolBarArea, globalToolbar);
+	
+	// Get toolbar position from settings and add to appropriate area
+	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+	Qt::ToolBarArea area = (settings.toolbarPosition == StreamUP::SettingsManager::ToolbarPosition::Bottom) 
+		? Qt::BottomToolBarArea : Qt::TopToolBarArea;
+	main_window->addToolBar(area, globalToolbar);
+	
+	// Update position-aware theming after initial positioning
+	globalToolbar->updatePositionAwareTheme();
 	
 	// Apply initial visibility setting
 	ApplyToolbarVisibility();
@@ -961,6 +970,29 @@ void ApplyToolbarVisibility()
 	if (globalToolbar) {
 		StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 		globalToolbar->setVisible(settings.showToolbar);
+	}
+}
+
+void ApplyToolbarPosition()
+{
+	if (globalToolbar) {
+		const auto main_window = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+		if (main_window) {
+			// Get current position setting
+			StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+			Qt::ToolBarArea newArea = (settings.toolbarPosition == StreamUP::SettingsManager::ToolbarPosition::Bottom) 
+				? Qt::BottomToolBarArea : Qt::TopToolBarArea;
+			
+			// Remove from current area and add to new area
+			main_window->removeToolBar(globalToolbar);
+			main_window->addToolBar(newArea, globalToolbar);
+			
+			// Update position-aware theming after repositioning
+			globalToolbar->updatePositionAwareTheme();
+			
+			// Ensure toolbar visibility is maintained after repositioning
+			ApplyToolbarVisibility();
+		}
 	}
 }
 

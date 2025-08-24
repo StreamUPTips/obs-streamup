@@ -157,6 +157,7 @@ obs_data_t* LoadSettings()
         obs_data_set_bool(data, "notifications_mute", false);
         obs_data_set_bool(data, "show_cph_integration", true);
         obs_data_set_bool(data, "show_toolbar", true);
+        obs_data_set_string(data, "toolbar_position", "top");
         
         // Set default dock tool settings
         obs_data_t* dockData = obs_data_create();
@@ -208,6 +209,14 @@ PluginSettings GetCurrentSettings()
         settings.showCPHIntegration = obs_data_get_bool(data, "show_cph_integration");
         settings.showToolbar = obs_data_get_bool(data, "show_toolbar");
         
+        // Load toolbar position setting (default to top if not set)
+        const char* positionStr = obs_data_get_string(data, "toolbar_position");
+        if (positionStr && strcmp(positionStr, "bottom") == 0) {
+            settings.toolbarPosition = ToolbarPosition::Bottom;
+        } else {
+            settings.toolbarPosition = ToolbarPosition::Top;
+        }
+        
         // Load dock tool settings
         obs_data_t* dockData = obs_data_get_obj(data, "dock_tools");
         if (dockData) {
@@ -236,6 +245,10 @@ void UpdateSettings(const PluginSettings& settings)
     obs_data_set_bool(data, "notifications_mute", settings.notificationsMute);
     obs_data_set_bool(data, "show_cph_integration", settings.showCPHIntegration);
     obs_data_set_bool(data, "show_toolbar", settings.showToolbar);
+    
+    // Save toolbar position setting
+    const char* positionStr = (settings.toolbarPosition == ToolbarPosition::Bottom) ? "bottom" : "top";
+    obs_data_set_string(data, "toolbar_position", positionStr);
     
     // Save dock tool settings
     obs_data_t* dockData = obs_data_create();
@@ -397,6 +410,14 @@ void ShowSettingsDialog()
         cphLayout->addWidget(cphIntegrationSwitch);
         generalLayout->addLayout(cphLayout);
 
+        contentLayout->addWidget(generalGroup);
+
+        // Toolbar Settings Group
+        QGroupBox* toolbarGroup = StreamUP::UIStyles::CreateStyledGroupBox("Toolbar Settings", "info");
+        
+        QVBoxLayout* toolbarLayout = new QVBoxLayout(toolbarGroup);
+        toolbarLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
         // Show toolbar setting
         obs_property_t* showToolbarProp =
             obs_properties_add_bool(props, "show_toolbar", "Show StreamUP Toolbar");
@@ -429,9 +450,54 @@ void ShowSettingsDialog()
         showToolbarLayout->addWidget(showToolbarLabel);
         showToolbarLayout->addStretch();
         showToolbarLayout->addWidget(showToolbarSwitch);
-        generalLayout->addLayout(showToolbarLayout);
+        toolbarLayout->addLayout(showToolbarLayout);
 
-        contentLayout->addWidget(generalGroup);
+        // Toolbar position setting
+        QHBoxLayout* toolbarPositionLayout = new QHBoxLayout();
+        
+        QLabel* toolbarPositionLabel = new QLabel("Toolbar Position");
+        toolbarPositionLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+        toolbarPositionLabel->setToolTip("Choose whether to place the toolbar at the top or bottom of OBS");
+        
+        // Get current toolbar position
+        PluginSettings currentSettings = GetCurrentSettings();
+        bool isBottom = (currentSettings.toolbarPosition == ToolbarPosition::Bottom);
+        
+        StreamUP::UIStyles::SwitchButton* toolbarPositionSwitch = StreamUP::UIStyles::CreateStyledSwitch("", isBottom);
+        toolbarPositionSwitch->setToolTip("Top/Bottom position toggle");
+        
+        // Add text labels for top/bottom
+        QLabel* topLabel = new QLabel("Top");
+        topLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+            .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+        
+        QLabel* bottomLabel = new QLabel("Bottom");
+        bottomLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+            .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+        
+        QObject::connect(toolbarPositionSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+            // Use modern settings system
+            PluginSettings currentSettings = GetCurrentSettings();
+            currentSettings.toolbarPosition = checked ? ToolbarPosition::Bottom : ToolbarPosition::Top;
+            UpdateSettings(currentSettings);
+            
+            // Apply toolbar position
+            extern void ApplyToolbarPosition();
+            ApplyToolbarPosition();
+        });
+
+        toolbarPositionLayout->addWidget(toolbarPositionLabel);
+        toolbarPositionLayout->addStretch();
+        toolbarPositionLayout->addWidget(topLabel);
+        toolbarPositionLayout->addWidget(toolbarPositionSwitch);
+        toolbarPositionLayout->addWidget(bottomLabel);
+        toolbarLayout->addLayout(toolbarPositionLayout);
+
+        contentLayout->addWidget(toolbarGroup);
 
         // Plugin Management Group
         QGroupBox* pluginGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsPluginManagementGroup"), "info");
