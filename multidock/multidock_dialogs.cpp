@@ -154,10 +154,19 @@ void ShowManageMultiDocksDialog()
             if (!id.isEmpty() && manager) {
                 MultiDockDock* multiDock = manager->GetMultiDock(id);
                 if (multiDock) {
-                    multiDock->show();
-                    multiDock->raise();
-                    multiDock->activateWindow();
-                    dialog.accept();
+                    // Find and show the actual OBS dock widget
+                    QMainWindow* mainWindow = GetObsMainWindow();
+                    if (mainWindow) {
+                        QDockWidget* obsDocWidget = mainWindow->findChild<QDockWidget*>(id);
+                        if (obsDocWidget) {
+                            obsDocWidget->show();
+                            obsDocWidget->raise();
+                            obsDocWidget->activateWindow();
+                            dialog.accept();
+                        } else {
+                            blog(LOG_WARNING, "[StreamUP MultiDock] Could not find OBS dock widget to open");
+                        }
+                    }
                 }
             }
         }
@@ -276,6 +285,75 @@ void ShowManageMultiDocksDialog()
         nameEdit->setFocus();
         
         newDialog.exec();
+    });
+    
+    QObject::connect(renameButton, &QPushButton::clicked, [listWidget, manager, &dialog]() {
+        QListWidgetItem* item = listWidget->currentItem();
+        if (!item || !manager) {
+            return;
+        }
+        
+        QString id = item->data(Qt::UserRole).toString();
+        QString currentName = item->text();
+        if (id.isEmpty()) {
+            return;
+        }
+        
+        // Show rename dialog
+        QDialog renameDialog(&dialog);
+        renameDialog.setWindowTitle("Rename MultiDock");
+        renameDialog.setModal(true);
+        renameDialog.resize(300, 120);
+        
+        QVBoxLayout* renameLayout = new QVBoxLayout(&renameDialog);
+        
+        // Name input
+        renameLayout->addWidget(new QLabel("New MultiDock Name:"));
+        QLineEdit* nameEdit = new QLineEdit(&renameDialog);
+        nameEdit->setText(currentName);
+        nameEdit->selectAll();
+        renameLayout->addWidget(nameEdit);
+        
+        // Buttons
+        QHBoxLayout* renameButtonLayout = new QHBoxLayout();
+        QPushButton* saveButton = new QPushButton("Save", &renameDialog);
+        QPushButton* cancelButton = new QPushButton("Cancel", &renameDialog);
+        
+        renameButtonLayout->addWidget(saveButton);
+        renameButtonLayout->addWidget(cancelButton);
+        renameLayout->addLayout(renameButtonLayout);
+        
+        // Connect signals
+        QObject::connect(cancelButton, &QPushButton::clicked, &renameDialog, &QDialog::reject);
+        QObject::connect(saveButton, &QPushButton::clicked, [&renameDialog, nameEdit, manager, item, id, currentName]() {
+            QString newName = nameEdit->text().trimmed();
+            if (newName.isEmpty()) {
+                QMessageBox::warning(&renameDialog, "Invalid Name", "Please enter a valid MultiDock name.");
+                return;
+            }
+            
+            if (newName == currentName) {
+                // No change needed
+                renameDialog.accept();
+                return;
+            }
+            
+            bool success = manager->RenameMultiDock(id, newName);
+            if (success) {
+                // Update the UI list
+                item->setText(newName);
+                blog(LOG_INFO, "[StreamUP MultiDock] Successfully renamed MultiDock to '%s'", newName.toUtf8().constData());
+                renameDialog.accept();
+            } else {
+                QMessageBox::warning(&renameDialog, "Error", "Failed to rename MultiDock.");
+            }
+        });
+        
+        // Make save button default
+        saveButton->setDefault(true);
+        nameEdit->setFocus();
+        
+        renameDialog.exec();
     });
     
     QObject::connect(closeButton, &QPushButton::clicked, &dialog, &QDialog::accept);
