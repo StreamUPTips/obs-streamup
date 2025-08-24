@@ -13,6 +13,8 @@
 #include <QToolBar>
 #include <QAction>
 #include <QIcon>
+#include <QDockWidget>
+#include <QMainWindow>
 #include <QPainter>
 #include <QPixmap>
 #include <QtSvg/QSvgRenderer>
@@ -111,7 +113,19 @@ void MultiDockDock::SetupUi()
 void MultiDockDock::SetName(const QString& name)
 {
     m_name = name;
-    // OBS will handle the title when this widget is registered as a dock
+    
+    // Find and update the OBS dock widget's title
+    QMainWindow* mainWindow = GetObsMainWindow();
+    if (mainWindow) {
+        QDockWidget* obsDocWidget = mainWindow->findChild<QDockWidget*>(m_id);
+        if (obsDocWidget) {
+            obsDocWidget->setWindowTitle(name);
+            blog(LOG_INFO, "[StreamUP MultiDock] Updated OBS dock title to '%s'", 
+                 name.toUtf8().constData());
+        } else {
+            blog(LOG_WARNING, "[StreamUP MultiDock] Could not find OBS dock widget to update title");
+        }
+    }
     
     blog(LOG_INFO, "[StreamUP MultiDock] Renamed MultiDock '%s' to '%s'", 
          m_id.toUtf8().constData(), m_name.toUtf8().constData());
