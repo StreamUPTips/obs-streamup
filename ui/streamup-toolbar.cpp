@@ -27,6 +27,9 @@ StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent),
 	// Ensure icons are properly themed on startup
 	updateIconsForTheme();
 	
+	// Set initial position-aware theming (will be updated when actually added to main window)
+	updatePositionAwareTheme();
+	
 	// Register for OBS frontend events to update button states
 	obs_frontend_add_event_callback(OnFrontendEvent, this);
 }
@@ -666,6 +669,40 @@ void StreamUPToolbar::updateIconsForTheme()
 	
 	// StreamUP settings button keeps its original icon (social icon)
 	blog(LOG_INFO, "[StreamUP] All toolbar icons force-updated for theme change");
+}
+
+void StreamUPToolbar::updatePositionAwareTheme()
+{
+	// Get current toolbar position from the main window
+	QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
+	if (!mainWindow) {
+		blog(LOG_WARNING, "[StreamUP] Unable to get main window for position-aware theming");
+		return;
+	}
+	
+	Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
+	
+	// Set object names and properties based on position for theme creators
+	if (currentArea == Qt::TopToolBarArea) {
+		setObjectName("StreamUPToolbar-Top");
+		setProperty("toolbarPosition", "top");
+		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for top position");
+	} else if (currentArea == Qt::BottomToolBarArea) {
+		setObjectName("StreamUPToolbar-Bottom"); 
+		setProperty("toolbarPosition", "bottom");
+		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for bottom position");
+	} else {
+		// Fallback for floating or other positions
+		setObjectName("StreamUPToolbar");
+		setProperty("toolbarPosition", "floating");
+		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for floating position");
+	}
+	
+	// Force style sheet refresh to apply position-based styling
+	style()->unpolish(this);
+	style()->polish(this);
+	
+	blog(LOG_INFO, "[StreamUP] Toolbar position-aware theme updated");
 }
 
 #include "streamup-toolbar.moc"
