@@ -41,7 +41,9 @@ struct DockToolSettings {
  */
 enum class ToolbarPosition {
     Top,
-    Bottom
+    Bottom,
+    Left,
+    Right
 };
 
 /**

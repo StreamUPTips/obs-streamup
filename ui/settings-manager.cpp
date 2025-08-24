@@ -25,6 +25,9 @@
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QHeaderView>
+#include <QButtonGroup>
+#include <QAbstractButton>
+#include <QComboBox>
 #include <memory>
 #include <util/platform.h>
 
@@ -211,8 +214,16 @@ PluginSettings GetCurrentSettings()
         
         // Load toolbar position setting (default to top if not set)
         const char* positionStr = obs_data_get_string(data, "toolbar_position");
-        if (positionStr && strcmp(positionStr, "bottom") == 0) {
-            settings.toolbarPosition = ToolbarPosition::Bottom;
+        if (positionStr) {
+            if (strcmp(positionStr, "bottom") == 0) {
+                settings.toolbarPosition = ToolbarPosition::Bottom;
+            } else if (strcmp(positionStr, "left") == 0) {
+                settings.toolbarPosition = ToolbarPosition::Left;
+            } else if (strcmp(positionStr, "right") == 0) {
+                settings.toolbarPosition = ToolbarPosition::Right;
+            } else {
+                settings.toolbarPosition = ToolbarPosition::Top;
+            }
         } else {
             settings.toolbarPosition = ToolbarPosition::Top;
         }
@@ -247,7 +258,22 @@ void UpdateSettings(const PluginSettings& settings)
     obs_data_set_bool(data, "show_toolbar", settings.showToolbar);
     
     // Save toolbar position setting
-    const char* positionStr = (settings.toolbarPosition == ToolbarPosition::Bottom) ? "bottom" : "top";
+    const char* positionStr;
+    switch (settings.toolbarPosition) {
+        case ToolbarPosition::Bottom:
+            positionStr = "bottom";
+            break;
+        case ToolbarPosition::Left:
+            positionStr = "left";
+            break;
+        case ToolbarPosition::Right:
+            positionStr = "right";
+            break;
+        default:
+        case ToolbarPosition::Top:
+            positionStr = "top";
+            break;
+    }
     obs_data_set_string(data, "toolbar_position", positionStr);
     
     // Save dock tool settings
@@ -452,49 +478,51 @@ void ShowSettingsDialog()
         showToolbarLayout->addWidget(showToolbarSwitch);
         toolbarLayout->addLayout(showToolbarLayout);
 
-        // Toolbar position setting
+        // Toolbar position setting with combobox
         QHBoxLayout* toolbarPositionLayout = new QHBoxLayout();
         
         QLabel* toolbarPositionLabel = new QLabel("Toolbar Position");
         toolbarPositionLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
             .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
             .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-        toolbarPositionLabel->setToolTip("Choose whether to place the toolbar at the top or bottom of OBS");
+        toolbarPositionLabel->setToolTip("Choose where to place the toolbar in OBS");
         
         // Get current toolbar position
         PluginSettings currentSettings = GetCurrentSettings();
-        bool isBottom = (currentSettings.toolbarPosition == ToolbarPosition::Bottom);
         
-        StreamUP::UIStyles::SwitchButton* toolbarPositionSwitch = StreamUP::UIStyles::CreateStyledSwitch("", isBottom);
-        toolbarPositionSwitch->setToolTip("Top/Bottom position toggle");
+        // Create combobox for position selection
+        QComboBox* positionComboBox = new QComboBox();
+        positionComboBox->addItem("Top", static_cast<int>(ToolbarPosition::Top));
+        positionComboBox->addItem("Bottom", static_cast<int>(ToolbarPosition::Bottom));
+        positionComboBox->addItem("Left", static_cast<int>(ToolbarPosition::Left));
+        positionComboBox->addItem("Right", static_cast<int>(ToolbarPosition::Right));
         
-        // Add text labels for top/bottom
-        QLabel* topLabel = new QLabel("Top");
-        topLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
-            .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+        // Set current selection
+        int currentIndex = static_cast<int>(currentSettings.toolbarPosition);
+        positionComboBox->setCurrentIndex(currentIndex);
         
-        QLabel* bottomLabel = new QLabel("Bottom");
-        bottomLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
-            .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+        // Set combobox styling and size
+        positionComboBox->setMinimumWidth(100);
+        positionComboBox->setMaximumWidth(150);
+        positionComboBox->setToolTip("Choose toolbar position: Top, Bottom, Left, or Right");
         
-        QObject::connect(toolbarPositionSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
-            // Use modern settings system
-            PluginSettings currentSettings = GetCurrentSettings();
-            currentSettings.toolbarPosition = checked ? ToolbarPosition::Bottom : ToolbarPosition::Top;
-            UpdateSettings(currentSettings);
-            
-            // Apply toolbar position
-            extern void ApplyToolbarPosition();
-            ApplyToolbarPosition();
-        });
+        // Connect combobox selection change
+        QObject::connect(positionComboBox, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+            [](int index) {
+                if (index >= 0) {
+                    PluginSettings currentSettings = GetCurrentSettings();
+                    currentSettings.toolbarPosition = static_cast<ToolbarPosition>(index);
+                    UpdateSettings(currentSettings);
+                    
+                    // Apply toolbar position
+                    extern void ApplyToolbarPosition();
+                    ApplyToolbarPosition();
+                }
+            });
 
         toolbarPositionLayout->addWidget(toolbarPositionLabel);
         toolbarPositionLayout->addStretch();
-        toolbarPositionLayout->addWidget(topLabel);
-        toolbarPositionLayout->addWidget(toolbarPositionSwitch);
-        toolbarPositionLayout->addWidget(bottomLabel);
+        toolbarPositionLayout->addWidget(positionComboBox);
         toolbarLayout->addLayout(toolbarPositionLayout);
 
         contentLayout->addWidget(toolbarGroup);

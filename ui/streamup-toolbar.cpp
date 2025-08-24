@@ -48,6 +48,16 @@ QFrame* StreamUPToolbar::createSeparator()
 	separator->setFixedSize(1, 16);
 	separator->setLineWidth(1);
 	return separator;
+}
+
+QFrame* StreamUPToolbar::createHorizontalSeparator()
+{
+	QFrame* separator = new QFrame();
+	separator->setFrameShape(QFrame::HLine);
+	separator->setFrameShadow(QFrame::Plain);
+	separator->setFixedSize(16, 1);
+	separator->setLineWidth(1);
+	return separator;
 } 
 
 void StreamUPToolbar::setupUI()
@@ -57,11 +67,11 @@ void StreamUPToolbar::setupUI()
 	setFloatable(false);
 	setOrientation(Qt::Horizontal);
 	
-	// Create a central widget with horizontal layout
-	QWidget* centralWidget = new QWidget(this);
-	QHBoxLayout* layout = new QHBoxLayout(centralWidget);
-	layout->setContentsMargins(8, 0, 8, 0);
-	layout->setSpacing(4);
+	// Create a central widget with horizontal layout (will be changed to vertical if needed)
+	centralWidget = new QWidget(this);
+	mainLayout = new QHBoxLayout(centralWidget);
+	mainLayout->setContentsMargins(8, 0, 8, 0);
+	mainLayout->setSpacing(4);
 	
 	// === STREAMING SECTION ===
 	// Create streaming button
@@ -73,10 +83,10 @@ void StreamUPToolbar::setupUI()
 	streamButton->setToolTip("Start/Stop Streaming");
 	streamButton->setCheckable(true);
 	connect(streamButton, &QToolButton::clicked, this, &StreamUPToolbar::onStreamButtonClicked);
-	layout->addWidget(streamButton);
+	mainLayout->addWidget(streamButton);
 	
 	// Separator
-	layout->addWidget(createSeparator());
+	mainLayout->addWidget(createSeparator());
 	
 	// === RECORDING SECTION ===
 	// Create recording button
@@ -88,7 +98,7 @@ void StreamUPToolbar::setupUI()
 	recordButton->setToolTip("Start/Stop Recording");
 	recordButton->setCheckable(true);
 	connect(recordButton, &QToolButton::clicked, this, &StreamUPToolbar::onRecordButtonClicked);
-	layout->addWidget(recordButton);
+	mainLayout->addWidget(recordButton);
 	
 	// Create pause recording button (initially hidden like OBS)
 	pauseButton = new QToolButton(centralWidget);
@@ -100,10 +110,10 @@ void StreamUPToolbar::setupUI()
 	pauseButton->setCheckable(true);
 	pauseButton->setVisible(false); // Hidden by default like OBS controls dock
 	connect(pauseButton, &QToolButton::clicked, this, &StreamUPToolbar::onPauseButtonClicked);
-	layout->addWidget(pauseButton);
+	mainLayout->addWidget(pauseButton);
 	
 	// Separator
-	layout->addWidget(createSeparator());
+	mainLayout->addWidget(createSeparator());
 	
 	// === REPLAY BUFFER SECTION ===
 	// Create replay buffer button
@@ -115,7 +125,7 @@ void StreamUPToolbar::setupUI()
 	replayBufferButton->setToolTip("Start/Stop Replay Buffer");
 	replayBufferButton->setCheckable(true);
 	connect(replayBufferButton, &QToolButton::clicked, this, &StreamUPToolbar::onReplayBufferButtonClicked);
-	layout->addWidget(replayBufferButton);
+	mainLayout->addWidget(replayBufferButton);
 	
 	// Create save replay button (initially hidden like OBS)
 	saveReplayButton = new QToolButton(centralWidget);
@@ -127,10 +137,10 @@ void StreamUPToolbar::setupUI()
 	saveReplayButton->setCheckable(false); // Save replay is not a toggle
 	saveReplayButton->setVisible(false); // Hidden by default like OBS controls dock
 	connect(saveReplayButton, &QToolButton::clicked, this, &StreamUPToolbar::onSaveReplayButtonClicked);
-	layout->addWidget(saveReplayButton);
+	mainLayout->addWidget(saveReplayButton);
 	
 	// Separator
-	layout->addWidget(createSeparator());
+	mainLayout->addWidget(createSeparator());
 	
 	// === VIRTUAL CAMERA SECTION ===
 	// Create virtual camera button
@@ -143,7 +153,7 @@ void StreamUPToolbar::setupUI()
 	virtualCameraButton->setToolTip("Start/Stop Virtual Camera");
 	virtualCameraButton->setCheckable(true);
 	connect(virtualCameraButton, &QToolButton::clicked, this, &StreamUPToolbar::onVirtualCameraButtonClicked);
-	layout->addWidget(virtualCameraButton);
+	mainLayout->addWidget(virtualCameraButton);
 	
 	// Create virtual camera config button (like OBS controls dock)
 	virtualCameraConfigButton = new QToolButton(centralWidget);
@@ -154,10 +164,10 @@ void StreamUPToolbar::setupUI()
 	virtualCameraConfigButton->setToolTip("Virtual Camera Configuration");
 	virtualCameraConfigButton->setCheckable(false);
 	connect(virtualCameraConfigButton, &QToolButton::clicked, this, &StreamUPToolbar::onVirtualCameraConfigButtonClicked);
-	layout->addWidget(virtualCameraConfigButton);
+	mainLayout->addWidget(virtualCameraConfigButton);
 	
 	// Separator
-	layout->addWidget(createSeparator());
+	mainLayout->addWidget(createSeparator());
 	
 	// === STUDIO MODE SECTION ===
 	// Create studio mode button
@@ -170,10 +180,10 @@ void StreamUPToolbar::setupUI()
 	studioModeButton->setToolTip("Toggle Studio Mode");
 	studioModeButton->setCheckable(true);
 	connect(studioModeButton, &QToolButton::clicked, this, &StreamUPToolbar::onStudioModeButtonClicked);
-	layout->addWidget(studioModeButton);
+	mainLayout->addWidget(studioModeButton);
 	
 	// Separator
-	layout->addWidget(createSeparator());
+	mainLayout->addWidget(createSeparator());
 	
 	// === SETTINGS SECTION ===
 	// Create settings button
@@ -185,10 +195,10 @@ void StreamUPToolbar::setupUI()
 	settingsButton->setToolTip("Open Settings");
 	settingsButton->setCheckable(false); // Settings button is not checkable
 	connect(settingsButton, &QToolButton::clicked, this, &StreamUPToolbar::onSettingsButtonClicked);
-	layout->addWidget(settingsButton);
+	mainLayout->addWidget(settingsButton);
 	
 	// Add spacer to push StreamUP settings button to the right
-	layout->addStretch();
+	mainLayout->addStretch();
 	
 	// === STREAMUP SETTINGS SECTION (RIGHT SIDE) ===
 	// Create StreamUP settings button
@@ -200,7 +210,7 @@ void StreamUPToolbar::setupUI()
 	streamUPSettingsButton->setToolTip("Open StreamUP Settings");
 	streamUPSettingsButton->setCheckable(false);
 	connect(streamUPSettingsButton, &QToolButton::clicked, this, &StreamUPToolbar::onStreamUPSettingsButtonClicked);
-	layout->addWidget(streamUPSettingsButton);
+	mainLayout->addWidget(streamUPSettingsButton);
 	
 	// Apply CSS styling for active states
 	setStyleSheet(R"(
@@ -691,6 +701,14 @@ void StreamUPToolbar::updatePositionAwareTheme()
 		setObjectName("StreamUPToolbar-Bottom"); 
 		setProperty("toolbarPosition", "bottom");
 		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for bottom position");
+	} else if (currentArea == Qt::LeftToolBarArea) {
+		setObjectName("StreamUPToolbar-Left");
+		setProperty("toolbarPosition", "left");
+		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for left position");
+	} else if (currentArea == Qt::RightToolBarArea) {
+		setObjectName("StreamUPToolbar-Right");
+		setProperty("toolbarPosition", "right");
+		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for right position");
 	} else {
 		// Fallback for floating or other positions
 		setObjectName("StreamUPToolbar");
@@ -698,11 +716,134 @@ void StreamUPToolbar::updatePositionAwareTheme()
 		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for floating position");
 	}
 	
+	// Update layout orientation before applying theme
+	updateLayoutOrientation();
+	
 	// Force style sheet refresh to apply position-based styling
 	style()->unpolish(this);
 	style()->polish(this);
 	
 	blog(LOG_INFO, "[StreamUP] Toolbar position-aware theme updated");
+}
+
+void StreamUPToolbar::updateLayoutOrientation()
+{
+	if (!centralWidget || !mainLayout) {
+		blog(LOG_WARNING, "[StreamUP] Cannot update layout orientation - missing central widget or layout");
+		return;
+	}
+	
+	// Get current toolbar position from the main window
+	QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
+	if (!mainWindow) {
+		blog(LOG_WARNING, "[StreamUP] Unable to get main window for layout orientation update");
+		return;
+	}
+	
+	Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
+	bool shouldBeVertical = (currentArea == Qt::LeftToolBarArea || currentArea == Qt::RightToolBarArea);
+	bool currentlyVertical = (mainLayout->direction() == QBoxLayout::TopToBottom || mainLayout->direction() == QBoxLayout::BottomToTop);
+	
+	// Only rebuild layout if orientation needs to change
+	if (shouldBeVertical != currentlyVertical) {
+		blog(LOG_INFO, "[StreamUP] Changing toolbar layout orientation to %s", shouldBeVertical ? "vertical" : "horizontal");
+		
+		// Store all current widgets in order
+		QList<QWidget*> widgets;
+		QList<bool> isSeparator;
+		
+		// Extract widgets from current layout
+		while (mainLayout->count() > 0) {
+			QLayoutItem* item = mainLayout->takeAt(0);
+			if (item->widget()) {
+				widgets.append(item->widget());
+				// Check if this is a separator to know which type to use
+				QFrame* frame = qobject_cast<QFrame*>(item->widget());
+				isSeparator.append(frame && (frame->frameShape() == QFrame::VLine || frame->frameShape() == QFrame::HLine));
+			}
+			delete item;
+		}
+		
+		// Delete the old layout and create a new one with correct orientation
+		delete mainLayout;
+		if (shouldBeVertical) {
+			mainLayout = new QVBoxLayout(centralWidget);
+			setOrientation(Qt::Vertical);
+			mainLayout->setContentsMargins(4, 8, 4, 8);
+			mainLayout->setAlignment(Qt::AlignHCenter); // Center widgets horizontally
+			
+			// Set size policies for vertical layout to maintain button sizes
+			centralWidget->setMinimumWidth(36); // Ensure minimum width for buttons (28px + padding)
+			centralWidget->setMaximumWidth(48); // Prevent excessive width
+		} else {
+			mainLayout = new QHBoxLayout(centralWidget);
+			setOrientation(Qt::Horizontal);
+			mainLayout->setContentsMargins(8, 0, 8, 0);
+			// No alignment needed for horizontal layout (default is fine)
+			
+			// Reset size constraints for horizontal layout
+			centralWidget->setMinimumWidth(0);
+			centralWidget->setMaximumWidth(16777215); // QWIDGETSIZE_MAX equivalent
+		}
+		mainLayout->setSpacing(4);
+		
+		// Re-add widgets with appropriate separators, handling StreamUP button positioning
+		QWidget* streamupButton = nullptr;
+		QList<QWidget*> mainButtons;
+		QList<bool> mainSeparators;
+		
+		// Separate StreamUP button from main buttons
+		for (int i = 0; i < widgets.size(); ++i) {
+			QWidget* widget = widgets[i];
+			
+			// Check if this is the StreamUP settings button
+			if (widget == streamUPSettingsButton) {
+				streamupButton = widget;
+			} else {
+				mainButtons.append(widget);
+				mainSeparators.append(isSeparator[i]);
+			}
+		}
+		
+		// Add main buttons first
+		for (int i = 0; i < mainButtons.size(); ++i) {
+			QWidget* widget = mainButtons[i];
+			
+			if (mainSeparators[i]) {
+				// Replace separator with correct orientation
+				widget->deleteLater(); // Delete the old separator
+				
+				// Add new separator with correct orientation
+				if (shouldBeVertical) {
+					QFrame* separator = createHorizontalSeparator();
+					mainLayout->addWidget(separator, 0, Qt::AlignHCenter);
+				} else {
+					mainLayout->addWidget(createSeparator());
+				}
+			} else {
+				// Re-add the widget
+				if (shouldBeVertical) {
+					mainLayout->addWidget(widget, 0, Qt::AlignHCenter);
+				} else {
+					mainLayout->addWidget(widget);
+				}
+			}
+		}
+		
+		// Add spacer (stretch) to push StreamUP button to the end
+		mainLayout->addStretch();
+		
+		// Add StreamUP button at the end (right side for horizontal, bottom for vertical)
+		if (streamupButton) {
+			if (shouldBeVertical) {
+				mainLayout->addWidget(streamupButton, 0, Qt::AlignHCenter);
+			} else {
+				mainLayout->addWidget(streamupButton);
+			}
+		}
+		
+		blog(LOG_INFO, "[StreamUP] Toolbar layout orientation updated successfully");
+	}
 }
 
 #include "streamup-toolbar.moc"
