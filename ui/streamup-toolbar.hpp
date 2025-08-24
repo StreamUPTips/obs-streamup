@@ -3,6 +3,7 @@
 #include <QToolBar>
 #include <QToolButton>
 #include <QFrame>
+#include <QBoxLayout>
 #include <obs.h>
 #include <obs-frontend-api.h>
 
@@ -12,6 +13,9 @@ class StreamUPToolbar : public QToolBar {
 public:
     explicit StreamUPToolbar(QWidget *parent = nullptr);
     ~StreamUPToolbar();
+    
+    // Public methods for external access
+    void updatePositionAwareTheme();
 
 private slots:
     void onStreamButtonClicked();
@@ -40,8 +44,9 @@ private:
     void updateAllButtons();
     void updateButtonVisibility();
     void updateIconsForTheme();
-    void updatePositionAwareTheme();
+    void updateLayoutOrientation();
     QFrame* createSeparator();
+    QFrame* createHorizontalSeparator();
     
     // Helper functions to check button availability
     bool isReplayBufferAvailable();
@@ -63,4 +68,8 @@ private:
     QToolButton* studioModeButton;
     QToolButton* settingsButton;
     QToolButton* streamUPSettingsButton;
+    
+    // Layout management for orientation changes
+    QWidget* centralWidget;
+    QBoxLayout* mainLayout;
 };

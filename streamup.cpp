@@ -952,8 +952,22 @@ static void LoadStreamUPToolbar()
 	
 	// Get toolbar position from settings and add to appropriate area
 	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-	Qt::ToolBarArea area = (settings.toolbarPosition == StreamUP::SettingsManager::ToolbarPosition::Bottom) 
-		? Qt::BottomToolBarArea : Qt::TopToolBarArea;
+	Qt::ToolBarArea area;
+	switch (settings.toolbarPosition) {
+		case StreamUP::SettingsManager::ToolbarPosition::Bottom:
+			area = Qt::BottomToolBarArea;
+			break;
+		case StreamUP::SettingsManager::ToolbarPosition::Left:
+			area = Qt::LeftToolBarArea;
+			break;
+		case StreamUP::SettingsManager::ToolbarPosition::Right:
+			area = Qt::RightToolBarArea;
+			break;
+		default:
+		case StreamUP::SettingsManager::ToolbarPosition::Top:
+			area = Qt::TopToolBarArea;
+			break;
+	}
 	main_window->addToolBar(area, globalToolbar);
 	
 	// Update position-aware theming after initial positioning
@@ -980,8 +994,22 @@ void ApplyToolbarPosition()
 		if (main_window) {
 			// Get current position setting
 			StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-			Qt::ToolBarArea newArea = (settings.toolbarPosition == StreamUP::SettingsManager::ToolbarPosition::Bottom) 
-				? Qt::BottomToolBarArea : Qt::TopToolBarArea;
+			Qt::ToolBarArea newArea;
+			switch (settings.toolbarPosition) {
+				case StreamUP::SettingsManager::ToolbarPosition::Bottom:
+					newArea = Qt::BottomToolBarArea;
+					break;
+				case StreamUP::SettingsManager::ToolbarPosition::Left:
+					newArea = Qt::LeftToolBarArea;
+					break;
+				case StreamUP::SettingsManager::ToolbarPosition::Right:
+					newArea = Qt::RightToolBarArea;
+					break;
+				default:
+				case StreamUP::SettingsManager::ToolbarPosition::Top:
+					newArea = Qt::TopToolBarArea;
+					break;
+			}
 			
 			// Remove from current area and add to new area
 			main_window->removeToolBar(globalToolbar);
