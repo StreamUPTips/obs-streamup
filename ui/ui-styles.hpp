@@ -204,6 +204,19 @@ QString GetSquircleButtonStyle(const QString& baseColor = "", const QString& hov
 QString GetScrollAreaStyle();
 QString GetTableStyle();
 
+// New StreamUP theme style functions
+QString GetLineEditStyle();
+QString GetCheckBoxStyle();
+QString GetComboBoxStyle();
+QString GetSpinBoxStyle();
+QString GetSliderStyle();
+QString GetListWidgetStyle();
+QString GetMenuStyle();
+QString GetEnhancedScrollAreaStyle();
+
+// Apply global StreamUP theme styles to widgets
+void ApplyStreamUPThemeStyles(QWidget* widget);
+
 // Utility functions for creating components that inherit from StreamUP theme
 QDialog* CreateStyledDialog(const QString& title, QWidget* parentWidget = nullptr);
 QLabel* CreateStyledTitle(const QString& text);
