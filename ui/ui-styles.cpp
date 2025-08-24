@@ -78,18 +78,22 @@ QString GetGroupBoxStyle(const QString& borderColor, const QString& titleColor) 
         "    border-top-right-radius: %10px;"
         "    subcontrol-origin: margin;"
         "    subcontrol-position: top left;"
-        "    top: -%8px;"
+        "    top: -%11px;"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "    font-weight: 800;"
+        "    font-size: 14px;"
         "}"
-    ).arg(Sizes::PADDING_LARGE)         // General padding (20px)
-     .arg(Sizes::PADDING_LARGE + 10)   // Top padding (30px)  
-     .arg(Sizes::SPACE_10)             // Margin right (10px)
-     .arg(Sizes::SPACE_14 + 1)         // Margin top (15px)
-     .arg(Sizes::RADIUS_DOCK)          // Border radius (22px)
-     .arg(Colors::BG_PRIMARY)          // Background color
-     .arg(Colors::TEXT_PRIMARY)        // Title text color
-     .arg(Sizes::SPACE_4)              // Title padding vertical (4px)
-     .arg(Sizes::SPACE_16)             // Title padding horizontal (16px)
-     .arg(Sizes::RADIUS_LG);           // Title top-right radius (14px)
+    ).arg(Sizes::PADDING_LARGE)        // 1. General padding (20px)
+     .arg(Sizes::PADDING_LARGE + 10)   // 2. Top padding (30px)  
+     .arg(Sizes::SPACE_10)             // 3. Margin right (10px)
+     .arg(Sizes::SPACE_14 + 1)         // 4. Margin top (15px)
+     .arg(Sizes::RADIUS_DOCK)          // 5. Border radius (22px)
+     .arg(Colors::BG_PRIMARY)          // 6. Background color
+     .arg(Colors::TEXT_PRIMARY)        // 7. Title text color
+     .arg(Sizes::SPACE_4)              // 8. Title padding vertical (4px)
+     .arg(Sizes::SPACE_16)             // 9. Title padding horizontal (16px)
+     .arg(Sizes::RADIUS_LG)            // 10. Title top-right radius (14px)
+     .arg(Sizes::SPACE_8);             // 11. Title top offset (8px)
 }
 
 QString GetContentLabelStyle() {
@@ -98,63 +102,103 @@ QString GetContentLabelStyle() {
 }
 
 QString GetButtonStyle(const QString& baseColor, const QString& hoverColor, int height) {
-    // Apply rounded pill shape with visible border and solid hover effect
+    // Updated to match StreamUP theme button styles
     Q_UNUSED(baseColor)
     Q_UNUSED(hoverColor)
-    
-    // Use standardized height for perfect pill shape
-    int buttonHeight = 24; // Reduced height for better pill proportions
-    int borderWidth = 2;
-    int pillRadius = (buttonHeight / 2) + borderWidth; // Perfect pill: radius accounts for border
+    Q_UNUSED(height)
     
     return QString(
         "QPushButton {"
-        "    border-radius: %1px;"
-        "    border: 2px solid %5;"
-        "    padding: 0px %2px;"
-        "    min-height: %3px;"
-        "    max-height: %3px;"
-        "    height: %3px;"
-        "    background: transparent;"
+        "    background-color: transparent;"
+        "    color: %1;"
+        "    border: %2px solid %3;"
+        "    min-height: %4px;"
+        "    max-height: %4px;"
+        "    border-radius: %5px;"
+        "    margin: %6px;"
+        "    padding: %6px %7px;"
+        "    outline: none;"
+        "    font-weight: 800;"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "    font-size: 14px;"
         "}"
         "QPushButton:hover {"
-        "    background: %4 !important;"
-        "    border-color: %4 !important;"
-        "    opacity: 1.0;"
+        "    background-color: %3;"
+        "    color: %1;"
         "}"
-    ).arg(pillRadius).arg(Sizes::SPACE_12).arg(buttonHeight).arg(Colors::PRIMARY_COLOR).arg(Colors::PRIMARY_COLOR);
+        "QPushButton:pressed {"
+        "    background-color: %8;"
+        "    color: %1;"
+        "}"
+        "QPushButton:disabled {"
+        "    color: %9;"
+        "    border-color: %10;"
+        "    background-color: transparent;"
+        "}"
+        "QPushButton:disabled:hover,"
+        "QPushButton:disabled:pressed {"
+        "    background-color: transparent;"
+        "    border-color: %10;"
+        "    color: %9;"
+        "}"
+    ).arg(Colors::TEXT_PRIMARY)
+     .arg(Sizes::BUTTON_BORDER_SIZE)
+     .arg(Colors::PRIMARY_COLOR)
+     .arg(Sizes::BUTTON_HEIGHT)
+     .arg(Sizes::RADIUS_LG)
+     .arg(Sizes::SPACE_2)
+     .arg(Sizes::SPACE_12)
+     .arg(Colors::PRIMARY_HOVER)
+     .arg(Colors::TEXT_DISABLED)
+     .arg(Colors::BORDER_DISABLED);
 }
 
 QString GetSquircleButtonStyle(const QString& baseColor, const QString& hoverColor, int size) {
-    // Apply rounded pill shape for icon buttons with visible border and solid hover effect
+    // Updated to match StreamUP theme button styles for icon buttons
     Q_UNUSED(baseColor)
     Q_UNUSED(hoverColor)
     
     int buttonSize = size > 0 ? size : Sizes::ICON_BUTTON_SIZE;
-    int borderWidth = 2;
-    // For squircle: use larger radius for more rounded appearance
-    int squircleRadius = 12 + borderWidth; // Fixed 10px radius creates more rounded squircle
     
     return QString(
         "QPushButton {"
-        "    border-radius: %1px;"
-        "    border: 2px solid %4;"
-        "    min-width: %2px !important;"
-        "    max-width: %2px !important;"
-        "    min-height: %2px !important;"
-        "    max-height: %2px !important;"
-        "    width: %2px !important;"
-        "    height: %2px !important;"
+        "    background-color: transparent;"
+        "    color: %2;"
+        "    border: %3px solid %4;"
+        "    border-radius: %5px;"
+        "    min-width: %1px !important;"
+        "    max-width: %1px !important;"
+        "    min-height: %1px !important;"
+        "    max-height: %1px !important;"
+        "    width: %1px !important;"
+        "    height: %1px !important;"
         "    padding: 0px !important;"
-        "    margin: 0px !important;"
-        "    background: transparent;"
+        "    margin: %6px !important;"
+        "    outline: none;"
+        "    font-weight: 800;"
         "}"
         "QPushButton:hover {"
-        "    background: %3 !important;"
-        "    border-color: %3 !important;"
-        "    opacity: 1.0;"
+        "    background-color: %4;"
+        "    color: %2;"
         "}"
-    ).arg(squircleRadius).arg(buttonSize).arg(Colors::PRIMARY_COLOR).arg(Colors::PRIMARY_COLOR);
+        "QPushButton:pressed {"
+        "    background-color: %7;"
+        "    color: %2;"
+        "}"
+        "QPushButton:disabled {"
+        "    color: %8;"
+        "    border-color: %9;"
+        "    background-color: transparent;"
+        "}"
+    ).arg(buttonSize)
+     .arg(Colors::TEXT_PRIMARY)
+     .arg(Sizes::BUTTON_BORDER_SIZE)
+     .arg(Colors::PRIMARY_COLOR)
+     .arg(Sizes::RADIUS_LG)
+     .arg(Sizes::SPACE_2)
+     .arg(Colors::PRIMARY_HOVER)
+     .arg(Colors::TEXT_DISABLED)
+     .arg(Colors::BORDER_DISABLED);
 }
 
 QString GetScrollAreaStyle() {
@@ -216,8 +260,8 @@ QString GetScrollAreaStyle() {
 }
 
 QString GetTableStyle() {
-    // Apply modern scrollbar styling to tables
-    return GetScrollAreaStyle();
+    // Apply modern table styling matching StreamUP theme
+    return GetListWidgetStyle() + GetEnhancedScrollAreaStyle();
 }
 
 QDialog* CreateStyledDialog(const QString& title, QWidget* parentWidget) {
@@ -655,6 +699,355 @@ void SetupDialogNavigation(StandardDialogComponents& components, std::function<v
     QObject::connect(components.mainButton, &QPushButton::clicked, [onMainButton]() {
         onMainButton();
     });
+}
+
+// New style functions to match StreamUP theme
+
+QString GetLineEditStyle() {
+    return QString(
+        "QLineEdit, QTextEdit, QPlainTextEdit {"
+        "    background-color: %1;"
+        "    border: none;"
+        "    border-radius: %2px;"
+        "    padding: %3px %4px;"
+        "    color: %5;"
+        "    font-weight: 500;"
+        "    font-size: 13px;"
+        "    min-height: %6px;"
+        "    selection-background-color: %7;"
+        "    selection-color: %5;"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "}"
+        "QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {"
+        "    border: %8px solid %9;"
+        "    outline: none;"
+        "}"
+    ).arg(Colors::BG_PRIMARY)
+     .arg(Sizes::RADIUS_SM)
+     .arg(Sizes::INPUT_PAD_Y)
+     .arg(Sizes::INPUT_PAD_X)
+     .arg(Colors::TEXT_PRIMARY)
+     .arg(Sizes::INPUT_HEIGHT)
+     .arg(Colors::PRIMARY_ALPHA_30)
+     .arg(Sizes::SPACE_1)
+     .arg(Colors::PRIMARY_COLOR);
+}
+
+QString GetCheckBoxStyle() {
+    return QString(
+        "QCheckBox {"
+        "    color: %1;"
+        "    font-weight: 500;"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "}"
+        "QCheckBox::indicator:unchecked {"
+        "    width: 44px;"
+        "    height: 22px;"
+        "    background-color: %2;"
+        "    border: 1px solid %3;"
+        "    border-radius: 11px;"
+        "}"
+        "QCheckBox::indicator:checked {"
+        "    width: 44px;"
+        "    height: 22px;"
+        "    background-color: %4;"
+        "    border: 1px solid %4;"
+        "    border-radius: 11px;"
+        "}"
+    ).arg(Colors::TEXT_PRIMARY)
+     .arg(Colors::BG_SECONDARY)
+     .arg(Colors::BORDER_MEDIUM)
+     .arg(Colors::PRIMARY_COLOR);
+}
+
+QString GetComboBoxStyle() {
+    return QString(
+        "QComboBox {"
+        "    background-color: %1;"
+        "    border: none;"
+        "    border-radius: %2px;"
+        "    padding: %3px %4px %3px %5px;"
+        "    margin: %3px;"
+        "    color: %6;"
+        "    font-weight: 500;"
+        "    font-size: 13px;"
+        "    min-height: %7px;"
+        "    max-height: %7px;"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "}"
+        "QComboBox:hover, QComboBox:focus {"
+        "    background-color: %8;"
+        "    outline: none;"
+        "}"
+        "QComboBox::drop-down {"
+        "    border: none;"
+        "    width: %7px;"
+        "    background-color: %9;"
+        "    border-top-right-radius: %2px;"
+        "    border-bottom-right-radius: %2px;"
+        "}"
+        "QComboBox QAbstractItemView {"
+        "    background-color: %10;"
+        "    border: 0px solid %11;"
+        "    border-radius: %12px;"
+        "    selection-background-color: %13;"
+        "    color: %6;"
+        "    padding: %14px;"
+        "    font-weight: 600;"
+        "    outline: none;"
+        "    show-decoration-selected: 0;"
+        "}"
+        "QComboBox QAbstractItemView::item {"
+        "    padding: %3px %15px;"
+        "    border-radius: %16px;"
+        "    margin: %17px %3px;"
+        "    border: none;"
+        "    outline: none;"
+        "}"
+        "QComboBox QAbstractItemView::item:selected {"
+        "    background-color: %9;"
+        "    color: %6;"
+        "    outline: none;"
+        "}"
+    ).arg(Colors::BG_PRIMARY)         // %1 - background
+     .arg(Sizes::RADIUS_SM)           // %2 - border radius
+     .arg(Sizes::SPACE_2)             // %3 - padding/margin
+     .arg(Sizes::INPUT_PAD_X_WITH_ICON) // %4 - right padding
+     .arg(Sizes::SPACE_12)            // %5 - left padding
+     .arg(Colors::TEXT_PRIMARY)       // %6 - text color
+     .arg(Sizes::BOX_HEIGHT)          // %7 - height
+     .arg(Colors::HOVER_OVERLAY)      // %8 - hover background
+     .arg(Colors::PRIMARY_COLOR)      // %9 - dropdown/selection background
+     .arg(Colors::MENU_OVERLAY)       // %10 - menu background
+     .arg(Colors::BORDER_MEDIUM)      // %11 - border color
+     .arg(Sizes::RADIUS_LG)           // %12 - menu border radius
+     .arg(Colors::PRIMARY_ALPHA_30)   // %13 - selection background
+     .arg(Sizes::SPACE_8)             // %14 - menu padding
+     .arg(Sizes::SPACE_10)            // %15 - item padding
+     .arg(Sizes::MENU_ITEM_PILL_RADIUS) // %16 - item border radius
+     .arg(Sizes::SPACE_1);            // %17 - item margin
+}
+
+QString GetSpinBoxStyle() {
+    return QString(
+        "QSpinBox, QDoubleSpinBox {"
+        "    background-color: %1;"
+        "    border: none;"
+        "    border-radius: %2px;"
+        "    padding: %3px %4px %3px %5px;"
+        "    margin: %3px;"
+        "    color: %6;"
+        "    font-weight: 500;"
+        "    font-size: 13px;"
+        "    min-height: %7px;"
+        "    max-height: %7px;"
+        "    selection-background-color: %8;"
+        "    selection-color: %6;"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "}"
+        "QSpinBox:hover, QDoubleSpinBox:hover, QSpinBox:focus, QDoubleSpinBox:focus {"
+        "    background-color: %9;"
+        "    outline: none;"
+        "}"
+        "QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {"
+        "    border: none;"
+        "    background-color: %10;"
+        "    width: %7px;"
+        "}"
+        "QSpinBox::up-button, QDoubleSpinBox::up-button {"
+        "    border-top-right-radius: %2px;"
+        "}"
+        "QSpinBox::down-button, QDoubleSpinBox::down-button {"
+        "    border-bottom-right-radius: %2px;"
+        "}"
+    ).arg(Colors::BG_PRIMARY)
+     .arg(Sizes::RADIUS_SM)
+     .arg(Sizes::SPACE_2)
+     .arg(Sizes::INPUT_PAD_X_WITH_ICON)
+     .arg(Sizes::SPACE_12)
+     .arg(Colors::TEXT_PRIMARY)
+     .arg(Sizes::BOX_HEIGHT)
+     .arg(Colors::PRIMARY_ALPHA_30)
+     .arg(Colors::HOVER_OVERLAY)
+     .arg(Colors::PRIMARY_COLOR);
+}
+
+QString GetSliderStyle() {
+    return QString(
+        "QSlider::groove:horizontal {"
+        "    height: %1px;"
+        "    background: %2;"
+        "    border: none;"
+        "    border-radius: %3px;"
+        "    margin: 0;"
+        "}"
+        "QSlider::groove:vertical {"
+        "    width: %1px;"
+        "    background: %2;"
+        "    border: none;"
+        "    border-radius: %3px;"
+        "    margin: 0;"
+        "}"
+        "QSlider::sub-page:horizontal {"
+        "    background: %4;"
+        "    height: %1px;"
+        "    border: none;"
+        "    border-radius: %3px;"
+        "    margin: 0;"
+        "}"
+        "QSlider::add-page:horizontal {"
+        "    background: %5;"
+        "    border: none;"
+        "    border-radius: %3px;"
+        "    margin: 0;"
+        "}"
+        "QSlider::handle:horizontal, QSlider::handle:vertical {"
+        "    width: 12px;"
+        "    height: 12px;"
+        "    margin: -4px 0;"
+        "    background: %6;"
+        "    border: 1px solid %7;"
+        "    border-radius: 6px;"
+        "}"
+        "QSlider::handle:hover {"
+        "    background: #f0f0f0;"
+        "    border: 1px solid %4;"
+        "}"
+    ).arg(Sizes::SLIDER_GROOVE_SIZE)
+     .arg(Colors::SURFACE_SUBTLE)
+     .arg(Sizes::SPACE_2)
+     .arg(Colors::PRIMARY_COLOR)
+     .arg(Colors::BORDER_MEDIUM)
+     .arg(Colors::TEXT_PRIMARY)
+     .arg(Colors::BG_SECONDARY);
+}
+
+QString GetListWidgetStyle() {
+    return QString(
+        "QTreeView, QListView, QListWidget, QTreeWidget {"
+        "    font-weight: 500;"
+        "    background-color: %1;"
+        "    border: 0;"
+        "    outline: none;"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "    font-size: 14px;"
+        "    color: %2;"
+        "}"
+        "QListWidget::item, QTreeWidget::item, QTreeView::item {"
+        "    outline: none;"
+        "    border: none;"
+        "    min-height: 24px;"
+        "    max-height: 24px;"
+        "    padding: 0 6px 0 6px;"
+        "}"
+        "QListWidget::item:hover, QTreeWidget::item:hover, QTreeView::item:hover {"
+        "    background-color: %3;"
+        "    color: %2;"
+        "    border-radius: %4px;"
+        "}"
+        "QListWidget::item:selected, QTreeWidget::item:selected, QTreeView::item:selected {"
+        "    background-color: %5;"
+        "    color: %2;"
+        "    border-radius: %4px;"
+        "}"
+    ).arg(Colors::BG_SECONDARY)
+     .arg(Colors::TEXT_PRIMARY)
+     .arg(Colors::PRIMARY_ALPHA_30)
+     .arg(Sizes::RADIUS_MD)
+     .arg(Colors::PRIMARY_COLOR);
+}
+
+QString GetMenuStyle() {
+    return QString(
+        "QMenu {"
+        "    background-color: %1;"
+        "    border: 1px solid %2;"
+        "    border-radius: 12px;"
+        "    padding: %3px %4px;"
+        "    color: %5;"
+        "    font-weight: 600;"
+        "    font-size: 13px;"
+        "    margin: %6px;"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "}"
+        "QMenu::item {"
+        "    padding: %7px %8px;"
+        "    border-radius: %9px;"
+        "    margin: %10px;"
+        "    min-height: 16px;"
+        "    background-color: transparent;"
+        "}"
+        "QMenu::item:selected {"
+        "    background-color: %11;"
+        "    color: %5;"
+        "}"
+        "QMenu::item:disabled {"
+        "    color: %12;"
+        "    background-color: transparent;"
+        "}"
+        "QMenu::separator {"
+        "    height: 1px;"
+        "    background-color: %2;"
+        "    margin: %13px %14px;"
+        "}"
+    ).arg(Colors::MENU_OVERLAY)
+     .arg(Colors::BORDER_SUBTLE)
+     .arg(Sizes::MENU_PAD_Y)
+     .arg(Sizes::MENU_PAD_X)
+     .arg(Colors::TEXT_PRIMARY)
+     .arg(Sizes::SPACE_4)
+     .arg(Sizes::MENU_ITEM_PAD_Y)
+     .arg(Sizes::MENU_ITEM_PAD_X)
+     .arg(Sizes::MENU_ITEM_PILL_RADIUS)
+     .arg(Sizes::SPACE_1)
+     .arg(Colors::PRIMARY_COLOR)
+     .arg(Colors::TEXT_DISABLED)
+     .arg(Sizes::SPACE_6)
+     .arg(Sizes::SPACE_12);
+}
+
+// Enhanced scrollbar style to match exact theme
+QString GetEnhancedScrollAreaStyle() {
+    return QString(
+        "QScrollBar {"
+        "    background-color: %1;"
+        "    margin: 0px;"
+        "    border-radius: 3px;"
+        "}"
+        "QScrollBar:vertical {"
+        "    width: 6px;"
+        "}"
+        "QScrollBar:horizontal {"
+        "    height: 6px;"
+        "}"
+        "QScrollBar::add-line, QScrollBar::sub-line {"
+        "    border: none;"
+        "    background: none;"
+        "}"
+        "QScrollBar::add-page, QScrollBar::sub-page {"
+        "    border: none;"
+        "    background: none;"
+        "}"
+        "QScrollBar::handle {"
+        "    background-color: %2;"
+        "    border-radius: 3px;"
+        "    min-height: 6px;"
+        "    min-width: 6px;"
+        "}"
+        "QScrollBar::handle:hover {"
+        "    background-color: %3;"
+        "}"
+    ).arg(Colors::BG_SECONDARY)
+     .arg(Colors::PRIMARY_COLOR)
+     .arg(Colors::PRIMARY_HOVER);
+}
+
+// Apply StreamUP theme styles to specific widget types
+void ApplyStreamUPThemeStyles(QWidget* widget) {
+    if (!widget) return;
+    
+    // Apply the enhanced scrollbar style which is the most commonly needed
+    widget->setStyleSheet(GetEnhancedScrollAreaStyle());
 }
 
 } // namespace UIStyles

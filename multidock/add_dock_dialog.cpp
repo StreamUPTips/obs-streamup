@@ -1,5 +1,6 @@
 #include "add_dock_dialog.hpp"
 #include "multidock_utils.hpp"
+#include "../ui/ui-styles.hpp"
 #include <obs-module.h>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -32,12 +33,13 @@ AddDockDialog::AddDockDialog(const QString& multiDockId, QWidget* parent)
     // Dock list
     m_dockList = new QListWidget(this);
     m_dockList->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_dockList->setStyleSheet(StreamUP::UIStyles::GetListWidgetStyle());
     layout->addWidget(m_dockList);
     
     // Buttons
     QHBoxLayout* buttonLayout = new QHBoxLayout();
-    m_addButton = new QPushButton("Add", this);
-    m_cancelButton = new QPushButton("Cancel", this);
+    m_addButton = StreamUP::UIStyles::CreateStyledButton("Add", "info");
+    m_cancelButton = StreamUP::UIStyles::CreateStyledButton("Cancel", "neutral");
     
     m_addButton->setEnabled(false);
     m_addButton->setDefault(true);

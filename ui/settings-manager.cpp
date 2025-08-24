@@ -502,6 +502,7 @@ void ShowSettingsDialog()
         positionComboBox->setCurrentIndex(currentIndex);
         
         // Set combobox styling and size
+        positionComboBox->setStyleSheet(StreamUP::UIStyles::GetComboBoxStyle());
         positionComboBox->setMinimumWidth(100);
         positionComboBox->setMaximumWidth(150);
         positionComboBox->setToolTip("Choose toolbar position: Top, Bottom, Left, or Right");
