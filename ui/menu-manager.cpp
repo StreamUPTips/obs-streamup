@@ -8,6 +8,7 @@
 #include "websocket-window.hpp"
 #include "../multidock/multidock_dialogs.hpp"
 #include "../multidock/multidock_manager.hpp"
+#include "../core/streamup-common.hpp"
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <QApplication>
@@ -17,16 +18,6 @@
 #include <QDesktopServices>
 #include <QUrl>
 
-// Platform detection
-#if defined(_WIN32)
-#define PLATFORM_NAME "windows"
-#elif defined(__APPLE__)
-#define PLATFORM_NAME "macos"  
-#elif defined(__linux__)
-#define PLATFORM_NAME "linux"
-#else
-#define PLATFORM_NAME "unknown"
-#endif
 
 // Forward declarations for dialog functions (defined in main streamup.cpp for now)
 extern void SettingsDialog();
@@ -72,7 +63,7 @@ void LoadMenuItems(QMenu* menu)
     QAction* action;
 
     // Platform-specific actions (Windows only)
-    if (strcmp(PLATFORM_NAME, "windows") == 0) {
+    if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
         action = menu->addAction(obs_module_text("MenuInstallProduct"));
         QObject::connect(action, &QAction::triggered, []() { 
             // Check if Shift is held to force load

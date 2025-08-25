@@ -117,6 +117,28 @@ void InvalidatePluginCache();
  */
 std::vector<std::pair<std::string, std::string>> GetInstalledPluginsCached();
 
+//-------------------UI HELPER FUNCTIONS-------------------
+/**
+ * Get forum/general URL for a specific plugin
+ * @param pluginName The name of the plugin to get URL for
+ * @return QString The forum/general URL for the plugin
+ */
+QString GetPluginForumLink(const std::string &pluginName);
+
+/**
+ * Get platform-specific download URL for a plugin
+ * @param pluginName The name of the plugin to get URL for  
+ * @return QString The platform-appropriate download URL
+ */
+QString GetPluginPlatformURL(const std::string &pluginName);
+
+/**
+ * Search for loaded modules in OBS log files (excludes default OBS modules)
+ * @param logPath Path to the OBS log directory
+ * @return std::vector List of non-standard loaded module names
+ */
+std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath);
+
 } // namespace PluginManager
 } // namespace StreamUP
 

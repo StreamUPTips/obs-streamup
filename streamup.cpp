@@ -14,112 +14,48 @@
 #include "ui-helpers.hpp"
 #include "ui/ui-styles.hpp"
 #include "menu-manager.hpp"
-#include "settings-manager.hpp"
 #include "notification-manager.hpp"
 #include "http-client.hpp"
-#include "path-utils.hpp"
+#include "utilities/path-utils.hpp"
 #include "string-utils.hpp"
 #include "version-utils.hpp"
 #include "ui/splash-screen.hpp"
 #include "ui/patch-notes-window.hpp"
 #include "multidock/multidock_manager.hpp"
-#include <cctype>
-#include <curl/curl.h>
 #include <filesystem>
 #include <fstream>
-#include <graphics/image-file.h>
-#include <iostream>
 #include <obs.h>
 #include <obs-data.h>
-#include <obs-encoder.h>
 #include <obs-frontend-api.h>
 #include <obs-module.h>
-#include <pthread.h>
-#include <QApplication>
-#include <QBuffer>
-#include <QCheckBox>
-#include <QClipboard>
-#include <QCoreApplication>
 #include <QDesktopServices>
 #include <QDialog>
-#include <QDir>
 #include <QDockWidget>
-#include <QFileDialog>
-#include <QFormLayout>
 #include <QGroupBox>
-#include <QIcon>
-#include <QImage>
 #include <QLabel>
 #include <QMainWindow>
-#include <QMenu>
-#include <QMenuBar>
-#include <QMessageBox>
 #include <QObject>
 #include <QPushButton>
 #include <QStyle>
-// QSystemTrayIcon now handled by NotificationManager module
-#include <QTextBrowser>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QUrl>
 #include <regex>
-#include <sstream>
 #include <thread>
 #include <unordered_set>
 #include <util/platform.h>
-#include <qscrollarea.h>
 
-#define QT_UTF8(str) QString::fromUtf8(str)
-#define QT_TO_UTF8(str) str.toUtf8().constData()
 
-#if defined(_WIN32)
-#define PLATFORM_NAME "windows"
-#elif defined(__APPLE__)
-#define PLATFORM_NAME "macos"
-#elif defined(__linux__)
-#define PLATFORM_NAME "linux"
-#else
-#define PLATFORM_NAME "unknown"
-#endif
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_AUTHOR("Andilippi");
 OBS_MODULE_USE_DEFAULT_LOCALE("streamup", "en-US")
 
-#ifdef min
-#undef min
-#endif
-
-#ifdef max
-#undef max
-#endif
 
 //--------------------STRUCTS & GLOBALS--------------------
-// SceneItemEnumData moved to StreamUP::streamup-common.hpp
-// PluginInfo moved to StreamUP::streamup-common.hpp
-// SystemTrayNotification struct moved to StreamUP::NotificationManager module
-// Plugin state moved to StreamUP::PluginState class
-// Notification mute state now managed by SettingsManager
-
-#define ADVANCED_MASKS_SETTINGS_SIZE 15
-static const char *advanced_mask_settings[] = {"rectangle_width",
-					       "rectangle_height",
-					       "position_x",
-					       "position_y",
-					       "shape_center_x",
-					       "shape_center_y",
-					       "rectangle_corner_radius",
-					       "mask_gradient_position",
-					       "mask_gradient_width",
-					       "circle_radius",
-					       "heart_size",
-					       "shape_star_outer_radius",
-					       "shape_star_inner_radius",
-					       "star_corner_radius",
-					       "shape_feather_amount"};
+// All structures and global state have been moved to appropriate modules
 
 
-//--------------------NOTIFICATION HELPERS--------------------
-// Notification functionality moved to StreamUP::NotificationManager module
 
 //--------------------PATH HELPERS--------------------
 std::string GetLocalAppDataPath()
@@ -141,7 +77,7 @@ char *GetFilePath()
 	char *path = nullptr;
 	char *path_abs = nullptr;
 
-	if (strcmp(PLATFORM_NAME, "windows") == 0) {
+	if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
 		path = obs_module_config_path("../../logs/");
 		path_abs = os_get_abs_path_ptr(path);
 
@@ -202,24 +138,7 @@ char *GetFilePath()
 	}
 }
 
-std::string GetMostRecentFile(std::string dirpath)
-{
-	auto it = std::filesystem::directory_iterator(dirpath);
-	auto last_write_time = decltype(it->last_write_time())::min();
-	std::filesystem::directory_entry newest_file;
-
-	for (const auto &entry : it) {
-		if (entry.is_regular_file() && entry.path().extension() == ".txt") {
-			auto current_write_time = entry.last_write_time();
-			if (current_write_time > last_write_time) {
-				last_write_time = current_write_time;
-				newest_file = entry;
-			}
-		}
-	}
-
-	return newest_file.path().string();
-}
+// GetMostRecentFile moved to StreamUP::PathUtils::GetMostRecentTxtFile
 
 
 void CreateToolDialog(const char *infoText1, const char *infoText2, const char *infoText3, const QString &titleText,
@@ -240,7 +159,10 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 
 		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow(titleTextChar);
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(20, 15, 20, 10);
+		dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
+		                                 StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+		                                 StreamUP::UIStyles::Sizes::PADDING_XL, 
+		                                 StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 
@@ -255,14 +177,14 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		});
 
 		dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_MessageBoxInformation, infoText1));
-		dialogLayout->addSpacing(10);
+		dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
 		QLabel *info2 = StreamUP::UIHelpers::CreateRichTextLabel(infoText2Str, false, true, Qt::AlignTop);
 		dialogLayout->addWidget(info2, 0, Qt::AlignTop);
-		dialogLayout->addSpacing(10);
+		dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
 		QGroupBox *info3Box = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("HowToUse"), "info");
-		info3Box->setMinimumWidth(350);
+		info3Box->setMinimumWidth(350); // Keep specific width requirement for this dialog
 		QVBoxLayout *info3BoxLayout = StreamUP::UIHelpers::CreateVBoxLayout(info3Box);
 		QLabel *info3 = StreamUP::UIHelpers::CreateRichTextLabel(infoText3Str, false, true);
 		QLabel *howTo1 = StreamUP::UIHelpers::CreateRichTextLabel(howTo1Str, false, true);
@@ -281,7 +203,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		QObject::connect(copyJsonButton, &QPushButton::clicked, [=]() { StreamUP::UIHelpers::CopyToClipboard(jsonString); });
 		info3BoxLayout->addWidget(copyJsonButton);
 		dialogLayout->addWidget(info3Box);
-		dialogLayout->addSpacing(10);
+		dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
 		dialogLayout->addLayout(buttonLayout);
 		dialog->setLayout(dialogLayout);
@@ -290,55 +212,18 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 }
 
 //-------------------PLUGIN MANAGEMENT AND SETTINGS-------------------
-std::vector<std::string> SplitString(const std::string &input, char delimiter)
-{
-	std::vector<std::string> parts;
-	std::istringstream stream(input);
-	std::string part;
-
-	while (std::getline(stream, part, delimiter)) {
-		parts.push_back(part);
-	}
-
-	return parts;
-}
-
-bool IsVersionLessThan(const std::string &version1, const std::string &version2)
-{
-	std::vector<std::string> parts1 = SplitString(version1, '.');
-	std::vector<std::string> parts2 = SplitString(version2, '.');
-
-	while (parts1.size() < parts2.size())
-		parts1.push_back("0");
-	while (parts2.size() < parts1.size())
-		parts2.push_back("0");
-
-	try {
-		for (size_t i = 0; i < parts1.size(); ++i) {
-			int num1 = std::stoi(parts1[i]);
-			int num2 = std::stoi(parts2[i]);
-
-			if (num1 < num2)
-				return true;
-			else if (num1 > num2)
-				return false;
-		}
-		return false; // Versions are equal
-	} catch (const std::exception &) {
-		return false;
-	}
-}
 
 std::string SearchStringInFile(const char *path, const char *search)
 {
-	std::string filepath = GetMostRecentFile(path);
+	std::string filepath = StreamUP::PathUtils::GetMostRecentTxtFile(path);
 	FILE *file = fopen(filepath.c_str(), "r+");
-	char line[256];
+	constexpr size_t LINE_BUFFER_SIZE = 256;
+	char line[LINE_BUFFER_SIZE];
 	std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
 	std::regex version_regex_double("[0-9]+\\.[0-9]+");
 
 	if (file) {
-		while (fgets(line, sizeof(line), file)) {
+		while (fgets(line, LINE_BUFFER_SIZE, file)) {
 			char *found_ptr = strstr(line, search);
 			if (found_ptr) {
 				std::string remaining_line = std::string(found_ptr + strlen(search));
@@ -392,11 +277,11 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 std::string GetPlatformURL(const StreamUP::PluginInfo &plugin_info)
 {
 	std::string url;
-	if (strcmp(PLATFORM_NAME, "windows") == 0) {
+	if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
 		url = plugin_info.windowsURL;
-	} else if (strcmp(PLATFORM_NAME, "macos") == 0) {
+	} else if (strcmp(STREAMUP_PLATFORM_NAME, "macos") == 0) {
 		url = plugin_info.macURL;
-	} else if (strcmp(PLATFORM_NAME, "linux") == 0) {
+	} else if (strcmp(STREAMUP_PLATFORM_NAME, "linux") == 0) {
 		url = plugin_info.linuxURL;
 	} else {
 		url = plugin_info.windowsURL;
@@ -410,7 +295,10 @@ void ErrorDialog(const QString &errorMessage)
 	StreamUP::UIHelpers::ShowDialogOnUIThread([errorMessage]() {
 		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowErrorTitle");
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(20, 15, 20, 10);
+		dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
+		                                 StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+		                                 StreamUP::UIStyles::Sizes::PADDING_XL, 
+		                                 StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
 		QString displayMessage = errorMessage.isEmpty() ? "Unknown error occurred." : errorMessage;
 
@@ -431,7 +319,10 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 		StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
 			QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowUpToDateTitle");
 			QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-			dialogLayout->setContentsMargins(20, 15, 20, 10);
+			dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
+		                                 StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+		                                 StreamUP::UIStyles::Sizes::PADDING_XL, 
+		                                 StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
 			dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_DialogApplyButton, "WindowUpToDateMessage"));
 
@@ -450,15 +341,18 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 	StreamUP::UIHelpers::ShowDialogOnUIThread([errorMsgMissing, errorMsgUpdate]() {
 		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowPluginErrorTitle");
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(20, 15, 20, 20);
+		dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
+		                                 StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
+		                                 StreamUP::UIStyles::Sizes::PADDING_XL, 
+		                                 StreamUP::UIStyles::Sizes::PADDING_XL);
 
 		const char *errorText = (errorMsgMissing != "NULL") ? "WindowPluginErrorMissing" : "WindowPluginErrorUpdating";
 		dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_MessageBoxWarning, errorText));
-		dialogLayout->addSpacing(10);
+		dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
 		QLabel *pluginErrorInfo = StreamUP::UIHelpers::CreateRichTextLabel(obs_module_text("WindowPluginErrorInfo"), false, true);
 		dialogLayout->addWidget(pluginErrorInfo);
-		dialogLayout->addSpacing(10);
+		dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
 		if (!errorMsgUpdate.empty()) {
 			QLabel *pluginsToUpdateList =
@@ -468,7 +362,7 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 			pluginsToUpdateBoxLayout->addWidget(pluginsToUpdateList);
 			dialogLayout->addWidget(pluginsToUpdateBox);
 			if (errorMsgMissing != "NULL") {
-				dialogLayout->addSpacing(10);
+				dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
 			}
 		}
 
@@ -713,39 +607,14 @@ obs_websocket_vendor vendor = nullptr;
 
 
 
-//--------------------MENU HELPERS--------------------
-// Settings functionality moved to StreamUP::SettingsManager module
 
-QString GetForumLink(const std::string &pluginName)
-{
-	const auto& allPlugins = StreamUP::GetAllPlugins();
-	const StreamUP::PluginInfo &pluginInfo = allPlugins.at(pluginName);
-	return QString::fromStdString(pluginInfo.generalURL);
-}
+// GetForumLink moved to StreamUP::PluginManager::GetPluginForumLink
 
-void SetLabelWithSortedModules(QLabel *label, const std::vector<std::string> &moduleNames)
-{
-	QString text;
-	if (moduleNames.empty()) {
-		text = obs_module_text("WindowSettingsUpdaterIncompatibleModules");
-	} else {
-		for (const std::string &moduleName : moduleNames) {
-			if (!text.isEmpty()) {
-				text += "<br>";
-			}
-			text += QString::fromStdString(moduleName);
-		}
-	}
+// SetLabelWithSortedModules functionality moved to UI helper functions
 
-	label->setMaximumWidth(300);
-	label->setWordWrap(true);
-	label->setTextFormat(Qt::RichText);
-	label->setTextInteractionFlags(Qt::TextBrowserInteraction);
-	label->setOpenExternalLinks(true);
-	label->setText(text);
-}
-
-std::vector<std::string> SearchModulesInFile(const char *path)
+// SearchModulesInFile moved to StreamUP::PluginManager::SearchLoadedModulesInLogFile
+/*
+std::vector<std::string> SearchModulesInFile_OLD(const char *path)
 {
 	std::unordered_set<std::string> ignoreModules = {"obs-websocket",      "coreaudio-encoder", "decklink-captions",
 							 "decklink-output-ui", "frontend-tools",    "image-source",
@@ -759,16 +628,16 @@ std::vector<std::string> SearchModulesInFile(const char *path)
 							 "linux-pulseaudio",   "linux-pipewire",    "linux-jack",
 							 "linux-capture",      "linux-source",      "obs-libfdk"};
 
-	std::string filepath = GetMostRecentFile(path);
+	std::string filepath = StreamUP::PathUtils::GetMostRecentTxtFile(path);
 	FILE *file = fopen(filepath.c_str(), "r");
 	std::vector<std::string> collected_modules;
 	std::regex timestamp_regex("^[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}:");
 
 	if (file) {
-		char line[256];
+		char line[LINE_BUFFER_SIZE];
 		bool in_section = false;
 
-		while (fgets(line, sizeof(line), file) != NULL) {
+		while (fgets(line, LINE_BUFFER_SIZE, file) != NULL) {
 			std::string str_line(line);
 			str_line = std::regex_replace(str_line, timestamp_regex, "");
 			str_line.erase(0, str_line.find_first_not_of(" \t\r\n"));
@@ -782,9 +651,9 @@ std::vector<std::string> SearchModulesInFile(const char *path)
 
 			if (in_section && !str_line.empty() && str_line != "Loaded Modules:") {
 				size_t suffix_pos = std::string::npos;
-				if (strcmp(PLATFORM_NAME, "windows") == 0) {
+				if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
 					suffix_pos = str_line.find(".dll");
-				} else if (strcmp(PLATFORM_NAME, "linux") == 0) {
+				} else if (strcmp(STREAMUP_PLATFORM_NAME, "linux") == 0) {
 					suffix_pos = str_line.find(".so");
 				}
 
@@ -820,9 +689,8 @@ std::vector<std::string> SearchModulesInFile(const char *path)
 
 	return collected_modules;
 }
+*/
 
-//--------------------SETTINGS MENU--------------------
-// InstalledPluginsDialog functionality moved to StreamUP::SettingsManager module
 
 void SettingsDialog()
 {
@@ -1065,7 +933,8 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 			
 			// Schedule startup UI to show on UI thread with delay
 			StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
-				QTimer::singleShot(2000, []() {
+				constexpr int STARTUP_DELAY_MS = 2000;
+				QTimer::singleShot(STARTUP_DELAY_MS, []() {
 					// Check splash screen condition
 					StreamUP::SplashScreen::ShowCondition condition = StreamUP::SplashScreen::CheckSplashCondition();
 					
@@ -1082,7 +951,8 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 			
 			// Schedule plugin update check with delay to allow welcome/patch notes windows to be shown first
 			StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
-				QTimer::singleShot(5000, []() {
+				constexpr int PLUGIN_CHECK_DELAY_MS = 5000;
+				QTimer::singleShot(PLUGIN_CHECK_DELAY_MS, []() {
 					// Check for plugin updates on startup if enabled, but stay silent if up to date
 					// Only show if no splash screen or patch notes window is open
 					if (!StreamUP::SplashScreen::IsSplashScreenOpen() && !StreamUP::PatchNotesWindow::IsPatchNotesWindowOpen()) {

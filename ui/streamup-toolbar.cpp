@@ -212,53 +212,68 @@ void StreamUPToolbar::setupUI()
 	connect(streamUPSettingsButton, &QToolButton::clicked, this, &StreamUPToolbar::onStreamUPSettingsButtonClicked);
 	mainLayout->addWidget(streamUPSettingsButton);
 	
-	// Apply CSS styling for active states
-	setStyleSheet(R"(
-		QToolButton {
-			background: transparent;
-			border: none;
-			border-radius: 4px;
-			padding: 2px;
-		}
-		QToolButton:hover {
-			background-color: rgba(255, 255, 255, 0.1);
-		}
-		QToolButton:pressed {
-			background-color: rgba(255, 255, 255, 0.2);
-		}
-		QToolButton:checked {
-			background: transparent;
-			border: none;
-		}
-		QToolButton:checked:hover {
-			background-color: rgba(255, 255, 255, 0.1);
-		}
-		/* Special styling for virtual camera and studio mode buttons when active */
-		QToolButton[objectName="virtualCameraButton"]:checked {
-			background-color: #0f7bcf;
-			border: 1px solid #0a5a9c;
-		}
-		QToolButton[objectName="virtualCameraButton"]:checked:hover {
-			background-color: #1584d6;
-		}
-		QToolButton[objectName="studioModeButton"]:checked {
-			background-color: #0f7bcf;
-			border: 1px solid #0a5a9c;
-		}
-		QToolButton[objectName="studioModeButton"]:checked:hover {
-			background-color: #1584d6;
-		}
-		QFrame {
-			background-color: rgba(128, 128, 128, 0.3);
-			border: none;
-		}
-	)");
+	// Apply CSS styling for active states using theme constants
+	updateToolbarStyling();
 	
 	// Add the central widget to toolbar
 	addWidget(centralWidget);
 	
 	// Don't update button visibility immediately as OBS may not be fully initialized
 	// It will be updated when OBS_FRONTEND_EVENT_FINISHED_LOADING is received
+}
+
+void StreamUPToolbar::updateToolbarStyling()
+{
+	// Apply theme-aware styling using StreamUP UI constants
+	QString styleSheet = QString(R"(
+		QToolButton {
+			background: transparent;
+			border: none;
+			border-radius: %1px;
+			padding: %2px;
+		}
+		QToolButton:hover {
+			background-color: %3;
+		}
+		QToolButton:pressed {
+			background-color: %4;
+		}
+		QToolButton:checked {
+			background: transparent;
+			border: none;
+		}
+		QToolButton:checked:hover {
+			background-color: %3;
+		}
+		/* Special styling for virtual camera and studio mode buttons when active */
+		QToolButton[objectName="virtualCameraButton"]:checked {
+			background-color: %5;
+			border: 1px solid %6;
+		}
+		QToolButton[objectName="virtualCameraButton"]:checked:hover {
+			background-color: %7;
+		}
+		QToolButton[objectName="studioModeButton"]:checked {
+			background-color: %5;
+			border: 1px solid %6;
+		}
+		QToolButton[objectName="studioModeButton"]:checked:hover {
+			background-color: %7;
+		}
+		QFrame {
+			background-color: %8;
+			border: none;
+		}
+	)").arg(StreamUP::UIStyles::Sizes::SPACE_4)                    // border-radius
+	   .arg(StreamUP::UIStyles::Sizes::SPACE_2)                    // padding
+	   .arg(StreamUP::UIStyles::Colors::HOVER_OVERLAY)             // hover background
+	   .arg(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30)          // pressed background
+	   .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR)             // checked background
+	   .arg(StreamUP::UIStyles::Colors::PRIMARY_INACTIVE)          // checked border
+	   .arg(StreamUP::UIStyles::Colors::PRIMARY_HOVER)             // checked hover background
+	   .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE);            // frame background
+	   
+	setStyleSheet(styleSheet);
 }
 
 bool StreamUPToolbar::isReplayBufferAvailable()
@@ -585,9 +600,10 @@ void StreamUPToolbar::OnFrontendEvent(enum obs_frontend_event event, void *data)
 		break;
 		
 	case OBS_FRONTEND_EVENT_THEME_CHANGED:
-		// Theme changed, update icons for new theme
+		// Theme changed, update icons and styling for new theme
 		blog(LOG_INFO, "[StreamUP] Received OBS_FRONTEND_EVENT_THEME_CHANGED event");
 		toolbar->updateIconsForTheme();
+		toolbar->updateToolbarStyling();
 		break;
 		
 	default:
