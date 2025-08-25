@@ -18,15 +18,17 @@ class QPoint;
 namespace StreamUP {
 namespace UIStyles {
 
-// StreamUP Theme Design Variables - Direct from StreamUP.obt
+// StreamUP Theme Design Variables - These are used for custom UI elements only
+// For OBS-native docks and controls, use OBS/Qt theming instead
 namespace Colors {
-    // Primary Theme Colors
+    // Primary Theme Colors - only for custom StreamUP UI
     constexpr const char* PRIMARY_COLOR = "#0076df";
     constexpr const char* PRIMARY_HOVER = "#0071e3";
     constexpr const char* PRIMARY_LIGHT = "#2997ff";
     constexpr const char* PRIMARY_INACTIVE = "#002e5d";
     
-    // Background Colors
+    // Note: Background colors should use Qt palette for OBS integration
+    // These are preserved for custom floating panels and dialogs only
     constexpr const char* BG_PRIMARY = "#161617";
     constexpr const char* BG_SECONDARY = "#111111";
     constexpr const char* BG_TERTIARY = "#2c2c2e";
@@ -216,6 +218,15 @@ QString GetEnhancedScrollAreaStyle();
 
 // Apply global StreamUP theme styles to widgets
 void ApplyStreamUPThemeStyles(QWidget* widget);
+
+// OBS/Qt-compliant styling functions (preferred for new code)
+// These use OBS theme colors and Qt palette system
+QString GetOBSCompliantDialogStyle();
+QString GetOBSCompliantButtonStyle(const QString& variant = "default");
+QString GetOBSCompliantGroupBoxStyle();
+QString GetMinimalNativeStyle(); // Lets Qt/OBS handle all theming
+void ApplyOBSNativeTheming(QWidget* widget);
+bool IsOBSThemeDark(); // Wrapper for obs_frontend_is_theme_dark()
 
 // Utility functions for creating components that inherit from StreamUP theme
 QDialog* CreateStyledDialog(const QString& title, QWidget* parentWidget = nullptr);

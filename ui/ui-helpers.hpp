@@ -121,6 +121,19 @@ void CopyToClipboard(const QString &text);
  */
 QString GetThemedIconPath(const QString &iconName);
 
+/**
+ * Create a QIcon that automatically handles theme changes (preferred for new code)
+ * @param baseName The base name of the icon (without suffix)
+ * @return QIcon Icon that updates with OBS theme changes
+ */
+QIcon CreateThemedIcon(const QString &baseName);
+
+/**
+ * Check if OBS is using a dark theme
+ * @return bool True if dark theme is active
+ */
+bool IsOBSThemeDark();
+
 } // namespace UIHelpers  
 } // namespace StreamUP
 

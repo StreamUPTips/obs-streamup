@@ -24,14 +24,19 @@
 #include <QClipboard>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QPalette>
+#include <QWidget>
+#include <QStyle>
 #include <functional>
 #include <obs-module.h>
+#include <obs-frontend-api.h>
 
 namespace StreamUP {
 namespace UIStyles {
 
 QString GetDialogStyle() {
-    // Modern StreamUP dialog styling with darkest background
+    // Modern StreamUP dialog styling - prefer GetOBSCompliantDialogStyle() for new code
+    // This version maintains custom StreamUP theme colors for existing custom dialogs
     return QString(
         "QDialog {"
         "    background-color: %1;"
@@ -1048,6 +1053,110 @@ void ApplyStreamUPThemeStyles(QWidget* widget) {
     
     // Apply the enhanced scrollbar style which is the most commonly needed
     widget->setStyleSheet(GetEnhancedScrollAreaStyle());
+}
+
+//-------------------OBS/QT-COMPLIANT STYLING FUNCTIONS-------------------
+// These functions use OBS theme system and Qt palette for better integration
+
+QString GetOBSCompliantDialogStyle() {
+    // Minimal styling that respects OBS theme and Qt palette
+    return QString(
+        "QDialog {"
+        "    background-color: palette(window);"
+        "    color: palette(window-text);"
+        "    border: 1px solid palette(mid);"
+        "}"
+    );
+}
+
+QString GetOBSCompliantButtonStyle(const QString& variant) {
+    // Use Qt palette colors with minimal custom styling
+    if (variant == "primary") {
+        return QString(
+            "QPushButton {"
+            "    background-color: palette(highlight);"
+            "    color: palette(highlighted-text);"
+            "    border: 1px solid palette(highlight);"
+            "    border-radius: 4px;"
+            "    padding: 4px 16px;"
+            "}"
+            "QPushButton:hover {"
+            "    background-color: palette(highlight);"
+            "    opacity: 0.9;"
+            "}"
+            "QPushButton:pressed {"
+            "    background-color: palette(dark);"
+            "}"
+            "QPushButton:disabled {"
+            "    background-color: palette(mid);"
+            "    color: palette(disabled, window-text);"
+            "}"
+        );
+    }
+    
+    // Default button style using palette
+    return QString(
+        "QPushButton {"
+        "    background-color: palette(button);"
+        "    color: palette(button-text);"
+        "    border: 1px solid palette(mid);"
+        "    border-radius: 4px;"
+        "    padding: 4px 16px;"
+        "}"
+        "QPushButton:hover {"
+        "    background-color: palette(light);"
+        "}"
+        "QPushButton:pressed {"
+        "    background-color: palette(dark);"
+        "}"
+        "QPushButton:disabled {"
+        "    background-color: palette(mid);"
+        "    color: palette(disabled, button-text);"
+        "}"
+    );
+}
+
+QString GetOBSCompliantGroupBoxStyle() {
+    // Simple group box that respects Qt/OBS theming
+    return QString(
+        "QGroupBox {"
+        "    background-color: palette(base);"
+        "    border: 1px solid palette(mid);"
+        "    border-radius: 4px;"
+        "    margin-top: 10px;"
+        "    padding-top: 4px;"
+        "}"
+        "QGroupBox::title {"
+        "    color: palette(window-text);"
+        "    subcontrol-origin: margin;"
+        "    subcontrol-position: top left;"
+        "    padding: 0 5px;"
+        "    background-color: palette(window);"
+        "}"
+    );
+}
+
+QString GetMinimalNativeStyle() {
+    // Absolutely minimal styling - let Qt/OBS handle everything
+    return QString();
+}
+
+void ApplyOBSNativeTheming(QWidget* widget) {
+    if (!widget) return;
+    
+    // Clear any custom stylesheets and let Qt handle theming
+    widget->setStyleSheet(GetMinimalNativeStyle());
+    
+    // Ensure the widget uses the system palette
+    widget->setAutoFillBackground(true);
+    
+    // Use the current application palette (which OBS sets up)
+    widget->setPalette(QApplication::palette());
+}
+
+bool IsOBSThemeDark() {
+    // Wrapper for OBS theme detection
+    return obs_frontend_is_theme_dark();
 }
 
 } // namespace UIStyles

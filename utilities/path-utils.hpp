@@ -35,6 +35,13 @@ bool PathExists(const QString &path);
  */
 QString ToAbsolutePath(const QString &relativePath);
 
+/**
+ * Get the most recent .txt file from a directory (specifically for log files)
+ * @param directoryPath Directory to search in
+ * @return std::string containing the most recent .txt file path
+ */
+std::string GetMostRecentTxtFile(const std::string &directoryPath);
+
 } // namespace PathUtils
 } // namespace StreamUP
 

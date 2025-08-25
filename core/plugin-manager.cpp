@@ -28,11 +28,14 @@
 #include <QObject>
 #include <QTimer>
 #include <QSizePolicy>
+#include <QString>
 #include <fstream>
 #include <iostream>
 #include <regex>
 #include <functional>
 #include <algorithm>
+#include <unordered_set>
+#include <cctype>
 #include <util/platform.h>
 #include <obs-frontend-api.h>
 
@@ -1019,6 +1022,114 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPluginsCached()
 
 	const auto& status = StreamUP::PluginState::Instance().GetCachedPluginStatus();
 	return status.installedPlugins;
+}
+
+//-------------------UI HELPER FUNCTIONS-------------------
+QString GetPluginForumLink(const std::string &pluginName)
+{
+	const auto& allPlugins = StreamUP::GetAllPlugins();
+	if (allPlugins.find(pluginName) != allPlugins.end()) {
+		const StreamUP::PluginInfo &pluginInfo = allPlugins.at(pluginName);
+		return QString::fromStdString(pluginInfo.generalURL);
+	}
+	return QString();
+}
+
+QString GetPluginPlatformURL(const std::string &pluginName)
+{
+	const auto& allPlugins = StreamUP::GetAllPlugins();
+	if (allPlugins.find(pluginName) == allPlugins.end()) {
+		return QString();
+	}
+
+	const StreamUP::PluginInfo &pluginInfo = allPlugins.at(pluginName);
+	std::string url;
+	if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
+		url = pluginInfo.windowsURL;
+	} else if (strcmp(STREAMUP_PLATFORM_NAME, "macos") == 0) {
+		url = pluginInfo.macURL;
+	} else if (strcmp(STREAMUP_PLATFORM_NAME, "linux") == 0) {
+		url = pluginInfo.linuxURL;
+	} else {
+		url = pluginInfo.windowsURL;
+	}
+	return QString::fromStdString(url);
+}
+
+std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath)
+{
+	std::unordered_set<std::string> ignoreModules = {"obs-websocket",      "coreaudio-encoder", "decklink-captions",
+									 "decklink-output-ui", "frontend-tools",    "image-source",
+									 "obs-browser",        "obs-ffmpeg",        "obs-filters",
+									 "obs-outputs",        "obs-qsv11",         "obs-text",
+									 "obs-transitions",    "obs-vst",           "obs-x264",
+									 "rtmp-services",      "text-freetype2",    "vlc-video",
+									 "win-capture",        "win-dshow",         "win-wasapi",
+									 "mac-avcapture",      "mac-capture",       "mac-syphon",
+									 "mac-videotoolbox",   "mac-virtualcam",    "linux-v4l2",
+									 "linux-pulseaudio",   "linux-pipewire",    "linux-jack",
+									 "linux-capture",      "linux-source",      "obs-libfdk"};
+
+	std::string filepath = StreamUP::PathUtils::GetMostRecentTxtFile(logPath);
+	FILE *file = fopen(filepath.c_str(), "r");
+	std::vector<std::string> collected_modules;
+	std::regex timestamp_regex("^[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}:");
+
+	if (file) {
+		char line[256];
+		bool in_section = false;
+
+		while (fgets(line, 256, file) != NULL) {
+			std::string str_line(line);
+			str_line = std::regex_replace(str_line, timestamp_regex, "");
+			str_line.erase(0, str_line.find_first_not_of(" \t\r\n"));
+			str_line.erase(str_line.find_last_not_of(" \t\r\n") + 1);
+
+			if (str_line.find("Loaded Modules:") != std::string::npos) {
+				in_section = true;
+			} else if (str_line.find("---------------------------------") != std::string::npos) {
+				in_section = false;
+			}
+
+			if (in_section && !str_line.empty() && str_line != "Loaded Modules:") {
+				size_t suffix_pos = std::string::npos;
+				if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
+					suffix_pos = str_line.find(".dll");
+				} else if (strcmp(STREAMUP_PLATFORM_NAME, "linux") == 0) {
+					suffix_pos = str_line.find(".so");
+				}
+
+				if (suffix_pos != std::string::npos) {
+					str_line = str_line.substr(0, suffix_pos);
+				}
+
+				if (ignoreModules.find(str_line) == ignoreModules.end()) {
+					bool foundInApi = false;
+					const auto& allPlugins = StreamUP::GetAllPlugins();
+					for (const auto &pair : allPlugins) {
+						if (pair.second.moduleName == str_line) {
+							foundInApi = true;
+							break;
+						}
+					}
+					if (!foundInApi) {
+						collected_modules.push_back(str_line);
+					}
+				}
+			}
+		}
+		fclose(file);
+	} else {
+		blog(LOG_ERROR, "[StreamUP] Failed to open log file: %s", filepath.c_str());
+	}
+
+	std::sort(collected_modules.begin(), collected_modules.end(), [](const std::string &a, const std::string &b) {
+		return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), [](char char1, char char2) {
+			return std::tolower(char1) < std::tolower(char2);
+		});
+	});
+
+	return collected_modules;
 }
 
 } // namespace PluginManager

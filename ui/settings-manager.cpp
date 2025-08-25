@@ -32,9 +32,6 @@
 #include <util/platform.h>
 
 // Forward declarations for functions that may need to be moved from streamup.cpp
-extern QString GetForumLink(const std::string &pluginName);
-extern void SetLabelWithSortedModules(QLabel *label, const std::vector<std::string> &moduleNames);
-extern std::vector<std::string> SearchModulesInFile(const char *path);
 extern char *GetFilePath();
 
 namespace StreamUP {
@@ -101,7 +98,7 @@ void AddCompatiblePluginRow(QTableWidget* table, const std::string& pluginName, 
     table->setItem(row, 3, new QTableWidgetItem(QString::fromStdString(version)));
     
     // Website column - Show domain name
-    QString forumLink = GetForumLink(pluginName);
+    QString forumLink = StreamUP::PluginManager::GetPluginForumLink(pluginName);
     QString domainName = ExtractDomain(forumLink);
     QTableWidgetItem* websiteItem = new QTableWidgetItem(domainName);
     websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::INFO));
@@ -761,7 +758,7 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
     
     // Add incompatible plugins
     char* filePath = GetFilePath();
-    std::vector<std::string> incompatibleModules = SearchModulesInFile(filePath);
+    std::vector<std::string> incompatibleModules = StreamUP::PluginManager::SearchLoadedModulesInLogFile(filePath);
     bfree(filePath);
     
     for (const std::string& moduleName : incompatibleModules) {
@@ -918,7 +915,7 @@ void ShowInstalledPluginsPage(QWidget* parentWidget)
         
         // Add incompatible plugins
         char* filePath = GetFilePath();
-        std::vector<std::string> incompatibleModules = SearchModulesInFile(filePath);
+        std::vector<std::string> incompatibleModules = StreamUP::PluginManager::SearchLoadedModulesInLogFile(filePath);
         bfree(filePath);
         
         for (const std::string& moduleName : incompatibleModules) {

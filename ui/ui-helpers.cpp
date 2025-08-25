@@ -1,5 +1,6 @@
 #include "ui-helpers.hpp"
 #include "ui-styles.hpp"
+#include "../core/streamup-common.hpp"
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <util/platform.h>
@@ -14,17 +15,8 @@
 #include <QObject>
 #include <QScreen>
 #include <QTimer>
-// QSystemTrayIcon now handled by NotificationManager module
+#include <QIcon>
 
-#if defined(_WIN32)
-#define PLATFORM_NAME "windows"
-#elif defined(__APPLE__)
-#define PLATFORM_NAME "macos"
-#elif defined(__linux__)
-#define PLATFORM_NAME "linux"
-#else
-#define PLATFORM_NAME "unknown"
-#endif
 
 // Forward declarations for functions from main streamup.cpp
 // Notification functionality moved to StreamUP::NotificationManager module
@@ -235,7 +227,7 @@ QLabel *CreateRichTextLabel(const QString &text, bool bold, bool wrap, Qt::Align
 QLabel *CreateIconLabel(const QStyle::StandardPixmap &iconName)
 {
 	QLabel *icon = new QLabel();
-	int pixmapSize = (strcmp(PLATFORM_NAME, "macos") == 0) ? 16 : 64;
+	int pixmapSize = (strcmp(STREAMUP_PLATFORM_NAME, "macos") == 0) ? 16 : 64;
 	icon->setPixmap(QApplication::style()->standardIcon(iconName).pixmap(pixmapSize, pixmapSize));
 	icon->setStyleSheet("padding-top: 3px;");
 	return icon;
@@ -296,12 +288,32 @@ QString GetThemedIconPath(const QString &iconName)
 	QString themeSuffix = isDarkTheme ? "-dark" : "-light";
 	QString iconPath = QString(":images/icons/ui/%1%2.svg").arg(iconName).arg(themeSuffix);
 	
-	// Debug log (can be removed later)
-	blog(LOG_DEBUG, "[StreamUP] Getting themed icon: %s -> %s (isDark: %s)", 
-		iconName.toUtf8().constData(), iconPath.toUtf8().constData(), 
-		isDarkTheme ? "true" : "false");
-	
 	return iconPath;
+}
+
+QIcon CreateThemedIcon(const QString &baseName)
+{
+	// Create a QIcon that can handle theme changes automatically
+	// This approach is more Qt-standard and handles theme switching better
+	QIcon icon;
+	
+	// Add both light and dark variants to the icon
+	// Qt and OBS can then automatically choose the appropriate one
+	QString lightIconPath = QString(":images/icons/ui/%1-light.svg").arg(baseName);
+	QString darkIconPath = QString(":images/icons/ui/%1-dark.svg").arg(baseName);
+	
+	// Add the current theme's icon as the default
+	bool isDarkTheme = obs_frontend_is_theme_dark();
+	QString currentIconPath = isDarkTheme ? darkIconPath : lightIconPath;
+	
+	icon.addFile(currentIconPath);
+	
+	return icon;
+}
+
+bool IsOBSThemeDark()
+{
+	return obs_frontend_is_theme_dark();
 }
 
 } // namespace UIHelpers

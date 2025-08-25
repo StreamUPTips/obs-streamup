@@ -55,6 +55,9 @@ private:
     // Theme-aware icon helper
     QString getThemedIconPath(const QString& iconName);
     
+    // Apply theme-aware styling
+    void updateToolbarStyling();
+    
     // OBS event handling
     static void OnFrontendEvent(enum obs_frontend_event event, void *data);
     
