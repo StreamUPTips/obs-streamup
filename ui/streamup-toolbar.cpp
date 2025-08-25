@@ -76,6 +76,8 @@ void StreamUPToolbar::setupUI()
 	// === STREAMING SECTION ===
 	// Create streaming button
 	streamButton = new QToolButton(centralWidget);
+	streamButton->setObjectName("streamButton");
+	streamButton->setProperty("buttonType", "streamup-button");
 	streamButton->setFixedSize(28, 28);
 	streamButton->setIcon(QIcon(getThemedIconPath("streaming-inactive")));
 	streamButton->setIconSize(QSize(20, 20));
@@ -86,11 +88,16 @@ void StreamUPToolbar::setupUI()
 	mainLayout->addWidget(streamButton);
 	
 	// Separator
-	mainLayout->addWidget(createSeparator());
+	QFrame* streamingSeparator = createSeparator();
+	streamingSeparator->setObjectName("streamingSeparator");
+	streamingSeparator->setProperty("separatorType", "streamup-separator");
+	mainLayout->addWidget(streamingSeparator);
 	
 	// === RECORDING SECTION ===
 	// Create recording button
 	recordButton = new QToolButton(centralWidget);
+	recordButton->setObjectName("recordButton");
+	recordButton->setProperty("buttonType", "streamup-button");
 	recordButton->setFixedSize(28, 28);
 	recordButton->setIcon(QIcon(getThemedIconPath("record-off")));
 	recordButton->setIconSize(QSize(20, 20));
@@ -102,6 +109,8 @@ void StreamUPToolbar::setupUI()
 	
 	// Create pause recording button (initially hidden like OBS)
 	pauseButton = new QToolButton(centralWidget);
+	pauseButton->setObjectName("pauseButton");
+	pauseButton->setProperty("buttonType", "streamup-button");
 	pauseButton->setFixedSize(28, 28);
 	pauseButton->setIcon(QIcon(getThemedIconPath("pause")));
 	pauseButton->setIconSize(QSize(20, 20));
@@ -113,11 +122,16 @@ void StreamUPToolbar::setupUI()
 	mainLayout->addWidget(pauseButton);
 	
 	// Separator
-	mainLayout->addWidget(createSeparator());
+	QFrame* recordingSeparator = createSeparator();
+	recordingSeparator->setObjectName("recordingSeparator");
+	recordingSeparator->setProperty("separatorType", "streamup-separator");
+	mainLayout->addWidget(recordingSeparator);
 	
 	// === REPLAY BUFFER SECTION ===
 	// Create replay buffer button
 	replayBufferButton = new QToolButton(centralWidget);
+	replayBufferButton->setObjectName("replayBufferButton");
+	replayBufferButton->setProperty("buttonType", "streamup-button");
 	replayBufferButton->setFixedSize(28, 28);
 	replayBufferButton->setIcon(QIcon(getThemedIconPath("replay-buffer-off")));
 	replayBufferButton->setIconSize(QSize(20, 20));
@@ -129,6 +143,8 @@ void StreamUPToolbar::setupUI()
 	
 	// Create save replay button (initially hidden like OBS)
 	saveReplayButton = new QToolButton(centralWidget);
+	saveReplayButton->setObjectName("saveReplayButton");
+	saveReplayButton->setProperty("buttonType", "streamup-button");
 	saveReplayButton->setFixedSize(28, 28);
 	saveReplayButton->setIcon(QIcon(getThemedIconPath("save-replay")));
 	saveReplayButton->setIconSize(QSize(20, 20)); // Slightly smaller
@@ -140,12 +156,16 @@ void StreamUPToolbar::setupUI()
 	mainLayout->addWidget(saveReplayButton);
 	
 	// Separator
-	mainLayout->addWidget(createSeparator());
+	QFrame* replayBufferSeparator = createSeparator();
+	replayBufferSeparator->setObjectName("replayBufferSeparator");
+	replayBufferSeparator->setProperty("separatorType", "streamup-separator");
+	mainLayout->addWidget(replayBufferSeparator);
 	
 	// === VIRTUAL CAMERA SECTION ===
 	// Create virtual camera button
 	virtualCameraButton = new QToolButton(centralWidget);
 	virtualCameraButton->setObjectName("virtualCameraButton");
+	virtualCameraButton->setProperty("buttonType", "streamup-button");
 	virtualCameraButton->setFixedSize(28, 28);
 	virtualCameraButton->setIcon(QIcon(getThemedIconPath("virtual-camera")));
 	virtualCameraButton->setIconSize(QSize(20, 20));
@@ -157,6 +177,8 @@ void StreamUPToolbar::setupUI()
 	
 	// Create virtual camera config button (like OBS controls dock)
 	virtualCameraConfigButton = new QToolButton(centralWidget);
+	virtualCameraConfigButton->setObjectName("virtualCameraConfigButton");
+	virtualCameraConfigButton->setProperty("buttonType", "streamup-button");
 	virtualCameraConfigButton->setFixedSize(28, 28);
 	virtualCameraConfigButton->setIcon(QIcon(getThemedIconPath("virtual-camera-settings")));
 	virtualCameraConfigButton->setIconSize(QSize(20, 20)); // Slightly smaller icon
@@ -167,12 +189,16 @@ void StreamUPToolbar::setupUI()
 	mainLayout->addWidget(virtualCameraConfigButton);
 	
 	// Separator
-	mainLayout->addWidget(createSeparator());
+	QFrame* virtualCameraSeparator = createSeparator();
+	virtualCameraSeparator->setObjectName("virtualCameraSeparator");
+	virtualCameraSeparator->setProperty("separatorType", "streamup-separator");
+	mainLayout->addWidget(virtualCameraSeparator);
 	
 	// === STUDIO MODE SECTION ===
 	// Create studio mode button
 	studioModeButton = new QToolButton(centralWidget);
 	studioModeButton->setObjectName("studioModeButton");
+	studioModeButton->setProperty("buttonType", "streamup-button");
 	studioModeButton->setFixedSize(28, 28);
 	studioModeButton->setIcon(QIcon(getThemedIconPath("studio-mode")));
 	studioModeButton->setIconSize(QSize(20, 20));
@@ -183,11 +209,16 @@ void StreamUPToolbar::setupUI()
 	mainLayout->addWidget(studioModeButton);
 	
 	// Separator
-	mainLayout->addWidget(createSeparator());
+	QFrame* studioModeSeparator = createSeparator();
+	studioModeSeparator->setObjectName("studioModeSeparator");
+	studioModeSeparator->setProperty("separatorType", "streamup-separator");
+	mainLayout->addWidget(studioModeSeparator);
 	
 	// === SETTINGS SECTION ===
 	// Create settings button
 	settingsButton = new QToolButton(centralWidget);
+	settingsButton->setObjectName("settingsButton");
+	settingsButton->setProperty("buttonType", "streamup-button");
 	settingsButton->setFixedSize(28, 28);
 	settingsButton->setIcon(QIcon(getThemedIconPath("settings")));
 	settingsButton->setIconSize(QSize(20, 20));
@@ -203,6 +234,8 @@ void StreamUPToolbar::setupUI()
 	// === STREAMUP SETTINGS SECTION (RIGHT SIDE) ===
 	// Create StreamUP settings button
 	streamUPSettingsButton = new QToolButton(centralWidget);
+	streamUPSettingsButton->setObjectName("streamUPSettingsButton");
+	streamUPSettingsButton->setProperty("buttonType", "streamup-button");
 	streamUPSettingsButton->setFixedSize(28, 28);
 	streamUPSettingsButton->setIcon(QIcon(":images/icons/social/streamup-logo-button.svg"));
 	streamUPSettingsButton->setIconSize(QSize(20, 20));
@@ -226,41 +259,43 @@ void StreamUPToolbar::updateToolbarStyling()
 {
 	// Apply theme-aware styling using StreamUP UI constants
 	QString styleSheet = QString(R"(
-		QToolButton {
+		/* Base styling for all StreamUP toolbar buttons */
+		QToolButton[buttonType="streamup-button"] {
 			background: transparent;
 			border: none;
 			border-radius: %1px;
 			padding: %2px;
 		}
-		QToolButton:hover {
+		QToolButton[buttonType="streamup-button"]:hover {
 			background-color: %3;
 		}
-		QToolButton:pressed {
+		QToolButton[buttonType="streamup-button"]:pressed {
 			background-color: %4;
 		}
-		QToolButton:checked {
+		QToolButton[buttonType="streamup-button"]:checked {
 			background: transparent;
 			border: none;
 		}
-		QToolButton:checked:hover {
+		QToolButton[buttonType="streamup-button"]:checked:hover {
 			background-color: %3;
 		}
 		/* Special styling for virtual camera and studio mode buttons when active */
-		QToolButton[objectName="virtualCameraButton"]:checked {
+		QToolButton[objectName^="virtualCameraButton"]:checked {
 			background-color: %5;
 			border: 1px solid %6;
 		}
-		QToolButton[objectName="virtualCameraButton"]:checked:hover {
+		QToolButton[objectName^="virtualCameraButton"]:checked:hover {
 			background-color: %7;
 		}
-		QToolButton[objectName="studioModeButton"]:checked {
+		QToolButton[objectName^="studioModeButton"]:checked {
 			background-color: %5;
 			border: 1px solid %6;
 		}
-		QToolButton[objectName="studioModeButton"]:checked:hover {
+		QToolButton[objectName^="studioModeButton"]:checked:hover {
 			background-color: %7;
 		}
-		QFrame {
+		/* Base styling for all StreamUP toolbar separators */
+		QFrame[separatorType="streamup-separator"] {
 			background-color: %8;
 			border: none;
 		}
@@ -707,29 +742,103 @@ void StreamUPToolbar::updatePositionAwareTheme()
 	}
 	
 	Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
+	QString positionSuffix;
+	QString positionProperty;
 	
 	// Set object names and properties based on position for theme creators
 	if (currentArea == Qt::TopToolBarArea) {
 		setObjectName("StreamUPToolbar-Top");
-		setProperty("toolbarPosition", "top");
+		positionSuffix = "-Top";
+		positionProperty = "top";
 		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for top position");
 	} else if (currentArea == Qt::BottomToolBarArea) {
 		setObjectName("StreamUPToolbar-Bottom"); 
-		setProperty("toolbarPosition", "bottom");
+		positionSuffix = "-Bottom";
+		positionProperty = "bottom";
 		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for bottom position");
 	} else if (currentArea == Qt::LeftToolBarArea) {
 		setObjectName("StreamUPToolbar-Left");
-		setProperty("toolbarPosition", "left");
+		positionSuffix = "-Left";
+		positionProperty = "left";
 		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for left position");
 	} else if (currentArea == Qt::RightToolBarArea) {
 		setObjectName("StreamUPToolbar-Right");
-		setProperty("toolbarPosition", "right");
+		positionSuffix = "-Right";
+		positionProperty = "right";
 		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for right position");
 	} else {
 		// Fallback for floating or other positions
 		setObjectName("StreamUPToolbar");
-		setProperty("toolbarPosition", "floating");
+		positionSuffix = "";
+		positionProperty = "floating";
 		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for floating position");
+	}
+	
+	setProperty("toolbarPosition", positionProperty);
+	
+	// Update button object names with position suffix for theme targeting
+	if (streamButton) {
+		streamButton->setObjectName("streamButton" + positionSuffix);
+		streamButton->setProperty("toolbarPosition", positionProperty);
+		streamButton->setProperty("buttonType", "streamup-button"); // Ensure common property is maintained
+	}
+	if (recordButton) {
+		recordButton->setObjectName("recordButton" + positionSuffix);
+		recordButton->setProperty("toolbarPosition", positionProperty);
+		recordButton->setProperty("buttonType", "streamup-button");
+	}
+	if (pauseButton) {
+		pauseButton->setObjectName("pauseButton" + positionSuffix);
+		pauseButton->setProperty("toolbarPosition", positionProperty);
+		pauseButton->setProperty("buttonType", "streamup-button");
+	}
+	if (replayBufferButton) {
+		replayBufferButton->setObjectName("replayBufferButton" + positionSuffix);
+		replayBufferButton->setProperty("toolbarPosition", positionProperty);
+		replayBufferButton->setProperty("buttonType", "streamup-button");
+	}
+	if (saveReplayButton) {
+		saveReplayButton->setObjectName("saveReplayButton" + positionSuffix);
+		saveReplayButton->setProperty("toolbarPosition", positionProperty);
+		saveReplayButton->setProperty("buttonType", "streamup-button");
+	}
+	if (virtualCameraButton) {
+		virtualCameraButton->setObjectName("virtualCameraButton" + positionSuffix);
+		virtualCameraButton->setProperty("toolbarPosition", positionProperty);
+		virtualCameraButton->setProperty("buttonType", "streamup-button");
+	}
+	if (virtualCameraConfigButton) {
+		virtualCameraConfigButton->setObjectName("virtualCameraConfigButton" + positionSuffix);
+		virtualCameraConfigButton->setProperty("toolbarPosition", positionProperty);
+		virtualCameraConfigButton->setProperty("buttonType", "streamup-button");
+	}
+	if (studioModeButton) {
+		studioModeButton->setObjectName("studioModeButton" + positionSuffix);
+		studioModeButton->setProperty("toolbarPosition", positionProperty);
+		studioModeButton->setProperty("buttonType", "streamup-button");
+	}
+	if (settingsButton) {
+		settingsButton->setObjectName("settingsButton" + positionSuffix);
+		settingsButton->setProperty("toolbarPosition", positionProperty);
+		settingsButton->setProperty("buttonType", "streamup-button");
+	}
+	if (streamUPSettingsButton) {
+		streamUPSettingsButton->setObjectName("streamUPSettingsButton" + positionSuffix);
+		streamUPSettingsButton->setProperty("toolbarPosition", positionProperty);
+		streamUPSettingsButton->setProperty("buttonType", "streamup-button");
+	}
+	
+	// Update separator object names with position suffix
+	QList<QFrame*> separators = centralWidget->findChildren<QFrame*>();
+	for (QFrame* separator : separators) {
+		QString currentName = separator->objectName();
+		if (currentName.contains("Separator")) {
+			// Remove any existing position suffix first
+			currentName = currentName.split("-").first();
+			separator->setObjectName(currentName + positionSuffix);
+			separator->setProperty("toolbarPosition", positionProperty);
+			separator->setProperty("separatorType", "streamup-separator"); // Ensure common property is maintained
+		}
 	}
 	
 	// Update layout orientation before applying theme
@@ -827,15 +936,20 @@ void StreamUPToolbar::updateLayoutOrientation()
 			
 			if (mainSeparators[i]) {
 				// Replace separator with correct orientation
+				QString separatorName = widget->objectName(); // Preserve the separator name
 				widget->deleteLater(); // Delete the old separator
 				
-				// Add new separator with correct orientation
+				// Add new separator with correct orientation and restore object name
+				QFrame* separator;
 				if (shouldBeVertical) {
-					QFrame* separator = createHorizontalSeparator();
+					separator = createHorizontalSeparator();
 					mainLayout->addWidget(separator, 0, Qt::AlignHCenter);
 				} else {
-					mainLayout->addWidget(createSeparator());
+					separator = createSeparator();
+					mainLayout->addWidget(separator);
 				}
+				separator->setObjectName(separatorName); // Restore the name
+				separator->setProperty("separatorType", "streamup-separator"); // Restore common property
 			} else {
 				// Re-add the widget
 				if (shouldBeVertical) {
