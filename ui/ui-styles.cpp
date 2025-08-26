@@ -50,7 +50,7 @@ QString GetDialogStyle() {
 
 QString GetTitleLabelStyle() {
     // Minimal styling - let theme handle most of it
-    return "QLabel { font-weight: bold; }";
+    return "QLabel { font-size: 20px; font-weight: bold; }";
 }
 
 QString GetDescriptionLabelStyle() {
