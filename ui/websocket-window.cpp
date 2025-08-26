@@ -114,60 +114,35 @@ void ShowWebSocketWindow(bool showInternalTools)
 		mainLayout->setContentsMargins(0, 0, 0, 0);
 		mainLayout->setSpacing(0);
 
-// --- Header (pill) container ---
-		QVBoxLayout *headerLayout = new QVBoxLayout;
-		headerLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-						 StreamUP::UIStyles::Sizes::PADDING_SMALL,
-						 StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-						 StreamUP::UIStyles::Sizes::PADDING_SMALL);
-		headerLayout->setSpacing(2);
-
-		// Title (always its own line)
-		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WebSocket.Window.Header"));
-		titleLabel->setAlignment(Qt::AlignCenter);
-		titleLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-
-		// Subtitle (always below title)
-		QLabel *subtitleLabel =
-			StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WebSocket.Window.Description"));
-		subtitleLabel->setAlignment(Qt::AlignCenter);
-
-		headerLayout->addWidget(titleLabel);
-		headerLayout->addWidget(subtitleLabel);
-
-		// --- Wrap inside pill widget ---
-		QWidget *headerWidget = new QWidget();
-		headerWidget->setObjectName("headerWidget");
-		headerWidget->setLayout(headerLayout);
-
-		// Ensure the widget fits both lines
-		headerWidget->setFixedWidth(570);
-
-		mainLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-		mainLayout->addWidget(headerWidget, 0, Qt::AlignHCenter);
-		mainLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-
-		// --- Style (pill shape) ---
-		headerWidget->setStyleSheet(QString("QWidget#headerWidget { "
-						    "background: %1; "
-						    "border-radius: 26px; "
-						    "padding: %2px %3px; "
-						    "}")
-						    .arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
-						    .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
-						    .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
-
-
-
-		// Content area with scroll
+		// Modern unified content area with scroll - everything inside
 		QScrollArea *scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 
 		QWidget *contentWidget = new QWidget();
 		contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
 		QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
-		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, StreamUP::UIStyles::Sizes::PADDING_XL,
-						  StreamUP::UIStyles::Sizes::PADDING_XL + 5, StreamUP::UIStyles::Sizes::PADDING_XL);
+		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
+						  StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
 		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+
+		// Modern header inside scrollable area
+		QWidget *headerSection = new QWidget();
+		QVBoxLayout *headerLayout = new QVBoxLayout(headerSection);
+		headerLayout->setContentsMargins(0, 0, 0, 0);
+		headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+
+		// Title with modern styling
+		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WebSocket.Window.Header"));
+		titleLabel->setAlignment(Qt::AlignCenter);
+
+		// Description with modern styling
+		QLabel *subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WebSocket.Window.Description"));
+		subtitleLabel->setAlignment(Qt::AlignCenter);
+
+		headerLayout->addWidget(titleLabel);
+		headerLayout->addWidget(subtitleLabel);
+		
+		contentLayout->addWidget(headerSection);
+		contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
 
 		// Group commands by category, filtering out internal tools if Shift is not held
 		QMap<QString, QList<WebSocketCommand>> commandsByCategory;
@@ -263,27 +238,25 @@ void ShowWebSocketWindow(bool showInternalTools)
 		// Add stretch to push content to top
 		contentLayout->addStretch();
 
-		scrollArea->setWidget(contentWidget);
-		mainLayout->addWidget(scrollArea);
-
-		// Bottom button area - no background bar, just padded button
-		QWidget *buttonWidget = new QWidget();
-		buttonWidget->setStyleSheet("background: transparent;"); // Remove background bar
-		QHBoxLayout *buttonLayout = new QHBoxLayout(buttonWidget);
-		buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-						 StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-						 StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-						 StreamUP::UIStyles::Sizes::PADDING_MEDIUM); // Add padding all around
-
-		QPushButton *closeButton =
-			StreamUP::UIStyles::CreateStyledButton(obs_module_text("WebSocket.Button.Close"), "neutral");
+		// Add close button at the bottom of the content area (inside scroll)
+		contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+		
+		// Modern button section inside scrollable content
+		QHBoxLayout *buttonLayout = new QHBoxLayout();
+		buttonLayout->setContentsMargins(0, 0, 0, 0);
+		
+		QPushButton *closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WebSocket.Button.Close"), "neutral");
 		QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
 
 		buttonLayout->addStretch();
 		buttonLayout->addWidget(closeButton);
-		buttonLayout->addStretch(); // Center the button
+		buttonLayout->addStretch();
+		
+		contentLayout->addLayout(buttonLayout);
+		contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
-		mainLayout->addWidget(buttonWidget);
+		scrollArea->setWidget(contentWidget);
+		mainLayout->addWidget(scrollArea);
 
 		dialog->setLayout(mainLayout);
 
