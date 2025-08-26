@@ -76,6 +76,12 @@
 		<file>media/logo.png</file>
 		<file>media/icon.ico</file>
 		
+		<!-- Theme Preview Images -->
+		<file>images/misc/obs-theme-1.png</file>
+		<file>images/misc/obs-theme-2.png</file>
+		<file>images/misc/obs-theme-3.png</file>
+		<file>images/misc/obs-theme-4.png</file>
+		
 		<!-- Documentation -->
 		<file>patch-notes.md</file>
 		<file>patch-notes-summary.md</file>

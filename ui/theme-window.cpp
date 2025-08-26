@@ -57,66 +57,84 @@ void CreateThemeDialog()
         
         QLabel* descriptionText = StreamUP::UIStyles::CreateStyledContent(
             "The StreamUP OBS Theme is carefully crafted to provide the cleanest and most "
-            "professional OBS Studio experience. Featuring modern design elements, improved "
-            "readability, and streamlined interfaces - it's the perfect companion to your "
-            "streaming setup."
+            "professional OBS Studio experience. This theme perfectly matches the StreamUP plugin's "
+            "design language, creating a seamless and cohesive interface throughout OBS Studio. "
+            "Featuring modern design elements, improved readability, and streamlined interfaces - "
+            "it's the perfect companion to your streaming setup."
         );
         descriptionText->setWordWrap(true);
         descriptionLayout->addWidget(descriptionText);
         
         mainLayout->addWidget(descriptionGroup);
         
-        // Features section
-        QGroupBox* featuresGroup = StreamUP::UIStyles::CreateStyledGroupBox("Theme Features", "info");
-        QVBoxLayout* featuresLayout = new QVBoxLayout(featuresGroup);
-        featuresLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACE_8);
-        
-        QStringList features = {
-            "• Clean, modern interface design",
-            "• Improved color contrast and readability",
-            "• Streamlined control layouts",
-            "• Professional dark theme aesthetic",
-            "• Optimized for streaming workflows",
-            "• Regular updates and improvements"
-        };
-        
-        for (const QString& feature : features) {
-            QLabel* featureLabel = StreamUP::UIStyles::CreateStyledContent(feature);
-            featuresLayout->addWidget(featureLabel);
-        }
-        
-        mainLayout->addWidget(featuresGroup);
         
         // Preview section with placeholder images
         QGroupBox* previewGroup = StreamUP::UIStyles::CreateStyledGroupBox("Theme Preview", "info");
         QVBoxLayout* previewLayout = new QVBoxLayout(previewGroup);
         previewLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACE_12);
         
-        // Create placeholder image areas
-        for (int i = 1; i <= 3; i++) {
-            QLabel* placeholderLabel = new QLabel();
-            placeholderLabel->setMinimumSize(400, 200);
-            placeholderLabel->setMaximumSize(500, 250);
-            placeholderLabel->setStyleSheet(QString(
-                "QLabel {"
-                "    background-color: %1;"
-                "    border: 2px dashed %2;"
-                "    border-radius: %3px;"
-                "    color: %4;"
-                "    font-size: 14px;"
-                "    font-weight: 500;"
-                "}"
-            ).arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
-             .arg(StreamUP::UIStyles::Colors::BORDER_MEDIUM)
-             .arg(StreamUP::UIStyles::Sizes::RADIUS_SM)
-             .arg(StreamUP::UIStyles::Colors::TEXT_MUTED));
+        QStringList imagePaths = {
+            ":/images/misc/obs-theme-1.png",
+            ":/images/misc/obs-theme-2.png", 
+            ":/images/misc/obs-theme-3.png",
+            ":/images/misc/obs-theme-4.png"
+        };
+        
+        // Create a flexible layout that adapts to different image sizes
+        QVBoxLayout* imagesLayout = new QVBoxLayout();
+        imagesLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACE_12);
+        
+        for (int i = 0; i < imagePaths.size(); i++) {
+            QLabel* imageLabel = new QLabel();
+            QPixmap pixmap(imagePaths[i]);
             
-            placeholderLabel->setText(QString("Theme Preview Image %1\n(Placeholder)").arg(i));
-            placeholderLabel->setAlignment(Qt::AlignCenter);
-            placeholderLabel->setScaledContents(true);
+            if (!pixmap.isNull()) {
+                // Calculate optimal display size based on original image
+                QSize originalSize = pixmap.size();
+                int maxWidth = 500;  // Maximum width for display
+                int maxHeight = 350; // Maximum height for display
+                
+                // Scale maintaining aspect ratio, but ensure reasonable viewing size
+                QPixmap scaledPixmap = pixmap.scaled(maxWidth, maxHeight, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                imageLabel->setPixmap(scaledPixmap);
+                imageLabel->setAlignment(Qt::AlignCenter);
+                
+                // Add subtle styling
+                imageLabel->setStyleSheet(QString(
+                    "QLabel {"
+                    "    border-radius: %1px;"
+                    "    border: 1px solid %2;"
+                    "    background-color: %3;"
+                    "    padding: 4px;"
+                    "}"
+                ).arg(StreamUP::UIStyles::Sizes::RADIUS_SM)
+                 .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
+                 .arg(StreamUP::UIStyles::Colors::BG_SECONDARY));
+                
+            } else {
+                // Fallback if image not found
+                imageLabel->setMinimumSize(400, 250);
+                imageLabel->setStyleSheet(QString(
+                    "QLabel {"
+                    "    background-color: %1;"
+                    "    border: 2px dashed %2;"
+                    "    border-radius: %3px;"
+                    "    color: %4;"
+                    "    font-size: 14px;"
+                    "    font-weight: 500;"
+                    "}"
+                ).arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
+                 .arg(StreamUP::UIStyles::Colors::BORDER_MEDIUM)
+                 .arg(StreamUP::UIStyles::Sizes::RADIUS_SM)
+                 .arg(StreamUP::UIStyles::Colors::TEXT_MUTED));
+                imageLabel->setText(QString("Theme Preview %1\n(Image not found)").arg(i + 1));
+                imageLabel->setAlignment(Qt::AlignCenter);
+            }
             
-            previewLayout->addWidget(placeholderLabel);
+            imagesLayout->addWidget(imageLabel);
         }
+        
+        previewLayout->addLayout(imagesLayout);
         
         mainLayout->addWidget(previewGroup);
         
@@ -136,7 +154,7 @@ void CreateThemeDialog()
         // Support button
         QPushButton* supportButton = StreamUP::UIStyles::CreateStyledButton("Become a Supporter", "primary", 0, 150);
         QObject::connect(supportButton, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://streamip.tips/Premium"));
+            QDesktopServices::openUrl(QUrl("https://streamup.tips/premium"));
         });
         accessLayout->addWidget(supportButton);
         
