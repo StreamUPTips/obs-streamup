@@ -33,22 +33,47 @@ void CreateThemeDialog()
     }
 
     UIHelpers::ShowDialogOnUIThread([]() {
-        // Create standardized dialog using modern template system
-        auto components = StreamUP::UIStyles::CreateStandardDialog(
-            "StreamUP - Theme",
-            "🎨 StreamUP OBS Theme", 
-            "The cleanest OBS theme out there - available to all supporters of any tier"
-        );
-        
-        components.dialog->setModal(false);
+        // Create modern unified dialog
+        QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP - Theme");
+        dialog->setModal(false);
+        dialog->resize(700, 700);
         
         // Store dialog reference
-        themeDialog = components.dialog;
+        themeDialog = dialog;
         
-        // Create main content area
-        QVBoxLayout* mainLayout = new QVBoxLayout();
-        mainLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACE_16);
+        QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
         mainLayout->setContentsMargins(0, 0, 0, 0);
+        mainLayout->setSpacing(0);
+
+        // Modern unified content area with scroll - everything inside
+        QScrollArea* scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+
+        QWidget* contentWidget = new QWidget();
+        contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+        QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
+        contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
+                                          StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
+        contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+
+        // Modern header inside scrollable area
+        QWidget* headerSection = new QWidget();
+        QVBoxLayout* headerLayout = new QVBoxLayout(headerSection);
+        headerLayout->setContentsMargins(0, 0, 0, 0);
+        headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+
+        // Title with modern styling
+        QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("🎨 StreamUP OBS Theme");
+        titleLabel->setAlignment(Qt::AlignCenter);
+
+        // Description with modern styling
+        QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription("The cleanest OBS theme out there - available to all supporters of any tier");
+        subtitleLabel->setAlignment(Qt::AlignCenter);
+
+        headerLayout->addWidget(titleLabel);
+        headerLayout->addWidget(subtitleLabel);
+        
+        contentLayout->addWidget(headerSection);
+        contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
         
         // Description section
         QGroupBox* descriptionGroup = StreamUP::UIStyles::CreateStyledGroupBox("About the StreamUP Theme", "info");
@@ -65,7 +90,7 @@ void CreateThemeDialog()
         descriptionText->setWordWrap(true);
         descriptionLayout->addWidget(descriptionText);
         
-        mainLayout->addWidget(descriptionGroup);
+        contentLayout->addWidget(descriptionGroup);
         
         
         // Preview section with placeholder images
@@ -136,7 +161,7 @@ void CreateThemeDialog()
         
         previewLayout->addLayout(imagesLayout);
         
-        mainLayout->addWidget(previewGroup);
+        contentLayout->addWidget(previewGroup);
         
         // Access information section
         QGroupBox* accessGroup = StreamUP::UIStyles::CreateStyledGroupBox("How to Get the Theme", "success");
@@ -158,24 +183,42 @@ void CreateThemeDialog()
         });
         accessLayout->addWidget(supportButton);
         
-        mainLayout->addWidget(accessGroup);
+        contentLayout->addWidget(accessGroup);
         
-        // Add content to scroll area
-        components.contentLayout->addLayout(mainLayout);
+        // Add close button at the bottom of the content area (inside scroll)
+        contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
         
-        // Update main button
-        components.mainButton->setText("Visit StreamUP.tips");
-        QObject::connect(components.mainButton, &QPushButton::clicked, []() {
+        // Modern button section inside scrollable content
+        QHBoxLayout* buttonLayout = new QHBoxLayout();
+        buttonLayout->setContentsMargins(0, 0, 0, 0);
+        
+        QPushButton* visitButton = StreamUP::UIStyles::CreateStyledButton("Visit StreamUP.tips", "primary");
+        QObject::connect(visitButton, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.tips/"));
         });
         
+        QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton("Close", "neutral");
+        QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
+
+        buttonLayout->addStretch();
+        buttonLayout->addWidget(visitButton);
+        buttonLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        buttonLayout->addWidget(closeButton);
+        buttonLayout->addStretch();
+        
+        contentLayout->addLayout(buttonLayout);
+        contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+        scrollArea->setWidget(contentWidget);
+        mainLayout->addWidget(scrollArea);
+        
         // Apply consistent sizing
-        StreamUP::UIStyles::ApplyConsistentSizing(components.dialog, 600, 900, 500, 750);
+        StreamUP::UIStyles::ApplyConsistentSizing(dialog, 600, 900, 500, 750);
         
         // Show dialog
-        components.dialog->show();
-        components.dialog->raise();
-        components.dialog->activateWindow();
+        dialog->show();
+        dialog->raise();
+        dialog->activateWindow();
     });
 }
 

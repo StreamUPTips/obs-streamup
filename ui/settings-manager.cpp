@@ -327,15 +327,43 @@ void ShowSettingsDialog()
 			return;
 		}
 
-		// Create standardized dialog using template system
-		auto components = StreamUP::UIStyles::CreateStandardDialog(obs_module_text("WindowSettingsTitle"),
-									   obs_module_text("WindowSettingsMainTitle"),
-									   obs_module_text("WindowSettingsMainDescription"));
+		// Create modern unified dialog
+		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsTitle"));
+		dialog->resize(700, 700);
 
-		QDialog *dialog = components.dialog;
-		QScrollArea *scrollArea = components.scrollArea;
-		QWidget *contentWidget = components.contentWidget;
-		QVBoxLayout *contentLayout = components.contentLayout;
+		QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
+		mainLayout->setContentsMargins(0, 0, 0, 0);
+		mainLayout->setSpacing(0);
+
+		// Modern unified content area with scroll - everything inside
+		QScrollArea *scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+
+		QWidget *contentWidget = new QWidget();
+		contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+		QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
+		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
+						  StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
+		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+
+		// Modern header inside scrollable area
+		QWidget *headerSection = new QWidget();
+		QVBoxLayout *headerLayout = new QVBoxLayout(headerSection);
+		headerLayout->setContentsMargins(0, 0, 0, 0);
+		headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+
+		// Title with modern styling
+		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsMainTitle"));
+		titleLabel->setAlignment(Qt::AlignCenter);
+
+		// Description with modern styling
+		QLabel *subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsMainDescription"));
+		subtitleLabel->setAlignment(Qt::AlignCenter);
+
+		headerLayout->addWidget(titleLabel);
+		headerLayout->addWidget(subtitleLabel);
+		
+		contentLayout->addWidget(headerSection);
+		contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
 
 		obs_properties_t *props = obs_properties_create();
 
@@ -531,9 +559,14 @@ void ShowSettingsDialog()
 		QPushButton *pluginButton =
 			StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsViewInstalledPlugins"), "info");
 
-		// Connect plugin button to show plugins inline with template system
-		QObject::connect(pluginButton, &QPushButton::clicked,
-				 [components]() { StreamUP::SettingsManager::ShowInstalledPluginsInline(components); });
+		// Connect plugin button to show plugins inline  
+		QObject::connect(pluginButton, &QPushButton::clicked, [scrollArea, contentWidget]() {
+			// Create a simple components-like structure for compatibility
+			StreamUP::UIStyles::StandardDialogComponents components;
+			components.scrollArea = scrollArea;
+			// Note: Sub-navigation will be simplified without back button functionality
+			StreamUP::SettingsManager::ShowInstalledPluginsInline(components); 
+		});
 
 		QHBoxLayout *pluginButtonLayout = new QHBoxLayout();
 		pluginButtonLayout->addStretch();
@@ -553,9 +586,13 @@ void ShowSettingsDialog()
 		QPushButton *hotkeysButton =
 			StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsManageHotkeys"), "info");
 
-		// Connect hotkeys button to show hotkeys inline with template system
-		QObject::connect(hotkeysButton, &QPushButton::clicked,
-				 [components]() { StreamUP::SettingsManager::ShowHotkeysInline(components); });
+		// Connect hotkeys button to show hotkeys inline
+		QObject::connect(hotkeysButton, &QPushButton::clicked, [scrollArea, contentWidget]() {
+			// Create a simple components-like structure for compatibility
+			StreamUP::UIStyles::StandardDialogComponents components;
+			components.scrollArea = scrollArea;
+			StreamUP::SettingsManager::ShowHotkeysInline(components); 
+		});
 
 		QHBoxLayout *hotkeysButtonLayout = new QHBoxLayout();
 		hotkeysButtonLayout->addStretch();
@@ -575,9 +612,13 @@ void ShowSettingsDialog()
 		QPushButton *dockConfigButton =
 			StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsManageDockConfig"), "info");
 
-		// Connect dock config button to show dock config inline with template system
-		QObject::connect(dockConfigButton, &QPushButton::clicked,
-				 [components]() { StreamUP::SettingsManager::ShowDockConfigInline(components); });
+		// Connect dock config button to show dock config inline
+		QObject::connect(dockConfigButton, &QPushButton::clicked, [scrollArea, contentWidget]() {
+			// Create a simple components-like structure for compatibility
+			StreamUP::UIStyles::StandardDialogComponents components;
+			components.scrollArea = scrollArea;
+			StreamUP::SettingsManager::ShowDockConfigInline(components); 
+		});
 
 		QHBoxLayout *dockConfigButtonLayout = new QHBoxLayout();
 		dockConfigButtonLayout->addStretch();
@@ -586,69 +627,26 @@ void ShowSettingsDialog()
 		dockConfigLayout->addLayout(dockConfigButtonLayout);
 
 		contentLayout->addWidget(dockConfigGroup);
-		contentLayout->addStretch();
+		
+		// Add close button at the bottom of the content area (inside scroll)
+		contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+		
+		// Modern button section inside scrollable content
+		QHBoxLayout* buttonLayout = new QHBoxLayout();
+		buttonLayout->setContentsMargins(0, 0, 0, 0);
+		
+		QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Close"), "neutral");
+		QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
 
-		// Create a timer to periodically update button text based on current page
-		QTimer *buttonUpdateTimer = new QTimer(dialog);
-		buttonUpdateTimer->setInterval(100); // Check every 100ms
+		buttonLayout->addStretch();
+		buttonLayout->addWidget(closeButton);
+		buttonLayout->addStretch();
+		
+		contentLayout->addLayout(buttonLayout);
+		contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
-		QPointer<QWidget> originalContentWidget = contentWidget; // Use QPointer for safe reference tracking
-
-		// Capture specific pointers safely to avoid reference issues
-		QPointer<QScrollArea> scrollAreaPtr = components.scrollArea;
-		QPointer<QPushButton> mainButtonPtr = components.mainButton;
-		QPointer<QDialog> dialogPtr = components.dialog;
-
-		QObject::connect(buttonUpdateTimer, &QTimer::timeout, [scrollAreaPtr, mainButtonPtr, originalContentWidget]() {
-			if (scrollAreaPtr.isNull() || mainButtonPtr.isNull()) {
-				return;
-			}
-
-			QWidget *currentWidget = scrollAreaPtr->widget();
-			if (currentWidget != originalContentWidget.data()) {
-				// We're on a sub-page, show Back button
-				if (mainButtonPtr->text() != obs_module_text("WindowSettingsBackButton")) {
-					mainButtonPtr->setText(obs_module_text("WindowSettingsBackButton"));
-				}
-			} else {
-				// We're on main page, show Close button
-				if (mainButtonPtr->text() != obs_module_text("Close")) {
-					mainButtonPtr->setText(obs_module_text("Close"));
-				}
-			}
-		});
-		buttonUpdateTimer->start();
-
-		// Setup dialog navigation using template system
-		StreamUP::UIStyles::SetupDialogNavigation(components, [scrollAreaPtr, dialogPtr, originalContentWidget]() {
-			// Add null pointer checks to prevent crashes
-			if (scrollAreaPtr.isNull() || dialogPtr.isNull()) {
-				return;
-			}
-
-			// Navigate back to main page if we're on a sub-page
-			QWidget *currentWidget = scrollAreaPtr->widget();
-			if (currentWidget != originalContentWidget.data()) {
-				// We're on a sub-page, go back to main content
-				QWidget *widgetToRemove = scrollAreaPtr->takeWidget();
-				if (!originalContentWidget.isNull()) {
-					scrollAreaPtr->setWidget(originalContentWidget.data());
-				}
-
-				// Properly delete the widget that was removed to prevent memory leaks and crashes
-				if (widgetToRemove && widgetToRemove != originalContentWidget.data()) {
-					widgetToRemove->deleteLater();
-				}
-
-				// Main header stays unchanged - "StreamUP Settings" throughout
-			} else {
-				// We're on main page, just close
-				dialogPtr->close();
-			}
-		});
-
-		// Stop timer when dialog is closed
-		QObject::connect(dialog, &QDialog::finished, [buttonUpdateTimer]() { buttonUpdateTimer->stop(); });
+		scrollArea->setWidget(contentWidget);
+		mainLayout->addWidget(scrollArea);
 
 		QObject::connect(dialog, &QDialog::finished, [=](int) {
 			obs_data_release(settings);
