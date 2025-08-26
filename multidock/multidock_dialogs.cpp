@@ -2,6 +2,7 @@
 #include "multidock_utils.hpp"
 #include "multidock_manager.hpp"
 #include "multidock_dock.hpp"
+#include "../ui/ui-styles.hpp"
 #include <obs-module.h>
 #include <QDialog>
 #include <QVBoxLayout>
@@ -27,12 +28,19 @@ void ShowNewMultiDockDialog()
     dialog.setModal(true);
     dialog.resize(300, 120);
     
+    // Set dialog background to BG_DARKEST
+    dialog.setStyleSheet(QString("QDialog { background-color: %1; }").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+    
     QVBoxLayout* layout = new QVBoxLayout(&dialog);
     
     // Name input
     layout->addWidget(new QLabel("MultiDock Name:"));
     QLineEdit* nameEdit = new QLineEdit(&dialog);
     nameEdit->setPlaceholderText("Enter MultiDock name...");
+    
+    // Style the input box
+    nameEdit->setStyleSheet(StreamUP::UIStyles::GetLineEditStyle());
+    
     layout->addWidget(nameEdit);
     
     // Buttons
@@ -40,6 +48,11 @@ void ShowNewMultiDockDialog()
     QPushButton* createButton = new QPushButton("Create", &dialog);
     QPushButton* cancelButton = new QPushButton("Cancel", &dialog);
     
+    // Style buttons
+    createButton->setStyleSheet(StreamUP::UIStyles::GetButtonStyle());
+    cancelButton->setStyleSheet(StreamUP::UIStyles::GetButtonStyle());
+    
+    buttonLayout->addStretch();
     buttonLayout->addWidget(createButton);
     buttonLayout->addWidget(cancelButton);
     layout->addLayout(buttonLayout);
@@ -91,11 +104,43 @@ void ShowManageMultiDocksDialog()
     dialog.setModal(true);
     dialog.resize(400, 300);
     
+    // Set dialog background to BG_DARKEST
+    dialog.setStyleSheet(QString("QDialog { background-color: %1; }").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+    
     QVBoxLayout* layout = new QVBoxLayout(&dialog);
     
     // List widget
     layout->addWidget(new QLabel("Existing MultiDocks:"));
     QListWidget* listWidget = new QListWidget(&dialog);
+    
+    // Style the list widget with rounded corners and proper background
+    listWidget->setStyleSheet(QString(
+        "QListWidget {"
+        "    background-color: %1;"
+        "    border: 0px solid %2;"
+        "    border-radius: %3px;"
+        "    padding: 4px;"
+        "    color: %4;"
+        "}"
+        "QListWidget::item {"
+        "    padding: 4px 8px;"
+        "    border-radius: %5px;"
+        "    margin: 1px;"
+        "}"
+        "QListWidget::item:selected {"
+        "    background-color: %6;"
+        "}"
+        "QListWidget::item:hover {"
+        "    background-color: %7;"
+        "}")
+        .arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
+        .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
+	.arg(StreamUP::UIStyles::Sizes::RADIUS_DOCK)
+        .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+        .arg(StreamUP::UIStyles::Sizes::RADIUS_LG)
+        .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR)
+	.arg(StreamUP::UIStyles::Colors::PRIMARY_HOVER));
+    
     layout->addWidget(listWidget);
     
     // Populate with existing MultiDocks
@@ -117,10 +162,18 @@ void ShowManageMultiDocksDialog()
     
     // Buttons
     QHBoxLayout* buttonLayout = new QHBoxLayout();
-    QPushButton* newButton = new QPushButton("New", &dialog);
+    QPushButton* newButton = new QPushButton(&dialog);
+    newButton->setProperty("class", "icon-plus");
+    newButton->setToolTip("New");
+    newButton->setStyleSheet(StreamUP::UIStyles::GetSquircleButtonStyle("", "", 28));
+    newButton->setFixedSize(28, 28);
     QPushButton* openButton = new QPushButton("Open", &dialog);
     QPushButton* renameButton = new QPushButton("Rename", &dialog);
-    QPushButton* deleteButton = new QPushButton("Delete", &dialog);
+    QPushButton* deleteButton = new QPushButton(&dialog);
+    deleteButton->setProperty("class", "icon-trash");
+    deleteButton->setToolTip("Delete");
+    deleteButton->setStyleSheet(StreamUP::UIStyles::GetSquircleButtonStyle("", "", 28));
+    deleteButton->setFixedSize(28, 28);
     QPushButton* closeButton = new QPushButton("Close", &dialog);
     
     // Enable/disable buttons based on selection
@@ -130,11 +183,13 @@ void ShowManageMultiDocksDialog()
     renameButton->setEnabled(hasSelection);
     deleteButton->setEnabled(hasSelection);
     
+    // Left side: New, Delete
     buttonLayout->addWidget(newButton);
-    buttonLayout->addWidget(openButton);
-    buttonLayout->addWidget(renameButton);
     buttonLayout->addWidget(deleteButton);
     buttonLayout->addStretch();
+    // Right side: Open, Rename, Close
+    buttonLayout->addWidget(openButton);
+    buttonLayout->addWidget(renameButton);
     buttonLayout->addWidget(closeButton);
     layout->addLayout(buttonLayout);
     
@@ -222,12 +277,19 @@ void ShowManageMultiDocksDialog()
         newDialog.setModal(true);
         newDialog.resize(300, 120);
         
+        // Set dialog background to BG_DARKEST
+        newDialog.setStyleSheet(QString("QDialog { background-color: %1; }").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+        
         QVBoxLayout* newLayout = new QVBoxLayout(&newDialog);
         
         // Name input
         newLayout->addWidget(new QLabel("MultiDock Name:"));
         QLineEdit* nameEdit = new QLineEdit(&newDialog);
         nameEdit->setPlaceholderText("Enter MultiDock name...");
+        
+        // Style the input box
+        nameEdit->setStyleSheet(StreamUP::UIStyles::GetLineEditStyle());
+        
         newLayout->addWidget(nameEdit);
         
         // Buttons
@@ -235,6 +297,11 @@ void ShowManageMultiDocksDialog()
         QPushButton* createButton = new QPushButton("Create", &newDialog);
         QPushButton* cancelButton = new QPushButton("Cancel", &newDialog);
         
+        // Style buttons
+        createButton->setStyleSheet(StreamUP::UIStyles::GetButtonStyle());
+        cancelButton->setStyleSheet(StreamUP::UIStyles::GetButtonStyle());
+        
+        newButtonLayout->addStretch();
         newButtonLayout->addWidget(createButton);
         newButtonLayout->addWidget(cancelButton);
         newLayout->addLayout(newButtonLayout);
@@ -305,6 +372,9 @@ void ShowManageMultiDocksDialog()
         renameDialog.setModal(true);
         renameDialog.resize(300, 120);
         
+        // Set dialog background to BG_DARKEST
+        renameDialog.setStyleSheet(QString("QDialog { background-color: %1; }").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+        
         QVBoxLayout* renameLayout = new QVBoxLayout(&renameDialog);
         
         // Name input
@@ -312,6 +382,10 @@ void ShowManageMultiDocksDialog()
         QLineEdit* nameEdit = new QLineEdit(&renameDialog);
         nameEdit->setText(currentName);
         nameEdit->selectAll();
+        
+        // Style the input box
+        nameEdit->setStyleSheet(StreamUP::UIStyles::GetLineEditStyle());
+        
         renameLayout->addWidget(nameEdit);
         
         // Buttons
@@ -319,6 +393,11 @@ void ShowManageMultiDocksDialog()
         QPushButton* saveButton = new QPushButton("Save", &renameDialog);
         QPushButton* cancelButton = new QPushButton("Cancel", &renameDialog);
         
+        // Style buttons
+        saveButton->setStyleSheet(StreamUP::UIStyles::GetButtonStyle());
+        cancelButton->setStyleSheet(StreamUP::UIStyles::GetButtonStyle());
+        
+        renameButtonLayout->addStretch();
         renameButtonLayout->addWidget(saveButton);
         renameButtonLayout->addWidget(cancelButton);
         renameLayout->addLayout(renameButtonLayout);

@@ -734,7 +734,7 @@ QString GetLineEditStyle() {
      .arg(Colors::TEXT_PRIMARY)
      .arg(Sizes::INPUT_HEIGHT)
      .arg(Colors::PRIMARY_ALPHA_30)
-     .arg(Sizes::SPACE_1)
+     .arg(Sizes::SPACE_2)
      .arg(Colors::PRIMARY_COLOR);
 }
 
