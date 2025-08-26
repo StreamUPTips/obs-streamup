@@ -42,6 +42,10 @@ QString GetDialogStyle() {
         "    background-color: %1;"
         "    border-radius: %2px;"
         "    padding: %3px;"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "}"
+        "QDialog * {"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
         "}"
     ).arg(Colors::BG_DARKEST)
      .arg(Sizes::RADIUS_DOCK)
@@ -49,13 +53,36 @@ QString GetDialogStyle() {
 }
 
 QString GetTitleLabelStyle() {
-    // Minimal styling - let theme handle most of it
-    return "QLabel { font-size: 20px; font-weight: bold; }";
+    // Modern title styling with enhanced typography
+    return QString(
+        "QLabel {"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "    font-size: 24px;"
+        "    font-weight: 700;"
+        "    color: %1;"
+        "    letter-spacing: -0.5px;"
+        "    line-height: 1.2;"
+        "    margin: 0px;"
+        "    padding: 0px 0px 8px 0px;"
+        "}"
+    ).arg(Colors::TEXT_PRIMARY);
 }
 
 QString GetDescriptionLabelStyle() {
-    // Minimal styling - let theme handle colors and fonts
-    return "";
+    // Modern description styling with improved readability
+    return QString(
+        "QLabel {"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "    font-size: 14px;"
+        "    font-weight: 400;"
+        "    color: %1;"
+        "    line-height: 1.4;"
+        "    letter-spacing: 0px;"
+        "    margin: 0px;"
+        "    padding: 0px 0px 4px 0px;"
+        "    opacity: 0.85;"
+        "}"
+    ).arg(Colors::TEXT_SECONDARY);
 }
 
 QString GetGroupBoxStyle(const QString& borderColor, const QString& titleColor) {
@@ -102,8 +129,19 @@ QString GetGroupBoxStyle(const QString& borderColor, const QString& titleColor) 
 }
 
 QString GetContentLabelStyle() {
-    // No custom styling - inherit from theme
-    return "";
+    // Modern content label styling with enhanced readability
+    return QString(
+        "QLabel {"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "    font-size: 15px;"
+        "    font-weight: 400;"
+        "    color: %1;"
+        "    line-height: 1.5;"
+        "    letter-spacing: 0.1px;"
+        "    margin: 0px;"
+        "    padding: 8px 0px;"
+        "}"
+    ).arg(Colors::TEXT_PRIMARY);
 }
 
 QString GetButtonStyle(const QString& baseColor, const QString& hoverColor, int height) {
@@ -278,13 +316,45 @@ QDialog* CreateStyledDialog(const QString& title, QWidget* parentWidget) {
 
 QLabel* CreateStyledTitle(const QString& text) {
     QLabel* label = new QLabel(text);
-    label->setStyleSheet(GetTitleLabelStyle());
+    
+    // Modern title styling with enhanced typography
+    QString modernTitleStyle = QString(
+        "QLabel {"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "    font-size: 24px;"
+        "    font-weight: 700;"
+        "    color: %1;"
+        "    letter-spacing: -0.5px;"
+        "    line-height: 1.2;"
+        "    margin: 0px;"
+        "    padding: 0px 0px 8px 0px;"
+        "}"
+    ).arg(Colors::TEXT_PRIMARY);
+    
+    label->setStyleSheet(modernTitleStyle);
     label->setAlignment(Qt::AlignCenter);
     return label;
 }
 
 QLabel* CreateStyledDescription(const QString& text) {
     QLabel* label = new QLabel(text);
+    
+    // Modern description styling with improved readability
+    QString modernDescStyle = QString(
+        "QLabel {"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "    font-size: 14px;"
+        "    font-weight: 400;"
+        "    color: %1;"
+        "    line-height: 1.4;"
+        "    letter-spacing: 0px;"
+        "    margin: 0px;"
+        "    padding: 0px 0px 4px 0px;"
+        "    opacity: 0.85;"
+        "}"
+    ).arg(Colors::TEXT_SECONDARY);
+    
+    label->setStyleSheet(modernDescStyle);
     label->setWordWrap(true);
     label->setAlignment(Qt::AlignCenter);
     return label;
@@ -292,6 +362,33 @@ QLabel* CreateStyledDescription(const QString& text) {
 
 QLabel* CreateStyledContent(const QString& text) {
     QLabel* label = new QLabel(text);
+    
+    // Modern content styling with enhanced readability
+    QString modernContentStyle = QString(
+        "QLabel {"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "    font-size: 15px;"
+        "    font-weight: 400;"
+        "    color: %1;"
+        "    line-height: 1.5;"
+        "    letter-spacing: 0.1px;"
+        "    margin: 0px;"
+        "    padding: 8px 0px;"
+        "}"
+        "QLabel a {"
+        "    color: %2;"
+        "    text-decoration: none;"
+        "    font-weight: 500;"
+        "}"
+        "QLabel a:hover {"
+        "    color: %3;"
+        "    text-decoration: underline;"
+        "}"
+    ).arg(Colors::TEXT_PRIMARY)
+     .arg(Colors::INFO)
+     .arg(Colors::PRIMARY_HOVER);
+    
+    label->setStyleSheet(modernContentStyle);
     label->setTextFormat(Qt::RichText);
     label->setWordWrap(true);
     label->setOpenExternalLinks(true);
@@ -1051,8 +1148,14 @@ QString GetEnhancedScrollAreaStyle() {
 void ApplyStreamUPThemeStyles(QWidget* widget) {
     if (!widget) return;
     
-    // Apply the enhanced scrollbar style which is the most commonly needed
-    widget->setStyleSheet(GetEnhancedScrollAreaStyle());
+    // Apply StreamUP font family and enhanced scrollbar styling globally
+    QString globalStyle = QString(
+        "* {"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "}"
+    ) + GetEnhancedScrollAreaStyle();
+    
+    widget->setStyleSheet(globalStyle);
 }
 
 //-------------------OBS/QT-COMPLIANT STYLING FUNCTIONS-------------------

@@ -141,7 +141,7 @@ void ShowWebSocketWindow(bool showInternalTools)
 		headerWidget->setLayout(headerLayout);
 
 		// Ensure the widget fits both lines
-		headerWidget->setFixedWidth(550);
+		headerWidget->setFixedWidth(570);
 
 		mainLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 		mainLayout->addWidget(headerWidget, 0, Qt::AlignHCenter);
@@ -150,7 +150,7 @@ void ShowWebSocketWindow(bool showInternalTools)
 		// --- Style (pill shape) ---
 		headerWidget->setStyleSheet(QString("QWidget#headerWidget { "
 						    "background: %1; "
-						    "border-radius: 30px; "
+						    "border-radius: 26px; "
 						    "padding: %2px %3px; "
 						    "}")
 						    .arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
