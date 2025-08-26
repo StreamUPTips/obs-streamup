@@ -950,6 +950,25 @@ void StreamUPToolbar::updateLayoutOrientation()
 				}
 				separator->setObjectName(separatorName); // Restore the name
 				separator->setProperty("separatorType", "streamup-separator"); // Restore common property
+				
+				// Set the toolbarPosition property based on current position
+				QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
+				if (mainWindow) {
+					Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
+					QString positionProperty;
+					if (currentArea == Qt::TopToolBarArea) {
+						positionProperty = "top";
+					} else if (currentArea == Qt::BottomToolBarArea) {
+						positionProperty = "bottom";
+					} else if (currentArea == Qt::LeftToolBarArea) {
+						positionProperty = "left";
+					} else if (currentArea == Qt::RightToolBarArea) {
+						positionProperty = "right";
+					} else {
+						positionProperty = "floating";
+					}
+					separator->setProperty("toolbarPosition", positionProperty);
+				}
 			} else {
 				// Re-add the widget
 				if (shouldBeVertical) {
