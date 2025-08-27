@@ -15,12 +15,346 @@
 #include <QPointer>
 #include <QGroupBox>
 #include <QPixmap>
+#include <QFrame>
+#include <QPropertyAnimation>
+#include <QEasingCurve>
+#include <QTimer>
+#include <QResizeEvent>
+#include <QStackedWidget>
+#include <QEnterEvent>
+#include <QDialog>
+#include <QKeyEvent>
+#include <QScreen>
+#include <QMouseEvent>
 
 namespace StreamUP {
 namespace ThemeWindow {
 
 // Static pointer to track open theme dialog
 static QPointer<QDialog> themeDialog;
+
+// Carousel widget for theme images
+class ThemeImageCarousel : public QWidget
+{
+    Q_OBJECT
+
+public:
+    explicit ThemeImageCarousel(QWidget* parent = nullptr) : QWidget(parent), currentIndex(0)
+    {
+        setFixedHeight(400);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        setupUI();
+        loadImages();
+        setupTimer();
+    }
+
+public slots:
+    void nextImage()
+    {
+        if (images.isEmpty()) return;
+        
+        currentIndex = (currentIndex + 1) % images.size();
+        updateImage();
+        updateDots();
+    }
+
+    void previousImage()
+    {
+        if (images.isEmpty()) return;
+        
+        currentIndex = (currentIndex - 1 + images.size()) % images.size();
+        updateImage();
+        updateDots();
+    }
+
+private slots:
+
+    void goToImage(int index)
+    {
+        if (index >= 0 && index < images.size()) {
+            currentIndex = index;
+            updateImage();
+            updateDots();
+        }
+    }
+
+private:
+    void setupUI()
+    {
+        QVBoxLayout* layout = new QVBoxLayout(this);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+        // Image container - full width to place buttons at edges
+        imageContainer = new QFrame();
+        imageContainer->setFixedHeight(350);
+        imageContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        imageContainer->setStyleSheet(QString(
+            "QFrame {"
+            "    background: transparent;"
+            "    border: none;"
+            "}"
+        ));
+
+        QHBoxLayout* containerLayout = new QHBoxLayout(imageContainer);
+        containerLayout->setContentsMargins(0, 0, 0, 0);
+        containerLayout->setSpacing(0);
+
+        // Navigation buttons (hidden - using external buttons instead)
+        prevButton = StreamUP::UIStyles::CreateStyledButton("❮", "neutral", 40);
+        prevButton->setFixedSize(40, 40);
+        prevButton->setVisible(false);
+        connect(prevButton, &QPushButton::clicked, this, &ThemeImageCarousel::previousImage);
+
+        nextButton = StreamUP::UIStyles::CreateStyledButton("❯", "neutral", 40);
+        nextButton->setFixedSize(40, 40);
+        nextButton->setVisible(false);
+        connect(nextButton, &QPushButton::clicked, this, &ThemeImageCarousel::nextImage);
+
+        // Image label centered without button constraints
+        imageLabel = new QLabel();
+        imageLabel->setAlignment(Qt::AlignCenter);
+        imageLabel->setScaledContents(false);
+        imageLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        imageLabel->setCursor(Qt::PointingHandCursor);
+        
+        // Connect click event for zooming
+        imageLabel->installEventFilter(this);
+
+        // Simple centered layout for image only
+        containerLayout->addWidget(imageLabel, 1, Qt::AlignCenter);
+
+        // Dots indicator - centered
+        dotsContainer = new QHBoxLayout();
+        dotsContainer->setContentsMargins(0, 0, 0, 0);
+        dotsContainer->setSpacing(8);
+        dotsContainer->addStretch(); // Add stretch before dots to center them
+
+        layout->addWidget(imageContainer);
+        layout->addLayout(dotsContainer);
+        layout->addStretch();
+    }
+
+    void loadImages()
+    {
+        // Load theme images
+        QStringList imageFiles = {"obs-theme-1.png", "obs-theme-2.png", "obs-theme-3.png", "obs-theme-4.png"};
+        
+        for (const QString& fileName : imageFiles) {
+            QString imagePath = QString(":/images/misc/%1").arg(fileName);
+            QPixmap pixmap(imagePath);
+            
+            if (!pixmap.isNull()) {
+                // Load image at full quality - let the label handle scaling
+                images.append(pixmap);
+            }
+        }
+
+        // Create dots for each image - small circles
+        for (int i = 0; i < images.size(); ++i) {
+            QPushButton* dot = new QPushButton();
+            dot->setText("");  // Ensure no text
+            dot->setFixedSize(10, 10);
+            dot->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+            dot->setFlat(true);
+            dot->setStyleSheet(QString(
+                "QPushButton {"
+                "    background-color: %1;"
+                "    border: none;"
+                "    border-radius: 5px;"
+                "    padding: 0px;"
+                "    margin: 0px;"
+                "}"
+                "QPushButton:hover {"
+                "    background-color: %2;"
+                "}"
+                "QPushButton:pressed {"
+                "    background-color: %3;"
+                "}"
+            ).arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
+             .arg(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30)
+             .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR));
+            
+            connect(dot, &QPushButton::clicked, [this, i]() { goToImage(i); });
+            dots.append(dot);
+            dotsContainer->addWidget(dot);
+        }
+
+        dotsContainer->addStretch(); // Add stretch after dots to center them
+
+        if (!images.isEmpty()) {
+            updateImage();
+            updateDots();
+        }
+    }
+
+    void updateImage()
+    {
+        if (currentIndex < images.size()) {
+            // Scale image to fit the container while maintaining aspect ratio and quality
+            int availableWidth = imageContainer->width();
+            int availableHeight = imageContainer->height();
+            
+            QPixmap scaledPixmap = images[currentIndex].scaled(
+                QSize(availableWidth, availableHeight), 
+                Qt::KeepAspectRatio, 
+                Qt::SmoothTransformation
+            );
+            imageLabel->setPixmap(scaledPixmap);
+        }
+    }
+
+    void updateDots()
+    {
+        for (int i = 0; i < dots.size(); ++i) {
+            QString style = QString(
+                "QPushButton {"
+                "    background-color: %1;"
+                "    border: none;"
+                "    border-radius: 5px;"
+                "    padding: 0px;"
+                "    margin: 0px;"
+                "}"
+                "QPushButton:hover {"
+                "    background-color: %2;"
+                "}"
+                "QPushButton:pressed {"
+                "    background-color: %3;"
+                "}"
+            ).arg(i == currentIndex ? StreamUP::UIStyles::Colors::PRIMARY_COLOR : StreamUP::UIStyles::Colors::BORDER_SUBTLE)
+             .arg(StreamUP::UIStyles::Colors::PRIMARY_HOVER)
+             .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR);
+            
+            dots[i]->setStyleSheet(style);
+        }
+    }
+
+    void setupTimer()
+    {
+        autoAdvanceTimer = new QTimer(this);
+        connect(autoAdvanceTimer, &QTimer::timeout, this, &ThemeImageCarousel::nextImage);
+        autoAdvanceTimer->start(4000); // Auto-advance every 4 seconds
+    }
+
+protected:
+    void enterEvent(QEnterEvent* event) override
+    {
+        autoAdvanceTimer->stop();
+        QWidget::enterEvent(event);
+    }
+
+    void leaveEvent(QEvent* event) override
+    {
+        autoAdvanceTimer->start(4000);
+        QWidget::leaveEvent(event);
+    }
+
+    void resizeEvent(QResizeEvent* event) override
+    {
+        QWidget::resizeEvent(event);
+        // Update image scaling when widget is resized
+        if (!images.isEmpty()) {
+            updateImage();
+        }
+    }
+
+
+private:
+    void showZoomedImage()
+    {
+        if (currentIndex >= images.size()) return;
+
+        // Create modal zoom dialog
+        QDialog* zoomDialog = new QDialog(this->window());
+        zoomDialog->setWindowTitle("Theme Preview - Full Size");
+        zoomDialog->setModal(true);
+        zoomDialog->setStyleSheet(QString(
+            "QDialog {"
+            "    background: %1;"
+            "    color: white;"
+            "}"
+        ).arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+
+        QVBoxLayout* layout = new QVBoxLayout(zoomDialog);
+        layout->setContentsMargins(20, 20, 20, 20);
+
+        // Full-size image label with fixed container size
+        QLabel* fullImageLabel = new QLabel();
+        fullImageLabel->setAlignment(Qt::AlignCenter);
+        fullImageLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        
+        // Scale image to fit in fixed dialog size while maintaining aspect ratio
+        QPixmap scaledPixmap = images[currentIndex].scaled(
+            QSize(800, 600), 
+            Qt::KeepAspectRatio, 
+            Qt::SmoothTransformation
+        );
+        fullImageLabel->setPixmap(scaledPixmap);
+
+        // Close instruction
+        QLabel* instructionLabel = StreamUP::UIStyles::CreateStyledContent("Click anywhere or press ESC to close");
+        instructionLabel->setAlignment(Qt::AlignCenter);
+
+        layout->addWidget(fullImageLabel, 1);
+        layout->addSpacing(10);
+        layout->addWidget(instructionLabel);
+
+        // Fixed dialog size
+        zoomDialog->setFixedSize(860, 720);
+
+        // Center on screen
+        zoomDialog->move(
+            (QApplication::primaryScreen()->geometry().width() - 860) / 2,
+            (QApplication::primaryScreen()->geometry().height() - 720) / 2
+        );
+
+        // Install event filter for closing on click
+        zoomDialog->installEventFilter(this);
+        fullImageLabel->installEventFilter(this);
+
+        // Store reference for event handling
+        currentZoomDialog = zoomDialog;
+
+        zoomDialog->exec();
+        delete zoomDialog;
+        currentZoomDialog = nullptr;
+    }
+
+    bool eventFilter(QObject* obj, QEvent* event) override
+    {
+        // Handle zoom dialog events
+        if (currentZoomDialog && (obj == currentZoomDialog || obj->parent() == currentZoomDialog)) {
+            if (event->type() == QEvent::MouseButtonPress || 
+                (event->type() == QEvent::KeyPress && 
+                 static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape)) {
+                currentZoomDialog->accept();
+                return true;
+            }
+        }
+        
+        // Handle image label click for zoom
+        if (obj == imageLabel && event->type() == QEvent::MouseButtonPress) {
+            QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (mouseEvent->button() == Qt::LeftButton) {
+                showZoomedImage();
+                return true;
+            }
+        }
+        return QWidget::eventFilter(obj, event);
+    }
+
+private:
+    QList<QPixmap> images;
+    QList<QPushButton*> dots;
+    QLabel* imageLabel;
+    QFrame* imageContainer;
+    QPushButton* prevButton;
+    QPushButton* nextButton;
+    QHBoxLayout* dotsContainer;
+    QTimer* autoAdvanceTimer;
+    QDialog* currentZoomDialog = nullptr;
+    int currentIndex;
+};
 
 void CreateThemeDialog()
 {
@@ -47,10 +381,14 @@ void CreateThemeDialog()
 
         // Modern unified content area with scroll - everything inside
         QScrollArea* scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+        scrollArea->setWidgetResizable(true); // Ensure this is set for proper alignment
+        scrollArea->setAlignment(Qt::AlignTop | Qt::AlignHCenter); // Keep content top-aligned when shorter than viewport
+        scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // Disable horizontal scrolling
 
         QWidget* contentWidget = new QWidget();
         contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
         contentWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        contentWidget->setMaximumWidth(900); // Match dialog width minus padding
         QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
         contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
                                           StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
@@ -95,181 +433,35 @@ void CreateThemeDialog()
         
         contentLayout->addWidget(descriptionGroup);
         
-        
-        // Preview section with placeholder images
-        QGroupBox* previewGroup = StreamUP::UIStyles::CreateStyledGroupBox("Theme Preview", "info");
+        // Theme images carousel section
+        QGroupBox* previewGroup = StreamUP::UIStyles::CreateStyledGroupBox("Theme Preview", "primary");
         QVBoxLayout* previewLayout = new QVBoxLayout(previewGroup);
         previewLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACE_12);
         
-        QStringList imagePaths = {
-            ":/images/misc/obs-theme-1.png",
-            ":/images/misc/obs-theme-2.png", 
-            ":/images/misc/obs-theme-3.png",
-            ":/images/misc/obs-theme-4.png"
-        };
+        // Create horizontal layout for buttons at group box edges
+        QHBoxLayout* carouselControlLayout = new QHBoxLayout();
+        carouselControlLayout->setContentsMargins(0, 0, 0, 0);
+        carouselControlLayout->setSpacing(0);
         
-        // Create carousel container with transparent background
-        QWidget* carouselContainer = new QWidget();
-        carouselContainer->setStyleSheet("QWidget { background: transparent; }");
-        QVBoxLayout* carouselLayout = new QVBoxLayout(carouselContainer);
-        carouselLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACE_16);
-        carouselLayout->setContentsMargins(0, 0, 0, 0);
-        carouselLayout->setAlignment(Qt::AlignCenter);
+        // Create carousel without navigation buttons (we'll add them externally)
+        ThemeImageCarousel* carousel = new ThemeImageCarousel();
         
-        // Main image display (focused/current image) - using button for click functionality
-        QPushButton* mainImageButton = new QPushButton();
-        mainImageButton->setFlat(true);
-        mainImageButton->setCursor(Qt::PointingHandCursor);
-        mainImageButton->setFixedSize(508, 358); // Fixed size to match scaled image without border
-        mainImageButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-        mainImageButton->setStyleSheet(QString(
-            "QPushButton {"
-            "    border: none;"
-            "    background: transparent;"
-            "    padding: 4px;"
-            "}"
-            "QPushButton:hover {"
-            "    background: rgba(255, 255, 255, 0.05);"
-            "}"
-            "QPushButton:pressed {"
-            "    background: rgba(255, 255, 255, 0.1);"
-            "}"
-        ));
+        // Create external navigation buttons for group box edges
+        QPushButton* externalPrevButton = StreamUP::UIStyles::CreateStyledButton("❮", "neutral", 40);
+        externalPrevButton->setFixedSize(40, 40);
+        QPushButton* externalNextButton = StreamUP::UIStyles::CreateStyledButton("❯", "neutral", 40);
+        externalNextButton->setFixedSize(40, 40);
         
-        // Thumbnail navigation with transparent background
-        QWidget* thumbnailsContainer = new QWidget();
-        thumbnailsContainer->setStyleSheet("QWidget { background: transparent; }");
-        QHBoxLayout* thumbnailsLayout = new QHBoxLayout(thumbnailsContainer);
-        thumbnailsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACE_8);
-        thumbnailsLayout->setContentsMargins(0, 0, 0, 0);
+        // Connect external buttons to carousel methods
+        QObject::connect(externalPrevButton, &QPushButton::clicked, carousel, &ThemeImageCarousel::previousImage);
+        QObject::connect(externalNextButton, &QPushButton::clicked, carousel, &ThemeImageCarousel::nextImage);
         
-        // Store images and create carousel logic
-        QVector<QPixmap>* originalImages = new QVector<QPixmap>();
-        QVector<QPushButton*>* thumbnailButtons = new QVector<QPushButton*>();
-        int* currentImageIndex = new int(0);
+        // Layout: button at edge - carousel - button at edge
+        carouselControlLayout->addWidget(externalPrevButton);
+        carouselControlLayout->addWidget(carousel, 1);
+        carouselControlLayout->addWidget(externalNextButton);
         
-        // Load images and create thumbnails
-        for (int i = 0; i < imagePaths.size(); i++) {
-            QPixmap pixmap(imagePaths[i]);
-            
-            if (!pixmap.isNull()) {
-                originalImages->append(pixmap);
-                
-                // Create thumbnail
-                QPixmap thumbnail = pixmap.scaled(80, 60, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-                QPushButton* thumbButton = new QPushButton();
-                thumbButton->setIcon(QIcon(thumbnail));
-                thumbButton->setIconSize(thumbnail.size());
-                thumbButton->setFlat(true);
-                thumbButton->setFixedSize(88, 68);
-                thumbButton->setCursor(Qt::PointingHandCursor);
-                thumbButton->setProperty("imageIndex", i);
-                
-                // Style thumbnail button
-                thumbButton->setStyleSheet(QString(
-                    "QPushButton {"
-                    "    border-radius: %1px;"
-                    "    border: 2px solid %2;"
-                    "    background: transparent;"
-                    "    padding: 2px;"
-                    "}"
-                    "QPushButton:hover {"
-                    "    border: 2px solid %3;"
-                    "}"
-                    "QPushButton[selected=\"true\"] {"
-                    "    border: 2px solid %3;"
-                    "}"
-                ).arg(StreamUP::UIStyles::Sizes::RADIUS_SM)
-                 .arg(StreamUP::UIStyles::Colors::BORDER_MEDIUM)
-                 .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR));
-                
-                thumbnailButtons->append(thumbButton);
-                thumbnailsLayout->addWidget(thumbButton);
-            } else {
-                // Create placeholder for missing images
-                originalImages->append(QPixmap());
-                QPushButton* placeholderButton = new QPushButton("N/A");
-                placeholderButton->setFixedSize(88, 68);
-                placeholderButton->setEnabled(false);
-                thumbnailButtons->append(placeholderButton);
-                thumbnailsLayout->addWidget(placeholderButton);
-            }
-        }
-        
-        // Center thumbnails
-        thumbnailsLayout->insertStretch(0);
-        thumbnailsLayout->addStretch();
-        
-        // Function to update main image
-        auto updateMainImage = [mainImageButton, originalImages, thumbnailButtons, currentImageIndex]() {
-            if (*currentImageIndex < originalImages->size() && !originalImages->at(*currentImageIndex).isNull()) {
-                QPixmap scaledMain = originalImages->at(*currentImageIndex).scaled(500, 350, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-                mainImageButton->setIcon(QIcon(scaledMain));
-                mainImageButton->setIconSize(scaledMain.size());
-                
-                // Update thumbnail selection
-                for (int i = 0; i < thumbnailButtons->size(); i++) {
-                    thumbnailButtons->at(i)->setProperty("selected", i == *currentImageIndex);
-                    thumbnailButtons->at(i)->style()->unpolish(thumbnailButtons->at(i));
-                    thumbnailButtons->at(i)->style()->polish(thumbnailButtons->at(i));
-                }
-            }
-        };
-        
-        // Connect thumbnail clicks
-        for (int i = 0; i < thumbnailButtons->size(); i++) {
-            QObject::connect(thumbnailButtons->at(i), &QPushButton::clicked, [i, currentImageIndex, updateMainImage]() {
-                *currentImageIndex = i;
-                updateMainImage();
-            });
-        }
-        
-        // Main image click-to-zoom
-        QObject::connect(mainImageButton, &QPushButton::clicked, [originalImages, currentImageIndex]() {
-            if (*currentImageIndex < originalImages->size() && !originalImages->at(*currentImageIndex).isNull()) {
-                QPixmap originalPixmap = originalImages->at(*currentImageIndex);
-                
-                // Create full-size dialog
-                QDialog* zoomDialog = new QDialog();
-                zoomDialog->setWindowTitle(QString("Theme Preview %1").arg(*currentImageIndex + 1));
-                zoomDialog->setModal(true);
-                zoomDialog->setAttribute(Qt::WA_DeleteOnClose);
-                
-                QVBoxLayout* zoomLayout = new QVBoxLayout(zoomDialog);
-                zoomLayout->setContentsMargins(10, 10, 10, 10);
-                
-                QScrollArea* zoomScrollArea = new QScrollArea();
-                zoomScrollArea->setWidgetResizable(true);
-                zoomScrollArea->setAlignment(Qt::AlignCenter);
-                
-                QLabel* fullImageLabel = new QLabel();
-                fullImageLabel->setPixmap(originalPixmap);
-                fullImageLabel->setAlignment(Qt::AlignCenter);
-                
-                zoomScrollArea->setWidget(fullImageLabel);
-                zoomLayout->addWidget(zoomScrollArea);
-                
-                // Size dialog based on image size
-                QSize imageSize = originalPixmap.size();
-                int dialogWidth = qMin(imageSize.width() + 50, 1200);
-                int dialogHeight = qMin(imageSize.height() + 100, 800);
-                zoomDialog->resize(dialogWidth, dialogHeight);
-                
-                zoomDialog->exec();
-            }
-        });
-        
-        // Initialize with first image
-        updateMainImage();
-        
-        // Add components to carousel layout
-        carouselLayout->addWidget(mainImageButton);
-        carouselLayout->addWidget(thumbnailsContainer);
-        
-        // Center the carousel within the preview group box
-        previewLayout->addStretch();
-        previewLayout->addWidget(carouselContainer);
-        previewLayout->addStretch();
+        previewLayout->addLayout(carouselControlLayout);
         
         contentLayout->addWidget(previewGroup);
         
@@ -324,8 +516,8 @@ void CreateThemeDialog()
         scrollArea->setWidget(contentWidget);
         mainLayout->addWidget(scrollArea);
         
-        // Apply flexible sizing that fits content
-        StreamUP::UIStyles::ApplyDynamicSizing(dialog, 650, 850, 600, 750);
+        // Apply flexible sizing that fits content - made wider for carousel
+        StreamUP::UIStyles::ApplyDynamicSizing(dialog, 900, 1100, 700, 850);
         
         // Show dialog
         dialog->show();
@@ -350,3 +542,5 @@ bool IsThemeWindowOpen()
 
 } // namespace ThemeWindow
 } // namespace StreamUP
+
+#include "theme-window.moc"
