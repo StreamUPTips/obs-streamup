@@ -28,6 +28,8 @@
 #include <QButtonGroup>
 #include <QAbstractButton>
 #include <QComboBox>
+#include <QListWidget>
+#include <QStackedWidget>
 #include <memory>
 #include <util/platform.h>
 
@@ -327,51 +329,145 @@ void ShowSettingsDialog()
 			return;
 		}
 
-		// Create modern unified dialog
+		// Create modern unified dialog with darkest background
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsTitle"));
-		dialog->resize(700, 700);
+		dialog->resize(900, 600);
+		dialog->setStyleSheet(QString("QDialog { background-color: %1; }")
+				      .arg(StreamUP::UIStyles::Colors::BG_DARKEST));
 
 		QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
 		mainLayout->setContentsMargins(0, 0, 0, 0);
 		mainLayout->setSpacing(0);
 
-		// Modern unified content area with scroll - everything inside
-		QScrollArea *scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-
-		QWidget *contentWidget = new QWidget();
-		contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
-		QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
+		// Create OBS-style horizontal layout with sidebar and content
+		QHBoxLayout *contentLayout = new QHBoxLayout();
 		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
 						  StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
-		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_XL);
 
-		// Modern header inside scrollable area
-		QWidget *headerSection = new QWidget();
-		QVBoxLayout *headerLayout = new QVBoxLayout(headerSection);
-		headerLayout->setContentsMargins(0, 0, 0, 0);
-		headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+		// Left sidebar container with rounded corners (like OBS)
+		QWidget *sidebarContainer = new QWidget();
+		sidebarContainer->setFixedWidth(200);
+		sidebarContainer->setStyleSheet(QString(
+			"QWidget {"
+			"    background-color: %1;"
+			"    border-radius: %2px;"
+			"}"
+		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
+		 .arg(StreamUP::UIStyles::Sizes::RADIUS_DOCK));
 
-		// Title with modern styling
-		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsMainTitle"));
-		titleLabel->setAlignment(Qt::AlignCenter);
+		QVBoxLayout *sidebarLayout = new QVBoxLayout(sidebarContainer);
+		sidebarLayout->setContentsMargins(0, 0, 0, 0);
+		sidebarLayout->setSpacing(0);
 
-		// Description with modern styling
-		QLabel *subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsMainDescription"));
-		subtitleLabel->setAlignment(Qt::AlignCenter);
+		QListWidget *categoryList = new QListWidget();
+		categoryList->setStyleSheet(QString(
+			"QListWidget {"
+			"    background-color: transparent;"
+			"    border: none;"
+			"    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+			"    font-size: 14px;"
+			"    outline: none;"
+			"    border-radius: %5px;"
+			"}"
+			"QListWidget::item {"
+			"    padding: 12px 16px;"
+			"    border: none;"
+			"    color: %1;"
+			"    background-color: transparent;"
+			"}"
+			"QListWidget::item:selected {"
+			"    background-color: %2;"
+			"    color: %3;"
+			"    border: none;"
+			"    border-radius: %6px;"
+			"}"
+			"QListWidget::item:hover:!selected {"
+			"    background-color: %4;"
+			"    color: %3;"
+			"    border-radius: %6px;"
+			"}"
+			"QListWidget::item:first {"
+			"    border-top-left-radius: %5px;"
+			"    border-top-right-radius: %5px;"
+			"}"
+			"QListWidget::item:last {"
+			"    border-bottom-left-radius: %5px;"
+			"    border-bottom-right-radius: %5px;"
+			"}"
+		).arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
+		 .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR)
+		 .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+		 .arg(StreamUP::UIStyles::Colors::HOVER_OVERLAY)
+		 .arg(StreamUP::UIStyles::Sizes::RADIUS_DOCK)
+		 .arg(StreamUP::UIStyles::Sizes::RADIUS_XL));
 
-		headerLayout->addWidget(titleLabel);
-		headerLayout->addWidget(subtitleLabel);
+		sidebarLayout->addWidget(categoryList);
+
+		// Add categories to sidebar
+		QStringList categories = {
+			obs_module_text("WindowSettingsGeneralGroup"),
+			"Toolbar Settings",
+			obs_module_text("WindowSettingsPluginManagementGroup"),
+			obs_module_text("WindowSettingsHotkeysGroup"),
+			obs_module_text("WindowSettingsDockConfigGroup")
+		};
+
+		for (const QString &category : categories) {
+			categoryList->addItem(category);
+		}
+		categoryList->setCurrentRow(0);
+
+		// Right content area
+		// Note: No scroll area needed with stacked widget approach
 		
-		contentLayout->addWidget(headerSection);
-		contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+		// Stack widget to hold different category pages
+		QStackedWidget *stackedWidget = new QStackedWidget();
+		stackedWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+		stackedWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
 		obs_properties_t *props = obs_properties_create();
 
-		// General Settings Group
-		QGroupBox *generalGroup =
-			StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsGeneralGroup"), "info");
+		// Create individual category pages
+		
+		// 1. General Settings Page
+		QWidget *generalPage = new QWidget();
+		QVBoxLayout *generalPageLayout = new QVBoxLayout(generalPage);
+		generalPageLayout->setContentsMargins(0, 0, 0, 0);
+		generalPageLayout->setSpacing(0);
+		
+		// Create scrollable container with dialog box styling
+		QScrollArea *generalScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+		generalScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+		generalScrollArea->setStyleSheet(generalScrollArea->styleSheet() + QString(
+			"QScrollArea {"
+			"    background-color: %1;"
+			"    border: none;"
+			"    border-radius: %2px;"
+			"}"
+			"QScrollArea > QWidget > QWidget {"
+			"    background: transparent;"
+			"}"
+		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
+		 .arg(StreamUP::UIStyles::Sizes::RADIUS_DOCK));
+		
+		// Create content container with dialog box background
+		QWidget *generalContentContainer = new QWidget();
+		generalContentContainer->setStyleSheet(QString(
+			"QWidget {"
+			"    background: transparent;"
+			"}"
+		));
+		
+		QVBoxLayout *generalContentLayout = new QVBoxLayout(generalContentContainer);
+		generalContentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
+							 StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
+		generalContentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
 
-		QVBoxLayout *generalLayout = new QVBoxLayout(generalGroup);
+		// Remove the GroupBox wrapper - settings go directly in the content container
+		QWidget *generalSettingsWidget = new QWidget();
+
+		QVBoxLayout *generalLayout = new QVBoxLayout(generalSettingsWidget);
 		generalLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
 		// Run at startup setting
@@ -459,12 +555,50 @@ void ShowSettingsDialog()
 		cphLayout->addWidget(cphIntegrationSwitch);
 		generalLayout->addLayout(cphLayout);
 
-		contentLayout->addWidget(generalGroup);
+		generalContentLayout->addWidget(generalSettingsWidget);
+		generalContentLayout->addStretch();
+		
+		generalScrollArea->setWidget(generalContentContainer);
+		generalPageLayout->addWidget(generalScrollArea);
+		stackedWidget->addWidget(generalPage);
 
-		// Toolbar Settings Group
-		QGroupBox *toolbarGroup = StreamUP::UIStyles::CreateStyledGroupBox("Toolbar Settings", "info");
+		// 2. Toolbar Settings Page
+		QWidget *toolbarPage = new QWidget();
+		QVBoxLayout *toolbarPageLayout = new QVBoxLayout(toolbarPage);
+		toolbarPageLayout->setContentsMargins(0, 0, 0, 0);
+		toolbarPageLayout->setSpacing(0);
+		
+		// Create scrollable container with dialog box styling
+		QScrollArea *toolbarScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+		toolbarScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+		toolbarScrollArea->setStyleSheet(toolbarScrollArea->styleSheet() + QString(
+			"QScrollArea {"
+			"    background-color: %1;"
+			"    border: none;"
+			"    border-radius: %2px;"
+			"}"
+			"QScrollArea > QWidget > QWidget {"
+			"    background: transparent;"
+			"}"
+		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
+		 .arg(StreamUP::UIStyles::Sizes::RADIUS_DOCK));
+		
+		// Create content container with dialog box background
+		QWidget *toolbarContentContainer = new QWidget();
+		toolbarContentContainer->setStyleSheet(QString(
+			"QWidget {"
+			"    background: transparent;"
+			"}"
+		));
+		
+		QVBoxLayout *toolbarContentLayout = new QVBoxLayout(toolbarContentContainer);
+		toolbarContentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
+							 StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
+		toolbarContentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
 
-		QVBoxLayout *toolbarLayout = new QVBoxLayout(toolbarGroup);
+		QWidget *toolbarSettingsWidget = new QWidget();
+
+		QVBoxLayout *toolbarLayout = new QVBoxLayout(toolbarSettingsWidget);
 		toolbarLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
 		// Show toolbar setting
@@ -547,25 +681,58 @@ void ShowSettingsDialog()
 		toolbarPositionLayout->addWidget(positionComboBox);
 		toolbarLayout->addLayout(toolbarPositionLayout);
 
-		contentLayout->addWidget(toolbarGroup);
+		toolbarContentLayout->addWidget(toolbarSettingsWidget);
+		toolbarContentLayout->addStretch();
+		
+		toolbarScrollArea->setWidget(toolbarContentContainer);
+		toolbarPageLayout->addWidget(toolbarScrollArea);
+		stackedWidget->addWidget(toolbarPage);
 
-		// Plugin Management Group
-		QGroupBox *pluginGroup =
-			StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsPluginManagementGroup"), "info");
+		// 3. Plugin Management Page
+		QWidget *pluginPage = new QWidget();
+		QVBoxLayout *pluginPageLayout = new QVBoxLayout(pluginPage);
+		pluginPageLayout->setContentsMargins(0, 0, 0, 0);
+		pluginPageLayout->setSpacing(0);
+		
+		// Create scrollable container with dialog box styling
+		QScrollArea *pluginScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+		pluginScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+		pluginScrollArea->setStyleSheet(pluginScrollArea->styleSheet() + QString(
+			"QScrollArea {"
+			"    background-color: %1;"
+			"    border: none;"
+			"    border-radius: %2px;"
+			"}"
+			"QScrollArea > QWidget > QWidget {"
+			"    background: transparent;"
+			"}"
+		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
+		 .arg(StreamUP::UIStyles::Sizes::RADIUS_DOCK));
+		
+		// Create content container with dialog box background
+		QWidget *pluginContentContainer = new QWidget();
+		pluginContentContainer->setStyleSheet(QString(
+			"QWidget {"
+			"    background: transparent;"
+			"}"
+		));
+		
+		QVBoxLayout *pluginContentLayout = new QVBoxLayout(pluginContentContainer);
+		pluginContentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
+							StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
+		pluginContentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
 
-		QVBoxLayout *pluginLayout = new QVBoxLayout(pluginGroup);
+		QWidget *pluginSettingsWidget = new QWidget();
+
+		QVBoxLayout *pluginLayout = new QVBoxLayout(pluginSettingsWidget);
 		pluginLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
 		QPushButton *pluginButton =
 			StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsViewInstalledPlugins"), "info");
 
-		// Connect plugin button to show plugins inline  
-		QObject::connect(pluginButton, &QPushButton::clicked, [scrollArea, contentWidget]() {
-			// Create a simple components-like structure for compatibility
-			StreamUP::UIStyles::StandardDialogComponents components;
-			components.scrollArea = scrollArea;
-			// Note: Sub-navigation will be simplified without back button functionality
-			StreamUP::SettingsManager::ShowInstalledPluginsInline(components); 
+		// Connect plugin button to open plugins dialog
+		QObject::connect(pluginButton, &QPushButton::clicked, []() {
+			StreamUP::SettingsManager::ShowInstalledPluginsPage(nullptr);
 		});
 
 		QHBoxLayout *pluginButtonLayout = new QHBoxLayout();
@@ -574,79 +741,394 @@ void ShowSettingsDialog()
 		pluginButtonLayout->addStretch();
 		pluginLayout->addLayout(pluginButtonLayout);
 
-		contentLayout->addWidget(pluginGroup);
+		pluginContentLayout->addWidget(pluginSettingsWidget);
+		pluginContentLayout->addStretch();
+		
+		pluginScrollArea->setWidget(pluginContentContainer);
+		pluginPageLayout->addWidget(pluginScrollArea);
+		stackedWidget->addWidget(pluginPage);
 
-		// Hotkeys Group
-		QGroupBox *hotkeysGroup =
-			StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsHotkeysGroup"), "info");
+		// 4. Hotkeys Page - embed the full hotkeys UI directly
+		QWidget *hotkeysPage = new QWidget();
+		QVBoxLayout *hotkeysPageLayout = new QVBoxLayout(hotkeysPage);
+		hotkeysPageLayout->setContentsMargins(0, 0, 0, 0);
+		hotkeysPageLayout->setSpacing(0);
+		
+		// Create scrollable container with dialog box styling
+		QScrollArea *hotkeysScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+		hotkeysScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+		hotkeysScrollArea->setStyleSheet(hotkeysScrollArea->styleSheet() + QString(
+			"QScrollArea {"
+			"    background-color: %1;"
+			"    border: none;"
+			"    border-radius: %2px;"
+			"}"
+			"QScrollArea > QWidget > QWidget {"
+			"    background: transparent;"
+			"}"
+		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
+		 .arg(StreamUP::UIStyles::Sizes::RADIUS_DOCK));
+		
+		// Create content container with dialog box background
+		QWidget *hotkeysContentContainer = new QWidget();
+		hotkeysContentContainer->setStyleSheet(QString(
+			"QWidget {"
+			"    background: transparent;"
+			"}"
+		));
+		
+		QVBoxLayout *hotkeysMainLayout = new QVBoxLayout(hotkeysContentContainer);
+		hotkeysMainLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
+						      StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
+		hotkeysMainLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+		
+		// Add hotkeys content directly
+		QWidget *hotkeysContentWidget = new QWidget();
+		QVBoxLayout *hotkeysContentLayout = new QVBoxLayout(hotkeysContentWidget);
+		hotkeysContentLayout->setContentsMargins(0, 0, 0, 0);
+		hotkeysContentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
 
-		QVBoxLayout *hotkeysLayout = new QVBoxLayout(hotkeysGroup);
-		hotkeysLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+		// Define hotkey information structure
+		struct HotkeyInfo {
+			QString name;
+			QString description;
+			QString obsHotkeyName;
+		};
+		
+		// Source Locking Hotkeys Section
+		QGroupBox *lockingGroup = StreamUP::UIStyles::CreateStyledGroupBox("Source Locking", "info");
+		QVBoxLayout *lockingLayout = new QVBoxLayout(lockingGroup);
+		lockingLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+		
+		std::vector<HotkeyInfo> lockingHotkeys = {
+			{obs_module_text("HotkeyLockAllSources"), obs_module_text("HotkeyLockAllSourcesDesc"), "streamup_lock_all_sources"},
+			{obs_module_text("HotkeyLockCurrentSources"), obs_module_text("HotkeyLockCurrentSourcesDesc"), "streamup_lock_current_sources"}
+		};
+		
+		// Refresh Operations Section
+		QGroupBox *refreshGroup = StreamUP::UIStyles::CreateStyledGroupBox("Refresh Operations", "info");
+		QVBoxLayout *refreshLayout = new QVBoxLayout(refreshGroup);
+		refreshLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+		
+		std::vector<HotkeyInfo> refreshHotkeys = {
+			{obs_module_text("HotkeyRefreshBrowserSources"), obs_module_text("HotkeyRefreshBrowserSourcesDesc"), "streamup_refresh_browser_sources"},
+			{obs_module_text("HotkeyRefreshAudioMonitoring"), obs_module_text("HotkeyRefreshAudioMonitoringDesc"), "streamup_refresh_audio_monitoring"}
+		};
+		
+		// Source Interaction Section
+		QGroupBox *interactionGroup = StreamUP::UIStyles::CreateStyledGroupBox("Source Interaction", "info");
+		QVBoxLayout *interactionLayout = new QVBoxLayout(interactionGroup);
+		interactionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+		
+		std::vector<HotkeyInfo> interactionHotkeys = {
+			{obs_module_text("HotkeyOpenSourceProperties"), obs_module_text("HotkeyOpenSourcePropertiesDesc"), "streamup_open_source_properties"},
+			{obs_module_text("HotkeyOpenSourceFilters"), obs_module_text("HotkeyOpenSourceFiltersDesc"), "streamup_open_source_filters"},
+			{obs_module_text("HotkeyOpenSourceInteract"), obs_module_text("HotkeyOpenSourceInteractDesc"), "streamup_open_source_interact"},
+			{obs_module_text("HotkeyOpenSceneFilters"), obs_module_text("HotkeyOpenSceneFiltersDesc"), "streamup_open_scene_filters"}
+		};
+		
+		// Video Capture Device Section
+		QGroupBox *videoCaptureGroup = StreamUP::UIStyles::CreateStyledGroupBox("Video Capture Devices", "info");
+		QVBoxLayout *videoCaptureLayout = new QVBoxLayout(videoCaptureGroup);
+		videoCaptureLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+		
+		std::vector<HotkeyInfo> videoCaptureHotkeys = {
+			{obs_module_text("HotkeyActivateVideoCaptureDevices"), obs_module_text("HotkeyActivateVideoCaptureDevicesDesc"), "streamup_activate_video_capture_devices"},
+			{obs_module_text("HotkeyDeactivateVideoCaptureDevices"), obs_module_text("HotkeyDeactivateVideoCaptureDevicesDesc"), "streamup_deactivate_video_capture_devices"},
+			{obs_module_text("HotkeyRefreshVideoCaptureDevices"), obs_module_text("HotkeyRefreshVideoCaptureDevicesDesc"), "streamup_refresh_video_capture_devices"}
+		};
+		
+		// Helper function to build hotkey rows for each section
+		auto buildHotkeySection = [](const std::vector<HotkeyInfo>& hotkeys, QVBoxLayout* parentLayout) {
+			QVBoxLayout *sectionLayout = new QVBoxLayout();
+			sectionLayout->setSpacing(0);
+			sectionLayout->setContentsMargins(0, 0, 0, 0);
+			
+			for (int i = 0; i < hotkeys.size(); ++i) {
+				const auto &hotkey = hotkeys[i];
+				
+				QWidget *hotkeyRow = new QWidget();
+				hotkeyRow->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
+				
+				QHBoxLayout *hotkeyRowLayout = new QHBoxLayout(hotkeyRow);
+				hotkeyRowLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3, 0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3);
+				hotkeyRowLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+				
+				// Text section
+				QVBoxLayout *textLayout = new QVBoxLayout();
+				textLayout->setSpacing(2);
+				textLayout->setContentsMargins(0, 0, 0, 0);
+				
+				QLabel *nameLabel = new QLabel(hotkey.name);
+				nameLabel->setStyleSheet(QString("QLabel { color: %1; font-size: %2px; font-weight: bold; background: transparent; }")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+				
+				QLabel *descLabel = new QLabel(hotkey.description);
+				descLabel->setStyleSheet(QString("QLabel { color: %1; font-size: %2px; background: transparent; }")
+							.arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+				descLabel->setWordWrap(true);
+				
+				textLayout->addWidget(nameLabel);
+				textLayout->addWidget(descLabel);
+				
+				QWidget *textWrapper = new QWidget();
+				QVBoxLayout *wrapperLayout = new QVBoxLayout(textWrapper);
+				wrapperLayout->setContentsMargins(0, 0, 0, 0);
+				wrapperLayout->addStretch();
+				wrapperLayout->addLayout(textLayout);
+				wrapperLayout->addStretch();
+				
+				hotkeyRowLayout->addWidget(textWrapper, 1);
+				
+				// Hotkey configuration widget
+				StreamUP::UI::HotkeyWidget *hotkeyWidget = new StreamUP::UI::HotkeyWidget(hotkey.obsHotkeyName, hotkeyRow);
+				
+				// Load current hotkey binding
+				obs_data_array_t *currentBinding = StreamUP::HotkeyManager::GetHotkeyBinding(hotkey.obsHotkeyName.toUtf8().constData());
+				if (currentBinding) {
+					hotkeyWidget->SetHotkey(currentBinding);
+					obs_data_array_release(currentBinding);
+				}
+				
+				// Connect to save changes
+				QObject::connect(hotkeyWidget, &StreamUP::UI::HotkeyWidget::HotkeyChanged, 
+					[](const QString &hotkeyName, obs_data_array_t *hotkeyData) {
+						if (hotkeyData) {
+							StreamUP::HotkeyManager::SetHotkeyBinding(hotkeyName.toUtf8().constData(), hotkeyData);
+						} else {
+							obs_data_array_t *emptyArray = obs_data_array_create();
+							StreamUP::HotkeyManager::SetHotkeyBinding(hotkeyName.toUtf8().constData(), emptyArray);
+							obs_data_array_release(emptyArray);
+						}
+					});
+				
+				hotkeyRowLayout->addWidget(hotkeyWidget);
+				sectionLayout->addWidget(hotkeyRow);
+				
+				// Add separator line between hotkeys (but not after the last one)
+				if (i < hotkeys.size() - 1) {
+					QFrame *separator = new QFrame();
+					separator->setFrameShape(QFrame::HLine);
+					separator->setFrameShadow(QFrame::Plain);
+					separator->setStyleSheet("QFrame { color: rgba(113, 128, 150, 0.3); background-color: rgba(113, 128, 150, 0.3); border: none; margin: 0px; max-height: 1px; }");
+					sectionLayout->addWidget(separator);
+				}
+			}
+			
+			parentLayout->addLayout(sectionLayout);
+		};
+		
+		// Build each hotkey section
+		buildHotkeySection(lockingHotkeys, lockingLayout);
+		buildHotkeySection(refreshHotkeys, refreshLayout);
+		buildHotkeySection(interactionHotkeys, interactionLayout);
+		buildHotkeySection(videoCaptureHotkeys, videoCaptureLayout);
+		
+		// Add all sections to main layout
+		hotkeysContentLayout->addWidget(lockingGroup);
+		hotkeysContentLayout->addWidget(refreshGroup);
+		hotkeysContentLayout->addWidget(interactionGroup);
+		hotkeysContentLayout->addWidget(videoCaptureGroup);
+		
+		hotkeysMainLayout->addWidget(hotkeysContentWidget);
+		hotkeysMainLayout->addStretch();
+		
+		hotkeysScrollArea->setWidget(hotkeysContentContainer);
+		hotkeysPageLayout->addWidget(hotkeysScrollArea);
+		stackedWidget->addWidget(hotkeysPage);
 
-		QPushButton *hotkeysButton =
-			StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsManageHotkeys"), "info");
+		// 5. Dock Configuration Page - embed the full dock config UI directly
+		QWidget *dockPage = new QWidget();
+		QVBoxLayout *dockPageLayout = new QVBoxLayout(dockPage);
+		dockPageLayout->setContentsMargins(0, 0, 0, 0);
+		dockPageLayout->setSpacing(0);
+		
+		// Create scrollable container with dialog box styling
+		QScrollArea *dockScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+		dockScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+		dockScrollArea->setStyleSheet(dockScrollArea->styleSheet() + QString(
+			"QScrollArea {"
+			"    background-color: %1;"
+			"    border: none;"
+			"    border-radius: %2px;"
+			"}"
+			"QScrollArea > QWidget > QWidget {"
+			"    background: transparent;"
+			"}"
+		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
+		 .arg(StreamUP::UIStyles::Sizes::RADIUS_DOCK));
+		
+		// Create content container with dialog box background
+		QWidget *dockContentContainer = new QWidget();
+		dockContentContainer->setStyleSheet(QString(
+			"QWidget {"
+			"    background: transparent;"
+			"}"
+		));
+		
+		QVBoxLayout *dockMainLayout = new QVBoxLayout(dockContentContainer);
+		dockMainLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
+						   StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
+		dockMainLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+		
+		// Add dock config content directly
+		QWidget *dockContentWidget = new QWidget();
+		QVBoxLayout *dockContentLayout = new QVBoxLayout(dockContentWidget);
+		dockContentLayout->setContentsMargins(0, 0, 0, 0);
+		dockContentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
 
-		// Connect hotkeys button to show hotkeys inline
-		QObject::connect(hotkeysButton, &QPushButton::clicked, [scrollArea, contentWidget]() {
-			// Create a simple components-like structure for compatibility
-			StreamUP::UIStyles::StandardDialogComponents components;
-			components.scrollArea = scrollArea;
-			StreamUP::SettingsManager::ShowHotkeysInline(components); 
+		// Create GroupBox for dock tools using UI styles
+		QGroupBox *toolsGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsDockToolsGroupTitle"), "info");
+		
+		QVBoxLayout *toolsGroupLayout = new QVBoxLayout(toolsGroup);
+		toolsGroupLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0, StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
+		toolsGroupLayout->setSpacing(0);
+		
+		// Get current dock settings
+		DockToolSettings dockSettings = GetDockToolSettings();
+		
+		// Define tool information structure
+		struct ToolInfo {
+			QString name;
+			QString description;
+			bool *settingPtr;
+			int toolIndex;
+		};
+		
+		// List of all dock tools with pointers to their settings
+		std::vector<ToolInfo> dockTools = {
+			{obs_module_text("DockToolLockAllSources"), obs_module_text("DockToolLockAllSourcesDesc"), &dockSettings.showLockAllSources, 0},
+			{obs_module_text("DockToolLockCurrentSources"), obs_module_text("DockToolLockCurrentSourcesDesc"), &dockSettings.showLockCurrentSources, 1},
+			{obs_module_text("DockToolRefreshBrowserSources"), obs_module_text("DockToolRefreshBrowserSourcesDesc"), &dockSettings.showRefreshBrowserSources, 2},
+			{obs_module_text("DockToolRefreshAudioMonitoring"), obs_module_text("DockToolRefreshAudioMonitoringDesc"), &dockSettings.showRefreshAudioMonitoring, 3},
+			{obs_module_text("DockToolVideoCaptureOptions"), obs_module_text("DockToolVideoCaptureOptionsDesc"), &dockSettings.showVideoCaptureOptions, 4}
+		};
+		
+		// Create tool rows
+		for (int i = 0; i < dockTools.size(); ++i) {
+			const auto &tool = dockTools[i];
+			
+			QWidget *toolRow = new QWidget();
+			toolRow->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
+			
+			QHBoxLayout *toolRowLayout = new QHBoxLayout(toolRow);
+			toolRowLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3, 0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3);
+			toolRowLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+			
+			// Text section
+			QVBoxLayout *textLayout = new QVBoxLayout();
+			textLayout->setSpacing(2);
+			textLayout->setContentsMargins(0, 0, 0, 0);
+			
+			QLabel *nameLabel = new QLabel(tool.name);
+			nameLabel->setStyleSheet(QString("QLabel { color: %1; font-size: %2px; font-weight: bold; background: transparent; }")
+						.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+			
+			QLabel *descLabel = new QLabel(tool.description);
+			descLabel->setStyleSheet(QString("QLabel { color: %1; font-size: %2px; background: transparent; }")
+						.arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+			descLabel->setWordWrap(true);
+			
+			textLayout->addWidget(nameLabel);
+			textLayout->addWidget(descLabel);
+			
+			QWidget *textWrapper = new QWidget();
+			QVBoxLayout *wrapperLayout = new QVBoxLayout(textWrapper);
+			wrapperLayout->setContentsMargins(0, 0, 0, 0);
+			wrapperLayout->addStretch();
+			wrapperLayout->addLayout(textLayout);
+			wrapperLayout->addStretch();
+			
+			toolRowLayout->addWidget(textWrapper, 1);
+			
+			// Switch section
+			DockToolSettings freshSettings = GetDockToolSettings();
+			bool currentValue = false;
+			
+			// Get the current value based on tool index
+			switch (tool.toolIndex) {
+				case 0: currentValue = freshSettings.showLockAllSources; break;
+				case 1: currentValue = freshSettings.showLockCurrentSources; break;
+				case 2: currentValue = freshSettings.showRefreshBrowserSources; break;
+				case 3: currentValue = freshSettings.showRefreshAudioMonitoring; break;
+				case 4: currentValue = freshSettings.showVideoCaptureOptions; break;
+			}
+			
+			StreamUP::UIStyles::SwitchButton *toolSwitch = StreamUP::UIStyles::CreateStyledSwitch("", currentValue);
+			
+			// Update settings when switch changes
+			QObject::connect(toolSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [toolIndex = tool.toolIndex](bool checked) {
+				DockToolSettings settings = GetDockToolSettings();
+				
+				switch (toolIndex) {
+					case 0: settings.showLockAllSources = checked; break;
+					case 1: settings.showLockCurrentSources = checked; break;
+					case 2: settings.showRefreshBrowserSources = checked; break;
+					case 3: settings.showRefreshAudioMonitoring = checked; break;
+					case 4: settings.showVideoCaptureOptions = checked; break;
+				}
+				
+				UpdateDockToolSettings(settings);
+			});
+			
+			toolRowLayout->addWidget(toolSwitch);
+			toolsGroupLayout->addWidget(toolRow);
+			
+			// Add separator line between tools (but not after the last one)
+			if (i < dockTools.size() - 1) {
+				QFrame *separator = new QFrame();
+				separator->setFrameShape(QFrame::HLine);
+				separator->setFrameShadow(QFrame::Plain);
+				separator->setStyleSheet("QFrame { color: rgba(113, 128, 150, 0.3); background-color: rgba(113, 128, 150, 0.3); border: none; margin: 0px; max-height: 1px; }");
+				toolsGroupLayout->addWidget(separator);
+			}
+		}
+		
+		dockContentLayout->addWidget(toolsGroup);
+		
+		dockMainLayout->addWidget(dockContentWidget);
+		dockMainLayout->addStretch();
+		
+		dockScrollArea->setWidget(dockContentContainer);
+		dockPageLayout->addWidget(dockScrollArea);
+		stackedWidget->addWidget(dockPage);
+		
+		// Connect category selection to page switching
+		QObject::connect(categoryList, &QListWidget::currentRowChanged, [stackedWidget](int index) {
+			stackedWidget->setCurrentIndex(index);
 		});
 
-		QHBoxLayout *hotkeysButtonLayout = new QHBoxLayout();
-		hotkeysButtonLayout->addStretch();
-		hotkeysButtonLayout->addWidget(hotkeysButton);
-		hotkeysButtonLayout->addStretch();
-		hotkeysLayout->addLayout(hotkeysButtonLayout);
+		// Set up the main layout
+		contentLayout->addWidget(sidebarContainer);
+		contentLayout->addWidget(stackedWidget, 1); // Give content area all the extra space
 
-		contentLayout->addWidget(hotkeysGroup);
+		QWidget *mainWidget = new QWidget();
+		mainWidget->setLayout(contentLayout);
+		mainLayout->addWidget(mainWidget);
 
-		// Dock Configuration Group
-		QGroupBox *dockConfigGroup =
-			StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsDockConfigGroup"), "info");
+		// Bottom button area with consistent background
+		QWidget *buttonWidget = new QWidget();
+		buttonWidget->setStyleSheet(QString("background: %1; padding: %2px;")
+					    .arg(StreamUP::UIStyles::Colors::BG_DARKEST)
+					    .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
+		QHBoxLayout *buttonLayout = new QHBoxLayout(buttonWidget);
+		buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
+						 StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+						 StreamUP::UIStyles::Sizes::PADDING_XL, 
+						 StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
 
-		QVBoxLayout *dockConfigLayout = new QVBoxLayout(dockConfigGroup);
-		dockConfigLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-
-		QPushButton *dockConfigButton =
-			StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsManageDockConfig"), "info");
-
-		// Connect dock config button to show dock config inline
-		QObject::connect(dockConfigButton, &QPushButton::clicked, [scrollArea, contentWidget]() {
-			// Create a simple components-like structure for compatibility
-			StreamUP::UIStyles::StandardDialogComponents components;
-			components.scrollArea = scrollArea;
-			StreamUP::SettingsManager::ShowDockConfigInline(components); 
-		});
-
-		QHBoxLayout *dockConfigButtonLayout = new QHBoxLayout();
-		dockConfigButtonLayout->addStretch();
-		dockConfigButtonLayout->addWidget(dockConfigButton);
-		dockConfigButtonLayout->addStretch();
-		dockConfigLayout->addLayout(dockConfigButtonLayout);
-
-		contentLayout->addWidget(dockConfigGroup);
-		
-		// Add close button at the bottom of the content area (inside scroll)
-		contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
-		
-		// Modern button section inside scrollable content
-		QHBoxLayout* buttonLayout = new QHBoxLayout();
-		buttonLayout->setContentsMargins(0, 0, 0, 0);
-		
-		QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Close"), "neutral");
+		QPushButton *closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Close"), "neutral");
 		QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
 
 		buttonLayout->addStretch();
 		buttonLayout->addWidget(closeButton);
 		buttonLayout->addStretch();
-		
-		contentLayout->addLayout(buttonLayout);
-		contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
-		scrollArea->setWidget(contentWidget);
-		mainLayout->addWidget(scrollArea);
+		mainLayout->addWidget(buttonWidget);
 
 		QObject::connect(dialog, &QDialog::finished, [=](int) {
 			obs_data_release(settings);
@@ -1362,7 +1844,7 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 	toolsGroupLayout->setSpacing(0);         // No spacing since we handle it in the widget padding
 
 	// Get current dock settings
-	DockToolSettings currentSettings = GetDockToolSettings();
+	DockToolSettings currentDockSettings = GetDockToolSettings();
 
 	// Define tool information structure
 	struct ToolInfo {
@@ -1375,15 +1857,15 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 	// List of all dock tools with pointers to their settings
 	std::vector<ToolInfo> dockTools = {
 		{obs_module_text("DockToolLockAllSources"), obs_module_text("DockToolLockAllSourcesDesc"),
-		 &currentSettings.showLockAllSources, 0},
+		 &currentDockSettings.showLockAllSources, 0},
 		{obs_module_text("DockToolLockCurrentSources"), obs_module_text("DockToolLockCurrentSourcesDesc"),
-		 &currentSettings.showLockCurrentSources, 1},
+		 &currentDockSettings.showLockCurrentSources, 1},
 		{obs_module_text("DockToolRefreshBrowserSources"), obs_module_text("DockToolRefreshBrowserSourcesDesc"),
-		 &currentSettings.showRefreshBrowserSources, 2},
+		 &currentDockSettings.showRefreshBrowserSources, 2},
 		{obs_module_text("DockToolRefreshAudioMonitoring"), obs_module_text("DockToolRefreshAudioMonitoringDesc"),
-		 &currentSettings.showRefreshAudioMonitoring, 3},
+		 &currentDockSettings.showRefreshAudioMonitoring, 3},
 		{obs_module_text("DockToolVideoCaptureOptions"), obs_module_text("DockToolVideoCaptureOptionsDesc"),
-		 &currentSettings.showVideoCaptureOptions, 4}};
+		 &currentDockSettings.showVideoCaptureOptions, 4}};
 
 	// Create tool rows matching WebSocket/hotkeys UI pattern
 	for (int i = 0; i < dockTools.size(); ++i) {
@@ -1482,12 +1964,12 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 		QTimer::singleShot(0, [toolSwitch, currentValue]() { toolSwitch->setChecked(currentValue); });
 
 		// Update settings immediately when switch changes
-		QObject::connect(toolSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [tool, toolSwitch](bool checked) {
+		QObject::connect(toolSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [toolIndex = tool.toolIndex](bool checked) {
 			// Get current settings from persistent storage
 			DockToolSettings settings = GetDockToolSettings();
 
 			// Update the specific setting based on tool index
-			switch (tool.toolIndex) {
+			switch (toolIndex) {
 			case 0:
 				settings.showLockAllSources = checked;
 				break;
@@ -1504,9 +1986,6 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 				settings.showVideoCaptureOptions = checked;
 				break;
 			}
-
-			// Update the local pointer too for UI consistency
-			*tool.settingPtr = checked;
 
 			// Save the updated settings immediately (this calls NotifyAllDocksSettingsChanged)
 			UpdateDockToolSettings(settings);
@@ -1560,9 +2039,9 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 		}
 	}
 
-	QObject::connect(resetButton, &QPushButton::clicked, [allSwitches, dockTools]() {
+	QObject::connect(resetButton, &QPushButton::clicked, [allSwitches]() {
 		// Show confirmation dialog for reset (matching hotkeys pattern)
-		StreamUP::UIHelpers::ShowDialogOnUIThread([allSwitches, dockTools]() {
+		StreamUP::UIHelpers::ShowDialogOnUIThread([allSwitches]() {
 			QDialog *confirmDialog =
 				StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsResetDockConfigTitle"));
 			confirmDialog->resize(400, 200);
@@ -1586,7 +2065,7 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 				obs_module_text("WindowSettingsResetDockConfigButton"), "error");
 
 			QObject::connect(cancelBtn, &QPushButton::clicked, confirmDialog, &QDialog::close);
-			QObject::connect(resetBtn, &QPushButton::clicked, [confirmDialog, allSwitches, dockTools]() {
+			QObject::connect(resetBtn, &QPushButton::clicked, [confirmDialog, allSwitches]() {
 				// Reset all dock tools to default (visible)
 				DockToolSettings defaultSettings;
 				UpdateDockToolSettings(defaultSettings);
@@ -1596,11 +2075,6 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 					if (switchButton) {
 						switchButton->setChecked(true);
 					}
-				}
-
-				// Update the tool setting pointers
-				for (const auto &tool : dockTools) {
-					*tool.settingPtr = true;
 				}
 
 				confirmDialog->close();

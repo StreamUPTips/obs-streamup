@@ -120,7 +120,7 @@ QString GetGroupBoxStyle(const QString& borderColor, const QString& titleColor) 
      .arg(Sizes::SPACE_10)             // 3. Margin right (10px)
      .arg(Sizes::SPACE_14 + 1)         // 4. Margin top (15px)
      .arg(Sizes::RADIUS_DOCK)          // 5. Border radius (22px)
-     .arg(Colors::BG_PRIMARY)          // 6. Background color
+     .arg(Colors::BG_SECONDARY)        // 6. Background color
      .arg(Colors::TEXT_PRIMARY)        // 7. Title text color
      .arg(Sizes::SPACE_4)              // 8. Title padding vertical (4px)
      .arg(Sizes::SPACE_16)             // 9. Title padding horizontal (16px)
@@ -911,7 +911,7 @@ QString GetComboBoxStyle() {
         "    color: %6;"
         "    outline: none;"
         "}"
-    ).arg(Colors::BG_PRIMARY)         // %1 - background
+    ).arg(Colors::BG_DARKEST)         // %1 - background
      .arg(Sizes::RADIUS_SM)           // %2 - border radius
      .arg(Sizes::SPACE_2)             // %3 - padding/margin
      .arg(Sizes::INPUT_PAD_X_WITH_ICON) // %4 - right padding
