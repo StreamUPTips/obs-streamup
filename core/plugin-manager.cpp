@@ -282,10 +282,6 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
 		
-		// Initial size - will be adjusted after content is added
-		dialog->setMinimumWidth(700);
-		dialog->setMaximumWidth(900);
-		
 		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
 		dialogLayout->setContentsMargins(0, 0, 0, 0);
 		dialogLayout->setSpacing(0);
@@ -506,8 +502,8 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		dialogLayout->addLayout(buttonLayout);
 		dialog->setLayout(dialogLayout);
 		
-		// Apply auto-sizing
-		StreamUP::UIStyles::ApplyAutoSizing(dialog);
+		// Apply auto-sizing with larger defaults for plugin tables
+		StreamUP::UIStyles::ApplyAutoSizing(dialog, 700, 1000, 150, 800);
 	});
 }
 

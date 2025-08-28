@@ -21,6 +21,7 @@
 #include <QMenu>
 #include <QAction>
 #include <QApplication>
+#include <QScreen>
 #include <QClipboard>
 #include <QDesktopServices>
 #include <QUrl>
@@ -557,51 +558,50 @@ void HandleTableCellClick(QTableWidget* table, int row, int column) {
 }
 
 void ApplyAutoSizing(QDialog* dialog, int minWidth, int maxWidth, int minHeight, int maxHeight) {
-    // Set initial size and show
+    // Ensure we have reasonable screen-aware maximum sizes
+    QScreen* screen = QApplication::primaryScreen();
+    if (screen) {
+        QRect screenGeometry = screen->availableGeometry();
+        // Use 80% of screen width/height as safe maximum, but respect passed parameters
+        maxWidth = qMin(maxWidth, static_cast<int>(screenGeometry.width() * 0.8));
+        maxHeight = qMin(maxHeight, static_cast<int>(screenGeometry.height() * 0.8));
+    }
+    
+    // Set minimum constraints first
+    dialog->setMinimumSize(minWidth, minHeight);
+    
+    // Calculate proper size before showing
+    dialog->adjustSize();
+    QSize sizeHint = dialog->sizeHint();
+    
+    // Calculate appropriate size based on content with padding
+    int width = qMax(minWidth, qMin(sizeHint.width() + 40, maxWidth));
+    int height = qMax(minHeight, qMin(sizeHint.height() + 20, maxHeight));
+    
+    // Set the calculated size before showing
+    dialog->resize(width, height);
+    
+    // Set maximum constraints after sizing but before showing
+    dialog->setMaximumSize(maxWidth, maxHeight);
+    
+    // Now show the dialog
     dialog->show();
     
-    // Calculate proper size after layout is complete
-    QTimer::singleShot(10, [dialog, maxWidth, maxHeight, minWidth, minHeight]() {
-        // Force layout calculation multiple times to ensure accurate sizing
-        dialog->adjustSize();
-        QSize sizeHint = dialog->sizeHint();
-        
-        // Calculate appropriate size based on content with minimal padding
-        int width = qMax(minWidth, qMin(sizeHint.width() + 40, maxWidth));
-        int height = qMax(minHeight, qMin(sizeHint.height() + 20, maxHeight));
-        
-        dialog->resize(width, height);
-        dialog->setMaximumSize(maxWidth, maxHeight);
-        dialog->setMinimumSize(minWidth, minHeight);
-        
-        // Center the dialog after resizing
-        StreamUP::UIHelpers::CenterDialog(dialog);
-    });
+    // Center the dialog after showing
+    StreamUP::UIHelpers::CenterDialog(dialog);
 }
 
 void ApplyContentBasedSizing(QDialog* dialog) {
     // For dialogs that should size exactly to their content
+    // Force layout calculation first
+    dialog->layout()->activate();
+    dialog->adjustSize();
+    
+    // Show the dialog after sizing
     dialog->show();
     
-    QTimer::singleShot(50, [dialog]() {
-        // Force layout calculation first
-        dialog->layout()->activate();
-        dialog->adjustSize();
-        QSize sizeHint = dialog->sizeHint();
-        
-        // Calculate size based on content with reasonable constraints
-        int width = qMax(650, qMin(sizeHint.width() + 60, 1000));
-        int height = qMax(400, qMin(sizeHint.height() + 40, 800));
-        
-        dialog->resize(width, height);
-        
-        // Set constraints but allow some flexibility
-        dialog->setMinimumSize(650, 400);
-        dialog->setMaximumSize(1000, 800);
-        
-        // Center the dialog after resizing
-        StreamUP::UIHelpers::CenterDialog(dialog);
-    });
+    // Center the dialog after showing
+    StreamUP::UIHelpers::CenterDialog(dialog);
 }
 
 void ApplyScrollAreaContentSizing(QScrollArea* scrollArea, int maxHeight) {
