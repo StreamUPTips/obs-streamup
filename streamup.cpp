@@ -886,6 +886,26 @@ void ApplyToolbarPosition()
 			// Update position-aware theming after repositioning
 			globalToolbar->updatePositionAwareTheme();
 			
+			// Force a comprehensive style refresh to ensure position-aware styles are applied immediately
+			blog(LOG_DEBUG, "[StreamUP] Forcing style refresh after toolbar position change");
+			
+			// Refresh the main window and all its children to pick up the new position-aware styling
+			main_window->style()->unpolish(main_window);
+			main_window->style()->polish(main_window);
+			
+			// Force refresh of all child widgets (including toolbars)
+			QList<QWidget*> allChildWidgets = main_window->findChildren<QWidget*>();
+			for (QWidget* child : allChildWidgets) {
+				if (child) {
+					child->style()->unpolish(child);
+					child->style()->polish(child);
+				}
+			}
+			
+			// Update and repaint the main window
+			main_window->update();
+			main_window->repaint();
+			
 			// Ensure toolbar visibility is maintained after repositioning
 			ApplyToolbarVisibility();
 		}
