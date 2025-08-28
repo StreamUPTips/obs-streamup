@@ -33,16 +33,46 @@ void CreatePatchNotesDialog()
     }
 
     UIHelpers::ShowDialogOnUIThread([]() {
-        // Create standardized dialog using modern template system
+        QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP - Patch Notes");
+
+        // Start with compact size - will expand based on content
+        dialog->resize(700, 700);
+
+        QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
+        mainLayout->setContentsMargins(0, 0, 0, 0);
+        mainLayout->setSpacing(0);
+
+        // Modern unified content area with scroll - everything inside
+        QScrollArea *scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+
+        QWidget *contentWidget = new QWidget();
+        contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+        QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
+        contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
+                          StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
+        contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+
+        // Modern header inside scrollable area
+        QWidget *headerSection = new QWidget();
+        QVBoxLayout *headerLayout = new QVBoxLayout(headerSection);
+        headerLayout->setContentsMargins(0, 0, 0, 0);
+        headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+
+        // Title with modern styling
+        QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle("📋 Patch Notes");
+        titleLabel->setAlignment(Qt::AlignCenter);
+
+        // Description with modern styling
         QString versionText = QString("Latest updates and improvements in v%1").arg(PROJECT_VERSION);
-        auto components = StreamUP::UIStyles::CreateStandardDialog(
-            "StreamUP - Patch Notes",
-            "📋 Patch Notes", 
-            versionText
-        );
+        QLabel *subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(versionText);
+        subtitleLabel->setAlignment(Qt::AlignCenter);
+
+        headerLayout->addWidget(titleLabel);
+        headerLayout->addWidget(subtitleLabel);
         
-        components.dialog->setModal(false);
-        
+        contentLayout->addWidget(headerSection);
+        contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+
         // Load patch notes content from splash screen module
         std::string patchNotesContent = StreamUP::SplashScreen::LoadLocalPatchNotes();
         QString patchNotesText = QString::fromStdString(patchNotesContent);
@@ -74,18 +104,18 @@ void CreatePatchNotesDialog()
         // Create main patch notes group box
         QGroupBox* patchNotesGroup = StreamUP::UIStyles::CreateStyledGroupBox("📋 Latest Updates", "success");
         QVBoxLayout* patchNotesLayout = new QVBoxLayout(patchNotesGroup);
-        patchNotesLayout->setContentsMargins(0, 0, 0, 0);
+        patchNotesLayout->setContentsMargins(8, 8, 8, 8);
         
         // Add patch notes content to group box
         QLabel* patchNotesLabel = UIHelpers::CreateRichTextLabel(patchNotesText, false, true, Qt::Alignment(), true);
         patchNotesLayout->addWidget(patchNotesLabel);
         
-        components.contentLayout->addWidget(patchNotesGroup);
+        contentLayout->addWidget(patchNotesGroup);
         
         // Add version and build information section
         QGroupBox* versionGroup = StreamUP::UIStyles::CreateStyledGroupBox("ℹ️ Version Information", "warning");
         QVBoxLayout* versionLayout = new QVBoxLayout(versionGroup);
-        versionLayout->setContentsMargins(0, 0, 0, 0);
+        versionLayout->setContentsMargins(8, 8, 8, 8);
         
         QString versionInfo = QString(R"(
 <div style="color: %1; line-height: 1.5; font-size: 13px;">
@@ -101,12 +131,12 @@ void CreatePatchNotesDialog()
         
         QLabel* versionLabel = UIHelpers::CreateRichTextLabel(versionInfo, false, true, Qt::Alignment(), true);
         versionLayout->addWidget(versionLabel);
-        components.contentLayout->addWidget(versionGroup);
+        contentLayout->addWidget(versionGroup);
         
         // Create links section with modern card styling
         QGroupBox* linksGroup = StreamUP::UIStyles::CreateStyledGroupBox("🔗 Useful Links", "info");
         QVBoxLayout* linksGroupLayout = new QVBoxLayout(linksGroup);
-        linksGroupLayout->setContentsMargins(0, 0, 0, 0);
+        linksGroupLayout->setContentsMargins(8, 8, 8, 8);
         
         // Link buttons with improved layout
         QHBoxLayout* buttonsLayout = new QHBoxLayout();
@@ -138,26 +168,44 @@ void CreatePatchNotesDialog()
         buttonsLayout->addStretch();
         
         linksGroupLayout->addLayout(buttonsLayout);
-        components.contentLayout->addWidget(linksGroup);
+        contentLayout->addWidget(linksGroup);
+
+        // Add stretch to push content to top
+        contentLayout->addStretch();
+
+        // Add close button at the bottom of the content area (inside scroll)
+        contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
         
-        // Setup dialog navigation with close button
-        QDialog* dialog = components.dialog; // Capture dialog pointer safely
-        StreamUP::UIStyles::SetupDialogNavigation(components, [dialog]() {
-            dialog->close();
-        });
+        // Modern button section inside scrollable content
+        QHBoxLayout *buttonLayout = new QHBoxLayout();
+        buttonLayout->setContentsMargins(0, 0, 0, 0);
         
-        // Update main button text
-        components.mainButton->setText("Close");
-        components.mainButton->setDefault(true);
+        QPushButton *closeButton = StreamUP::UIStyles::CreateStyledButton("Close", "neutral");
+        QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
         
-        // Apply modern sizing
-        StreamUP::UIStyles::ApplyConsistentSizing(components.dialog, 720, 1000, 500, 700);
+        buttonLayout->addStretch();
+        buttonLayout->addWidget(closeButton);
+        buttonLayout->addStretch();
+        
+        contentLayout->addLayout(buttonLayout);
+
+        // Set up scroll area
+        scrollArea->setWidget(contentWidget);
+        scrollArea->setWidgetResizable(true);
+        scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+        mainLayout->addWidget(scrollArea);
+        dialog->setLayout(mainLayout);
+
+        // Apply consistent sizing similar to WebSocket window
+        StreamUP::UIStyles::ApplyAutoSizing(dialog, 700, 900, 700, 800);
         
         // Store the dialog reference
-        patchNotesDialog = components.dialog;
+        patchNotesDialog = dialog;
         
-        components.dialog->show();
-        StreamUP::UIHelpers::CenterDialog(components.dialog);
+        // Center the dialog
+        StreamUP::UIHelpers::CenterDialog(dialog);
     });
 }
 
