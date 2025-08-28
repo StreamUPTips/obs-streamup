@@ -369,8 +369,8 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 	QString cphCommand =
 		QString(R"(CPH.ObsSendRaw("CallVendorRequest", "{\"vendorName\":\"streamup\",\"requestType\":\"%1\",\"requestData\":{}}", 0);)")
 			.arg(command);
-	QPushButton *cphBtn = StreamUP::UIStyles::CreateStyledButton("CPH", "info", 28, 70);
-	cphBtn->setFixedSize(70, 28); // Set static size
+	QPushButton *cphBtn = StreamUP::UIStyles::CreateStyledButton("CPH", "info", 28, 85);
+	cphBtn->setFixedSize(85, 28); // Set static size - wider to accommodate "Copied" text
 	cphBtn->setToolTip(obs_module_text("WebSocket.Button.CPH.Tooltip"));
 	QObject::connect(cphBtn, &QPushButton::clicked, [cphBtn, cphCommand]() {
 		QApplication::clipboard()->setText(cphCommand);
