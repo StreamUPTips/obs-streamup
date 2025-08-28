@@ -149,6 +149,10 @@ void UpdateDockToolSettings(const DockToolSettings& dockSettings);
  */
 void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents& components);
 
+/**
+ * Clean up cached settings on plugin shutdown
+ */
+void CleanupSettingsCache();
 
 } // namespace SettingsManager
 } // namespace StreamUP

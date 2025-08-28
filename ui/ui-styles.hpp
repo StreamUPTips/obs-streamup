@@ -245,7 +245,7 @@ void AutoResizeTableColumns(QTableWidget* table);
 void HandleTableCellClick(QTableWidget* table, int row, int column);
 
 // Auto-sizing utilities
-void ApplyAutoSizing(QDialog* dialog, int minWidth = 700, int maxWidth = 900, int minHeight = 150, int maxHeight = 600);
+void ApplyAutoSizing(QDialog* dialog, int minWidth = 700, int maxWidth = 900, int minHeight = 150, int maxHeight = 750);
 void ApplyContentBasedSizing(QDialog* dialog);
 void ApplyScrollAreaContentSizing(QScrollArea* scrollArea, int maxHeight = 300);
 void ApplyDynamicSizing(QDialog* dialog, int minWidth = 500, int maxWidth = 900, int minHeight = 400, int maxHeight = 650);

@@ -989,6 +989,9 @@ void obs_module_unload()
 	
 	// Shutdown MultiDock system
 	StreamUP::MultiDock::MultiDockManager::Shutdown();
+	
+	// Clean up settings cache
+	StreamUP::SettingsManager::CleanupSettingsCache();
 }
 
 MODULE_EXPORT const char *obs_module_description(void)

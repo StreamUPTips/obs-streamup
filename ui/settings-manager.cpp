@@ -42,6 +42,10 @@ namespace SettingsManager {
 // Global settings state
 static bool notificationsMuted = false;
 
+// Cache for settings to avoid repeated file loading
+static obs_data_t* cachedSettings = nullptr;
+static bool settingsLoadLogged = false;
+
 // Helper function to extract domain from URL
 QString ExtractDomain(const QString &url)
 {
@@ -145,6 +149,12 @@ static QPointer<QDialog> settingsDialog;
 
 obs_data_t *LoadSettings()
 {
+	// Return cached settings if available
+	if (cachedSettings) {
+		obs_data_addref(cachedSettings);
+		return cachedSettings;
+	}
+
 	char *configPath = obs_module_config_path("configs.json");
 	obs_data_t *data = obs_data_create_from_json_file(configPath);
 
@@ -179,8 +189,16 @@ obs_data_t *LoadSettings()
 			blog(LOG_WARNING, "[StreamUP] Failed to save default settings to file.");
 		}
 	} else {
-		blog(LOG_INFO, "[StreamUP] Settings loaded successfully from %s", configPath);
+		// Only log success message once
+		if (!settingsLoadLogged) {
+			blog(LOG_INFO, "[StreamUP] Settings loaded successfully from %s", configPath);
+			settingsLoadLogged = true;
+		}
 	}
+
+	// Cache the settings for future use
+	cachedSettings = data;
+	obs_data_addref(cachedSettings);
 
 	bfree(configPath);
 	return data;
@@ -194,6 +212,12 @@ bool SaveSettings(obs_data_t *settings)
 	if (obs_data_save_json(settings, configPath)) {
 		blog(LOG_INFO, "[StreamUP] Settings saved to %s", configPath);
 		success = true;
+		
+		// Invalidate cache so next load picks up the updated settings
+		if (cachedSettings) {
+			obs_data_release(cachedSettings);
+			cachedSettings = nullptr;
+		}
 	} else {
 		blog(LOG_WARNING, "[StreamUP] Failed to save settings to file.");
 	}
@@ -2102,6 +2126,16 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 	components.scrollArea->setWidget(dockConfigWidget);
 
 	// Don't resize dialog when switching to sub-menus to maintain consistent header appearance
+}
+
+void CleanupSettingsCache()
+{
+	// Release cached settings on plugin shutdown
+	if (cachedSettings) {
+		obs_data_release(cachedSettings);
+		cachedSettings = nullptr;
+	}
+	settingsLoadLogged = false;
 }
 
 } // namespace SettingsManager
