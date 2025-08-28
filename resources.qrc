@@ -83,7 +83,6 @@
 		<file>images/misc/obs-theme-4.png</file>
 		
 		<!-- Documentation -->
-		<file>patch-notes.md</file>
 		<file>patch-notes-summary.md</file>
 		<file>plugin-info.md</file>
 		<file>support-info.md</file>
