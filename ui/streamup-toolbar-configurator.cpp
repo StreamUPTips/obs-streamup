@@ -1,0 +1,561 @@
+#include "streamup-toolbar-configurator.hpp"
+#include "settings-manager.hpp"
+#include "ui-styles.hpp"
+#include <QApplication>
+#include <QMimeData>
+#include <QDrag>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QMessageBox>
+#include <QStandardPaths>
+#include <QFileInfo>
+#include <QPixmap>
+#include <QIcon>
+#include <QDateTime>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <obs-frontend-api.h>
+
+namespace StreamUP {
+
+ToolbarConfigurator::ToolbarConfigurator(QWidget *parent)
+    : QDialog(parent)
+{
+    // Register custom types for QVariant
+    qRegisterMetaType<std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem>>();
+    
+    setWindowTitle("Configure StreamUP Toolbar");
+    setModal(true);
+    resize(650, 500);
+    
+    // Apply StreamUP dialog styling
+    setStyleSheet(UIStyles::GetDialogStyle());
+    
+    setupUI();
+    
+    // Load current configuration
+    config.loadFromSettings();
+    
+    populateBuiltinButtonsList();
+    populateDockButtonsList();
+    populateCurrentConfiguration();
+    updateButtonStates();
+}
+
+ToolbarConfigurator::~ToolbarConfigurator() = default;
+
+void ToolbarConfigurator::setupUI()
+{
+    // Main layout
+    QVBoxLayout* mainLayout = new QVBoxLayout(this);
+    
+    // Create splitter for left and right panels
+    mainSplitter = new QSplitter(Qt::Horizontal, this);
+    mainLayout->addWidget(mainSplitter);
+    
+    // === LEFT PANEL: Available items ===
+    leftPanel = new QWidget();
+    leftLayout = new QVBoxLayout(leftPanel);
+    
+    // Create tab widget
+    itemTabWidget = new QTabWidget();
+    leftLayout->addWidget(itemTabWidget);
+    
+    // === TAB 1: Built-in Buttons ===
+    QWidget* builtinTab = new QWidget();
+    QVBoxLayout* builtinTabLayout = new QVBoxLayout(builtinTab);
+    builtinTabLayout->setContentsMargins(12, 12, 12, 12);
+    
+    builtinButtonsList = new QTreeWidget();
+    builtinButtonsList->setHeaderHidden(true);
+    builtinButtonsList->setRootIsDecorated(true);
+    builtinButtonsList->setStyleSheet(UIStyles::GetListWidgetStyle() + 
+        "QTreeWidget { border-radius: 8px; }");
+    builtinTabLayout->addWidget(builtinButtonsList);
+    
+    addBuiltinButton = new QPushButton("Add Selected Button");
+    addBuiltinButton->setEnabled(false);
+    addBuiltinButton->setStyleSheet(UIStyles::GetButtonStyle());
+    builtinTabLayout->addWidget(addBuiltinButton);
+    
+    itemTabWidget->addTab(builtinTab, "OBS");
+    
+    // === TAB 2: StreamUP Dock Buttons ===
+    QWidget* dockTab = new QWidget();
+    QVBoxLayout* dockTabLayout = new QVBoxLayout(dockTab);
+    dockTabLayout->setContentsMargins(12, 12, 12, 12);
+    
+    dockButtonsList = new QTreeWidget();
+    dockButtonsList->setHeaderHidden(true);
+    dockButtonsList->setRootIsDecorated(true);
+    dockButtonsList->setStyleSheet(UIStyles::GetListWidgetStyle() + 
+        "QTreeWidget { border-radius: 8px; }");
+    dockTabLayout->addWidget(dockButtonsList);
+    
+    addDockButton = new QPushButton("Add Selected Dock Button");
+    addDockButton->setEnabled(false);
+    addDockButton->setStyleSheet(UIStyles::GetButtonStyle());
+    dockTabLayout->addWidget(addDockButton);
+    
+    itemTabWidget->addTab(dockTab, "StreamUP");
+    
+    // === TAB 3: Spacers & Separators ===
+    QWidget* spacerTab = new QWidget();
+    QVBoxLayout* spacerTabLayout = new QVBoxLayout(spacerTab);
+    spacerTabLayout->setContentsMargins(12, 12, 12, 12);
+    
+    // Custom spacer section
+    QLabel* spacerLabel = new QLabel("Custom Spacer");
+    spacerLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
+    spacerTabLayout->addWidget(spacerLabel);
+    
+    QHBoxLayout* sizeLayout = new QHBoxLayout();
+    sizeLayout->addWidget(new QLabel("Size (px):"));
+    spacerSizeSpinBox = new QSpinBox();
+    spacerSizeSpinBox->setRange(5, 200);
+    spacerSizeSpinBox->setValue(20);
+    spacerSizeSpinBox->setStyleSheet(UIStyles::GetSpinBoxStyle());
+    sizeLayout->addWidget(spacerSizeSpinBox);
+    sizeLayout->addStretch();
+    spacerTabLayout->addLayout(sizeLayout);
+    
+    addCustomSpacerButton = new QPushButton("Add Custom Spacer");
+    addCustomSpacerButton->setStyleSheet(UIStyles::GetButtonStyle());
+    spacerTabLayout->addWidget(addCustomSpacerButton);
+    
+    spacerTabLayout->addSpacing(20);
+    
+    // Separator section
+    QLabel* separatorLabel = new QLabel("Separator");
+    separatorLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
+    spacerTabLayout->addWidget(separatorLabel);
+    
+    addSeparatorButton = new QPushButton("Add Separator");
+    addSeparatorButton->setStyleSheet(UIStyles::GetButtonStyle());
+    spacerTabLayout->addWidget(addSeparatorButton);
+    
+    spacerTabLayout->addStretch();
+    itemTabWidget->addTab(spacerTab, "Spacing");
+    
+    mainSplitter->addWidget(leftPanel);
+    
+    // === RIGHT PANEL: Current configuration ===
+    rightPanel = new QWidget();
+    rightLayout = new QVBoxLayout(rightPanel);
+    
+    configLabel = new QLabel("Current Toolbar Configuration:");
+    configLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
+    rightLayout->addWidget(configLabel);
+    
+    currentConfigList = new DraggableListWidget();
+    currentConfigList->setStyleSheet(UIStyles::GetListWidgetStyle() + 
+        "QListWidget { border-radius: 8px; }");
+    rightLayout->addWidget(currentConfigList);
+    
+    // Configuration control buttons
+    configButtonsLayout = new QHBoxLayout();
+    
+    removeButton = new QPushButton("Remove");
+    removeButton->setEnabled(false);
+    removeButton->setStyleSheet(UIStyles::GetButtonStyle());
+    configButtonsLayout->addWidget(removeButton);
+    
+    moveUpButton = new QPushButton("Move Up");
+    moveUpButton->setEnabled(false);
+    moveUpButton->setStyleSheet(UIStyles::GetButtonStyle());
+    configButtonsLayout->addWidget(moveUpButton);
+    
+    moveDownButton = new QPushButton("Move Down");
+    moveDownButton->setEnabled(false);
+    moveDownButton->setStyleSheet(UIStyles::GetButtonStyle());
+    configButtonsLayout->addWidget(moveDownButton);
+    
+    configButtonsLayout->addStretch();
+    
+    resetButton = new QPushButton("Reset to Default");
+    resetButton->setStyleSheet(UIStyles::GetButtonStyle());
+    configButtonsLayout->addWidget(resetButton);
+    
+    rightLayout->addLayout(configButtonsLayout);
+    mainSplitter->addWidget(rightPanel);
+    
+    // Set splitter proportions
+    mainSplitter->setSizes({250, 400});
+    
+    // === BOTTOM BUTTONS ===
+    bottomButtonsLayout = new QHBoxLayout();
+    bottomButtonsLayout->addStretch();
+    
+    saveButton = new QPushButton("Save");
+    saveButton->setDefault(true);
+    saveButton->setStyleSheet(UIStyles::GetButtonStyle());
+    bottomButtonsLayout->addWidget(saveButton);
+    
+    cancelButton = new QPushButton("Cancel");
+    cancelButton->setStyleSheet(UIStyles::GetButtonStyle());
+    bottomButtonsLayout->addWidget(cancelButton);
+    
+    mainLayout->addLayout(bottomButtonsLayout);
+    
+    // Connect signals
+    connect(builtinButtonsList, &QTreeWidget::itemSelectionChanged, this, &ToolbarConfigurator::updateButtonStates);
+    connect(dockButtonsList, &QTreeWidget::itemSelectionChanged, this, &ToolbarConfigurator::updateButtonStates);
+    connect(currentConfigList, &QListWidget::itemSelectionChanged, this, &ToolbarConfigurator::onItemSelectionChanged);
+    connect(currentConfigList, &DraggableListWidget::itemMoved, [this](int from, int to) {
+        config.moveItem(from, to);
+        populateCurrentConfiguration();
+    });
+    
+    connect(addBuiltinButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddBuiltinButton);
+    connect(addDockButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddDockButton);
+    connect(addSeparatorButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddSeparator);
+    connect(addCustomSpacerButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddCustomSpacer);
+    
+    connect(removeButton, &QPushButton::clicked, this, &ToolbarConfigurator::onRemoveItem);
+    connect(moveUpButton, &QPushButton::clicked, this, &ToolbarConfigurator::onMoveUp);
+    connect(moveDownButton, &QPushButton::clicked, this, &ToolbarConfigurator::onMoveDown);
+    connect(resetButton, &QPushButton::clicked, this, &ToolbarConfigurator::onResetToDefault);
+    
+    connect(saveButton, &QPushButton::clicked, this, &ToolbarConfigurator::onSave);
+    connect(cancelButton, &QPushButton::clicked, this, &ToolbarConfigurator::onCancel);
+    
+    // Spacer settings change tracking
+    connect(spacerSizeSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &ToolbarConfigurator::onSpacerSettingsChanged);
+}
+
+void ToolbarConfigurator::populateBuiltinButtonsList()
+{
+    builtinButtonsList->clear();
+    
+    // Create Controls Dock category
+    QTreeWidgetItem* controlsCategory = new QTreeWidgetItem(builtinButtonsList);
+    controlsCategory->setText(0, "Controls Dock");
+    controlsCategory->setExpanded(true);
+    controlsCategory->setFlags(Qt::ItemIsEnabled); // Make category non-selectable
+    
+    auto buttons = ToolbarConfig::ButtonRegistry::getBuiltinButtons();
+    for (const auto& button : buttons) {
+        QTreeWidgetItem* item = new QTreeWidgetItem(controlsCategory);
+        item->setText(0, button.displayName);
+        item->setData(0, Qt::UserRole, button.type);
+        item->setToolTip(0, button.defaultTooltip);
+    }
+}
+
+void ToolbarConfigurator::populateDockButtonsList()
+{
+    dockButtonsList->clear();
+    
+    // Create StreamUP Tools category
+    QTreeWidgetItem* toolsCategory = new QTreeWidgetItem(dockButtonsList);
+    toolsCategory->setText(0, "StreamUP Tools");
+    toolsCategory->setExpanded(true);
+    toolsCategory->setFlags(Qt::ItemIsEnabled); // Make category non-selectable
+    
+    // Create StreamUP Settings category
+    QTreeWidgetItem* settingsCategory = new QTreeWidgetItem(dockButtonsList);
+    settingsCategory->setText(0, "StreamUP Settings");
+    settingsCategory->setExpanded(true);
+    settingsCategory->setFlags(Qt::ItemIsEnabled); // Make category non-selectable
+    
+    auto buttons = ToolbarConfig::ToolbarConfiguration::getAvailableDockButtons();
+    for (const auto& button : buttons) {
+        // Determine which category this button belongs to
+        QTreeWidgetItem* parentCategory = toolsCategory;
+        if (button.dockButtonType.contains("settings") || button.dockButtonType.contains("config")) {
+            parentCategory = settingsCategory;
+        }
+        
+        QTreeWidgetItem* item = new QTreeWidgetItem(parentCategory);
+        item->setText(0, button.name);
+        item->setData(0, Qt::UserRole, button.dockButtonType);
+        item->setToolTip(0, button.tooltip);
+    }
+}
+
+void ToolbarConfigurator::populateCurrentConfiguration()
+{
+    currentConfigList->clear();
+    
+    for (const auto& configItem : config.items) {
+        QListWidgetItem* item = createConfigurationItem(configItem);
+        currentConfigList->addItem(item);
+    }
+    
+    updateButtonStates();
+}
+
+QListWidgetItem* ToolbarConfigurator::createConfigurationItem(std::shared_ptr<ToolbarConfig::ToolbarItem> item)
+{
+    QListWidgetItem* listItem = new QListWidgetItem();
+    listItem->setData(Qt::UserRole, QVariant::fromValue(item));
+    
+    QString displayText;
+    QString iconPath;
+    
+    switch (item->type) {
+    case ToolbarConfig::ItemType::Button: {
+        auto buttonItem = std::static_pointer_cast<ToolbarConfig::ButtonItem>(item);
+        auto buttonInfo = ToolbarConfig::ButtonRegistry::getButtonInfo(buttonItem->buttonType);
+        displayText = QString("🔵 %1").arg(buttonInfo.displayName);
+        break;
+    }
+    case ToolbarConfig::ItemType::Separator: {
+        displayText = "━━━ Separator ━━━";
+        listItem->setTextAlignment(Qt::AlignCenter);
+        break;
+    }
+    case ToolbarConfig::ItemType::CustomSpacer: {
+        auto spacerItem = std::static_pointer_cast<ToolbarConfig::CustomSpacerItem>(item);
+        displayText = QString("↔️ Spacer (%1px)").arg(spacerItem->size);
+        break;
+    }
+    case ToolbarConfig::ItemType::DockButton: {
+        auto dockItem = std::static_pointer_cast<ToolbarConfig::DockButtonItem>(item);
+        displayText = QString("🔧 %1 (Dock)").arg(dockItem->name);
+        break;
+    }
+    }
+    
+    listItem->setText(displayText);
+    listItem->setFlags(listItem->flags() | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled);
+    
+    if (!item->visible) {
+        listItem->setForeground(QColor(128, 128, 128));
+        listItem->setText(displayText + " (Hidden)");
+    }
+    
+    return listItem;
+}
+
+void ToolbarConfigurator::updateButtonStates()
+{
+    // Update add buttons based on selections - only enable if a child item (not category) is selected
+    QTreeWidgetItem* builtinSelected = builtinButtonsList->currentItem();
+    addBuiltinButton->setEnabled(builtinSelected != nullptr && builtinSelected->parent() != nullptr);
+    
+    QTreeWidgetItem* dockSelected = dockButtonsList->currentItem();
+    addDockButton->setEnabled(dockSelected != nullptr && dockSelected->parent() != nullptr);
+    
+    // Custom spacer button is always enabled (no validation needed)
+    addCustomSpacerButton->setEnabled(true);
+    
+    // Update configuration manipulation buttons
+    QListWidgetItem* selectedItem = currentConfigList->currentItem();
+    bool hasSelection = selectedItem != nullptr;
+    int selectedRow = currentConfigList->currentRow();
+    
+    removeButton->setEnabled(hasSelection);
+    moveUpButton->setEnabled(hasSelection && selectedRow > 0);
+    moveDownButton->setEnabled(hasSelection && selectedRow < currentConfigList->count() - 1);
+}
+
+void ToolbarConfigurator::onAddBuiltinButton()
+{
+    QTreeWidgetItem* selected = builtinButtonsList->currentItem();
+    if (!selected || selected->parent() == nullptr) return; // Only allow child items, not categories
+    
+    QString buttonType = selected->data(0, Qt::UserRole).toString();
+    auto buttonInfo = ToolbarConfig::ButtonRegistry::getButtonInfo(buttonType);
+    
+    // Generate unique ID
+    QString id = QString("builtin_%1_%2").arg(buttonType).arg(QDateTime::currentMSecsSinceEpoch());
+    
+    auto buttonItem = std::make_shared<ToolbarConfig::ButtonItem>(id, buttonType);
+    buttonItem->iconPath = buttonInfo.defaultIcon;
+    buttonItem->tooltip = buttonInfo.defaultTooltip;
+    buttonItem->checkable = buttonInfo.checkable;
+    
+    config.addItem(buttonItem);
+    populateCurrentConfiguration();
+}
+
+void ToolbarConfigurator::onAddDockButton()
+{
+    QTreeWidgetItem* selected = dockButtonsList->currentItem();
+    if (!selected || selected->parent() == nullptr) return; // Only allow child items, not categories
+    
+    QString dockButtonType = selected->data(0, Qt::UserRole).toString();
+    
+    // Find the dock button info
+    auto availableButtons = ToolbarConfig::ToolbarConfiguration::getAvailableDockButtons();
+    for (const auto& button : availableButtons) {
+        if (button.dockButtonType == dockButtonType) {
+            // Generate unique ID
+            QString id = QString("dock_%1_%2").arg(dockButtonType).arg(QDateTime::currentMSecsSinceEpoch());
+            
+            auto dockItem = std::make_shared<ToolbarConfig::DockButtonItem>(id, button.dockButtonType, button.name);
+            dockItem->iconPath = button.iconPath;
+            dockItem->tooltip = button.tooltip;
+            
+            config.addItem(dockItem);
+            populateCurrentConfiguration();
+            break;
+        }
+    }
+}
+
+void ToolbarConfigurator::onAddSeparator()
+{
+    QString id = QString("sep_%1").arg(QDateTime::currentMSecsSinceEpoch());
+    auto separatorItem = std::make_shared<ToolbarConfig::SeparatorItem>(id);
+    
+    config.addItem(separatorItem);
+    populateCurrentConfiguration();
+}
+
+void ToolbarConfigurator::onAddCustomSpacer()
+{
+    QString id = QString("spacer_%1").arg(QDateTime::currentMSecsSinceEpoch());
+    
+    auto spacerItem = std::make_shared<ToolbarConfig::CustomSpacerItem>(id, spacerSizeSpinBox->value());
+    spacerItem->isStretch = false; // Always false now
+    
+    config.addItem(spacerItem);
+    populateCurrentConfiguration();
+    
+    // Reset form to defaults
+    clearSpacerForm();
+}
+
+
+void ToolbarConfigurator::onRemoveItem()
+{
+    QListWidgetItem* selected = currentConfigList->currentItem();
+    if (!selected) return;
+    
+    auto item = selected->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+    if (item) {
+        config.removeItem(item->id);
+        populateCurrentConfiguration();
+    }
+}
+
+void ToolbarConfigurator::onMoveUp()
+{
+    int currentRow = currentConfigList->currentRow();
+    if (currentRow > 0) {
+        config.moveItem(currentRow, currentRow - 1);
+        populateCurrentConfiguration();
+        currentConfigList->setCurrentRow(currentRow - 1);
+    }
+}
+
+void ToolbarConfigurator::onMoveDown()
+{
+    int currentRow = currentConfigList->currentRow();
+    if (currentRow >= 0 && currentRow < currentConfigList->count() - 1) {
+        config.moveItem(currentRow, currentRow + 1);
+        populateCurrentConfiguration();
+        currentConfigList->setCurrentRow(currentRow + 1);
+    }
+}
+
+void ToolbarConfigurator::onItemSelectionChanged()
+{
+    updateButtonStates();
+}
+
+void ToolbarConfigurator::onResetToDefault()
+{
+    int ret = QMessageBox::question(this, "Reset Configuration",
+                                    "Are you sure you want to reset the toolbar to its default configuration? This will remove all custom buttons and separators.",
+                                    QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    
+    if (ret == QMessageBox::Yes) {
+        config.setDefaultConfiguration();
+        populateCurrentConfiguration();
+    }
+}
+
+
+void ToolbarConfigurator::onSave()
+{
+    config.saveToSettings();
+    accept(); // Close dialog with accepted result
+}
+
+void ToolbarConfigurator::onCancel()
+{
+    reject(); // Close dialog with rejected result
+}
+
+
+
+void ToolbarConfigurator::clearSpacerForm()
+{
+    spacerSizeSpinBox->setValue(20);
+}
+
+void ToolbarConfigurator::onSpacerSettingsChanged()
+{
+    // No validation needed for spacer settings - all values are valid
+}
+
+// DraggableListWidget implementation
+
+DraggableListWidget::DraggableListWidget(QWidget* parent)
+    : QListWidget(parent), dragStartIndex(-1)
+{
+    setDragDropMode(QAbstractItemView::InternalMove);
+    setDefaultDropAction(Qt::MoveAction);
+    setSelectionMode(QAbstractItemView::SingleSelection);
+}
+
+void DraggableListWidget::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (event->source() == this && event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist")) {
+        event->acceptProposedAction();
+    } else {
+        event->ignore();
+    }
+}
+
+void DraggableListWidget::dragMoveEvent(QDragMoveEvent* event)
+{
+    if (event->source() == this && event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist")) {
+        event->acceptProposedAction();
+    } else {
+        event->ignore();
+    }
+}
+
+void DraggableListWidget::dropEvent(QDropEvent* event)
+{
+    if (event->source() != this) {
+        event->ignore();
+        return;
+    }
+    
+    int dropIndex = indexAt(event->position().toPoint()).row();
+    if (dropIndex < 0) {
+        dropIndex = count();
+    }
+    
+    if (dragStartIndex >= 0 && dragStartIndex != dropIndex) {
+        // Adjust drop index if dropping below the dragged item
+        if (dropIndex > dragStartIndex) {
+            dropIndex--;
+        }
+        
+        emit itemMoved(dragStartIndex, dropIndex);
+    }
+    
+    dragStartIndex = -1;
+    event->acceptProposedAction();
+}
+
+void DraggableListWidget::startDrag(Qt::DropActions supportedActions)
+{
+    QListWidgetItem* item = currentItem();
+    if (item) {
+        dragStartIndex = row(item);
+        QListWidget::startDrag(supportedActions);
+    }
+}
+
+} // namespace StreamUP
+
+#include "streamup-toolbar-configurator.moc"
