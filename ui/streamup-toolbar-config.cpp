@@ -162,6 +162,13 @@ void ToolbarConfiguration::fromJson(const QJsonObject& json) {
         switch (type) {
         case ItemType::Button: {
             QString buttonType = itemObj["buttonType"].toString();
+            
+            // Filter out old explicit pause/save_replay items - they are now auto-managed
+            if (buttonType == "pause" || buttonType == "save_replay") {
+                qInfo() << "[StreamUP] Filtering out old explicit" << buttonType << "button - now auto-managed by parent button";
+                continue; // Skip this item
+            }
+            
             auto buttonItem = std::make_shared<ButtonItem>(id, buttonType);
             buttonItem->fromJson(itemObj);
             item = buttonItem;
@@ -208,12 +215,12 @@ void ToolbarConfiguration::setDefaultConfiguration() {
     
     // Recording section
     addItem(std::make_shared<ButtonItem>("record", "record"));
-    addItem(std::make_shared<ButtonItem>("pause", "pause"));
+    // Note: pause button is auto-managed by record button, not configurable
     addItem(std::make_shared<SeparatorItem>("sep2"));
     
     // Replay buffer section
     addItem(std::make_shared<ButtonItem>("replay_buffer", "replay_buffer"));
-    addItem(std::make_shared<ButtonItem>("save_replay", "save_replay"));
+    // Note: save_replay button is auto-managed by replay_buffer button, not configurable
     addItem(std::make_shared<SeparatorItem>("sep3"));
     
     // Virtual camera section

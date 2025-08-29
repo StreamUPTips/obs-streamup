@@ -77,200 +77,7 @@ QFrame* StreamUPToolbar::createHorizontalSeparator()
 	return separator;
 } 
 
-void StreamUPToolbar::setupUI()
-{
-	// Set basic toolbar properties like obs-toolbar
-	setMovable(false);
-	setFloatable(false);
-	setOrientation(Qt::Horizontal);
-	
-	// Create a central widget with horizontal layout (will be changed to vertical if needed)
-	centralWidget = new QWidget(this);
-	mainLayout = new QHBoxLayout(centralWidget);
-	mainLayout->setContentsMargins(8, 0, 8, 0);
-	mainLayout->setSpacing(4);
-	
-	// === STREAMING SECTION ===
-	// Create streaming button
-	streamButton = new QToolButton(centralWidget);
-	streamButton->setObjectName("streamButton");
-	streamButton->setProperty("buttonType", "streamup-button");
-	streamButton->setFixedSize(28, 28);
-	streamButton->setIcon(QIcon(getThemedIconPath("streaming-inactive")));
-	streamButton->setIconSize(QSize(20, 20));
-	streamButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-	streamButton->setToolTip("Start/Stop Streaming");
-	streamButton->setCheckable(true);
-	connect(streamButton, &QToolButton::clicked, this, &StreamUPToolbar::onStreamButtonClicked);
-	mainLayout->addWidget(streamButton);
-	
-	// Separator
-	QFrame* streamingSeparator = createSeparator();
-	streamingSeparator->setObjectName("streamingSeparator");
-	streamingSeparator->setProperty("separatorType", "streamup-separator");
-	mainLayout->addWidget(streamingSeparator);
-	
-	// === RECORDING SECTION ===
-	// Create recording button
-	recordButton = new QToolButton(centralWidget);
-	recordButton->setObjectName("recordButton");
-	recordButton->setProperty("buttonType", "streamup-button");
-	recordButton->setFixedSize(28, 28);
-	recordButton->setIcon(QIcon(getThemedIconPath("record-off")));
-	recordButton->setIconSize(QSize(20, 20));
-	recordButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-	recordButton->setToolTip("Start/Stop Recording");
-	recordButton->setCheckable(true);
-	connect(recordButton, &QToolButton::clicked, this, &StreamUPToolbar::onRecordButtonClicked);
-	mainLayout->addWidget(recordButton);
-	
-	// Create pause recording button (initially hidden like OBS)
-	pauseButton = new QToolButton(centralWidget);
-	pauseButton->setObjectName("pauseButton");
-	pauseButton->setProperty("buttonType", "streamup-button");
-	pauseButton->setFixedSize(28, 28);
-	pauseButton->setIcon(QIcon(getThemedIconPath("pause")));
-	pauseButton->setIconSize(QSize(20, 20));
-	pauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-	pauseButton->setToolTip("Pause/Resume Recording");
-	pauseButton->setCheckable(true);
-	pauseButton->setVisible(false); // Hidden by default like OBS controls dock
-	connect(pauseButton, &QToolButton::clicked, this, &StreamUPToolbar::onPauseButtonClicked);
-	mainLayout->addWidget(pauseButton);
-	
-	// Separator
-	QFrame* recordingSeparator = createSeparator();
-	recordingSeparator->setObjectName("recordingSeparator");
-	recordingSeparator->setProperty("separatorType", "streamup-separator");
-	mainLayout->addWidget(recordingSeparator);
-	
-	// === REPLAY BUFFER SECTION ===
-	// Create replay buffer button
-	replayBufferButton = new QToolButton(centralWidget);
-	replayBufferButton->setObjectName("replayBufferButton");
-	replayBufferButton->setProperty("buttonType", "streamup-button");
-	replayBufferButton->setFixedSize(28, 28);
-	replayBufferButton->setIcon(QIcon(getThemedIconPath("replay-buffer-off")));
-	replayBufferButton->setIconSize(QSize(20, 20));
-	replayBufferButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-	replayBufferButton->setToolTip("Start/Stop Replay Buffer");
-	replayBufferButton->setCheckable(true);
-	connect(replayBufferButton, &QToolButton::clicked, this, &StreamUPToolbar::onReplayBufferButtonClicked);
-	mainLayout->addWidget(replayBufferButton);
-	
-	// Create save replay button (initially hidden like OBS)
-	saveReplayButton = new QToolButton(centralWidget);
-	saveReplayButton->setObjectName("saveReplayButton");
-	saveReplayButton->setProperty("buttonType", "streamup-button");
-	saveReplayButton->setFixedSize(28, 28);
-	saveReplayButton->setIcon(QIcon(getThemedIconPath("save-replay")));
-	saveReplayButton->setIconSize(QSize(20, 20)); // Slightly smaller
-	saveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-	saveReplayButton->setToolTip("Save Replay");
-	saveReplayButton->setCheckable(false); // Save replay is not a toggle
-	saveReplayButton->setVisible(false); // Hidden by default like OBS controls dock
-	connect(saveReplayButton, &QToolButton::clicked, this, &StreamUPToolbar::onSaveReplayButtonClicked);
-	mainLayout->addWidget(saveReplayButton);
-	
-	// Separator
-	QFrame* replayBufferSeparator = createSeparator();
-	replayBufferSeparator->setObjectName("replayBufferSeparator");
-	replayBufferSeparator->setProperty("separatorType", "streamup-separator");
-	mainLayout->addWidget(replayBufferSeparator);
-	
-	// === VIRTUAL CAMERA SECTION ===
-	// Create virtual camera button
-	virtualCameraButton = new QToolButton(centralWidget);
-	virtualCameraButton->setObjectName("virtualCameraButton");
-	virtualCameraButton->setProperty("buttonType", "streamup-button");
-	virtualCameraButton->setFixedSize(28, 28);
-	virtualCameraButton->setIcon(QIcon(getThemedIconPath("virtual-camera")));
-	virtualCameraButton->setIconSize(QSize(20, 20));
-	virtualCameraButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-	virtualCameraButton->setToolTip("Start/Stop Virtual Camera");
-	virtualCameraButton->setCheckable(true);
-	connect(virtualCameraButton, &QToolButton::clicked, this, &StreamUPToolbar::onVirtualCameraButtonClicked);
-	mainLayout->addWidget(virtualCameraButton);
-	
-	// Create virtual camera config button (like OBS controls dock)
-	virtualCameraConfigButton = new QToolButton(centralWidget);
-	virtualCameraConfigButton->setObjectName("virtualCameraConfigButton");
-	virtualCameraConfigButton->setProperty("buttonType", "streamup-button");
-	virtualCameraConfigButton->setFixedSize(28, 28);
-	virtualCameraConfigButton->setIcon(QIcon(getThemedIconPath("virtual-camera-settings")));
-	virtualCameraConfigButton->setIconSize(QSize(20, 20)); // Slightly smaller icon
-	virtualCameraConfigButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-	virtualCameraConfigButton->setToolTip("Virtual Camera Configuration");
-	virtualCameraConfigButton->setCheckable(false);
-	connect(virtualCameraConfigButton, &QToolButton::clicked, this, &StreamUPToolbar::onVirtualCameraConfigButtonClicked);
-	mainLayout->addWidget(virtualCameraConfigButton);
-	
-	// Separator
-	QFrame* virtualCameraSeparator = createSeparator();
-	virtualCameraSeparator->setObjectName("virtualCameraSeparator");
-	virtualCameraSeparator->setProperty("separatorType", "streamup-separator");
-	mainLayout->addWidget(virtualCameraSeparator);
-	
-	// === STUDIO MODE SECTION ===
-	// Create studio mode button
-	studioModeButton = new QToolButton(centralWidget);
-	studioModeButton->setObjectName("studioModeButton");
-	studioModeButton->setProperty("buttonType", "streamup-button");
-	studioModeButton->setFixedSize(28, 28);
-	studioModeButton->setIcon(QIcon(getThemedIconPath("studio-mode")));
-	studioModeButton->setIconSize(QSize(20, 20));
-	studioModeButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-	studioModeButton->setToolTip("Toggle Studio Mode");
-	studioModeButton->setCheckable(true);
-	connect(studioModeButton, &QToolButton::clicked, this, &StreamUPToolbar::onStudioModeButtonClicked);
-	mainLayout->addWidget(studioModeButton);
-	
-	// Separator
-	QFrame* studioModeSeparator = createSeparator();
-	studioModeSeparator->setObjectName("studioModeSeparator");
-	studioModeSeparator->setProperty("separatorType", "streamup-separator");
-	mainLayout->addWidget(studioModeSeparator);
-	
-	// === SETTINGS SECTION ===
-	// Create settings button
-	settingsButton = new QToolButton(centralWidget);
-	settingsButton->setObjectName("settingsButton");
-	settingsButton->setProperty("buttonType", "streamup-button");
-	settingsButton->setFixedSize(28, 28);
-	settingsButton->setIcon(QIcon(getThemedIconPath("settings")));
-	settingsButton->setIconSize(QSize(20, 20));
-	settingsButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-	settingsButton->setToolTip("Open Settings");
-	settingsButton->setCheckable(false); // Settings button is not checkable
-	connect(settingsButton, &QToolButton::clicked, this, &StreamUPToolbar::onSettingsButtonClicked);
-	mainLayout->addWidget(settingsButton);
-	
-	// Add spacer to push StreamUP settings button to the right
-	mainLayout->addStretch();
-	
-	// === STREAMUP SETTINGS SECTION (RIGHT SIDE) ===
-	// Create StreamUP settings button
-	streamUPSettingsButton = new QToolButton(centralWidget);
-	streamUPSettingsButton->setObjectName("streamUPSettingsButton");
-	streamUPSettingsButton->setProperty("buttonType", "streamup-button");
-	streamUPSettingsButton->setFixedSize(28, 28);
-	streamUPSettingsButton->setIcon(QIcon(":images/icons/social/streamup-logo-button.svg"));
-	streamUPSettingsButton->setIconSize(QSize(20, 20));
-	streamUPSettingsButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-	streamUPSettingsButton->setToolTip("Open StreamUP Settings");
-	streamUPSettingsButton->setCheckable(false);
-	connect(streamUPSettingsButton, &QToolButton::clicked, this, &StreamUPToolbar::onStreamUPSettingsButtonClicked);
-	mainLayout->addWidget(streamUPSettingsButton);
-	
-	// Apply CSS styling for active states using theme constants
-	updateToolbarStyling();
-	
-	// Add the central widget to toolbar
-	addWidget(centralWidget);
-	
-	// Don't update button visibility immediately as OBS may not be fully initialized
-	// It will be updated when OBS_FRONTEND_EVENT_FINISHED_LOADING is received
-}
+// Old setupUI function removed - now using setupDynamicUI() for configuration-based toolbar
 
 void StreamUPToolbar::updateToolbarStyling()
 {
@@ -506,22 +313,30 @@ void StreamUPToolbar::updateRecordButton()
 		recordButton->setIcon(QIcon(getThemedIconPath(iconName)));
 		recordButton->setToolTip(recording ? "Stop Recording" : "Start Recording");
 		
-		// Show/hide pause button based on recording state AND pausability (like OBS controls dock)
+		// In dynamic configuration mode, pause button visibility is managed by user config
+		// Only enable/disable based on recording state and pausability
 		if (pauseButton) {
-			bool showPause = recording && isRecordingPausable();
-			pauseButton->setVisible(showPause);
+			bool canPause = recording && isRecordingPausable();
+			pauseButton->setEnabled(canPause);
 		}
 	}
 }
 
 void StreamUPToolbar::updatePauseButton()
 {
+	if (isReconstructingUI) {
+		blog(LOG_INFO, "[StreamUP] DEBUG: updatePauseButton blocked during UI reconstruction");
+		return;
+	}
+	blog(LOG_INFO, "[StreamUP] DEBUG: updatePauseButton called, pauseButton: %p", (void*)pauseButton);
 	if (pauseButton) {
 		bool recording = obs_frontend_recording_active();
 		bool paused = obs_frontend_recording_paused();
 		pauseButton->setEnabled(recording);
 		pauseButton->setChecked(paused);
-		pauseButton->setIcon(QIcon(getThemedIconPath("pause")));
+		QString iconPath = getThemedIconPath("pause");
+		blog(LOG_INFO, "[StreamUP] DEBUG: updatePauseButton setting icon to: %s", iconPath.toUtf8().constData());
+		pauseButton->setIcon(QIcon(iconPath));
 		pauseButton->setToolTip(paused ? "Resume Recording" : "Pause Recording");
 	}
 }
@@ -535,22 +350,32 @@ void StreamUPToolbar::updateReplayBufferButton()
 		replayBufferButton->setIcon(QIcon(getThemedIconPath(iconName)));
 		replayBufferButton->setToolTip(active ? "Stop Replay Buffer" : "Start Replay Buffer");
 		
-		// Show/hide save replay button based on replay buffer state (like OBS controls dock)
+		// In dynamic configuration mode, save replay button visibility is managed by user config
+		// Only enable/disable based on replay buffer state
 		if (saveReplayButton) {
-			saveReplayButton->setVisible(active);
+			saveReplayButton->setEnabled(active);
 		}
 	}
 }
 
 void StreamUPToolbar::updateSaveReplayButton()
 {
+	if (isReconstructingUI) {
+		blog(LOG_INFO, "[StreamUP] DEBUG: updateSaveReplayButton blocked during UI reconstruction");
+		return;
+	}
+	blog(LOG_INFO, "[StreamUP] DEBUG: updateSaveReplayButton called, saveReplayButton: %p", (void*)saveReplayButton);
 	if (saveReplayButton) {
 		bool replayActive = obs_frontend_replay_buffer_active();
-		saveReplayButton->setVisible(replayActive);
 		
-		// Enable/disable based on recording state (can't save during recording pause in some cases)
+		// Ensure icon is set correctly
+		QString iconPath = getThemedIconPath("save-replay");
+		blog(LOG_INFO, "[StreamUP] DEBUG: updateSaveReplayButton setting icon to: %s", iconPath.toUtf8().constData());
+		saveReplayButton->setIcon(QIcon(iconPath));
+		
+		// Enable/disable based on replay buffer and recording state
 		bool recordingPaused = obs_frontend_recording_paused();
-		saveReplayButton->setEnabled(!recordingPaused);
+		saveReplayButton->setEnabled(replayActive && !recordingPaused);
 	}
 }
 
@@ -1047,6 +872,11 @@ void StreamUPToolbar::updateLayoutOrientation()
 
 void StreamUPToolbar::setupDynamicUI()
 {
+	// Set flag to prevent updates during reconstruction
+	isReconstructingUI = true;
+	blog(LOG_INFO, "[StreamUP] DEBUG: ===== STARTING SETUPDYNAMICUI =====");
+	blog(LOG_INFO, "[StreamUP] DEBUG: setupDynamicUI called - pauseButton: %p, saveReplayButton: %p", (void*)pauseButton, (void*)saveReplayButton);
+	
 	// Set basic toolbar properties like obs-toolbar
 	setMovable(false);
 	setFloatable(false);
@@ -1055,14 +885,71 @@ void StreamUPToolbar::setupDynamicUI()
 	// Clear existing toolbar contents
 	clear();
 	
-	// Create a central widget with horizontal layout (will be changed to vertical if needed)
+	// Delete old central widget if it exists to ensure complete cleanup
+	if (centralWidget) {
+		blog(LOG_INFO, "[StreamUP] DEBUG: Deleting old centralWidget: %p", (void*)centralWidget);
+		centralWidget->setParent(nullptr);
+		centralWidget->deleteLater();
+		centralWidget = nullptr;
+		mainLayout = nullptr;
+	}
+	
+	// Create a new central widget with horizontal layout (will be changed to vertical if needed)
 	centralWidget = new QWidget(this);
 	mainLayout = new QHBoxLayout(centralWidget);
 	mainLayout->setContentsMargins(8, 0, 8, 0);
 	mainLayout->setSpacing(4);
 	
-	// Clear existing buttons
+	// Clear existing buttons and properly clean up old references
+	blog(LOG_INFO, "[StreamUP] DEBUG: Clearing old button references - pauseButton: %p, saveReplayButton: %p", (void*)pauseButton, (void*)saveReplayButton);
 	dynamicButtons.clear();
+	
+	// Delete old button instances if they exist (more aggressive cleanup)
+	if (pauseButton) {
+		blog(LOG_INFO, "[StreamUP] DEBUG: Deleting old pauseButton: %p", (void*)pauseButton);
+		pauseButton->setParent(nullptr);
+		pauseButton->deleteLater();
+	}
+	if (saveReplayButton) {
+		blog(LOG_INFO, "[StreamUP] DEBUG: Deleting old saveReplayButton: %p", (void*)saveReplayButton);
+		saveReplayButton->setParent(nullptr);
+		saveReplayButton->deleteLater();
+	}
+	
+	// Also delete all other button references to ensure clean slate
+	if (streamButton) {
+		streamButton->setParent(nullptr);
+		streamButton->deleteLater();
+	}
+	if (recordButton) {
+		recordButton->setParent(nullptr);
+		recordButton->deleteLater();
+	}
+	if (replayBufferButton) {
+		replayBufferButton->setParent(nullptr);
+		replayBufferButton->deleteLater();
+	}
+	if (virtualCameraButton) {
+		virtualCameraButton->setParent(nullptr);
+		virtualCameraButton->deleteLater();
+	}
+	if (virtualCameraConfigButton) {
+		virtualCameraConfigButton->setParent(nullptr);
+		virtualCameraConfigButton->deleteLater();
+	}
+	if (studioModeButton) {
+		studioModeButton->setParent(nullptr);
+		studioModeButton->deleteLater();
+	}
+	if (settingsButton) {
+		settingsButton->setParent(nullptr);
+		settingsButton->deleteLater();
+	}
+	if (streamUPSettingsButton) {
+		streamUPSettingsButton->setParent(nullptr);
+		streamUPSettingsButton->deleteLater();
+	}
+	
 	streamButton = nullptr;
 	recordButton = nullptr;
 	pauseButton = nullptr;
@@ -1108,6 +995,65 @@ void StreamUPToolbar::setupDynamicUI()
 				button->setObjectName(item->id);
 				dynamicButtons[item->id] = button;
 				mainLayout->addWidget(button);
+				
+				// Check if this button needs companion buttons (pause/save_replay)
+				if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
+					auto buttonItem = std::dynamic_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item);
+					if (buttonItem) {
+						// Add pause button immediately after record button
+						if (buttonItem->buttonType == "record") {
+							blog(LOG_INFO, "[StreamUP] DEBUG: ===== CREATING PAUSE BUTTON =====");
+							blog(LOG_INFO, "[StreamUP] DEBUG: Current pauseButton reference: %p", (void*)pauseButton);
+							
+							// Create new pause button for this position
+							QToolButton* newPauseButton = new QToolButton(centralWidget);
+							blog(LOG_INFO, "[StreamUP] DEBUG: Created new pause button at address: %p", (void*)newPauseButton);
+							newPauseButton->setProperty("buttonType", "streamup-button");
+							newPauseButton->setFixedSize(28, 28);
+							newPauseButton->setIconSize(QSize(20, 20));
+							newPauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+							QString pauseIconPath = getThemedIconPath("pause");
+							blog(LOG_INFO, "[StreamUP] DEBUG: Setting pause button icon to: %s", pauseIconPath.toUtf8().constData());
+							newPauseButton->setIcon(QIcon(pauseIconPath));
+							newPauseButton->setToolTip("Pause Recording");
+							newPauseButton->setCheckable(true);
+							newPauseButton->setObjectName("pause_dynamic");
+							connect(newPauseButton, &QToolButton::clicked, this, &StreamUPToolbar::onPauseButtonClicked);
+							
+							// Replace the old pause button reference
+							blog(LOG_INFO, "[StreamUP] DEBUG: Replacing pauseButton reference (old: %p, new: %p)", (void*)pauseButton, (void*)newPauseButton);
+							pauseButton = newPauseButton;
+							recordButton = button;
+							mainLayout->addWidget(pauseButton);
+							blog(LOG_INFO, "[StreamUP] DEBUG: Added pauseButton to layout, parent: %p", (void*)pauseButton->parent());
+							blog(LOG_INFO, "[StreamUP] DEBUG: ===== PAUSE BUTTON CREATION COMPLETE =====");
+						}
+						// Add save_replay button immediately after replay_buffer button
+						else if (buttonItem->buttonType == "replay_buffer") {
+							blog(LOG_INFO, "[StreamUP] DEBUG: Creating new save_replay button after replay_buffer button at position");
+							// Create new save_replay button for this position
+							QToolButton* newSaveReplayButton = new QToolButton(centralWidget);
+							newSaveReplayButton->setProperty("buttonType", "streamup-button");
+							newSaveReplayButton->setFixedSize(28, 28);
+							newSaveReplayButton->setIconSize(QSize(20, 20));
+							newSaveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+							QString saveReplayIconPath = getThemedIconPath("save-replay");
+							blog(LOG_INFO, "[StreamUP] DEBUG: Setting save_replay button icon to: %s", saveReplayIconPath.toUtf8().constData());
+							newSaveReplayButton->setIcon(QIcon(saveReplayIconPath));
+							newSaveReplayButton->setToolTip("Save Replay");
+							newSaveReplayButton->setCheckable(false);
+							newSaveReplayButton->setObjectName("save_replay_dynamic");
+							connect(newSaveReplayButton, &QToolButton::clicked, this, &StreamUPToolbar::onSaveReplayButtonClicked);
+							
+							// Replace the old save replay button reference
+							blog(LOG_INFO, "[StreamUP] DEBUG: Replacing saveReplayButton reference (old: %p, new: %p)", (void*)saveReplayButton, (void*)newSaveReplayButton);
+							saveReplayButton = newSaveReplayButton;
+							replayBufferButton = button;
+							mainLayout->addWidget(saveReplayButton);
+							blog(LOG_INFO, "[StreamUP] DEBUG: Added saveReplayButton to layout, parent: %p", (void*)saveReplayButton->parent());
+						}
+					}
+				}
 			}
 		}
 	}
@@ -1158,6 +1104,11 @@ void StreamUPToolbar::setupDynamicUI()
 	
 	// Update layout orientation based on current position
 	updateLayoutOrientation();
+	
+	// Clear flag and update buttons now that reconstruction is complete
+	isReconstructingUI = false;
+	blog(LOG_INFO, "[StreamUP] DEBUG: UI reconstruction complete, re-enabling updates");
+	updateAllButtons();
 }
 
 QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem> item)
