@@ -36,6 +36,10 @@ public:
 	void ButtonActivateAllVideoCaptureDevices();
 	void ButtonDeactivateAllVideoCaptureDevices();
 	void ButtonRefreshAllVideoCaptureDevices();
+	
+	// Helper methods for toolbar access
+	bool AreAllSourcesLockedInAllScenes();
+	bool AreAllSourcesLockedInCurrentScene();
 
 private:
 	Ui::StreamUPDock *ui;
@@ -50,9 +54,6 @@ private:
 
 	void applyFileIconToButton(QPushButton *button, const QString &filePath);
 	void updateButtonIcons();
-
-	bool AreAllSourcesLockedInAllScenes();
-	bool AreAllSourcesLockedInCurrentScene();
 
 	void setupObsSignals();
 	void connectSceneSignals();
