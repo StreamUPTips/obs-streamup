@@ -1074,10 +1074,19 @@ void StreamUPToolbar::setupDynamicUI()
 	settingsButton = nullptr;
 	streamUPSettingsButton = nullptr;
 	
-	// Create widgets from configuration
-	bool needsStretch = false;
+	// Create widgets from configuration in two passes to ensure proper positioning
+	// First pass: Add all items that are NOT StreamUP settings buttons
 	for (const auto& item : toolbarConfig.items) {
 		if (!item->visible) continue;
+		
+		// Skip StreamUP settings buttons in first pass
+		bool isStreamUPSettings = false;
+		if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
+			if (auto buttonItem = std::dynamic_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item)) {
+				isStreamUPSettings = (buttonItem->buttonType == "streamup_settings");
+			}
+		}
+		if (isStreamUPSettings) continue;
 		
 		if (item->type == StreamUP::ToolbarConfig::ItemType::Separator) {
 			QFrame* separator = createSeparatorFromConfig(false);
@@ -1098,19 +1107,46 @@ void StreamUPToolbar::setupDynamicUI()
 			if (button) {
 				button->setObjectName(item->id);
 				dynamicButtons[item->id] = button;
-				
-				// Check if this is the StreamUP settings button (should be on the right)
-				if (auto buttonItem = std::dynamic_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item)) {
-					if (buttonItem->buttonType == "streamup_settings") {
-						if (!needsStretch) {
-							mainLayout->addStretch();
-							needsStretch = true;
-						}
-					}
-				}
-				
 				mainLayout->addWidget(button);
 			}
+		}
+	}
+	
+	// Add stretch to push StreamUP settings buttons to the right
+	bool hasStreamUPSettings = false;
+	for (const auto& item : toolbarConfig.items) {
+		if (!item->visible) continue;
+		if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
+			if (auto buttonItem = std::dynamic_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item)) {
+				if (buttonItem->buttonType == "streamup_settings") {
+					hasStreamUPSettings = true;
+					break;
+				}
+			}
+		}
+	}
+	if (hasStreamUPSettings) {
+		mainLayout->addStretch();
+	}
+	
+	// Second pass: Add StreamUP settings buttons (they go on the right)
+	for (const auto& item : toolbarConfig.items) {
+		if (!item->visible) continue;
+		
+		// Only process StreamUP settings buttons in second pass
+		bool isStreamUPSettings = false;
+		if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
+			if (auto buttonItem = std::dynamic_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item)) {
+				isStreamUPSettings = (buttonItem->buttonType == "streamup_settings");
+			}
+		}
+		if (!isStreamUPSettings) continue;
+		
+		QToolButton* button = createButtonFromConfig(item);
+		if (button) {
+			button->setObjectName(item->id);
+			dynamicButtons[item->id] = button;
+			mainLayout->addWidget(button);
 		}
 	}
 	
@@ -1135,10 +1171,16 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 	if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
 		auto buttonItem = std::static_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item);
 		
-		// Set up built-in button
-		button->setIcon(QIcon(getThemedIconPath(buttonItem->iconPath.isEmpty() ? 
-			StreamUP::ToolbarConfig::ButtonRegistry::getButtonInfo(buttonItem->buttonType).defaultIcon : 
-			buttonItem->iconPath)));
+		// Set up built-in button - ensure we have a valid icon path
+		QString iconPath = buttonItem->iconPath;
+		if (iconPath.isEmpty()) {
+			iconPath = StreamUP::ToolbarConfig::ButtonRegistry::getButtonInfo(buttonItem->buttonType).defaultIcon;
+		}
+		// If still empty, use a default icon to prevent empty path errors
+		if (iconPath.isEmpty()) {
+			iconPath = "settings"; // Use settings icon as fallback
+		}
+		button->setIcon(QIcon(getThemedIconPath(iconPath)));
 		button->setToolTip(buttonItem->tooltip.isEmpty() ? 
 			StreamUP::ToolbarConfig::ButtonRegistry::getButtonInfo(buttonItem->buttonType).defaultTooltip : 
 			buttonItem->tooltip);

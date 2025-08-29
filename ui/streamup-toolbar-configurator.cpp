@@ -13,6 +13,10 @@
 #include <QPixmap>
 #include <QIcon>
 #include <QDateTime>
+#include <QPainter>
+#include <QPolygon>
+#include <QDrag>
+#include <QStyleOptionViewItem>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -69,6 +73,11 @@ void ToolbarConfigurator::setupUI()
     leftPanel->setStyleSheet("QWidget { background-color: " + QString(StreamUP::UIStyles::Colors::BG_PRIMARY) + "; border: none; border-radius: 24px;}");
     leftLayout = new QVBoxLayout(leftPanel);
     
+    // Add heading to left panel
+    QLabel* leftHeading = new QLabel("Available Items");
+    leftHeading->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
+    leftLayout->addWidget(leftHeading);
+    
     // Create tab widget
     itemTabWidget = new QTabWidget();
     // Style the tab widget with pill-shaped tabs and darkest color
@@ -107,6 +116,7 @@ void ToolbarConfigurator::setupUI()
     QWidget* builtinTab = new QWidget();
     QVBoxLayout* builtinTabLayout = new QVBoxLayout(builtinTab);
     builtinTabLayout->setContentsMargins(12, 12, 12, 12);
+    builtinTabLayout->setSpacing(12);
     
     builtinButtonsList = new QTreeWidget();
     builtinButtonsList->setHeaderHidden(true);
@@ -135,6 +145,26 @@ void ToolbarConfigurator::setupUI()
         "QTreeWidget::branch { "
         "    background: transparent; "
         "} "
+        "QTreeWidget::branch:closed:has-children { "
+        "    border: none; "
+        "    background: transparent; "
+        "    width: 0; "
+        "    height: 0; "
+        "    border-left: 4px solid " + QString(StreamUP::UIStyles::Colors::TEXT_SECONDARY) + "; "
+        "    border-top: 3px solid transparent; "
+        "    border-bottom: 3px solid transparent; "
+        "    margin: 6px 4px 6px 6px; "
+        "} "
+        "QTreeWidget::branch:open:has-children { "
+        "    border: none; "
+        "    background: transparent; "
+        "    width: 0; "
+        "    height: 0; "
+        "    border-top: 4px solid " + QString(StreamUP::UIStyles::Colors::TEXT_SECONDARY) + "; "
+        "    border-left: 3px solid transparent; "
+        "    border-right: 3px solid transparent; "
+        "    margin: 4px 6px 6px 6px; "
+        "} "
         "QScrollBar:vertical { "
         "    background: " + QString(StreamUP::UIStyles::Colors::BG_SECONDARY) + "; "
         "    width: 6px; "
@@ -152,12 +182,12 @@ void ToolbarConfigurator::setupUI()
         "    height: 0px; "
         "}"
     );
-    builtinTabLayout->addWidget(builtinButtonsList);
+    builtinTabLayout->addWidget(builtinButtonsList, 1); // Give tree widget stretch priority
     
     addBuiltinButton = new QPushButton("Add Selected Button");
     addBuiltinButton->setEnabled(false);
     addBuiltinButton->setStyleSheet(UIStyles::GetButtonStyle());
-    builtinTabLayout->addWidget(addBuiltinButton);
+    builtinTabLayout->addWidget(addBuiltinButton, 0); // Don't stretch button
     
     itemTabWidget->addTab(builtinTab, "OBS");
     
@@ -165,6 +195,7 @@ void ToolbarConfigurator::setupUI()
     QWidget* dockTab = new QWidget();
     QVBoxLayout* dockTabLayout = new QVBoxLayout(dockTab);
     dockTabLayout->setContentsMargins(12, 12, 12, 12);
+    dockTabLayout->setSpacing(12);
     
     dockButtonsList = new QTreeWidget();
     dockButtonsList->setHeaderHidden(true);
@@ -193,6 +224,26 @@ void ToolbarConfigurator::setupUI()
         "QTreeWidget::branch { "
         "    background: transparent; "
         "} "
+        "QTreeWidget::branch:closed:has-children { "
+        "    border: none; "
+        "    background: transparent; "
+        "    width: 0; "
+        "    height: 0; "
+        "    border-left: 4px solid " + QString(StreamUP::UIStyles::Colors::TEXT_SECONDARY) + "; "
+        "    border-top: 3px solid transparent; "
+        "    border-bottom: 3px solid transparent; "
+        "    margin: 6px 4px 6px 6px; "
+        "} "
+        "QTreeWidget::branch:open:has-children { "
+        "    border: none; "
+        "    background: transparent; "
+        "    width: 0; "
+        "    height: 0; "
+        "    border-top: 4px solid " + QString(StreamUP::UIStyles::Colors::TEXT_SECONDARY) + "; "
+        "    border-left: 3px solid transparent; "
+        "    border-right: 3px solid transparent; "
+        "    margin: 4px 6px 6px 6px; "
+        "} "
         "QScrollBar:vertical { "
         "    background: " + QString(StreamUP::UIStyles::Colors::BG_SECONDARY) + "; "
         "    width: 6px; "
@@ -210,12 +261,12 @@ void ToolbarConfigurator::setupUI()
         "    height: 0px; "
         "}"
     );
-    dockTabLayout->addWidget(dockButtonsList);
+    dockTabLayout->addWidget(dockButtonsList, 1); // Give tree widget stretch priority
     
     addDockButton = new QPushButton("Add Selected Dock Button");
     addDockButton->setEnabled(false);
     addDockButton->setStyleSheet(UIStyles::GetButtonStyle());
-    dockTabLayout->addWidget(addDockButton);
+    dockTabLayout->addWidget(addDockButton, 0); // Don't stretch button
     
     itemTabWidget->addTab(dockTab, "StreamUP");
     
@@ -223,11 +274,25 @@ void ToolbarConfigurator::setupUI()
     QWidget* spacerTab = new QWidget();
     QVBoxLayout* spacerTabLayout = new QVBoxLayout(spacerTab);
     spacerTabLayout->setContentsMargins(12, 12, 12, 12);
+    spacerTabLayout->setSpacing(0);
+    
+    // Create background container to match tree widgets
+    QWidget* spacerContainer = new QWidget();
+    spacerContainer->setStyleSheet(
+        "QWidget { "
+        "    border: none; "
+        "    border-radius: 12px; "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_DARKEST) + "; "
+        "}"
+    );
+    QVBoxLayout* spacerContainerLayout = new QVBoxLayout(spacerContainer);
+    spacerContainerLayout->setContentsMargins(8, 8, 8, 8);
+    spacerContainerLayout->setSpacing(6);
     
     // Custom spacer section
     QLabel* spacerLabel = new QLabel("Custom Spacer");
     spacerLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
-    spacerTabLayout->addWidget(spacerLabel);
+    spacerContainerLayout->addWidget(spacerLabel);
     
     QHBoxLayout* sizeLayout = new QHBoxLayout();
     sizeLayout->addWidget(new QLabel("Size (px):"));
@@ -237,24 +302,23 @@ void ToolbarConfigurator::setupUI()
     spacerSizeSpinBox->setStyleSheet(UIStyles::GetSpinBoxStyle());
     sizeLayout->addWidget(spacerSizeSpinBox);
     sizeLayout->addStretch();
-    spacerTabLayout->addLayout(sizeLayout);
+    spacerContainerLayout->addLayout(sizeLayout);
     
     addCustomSpacerButton = new QPushButton("Add Custom Spacer");
     addCustomSpacerButton->setStyleSheet(UIStyles::GetButtonStyle());
-    spacerTabLayout->addWidget(addCustomSpacerButton);
-    
-    spacerTabLayout->addSpacing(20);
+    spacerContainerLayout->addWidget(addCustomSpacerButton);
     
     // Separator section
     QLabel* separatorLabel = new QLabel("Separator");
     separatorLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
-    spacerTabLayout->addWidget(separatorLabel);
+    spacerContainerLayout->addWidget(separatorLabel);
     
     addSeparatorButton = new QPushButton("Add Separator");
     addSeparatorButton->setStyleSheet(UIStyles::GetButtonStyle());
-    spacerTabLayout->addWidget(addSeparatorButton);
+    spacerContainerLayout->addWidget(addSeparatorButton);
     
-    spacerTabLayout->addStretch();
+    spacerTabLayout->addWidget(spacerContainer);
+    spacerTabLayout->addStretch(); // Push content to top
     itemTabWidget->addTab(spacerTab, "Spacing");
     
     mainSplitter->addWidget(leftPanel);
@@ -265,7 +329,7 @@ void ToolbarConfigurator::setupUI()
     rightLayout = new QVBoxLayout(rightPanel);
     
     configLabel = new QLabel("Current Toolbar Configuration:");
-    configLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
+    configLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle() + "font-weight: bold;");
     rightLayout->addWidget(configLabel);
     
     currentConfigList = new DraggableListWidget();
@@ -340,8 +404,9 @@ void ToolbarConfigurator::setupUI()
     rightLayout->addLayout(configButtonsLayout);
     mainSplitter->addWidget(rightPanel);
     
-    // Set splitter proportions (narrower tab boxes, wider right panel)
+    // Set splitter proportions (narrower tab boxes, wider right panel)  
     mainSplitter->setSizes({280, 420});
+    mainSplitter->setHandleWidth(12); // Add 12px gap between panels
     
     // === BOTTOM BUTTONS ===
     bottomButtonsLayout = new QHBoxLayout();
@@ -366,9 +431,69 @@ void ToolbarConfigurator::setupUI()
     connect(currentConfigList, &QListWidget::itemSelectionChanged, this, &ToolbarConfigurator::onItemSelectionChanged);
     connect(currentConfigList, &QListWidget::itemDoubleClicked, this, &ToolbarConfigurator::onItemDoubleClicked);
     connect(currentConfigList, &QListWidget::itemClicked, this, &ToolbarConfigurator::onItemClicked);
-    connect(currentConfigList, &DraggableListWidget::itemMoved, [this](int from, int to) {
-        config.moveItem(from, to);
-        populateCurrentConfiguration();
+    // Connect drag-and-drop with proper ID-based indexing
+    connect(currentConfigList, &DraggableListWidget::itemMoved, [this](int fromUIIndex, int toUIIndex) {
+        // Get the item being moved using the original fromUIIndex before any moves
+        if (fromUIIndex < 0 || fromUIIndex >= currentConfigList->count()) {
+            return;
+        }
+        
+        QListWidgetItem* draggedUIItem = currentConfigList->item(fromUIIndex);
+        if (!draggedUIItem) {
+            return;
+        }
+        
+        auto draggedItem = draggedUIItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+        if (!draggedItem) {
+            return;
+        }
+        
+        QString draggedItemId = draggedItem->id;
+        
+        // Find the actual config index of the dragged item
+        int fromConfigIndex = config.getItemIndex(draggedItemId);
+        if (fromConfigIndex < 0) {
+            return;
+        }
+        
+        // Calculate target config index
+        int toConfigIndex;
+        if (toUIIndex >= currentConfigList->count()) {
+            // Dropped at the end
+            toConfigIndex = config.items.size() - 1;
+        } else {
+            // Find what item is at the target UI position
+            QListWidgetItem* targetUIItem = currentConfigList->item(toUIIndex);
+            if (!targetUIItem) {
+                return;
+            }
+            
+            auto targetItem = targetUIItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+            if (!targetItem) {
+                return;
+            }
+            
+            toConfigIndex = config.getItemIndex(targetItem->id);
+            if (toConfigIndex < 0) {
+                return;
+            }
+        }
+        
+        // Perform the move in config
+        if (fromConfigIndex != toConfigIndex) {
+            config.moveItem(fromConfigIndex, toConfigIndex);
+            populateCurrentConfiguration();
+            
+            // Restore selection to moved item
+            for (int i = 0; i < currentConfigList->count(); ++i) {
+                QListWidgetItem* listItem = currentConfigList->item(i);
+                auto listItemData = listItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+                if (listItemData && listItemData->id == draggedItemId) {
+                    currentConfigList->setCurrentRow(i);
+                    break;
+                }
+            }
+        }
     });
     
     connect(addBuiltinButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddBuiltinButton);
@@ -644,21 +769,59 @@ void ToolbarConfigurator::onRemoveItem()
 
 void ToolbarConfigurator::onMoveUp()
 {
-    int currentRow = currentConfigList->currentRow();
-    if (currentRow > 0) {
-        config.moveItem(currentRow, currentRow - 1);
-        populateCurrentConfiguration();
-        currentConfigList->setCurrentRow(currentRow - 1);
+    QListWidgetItem* selectedItem = currentConfigList->currentItem();
+    if (!selectedItem) return;
+    
+    // Get the item from the selected UI item
+    auto item = selectedItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+    if (!item) return;
+    
+    QString itemId = item->id;
+    
+    // Find the actual config index of this item (not the UI row!)
+    int configIndex = config.getItemIndex(itemId);
+    if (configIndex <= 0) return; // Can't move up if it's the first item or not found
+    
+    config.moveItem(configIndex, configIndex - 1);
+    populateCurrentConfiguration();
+    
+    // Find and select the moved item by ID
+    for (int i = 0; i < currentConfigList->count(); ++i) {
+        QListWidgetItem* listItem = currentConfigList->item(i);
+        auto listItemData = listItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+        if (listItemData && listItemData->id == itemId) {
+            currentConfigList->setCurrentRow(i);
+            break;
+        }
     }
 }
 
 void ToolbarConfigurator::onMoveDown()
 {
-    int currentRow = currentConfigList->currentRow();
-    if (currentRow >= 0 && currentRow < currentConfigList->count() - 1) {
-        config.moveItem(currentRow, currentRow + 1);
-        populateCurrentConfiguration();
-        currentConfigList->setCurrentRow(currentRow + 1);
+    QListWidgetItem* selectedItem = currentConfigList->currentItem();
+    if (!selectedItem) return;
+    
+    // Get the item from the selected UI item
+    auto item = selectedItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+    if (!item) return;
+    
+    QString itemId = item->id;
+    
+    // Find the actual config index of this item (not the UI row!)
+    int configIndex = config.getItemIndex(itemId);
+    if (configIndex < 0 || configIndex >= config.items.size() - 1) return; // Can't move down if it's the last item or not found
+    
+    config.moveItem(configIndex, configIndex + 1);
+    populateCurrentConfiguration();
+    
+    // Find and select the moved item by ID
+    for (int i = 0; i < currentConfigList->count(); ++i) {
+        QListWidgetItem* listItem = currentConfigList->item(i);
+        auto listItemData = listItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+        if (listItemData && listItemData->id == itemId) {
+            currentConfigList->setCurrentRow(i);
+            break;
+        }
     }
 }
 
@@ -742,16 +905,17 @@ void ToolbarConfigurator::onSpacerSettingsChanged()
 // DraggableListWidget implementation
 
 DraggableListWidget::DraggableListWidget(QWidget* parent)
-    : QListWidget(parent), dragStartIndex(-1)
+    : QListWidget(parent), dragStartIndex(-1), dropIndicatorIndex(-1)
 {
     setDragDropMode(QAbstractItemView::InternalMove);
     setDefaultDropAction(Qt::MoveAction);
     setSelectionMode(QAbstractItemView::SingleSelection);
+    setDropIndicatorShown(true);
 }
 
 void DraggableListWidget::dragEnterEvent(QDragEnterEvent* event)
 {
-    if (event->source() == this && event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist")) {
+    if (event->source() == this && event->mimeData()->hasFormat("application/x-streamup-toolbaritem")) {
         event->acceptProposedAction();
     } else {
         event->ignore();
@@ -760,11 +924,38 @@ void DraggableListWidget::dragEnterEvent(QDragEnterEvent* event)
 
 void DraggableListWidget::dragMoveEvent(QDragMoveEvent* event)
 {
-    if (event->source() == this && event->mimeData()->hasFormat("application/x-qabstractitemmodeldatalist")) {
+    if (event->source() == this && event->mimeData()->hasFormat("application/x-streamup-toolbaritem")) {
+        // Calculate drop position and update indicator
+        QPoint pos = event->position().toPoint();
+        QModelIndex index = indexAt(pos);
+        
+        if (index.isValid()) {
+            QRect rect = visualRect(index);
+            // If we're in the bottom half of the item, drop after it
+            if (pos.y() > rect.center().y()) {
+                dropIndicatorIndex = index.row() + 1;
+            } else {
+                dropIndicatorIndex = index.row();
+            }
+        } else {
+            // Dropping at the end
+            dropIndicatorIndex = count();
+        }
+        
+        // Trigger repaint to show drop indicator
+        viewport()->update();
+        
         event->acceptProposedAction();
     } else {
         event->ignore();
     }
+}
+
+void DraggableListWidget::dragLeaveEvent(QDragLeaveEvent* event)
+{
+    dropIndicatorIndex = -1;
+    viewport()->update(); // Clear drop indicator
+    QListWidget::dragLeaveEvent(event);
 }
 
 void DraggableListWidget::dropEvent(QDropEvent* event)
@@ -774,7 +965,8 @@ void DraggableListWidget::dropEvent(QDropEvent* event)
         return;
     }
     
-    int dropIndex = indexAt(event->position().toPoint()).row();
+    // Use the calculated dropIndicatorIndex from dragMoveEvent
+    int dropIndex = dropIndicatorIndex;
     if (dropIndex < 0) {
         dropIndex = count();
     }
@@ -789,15 +981,104 @@ void DraggableListWidget::dropEvent(QDropEvent* event)
     }
     
     dragStartIndex = -1;
+    dropIndicatorIndex = -1;
+    viewport()->update(); // Clear drop indicator
     event->acceptProposedAction();
 }
 
 void DraggableListWidget::startDrag(Qt::DropActions supportedActions)
 {
     QListWidgetItem* item = currentItem();
-    if (item) {
-        dragStartIndex = row(item);
-        QListWidget::startDrag(supportedActions);
+    if (!item) return;
+    
+    dragStartIndex = row(item);
+    
+    // Create a custom drag with transparent pixmap
+    QDrag* drag = new QDrag(this);
+    QMimeData* mimeData = new QMimeData();
+    
+    // Set up custom mime data to avoid QVariant serialization issues
+    mimeData->setData("application/x-streamup-toolbaritem", QByteArray::number(dragStartIndex));
+    
+    // Create a transparent version of the item
+    QRect itemRect = visualItemRect(item);
+    QPixmap pixmap(itemRect.size());
+    pixmap.fill(Qt::transparent);
+    
+    // Render the item onto the pixmap
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    
+    // Draw the item with the widget's style
+    QStyleOptionViewItem option;
+    option.rect = QRect(0, 0, itemRect.width(), itemRect.height());
+    option.state = QStyle::State_Selected;
+    option.displayAlignment = Qt::AlignLeft | Qt::AlignVCenter;
+    option.decorationAlignment = Qt::AlignLeft | Qt::AlignVCenter;
+    option.decorationSize = iconSize();
+    option.font = font();
+    option.fontMetrics = fontMetrics();
+    option.palette = palette();
+    option.text = item->text();
+    option.icon = item->icon();
+    
+    // Draw the item normally first
+    style()->drawControl(QStyle::CE_ItemViewItem, &option, &painter, this);
+    
+    // Apply transparency to the entire pixmap
+    QPixmap transparentPixmap(pixmap.size());
+    transparentPixmap.fill(Qt::transparent);
+    QPainter transparentPainter(&transparentPixmap);
+    transparentPainter.setOpacity(0.5); // 50% transparency
+    transparentPainter.drawPixmap(0, 0, pixmap);
+    
+    drag->setMimeData(mimeData);
+    drag->setPixmap(transparentPixmap);
+    drag->setHotSpot(QPoint(transparentPixmap.width() / 2, transparentPixmap.height() / 2));
+    
+    // Start the drag operation
+    drag->exec(supportedActions, Qt::MoveAction);
+}
+
+void DraggableListWidget::paintEvent(QPaintEvent* event)
+{
+    QListWidget::paintEvent(event);
+    
+    // Draw drop indicator if we're in a drag operation
+    if (dropIndicatorIndex >= 0 && dragStartIndex >= 0) {
+        QPainter painter(viewport());
+        painter.setRenderHint(QPainter::Antialiasing);
+        
+        // Use StreamUP primary color for the drop indicator
+        painter.setPen(QPen(QColor("#0076df"), 2));
+        painter.setBrush(QBrush(QColor("#0076df")));
+        
+        int y;
+        if (dropIndicatorIndex == count()) {
+            // Dropping at the end
+            if (count() > 0) {
+                QRect lastRect = visualRect(model()->index(count() - 1, 0));
+                y = lastRect.bottom() + 1;
+            } else {
+                y = 1;
+            }
+        } else {
+            // Dropping between items
+            QRect rect = visualRect(model()->index(dropIndicatorIndex, 0));
+            y = rect.top() - 1;
+        }
+        
+        // Draw horizontal line as drop indicator
+        painter.drawLine(5, y, width() - 10, y);
+        
+        // Draw small triangular indicators at both ends
+        QPolygon leftArrow;
+        leftArrow << QPoint(2, y) << QPoint(8, y - 3) << QPoint(8, y + 3);
+        painter.drawPolygon(leftArrow);
+        
+        QPolygon rightArrow;
+        rightArrow << QPoint(width() - 2, y) << QPoint(width() - 8, y - 3) << QPoint(width() - 8, y + 3);
+        painter.drawPolygon(rightArrow);
     }
 }
 

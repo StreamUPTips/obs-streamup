@@ -123,11 +123,14 @@ signals:
 protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
+    void dragLeaveEvent(QDragLeaveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
     void startDrag(Qt::DropActions supportedActions) override;
+    void paintEvent(QPaintEvent* event) override;
 
 private:
     int dragStartIndex;
+    int dropIndicatorIndex;
 };
 
 } // namespace StreamUP
