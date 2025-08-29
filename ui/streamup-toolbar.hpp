@@ -37,7 +37,6 @@ private slots:
     void onDockButtonClicked();
 
 private:
-    void setupUI();
     void setupDynamicUI();
     void clearLayout();
     QToolButton* createButtonFromConfig(std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem> item);
@@ -72,6 +71,9 @@ private:
     
     // Apply theme-aware styling
     void updateToolbarStyling();
+    
+    // Flag to prevent updates during UI reconstruction
+    bool isReconstructingUI = false;
     
     // OBS event handling
     static void OnFrontendEvent(enum obs_frontend_event event, void *data);
