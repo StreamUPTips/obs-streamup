@@ -28,7 +28,7 @@ ToolbarConfigurator::ToolbarConfigurator(QWidget *parent)
     
     setWindowTitle("Configure StreamUP Toolbar");
     setModal(true);
-    resize(650, 500);
+    resize(900, 650);
     
     // Apply StreamUP dialog styling
     setStyleSheet(UIStyles::GetDialogStyle());
@@ -48,19 +48,59 @@ ToolbarConfigurator::~ToolbarConfigurator() = default;
 
 void ToolbarConfigurator::setupUI()
 {
-    // Main layout
+    // Main layout with 12px margin
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(12, 12, 12, 12);
+    mainLayout->setSpacing(12);
     
     // Create splitter for left and right panels
     mainSplitter = new QSplitter(Qt::Horizontal, this);
+    // Style the splitter handle to use darkest color
+    mainSplitter->setStyleSheet(
+        "QSplitter::handle { "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_DARKEST) + "; "
+        "    width: 2px; "
+        "}"
+    );
     mainLayout->addWidget(mainSplitter);
     
     // === LEFT PANEL: Available items ===
     leftPanel = new QWidget();
+    leftPanel->setStyleSheet("QWidget { background-color: " + QString(StreamUP::UIStyles::Colors::BG_PRIMARY) + "; border: none; border-radius: 24px;}");
     leftLayout = new QVBoxLayout(leftPanel);
     
     // Create tab widget
     itemTabWidget = new QTabWidget();
+    // Style the tab widget with pill-shaped tabs and darkest color
+    itemTabWidget->setStyleSheet(
+        "QTabWidget::pane { "
+        "    border: none; "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_PRIMARY) + "; "
+        "} "
+        "QTabWidget::tab-bar { "
+        "    left: 0px; "
+        "} "
+        "QTabBar::tab { "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_DARKEST) + "; "
+        "    color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
+        "    border: none; "
+        "    padding: 4px 8px; "
+        "    margin-right: 8px; "
+        "    margin-bottom: 0px; "
+        "    border-radius: 10px; "
+        "    min-width: 30px; "
+        "} "
+        "QTabBar::tab:selected { "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
+        "} "
+        "QTabBar::tab:hover:!selected { "
+				 "    background-color: " +
+				 QString(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30) +
+				 "; "
+        "    color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
+        "}"
+    );
     leftLayout->addWidget(itemTabWidget);
     
     // === TAB 1: Built-in Buttons ===
@@ -71,8 +111,47 @@ void ToolbarConfigurator::setupUI()
     builtinButtonsList = new QTreeWidget();
     builtinButtonsList->setHeaderHidden(true);
     builtinButtonsList->setRootIsDecorated(true);
-    builtinButtonsList->setStyleSheet(UIStyles::GetListWidgetStyle() + 
-        "QTreeWidget { border-radius: 8px; }");
+    builtinButtonsList->setStyleSheet(
+        "QTreeWidget { "
+        "    border: none; "
+        "    border-radius: 12px; "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_DARKEST) + "; "
+        "    color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
+        "    selection-background-color: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    selection-color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
+        "    outline: none; "
+        "    padding: 8px; "
+        "} "
+        "QTreeWidget::item { "
+        "    padding: 4px 8px; "
+        "    border-radius: 6px; "
+        "    margin: 1px; "
+        "} "
+        "QTreeWidget::item:hover { "
+				      "    background-color: " +
+				      QString(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30) +
+				      "; "
+        "} "
+        "QTreeWidget::branch { "
+        "    background: transparent; "
+        "} "
+        "QScrollBar:vertical { "
+        "    background: " + QString(StreamUP::UIStyles::Colors::BG_SECONDARY) + "; "
+        "    width: 6px; "
+        "    border-radius: 3px; "
+        "} "
+        "QScrollBar::handle:vertical { "
+        "    background: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    border-radius: 3px; "
+        "    min-height: 20px; "
+        "} "
+        "QScrollBar::handle:vertical:hover { "
+        "    background: " + QString(StreamUP::UIStyles::Colors::PRIMARY_HOVER) + "; "
+        "} "
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { "
+        "    height: 0px; "
+        "}"
+    );
     builtinTabLayout->addWidget(builtinButtonsList);
     
     addBuiltinButton = new QPushButton("Add Selected Button");
@@ -90,8 +169,47 @@ void ToolbarConfigurator::setupUI()
     dockButtonsList = new QTreeWidget();
     dockButtonsList->setHeaderHidden(true);
     dockButtonsList->setRootIsDecorated(true);
-    dockButtonsList->setStyleSheet(UIStyles::GetListWidgetStyle() + 
-        "QTreeWidget { border-radius: 8px; }");
+    dockButtonsList->setStyleSheet(
+        "QTreeWidget { "
+        "    border: none; "
+        "    border-radius: 12px; "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_DARKEST) + "; "
+        "    color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
+        "    selection-background-color: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    selection-color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
+        "    outline: none; "
+        "    padding: 8px; "
+        "} "
+        "QTreeWidget::item { "
+        "    padding: 4px 8px; "
+        "    border-radius: 6px; "
+        "    margin: 1px; "
+        "} "
+        "QTreeWidget::item:hover { "
+				   "    background-color: " +
+				   QString(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30) +
+				   "; "
+        "} "
+        "QTreeWidget::branch { "
+        "    background: transparent; "
+        "} "
+        "QScrollBar:vertical { "
+        "    background: " + QString(StreamUP::UIStyles::Colors::BG_SECONDARY) + "; "
+        "    width: 6px; "
+        "    border-radius: 3px; "
+        "} "
+        "QScrollBar::handle:vertical { "
+        "    background: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    border-radius: 3px; "
+        "    min-height: 20px; "
+        "} "
+        "QScrollBar::handle:vertical:hover { "
+        "    background: " + QString(StreamUP::UIStyles::Colors::PRIMARY_HOVER) + "; "
+        "} "
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { "
+        "    height: 0px; "
+        "}"
+    );
     dockTabLayout->addWidget(dockButtonsList);
     
     addDockButton = new QPushButton("Add Selected Dock Button");
@@ -143,6 +261,7 @@ void ToolbarConfigurator::setupUI()
     
     // === RIGHT PANEL: Current configuration ===
     rightPanel = new QWidget();
+    rightPanel->setStyleSheet("QWidget { background-color: " + QString(StreamUP::UIStyles::Colors::BG_PRIMARY) + "; border: none; border-radius: 24px;}");
     rightLayout = new QVBoxLayout(rightPanel);
     
     configLabel = new QLabel("Current Toolbar Configuration:");
@@ -150,8 +269,48 @@ void ToolbarConfigurator::setupUI()
     rightLayout->addWidget(configLabel);
     
     currentConfigList = new DraggableListWidget();
-    currentConfigList->setStyleSheet(UIStyles::GetListWidgetStyle() + 
-        "QListWidget { border-radius: 8px; }");
+    currentConfigList->setStyleSheet(
+        "QListWidget { "
+        "    border: none; "
+        "    border-radius: 12px; "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_DARKEST) + "; "
+        "    color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
+        "    selection-background-color: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    selection-color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
+        "    outline: none; "
+        "    padding: 8px; "
+        "} "
+        "QListWidget::item { "
+        "    padding: 4px 8px; "
+        "    margin: 1px; "
+        "    border-radius: 6px; "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_SECONDARY) + "; "
+        "} "
+        "QListWidget::item:selected { "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "} "
+        "QListWidget::item:hover { "
+				     "    background-color: " +
+				     QString(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30) +
+				     "; "
+        "} "
+        "QScrollBar:vertical { "
+        "    background: " + QString(StreamUP::UIStyles::Colors::BG_SECONDARY) + "; "
+        "    width: 6px; "
+        "    border-radius: 3px; "
+        "} "
+        "QScrollBar::handle:vertical { "
+        "    background: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    border-radius: 3px; "
+        "    min-height: 20px; "
+        "} "
+        "QScrollBar::handle:vertical:hover { "
+        "    background: " + QString(StreamUP::UIStyles::Colors::PRIMARY_HOVER) + "; "
+        "} "
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { "
+        "    height: 0px; "
+        "}"
+    );
     rightLayout->addWidget(currentConfigList);
     
     // Configuration control buttons
@@ -181,8 +340,8 @@ void ToolbarConfigurator::setupUI()
     rightLayout->addLayout(configButtonsLayout);
     mainSplitter->addWidget(rightPanel);
     
-    // Set splitter proportions
-    mainSplitter->setSizes({250, 400});
+    // Set splitter proportions (narrower tab boxes, wider right panel)
+    mainSplitter->setSizes({280, 420});
     
     // === BOTTOM BUTTONS ===
     bottomButtonsLayout = new QHBoxLayout();
