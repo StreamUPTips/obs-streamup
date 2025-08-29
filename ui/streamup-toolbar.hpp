@@ -4,8 +4,11 @@
 #include <QToolButton>
 #include <QFrame>
 #include <QBoxLayout>
+#include <QMenu>
+#include <QAction>
 #include <obs.h>
 #include <obs-frontend-api.h>
+#include "streamup-toolbar-config.hpp"
 
 class StreamUPToolbar : public QToolBar {
     Q_OBJECT
@@ -16,6 +19,7 @@ public:
     
     // Public methods for external access
     void updatePositionAwareTheme();
+    void refreshFromConfiguration();
 
 private slots:
     void onStreamButtonClicked();
@@ -28,9 +32,17 @@ private slots:
     void onStudioModeButtonClicked();
     void onSettingsButtonClicked();
     void onStreamUPSettingsButtonClicked();
+    void onConfigureToolbarClicked();
+    void onDockButtonClicked();
 
 private:
     void setupUI();
+    void setupDynamicUI();
+    void clearLayout();
+    QToolButton* createButtonFromConfig(std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem> item);
+    QFrame* createSeparatorFromConfig(bool isVertical);
+    void executeDockAction(const QString& actionType);
+    void showToolbarContextMenu(const QPoint& position);
     void updateStreamButton();
     void updateRecordButton();
     void updatePauseButton();
@@ -75,4 +87,13 @@ private:
     // Layout management for orientation changes
     QWidget* centralWidget;
     QBoxLayout* mainLayout;
+    
+    // Configuration system
+    StreamUP::ToolbarConfig::ToolbarConfiguration toolbarConfig;
+    QMap<QString, QToolButton*> dynamicButtons; // Maps item ID to button
+    QMenu* contextMenu;
+    QAction* configureAction;
+
+protected:
+    void contextMenuEvent(QContextMenuEvent* event) override;
 };

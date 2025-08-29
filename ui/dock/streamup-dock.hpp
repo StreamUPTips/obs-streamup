@@ -26,6 +26,16 @@ public:
 	~StreamUPDock();
 	
 	static void NotifyAllDocksSettingsChanged();
+	
+	// Button actions - made public for toolbar access
+	void ButtonToggleLockAllSources();
+	void ButtonToggleLockSourcesInCurrentScene();
+	void ButtonRefreshAudioMonitoring();
+	void ButtonRefreshBrowserSources();
+	void ButtonShowVideoCapturePopup();
+	void ButtonActivateAllVideoCaptureDevices();
+	void ButtonDeactivateAllVideoCaptureDevices();
+	void ButtonRefreshAllVideoCaptureDevices();
 
 private:
 	Ui::StreamUPDock *ui;
@@ -39,15 +49,6 @@ private:
 	bool isProcessing;
 
 	void applyFileIconToButton(QPushButton *button, const QString &filePath);
-
-	void ButtonToggleLockAllSources();
-	void ButtonToggleLockSourcesInCurrentScene();
-	void ButtonRefreshAudioMonitoring();
-	void ButtonRefreshBrowserSources();
-	void ButtonShowVideoCapturePopup();
-	void ButtonActivateAllVideoCaptureDevices();
-	void ButtonDeactivateAllVideoCaptureDevices();
-	void ButtonRefreshAllVideoCaptureDevices();
 	void updateButtonIcons();
 
 	bool AreAllSourcesLockedInAllScenes();

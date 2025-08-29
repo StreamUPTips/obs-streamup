@@ -1,4 +1,6 @@
 #include "streamup-toolbar.hpp"
+#include "streamup-toolbar-configurator.hpp"
+#include "dock/streamup-dock.hpp"
 #include "ui-styles.hpp"
 #include "ui-helpers.hpp"
 #include "settings-manager.hpp"
@@ -10,18 +12,29 @@
 #include <QAction>
 #include <QFrame>
 #include <QPushButton>
+#include <QContextMenuEvent>
+#include <QMenu>
+#include <QMessageBox>
 #include <util/config-file.h>
 
 StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent), 
 	streamButton(nullptr), recordButton(nullptr), pauseButton(nullptr), 
 	replayBufferButton(nullptr), saveReplayButton(nullptr), virtualCameraButton(nullptr), 
 	virtualCameraConfigButton(nullptr), studioModeButton(nullptr), settingsButton(nullptr),
-	streamUPSettingsButton(nullptr)
+	streamUPSettingsButton(nullptr), centralWidget(nullptr), mainLayout(nullptr), 
+	contextMenu(nullptr), configureAction(nullptr)
 {
 	setObjectName("StreamUPToolbar");
 	setWindowTitle("StreamUP Controls");
 
-	setupUI();
+	// Setup context menu
+	contextMenu = new QMenu(this);
+	configureAction = contextMenu->addAction("Configure Toolbar...");
+	connect(configureAction, &QAction::triggered, this, &StreamUPToolbar::onConfigureToolbarClicked);
+
+	// Load configuration and setup UI
+	toolbarConfig.loadFromSettings();
+	setupDynamicUI();
 	updateAllButtons();
 	
 	// Ensure icons are properly themed on startup
@@ -992,6 +1005,286 @@ void StreamUPToolbar::updateLayoutOrientation()
 		}
 		
 		blog(LOG_INFO, "[StreamUP] Toolbar layout orientation updated successfully");
+	}
+}
+
+void StreamUPToolbar::setupDynamicUI()
+{
+	// Set basic toolbar properties like obs-toolbar
+	setMovable(false);
+	setFloatable(false);
+	setOrientation(Qt::Horizontal);
+	
+	// Clear existing toolbar contents
+	clear();
+	
+	// Create a central widget with horizontal layout (will be changed to vertical if needed)
+	centralWidget = new QWidget(this);
+	mainLayout = new QHBoxLayout(centralWidget);
+	mainLayout->setContentsMargins(8, 0, 8, 0);
+	mainLayout->setSpacing(4);
+	
+	// Clear existing buttons
+	dynamicButtons.clear();
+	streamButton = nullptr;
+	recordButton = nullptr;
+	pauseButton = nullptr;
+	replayBufferButton = nullptr;
+	saveReplayButton = nullptr;
+	virtualCameraButton = nullptr;
+	virtualCameraConfigButton = nullptr;
+	studioModeButton = nullptr;
+	settingsButton = nullptr;
+	streamUPSettingsButton = nullptr;
+	
+	// Create widgets from configuration
+	bool needsStretch = false;
+	for (const auto& item : toolbarConfig.items) {
+		if (!item->visible) continue;
+		
+		if (item->type == StreamUP::ToolbarConfig::ItemType::Separator) {
+			QFrame* separator = createSeparatorFromConfig(false);
+			separator->setObjectName(item->id);
+			separator->setProperty("separatorType", "streamup-separator");
+			mainLayout->addWidget(separator);
+		} else if (item->type == StreamUP::ToolbarConfig::ItemType::CustomSpacer) {
+			auto spacerItem = std::static_pointer_cast<StreamUP::ToolbarConfig::CustomSpacerItem>(item);
+			// Create a fixed-size spacer widget
+			QWidget* spacerWidget = new QWidget(centralWidget);
+			spacerWidget->setObjectName(item->id);
+			spacerWidget->setFixedSize(spacerItem->size, 28); // Match button height
+			spacerWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
+			spacerWidget->setStyleSheet("background: transparent;");
+			mainLayout->addWidget(spacerWidget);
+		} else {
+			QToolButton* button = createButtonFromConfig(item);
+			if (button) {
+				button->setObjectName(item->id);
+				dynamicButtons[item->id] = button;
+				
+				// Check if this is the StreamUP settings button (should be on the right)
+				if (auto buttonItem = std::dynamic_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item)) {
+					if (buttonItem->buttonType == "streamup_settings") {
+						if (!needsStretch) {
+							mainLayout->addStretch();
+							needsStretch = true;
+						}
+					}
+				}
+				
+				mainLayout->addWidget(button);
+			}
+		}
+	}
+	
+	// Apply CSS styling
+	updateToolbarStyling();
+	
+	// Add the central widget to toolbar
+	addWidget(centralWidget);
+	
+	// Update layout orientation based on current position
+	updateLayoutOrientation();
+}
+
+QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem> item)
+{
+	QToolButton* button = new QToolButton(centralWidget);
+	button->setProperty("buttonType", "streamup-button");
+	button->setFixedSize(28, 28);
+	button->setIconSize(QSize(20, 20));
+	button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+	
+	if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
+		auto buttonItem = std::static_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item);
+		
+		// Set up built-in button
+		button->setIcon(QIcon(getThemedIconPath(buttonItem->iconPath.isEmpty() ? 
+			StreamUP::ToolbarConfig::ButtonRegistry::getButtonInfo(buttonItem->buttonType).defaultIcon : 
+			buttonItem->iconPath)));
+		button->setToolTip(buttonItem->tooltip.isEmpty() ? 
+			StreamUP::ToolbarConfig::ButtonRegistry::getButtonInfo(buttonItem->buttonType).defaultTooltip : 
+			buttonItem->tooltip);
+		button->setCheckable(buttonItem->checkable);
+		
+		// Connect to appropriate slot based on button type
+		if (buttonItem->buttonType == "stream") {
+			streamButton = button;
+			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onStreamButtonClicked);
+		} else if (buttonItem->buttonType == "record") {
+			recordButton = button;
+			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onRecordButtonClicked);
+		} else if (buttonItem->buttonType == "pause") {
+			pauseButton = button;
+			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onPauseButtonClicked);
+		} else if (buttonItem->buttonType == "replay_buffer") {
+			replayBufferButton = button;
+			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onReplayBufferButtonClicked);
+		} else if (buttonItem->buttonType == "save_replay") {
+			saveReplayButton = button;
+			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onSaveReplayButtonClicked);
+		} else if (buttonItem->buttonType == "virtual_camera") {
+			virtualCameraButton = button;
+			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onVirtualCameraButtonClicked);
+		} else if (buttonItem->buttonType == "virtual_camera_config") {
+			virtualCameraConfigButton = button;
+			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onVirtualCameraConfigButtonClicked);
+		} else if (buttonItem->buttonType == "studio_mode") {
+			studioModeButton = button;
+			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onStudioModeButtonClicked);
+		} else if (buttonItem->buttonType == "settings") {
+			settingsButton = button;
+			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onSettingsButtonClicked);
+		} else if (buttonItem->buttonType == "streamup_settings") {
+			streamUPSettingsButton = button;
+			// Use the special StreamUP logo icon
+			button->setIcon(QIcon(":images/icons/social/streamup-logo-button.svg"));
+			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onStreamUPSettingsButtonClicked);
+		}
+		
+	} else if (item->type == StreamUP::ToolbarConfig::ItemType::DockButton) {
+		auto dockItem = std::static_pointer_cast<StreamUP::ToolbarConfig::DockButtonItem>(item);
+		
+		// Set up dock button
+		if (!dockItem->iconPath.isEmpty()) {
+			// Use themed icon system for dock button icons
+			button->setIcon(QIcon(getThemedIconPath(dockItem->iconPath)));
+		} else {
+			// Use a default dock icon
+			button->setIcon(QIcon(getThemedIconPath("settings")));
+		}
+		button->setToolTip(dockItem->tooltip);
+		button->setCheckable(false);
+		
+		// Store dock action type in button's property
+		button->setProperty("dockActionType", dockItem->dockButtonType);
+		connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onDockButtonClicked);
+	}
+	
+	return button;
+}
+
+QFrame* StreamUPToolbar::createSeparatorFromConfig(bool isVertical)
+{
+	QFrame* separator = new QFrame();
+	if (isVertical) {
+		separator->setFrameShape(QFrame::HLine);
+		separator->setFixedSize(16, 1);
+	} else {
+		separator->setFrameShape(QFrame::VLine);
+		separator->setFixedSize(1, 16);
+	}
+	separator->setFrameShadow(QFrame::Plain);
+	separator->setLineWidth(1);
+	return separator;
+}
+
+void StreamUPToolbar::refreshFromConfiguration()
+{
+	// Clear the current toolbar state
+	clear();
+	dynamicButtons.clear();
+	
+	// Reset button pointers
+	streamButton = nullptr;
+	recordButton = nullptr;
+	pauseButton = nullptr;
+	replayBufferButton = nullptr;
+	saveReplayButton = nullptr;
+	virtualCameraButton = nullptr;
+	virtualCameraConfigButton = nullptr;
+	studioModeButton = nullptr;
+	settingsButton = nullptr;
+	streamUPSettingsButton = nullptr;
+	centralWidget = nullptr;
+	mainLayout = nullptr;
+	
+	// Reload configuration and rebuild UI
+	toolbarConfig.loadFromSettings();
+	setupDynamicUI();
+	updateAllButtons();
+	updateIconsForTheme();
+	updatePositionAwareTheme();
+}
+
+void StreamUPToolbar::clearLayout()
+{
+	if (mainLayout) {
+		// Delete all widgets in the layout
+		while (QLayoutItem* item = mainLayout->takeAt(0)) {
+			if (QWidget* widget = item->widget()) {
+				widget->deleteLater();
+			}
+			delete item;
+		}
+	}
+	
+	dynamicButtons.clear();
+}
+
+void StreamUPToolbar::onConfigureToolbarClicked()
+{
+	StreamUP::ToolbarConfigurator configurator(this);
+	if (configurator.exec() == QDialog::Accepted) {
+		// Refresh the toolbar with new configuration
+		refreshFromConfiguration();
+	}
+}
+
+
+void StreamUPToolbar::onDockButtonClicked()
+{
+	QToolButton* button = qobject_cast<QToolButton*>(sender());
+	if (!button) return;
+	
+	QString actionType = button->property("dockActionType").toString();
+	executeDockAction(actionType);
+}
+
+
+void StreamUPToolbar::executeDockAction(const QString& actionType)
+{
+	// Find the StreamUP dock to call its functions
+	QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
+	if (!mainWindow) return;
+	
+	StreamUPDock* dock = mainWindow->findChild<StreamUPDock*>();
+	if (!dock) {
+		QMessageBox::warning(this, "StreamUP Dock", 
+			"StreamUP dock is not available. Please make sure it is loaded.");
+		return;
+	}
+	
+	// Call the appropriate dock function based on action type
+	if (actionType == "lock_all_sources") {
+		dock->ButtonToggleLockAllSources();
+	} else if (actionType == "lock_current_sources") {
+		dock->ButtonToggleLockSourcesInCurrentScene();
+	} else if (actionType == "refresh_audio") {
+		dock->ButtonRefreshAudioMonitoring();
+	} else if (actionType == "refresh_browser") {
+		dock->ButtonRefreshBrowserSources();
+	} else if (actionType == "video_capture") {
+		dock->ButtonShowVideoCapturePopup();
+	} else if (actionType == "activate_video_devices") {
+		dock->ButtonActivateAllVideoCaptureDevices();
+	} else if (actionType == "deactivate_video_devices") {
+		dock->ButtonDeactivateAllVideoCaptureDevices();
+	} else if (actionType == "refresh_video_devices") {
+		dock->ButtonRefreshAllVideoCaptureDevices();
+	} else if (actionType == "streamup_settings") {
+		// Open StreamUP settings dialog
+		ShowDockConfigDialog();
+	} else {
+		QMessageBox::warning(this, "Unknown Action", 
+			QString("Unknown dock action: %1").arg(actionType));
+	}
+}
+
+void StreamUPToolbar::contextMenuEvent(QContextMenuEvent* event)
+{
+	if (contextMenu) {
+		contextMenu->popup(event->globalPos());
 	}
 }
 

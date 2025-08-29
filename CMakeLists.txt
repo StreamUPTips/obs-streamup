@@ -86,7 +86,11 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/dock/streamup-dock.hpp
   ui/dock/streamup-dock.cpp
   ui/streamup-toolbar.hpp
-  ui/streamup-toolbar.cpp)
+  ui/streamup-toolbar.cpp
+  ui/streamup-toolbar-config.hpp
+  ui/streamup-toolbar-config.cpp
+  ui/streamup-toolbar-configurator.hpp
+  ui/streamup-toolbar-configurator.cpp)
 
 # Integrations module files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -175,6 +179,14 @@ source_group("UI" FILES
 source_group("UI\\Dock" FILES
   ui/dock/streamup-dock.hpp
   ui/dock/streamup-dock.cpp)
+
+source_group("UI\\Toolbar" FILES
+  ui/streamup-toolbar.hpp
+  ui/streamup-toolbar.cpp
+  ui/streamup-toolbar-config.hpp
+  ui/streamup-toolbar-config.cpp
+  ui/streamup-toolbar-configurator.hpp
+  ui/streamup-toolbar-configurator.cpp)
 
 source_group("Integrations" FILES
   integrations/websocket-api.hpp
