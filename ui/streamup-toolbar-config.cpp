@@ -267,6 +267,7 @@ int ToolbarConfiguration::getItemIndex(const QString& id) const {
     return -1;
 }
 
+
 QList<DockButtonItem> ToolbarConfiguration::getAvailableDockButtons() {
     QList<DockButtonItem> buttons;
     
@@ -333,7 +334,9 @@ QList<BuiltinButtonInfo> ButtonRegistry::getBuiltinButtons() {
     
     buttons.append({"stream", "stream", "Stream", "streaming-inactive", "Start/Stop Streaming", true});
     buttons.append({"record", "record", "Record", "record-off", "Start/Stop Recording", true});
+    // Note: pause button is auto-managed by record button, not configurable
     buttons.append({"replay_buffer", "replay_buffer", "Replay Buffer", "replay-buffer-off", "Start/Stop Replay Buffer", true});
+    // Note: save_replay button is auto-managed by replay_buffer button, not configurable
     buttons.append({"virtual_camera", "virtual_camera", "Virtual Camera", "virtual-camera", "Start/Stop Virtual Camera", true});
     buttons.append({"virtual_camera_config", "virtual_camera_config", "Virtual Camera Config", "virtual-camera-settings", "Virtual Camera Configuration", false});
     buttons.append({"studio_mode", "studio_mode", "Studio Mode", "studio-mode", "Toggle Studio Mode", true});
