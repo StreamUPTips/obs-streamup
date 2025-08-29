@@ -96,6 +96,12 @@ void InitializeSettingsSystem();
 void ShowSettingsDialog();
 
 /**
+ * @brief Show the settings dialog window with a specific tab selected
+ * @param tabIndex The index of the tab to open (0=General, 1=Toolbar Settings, etc.)
+ */
+void ShowSettingsDialog(int tabIndex);
+
+/**
  * @brief Check if notifications are currently muted
  * @return bool True if notifications are muted
  */

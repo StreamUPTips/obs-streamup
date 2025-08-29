@@ -318,9 +318,9 @@ QList<DockButtonItem> ToolbarConfiguration::getAvailableDockButtons() {
     refreshVideoButton.tooltip = "Refresh All Video Capture Devices";
     buttons.append(refreshVideoButton);
     
-    // StreamUP Settings - use settings icon
+    // StreamUP Settings - use StreamUP logo icon
     auto streamupSettingsButton = DockButtonItem("dock_streamup_settings", "streamup_settings", "Open StreamUP Settings");
-    streamupSettingsButton.iconPath = "settings";
+    streamupSettingsButton.iconPath = "streamup-logo-button";
     streamupSettingsButton.tooltip = "Open StreamUP Settings";
     buttons.append(streamupSettingsButton);
     
@@ -333,9 +333,7 @@ QList<BuiltinButtonInfo> ButtonRegistry::getBuiltinButtons() {
     
     buttons.append({"stream", "stream", "Stream", "streaming-inactive", "Start/Stop Streaming", true});
     buttons.append({"record", "record", "Record", "record-off", "Start/Stop Recording", true});
-    buttons.append({"pause", "pause", "Pause Recording", "pause", "Pause/Resume Recording", true});
     buttons.append({"replay_buffer", "replay_buffer", "Replay Buffer", "replay-buffer-off", "Start/Stop Replay Buffer", true});
-    buttons.append({"save_replay", "save_replay", "Save Replay", "save-replay", "Save Replay", false});
     buttons.append({"virtual_camera", "virtual_camera", "Virtual Camera", "virtual-camera", "Start/Stop Virtual Camera", true});
     buttons.append({"virtual_camera_config", "virtual_camera_config", "Virtual Camera Config", "virtual-camera-settings", "Virtual Camera Configuration", false});
     buttons.append({"studio_mode", "studio_mode", "Studio Mode", "studio-mode", "Toggle Studio Mode", true});

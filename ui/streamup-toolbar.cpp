@@ -1,6 +1,7 @@
 #include "streamup-toolbar.hpp"
 #include "streamup-toolbar-configurator.hpp"
 #include "dock/streamup-dock.hpp"
+#include "../video-capture-popup.hpp"
 #include "ui-styles.hpp"
 #include "ui-helpers.hpp"
 #include "settings-manager.hpp"
@@ -31,6 +32,9 @@ StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent),
 	contextMenu = new QMenu(this);
 	configureAction = contextMenu->addAction("Configure Toolbar...");
 	connect(configureAction, &QAction::triggered, this, &StreamUPToolbar::onConfigureToolbarClicked);
+	
+	toolbarSettingsAction = contextMenu->addAction("Toolbar Settings");
+	connect(toolbarSettingsAction, &QAction::triggered, this, &StreamUPToolbar::onToolbarSettingsClicked);
 
 	// Load configuration and setup UI
 	toolbarConfig.loadFromSettings();
@@ -587,6 +591,39 @@ void StreamUPToolbar::updateStreamUPSettingsButton()
 	if (streamUPSettingsButton) {
 		// StreamUP logo button stays the same (social icon, not UI icon)
 		streamUPSettingsButton->setIcon(QIcon(":images/icons/social/streamup-logo-button.svg"));
+	}
+}
+
+void StreamUPToolbar::updateDockButtonIcons()
+{
+	// Update all dynamic dock buttons that may have state-dependent icons
+	for (auto it = dynamicButtons.begin(); it != dynamicButtons.end(); ++it) {
+		QToolButton* button = it.value();
+		if (!button) continue;
+		
+		// Get the dock button type from the button's property
+		QString actionType = button->property("dockActionType").toString();
+		
+		// Update icons based on current state for lock buttons
+		if (actionType == "lock_all_sources") {
+			// Check if all sources are currently locked
+			QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
+			StreamUPDock* dock = mainWindow->findChild<StreamUPDock*>();
+			if (dock) {
+				bool allLocked = dock->AreAllSourcesLockedInAllScenes();
+				QString iconName = allLocked ? "all-scene-source-locked" : "all-scene-source-unlocked";
+				button->setIcon(QIcon(getThemedIconPath(iconName)));
+			}
+		} else if (actionType == "lock_current_sources") {
+			// Check if current scene sources are locked
+			QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
+			StreamUPDock* dock = mainWindow->findChild<StreamUPDock*>();
+			if (dock) {
+				bool currentLocked = dock->AreAllSourcesLockedInCurrentScene();
+				QString iconName = currentLocked ? "current-scene-source-locked" : "current-scene-source-unlocked";
+				button->setIcon(QIcon(getThemedIconPath(iconName)));
+			}
+		}
 	}
 }
 
@@ -1231,6 +1268,11 @@ void StreamUPToolbar::onConfigureToolbarClicked()
 	}
 }
 
+void StreamUPToolbar::onToolbarSettingsClicked()
+{
+	// Open StreamUP Settings on the Toolbar Settings tab (index 1)
+	StreamUP::SettingsManager::ShowSettingsDialog(1);
+}
 
 void StreamUPToolbar::onDockButtonClicked()
 {
@@ -1238,7 +1280,13 @@ void StreamUPToolbar::onDockButtonClicked()
 	if (!button) return;
 	
 	QString actionType = button->property("dockActionType").toString();
-	executeDockAction(actionType);
+	
+	// Special handling for video_capture to position popup correctly
+	if (actionType == "video_capture") {
+		executeDockActionWithButton(actionType, button);
+	} else {
+		executeDockAction(actionType);
+	}
 }
 
 
@@ -1258,8 +1306,12 @@ void StreamUPToolbar::executeDockAction(const QString& actionType)
 	// Call the appropriate dock function based on action type
 	if (actionType == "lock_all_sources") {
 		dock->ButtonToggleLockAllSources();
+		// Update toolbar dock button icons after state change
+		updateDockButtonIcons();
 	} else if (actionType == "lock_current_sources") {
 		dock->ButtonToggleLockSourcesInCurrentScene();
+		// Update toolbar dock button icons after state change
+		updateDockButtonIcons();
 	} else if (actionType == "refresh_audio") {
 		dock->ButtonRefreshAudioMonitoring();
 	} else if (actionType == "refresh_browser") {
@@ -1278,6 +1330,60 @@ void StreamUPToolbar::executeDockAction(const QString& actionType)
 	} else {
 		QMessageBox::warning(this, "Unknown Action", 
 			QString("Unknown dock action: %1").arg(actionType));
+	}
+}
+
+void StreamUPToolbar::executeDockActionWithButton(const QString& actionType, QToolButton* button)
+{
+	// Find the StreamUP dock to call its functions
+	QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
+	if (!mainWindow) return;
+	
+	StreamUPDock* dock = mainWindow->findChild<StreamUPDock*>();
+	if (!dock) {
+		QMessageBox::warning(this, "StreamUP Dock", 
+			"StreamUP dock is not available. Please make sure it is loaded.");
+		return;
+	}
+	
+	// Special handling for video_capture to position popup relative to toolbar button
+	if (actionType == "video_capture") {
+		// Check if there's already an open popup and close it
+		static VideoCapturePopup* videoCapturePopup = nullptr;
+		if (videoCapturePopup && videoCapturePopup->isVisible()) {
+			videoCapturePopup->deleteLater();
+			videoCapturePopup = nullptr;
+			return;
+		}
+		
+		// Close existing popup if open but not visible
+		if (videoCapturePopup) {
+			videoCapturePopup->deleteLater();
+			videoCapturePopup = nullptr;
+		}
+		
+		// Create new popup
+		videoCapturePopup = new VideoCapturePopup(this);
+		
+		// Connect popup signals to dock methods
+		connect(videoCapturePopup, &VideoCapturePopup::activateAllVideoCaptureDevices,
+			dock, &StreamUPDock::ButtonActivateAllVideoCaptureDevices);
+		connect(videoCapturePopup, &VideoCapturePopup::deactivateAllVideoCaptureDevices,
+			dock, &StreamUPDock::ButtonDeactivateAllVideoCaptureDevices);
+		connect(videoCapturePopup, &VideoCapturePopup::refreshAllVideoCaptureDevices,
+			dock, &StreamUPDock::ButtonRefreshAllVideoCaptureDevices);
+		
+		// Connect to handle cleanup when popup is closed
+		connect(videoCapturePopup, &QWidget::destroyed, [&]() {
+			videoCapturePopup = nullptr;
+		});
+		
+		// Show popup next to the toolbar button (not dock button)
+		QPoint buttonPos = button->mapToGlobal(QPoint(0, 0));
+		videoCapturePopup->showNearButton(buttonPos, button->size());
+	} else {
+		// For other actions, use regular dock action
+		executeDockAction(actionType);
 	}
 }
 

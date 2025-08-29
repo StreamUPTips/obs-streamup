@@ -33,6 +33,7 @@ private slots:
     void onSettingsButtonClicked();
     void onStreamUPSettingsButtonClicked();
     void onConfigureToolbarClicked();
+    void onToolbarSettingsClicked();
     void onDockButtonClicked();
 
 private:
@@ -42,6 +43,7 @@ private:
     QToolButton* createButtonFromConfig(std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem> item);
     QFrame* createSeparatorFromConfig(bool isVertical);
     void executeDockAction(const QString& actionType);
+    void executeDockActionWithButton(const QString& actionType, QToolButton* button);
     void showToolbarContextMenu(const QPoint& position);
     void updateStreamButton();
     void updateRecordButton();
@@ -53,6 +55,7 @@ private:
     void updateStudioModeButton();
     void updateSettingsButton();
     void updateStreamUPSettingsButton();
+    void updateDockButtonIcons();
     void updateAllButtons();
     void updateButtonVisibility();
     void updateIconsForTheme();
@@ -93,6 +96,7 @@ private:
     QMap<QString, QToolButton*> dynamicButtons; // Maps item ID to button
     QMenu* contextMenu;
     QAction* configureAction;
+    QAction* toolbarSettingsAction;
 
 protected:
     void contextMenuEvent(QContextMenuEvent* event) override;

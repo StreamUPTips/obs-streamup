@@ -201,8 +201,12 @@ void ToolbarConfigurator::setupUI()
     
     // Connect signals
     connect(builtinButtonsList, &QTreeWidget::itemSelectionChanged, this, &ToolbarConfigurator::updateButtonStates);
+    connect(builtinButtonsList, &QTreeWidget::itemDoubleClicked, this, &ToolbarConfigurator::onBuiltinItemDoubleClicked);
     connect(dockButtonsList, &QTreeWidget::itemSelectionChanged, this, &ToolbarConfigurator::updateButtonStates);
+    connect(dockButtonsList, &QTreeWidget::itemDoubleClicked, this, &ToolbarConfigurator::onDockItemDoubleClicked);
     connect(currentConfigList, &QListWidget::itemSelectionChanged, this, &ToolbarConfigurator::onItemSelectionChanged);
+    connect(currentConfigList, &QListWidget::itemDoubleClicked, this, &ToolbarConfigurator::onItemDoubleClicked);
+    connect(currentConfigList, &QListWidget::itemClicked, this, &ToolbarConfigurator::onItemClicked);
     connect(currentConfigList, &DraggableListWidget::itemMoved, [this](int from, int to) {
         config.moveItem(from, to);
         populateCurrentConfiguration();
@@ -281,7 +285,9 @@ void ToolbarConfigurator::populateCurrentConfiguration()
     
     for (const auto& configItem : config.items) {
         QListWidgetItem* item = createConfigurationItem(configItem);
-        currentConfigList->addItem(item);
+        if (item) { // Only add if item was successfully created
+            currentConfigList->addItem(item);
+        }
     }
     
     updateButtonStates();
@@ -289,43 +295,67 @@ void ToolbarConfigurator::populateCurrentConfiguration()
 
 QListWidgetItem* ToolbarConfigurator::createConfigurationItem(std::shared_ptr<ToolbarConfig::ToolbarItem> item)
 {
+    // Skip items that shouldn't be displayed
+    if (!item) {
+        return nullptr;
+    }
+    
     QListWidgetItem* listItem = new QListWidgetItem();
     listItem->setData(Qt::UserRole, QVariant::fromValue(item));
     
     QString displayText;
     QString iconPath;
     
+    // Add clickable blue dot for enable/disable
+    QString enabledDot = item->visible ? "🔵" : "⚫";
+    
     switch (item->type) {
     case ToolbarConfig::ItemType::Button: {
         auto buttonItem = std::static_pointer_cast<ToolbarConfig::ButtonItem>(item);
         auto buttonInfo = ToolbarConfig::ButtonRegistry::getButtonInfo(buttonItem->buttonType);
-        displayText = QString("🔵 %1").arg(buttonInfo.displayName);
+        
+        // Handle case where button info is not found or display name is empty
+        QString buttonDisplayName = buttonInfo.displayName;
+        if (buttonDisplayName.isEmpty()) {
+            // If it's a StreamUP Settings button that was removed from built-in buttons, hide it
+            if (buttonItem->buttonType == "streamup_settings") {
+                return nullptr; // Hide this item completely
+            } 
+            // Also hide pause and save_replay buttons that were removed
+            else if (buttonItem->buttonType == "pause" || buttonItem->buttonType == "save_replay") {
+                return nullptr; // Hide these items completely
+            } else {
+                // For other unknown buttons, use the button type
+                buttonDisplayName = buttonItem->buttonType;
+            }
+        }
+        
+        displayText = QString("%1 %2").arg(enabledDot).arg(buttonDisplayName);
         break;
     }
     case ToolbarConfig::ItemType::Separator: {
-        displayText = "━━━ Separator ━━━";
-        listItem->setTextAlignment(Qt::AlignCenter);
+        displayText = QString("%1 ━━━ Separator ━━━").arg(enabledDot);
         break;
     }
     case ToolbarConfig::ItemType::CustomSpacer: {
         auto spacerItem = std::static_pointer_cast<ToolbarConfig::CustomSpacerItem>(item);
-        displayText = QString("↔️ Spacer (%1px)").arg(spacerItem->size);
+        displayText = QString("%1 ↔️ Spacer (%2px) ↔️").arg(enabledDot).arg(spacerItem->size);
         break;
     }
     case ToolbarConfig::ItemType::DockButton: {
         auto dockItem = std::static_pointer_cast<ToolbarConfig::DockButtonItem>(item);
-        displayText = QString("🔧 %1 (Dock)").arg(dockItem->name);
+        // Special handling for StreamUP Settings - show without "(Dock)" suffix
+        if (dockItem->dockButtonType == "streamup_settings") {
+            displayText = QString("%1 %2").arg(enabledDot).arg(dockItem->name);
+        } else {
+            displayText = QString("%1 %2 (Dock)").arg(enabledDot).arg(dockItem->name);
+        }
         break;
     }
     }
     
     listItem->setText(displayText);
     listItem->setFlags(listItem->flags() | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled);
-    
-    if (!item->visible) {
-        listItem->setForeground(QColor(128, 128, 128));
-        listItem->setText(displayText + " (Hidden)");
-    }
     
     return listItem;
 }
@@ -372,6 +402,16 @@ void ToolbarConfigurator::onAddBuiltinButton()
     populateCurrentConfiguration();
 }
 
+void ToolbarConfigurator::onBuiltinItemDoubleClicked(QTreeWidgetItem* treeItem, int column)
+{
+    Q_UNUSED(column);
+    if (!treeItem || treeItem->parent() == nullptr) return; // Only allow child items, not categories
+    
+    // Simulate the add builtin button click
+    builtinButtonsList->setCurrentItem(treeItem);
+    onAddBuiltinButton();
+}
+
 void ToolbarConfigurator::onAddDockButton()
 {
     QTreeWidgetItem* selected = dockButtonsList->currentItem();
@@ -395,6 +435,16 @@ void ToolbarConfigurator::onAddDockButton()
             break;
         }
     }
+}
+
+void ToolbarConfigurator::onDockItemDoubleClicked(QTreeWidgetItem* treeItem, int column)
+{
+    Q_UNUSED(column);
+    if (!treeItem || treeItem->parent() == nullptr) return; // Only allow child items, not categories
+    
+    // Simulate the add dock button click
+    dockButtonsList->setCurrentItem(treeItem);
+    onAddDockButton();
 }
 
 void ToolbarConfigurator::onAddSeparator()
@@ -456,6 +506,42 @@ void ToolbarConfigurator::onMoveDown()
 void ToolbarConfigurator::onItemSelectionChanged()
 {
     updateButtonStates();
+}
+
+void ToolbarConfigurator::onItemClicked(QListWidgetItem* listItem)
+{
+    if (!listItem) return;
+    
+    // Get the click position relative to the item
+    QPoint clickPos = currentConfigList->mapFromGlobal(QCursor::pos());
+    QRect itemRect = currentConfigList->visualItemRect(listItem);
+    
+    // Check if click was in the blue dot area (first ~25 pixels)
+    if (clickPos.x() - itemRect.x() <= 25) {
+        auto item = listItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+        if (!item) return;
+        
+        // Toggle visibility
+        item->visible = !item->visible;
+        
+        // Update the configuration and refresh the display
+        populateCurrentConfiguration(); // Refresh the display to show new state
+    }
+}
+
+void ToolbarConfigurator::onItemDoubleClicked(QListWidgetItem* listItem)
+{
+    if (!listItem) return;
+    
+    auto item = listItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+    if (!item) return;
+    
+    // Toggle visibility
+    item->visible = !item->visible;
+    
+    // Update the configuration and refresh the display
+    config.saveToSettings(); // Save the change immediately
+    populateCurrentConfiguration(); // Refresh the display to show new state
 }
 
 void ToolbarConfigurator::onResetToDefault()

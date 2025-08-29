@@ -42,13 +42,17 @@ public:
 
 private slots:
     void onAddBuiltinButton();
+    void onBuiltinItemDoubleClicked(QTreeWidgetItem* item, int column);
     void onAddDockButton();
+    void onDockItemDoubleClicked(QTreeWidgetItem* item, int column);
     void onAddSeparator();
     void onAddCustomSpacer();
     void onRemoveItem();
     void onMoveUp();
     void onMoveDown();
     void onItemSelectionChanged();
+    void onItemClicked(QListWidgetItem* item);
+    void onItemDoubleClicked(QListWidgetItem* item);
     void onResetToDefault();
     void onSave();
     void onCancel();

@@ -7,6 +7,8 @@
 #include "hotkey-manager.hpp"
 #include "hotkey-widget.hpp"
 #include "dock/streamup-dock.hpp"
+#include "streamup-toolbar.hpp"
+#include "streamup-toolbar-configurator.hpp"
 #include <obs-module.h>
 #include <obs-properties.h>
 #include <obs-frontend-api.h>
@@ -339,6 +341,11 @@ void InitializeSettingsSystem()
 
 void ShowSettingsDialog()
 {
+	ShowSettingsDialog(0); // Default to General Settings tab
+}
+
+void ShowSettingsDialog(int tabIndex)
+{
 	// Check if settings dialog is already open
 	if (!settingsDialog.isNull() && settingsDialog->isVisible()) {
 		// Bring existing dialog to front
@@ -347,7 +354,7 @@ void ShowSettingsDialog()
 		return;
 	}
 
-	StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
+	StreamUP::UIHelpers::ShowDialogOnUIThread([tabIndex]() {
 		obs_data_t *settings = LoadSettings();
 		if (!settings) {
 			return;
@@ -440,7 +447,7 @@ void ShowSettingsDialog()
 		for (const QString &category : categories) {
 			categoryList->addItem(category);
 		}
-		categoryList->setCurrentRow(0);
+		categoryList->setCurrentRow(tabIndex);
 
 		// Right content area
 		// Note: No scroll area needed with stacked widget approach
@@ -704,6 +711,41 @@ void ShowSettingsDialog()
 		toolbarPositionLayout->addStretch();
 		toolbarPositionLayout->addWidget(positionComboBox);
 		toolbarLayout->addLayout(toolbarPositionLayout);
+
+		// Add spacing between sections
+		toolbarLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+
+		// Add "Configure Toolbar" button
+		QHBoxLayout *configureToolbarLayout = new QHBoxLayout();
+		
+		QLabel *configureToolbarLabel = new QLabel("Toolbar Configuration");
+		configureToolbarLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							    .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							    .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		configureToolbarLabel->setToolTip("Customize toolbar buttons and layout");
+
+		QPushButton *configureToolbarButton = StreamUP::UIStyles::CreateStyledButton("Configure Toolbar", "neutral");
+		configureToolbarButton->setToolTip("Open toolbar configuration dialog");
+		
+		QObject::connect(configureToolbarButton, &QPushButton::clicked, [dialog]() {
+			// Find the toolbar widget and open its configurator
+			QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
+			if (mainWindow) {
+				StreamUPToolbar* toolbar = mainWindow->findChild<StreamUPToolbar*>();
+				if (toolbar) {
+					StreamUP::ToolbarConfigurator configurator(dialog);
+					if (configurator.exec() == QDialog::Accepted) {
+						// Refresh the toolbar with new configuration
+						toolbar->refreshFromConfiguration();
+					}
+				}
+			}
+		});
+
+		configureToolbarLayout->addWidget(configureToolbarLabel);
+		configureToolbarLayout->addStretch();
+		configureToolbarLayout->addWidget(configureToolbarButton);
+		toolbarLayout->addLayout(configureToolbarLayout);
 
 		toolbarContentLayout->addWidget(toolbarSettingsWidget);
 		toolbarContentLayout->addStretch();
@@ -1125,6 +1167,9 @@ void ShowSettingsDialog()
 		QObject::connect(categoryList, &QListWidget::currentRowChanged, [stackedWidget](int index) {
 			stackedWidget->setCurrentIndex(index);
 		});
+		
+		// Set the stacked widget to show the correct page for the selected tab
+		stackedWidget->setCurrentIndex(tabIndex);
 
 		// Set up the main layout
 		contentLayout->addWidget(sidebarContainer);
