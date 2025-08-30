@@ -101,6 +101,12 @@ bool ToolbarConfiguration::saveToSettings() const {
     obs_data_set_string(settings, "toolbar_configuration", jsonString.toUtf8().constData());
     
     bool success = StreamUP::SettingsManager::SaveSettings(settings);
+    
+    // Invalidate cache since settings changed
+    if (success) {
+        invalidateCache();
+    }
+    
     obs_data_release(settings);
     return success;
 }
@@ -110,6 +116,7 @@ bool ToolbarConfiguration::loadFromSettings() {
     if (!settings) {
         // No settings file, use default configuration
         setDefaultConfiguration();
+        invalidateCache();
         return true;
     }
     
@@ -119,20 +126,40 @@ bool ToolbarConfiguration::loadFromSettings() {
     if (!jsonString || strlen(jsonString) == 0) {
         // No saved configuration, use default
         setDefaultConfiguration();
+        invalidateCache();
         return true;
     }
     
+    // Check if configuration has changed using dirty-flag caching
+    QString currentJsonString = QString::fromUtf8(jsonString);
+    if (configCacheValid && currentJsonString == lastLoadedJsonString) {
+        // Configuration hasn't changed, skip expensive JSON parsing
+        return true;
+    }
+    
+    // Parse JSON since configuration changed
     QJsonParseError error;
-    QJsonDocument doc = QJsonDocument::fromJson(QByteArray(jsonString), &error);
+    QJsonDocument doc = QJsonDocument::fromJson(currentJsonString.toUtf8(), &error);
     
     if (error.error != QJsonParseError::NoError) {
         qWarning() << "Failed to parse toolbar configuration:" << error.errorString();
         setDefaultConfiguration();
+        invalidateCache();
         return false;
     }
     
     fromJson(doc.object());
+    
+    // Update cache state
+    lastLoadedJsonString = currentJsonString;
+    configCacheValid = true;
+    
     return true;
+}
+
+void ToolbarConfiguration::invalidateCache() const {
+    configCacheValid = false;
+    lastLoadedJsonString.clear();
 }
 
 QJsonObject ToolbarConfiguration::toJson() const {

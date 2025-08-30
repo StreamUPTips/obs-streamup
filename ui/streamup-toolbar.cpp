@@ -56,8 +56,9 @@ StreamUPToolbar::~StreamUPToolbar()
 	// Remove event callback
 	obs_frontend_remove_event_callback(OnFrontendEvent, this);
 	
-	// Clear icon cache on destruction
+	// Clear caches on destruction
 	clearIconCache();
+	clearStyleSheetCache();
 }
 
 QFrame* StreamUPToolbar::createSeparator()
@@ -84,8 +85,14 @@ QFrame* StreamUPToolbar::createHorizontalSeparator()
 
 void StreamUPToolbar::updateToolbarStyling()
 {
-	// Apply theme-aware styling using StreamUP UI constants
-	QString styleSheet = QString(R"(
+	// Check if cached stylesheet is valid (prevents redundant generation)
+	if (styleSheetCacheValid && !cachedStyleSheet.isEmpty()) {
+		setStyleSheet(cachedStyleSheet);
+		return;
+	}
+	
+	// Generate new stylesheet with theme-aware styling using StreamUP UI constants
+	cachedStyleSheet = QString(R"(
 		/* Base styling for all StreamUP toolbar buttons */
 		QToolButton[buttonType="streamup-button"] {
 			background: transparent;
@@ -126,6 +133,10 @@ void StreamUPToolbar::updateToolbarStyling()
 			background-color: %8;
 			border: none;
 		}
+		/* Spacer widgets styling */
+		QWidget[objectName*="spacer"] {
+			background: transparent;
+		}
 	)").arg(StreamUP::UIStyles::Sizes::SPACE_4)                    // border-radius
 	   .arg(StreamUP::UIStyles::Sizes::SPACE_2)                    // padding
 	   .arg(StreamUP::UIStyles::Colors::HOVER_OVERLAY)             // hover background
@@ -134,8 +145,10 @@ void StreamUPToolbar::updateToolbarStyling()
 	   .arg(StreamUP::UIStyles::Colors::PRIMARY_INACTIVE)          // checked border
 	   .arg(StreamUP::UIStyles::Colors::PRIMARY_HOVER)             // checked hover background
 	   .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE);            // frame background
-	   
-	setStyleSheet(styleSheet);
+	
+	// Mark cache as valid and apply stylesheet
+	styleSheetCacheValid = true;
+	setStyleSheet(cachedStyleSheet);
 }
 
 bool StreamUPToolbar::isReplayBufferAvailable()
@@ -532,10 +545,11 @@ QString StreamUPToolbar::getThemedIconPath(const QString& iconName)
 
 QIcon StreamUPToolbar::getCachedIcon(const QString& iconName)
 {
-	// Check if theme has changed and invalidate cache if needed
+	// Check if theme has changed and invalidate caches if needed
 	bool isDark = obs_frontend_is_theme_dark();
 	if (currentThemeIsDark != isDark) {
 		clearIconCache();
+		clearStyleSheetCache();  // Stylesheet also depends on theme
 		currentThemeIsDark = isDark;
 	}
 	
@@ -556,6 +570,12 @@ QIcon StreamUPToolbar::getCachedIcon(const QString& iconName)
 void StreamUPToolbar::clearIconCache()
 {
 	iconCache.clear();
+}
+
+void StreamUPToolbar::clearStyleSheetCache()
+{
+	cachedStyleSheet.clear();
+	styleSheetCacheValid = false;
 }
 
 void StreamUPToolbar::updateIconsForTheme()
@@ -890,6 +910,9 @@ void StreamUPToolbar::setupDynamicUI()
 	blog(LOG_INFO, "[StreamUP] DEBUG: ===== STARTING SETUPDYNAMICUI =====");
 	blog(LOG_INFO, "[StreamUP] DEBUG: setupDynamicUI called - pauseButton: %p, saveReplayButton: %p", (void*)pauseButton, (void*)saveReplayButton);
 	
+	// Clear stylesheet cache since UI is being reconstructed
+	clearStyleSheetCache();
+	
 	// Set basic toolbar properties like obs-toolbar
 	setMovable(false);
 	setFloatable(false);
@@ -997,10 +1020,11 @@ void StreamUPToolbar::setupDynamicUI()
 			auto spacerItem = std::static_pointer_cast<StreamUP::ToolbarConfig::CustomSpacerItem>(item);
 			// Create a fixed-size spacer widget
 			QWidget* spacerWidget = new QWidget(centralWidget);
-			spacerWidget->setObjectName(item->id);
+			// Ensure objectName contains "spacer" for CSS selector matching
+			spacerWidget->setObjectName(QString("spacer_%1").arg(item->id));
 			spacerWidget->setFixedSize(spacerItem->size, 28); // Match button height
 			spacerWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
-			spacerWidget->setStyleSheet("background: transparent;");
+			// Styling handled by parent container CSS (eliminates individual setStyleSheet call)
 			mainLayout->addWidget(spacerWidget);
 		} else {
 			QToolButton* button = createButtonFromConfig(item);
@@ -1229,6 +1253,10 @@ void StreamUPToolbar::refreshFromConfiguration()
 	// Clear the current toolbar state
 	clear();
 	dynamicButtons.clear();
+	
+	// Clear caches since UI is being reconstructed
+	clearIconCache();
+	clearStyleSheetCache();
 	
 	// Reset button pointers
 	streamButton = nullptr;
