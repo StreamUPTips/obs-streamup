@@ -27,7 +27,6 @@ static QString GetConfigPath()
         dir.mkpath(".");
     }
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Config path: %s", configPath.toUtf8().constData());
     return configPath;
 }
 
@@ -69,7 +68,6 @@ static void SaveConfig(const QJsonObject& config)
     qint64 written = file.write(jsonData);
     file.flush();
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Wrote %lld bytes to config file", written);
 }
 
 QList<MultiDockInfo> LoadMultiDockList()
@@ -77,11 +75,9 @@ QList<MultiDockInfo> LoadMultiDockList()
     QList<MultiDockInfo> result;
     QJsonObject config = LoadConfig();
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Config object keys: %s", 
          QJsonDocument(config).toJson(QJsonDocument::Compact).constData());
     
     QJsonArray multiDockArray = config["multidocks"].toArray();
-    blog(LOG_INFO, "[StreamUP MultiDock] MultiDock array size: %d", multiDockArray.size());
     
     for (const QJsonValue& value : multiDockArray) {
         QJsonObject obj = value.toObject();
@@ -89,7 +85,6 @@ QList<MultiDockInfo> LoadMultiDockList()
         info.id = obj["id"].toString();
         info.name = obj["name"].toString();
         
-        blog(LOG_INFO, "[StreamUP MultiDock] Loading MultiDock: id='%s', name='%s'", 
              info.id.toUtf8().constData(), info.name.toUtf8().constData());
         
         if (!info.id.isEmpty() && !info.name.isEmpty()) {

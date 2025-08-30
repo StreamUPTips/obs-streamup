@@ -186,14 +186,12 @@ obs_data_t *LoadSettings()
 		obs_data_release(dockData);
 
 		if (obs_data_save_json(data, configPath)) {
-			blog(LOG_INFO, "[StreamUP] Default settings saved to %s", configPath);
 		} else {
 			blog(LOG_WARNING, "[StreamUP] Failed to save default settings to file.");
 		}
 	} else {
 		// Only log success message once
 		if (!settingsLoadLogged) {
-			blog(LOG_INFO, "[StreamUP] Settings loaded successfully from %s", configPath);
 			settingsLoadLogged = true;
 		}
 	}
@@ -212,7 +210,6 @@ bool SaveSettings(obs_data_t *settings)
 	bool success = false;
 
 	if (obs_data_save_json(settings, configPath)) {
-		blog(LOG_INFO, "[StreamUP] Settings saved to %s", configPath);
 		success = true;
 		
 		// Invalidate cache so next load picks up the updated settings
@@ -266,7 +263,6 @@ PluginSettings GetCurrentSettings()
 
 			obs_data_release(dockData);
 		} else {
-			blog(LOG_INFO, "[StreamUP Settings] No dock_tools data found, using defaults");
 		}
 
 		obs_data_release(data);
