@@ -72,6 +72,8 @@ void ToolbarConfigurator::setupUI()
     leftPanel = new QWidget();
     leftPanel->setStyleSheet("QWidget { background-color: " + QString(StreamUP::UIStyles::Colors::BG_PRIMARY) + "; border: none; border-radius: 24px;}");
     leftLayout = new QVBoxLayout(leftPanel);
+    leftLayout->setContentsMargins(12, 12, 12, 12); // Standard margins
+    leftLayout->setSpacing(12);
     
     // Add heading to left panel
     QLabel* leftHeading = new QLabel("Available Items");
@@ -115,7 +117,7 @@ void ToolbarConfigurator::setupUI()
     // === TAB 1: Built-in Buttons ===
     QWidget* builtinTab = new QWidget();
     QVBoxLayout* builtinTabLayout = new QVBoxLayout(builtinTab);
-    builtinTabLayout->setContentsMargins(12, 12, 12, 12);
+    builtinTabLayout->setContentsMargins(12, 12, 12, 12); // Standard margins
     builtinTabLayout->setSpacing(12);
     
     builtinButtonsList = new QTreeWidget();
@@ -192,6 +194,9 @@ void ToolbarConfigurator::setupUI()
     );
     builtinTabLayout->addWidget(builtinButtonsList, 1); // Give tree widget stretch priority
     
+    // Add spacer to push button to bottom
+    builtinTabLayout->addStretch(0);
+    
     addBuiltinButton = new QPushButton("Add Selected Button");
     addBuiltinButton->setEnabled(false);
     addBuiltinButton->setStyleSheet(UIStyles::GetButtonStyle());
@@ -202,7 +207,7 @@ void ToolbarConfigurator::setupUI()
     // === TAB 2: StreamUP Dock Buttons ===
     QWidget* dockTab = new QWidget();
     QVBoxLayout* dockTabLayout = new QVBoxLayout(dockTab);
-    dockTabLayout->setContentsMargins(12, 12, 12, 12);
+    dockTabLayout->setContentsMargins(12, 12, 12, 12); // Standard margins
     dockTabLayout->setSpacing(12);
     
     dockButtonsList = new QTreeWidget();
@@ -279,6 +284,9 @@ void ToolbarConfigurator::setupUI()
     );
     dockTabLayout->addWidget(dockButtonsList, 1); // Give tree widget stretch priority
     
+    // Add spacer to push button to bottom
+    dockTabLayout->addStretch(0);
+    
     addDockButton = new QPushButton("Add Selected Dock Button");
     addDockButton->setEnabled(false);
     addDockButton->setStyleSheet(UIStyles::GetButtonStyle());
@@ -289,7 +297,7 @@ void ToolbarConfigurator::setupUI()
     // === TAB 3: Spacers & Separators ===
     QWidget* spacerTab = new QWidget();
     QVBoxLayout* spacerTabLayout = new QVBoxLayout(spacerTab);
-    spacerTabLayout->setContentsMargins(12, 12, 12, 12);
+    spacerTabLayout->setContentsMargins(12, 12, 12, 12); // Standard margins  
     spacerTabLayout->setSpacing(0);
     
     // Create background container to match tree widgets
@@ -343,6 +351,8 @@ void ToolbarConfigurator::setupUI()
     rightPanel = new QWidget();
     rightPanel->setStyleSheet("QWidget { background-color: " + QString(StreamUP::UIStyles::Colors::BG_PRIMARY) + "; border: none; border-radius: 24px;}");
     rightLayout = new QVBoxLayout(rightPanel);
+    rightLayout->setContentsMargins(12, 12, 12, 12);
+    rightLayout->setSpacing(12);
     
     configLabel = new QLabel("Current Toolbar Configuration:");
     configLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle() + "font-weight: bold;");
@@ -391,7 +401,10 @@ void ToolbarConfigurator::setupUI()
         "    height: 0px; "
         "}"
     );
-    rightLayout->addWidget(currentConfigList);
+    rightLayout->addWidget(currentConfigList, 1); // Give list widget stretch priority
+    
+    // Add spacer to push buttons to bottom - matching left panel
+    rightLayout->addStretch(0);
     
     // Configuration control buttons
     configButtonsLayout = new QHBoxLayout();
