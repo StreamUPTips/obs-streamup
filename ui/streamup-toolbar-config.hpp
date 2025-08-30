@@ -113,6 +113,14 @@ public:
     
     // Get available dock buttons
     static QList<DockButtonItem> getAvailableDockButtons();
+    
+private:
+    // Configuration caching for performance optimization
+    mutable bool configCacheValid = false;
+    mutable QString lastLoadedJsonString;
+    
+    // Mark configuration as needing reload
+    void invalidateCache() const;
 };
 
 // Available built-in button types

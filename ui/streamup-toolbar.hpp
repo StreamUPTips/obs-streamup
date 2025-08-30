@@ -85,6 +85,11 @@ private:
     QHash<QString, QIcon> iconCache;
     bool currentThemeIsDark = false;  // Track theme for cache invalidation
     
+    // Stylesheet cache for performance optimization
+    QString cachedStyleSheet;
+    bool styleSheetCacheValid = false;
+    void clearStyleSheetCache();
+    
     // OBS event handling
     static void OnFrontendEvent(enum obs_frontend_event event, void *data);
     
