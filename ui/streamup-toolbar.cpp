@@ -55,6 +55,9 @@ StreamUPToolbar::~StreamUPToolbar()
 {
 	// Remove event callback
 	obs_frontend_remove_event_callback(OnFrontendEvent, this);
+	
+	// Clear icon cache on destruction
+	clearIconCache();
 }
 
 QFrame* StreamUPToolbar::createSeparator()
@@ -297,9 +300,8 @@ void StreamUPToolbar::updateStreamButton()
 		bool streaming = obs_frontend_streaming_active();
 		streamButton->setChecked(streaming);
 		QString iconName = streaming ? "streaming" : "streaming-inactive";
-		QString iconPath = getThemedIconPath(iconName);
-		blog(LOG_DEBUG, "[StreamUP] Updating stream button icon: %s", iconPath.toUtf8().constData());
-		streamButton->setIcon(QIcon(iconPath));
+		streamButton->setIcon(getCachedIcon(iconName));
+		blog(LOG_DEBUG, "[StreamUP] Updated stream button with cached icon: %s", iconName.toUtf8().constData());
 		streamButton->setToolTip(streaming ? "Stop Streaming" : "Start Streaming");
 	}
 }
@@ -310,7 +312,7 @@ void StreamUPToolbar::updateRecordButton()
 		bool recording = obs_frontend_recording_active();
 		recordButton->setChecked(recording);
 		QString iconName = recording ? "record-on" : "record-off";
-		recordButton->setIcon(QIcon(getThemedIconPath(iconName)));
+		recordButton->setIcon(getCachedIcon(iconName));
 		recordButton->setToolTip(recording ? "Stop Recording" : "Start Recording");
 		
 		// Control pause button visibility based on recording state and compatibility
@@ -335,9 +337,8 @@ void StreamUPToolbar::updatePauseButton()
 		bool paused = obs_frontend_recording_paused();
 		pauseButton->setEnabled(recording);
 		pauseButton->setChecked(paused);
-		QString iconPath = getThemedIconPath("pause");
-		blog(LOG_INFO, "[StreamUP] DEBUG: updatePauseButton setting icon to: %s", iconPath.toUtf8().constData());
-		pauseButton->setIcon(QIcon(iconPath));
+		pauseButton->setIcon(getCachedIcon("pause"));
+		blog(LOG_DEBUG, "[StreamUP] Updated pause button with cached icon");
 		pauseButton->setToolTip(paused ? "Resume Recording" : "Pause Recording");
 	}
 }
@@ -348,7 +349,7 @@ void StreamUPToolbar::updateReplayBufferButton()
 		bool active = obs_frontend_replay_buffer_active();
 		replayBufferButton->setChecked(active);
 		QString iconName = active ? "replay-buffer-on" : "replay-buffer-off";
-		replayBufferButton->setIcon(QIcon(getThemedIconPath(iconName)));
+		replayBufferButton->setIcon(getCachedIcon(iconName));
 		replayBufferButton->setToolTip(active ? "Stop Replay Buffer" : "Start Replay Buffer");
 		
 		// Control save replay button visibility based on replay buffer state
@@ -371,9 +372,8 @@ void StreamUPToolbar::updateSaveReplayButton()
 		bool replayActive = obs_frontend_replay_buffer_active();
 		
 		// Ensure icon is set correctly
-		QString iconPath = getThemedIconPath("save-replay");
-		blog(LOG_INFO, "[StreamUP] DEBUG: updateSaveReplayButton setting icon to: %s", iconPath.toUtf8().constData());
-		saveReplayButton->setIcon(QIcon(iconPath));
+		saveReplayButton->setIcon(getCachedIcon("save-replay"));
+		blog(LOG_DEBUG, "[StreamUP] Updated save replay button with cached icon");
 		
 		// Show only when replay buffer is active, enable/disable based on recording pause state
 		saveReplayButton->setVisible(replayActive);
@@ -403,14 +403,14 @@ void StreamUPToolbar::updateStudioModeButton()
 void StreamUPToolbar::updateVirtualCameraConfigButton()
 {
 	if (virtualCameraConfigButton) {
-		virtualCameraConfigButton->setIcon(QIcon(getThemedIconPath("virtual-camera-settings")));
+		virtualCameraConfigButton->setIcon(getCachedIcon("virtual-camera-settings"));
 	}
 }
 
 void StreamUPToolbar::updateSettingsButton()
 {
 	if (settingsButton) {
-		settingsButton->setIcon(QIcon(getThemedIconPath("settings")));
+		settingsButton->setIcon(getCachedIcon("settings"));
 	}
 }
 
@@ -440,7 +440,7 @@ void StreamUPToolbar::updateDockButtonIcons()
 			if (dock) {
 				bool allLocked = dock->AreAllSourcesLockedInAllScenes();
 				QString iconName = allLocked ? "all-scene-source-locked" : "all-scene-source-unlocked";
-				button->setIcon(QIcon(getThemedIconPath(iconName)));
+				button->setIcon(getCachedIcon(iconName));
 			}
 		} else if (actionType == "lock_current_sources") {
 			// Check if current scene sources are locked
@@ -449,7 +449,7 @@ void StreamUPToolbar::updateDockButtonIcons()
 			if (dock) {
 				bool currentLocked = dock->AreAllSourcesLockedInCurrentScene();
 				QString iconName = currentLocked ? "current-scene-source-locked" : "current-scene-source-unlocked";
-				button->setIcon(QIcon(getThemedIconPath(iconName)));
+				button->setIcon(getCachedIcon(iconName));
 			}
 		}
 	}
@@ -530,84 +530,94 @@ QString StreamUPToolbar::getThemedIconPath(const QString& iconName)
 	return StreamUP::UIHelpers::GetThemedIconPath(iconName);
 }
 
+QIcon StreamUPToolbar::getCachedIcon(const QString& iconName)
+{
+	// Check if theme has changed and invalidate cache if needed
+	bool isDark = obs_frontend_is_theme_dark();
+	if (currentThemeIsDark != isDark) {
+		clearIconCache();
+		currentThemeIsDark = isDark;
+	}
+	
+	// Check cache first
+	auto it = iconCache.find(iconName);
+	if (it != iconCache.end()) {
+		return it.value();
+	}
+	
+	// Create and cache new icon
+	QString iconPath = getThemedIconPath(iconName);
+	QIcon icon(iconPath);
+	iconCache.insert(iconName, icon);
+	
+	return icon;
+}
+
+void StreamUPToolbar::clearIconCache()
+{
+	iconCache.clear();
+}
+
 void StreamUPToolbar::updateIconsForTheme()
 {
-	// Update all button icons for the current theme
+	// Update all button icons for the current theme using cached icons
 	bool isDark = obs_frontend_is_theme_dark();
 	blog(LOG_INFO, "[StreamUP] Theme changed, updating all toolbar icons (isDark: %s)", isDark ? "true" : "false");
 	
-	// Force icon cache clearing by creating new QIcon objects
+	// Update buttons with cached icons (eliminates redundant QIcon construction)
 	if (streamButton) {
 		bool streaming = obs_frontend_streaming_active();
 		QString iconName = streaming ? "streaming" : "streaming-inactive";
-		QString iconPath = getThemedIconPath(iconName);
-		streamButton->setIcon(QIcon());  // Clear first
-		streamButton->setIcon(QIcon(iconPath));  // Set new icon
-		blog(LOG_DEBUG, "[StreamUP] Force updated stream button: %s", iconPath.toUtf8().constData());
+		streamButton->setIcon(getCachedIcon(iconName));
+		blog(LOG_DEBUG, "[StreamUP] Updated stream button with cached icon: %s", iconName.toUtf8().constData());
 	}
 	
 	if (recordButton) {
 		bool recording = obs_frontend_recording_active();
 		QString iconName = recording ? "record-on" : "record-off";
-		QString iconPath = getThemedIconPath(iconName);
-		recordButton->setIcon(QIcon());
-		recordButton->setIcon(QIcon(iconPath));
-		blog(LOG_DEBUG, "[StreamUP] Force updated record button: %s", iconPath.toUtf8().constData());
+		recordButton->setIcon(getCachedIcon(iconName));
+		blog(LOG_DEBUG, "[StreamUP] Updated record button with cached icon: %s", iconName.toUtf8().constData());
 	}
 	
 	if (pauseButton) {
-		QString iconPath = getThemedIconPath("pause");
-		pauseButton->setIcon(QIcon());
-		pauseButton->setIcon(QIcon(iconPath));
-		blog(LOG_DEBUG, "[StreamUP] Force updated pause button: %s", iconPath.toUtf8().constData());
+		pauseButton->setIcon(getCachedIcon("pause"));
+		blog(LOG_DEBUG, "[StreamUP] Updated pause button with cached icon");
 	}
 	
 	if (replayBufferButton) {
 		bool active = obs_frontend_replay_buffer_active();
 		QString iconName = active ? "replay-buffer-on" : "replay-buffer-off";
-		QString iconPath = getThemedIconPath(iconName);
-		replayBufferButton->setIcon(QIcon());
-		replayBufferButton->setIcon(QIcon(iconPath));
-		blog(LOG_DEBUG, "[StreamUP] Force updated replay buffer button: %s", iconPath.toUtf8().constData());
+		replayBufferButton->setIcon(getCachedIcon(iconName));
+		blog(LOG_DEBUG, "[StreamUP] Updated replay buffer button with cached icon: %s", iconName.toUtf8().constData());
 	}
 	
 	if (saveReplayButton && saveReplayButton->isVisible()) {
-		QString iconPath = getThemedIconPath("save-replay");
-		saveReplayButton->setIcon(QIcon());
-		saveReplayButton->setIcon(QIcon(iconPath));
-		blog(LOG_DEBUG, "[StreamUP] Force updated save replay button: %s", iconPath.toUtf8().constData());
+		saveReplayButton->setIcon(getCachedIcon("save-replay"));
+		blog(LOG_DEBUG, "[StreamUP] Updated save replay button with cached icon");
 	}
 	
 	if (virtualCameraButton) {
-		QString iconPath = getThemedIconPath("virtual-camera");
-		virtualCameraButton->setIcon(QIcon());
-		virtualCameraButton->setIcon(QIcon(iconPath));
-		blog(LOG_DEBUG, "[StreamUP] Force updated virtual camera button: %s", iconPath.toUtf8().constData());
+		virtualCameraButton->setIcon(getCachedIcon("virtual-camera"));
+		blog(LOG_DEBUG, "[StreamUP] Updated virtual camera button with cached icon");
 	}
 	
 	if (virtualCameraConfigButton) {
-		QString iconPath = getThemedIconPath("virtual-camera-settings");
-		virtualCameraConfigButton->setIcon(QIcon());
-		virtualCameraConfigButton->setIcon(QIcon(iconPath));
-		blog(LOG_DEBUG, "[StreamUP] Force updated virtual camera config button: %s", iconPath.toUtf8().constData());
+		virtualCameraConfigButton->setIcon(getCachedIcon("virtual-camera-settings"));
+		blog(LOG_DEBUG, "[StreamUP] Updated virtual camera config button with cached icon");
 	}
 	
 	if (studioModeButton) {
-		QString iconPath = getThemedIconPath("studio-mode");
-		studioModeButton->setIcon(QIcon());
-		studioModeButton->setIcon(QIcon(iconPath));
-		blog(LOG_DEBUG, "[StreamUP] Force updated studio mode button: %s", iconPath.toUtf8().constData());
+		studioModeButton->setIcon(getCachedIcon("studio-mode"));
+		blog(LOG_DEBUG, "[StreamUP] Updated studio mode button with cached icon");
 	}
 	
 	if (settingsButton) {
-		QString iconPath = getThemedIconPath("settings");
-		settingsButton->setIcon(QIcon());
-		settingsButton->setIcon(QIcon(iconPath));
-		blog(LOG_DEBUG, "[StreamUP] Force updated settings button: %s", iconPath.toUtf8().constData());
+		settingsButton->setIcon(getCachedIcon("settings"));
+		blog(LOG_DEBUG, "[StreamUP] Updated settings button with cached icon");
 	}
 	
-	// StreamUP settings button keeps its original icon (social icon)
-	blog(LOG_INFO, "[StreamUP] All toolbar icons force-updated for theme change");
+	// StreamUP settings button keeps its original icon (social icon, not cached)
+	blog(LOG_INFO, "[StreamUP] All toolbar icons updated with cached icons for theme change");
 }
 
 void StreamUPToolbar::updatePositionAwareTheme()
@@ -1015,9 +1025,8 @@ void StreamUPToolbar::setupDynamicUI()
 							newPauseButton->setFixedSize(28, 28);
 							newPauseButton->setIconSize(QSize(20, 20));
 							newPauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-							QString pauseIconPath = getThemedIconPath("pause");
-							blog(LOG_INFO, "[StreamUP] DEBUG: Setting pause button icon to: %s", pauseIconPath.toUtf8().constData());
-							newPauseButton->setIcon(QIcon(pauseIconPath));
+							newPauseButton->setIcon(getCachedIcon("pause"));
+							blog(LOG_DEBUG, "[StreamUP] Set pause button icon with cached icon");
 							newPauseButton->setToolTip("Pause Recording");
 							newPauseButton->setCheckable(true);
 							newPauseButton->setObjectName("pause_dynamic");
@@ -1042,9 +1051,8 @@ void StreamUPToolbar::setupDynamicUI()
 							newSaveReplayButton->setFixedSize(28, 28);
 							newSaveReplayButton->setIconSize(QSize(20, 20));
 							newSaveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-							QString saveReplayIconPath = getThemedIconPath("save-replay");
-							blog(LOG_INFO, "[StreamUP] DEBUG: Setting save_replay button icon to: %s", saveReplayIconPath.toUtf8().constData());
-							newSaveReplayButton->setIcon(QIcon(saveReplayIconPath));
+							newSaveReplayButton->setIcon(getCachedIcon("save-replay"));
+							blog(LOG_DEBUG, "[StreamUP] Set save replay button icon with cached icon");
 							newSaveReplayButton->setToolTip("Save Replay");
 							newSaveReplayButton->setCheckable(false);
 							newSaveReplayButton->setObjectName("save_replay_dynamic");
@@ -1138,7 +1146,7 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 		if (iconPath.isEmpty()) {
 			iconPath = "settings"; // Use settings icon as fallback
 		}
-		button->setIcon(QIcon(getThemedIconPath(iconPath)));
+		button->setIcon(getCachedIcon(iconPath));
 		button->setToolTip(buttonItem->tooltip.isEmpty() ? 
 			StreamUP::ToolbarConfig::ButtonRegistry::getButtonInfo(buttonItem->buttonType).defaultTooltip : 
 			buttonItem->tooltip);
@@ -1185,10 +1193,10 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 		// Set up dock button
 		if (!dockItem->iconPath.isEmpty()) {
 			// Use themed icon system for dock button icons
-			button->setIcon(QIcon(getThemedIconPath(dockItem->iconPath)));
+			button->setIcon(getCachedIcon(dockItem->iconPath));
 		} else {
 			// Use a default dock icon
-			button->setIcon(QIcon(getThemedIconPath("settings")));
+			button->setIcon(getCachedIcon("settings"));
 		}
 		button->setToolTip(dockItem->tooltip);
 		button->setCheckable(false);
