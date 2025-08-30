@@ -55,7 +55,9 @@ target_sources(${PROJECT_NAME} PRIVATE
   utilities/http-client.cpp
   utilities/obs-wrappers.hpp
   utilities/error-handler.hpp
-  utilities/error-handler.cpp)
+  utilities/error-handler.cpp
+  utilities/obs-data-helpers.hpp
+  utilities/obs-data-helpers.cpp)
 
 # UI module files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -150,7 +152,9 @@ source_group("Utilities" FILES
   utilities/http-client.cpp
   utilities/obs-wrappers.hpp
   utilities/error-handler.hpp
-  utilities/error-handler.cpp)
+  utilities/error-handler.cpp
+  utilities/obs-data-helpers.hpp
+  utilities/obs-data-helpers.cpp)
 
 source_group("UI" FILES
   ui/hotkey-manager.hpp
