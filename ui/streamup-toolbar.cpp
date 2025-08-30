@@ -756,18 +756,28 @@ void StreamUPToolbar::updateLayoutOrientation()
 	// Only rebuild layout if orientation needs to change
 	if (shouldBeVertical != currentlyVertical) {
 		
-		// Store all current widgets in order
+		// Store all current widgets in order with their types
 		QList<QWidget*> widgets;
-		QList<bool> isSeparator;
+		QList<QString> widgetTypes; // "separator", "spacer", "button", or "other"
 		
 		// Extract widgets from current layout
 		while (mainLayout->count() > 0) {
 			QLayoutItem* item = mainLayout->takeAt(0);
 			if (item->widget()) {
-				widgets.append(item->widget());
-				// Check if this is a separator to know which type to use
-				QFrame* frame = qobject_cast<QFrame*>(item->widget());
-				isSeparator.append(frame && (frame->frameShape() == QFrame::VLine || frame->frameShape() == QFrame::HLine));
+				QWidget* widget = item->widget();
+				widgets.append(widget);
+				
+				// Determine widget type for proper handling during rebuild
+				QFrame* frame = qobject_cast<QFrame*>(widget);
+				if (frame && (frame->frameShape() == QFrame::VLine || frame->frameShape() == QFrame::HLine)) {
+					widgetTypes.append("separator");
+				} else if (widget->objectName().contains("spacer")) {
+					widgetTypes.append("spacer");
+				} else if (qobject_cast<QToolButton*>(widget)) {
+					widgetTypes.append("button");
+				} else {
+					widgetTypes.append("other");
+				}
 			}
 			delete item;
 		}
@@ -795,12 +805,12 @@ void StreamUPToolbar::updateLayoutOrientation()
 		}
 		mainLayout->setSpacing(4);
 		
-		// Re-add widgets with appropriate separators, handling StreamUP button positioning
+		// Re-add widgets with proper orientation handling, including StreamUP button positioning
 		QWidget* streamupButton = nullptr;
-		QList<QWidget*> mainButtons;
-		QList<bool> mainSeparators;
+		QList<QWidget*> mainWidgets;
+		QList<QString> mainWidgetTypes;
 		
-		// Separate StreamUP button from main buttons
+		// Separate StreamUP button from main widgets
 		for (int i = 0; i < widgets.size(); ++i) {
 			QWidget* widget = widgets[i];
 			
@@ -808,16 +818,17 @@ void StreamUPToolbar::updateLayoutOrientation()
 			if (widget == streamUPSettingsButton) {
 				streamupButton = widget;
 			} else {
-				mainButtons.append(widget);
-				mainSeparators.append(isSeparator[i]);
+				mainWidgets.append(widget);
+				mainWidgetTypes.append(widgetTypes[i]);
 			}
 		}
 		
-		// Add main buttons first
-		for (int i = 0; i < mainButtons.size(); ++i) {
-			QWidget* widget = mainButtons[i];
+		// Add main widgets first
+		for (int i = 0; i < mainWidgets.size(); ++i) {
+			QWidget* widget = mainWidgets[i];
+			QString widgetType = mainWidgetTypes[i];
 			
-			if (mainSeparators[i]) {
+			if (widgetType == "separator") {
 				// Replace separator with correct orientation
 				QString separatorName = widget->objectName(); // Preserve the separator name
 				widget->deleteLater(); // Delete the old separator
@@ -852,8 +863,36 @@ void StreamUPToolbar::updateLayoutOrientation()
 					}
 					separator->setProperty("toolbarPosition", positionProperty);
 				}
+			} else if (widgetType == "spacer") {
+				// Update spacer dimensions for new orientation
+				// Extract the spacer size from the old dimensions and apply to new orientation
+				QSize oldSize = widget->size();
+				int spacerSize;
+				if (currentlyVertical) {
+					// Was vertical, spacer size was the height
+					spacerSize = oldSize.height();
+				} else {
+					// Was horizontal, spacer size was the width  
+					spacerSize = oldSize.width();
+				}
+				
+				// Apply new dimensions based on new orientation
+				if (shouldBeVertical) {
+					// Now vertical, spacer size becomes the height
+					widget->setFixedSize(28, spacerSize);
+				} else {
+					// Now horizontal, spacer size becomes the width
+					widget->setFixedSize(spacerSize, 28);
+				}
+				
+				// Re-add the spacer widget
+				if (shouldBeVertical) {
+					mainLayout->addWidget(widget, 0, Qt::AlignHCenter);
+				} else {
+					mainLayout->addWidget(widget);
+				}
 			} else {
-				// Re-add the widget
+				// Re-add other widgets (buttons, etc.)
 				if (shouldBeVertical) {
 					mainLayout->addWidget(widget, 0, Qt::AlignHCenter);
 				} else {
@@ -986,11 +1025,29 @@ void StreamUPToolbar::setupDynamicUI()
 			mainLayout->addWidget(separator);
 		} else if (item->type == StreamUP::ToolbarConfig::ItemType::CustomSpacer) {
 			auto spacerItem = std::static_pointer_cast<StreamUP::ToolbarConfig::CustomSpacerItem>(item);
-			// Create a fixed-size spacer widget
+			// Create a fixed-size spacer widget with orientation-aware dimensions
 			QWidget* spacerWidget = new QWidget(centralWidget);
 			// Ensure objectName contains "spacer" for CSS selector matching
 			spacerWidget->setObjectName(QString("spacer_%1").arg(item->id));
-			spacerWidget->setFixedSize(spacerItem->size, 28); // Match button height
+			
+			// Set dimensions based on current toolbar orientation
+			QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
+			if (mainWindow) {
+				Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
+				bool isVertical = (currentArea == Qt::LeftToolBarArea || currentArea == Qt::RightToolBarArea);
+				
+				if (isVertical) {
+					// For vertical toolbar, spacer height should be the configured size
+					spacerWidget->setFixedSize(28, spacerItem->size); // Match button width, use configured size for height
+				} else {
+					// For horizontal toolbar, spacer width should be the configured size
+					spacerWidget->setFixedSize(spacerItem->size, 28); // Use configured size for width, match button height
+				}
+			} else {
+				// Fallback to horizontal orientation if can't determine position
+				spacerWidget->setFixedSize(spacerItem->size, 28);
+			}
+			
 			spacerWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
 			// Styling handled by parent container CSS (eliminates individual setStyleSheet call)
 			mainLayout->addWidget(spacerWidget);
