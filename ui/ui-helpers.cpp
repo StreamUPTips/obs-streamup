@@ -24,10 +24,80 @@
 namespace StreamUP {
 namespace UIHelpers {
 
+//-------------------DIALOG MANAGEMENT-------------------
+// Static member definition
+std::unordered_map<std::string, QPointer<QDialog>> DialogManager::s_dialogs;
+
+bool DialogManager::ShowSingletonDialog(const std::string& dialogId, 
+                                       const std::function<QDialog*()>& createFunction,
+                                       bool bringToFront)
+{
+    auto it = s_dialogs.find(dialogId);
+    
+    // Check if dialog already exists and is visible
+    if (it != s_dialogs.end() && !it->second.isNull() && it->second->isVisible()) {
+        if (bringToFront) {
+            it->second->raise();
+            it->second->activateWindow();
+        }
+        return false; // Existing dialog found
+    }
+    
+    // Clean up any null pointers
+    if (it != s_dialogs.end() && it->second.isNull()) {
+        s_dialogs.erase(it);
+    }
+    
+    // Create new dialog
+    QDialog* dialog = createFunction();
+    if (dialog) {
+        s_dialogs[dialogId] = dialog;
+        return true; // New dialog created
+    }
+    
+    return false;
+}
+
+void DialogManager::CloseSingletonDialog(const std::string& dialogId)
+{
+    auto it = s_dialogs.find(dialogId);
+    if (it != s_dialogs.end() && !it->second.isNull()) {
+        it->second->close();
+        s_dialogs.erase(it);
+    }
+}
+
+bool DialogManager::IsSingletonDialogOpen(const std::string& dialogId)
+{
+    auto it = s_dialogs.find(dialogId);
+    return it != s_dialogs.end() && !it->second.isNull() && it->second->isVisible();
+}
+
 //-------------------DIALOG CREATION FUNCTIONS-------------------
 void ShowDialogOnUIThread(const std::function<void()> &dialogFunction)
 {
 	QMetaObject::invokeMethod(qApp, dialogFunction, Qt::QueuedConnection);
+}
+
+void ShowSingletonDialogOnUIThread(const std::string& dialogId,
+                                  const std::function<QDialog*()>& createFunction,
+                                  bool bringToFront)
+{
+    // First check if dialog already exists (can be done safely on any thread)
+    if (DialogManager::IsSingletonDialogOpen(dialogId)) {
+        if (bringToFront) {
+            ShowDialogOnUIThread([dialogId]() {
+                // Use public method to bring dialog to front
+                DialogManager::ShowSingletonDialog(dialogId, []() -> QDialog* { return nullptr; }, true);
+            });
+        }
+        return;
+    }
+    
+    // Create dialog on UI thread
+    ShowDialogOnUIThread([dialogId, createFunction, bringToFront]() {
+        DialogManager::ShowSingletonDialog(dialogId, createFunction, bringToFront);
+    });
 }
 
 QDialog *CreateDialogWindow(const char *windowTitle, QWidget *parentWidget)

@@ -9,10 +9,47 @@
 #include <QStyle>
 #include <QString>
 #include <QWidget>
+#include <QPointer>
 #include <functional>
+#include <unordered_map>
 
 namespace StreamUP {
 namespace UIHelpers {
+
+//-------------------DIALOG MANAGEMENT-------------------
+/**
+ * Centralized dialog manager for singleton dialog patterns
+ * Handles the common pattern of showing one instance of a dialog at a time
+ */
+class DialogManager {
+public:
+    /**
+     * Show a dialog using singleton pattern - only one instance at a time
+     * @param dialogId Unique identifier for the dialog (e.g., "settings", "patch-notes")
+     * @param createFunction Function that creates and configures the dialog
+     * @param bringToFront If true, brings existing dialog to front instead of ignoring
+     * @return true if new dialog was created, false if existing dialog was found
+     */
+    static bool ShowSingletonDialog(const std::string& dialogId, 
+                                   const std::function<QDialog*()>& createFunction,
+                                   bool bringToFront = true);
+    
+    /**
+     * Close a singleton dialog if it exists
+     * @param dialogId The dialog identifier to close
+     */
+    static void CloseSingletonDialog(const std::string& dialogId);
+    
+    /**
+     * Check if a singleton dialog is currently open
+     * @param dialogId The dialog identifier to check
+     * @return true if dialog exists and is visible
+     */
+    static bool IsSingletonDialogOpen(const std::string& dialogId);
+
+private:
+    static std::unordered_map<std::string, QPointer<QDialog>> s_dialogs;
+};
 
 //-------------------DIALOG CREATION FUNCTIONS-------------------
 /**
@@ -20,6 +57,17 @@ namespace UIHelpers {
  * @param dialogFunction The function to execute on the UI thread
  */
 void ShowDialogOnUIThread(const std::function<void()> &dialogFunction);
+
+/**
+ * Show a singleton dialog on the UI thread (combines common patterns)
+ * This is the most common dialog pattern in the codebase
+ * @param dialogId Unique identifier for the dialog
+ * @param createFunction Function that creates the dialog (called on UI thread)
+ * @param bringToFront If true, brings existing dialog to front
+ */
+void ShowSingletonDialogOnUIThread(const std::string& dialogId,
+                                  const std::function<QDialog*()>& createFunction,
+                                  bool bringToFront = true);
 
 /**
  * Create a standard dialog window with common properties

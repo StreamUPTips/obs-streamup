@@ -146,8 +146,7 @@ void AddIncompatiblePluginRow(QTableWidget *table, const std::string &moduleName
 	table->setItem(row, 4, websiteItem);
 }
 
-// Static pointer to track open settings dialog
-static QPointer<QDialog> settingsDialog;
+// Settings dialog is now managed by DialogManager in ui-helpers
 
 obs_data_t *LoadSettings()
 {
@@ -346,18 +345,10 @@ void ShowSettingsDialog()
 
 void ShowSettingsDialog(int tabIndex)
 {
-	// Check if settings dialog is already open
-	if (!settingsDialog.isNull() && settingsDialog->isVisible()) {
-		// Bring existing dialog to front
-		settingsDialog->raise();
-		settingsDialog->activateWindow();
-		return;
-	}
-
-	StreamUP::UIHelpers::ShowDialogOnUIThread([tabIndex]() {
+	StreamUP::UIHelpers::ShowSingletonDialogOnUIThread("settings", [tabIndex]() -> QDialog* {
 		obs_data_t *settings = LoadSettings();
 		if (!settings) {
-			return;
+			return nullptr;
 		}
 
 		// Create modern unified dialog with darkest background
@@ -1204,12 +1195,10 @@ void ShowSettingsDialog(int tabIndex)
 			obs_properties_destroy(props);
 		});
 
-		// Store the dialog reference
-		settingsDialog = dialog;
-
 		// Apply consistent sizing that fits content without scrolling - use very generous height
 		StreamUP::UIStyles::ApplyConsistentSizing(dialog, 650, 1000, 300, 1200);
 		dialog->show();
+		return dialog;
 	});
 }
 

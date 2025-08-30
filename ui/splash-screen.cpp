@@ -32,8 +32,7 @@
 namespace StreamUP {
 namespace SplashScreen {
 
-// Static pointer to track open splash dialog
-static QPointer<QDialog> splashDialog;
+// Splash dialog is now managed by DialogManager in ui-helpers
 
 // Supporter data structures
 struct Supporter {
@@ -725,12 +724,9 @@ void UpdateVersionTracking()
 
 void CreateSplashDialog(ShowCondition condition)
 {
-    // Check if splash dialog is already open
-    if (!splashDialog.isNull() && splashDialog->isVisible()) {
-        // Bring existing dialog to front
-        splashDialog->raise();
-        splashDialog->activateWindow();
-        return;
+    // Use DialogManager for singleton pattern, but condition logic still needed
+    if (UIHelpers::DialogManager::IsSingletonDialogOpen("splash")) {
+        return; // Dialog already handled by DialogManager
     }
 
     // Start loading supporters data if not already loaded or in progress
@@ -738,7 +734,7 @@ void CreateSplashDialog(ShowCondition condition)
         LoadSupportersData();
     }
 
-    UIHelpers::ShowDialogOnUIThread([condition]() {
+    UIHelpers::ShowSingletonDialogOnUIThread("splash", [condition]() -> QDialog* {
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP");
         dialog->setModal(false);
         dialog->setFixedSize(800, 600);
@@ -1099,12 +1095,12 @@ void CreateSplashDialog(ShowCondition condition)
         
         mainLayout->addWidget(scrollArea);
 
-        // Store the dialog reference
-        splashDialog = dialog;
+        // Dialog will be managed by DialogManager
         
         dialog->setLayout(mainLayout);
         dialog->show();
         StreamUP::UIHelpers::CenterDialog(dialog);
+        return dialog;
     });
 }
 
@@ -1138,7 +1134,7 @@ void ShowSplashScreen()
 
 bool IsSplashScreenOpen()
 {
-    return !splashDialog.isNull() && splashDialog->isVisible();
+    return UIHelpers::DialogManager::IsSingletonDialogOpen("splash");
 }
 
 } // namespace SplashScreen

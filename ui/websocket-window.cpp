@@ -23,9 +23,7 @@
 namespace StreamUP {
 namespace WebSocketWindow {
 
-// Static pointers to track open dialogs
-static QPointer<QDialog> normalWebSocketDialog;
-static QPointer<QDialog> internalWebSocketDialog;
+// WebSocket dialogs are now managed by DialogManager in ui-helpers
 
 struct WebSocketCommand {
 	QString name;
@@ -94,17 +92,8 @@ static const QList<WebSocketCommand> websocketCommands = {
 
 void ShowWebSocketWindow(bool showInternalTools)
 {
-	// Check if the appropriate dialog is already open
-	QPointer<QDialog> &dialogRef = showInternalTools ? internalWebSocketDialog : normalWebSocketDialog;
-
-	if (!dialogRef.isNull() && dialogRef->isVisible()) {
-		// Bring existing dialog to front
-		dialogRef->raise();
-		dialogRef->activateWindow();
-		return;
-	}
-
-	StreamUP::UIHelpers::ShowDialogOnUIThread([showInternalTools, &dialogRef]() {
+	std::string dialogId = showInternalTools ? "websocket-internal" : "websocket-normal";
+	StreamUP::UIHelpers::ShowSingletonDialogOnUIThread(dialogId, [showInternalTools]() -> QDialog* {
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WebSocket.Window.Title"));
 
 		// Start with compact size - will expand based on content
@@ -260,12 +249,10 @@ void ShowWebSocketWindow(bool showInternalTools)
 
 		dialog->setLayout(mainLayout);
 
-		// Store the dialog reference
-		dialogRef = dialog;
-
 		// Apply consistent sizing for websocket window
 		StreamUP::UIStyles::ApplyConsistentSizing(dialog, 700, 1100, 500, 800);
 		dialog->show();
+		return dialog;
 	});
 }
 
