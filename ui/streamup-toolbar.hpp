@@ -6,6 +6,8 @@
 #include <QBoxLayout>
 #include <QMenu>
 #include <QAction>
+#include <QHash>
+#include <QIcon>
 #include <obs.h>
 #include <obs-frontend-api.h>
 #include "streamup-toolbar-config.hpp"
@@ -69,11 +71,19 @@ private:
     // Theme-aware icon helper
     QString getThemedIconPath(const QString& iconName);
     
+    // Cached icon loading system
+    QIcon getCachedIcon(const QString& iconName);
+    void clearIconCache();
+    
     // Apply theme-aware styling
     void updateToolbarStyling();
     
     // Flag to prevent updates during UI reconstruction
     bool isReconstructingUI = false;
+    
+    // Icon cache for performance optimization
+    QHash<QString, QIcon> iconCache;
+    bool currentThemeIsDark = false;  // Track theme for cache invalidation
     
     // OBS event handling
     static void OnFrontendEvent(enum obs_frontend_event event, void *data);
