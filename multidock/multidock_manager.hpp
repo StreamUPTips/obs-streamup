@@ -4,6 +4,7 @@
 #include "persistence.hpp"
 #include <QObject>
 #include <QHash>
+#include <QPointer>
 #include <obs-frontend-api.h>
 
 namespace StreamUP {
@@ -112,7 +113,7 @@ private:
     // Event callback for OBS frontend events
     static void OnFrontendEvent(enum obs_frontend_event event, void* private_data);
 
-    QHash<QString, MultiDockDock*> m_multiDocks;
+    QHash<QString, QPointer<MultiDockDock>> m_multiDocks;
     QHash<QString, MultiDockInfo> m_persistentInfo; // Maintains info even after widgets are destroyed
     QStringList m_pendingRetryIds; // MultiDocks that need retry restoration
     bool m_hasRetriedRestoration; // Track if we've already done the delayed retry

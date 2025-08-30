@@ -159,7 +159,7 @@ bool MultiDockManager::RemoveMultiDock(const QString& id)
         return false;
     }
     
-    MultiDockDock* multiDock = m_multiDocks.value(id, nullptr);
+    MultiDockDock* multiDock = m_multiDocks.value(id).data();
     
     // If we have the widget, return all captured docks first
     if (multiDock && multiDock->GetInnerHost()) {
@@ -221,7 +221,7 @@ bool MultiDockManager::RenameMultiDock(const QString& id, const QString& newName
 
 MultiDockDock* MultiDockManager::GetMultiDock(const QString& id) const
 {
-    return m_multiDocks.value(id, nullptr);
+    return m_multiDocks.value(id).data();
 }
 
 QList<MultiDockDock*> MultiDockManager::GetAllMultiDocks() const
@@ -457,19 +457,15 @@ void MultiDockManager::OnMultiDockDestroyed(QObject* obj)
         return;
     }
     
-    // Find the destroyed MultiDock and set widget pointer to null
+    // Find the destroyed MultiDock - with QPointer, it automatically becomes null
     // The persistent info is maintained separately
     for (auto it = m_multiDocks.begin(); it != m_multiDocks.end(); ++it) {
-        if (it.value() == static_cast<MultiDockDock*>(obj)) {
+        if (it.value().data() == static_cast<MultiDockDock*>(obj)) {
             QString id = it.key();
-            blog(LOG_INFO, "[StreamUP MultiDock] Widget destroyed for MultiDock ID '%s', setting widget pointer to null", 
+            blog(LOG_INFO, "[StreamUP MultiDock] Widget destroyed for MultiDock ID '%s', QPointer automatically set to null", 
                  id.toUtf8().constData());
             
-            // Check if the entry still exists (it might have been removed by RemoveMultiDock)
-            if (m_multiDocks.contains(id)) {
-                it.value() = nullptr; // Set widget pointer to null but keep the entry
-            }
-            
+            // QPointer automatically becomes null when object is destroyed
             // Persistent info is maintained in m_persistentInfo, so this MultiDock will be restored on next load
             break;
         }

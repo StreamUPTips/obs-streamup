@@ -116,7 +116,13 @@ void WebsocketRequestRefreshAudioMonitoring(obs_data_t *request_data, obs_data_t
 {
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
-	obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr);
+	
+	// Queue source enumeration on graphics thread for thread safety
+	obs_queue_task(OBS_TASK_GRAPHICS, [](void *param) {
+		UNUSED_PARAMETER(param);
+		obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr);
+	}, nullptr, false);
+	
 	obs_data_set_bool(response_data, "success", true);
 }
 
@@ -124,7 +130,13 @@ void WebsocketRequestRefreshBrowserSources(obs_data_t *request_data, obs_data_t 
 {
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
-	obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr);
+	
+	// Queue source enumeration on graphics thread for thread safety
+	obs_queue_task(OBS_TASK_GRAPHICS, [](void *param) {
+		UNUSED_PARAMETER(param);
+		obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr);
+	}, nullptr, false);
+	
 	obs_data_set_bool(response_data, "success", true);
 }
 
@@ -181,6 +193,7 @@ void WebsocketRequestGetOutputFilePath(obs_data_t *request_data, obs_data_t *res
 
 	char *path = obs_frontend_get_current_record_output_path();
 	obs_data_set_string(response_data, "outputFilePath", path);
+	bfree(path);
 }
 
 void WebsocketRequestVLCGetCurrentFile(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
