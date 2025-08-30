@@ -218,15 +218,17 @@ if(BUILD_OUT_OF_TREE)
     find_package(obs-frontend-api REQUIRED)
     include(cmake/ObsPluginHelpers.cmake)
     set(OBS_FRONTEND_API_NAME "obs-frontend-api")
-    target_include_directories(${PROJECT_NAME} PRIVATE
-		"${CMAKE_CURRENT_SOURCE_DIR}/core"
-		"${CMAKE_CURRENT_SOURCE_DIR}/utilities"
-		"${CMAKE_CURRENT_SOURCE_DIR}/ui"
-		"${CMAKE_CURRENT_SOURCE_DIR}/integrations"
-		"${CMAKE_CURRENT_SOURCE_DIR}/multidock")
 else()
     set(OBS_FRONTEND_API_NAME "frontend-api")
 endif()
+
+# Set common include directories for both build modes
+target_include_directories(${PROJECT_NAME} PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/core"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities"
+    "${CMAKE_CURRENT_SOURCE_DIR}/ui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/integrations"
+    "${CMAKE_CURRENT_SOURCE_DIR}/multidock")
 
 if(OS_WINDOWS)
 	get_filename_component(ISS_FILES_DIR "${CMAKE_BINARY_DIR}\\..\\package" ABSOLUTE)
@@ -251,20 +253,29 @@ elseif(OS_MACOS)
 	target_compile_options(${PROJECT_NAME} PRIVATE -Wall)
 endif()
 
-# Find Qt components
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui Svg)
+# Find Qt components (order matters for dependencies)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg)
 
-set_target_properties(${PROJECT_NAME} PROPERTIES AUTOMOC ON AUTOUIC ON AUTORCC ON)
-set(UI_FILES StreamUPDock.ui)
+# Enable Qt Meta-Object Compiler, UI Compiler, and Resource Compiler
+set_target_properties(${PROJECT_NAME} PROPERTIES 
+    AUTOMOC ON 
+    AUTOUIC ON 
+    AUTORCC ON
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON)
 
+# Link required libraries (grouped by dependency order)
 target_link_libraries(${PROJECT_NAME}
-		OBS::${OBS_FRONTEND_API_NAME}
-    CURL::libcurl
-		Qt6::Core
-		Qt6::Widgets
-    Qt6::Gui
+    # OBS Studio libraries
+    OBS::libobs
+    OBS::${OBS_FRONTEND_API_NAME}
+    # Qt6 libraries (Core must come before others)
+    Qt6::Core
+    Qt6::Gui  
+    Qt6::Widgets
     Qt6::Svg
-		OBS::libobs)
+    # External libraries
+    CURL::libcurl)
 
 if(BUILD_OUT_OF_TREE)
 	if(NOT LIB_OUT_DIR)
@@ -280,13 +291,9 @@ if(BUILD_OUT_OF_TREE)
 		DESTINATION ${CMAKE_INSTALL_PREFIX}/${DATA_OUT_DIR})
 	setup_plugin_target(${PROJECT_NAME})
 else()
+	# Add OBS frontend API include directory for in-tree builds
 	target_include_directories(${PROJECT_NAME} PRIVATE
-		"${CMAKE_SOURCE_DIR}/UI/obs-frontend-api"
-		"${CMAKE_CURRENT_SOURCE_DIR}/core"
-		"${CMAKE_CURRENT_SOURCE_DIR}/utilities"
-		"${CMAKE_CURRENT_SOURCE_DIR}/ui"
-		"${CMAKE_CURRENT_SOURCE_DIR}/integrations"
-		"${CMAKE_CURRENT_SOURCE_DIR}/multidock")
+		"${CMAKE_SOURCE_DIR}/UI/obs-frontend-api")
 	if(OBS_CMAKE_VERSION VERSION_GREATER_EQUAL 3.0.0)
 		set_target_properties_obs(${PROJECT_NAME} PROPERTIES FOLDER "plugins/andilippi" PREFIX "")
 	else()
