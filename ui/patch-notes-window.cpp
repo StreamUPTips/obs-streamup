@@ -19,20 +19,11 @@
 namespace StreamUP {
 namespace PatchNotesWindow {
 
-// Static pointer to track open patch notes dialog
-static QPointer<QDialog> patchNotesDialog;
+// Patch notes dialog is now managed by DialogManager in ui-helpers
 
 void CreatePatchNotesDialog()
 {
-    // Check if patch notes dialog is already open
-    if (!patchNotesDialog.isNull() && patchNotesDialog->isVisible()) {
-        // Bring existing dialog to front
-        patchNotesDialog->raise();
-        patchNotesDialog->activateWindow();
-        return;
-    }
-
-    UIHelpers::ShowDialogOnUIThread([]() {
+    UIHelpers::ShowSingletonDialogOnUIThread("patch-notes", []() -> QDialog* {
         QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP - Patch Notes");
 
         // Start with compact size - will expand based on content
@@ -201,11 +192,9 @@ void CreatePatchNotesDialog()
         // Apply consistent sizing similar to WebSocket window
         StreamUP::UIStyles::ApplyAutoSizing(dialog, 700, 900, 700, 800);
         
-        // Store the dialog reference
-        patchNotesDialog = dialog;
-        
         // Center the dialog
         StreamUP::UIHelpers::CenterDialog(dialog);
+        return dialog;
     });
 }
 
@@ -218,7 +207,7 @@ void ShowPatchNotesWindow()
 
 bool IsPatchNotesWindowOpen()
 {
-    return !patchNotesDialog.isNull() && patchNotesDialog->isVisible();
+    return UIHelpers::DialogManager::IsSingletonDialogOpen("patch-notes");
 }
 
 } // namespace PatchNotesWindow

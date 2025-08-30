@@ -30,8 +30,7 @@
 namespace StreamUP {
 namespace ThemeWindow {
 
-// Static pointer to track open theme dialog
-static QPointer<QDialog> themeDialog;
+// Theme dialog is now managed by DialogManager in ui-helpers
 
 // Carousel widget for theme images
 class ThemeImageCarousel : public QWidget
@@ -358,22 +357,13 @@ private:
 
 void CreateThemeDialog()
 {
-    // Check if theme dialog is already open
-    if (!themeDialog.isNull() && themeDialog->isVisible()) {
-        // Bring existing dialog to front
-        themeDialog->raise();
-        themeDialog->activateWindow();
-        return;
-    }
-
-    UIHelpers::ShowDialogOnUIThread([]() {
+    UIHelpers::ShowSingletonDialogOnUIThread("theme", []() -> QDialog* {
         // Create modern unified dialog
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP - Theme");
         dialog->setModal(false);
         dialog->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
         
-        // Store dialog reference
-        themeDialog = dialog;
+        // Dialog will be managed by DialogManager
         
         QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
         mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -523,6 +513,7 @@ void CreateThemeDialog()
         dialog->show();
         dialog->raise();
         dialog->activateWindow();
+        return dialog;
     });
 }
 
@@ -537,7 +528,7 @@ void ShowThemeWindow()
 
 bool IsThemeWindowOpen()
 {
-    return !themeDialog.isNull() && themeDialog->isVisible();
+    return UIHelpers::DialogManager::IsSingletonDialogOpen("theme");
 }
 
 } // namespace ThemeWindow
