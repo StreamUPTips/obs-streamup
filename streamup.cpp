@@ -58,19 +58,6 @@ OBS_MODULE_USE_DEFAULT_LOCALE("streamup", "en-US")
 
 
 //--------------------PATH HELPERS--------------------
-std::string GetLocalAppDataPath()
-{
-#ifdef _WIN32
-	char *buf = nullptr;
-	size_t sz = 0;
-	if (_dupenv_s(&buf, &sz, "LOCALAPPDATA") == 0 && buf != nullptr) {
-		std::string path(buf);
-		free(buf);
-		return path;
-	}
-#endif
-	return "";
-}
 
 char *GetFilePath()
 {
@@ -274,131 +261,10 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 	return installedPlugins;
 }
 
-std::string GetPlatformURL(const StreamUP::PluginInfo &plugin_info)
-{
-	std::string url;
-	if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
-		url = plugin_info.windowsURL;
-	} else if (strcmp(STREAMUP_PLATFORM_NAME, "macos") == 0) {
-		url = plugin_info.macURL;
-	} else if (strcmp(STREAMUP_PLATFORM_NAME, "linux") == 0) {
-		url = plugin_info.linuxURL;
-	} else {
-		url = plugin_info.windowsURL;
-	}
-	return url;
-}
 
 //-------------------ERROR AND UPDATE HANDLING-------------------
-void ErrorDialog(const QString &errorMessage)
-{
-	StreamUP::UIHelpers::ShowDialogOnUIThread([errorMessage]() {
-		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowErrorTitle");
-		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
-		                                 StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
-		                                 StreamUP::UIStyles::Sizes::PADDING_XL, 
-		                                 StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
-		QString displayMessage = errorMessage.isEmpty() ? "Unknown error occurred." : errorMessage;
 
-		dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_MessageBoxCritical, displayMessage.toUtf8().constData()));
-
-		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		StreamUP::UIHelpers::CreateButton(buttonLayout, "OK", [dialog]() { dialog->close(); });
-
-		dialogLayout->addLayout(buttonLayout);
-		dialog->setLayout(dialogLayout);
-		dialog->show();
-	});
-}
-
-void PluginsUpToDateOutput(bool manuallyTriggered)
-{
-	if (manuallyTriggered) {
-		StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
-			QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowUpToDateTitle");
-			QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-			dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
-		                                 StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
-		                                 StreamUP::UIStyles::Sizes::PADDING_XL, 
-		                                 StreamUP::UIStyles::Sizes::SPACING_SMALL);
-
-			dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_DialogApplyButton, "WindowUpToDateMessage"));
-
-			QHBoxLayout *buttonLayout = new QHBoxLayout();
-			StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
-
-			dialogLayout->addLayout(buttonLayout);
-			dialog->setLayout(dialogLayout);
-			dialog->show();
-		});
-	}
-}
-
-void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
-{
-	StreamUP::UIHelpers::ShowDialogOnUIThread([errorMsgMissing, errorMsgUpdate]() {
-		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow("WindowPluginErrorTitle");
-		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
-		                                 StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
-		                                 StreamUP::UIStyles::Sizes::PADDING_XL, 
-		                                 StreamUP::UIStyles::Sizes::PADDING_XL);
-
-		const char *errorText = (errorMsgMissing != "NULL") ? "WindowPluginErrorMissing" : "WindowPluginErrorUpdating";
-		dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_MessageBoxWarning, errorText));
-		dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
-
-		QLabel *pluginErrorInfo = StreamUP::UIHelpers::CreateRichTextLabel(obs_module_text("WindowPluginErrorInfo"), false, true);
-		dialogLayout->addWidget(pluginErrorInfo);
-		dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
-
-		if (!errorMsgUpdate.empty()) {
-			QLabel *pluginsToUpdateList =
-				StreamUP::UIHelpers::CreateRichTextLabel(QString::fromStdString(errorMsgUpdate), false, false, Qt::AlignCenter);
-			QGroupBox *pluginsToUpdateBox = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowPluginErrorUpdateGroup"), "warning");
-			QVBoxLayout *pluginsToUpdateBoxLayout = new QVBoxLayout(pluginsToUpdateBox);
-			pluginsToUpdateBoxLayout->addWidget(pluginsToUpdateList);
-			dialogLayout->addWidget(pluginsToUpdateBox);
-			if (errorMsgMissing != "NULL") {
-				dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
-			}
-		}
-
-		if (errorMsgMissing != "NULL") {
-			QLabel *pluginsMissingList =
-				StreamUP::UIHelpers::CreateRichTextLabel(QString::fromStdString(errorMsgMissing), false, false, Qt::AlignCenter);
-			QGroupBox *pluginsMissingBox = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowPluginErrorMissingGroup"), "error");
-			QVBoxLayout *pluginsMissingBoxLayout = new QVBoxLayout(pluginsMissingBox);
-			pluginsMissingBoxLayout->addWidget(pluginsMissingList);
-			dialogLayout->addWidget(pluginsMissingBox);
-		}
-
-		if (errorMsgMissing != "NULL") {
-			QLabel *pluginstallerLabel =
-				StreamUP::UIHelpers::CreateRichTextLabel(obs_module_text("WindowPluginErrorFooter"), false, false, Qt::AlignCenter);
-			dialogLayout->addWidget(pluginstallerLabel);
-		}
-
-		QHBoxLayout *buttonLayout = new QHBoxLayout();
-
-		StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("OK"), [dialog]() { dialog->close(); });
-
-		if (errorMsgMissing != "NULL") {
-			QPushButton *pluginstallerButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("MenuDownloadPluginstaller"), "neutral");
-			QObject::connect(pluginstallerButton, &QPushButton::clicked, []() {
-				QDesktopServices::openUrl(QUrl("https://streamup.tips/product/plugin-installer"));
-			});
-			buttonLayout->addWidget(pluginstallerButton);
-		}
-
-		dialogLayout->addLayout(buttonLayout);
-
-		dialog->setLayout(dialogLayout);
-		dialog->show();
-	});
-}
 
 
 //-------------------OBS API HELPER FUNCTIONS-------------------
@@ -406,31 +272,6 @@ void PluginsHaveIssue(std::string errorMsgMissing, std::string errorMsgUpdate)
 
 
 //-------------------- HELPER FUNCTIONS--------------------
-static bool EnumSceneItemsCallback(obs_scene_t *scene, obs_sceneitem_t *item, void *param)
-{
-	UNUSED_PARAMETER(scene);
-
-	StreamUP::SceneItemEnumData *data = static_cast<StreamUP::SceneItemEnumData *>(param);
-	bool isSelected = obs_sceneitem_selected(item);
-	if (isSelected) {
-		data->isAnySourceSelected = true;
-		obs_source_t *source = obs_sceneitem_get_source(item);
-		data->selectedSourceName = obs_source_get_name(source);
-	}
-	return true;
-}
-
-bool EnumSceneItems(obs_scene_t *scene, const char **selected_source_name)
-{
-	StreamUP::SceneItemEnumData data;
-
-	obs_scene_enum_items(scene, EnumSceneItemsCallback, &data);
-
-	if (data.isAnySourceSelected) {
-		*selected_source_name = data.selectedSourceName;
-	}
-	return data.isAnySourceSelected;
-}
 
 void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data, bool transition_type)
 {
@@ -580,19 +421,6 @@ void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 }
 
 //-------------------UTILITY FUNCTIONS-------------------
-const char *MonitoringTypeToString(obs_monitoring_type type)
-{
-	switch (type) {
-	case OBS_MONITORING_TYPE_NONE:
-		return "None";
-	case OBS_MONITORING_TYPE_MONITOR_ONLY:
-		return "Monitor Only";
-	case OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT:
-		return "Monitor and Output";
-	default:
-		return "Unknown";
-	}
-}
 
 
 
@@ -613,83 +441,6 @@ obs_websocket_vendor vendor = nullptr;
 // SetLabelWithSortedModules functionality moved to UI helper functions
 
 // SearchModulesInFile moved to StreamUP::PluginManager::SearchLoadedModulesInLogFile
-/*
-std::vector<std::string> SearchModulesInFile_OLD(const char *path)
-{
-	std::unordered_set<std::string> ignoreModules = {"obs-websocket",      "coreaudio-encoder", "decklink-captions",
-							 "decklink-output-ui", "frontend-tools",    "image-source",
-							 "obs-browser",        "obs-ffmpeg",        "obs-filters",
-							 "obs-outputs",        "obs-qsv11",         "obs-text",
-							 "obs-transitions",    "obs-vst",           "obs-x264",
-							 "rtmp-services",      "text-freetype2",    "vlc-video",
-							 "win-capture",        "win-dshow",         "win-wasapi",
-							 "mac-avcapture",      "mac-capture",       "mac-syphon",
-							 "mac-videotoolbox",   "mac-virtualcam",    "linux-v4l2",
-							 "linux-pulseaudio",   "linux-pipewire",    "linux-jack",
-							 "linux-capture",      "linux-source",      "obs-libfdk"};
-
-	std::string filepath = StreamUP::PathUtils::GetMostRecentTxtFile(path);
-	FILE *file = fopen(filepath.c_str(), "r");
-	std::vector<std::string> collected_modules;
-	std::regex timestamp_regex("^[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}:");
-
-	if (file) {
-		char line[LINE_BUFFER_SIZE];
-		bool in_section = false;
-
-		while (fgets(line, LINE_BUFFER_SIZE, file) != NULL) {
-			std::string str_line(line);
-			str_line = std::regex_replace(str_line, timestamp_regex, "");
-			str_line.erase(0, str_line.find_first_not_of(" \t\r\n"));
-			str_line.erase(str_line.find_last_not_of(" \t\r\n") + 1);
-
-			if (str_line.find("Loaded Modules:") != std::string::npos) {
-				in_section = true;
-			} else if (str_line.find("---------------------------------") != std::string::npos) {
-				in_section = false;
-			}
-
-			if (in_section && !str_line.empty() && str_line != "Loaded Modules:") {
-				size_t suffix_pos = std::string::npos;
-				if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
-					suffix_pos = str_line.find(".dll");
-				} else if (strcmp(STREAMUP_PLATFORM_NAME, "linux") == 0) {
-					suffix_pos = str_line.find(".so");
-				}
-
-				if (suffix_pos != std::string::npos) {
-					str_line = str_line.substr(0, suffix_pos);
-				}
-
-				if (ignoreModules.find(str_line) == ignoreModules.end()) {
-					bool foundInApi = false;
-					const auto& allPlugins = StreamUP::GetAllPlugins();
-					for (const auto &pair : allPlugins) {
-						if (pair.second.moduleName == str_line) {
-							foundInApi = true;
-							break;
-						}
-					}
-					if (!foundInApi) {
-						collected_modules.push_back(str_line);
-					}
-				}
-			}
-		}
-		fclose(file);
-	} else {
-		blog(LOG_ERROR, "[StreamUP] Failed to open log file: %s", filepath.c_str());
-	}
-
-	std::sort(collected_modules.begin(), collected_modules.end(), [](const std::string &a, const std::string &b) {
-		return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), [](char char1, char char2) {
-			return std::tolower(char1) < std::tolower(char2);
-		});
-	});
-
-	return collected_modules;
-}
-*/
 
 
 void SettingsDialog()
