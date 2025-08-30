@@ -313,10 +313,11 @@ void StreamUPToolbar::updateRecordButton()
 		recordButton->setIcon(QIcon(getThemedIconPath(iconName)));
 		recordButton->setToolTip(recording ? "Stop Recording" : "Start Recording");
 		
-		// In dynamic configuration mode, pause button visibility is managed by user config
-		// Only enable/disable based on recording state and pausability
+		// Control pause button visibility based on recording state and compatibility
 		if (pauseButton) {
 			bool canPause = recording && isRecordingPausable();
+			// Show pause button only when recording is active and pausable
+			pauseButton->setVisible(canPause);
 			pauseButton->setEnabled(canPause);
 		}
 	}
@@ -350,9 +351,10 @@ void StreamUPToolbar::updateReplayBufferButton()
 		replayBufferButton->setIcon(QIcon(getThemedIconPath(iconName)));
 		replayBufferButton->setToolTip(active ? "Stop Replay Buffer" : "Start Replay Buffer");
 		
-		// In dynamic configuration mode, save replay button visibility is managed by user config
-		// Only enable/disable based on replay buffer state
+		// Control save replay button visibility based on replay buffer state
 		if (saveReplayButton) {
+			// Show save replay button only when replay buffer is active
+			saveReplayButton->setVisible(active);
 			saveReplayButton->setEnabled(active);
 		}
 	}
@@ -373,7 +375,8 @@ void StreamUPToolbar::updateSaveReplayButton()
 		blog(LOG_INFO, "[StreamUP] DEBUG: updateSaveReplayButton setting icon to: %s", iconPath.toUtf8().constData());
 		saveReplayButton->setIcon(QIcon(iconPath));
 		
-		// Enable/disable based on replay buffer and recording state
+		// Show only when replay buffer is active, enable/disable based on recording pause state
+		saveReplayButton->setVisible(replayActive);
 		bool recordingPaused = obs_frontend_recording_paused();
 		saveReplayButton->setEnabled(replayActive && !recordingPaused);
 	}
@@ -1018,6 +1021,8 @@ void StreamUPToolbar::setupDynamicUI()
 							newPauseButton->setToolTip("Pause Recording");
 							newPauseButton->setCheckable(true);
 							newPauseButton->setObjectName("pause_dynamic");
+							// Start hidden - will be shown when recording is active and pausable
+							newPauseButton->setVisible(false);
 							connect(newPauseButton, &QToolButton::clicked, this, &StreamUPToolbar::onPauseButtonClicked);
 							
 							// Replace the old pause button reference
@@ -1043,6 +1048,8 @@ void StreamUPToolbar::setupDynamicUI()
 							newSaveReplayButton->setToolTip("Save Replay");
 							newSaveReplayButton->setCheckable(false);
 							newSaveReplayButton->setObjectName("save_replay_dynamic");
+							// Start hidden - will be shown when replay buffer is active
+							newSaveReplayButton->setVisible(false);
 							connect(newSaveReplayButton, &QToolButton::clicked, this, &StreamUPToolbar::onSaveReplayButtonClicked);
 							
 							// Replace the old save replay button reference
