@@ -341,17 +341,14 @@ void StreamUPToolbar::updateRecordButton()
 void StreamUPToolbar::updatePauseButton()
 {
 	if (isReconstructingUI) {
-		blog(LOG_INFO, "[StreamUP] DEBUG: updatePauseButton blocked during UI reconstruction");
 		return;
 	}
-	blog(LOG_INFO, "[StreamUP] DEBUG: updatePauseButton called, pauseButton: %p", (void*)pauseButton);
 	if (pauseButton) {
 		bool recording = obs_frontend_recording_active();
 		bool paused = obs_frontend_recording_paused();
 		pauseButton->setEnabled(recording);
 		pauseButton->setChecked(paused);
 		pauseButton->setIcon(getCachedIcon("pause"));
-		blog(LOG_DEBUG, "[StreamUP] Updated pause button with cached icon");
 		pauseButton->setToolTip(paused ? "Resume Recording" : "Pause Recording");
 	}
 }
@@ -377,16 +374,13 @@ void StreamUPToolbar::updateReplayBufferButton()
 void StreamUPToolbar::updateSaveReplayButton()
 {
 	if (isReconstructingUI) {
-		blog(LOG_INFO, "[StreamUP] DEBUG: updateSaveReplayButton blocked during UI reconstruction");
 		return;
 	}
-	blog(LOG_INFO, "[StreamUP] DEBUG: updateSaveReplayButton called, saveReplayButton: %p", (void*)saveReplayButton);
 	if (saveReplayButton) {
 		bool replayActive = obs_frontend_replay_buffer_active();
 		
 		// Ensure icon is set correctly
 		saveReplayButton->setIcon(getCachedIcon("save-replay"));
-		blog(LOG_DEBUG, "[StreamUP] Updated save replay button with cached icon");
 		
 		// Show only when replay buffer is active, enable/disable based on recording pause state
 		saveReplayButton->setVisible(replayActive);
@@ -527,7 +521,6 @@ void StreamUPToolbar::OnFrontendEvent(enum obs_frontend_event event, void *data)
 		
 	case OBS_FRONTEND_EVENT_THEME_CHANGED:
 		// Theme changed, update icons and styling for new theme
-		blog(LOG_INFO, "[StreamUP] Received OBS_FRONTEND_EVENT_THEME_CHANGED event");
 		toolbar->updateIconsForTheme();
 		toolbar->updateToolbarStyling();
 		break;
@@ -582,62 +575,51 @@ void StreamUPToolbar::updateIconsForTheme()
 {
 	// Update all button icons for the current theme using cached icons
 	bool isDark = obs_frontend_is_theme_dark();
-	blog(LOG_INFO, "[StreamUP] Theme changed, updating all toolbar icons (isDark: %s)", isDark ? "true" : "false");
 	
 	// Update buttons with cached icons (eliminates redundant QIcon construction)
 	if (streamButton) {
 		bool streaming = obs_frontend_streaming_active();
 		QString iconName = streaming ? "streaming" : "streaming-inactive";
 		streamButton->setIcon(getCachedIcon(iconName));
-		blog(LOG_DEBUG, "[StreamUP] Updated stream button with cached icon: %s", iconName.toUtf8().constData());
 	}
 	
 	if (recordButton) {
 		bool recording = obs_frontend_recording_active();
 		QString iconName = recording ? "record-on" : "record-off";
 		recordButton->setIcon(getCachedIcon(iconName));
-		blog(LOG_DEBUG, "[StreamUP] Updated record button with cached icon: %s", iconName.toUtf8().constData());
 	}
 	
 	if (pauseButton) {
 		pauseButton->setIcon(getCachedIcon("pause"));
-		blog(LOG_DEBUG, "[StreamUP] Updated pause button with cached icon");
 	}
 	
 	if (replayBufferButton) {
 		bool active = obs_frontend_replay_buffer_active();
 		QString iconName = active ? "replay-buffer-on" : "replay-buffer-off";
 		replayBufferButton->setIcon(getCachedIcon(iconName));
-		blog(LOG_DEBUG, "[StreamUP] Updated replay buffer button with cached icon: %s", iconName.toUtf8().constData());
 	}
 	
 	if (saveReplayButton && saveReplayButton->isVisible()) {
 		saveReplayButton->setIcon(getCachedIcon("save-replay"));
-		blog(LOG_DEBUG, "[StreamUP] Updated save replay button with cached icon");
 	}
 	
 	if (virtualCameraButton) {
 		virtualCameraButton->setIcon(getCachedIcon("virtual-camera"));
-		blog(LOG_DEBUG, "[StreamUP] Updated virtual camera button with cached icon");
 	}
 	
 	if (virtualCameraConfigButton) {
 		virtualCameraConfigButton->setIcon(getCachedIcon("virtual-camera-settings"));
-		blog(LOG_DEBUG, "[StreamUP] Updated virtual camera config button with cached icon");
 	}
 	
 	if (studioModeButton) {
 		studioModeButton->setIcon(getCachedIcon("studio-mode"));
-		blog(LOG_DEBUG, "[StreamUP] Updated studio mode button with cached icon");
 	}
 	
 	if (settingsButton) {
 		settingsButton->setIcon(getCachedIcon("settings"));
-		blog(LOG_DEBUG, "[StreamUP] Updated settings button with cached icon");
 	}
 	
 	// StreamUP settings button keeps its original icon (social icon, not cached)
-	blog(LOG_INFO, "[StreamUP] All toolbar icons updated with cached icons for theme change");
 }
 
 void StreamUPToolbar::updatePositionAwareTheme()
@@ -658,28 +640,23 @@ void StreamUPToolbar::updatePositionAwareTheme()
 		setObjectName("StreamUPToolbar-Top");
 		positionSuffix = "-Top";
 		positionProperty = "top";
-		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for top position");
 	} else if (currentArea == Qt::BottomToolBarArea) {
 		setObjectName("StreamUPToolbar-Bottom"); 
 		positionSuffix = "-Bottom";
 		positionProperty = "bottom";
-		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for bottom position");
 	} else if (currentArea == Qt::LeftToolBarArea) {
 		setObjectName("StreamUPToolbar-Left");
 		positionSuffix = "-Left";
 		positionProperty = "left";
-		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for left position");
 	} else if (currentArea == Qt::RightToolBarArea) {
 		setObjectName("StreamUPToolbar-Right");
 		positionSuffix = "-Right";
 		positionProperty = "right";
-		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for right position");
 	} else {
 		// Fallback for floating or other positions
 		setObjectName("StreamUPToolbar");
 		positionSuffix = "";
 		positionProperty = "floating";
-		blog(LOG_DEBUG, "[StreamUP] Updated toolbar theme for floating position");
 	}
 	
 	setProperty("toolbarPosition", positionProperty);
@@ -756,7 +733,6 @@ void StreamUPToolbar::updatePositionAwareTheme()
 	style()->unpolish(this);
 	style()->polish(this);
 	
-	blog(LOG_INFO, "[StreamUP] Toolbar position-aware theme updated");
 }
 
 void StreamUPToolbar::updateLayoutOrientation()
@@ -779,7 +755,6 @@ void StreamUPToolbar::updateLayoutOrientation()
 	
 	// Only rebuild layout if orientation needs to change
 	if (shouldBeVertical != currentlyVertical) {
-		blog(LOG_INFO, "[StreamUP] Changing toolbar layout orientation to %s", shouldBeVertical ? "vertical" : "horizontal");
 		
 		// Store all current widgets in order
 		QList<QWidget*> widgets;
@@ -899,7 +874,6 @@ void StreamUPToolbar::updateLayoutOrientation()
 			}
 		}
 		
-		blog(LOG_INFO, "[StreamUP] Toolbar layout orientation updated successfully");
 	}
 }
 
@@ -907,8 +881,6 @@ void StreamUPToolbar::setupDynamicUI()
 {
 	// Set flag to prevent updates during reconstruction
 	isReconstructingUI = true;
-	blog(LOG_INFO, "[StreamUP] DEBUG: ===== STARTING SETUPDYNAMICUI =====");
-	blog(LOG_INFO, "[StreamUP] DEBUG: setupDynamicUI called - pauseButton: %p, saveReplayButton: %p", (void*)pauseButton, (void*)saveReplayButton);
 	
 	// Clear stylesheet cache since UI is being reconstructed
 	clearStyleSheetCache();
@@ -923,7 +895,6 @@ void StreamUPToolbar::setupDynamicUI()
 	
 	// Delete old central widget if it exists to ensure complete cleanup
 	if (centralWidget) {
-		blog(LOG_INFO, "[StreamUP] DEBUG: Deleting old centralWidget: %p", (void*)centralWidget);
 		centralWidget->setParent(nullptr);
 		centralWidget->deleteLater();
 		centralWidget = nullptr;
@@ -937,17 +908,14 @@ void StreamUPToolbar::setupDynamicUI()
 	mainLayout->setSpacing(4);
 	
 	// Clear existing buttons and properly clean up old references
-	blog(LOG_INFO, "[StreamUP] DEBUG: Clearing old button references - pauseButton: %p, saveReplayButton: %p", (void*)pauseButton, (void*)saveReplayButton);
 	dynamicButtons.clear();
 	
 	// Delete old button instances if they exist (more aggressive cleanup)
 	if (pauseButton) {
-		blog(LOG_INFO, "[StreamUP] DEBUG: Deleting old pauseButton: %p", (void*)pauseButton);
 		pauseButton->setParent(nullptr);
 		pauseButton->deleteLater();
 	}
 	if (saveReplayButton) {
-		blog(LOG_INFO, "[StreamUP] DEBUG: Deleting old saveReplayButton: %p", (void*)saveReplayButton);
 		saveReplayButton->setParent(nullptr);
 		saveReplayButton->deleteLater();
 	}
@@ -1039,19 +1007,15 @@ void StreamUPToolbar::setupDynamicUI()
 					if (buttonItem) {
 						// Add pause button immediately after record button
 						if (buttonItem->buttonType == "record") {
-							blog(LOG_INFO, "[StreamUP] DEBUG: ===== CREATING PAUSE BUTTON =====");
-							blog(LOG_INFO, "[StreamUP] DEBUG: Current pauseButton reference: %p", (void*)pauseButton);
 							
 							// Create new pause button for this position
 							QToolButton* newPauseButton = new QToolButton(centralWidget);
-							blog(LOG_INFO, "[StreamUP] DEBUG: Created new pause button at address: %p", (void*)newPauseButton);
-							newPauseButton->setProperty("buttonType", "streamup-button");
+											newPauseButton->setProperty("buttonType", "streamup-button");
 							newPauseButton->setFixedSize(28, 28);
 							newPauseButton->setIconSize(QSize(20, 20));
 							newPauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newPauseButton->setIcon(getCachedIcon("pause"));
-							blog(LOG_DEBUG, "[StreamUP] Set pause button icon with cached icon");
-							newPauseButton->setToolTip("Pause Recording");
+											newPauseButton->setToolTip("Pause Recording");
 							newPauseButton->setCheckable(true);
 							newPauseButton->setObjectName("pause_dynamic");
 							// Start hidden - will be shown when recording is active and pausable
@@ -1059,25 +1023,20 @@ void StreamUPToolbar::setupDynamicUI()
 							connect(newPauseButton, &QToolButton::clicked, this, &StreamUPToolbar::onPauseButtonClicked);
 							
 							// Replace the old pause button reference
-							blog(LOG_INFO, "[StreamUP] DEBUG: Replacing pauseButton reference (old: %p, new: %p)", (void*)pauseButton, (void*)newPauseButton);
 							pauseButton = newPauseButton;
 							recordButton = button;
 							mainLayout->addWidget(pauseButton);
-							blog(LOG_INFO, "[StreamUP] DEBUG: Added pauseButton to layout, parent: %p", (void*)pauseButton->parent());
-							blog(LOG_INFO, "[StreamUP] DEBUG: ===== PAUSE BUTTON CREATION COMPLETE =====");
 						}
 						// Add save_replay button immediately after replay_buffer button
 						else if (buttonItem->buttonType == "replay_buffer") {
-							blog(LOG_INFO, "[StreamUP] DEBUG: Creating new save_replay button after replay_buffer button at position");
-							// Create new save_replay button for this position
+											// Create new save_replay button for this position
 							QToolButton* newSaveReplayButton = new QToolButton(centralWidget);
 							newSaveReplayButton->setProperty("buttonType", "streamup-button");
 							newSaveReplayButton->setFixedSize(28, 28);
 							newSaveReplayButton->setIconSize(QSize(20, 20));
 							newSaveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newSaveReplayButton->setIcon(getCachedIcon("save-replay"));
-							blog(LOG_DEBUG, "[StreamUP] Set save replay button icon with cached icon");
-							newSaveReplayButton->setToolTip("Save Replay");
+											newSaveReplayButton->setToolTip("Save Replay");
 							newSaveReplayButton->setCheckable(false);
 							newSaveReplayButton->setObjectName("save_replay_dynamic");
 							// Start hidden - will be shown when replay buffer is active
@@ -1085,12 +1044,10 @@ void StreamUPToolbar::setupDynamicUI()
 							connect(newSaveReplayButton, &QToolButton::clicked, this, &StreamUPToolbar::onSaveReplayButtonClicked);
 							
 							// Replace the old save replay button reference
-							blog(LOG_INFO, "[StreamUP] DEBUG: Replacing saveReplayButton reference (old: %p, new: %p)", (void*)saveReplayButton, (void*)newSaveReplayButton);
-							saveReplayButton = newSaveReplayButton;
+											saveReplayButton = newSaveReplayButton;
 							replayBufferButton = button;
 							mainLayout->addWidget(saveReplayButton);
-							blog(LOG_INFO, "[StreamUP] DEBUG: Added saveReplayButton to layout, parent: %p", (void*)saveReplayButton->parent());
-						}
+										}
 					}
 				}
 			}
@@ -1146,7 +1103,6 @@ void StreamUPToolbar::setupDynamicUI()
 	
 	// Clear flag and update buttons now that reconstruction is complete
 	isReconstructingUI = false;
-	blog(LOG_INFO, "[StreamUP] DEBUG: UI reconstruction complete, re-enabling updates");
 	updateAllButtons();
 }
 

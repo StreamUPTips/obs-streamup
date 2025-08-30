@@ -83,7 +83,6 @@ void HotkeyOpenSourceProperties(void *data, obs_hotkey_id id, obs_hotkey_t *hotk
 	// Get the name of the currently selected source
 	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
-		blog(LOG_INFO, "[StreamUP] No source selected, cannot open properties.");
 		return;
 	}
 
@@ -94,7 +93,6 @@ void HotkeyOpenSourceProperties(void *data, obs_hotkey_id id, obs_hotkey_t *hotk
 		obs_frontend_open_source_properties(selected_source);
 		obs_source_release(selected_source);
 	} else {
-		blog(LOG_INFO, "[StreamUP] Failed to find source: %s", selected_source_name);
 	}
 }
 
@@ -110,7 +108,6 @@ void HotkeyOpenSourceFilters(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey,
 	// Get the name of the currently selected source
 	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
-		blog(LOG_INFO, "[StreamUP] No source selected, cannot open filters.");
 		return;
 	}
 
@@ -121,7 +118,6 @@ void HotkeyOpenSourceFilters(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey,
 		obs_frontend_open_source_filters(selected_source);
 		obs_source_release(selected_source);
 	} else {
-		blog(LOG_INFO, "[StreamUP] Failed to find source: %s", selected_source_name);
 	}
 }
 
@@ -137,7 +133,6 @@ void HotkeyOpenSourceInteract(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 	// Get the name of the currently selected source
 	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
-		blog(LOG_INFO, "[StreamUP] No source selected, cannot open interact window.");
 		return;
 	}
 
@@ -148,7 +143,6 @@ void HotkeyOpenSourceInteract(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 		obs_frontend_open_source_interaction(selected_source);
 		obs_source_release(selected_source); // Release reference count
 	} else {
-		blog(LOG_INFO, "[StreamUP] Failed to find source: %s", selected_source_name);
 	}
 }
 

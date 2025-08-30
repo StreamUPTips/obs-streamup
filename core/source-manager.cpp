@@ -63,7 +63,6 @@ bool RefreshAudioMonitoring(void *data, obs_source_t *source)
 		obs_source_set_monitoring_type(source, OBS_MONITORING_TYPE_NONE);
 		obs_source_set_monitoring_type(source, original_monitoring_type);
 
-		blog(LOG_INFO, "[StreamUP] '%s' has refreshed audio monitoring type: '%s'", source_name,
 		     MonitoringTypeToString(original_monitoring_type));
 	}
 
@@ -106,7 +105,6 @@ bool RefreshBrowserSources(void *data, obs_source_t *source)
 			obs_data_set_int(settings, "fps", fps - 1);
 		}
 		obs_source_update(source, settings);
-		blog(LOG_INFO, "[StreamUP] Refreshed '%s' browser source", source_name);
 
 		obs_data_release(settings);
 	}
@@ -262,11 +260,9 @@ bool ToggleLockSourcesInCurrentScene(bool sendNotification)
 
 	if (sendNotification) {
 		if (any_unlocked) {
-			blog(LOG_INFO, "[StreamUP] All sources in the current scene have been locked.");
 			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("SourceLockSystem"),
 					     obs_module_text("LockedCurrentSources"));
 		} else {
-			blog(LOG_INFO, "[StreamUP] All sources in the current scene have been unlocked.");
 			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("SourceLockSystem"),
 					     obs_module_text("UnlockedCurrentSources"));
 		}
@@ -355,11 +351,9 @@ bool ToggleLockAllSources(bool sendNotification)
 
 	if (sendNotification) {
 		if (data.any_unlocked) {
-			blog(LOG_INFO, "[StreamUP] All sources in all scenes have been locked.");
 			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("SourceLockSystem"),
 					     obs_module_text("LockedAllSources"));
 		} else {
-			blog(LOG_INFO, "[StreamUP] All sources in all scenes have been unlocked.");
 			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("SourceLockSystem"),
 					     obs_module_text("UnlockedAllSources"));
 		}
@@ -410,7 +404,6 @@ const char *GetSelectedSourceFromCurrentScene()
 	// Get the current scene source from the frontend
 	obs_source_t *current_scene_source = obs_frontend_get_current_scene();
 	if (!current_scene_source) {
-		blog(LOG_INFO, "[StreamUP] No active scene.");
 		return nullptr;
 	}
 
@@ -419,7 +412,6 @@ const char *GetSelectedSourceFromCurrentScene()
 	obs_source_release(current_scene_source); // Always release the source when done
 
 	if (!scene) {
-		blog(LOG_INFO, "[StreamUP] No active scene found.");
 		return nullptr;
 	}
 
@@ -435,7 +427,6 @@ const char *GetSelectedSourceFromCurrentScene()
 		return obs_source_get_name(selected_source); // Return the source name
 	}
 
-	blog(LOG_INFO, "[StreamUP] No selected source or multiple selected sources.");
 	return nullptr; // No source or multiple sources selected
 }
 

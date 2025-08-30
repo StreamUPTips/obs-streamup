@@ -21,7 +21,6 @@ MultiDockManager::MultiDockManager(QObject* parent)
     // Register for OBS frontend events to save state more reliably
     obs_frontend_add_event_callback(OnFrontendEvent, this);
     
-    blog(LOG_INFO, "[StreamUP MultiDock] MultiDockManager created");
 }
 
 MultiDockManager::~MultiDockManager()
@@ -29,7 +28,6 @@ MultiDockManager::~MultiDockManager()
     // Remove event callback
     obs_frontend_remove_event_callback(OnFrontendEvent, this);
     
-    blog(LOG_INFO, "[StreamUP MultiDock] MultiDockManager destroyed");
 }
 
 MultiDockManager* MultiDockManager::Instance()
@@ -47,7 +45,6 @@ void MultiDockManager::Initialize()
     s_instance = new MultiDockManager();
     s_instance->LoadAllMultiDocks();
     
-    blog(LOG_INFO, "[StreamUP MultiDock] MultiDockManager initialized");
 }
 
 void MultiDockManager::OnFrontendEvent(enum obs_frontend_event event, void *private_data)
@@ -61,14 +58,11 @@ void MultiDockManager::OnFrontendEvent(enum obs_frontend_event event, void *priv
     case OBS_FRONTEND_EVENT_EXIT:
     case OBS_FRONTEND_EVENT_PROFILE_CHANGING:
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING:
-        blog(LOG_INFO, "[StreamUP MultiDock] Saving MultiDock states on frontend event %d", event);
         manager->SaveAllMultiDocks();
         break;
     case OBS_FRONTEND_EVENT_FINISHED_LOADING:
         // Retry failed restorations after all plugins have loaded
         if (!manager->m_hasRetriedRestoration && !manager->m_pendingRetryIds.isEmpty()) {
-            blog(LOG_INFO, "[StreamUP MultiDock] OBS finished loading, retrying failed restorations for %d MultiDocks", 
-                 manager->m_pendingRetryIds.size());
             // Use a timer to ensure all dock widgets are fully initialized
             QTimer::singleShot(2000, manager, &MultiDockManager::RetryFailedRestorations);
         }
@@ -87,7 +81,6 @@ void MultiDockManager::Shutdown()
     
     // Don't save during shutdown - the widgets may already be destroyed
     // We've already saved when needed via the event callback
-    blog(LOG_INFO, "[StreamUP MultiDock] MultiDockManager shutting down (widgets may already be destroyed by OBS)...");
     
     // Clean up remaining MultiDocks if any still exist
     QList<MultiDockDock*> multiDocks = s_instance->GetAllMultiDocks();
@@ -101,7 +94,6 @@ void MultiDockManager::Shutdown()
     delete s_instance;
     s_instance = nullptr;
     
-    blog(LOG_INFO, "[StreamUP MultiDock] MultiDockManager shutdown complete");
 }
 
 QString MultiDockManager::CreateMultiDock(const QString& name)
@@ -147,7 +139,6 @@ QString MultiDockManager::CreateMultiDock(const QString& name)
     // Save the updated list
     SaveAllMultiDocks();
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Created MultiDock '%s' with ID '%s' and auto-opened", 
          trimmedName.toUtf8().constData(), id.toUtf8().constData());
     
     return id;
@@ -163,18 +154,15 @@ bool MultiDockManager::RemoveMultiDock(const QString& id)
     
     // If we have the widget, return all captured docks first
     if (multiDock && multiDock->GetInnerHost()) {
-        blog(LOG_INFO, "[StreamUP MultiDock] Returning all docks before removing MultiDock '%s'", id.toUtf8().constData());
         
         // Get all captured docks and return them to main window
         QList<QDockWidget*> allDocks = multiDock->GetInnerHost()->GetAllDocks();
         for (QDockWidget* dock : allDocks) {
             if (dock) {
-                blog(LOG_INFO, "[StreamUP MultiDock] Returning dock '%s'", dock->windowTitle().toUtf8().constData());
                 multiDock->GetInnerHost()->RemoveDock(dock);
             }
         }
         
-        blog(LOG_INFO, "[StreamUP MultiDock] All docks returned, now removing MultiDock");
     }
     
     // Remove from our tracking
@@ -187,7 +175,6 @@ bool MultiDockManager::RemoveMultiDock(const QString& id)
     
     // Now unregister the empty MultiDock from OBS
     obs_frontend_remove_dock(id.toUtf8().constData());
-    blog(LOG_INFO, "[StreamUP MultiDock] Unregistered empty MultiDock from OBS");
     
     return true;
 }
