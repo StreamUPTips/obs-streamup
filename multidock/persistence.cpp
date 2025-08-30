@@ -75,8 +75,6 @@ QList<MultiDockInfo> LoadMultiDockList()
     QList<MultiDockInfo> result;
     QJsonObject config = LoadConfig();
     
-         QJsonDocument(config).toJson(QJsonDocument::Compact).constData());
-    
     QJsonArray multiDockArray = config["multidocks"].toArray();
     
     for (const QJsonValue& value : multiDockArray) {
@@ -84,8 +82,6 @@ QList<MultiDockInfo> LoadMultiDockList()
         MultiDockInfo info;
         info.id = obj["id"].toString();
         info.name = obj["name"].toString();
-        
-             info.id.toUtf8().constData(), info.name.toUtf8().constData());
         
         if (!info.id.isEmpty() && !info.name.isEmpty()) {
             result.append(info);

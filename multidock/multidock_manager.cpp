@@ -139,8 +139,6 @@ QString MultiDockManager::CreateMultiDock(const QString& name)
     // Save the updated list
     SaveAllMultiDocks();
     
-         trimmedName.toUtf8().constData(), id.toUtf8().constData());
-    
     return id;
 }
 
