@@ -62,8 +62,6 @@ bool RefreshAudioMonitoring(void *data, obs_source_t *source)
 	if (original_monitoring_type != OBS_MONITORING_TYPE_NONE) {
 		obs_source_set_monitoring_type(source, OBS_MONITORING_TYPE_NONE);
 		obs_source_set_monitoring_type(source, original_monitoring_type);
-
-		     MonitoringTypeToString(original_monitoring_type));
 	}
 
 	return true;
