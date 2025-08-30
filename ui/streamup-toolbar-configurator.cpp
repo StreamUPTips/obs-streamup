@@ -121,6 +121,7 @@ void ToolbarConfigurator::setupUI()
     builtinButtonsList = new QTreeWidget();
     builtinButtonsList->setHeaderHidden(true);
     builtinButtonsList->setRootIsDecorated(true);
+    builtinButtonsList->setIndentation(0); // No indentation - we'll handle it with styling
     builtinButtonsList->setStyleSheet(
         "QTreeWidget { "
         "    border: none; "
@@ -131,6 +132,7 @@ void ToolbarConfigurator::setupUI()
         "    selection-color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
         "    outline: none; "
         "    padding: 8px; "
+        "    show-decoration-selected: 0; "
         "} "
         "QTreeWidget::item { "
         "    padding: 4px 8px; "
@@ -142,28 +144,34 @@ void ToolbarConfigurator::setupUI()
 				      QString(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30) +
 				      "; "
         "} "
+        "QTreeWidget::item:selected { "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    border: none; "
+        "} "
+        "QTreeWidget::item:selected:active { "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    border: none; "
+        "} "
+        "QTreeWidget::item:selected:!active { "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    border: none; "
+        "} "
+        "QTreeWidget::indicator { "
+        "    width: 0px; "
+        "    height: 0px; "
+        "    border: none; "
+        "    background: transparent; "
+        "} "
+        "QTreeWidget::indicator:checked, QTreeWidget::indicator:unchecked { "
+        "    width: 0px; "
+        "    height: 0px; "
+        "    border: none; "
+        "    background: transparent; "
+        "} "
         "QTreeWidget::branch { "
         "    background: transparent; "
-        "} "
-        "QTreeWidget::branch:closed:has-children { "
-        "    border: none; "
-        "    background: transparent; "
-        "    width: 0; "
-        "    height: 0; "
-        "    border-left: 4px solid " + QString(StreamUP::UIStyles::Colors::TEXT_SECONDARY) + "; "
-        "    border-top: 3px solid transparent; "
-        "    border-bottom: 3px solid transparent; "
-        "    margin: 6px 4px 6px 6px; "
-        "} "
-        "QTreeWidget::branch:open:has-children { "
-        "    border: none; "
-        "    background: transparent; "
-        "    width: 0; "
-        "    height: 0; "
-        "    border-top: 4px solid " + QString(StreamUP::UIStyles::Colors::TEXT_SECONDARY) + "; "
-        "    border-left: 3px solid transparent; "
-        "    border-right: 3px solid transparent; "
-        "    margin: 4px 6px 6px 6px; "
+        "    width: 0px; "
+        "    height: 0px; "
         "} "
         "QScrollBar:vertical { "
         "    background: " + QString(StreamUP::UIStyles::Colors::BG_SECONDARY) + "; "
@@ -200,6 +208,7 @@ void ToolbarConfigurator::setupUI()
     dockButtonsList = new QTreeWidget();
     dockButtonsList->setHeaderHidden(true);
     dockButtonsList->setRootIsDecorated(true);
+    dockButtonsList->setIndentation(0); // No indentation - we'll handle it with styling
     dockButtonsList->setStyleSheet(
         "QTreeWidget { "
         "    border: none; "
@@ -210,6 +219,7 @@ void ToolbarConfigurator::setupUI()
         "    selection-color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
         "    outline: none; "
         "    padding: 8px; "
+        "    show-decoration-selected: 0; "
         "} "
         "QTreeWidget::item { "
         "    padding: 4px 8px; "
@@ -221,28 +231,34 @@ void ToolbarConfigurator::setupUI()
 				   QString(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30) +
 				   "; "
         "} "
+        "QTreeWidget::item:selected { "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    border: none; "
+        "} "
+        "QTreeWidget::item:selected:active { "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    border: none; "
+        "} "
+        "QTreeWidget::item:selected:!active { "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    border: none; "
+        "} "
+        "QTreeWidget::indicator { "
+        "    width: 0px; "
+        "    height: 0px; "
+        "    border: none; "
+        "    background: transparent; "
+        "} "
+        "QTreeWidget::indicator:checked, QTreeWidget::indicator:unchecked { "
+        "    width: 0px; "
+        "    height: 0px; "
+        "    border: none; "
+        "    background: transparent; "
+        "} "
         "QTreeWidget::branch { "
         "    background: transparent; "
-        "} "
-        "QTreeWidget::branch:closed:has-children { "
-        "    border: none; "
-        "    background: transparent; "
-        "    width: 0; "
-        "    height: 0; "
-        "    border-left: 4px solid " + QString(StreamUP::UIStyles::Colors::TEXT_SECONDARY) + "; "
-        "    border-top: 3px solid transparent; "
-        "    border-bottom: 3px solid transparent; "
-        "    margin: 6px 4px 6px 6px; "
-        "} "
-        "QTreeWidget::branch:open:has-children { "
-        "    border: none; "
-        "    background: transparent; "
-        "    width: 0; "
-        "    height: 0; "
-        "    border-top: 4px solid " + QString(StreamUP::UIStyles::Colors::TEXT_SECONDARY) + "; "
-        "    border-left: 3px solid transparent; "
-        "    border-right: 3px solid transparent; "
-        "    margin: 4px 6px 6px 6px; "
+        "    width: 0px; "
+        "    height: 0px; "
         "} "
         "QScrollBar:vertical { "
         "    background: " + QString(StreamUP::UIStyles::Colors::BG_SECONDARY) + "; "
@@ -513,6 +529,68 @@ void ToolbarConfigurator::setupUI()
     connect(spacerSizeSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &ToolbarConfigurator::onSpacerSettingsChanged);
 }
 
+void ToolbarConfigurator::createExpandIndicator(QTreeWidget* treeWidget, QTreeWidgetItem* item)
+{
+    // Create a container widget with horizontal layout
+    QWidget* containerWidget = new QWidget();
+    containerWidget->setStyleSheet("QWidget { background: transparent; }");
+    
+    QHBoxLayout* layout = new QHBoxLayout(containerWidget);
+    layout->setContentsMargins(0, 0, 0, 0); // No margins needed with proper indentation
+    layout->setSpacing(6); // Space between icon and text
+    
+    // Create the expand/collapse indicator
+    QCheckBox* expandIndicator = new QCheckBox();
+    expandIndicator->setProperty("class", "checkbox-icon indicator-expand");
+    expandIndicator->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    expandIndicator->setAttribute(Qt::WA_LayoutUsesWidgetRect);
+    expandIndicator->setChecked(!item->isExpanded()); // Inverted: checked = collapsed
+    expandIndicator->setStyleSheet(
+        "QCheckBox { background: transparent; border: none; } "
+        "QCheckBox:hover { background: transparent; }" // Disable hover effect
+    );
+    
+    // Create a label for the text
+    QLabel* textLabel = new QLabel(item->text(0));
+    textLabel->setStyleSheet(
+        "QLabel { "
+        "    background: transparent; "
+        "    color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
+        "}"
+    );
+    
+    // Add widgets to layout
+    layout->addWidget(expandIndicator);
+    layout->addWidget(textLabel);
+    layout->addStretch(); // Push everything to the left
+    
+    // Connect the checkbox to expand/collapse the item
+    connect(expandIndicator, &QCheckBox::toggled, [item](bool checked) {
+        item->setExpanded(!checked); // Inverted logic: checked = collapsed
+    });
+    
+    // Also connect the item's expansion to update the checkbox
+    connect(treeWidget, &QTreeWidget::itemExpanded, [expandIndicator, item](QTreeWidgetItem* expandedItem) {
+        if (expandedItem == item) {
+            expandIndicator->blockSignals(true);
+            expandIndicator->setChecked(false); // Expanded = unchecked
+            expandIndicator->blockSignals(false);
+        }
+    });
+    
+    connect(treeWidget, &QTreeWidget::itemCollapsed, [expandIndicator, item](QTreeWidgetItem* collapsedItem) {
+        if (collapsedItem == item) {
+            expandIndicator->blockSignals(true);
+            expandIndicator->setChecked(true); // Collapsed = checked
+            expandIndicator->blockSignals(false);
+        }
+    });
+    
+    // Clear the original text since we're using a custom widget
+    item->setText(0, "");
+    treeWidget->setItemWidget(item, 0, containerWidget);
+}
+
 void ToolbarConfigurator::populateBuiltinButtonsList()
 {
     builtinButtonsList->clear();
@@ -523,10 +601,13 @@ void ToolbarConfigurator::populateBuiltinButtonsList()
     controlsCategory->setExpanded(true);
     controlsCategory->setFlags(Qt::ItemIsEnabled); // Make category non-selectable
     
+    // Create expand/collapse indicator for the category
+    createExpandIndicator(builtinButtonsList, controlsCategory);
+    
     auto buttons = ToolbarConfig::ButtonRegistry::getBuiltinButtons();
     for (const auto& button : buttons) {
         QTreeWidgetItem* item = new QTreeWidgetItem(controlsCategory);
-        item->setText(0, button.displayName);
+        item->setText(0, "    " + button.displayName); // Add manual indentation
         item->setData(0, Qt::UserRole, button.type);
         item->setToolTip(0, button.defaultTooltip);
     }
@@ -548,6 +629,10 @@ void ToolbarConfigurator::populateDockButtonsList()
     settingsCategory->setExpanded(true);
     settingsCategory->setFlags(Qt::ItemIsEnabled); // Make category non-selectable
     
+    // Create expand/collapse indicators for both categories
+    createExpandIndicator(dockButtonsList, toolsCategory);
+    createExpandIndicator(dockButtonsList, settingsCategory);
+    
     auto buttons = ToolbarConfig::ToolbarConfiguration::getAvailableDockButtons();
     for (const auto& button : buttons) {
         // Determine which category this button belongs to
@@ -557,7 +642,7 @@ void ToolbarConfigurator::populateDockButtonsList()
         }
         
         QTreeWidgetItem* item = new QTreeWidgetItem(parentCategory);
-        item->setText(0, button.name);
+        item->setText(0, "    " + button.name); // Add manual indentation
         item->setData(0, Qt::UserRole, button.dockButtonType);
         item->setToolTip(0, button.tooltip);
     }

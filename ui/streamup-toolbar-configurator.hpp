@@ -65,6 +65,7 @@ private:
     void populateCurrentConfiguration();
     void updateButtonStates();
     void clearSpacerForm();
+    void createExpandIndicator(QTreeWidget* treeWidget, QTreeWidgetItem* item);
     
     QListWidgetItem* createConfigurationItem(std::shared_ptr<ToolbarConfig::ToolbarItem> item);
     std::shared_ptr<ToolbarConfig::ToolbarItem> createItemFromSelection();
