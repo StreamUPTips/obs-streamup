@@ -1,6 +1,7 @@
 #include "settings-manager.hpp"
 #include "ui-helpers.hpp"
 #include "ui-styles.hpp"
+#include "../utilities/obs-data-helpers.hpp"
 #include "switch-button.hpp"
 #include "plugin-manager.hpp"
 #include "plugin-state.hpp"
@@ -233,14 +234,14 @@ PluginSettings GetCurrentSettings()
 	obs_data_t *data = LoadSettings();
 
 	if (data) {
-		settings.runAtStartup = obs_data_get_bool(data, "run_at_startup");
-		settings.notificationsMute = obs_data_get_bool(data, "notifications_mute");
-		settings.showCPHIntegration = obs_data_get_bool(data, "show_cph_integration");
-		settings.showToolbar = obs_data_get_bool(data, "show_toolbar");
+		settings.runAtStartup = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "run_at_startup", true);
+		settings.notificationsMute = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "notifications_mute", false);
+		settings.showCPHIntegration = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "show_cph_integration", true);
+		settings.showToolbar = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "show_toolbar", true);
 
 		// Load toolbar position setting (default to top if not set)
-		const char *positionStr = obs_data_get_string(data, "toolbar_position");
-		if (positionStr) {
+		const char *positionStr = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "toolbar_position", "top");
+		if (positionStr && strlen(positionStr) > 0) {
 			if (strcmp(positionStr, "bottom") == 0) {
 				settings.toolbarPosition = ToolbarPosition::Bottom;
 			} else if (strcmp(positionStr, "left") == 0) {
@@ -257,12 +258,11 @@ PluginSettings GetCurrentSettings()
 		// Load dock tool settings
 		obs_data_t *dockData = obs_data_get_obj(data, "dock_tools");
 		if (dockData) {
-			settings.dockTools.showLockAllSources = obs_data_get_bool(dockData, "show_lock_all_sources");
-			settings.dockTools.showLockCurrentSources = obs_data_get_bool(dockData, "show_lock_current_sources");
-			settings.dockTools.showRefreshBrowserSources = obs_data_get_bool(dockData, "show_refresh_browser_sources");
-			settings.dockTools.showRefreshAudioMonitoring =
-				obs_data_get_bool(dockData, "show_refresh_audio_monitoring");
-			settings.dockTools.showVideoCaptureOptions = obs_data_get_bool(dockData, "show_video_capture_options");
+			settings.dockTools.showLockAllSources = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_lock_all_sources", true);
+			settings.dockTools.showLockCurrentSources = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_lock_current_sources", true);
+			settings.dockTools.showRefreshBrowserSources = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_refresh_browser_sources", true);
+			settings.dockTools.showRefreshAudioMonitoring = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_refresh_audio_monitoring", true);
+			settings.dockTools.showVideoCaptureOptions = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_video_capture_options", true);
 
 			obs_data_release(dockData);
 		} else {

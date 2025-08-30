@@ -1,6 +1,7 @@
 #include "hotkey-manager.hpp"
 #include "streamup-common.hpp"
 #include "source-manager.hpp"
+#include "../utilities/obs-data-helpers.hpp"
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <obs-hotkey.h>
@@ -217,98 +218,30 @@ void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 	
 	if (saving) {
 		// save hotkeys
-		obs_data_array_t *hotkeySaveArray;
-
-		hotkeySaveArray = obs_hotkey_save(refresh_browser_sources_hotkey_id);
-		obs_data_set_array(save_data, "refresh_browser_sources_hotkey", hotkeySaveArray);
-		obs_data_array_release(hotkeySaveArray);
-
-		hotkeySaveArray = obs_hotkey_save(refresh_audio_monitoring_hotkey_id);
-		obs_data_set_array(save_data, "refresh_audio_monitoring_hotkey", hotkeySaveArray);
-		obs_data_array_release(hotkeySaveArray);
-
-		hotkeySaveArray = obs_hotkey_save(lock_all_sources_hotkey_id);
-		obs_data_set_array(save_data, "lock_all_sources_hotkey", hotkeySaveArray);
-		obs_data_array_release(hotkeySaveArray);
-
-		hotkeySaveArray = obs_hotkey_save(lock_current_sources_hotkey_id);
-		obs_data_set_array(save_data, "lock_current_sources_hotkey", hotkeySaveArray);
-		obs_data_array_release(hotkeySaveArray);
-
-		hotkeySaveArray = obs_hotkey_save(open_source_properties_hotkey_id);
-		obs_data_set_array(save_data, "open_source_properties_hotkey", hotkeySaveArray);
-		obs_data_array_release(hotkeySaveArray);
-
-		hotkeySaveArray = obs_hotkey_save(open_source_filters_hotkey_id);
-		obs_data_set_array(save_data, "open_source_filters_hotkey", hotkeySaveArray);
-		obs_data_array_release(hotkeySaveArray);
-
-		hotkeySaveArray = obs_hotkey_save(open_source_interact_hotkey_id);
-		obs_data_set_array(save_data, "open_source_interact_hotkey", hotkeySaveArray);
-		obs_data_array_release(hotkeySaveArray);
-
-		hotkeySaveArray = obs_hotkey_save(open_scene_filters_hotkey_id);
-		obs_data_set_array(save_data, "open_scene_filters_hotkey", hotkeySaveArray);
-		obs_data_array_release(hotkeySaveArray);
-
-		hotkeySaveArray = obs_hotkey_save(activate_video_capture_devices_hotkey_id);
-		obs_data_set_array(save_data, "activate_video_capture_devices_hotkey", hotkeySaveArray);
-		obs_data_array_release(hotkeySaveArray);
-
-		hotkeySaveArray = obs_hotkey_save(deactivate_video_capture_devices_hotkey_id);
-		obs_data_set_array(save_data, "deactivate_video_capture_devices_hotkey", hotkeySaveArray);
-		obs_data_array_release(hotkeySaveArray);
-
-		hotkeySaveArray = obs_hotkey_save(refresh_video_capture_devices_hotkey_id);
-		obs_data_set_array(save_data, "refresh_video_capture_devices_hotkey", hotkeySaveArray);
-		obs_data_array_release(hotkeySaveArray);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "refresh_browser_sources_hotkey", refresh_browser_sources_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "refresh_audio_monitoring_hotkey", refresh_audio_monitoring_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "lock_all_sources_hotkey", lock_all_sources_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "lock_current_sources_hotkey", lock_current_sources_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "open_source_properties_hotkey", open_source_properties_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "open_source_filters_hotkey", open_source_filters_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "open_source_interact_hotkey", open_source_interact_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "open_scene_filters_hotkey", open_scene_filters_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "activate_video_capture_devices_hotkey", activate_video_capture_devices_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "deactivate_video_capture_devices_hotkey", deactivate_video_capture_devices_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "refresh_video_capture_devices_hotkey", refresh_video_capture_devices_hotkey_id);
 	} else {
 		// load hotkeys
-		obs_data_array_t *hotkeyLoadArray;
-
-		hotkeyLoadArray = obs_data_get_array(save_data, "refresh_browser_sources_hotkey");
-		obs_hotkey_load(refresh_browser_sources_hotkey_id, hotkeyLoadArray);
-		obs_data_array_release(hotkeyLoadArray);
-
-		hotkeyLoadArray = obs_data_get_array(save_data, "refresh_audio_monitoring_hotkey");
-		obs_hotkey_load(refresh_audio_monitoring_hotkey_id, hotkeyLoadArray);
-		obs_data_array_release(hotkeyLoadArray);
-
-		hotkeyLoadArray = obs_data_get_array(save_data, "lock_all_sources_hotkey");
-		obs_hotkey_load(lock_all_sources_hotkey_id, hotkeyLoadArray);
-		obs_data_array_release(hotkeyLoadArray);
-
-		hotkeyLoadArray = obs_data_get_array(save_data, "lock_current_sources_hotkey");
-		obs_hotkey_load(lock_current_sources_hotkey_id, hotkeyLoadArray);
-		obs_data_array_release(hotkeyLoadArray);
-
-		hotkeyLoadArray = obs_data_get_array(save_data, "open_source_properties_hotkey");
-		obs_hotkey_load(open_source_properties_hotkey_id, hotkeyLoadArray);
-		obs_data_array_release(hotkeyLoadArray);
-
-		hotkeyLoadArray = obs_data_get_array(save_data, "open_source_filters_hotkey");
-		obs_hotkey_load(open_source_filters_hotkey_id, hotkeyLoadArray);
-		obs_data_array_release(hotkeyLoadArray);
-
-		hotkeyLoadArray = obs_data_get_array(save_data, "open_source_interact_hotkey");
-		obs_hotkey_load(open_source_interact_hotkey_id, hotkeyLoadArray);
-		obs_data_array_release(hotkeyLoadArray);
-
-		hotkeyLoadArray = obs_data_get_array(save_data, "open_scene_filters_hotkey");
-		obs_hotkey_load(open_scene_filters_hotkey_id, hotkeyLoadArray);
-		obs_data_array_release(hotkeyLoadArray);
-
-		hotkeyLoadArray = obs_data_get_array(save_data, "activate_video_capture_devices_hotkey");
-		obs_hotkey_load(activate_video_capture_devices_hotkey_id, hotkeyLoadArray);
-		obs_data_array_release(hotkeyLoadArray);
-
-		hotkeyLoadArray = obs_data_get_array(save_data, "deactivate_video_capture_devices_hotkey");
-		obs_hotkey_load(deactivate_video_capture_devices_hotkey_id, hotkeyLoadArray);
-		obs_data_array_release(hotkeyLoadArray);
-
-		hotkeyLoadArray = obs_data_get_array(save_data, "refresh_video_capture_devices_hotkey");
-		obs_hotkey_load(refresh_video_capture_devices_hotkey_id, hotkeyLoadArray);
-		obs_data_array_release(hotkeyLoadArray);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "refresh_browser_sources_hotkey", refresh_browser_sources_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "refresh_audio_monitoring_hotkey", refresh_audio_monitoring_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "lock_all_sources_hotkey", lock_all_sources_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "lock_current_sources_hotkey", lock_current_sources_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "open_source_properties_hotkey", open_source_properties_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "open_source_filters_hotkey", open_source_filters_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "open_source_interact_hotkey", open_source_interact_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "open_scene_filters_hotkey", open_scene_filters_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "activate_video_capture_devices_hotkey", activate_video_capture_devices_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "deactivate_video_capture_devices_hotkey", deactivate_video_capture_devices_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "refresh_video_capture_devices_hotkey", refresh_video_capture_devices_hotkey_id);
 	}
 }
 
