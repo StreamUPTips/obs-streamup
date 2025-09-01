@@ -1258,8 +1258,13 @@ void ApplyOBSNativeTheming(QWidget* widget) {
 }
 
 bool IsOBSThemeDark() {
-    // Wrapper for OBS theme detection - fallback for compatibility
-    return false; // Default to light theme
+    // obs_frontend_is_theme_dark was introduced in OBS 29.0.0
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
+    return obs_frontend_is_theme_dark();
+#else
+    // Fallback for older OBS versions - assume light theme
+    return false;
+#endif
 }
 
 } // namespace UIStyles

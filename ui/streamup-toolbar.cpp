@@ -519,11 +519,13 @@ void StreamUPToolbar::OnFrontendEvent(enum obs_frontend_event event, void *data)
 		toolbar->updateAllButtons();
 		break;
 		
-	// case OBS_FRONTEND_EVENT_THEME_CHANGED: // Not available in all builds
-	//	// Theme changed, update icons and styling for new theme
-	//	toolbar->updateIconsForTheme();
-	//	toolbar->updateToolbarStyling();
-	//	break;
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
+	case OBS_FRONTEND_EVENT_THEME_CHANGED:
+		// Theme changed, update icons and styling for new theme
+		toolbar->updateIconsForTheme();
+		toolbar->updateToolbarStyling();
+		break;
+#endif
 		
 	default:
 		break;
@@ -539,7 +541,11 @@ QString StreamUPToolbar::getThemedIconPath(const QString& iconName)
 QIcon StreamUPToolbar::getCachedIcon(const QString& iconName)
 {
 	// Check if theme has changed and invalidate caches if needed
-	bool isDark = false; // Fallback for compatibility
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
+	bool isDark = obs_frontend_is_theme_dark();
+#else
+	bool isDark = false; // Fallback for older OBS versions
+#endif
 	if (currentThemeIsDark != isDark) {
 		clearIconCache();
 		clearStyleSheetCache();  // Stylesheet also depends on theme
@@ -574,7 +580,11 @@ void StreamUPToolbar::clearStyleSheetCache()
 void StreamUPToolbar::updateIconsForTheme()
 {
 	// Update all button icons for the current theme using cached icons
-	bool isDark = false; // Fallback for compatibility
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
+	bool isDark = obs_frontend_is_theme_dark();
+#else
+	bool isDark = false; // Fallback for older OBS versions
+#endif
 	
 	// Update buttons with cached icons (eliminates redundant QIcon construction)
 	if (streamButton) {
