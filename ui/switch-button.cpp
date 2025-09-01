@@ -143,7 +143,7 @@ void SwitchButton::paintEvent(QPaintEvent* event)
     
     // iOS 26 style - minimal shadow for edge definition
     painter.setBrush(QColor(0, 0, 0, 8));
-    QRect shadowRect = knobRect.adjusted(0, 0.5, 0, 0.5);
+    QRect shadowRect = knobRect.adjusted(0, 1, 0, 1);
     // Use height for corner radius to make it truly pill-shaped
     painter.drawRoundedRect(shadowRect, KNOB_HEIGHT / 2, KNOB_HEIGHT / 2);
     
