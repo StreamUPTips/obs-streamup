@@ -423,7 +423,7 @@ void LoadStreamupFile(bool forceLoad)
 	}
 
 	QString fileName =
-		QFileDialog::getOpenFileName(nullptr, QT_UTF8(obs_module_text("Load")), QString(), "StreamUP File (*.streamup)");
+		QFileDialog::getOpenFileName(nullptr, QT_UTF8(obs_module_text("UI.Button.Load")), QString(), "StreamUP File (*.streamup)");
 	if (!fileName.isEmpty()) {
 		LoadStreamupFileFromPath(fileName, forceLoad);
 	}

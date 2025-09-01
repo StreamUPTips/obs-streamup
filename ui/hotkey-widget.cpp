@@ -26,7 +26,7 @@ HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
     layout->setSpacing(5);
     
     // Display label showing current hotkey
-    m_displayLabel = new QLabel(obs_module_text("HotkeyWidget.None"));
+    m_displayLabel = new QLabel(obs_module_text("Hotkey.Widget.None"));
     m_displayLabel->setStyleSheet(QString(
         "QLabel {"
         "color: %1;"
@@ -47,12 +47,12 @@ HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
     m_displayLabel->setAlignment(Qt::AlignCenter);
     
     // Record button
-    m_recordButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("HotkeyWidget.Set"), "info");
+    m_recordButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Hotkey.Widget.Set"), "info");
     m_recordButton->setFixedWidth(70);
     connect(m_recordButton, &QPushButton::clicked, this, &HotkeyWidget::OnRecordButtonClicked);
     
     // Clear button  
-    m_clearButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("HotkeyWidget.Clear"), "neutral");
+    m_clearButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Hotkey.Widget.Clear"), "neutral");
     m_clearButton->setFixedWidth(70);
     connect(m_clearButton, &QPushButton::clicked, this, &HotkeyWidget::OnClearButtonClicked);
     
@@ -145,9 +145,9 @@ void HotkeyWidget::StartRecording()
     m_recordedKey = 0;
     m_recordedModifiers = Qt::NoModifier;
     
-    m_recordButton->setText(obs_module_text("HotkeyWidget.Cancel"));
+    m_recordButton->setText(obs_module_text("Hotkey.Widget.Cancel"));
     m_recordButton->setStyleSheet(StreamUP::UIStyles::CreateStyledButton("", "error")->styleSheet());
-    m_displayLabel->setText(obs_module_text("HotkeyWidget.PressKeys"));
+    m_displayLabel->setText(obs_module_text("Hotkey.Widget.PressKeys"));
     m_displayLabel->setStyleSheet(m_displayLabel->styleSheet() + 
         QString("background: %1; border-color: %2;")
         .arg(StreamUP::UIStyles::Colors::WARNING)
@@ -164,7 +164,7 @@ void HotkeyWidget::StopRecording()
     m_recording = false;
     releaseKeyboard();
     
-    m_recordButton->setText(obs_module_text("HotkeyWidget.Set"));
+    m_recordButton->setText(obs_module_text("Hotkey.Widget.Set"));
     m_recordButton->setStyleSheet(StreamUP::UIStyles::CreateStyledButton("", "info")->styleSheet());
     
     // Create hotkey data from recorded key combination
@@ -181,7 +181,7 @@ void HotkeyWidget::StopRecording()
 
 void HotkeyWidget::UpdateDisplay()
 {
-    QString displayText = obs_module_text("HotkeyWidget.None");
+    QString displayText = obs_module_text("Hotkey.Widget.None");
     QString normalStyle = QString(
         "QLabel {"
         "color: %1;"
@@ -213,19 +213,19 @@ void HotkeyWidget::UpdateDisplay()
             QString modStr = "";
             if (control) {
                 if (!modStr.isEmpty()) modStr += "+";
-                modStr += obs_module_text("HotkeyWidget.Ctrl");
+                modStr += obs_module_text("Hotkey.Widget.Ctrl");
             }
             if (alt) {
                 if (!modStr.isEmpty()) modStr += "+";
-                modStr += obs_module_text("HotkeyWidget.Alt");
+                modStr += obs_module_text("Hotkey.Widget.Alt");
             }
             if (shift) {
                 if (!modStr.isEmpty()) modStr += "+";
-                modStr += obs_module_text("HotkeyWidget.Shift");
+                modStr += obs_module_text("Hotkey.Widget.Shift");
             }
             if (command) {
                 if (!modStr.isEmpty()) modStr += "+";
-                modStr += obs_module_text("HotkeyWidget.Cmd");
+                modStr += obs_module_text("Hotkey.Widget.Cmd");
             }
             
             if (keyStr && strlen(keyStr) > 0) {
@@ -253,19 +253,19 @@ QString HotkeyWidget::FormatKeyCombo(int key, Qt::KeyboardModifiers modifiers)
     // Add modifiers
     if (modifiers & Qt::ControlModifier) {
         if (!result.isEmpty()) result += "+";
-        result += obs_module_text("HotkeyWidget.Ctrl");
+        result += obs_module_text("Hotkey.Widget.Ctrl");
     }
     if (modifiers & Qt::AltModifier) {
         if (!result.isEmpty()) result += "+";
-        result += obs_module_text("HotkeyWidget.Alt");
+        result += obs_module_text("Hotkey.Widget.Alt");
     }
     if (modifiers & Qt::ShiftModifier) {
         if (!result.isEmpty()) result += "+";
-        result += obs_module_text("HotkeyWidget.Shift");
+        result += obs_module_text("Hotkey.Widget.Shift");
     }
     if (modifiers & Qt::MetaModifier) {
         if (!result.isEmpty()) result += "+";
-        result += obs_module_text("HotkeyWidget.Meta");
+        result += obs_module_text("Hotkey.Widget.Meta");
     }
     
     // Add the key
@@ -277,7 +277,7 @@ QString HotkeyWidget::FormatKeyCombo(int key, Qt::KeyboardModifiers modifiers)
         }
     }
     
-    return result.isEmpty() ? obs_module_text("HotkeyWidget.None") : result;
+    return result.isEmpty() ? obs_module_text("Hotkey.Widget.None") : result;
 }
 
 QString HotkeyWidget::QtKeyToOBSKey(int qtKey) 

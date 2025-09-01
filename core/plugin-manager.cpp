@@ -29,6 +29,7 @@
 #include <QTimer>
 #include <QSizePolicy>
 #include <QString>
+#include <QStringList>
 #include <fstream>
 #include <iostream>
 #include <regex>
@@ -74,11 +75,11 @@ QString ExtractDomainFromUrl(const QString& url) {
 }
 QTableWidget* CreateMissingPluginsTable(const std::map<std::string, std::string>& missing_modules) {
 	QStringList headers = {
-		obs_module_text("PluginName"),
-		obs_module_text("Status"), 
-		obs_module_text("CurrentVersion"),
-		obs_module_text("DownloadLink"),
-		obs_module_text("WebsiteLink")
+		obs_module_text("UI.Label.PluginName"),
+		obs_module_text("UI.Label.Status"), 
+		obs_module_text("UI.Label.CurrentVersion"),
+		obs_module_text("UI.Label.DownloadLink"),
+		obs_module_text("UI.Label.WebsiteLink")
 	};
 	
 	QTableWidget* table = StreamUP::UIStyles::CreateStyledTable(headers);
@@ -102,7 +103,7 @@ QTableWidget* CreateMissingPluginsTable(const std::map<std::string, std::string>
 		table->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(moduleName)));
 		
 		// Status column - Missing
-		QTableWidgetItem* statusItem = new QTableWidgetItem("❌ " + QString(obs_module_text("MISSING")));
+		QTableWidgetItem* statusItem = new QTableWidgetItem("❌ " + QString(obs_module_text("UI.Message.MISSING")));
 		statusItem->setForeground(QColor("#ef4444"));
 		table->setItem(row, 1, statusItem);
 		
@@ -112,7 +113,7 @@ QTableWidget* CreateMissingPluginsTable(const std::map<std::string, std::string>
 		table->setItem(row, 2, versionItem);
 		
 		// Download Link column
-		QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("Download"));
+		QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
 		downloadItem->setForeground(QColor("#3b82f6"));
 		downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
 		table->setItem(row, 3, downloadItem);
@@ -133,11 +134,11 @@ QTableWidget* CreateMissingPluginsTable(const std::map<std::string, std::string>
 
 QTableWidget* CreateUpdatesTable(const std::map<std::string, std::string>& version_mismatch_modules) {
 	QStringList headers = {
-		obs_module_text("PluginName"),
-		obs_module_text("InstalledVersion"),
-		obs_module_text("CurrentVersion"), 
-		obs_module_text("DownloadLink"),
-		obs_module_text("WebsiteLink")
+		obs_module_text("UI.Label.PluginName"),
+		obs_module_text("UI.Label.InstalledVersion"),
+		obs_module_text("UI.Label.CurrentVersion"), 
+		obs_module_text("UI.Label.DownloadLink"),
+		obs_module_text("UI.Label.WebsiteLink")
 	};
 	
 	QTableWidget* table = StreamUP::UIStyles::CreateStyledTable(headers);
@@ -172,7 +173,7 @@ QTableWidget* CreateUpdatesTable(const std::map<std::string, std::string>& versi
 		table->setItem(row, 2, currentItem);
 		
 		// Download Link column
-		QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("Download"));
+		QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
 		downloadItem->setForeground(QColor("#3b82f6"));
 		downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
 		table->setItem(row, 3, downloadItem);
@@ -194,7 +195,7 @@ QTableWidget* CreateUpdatesTable(const std::map<std::string, std::string>& versi
 //-------------------ERROR HANDLING FUNCTIONS-------------------
 void ErrorDialog(const QString &errorMessage)
 {
-	std::string message = errorMessage.isEmpty() ? obs_module_text("UnknownErrorOccurred") : errorMessage.toStdString();
+	std::string message = errorMessage.isEmpty() ? obs_module_text("UI.Message.UnknownError") : errorMessage.toStdString();
 	StreamUP::ErrorHandler::ShowErrorDialog("Plugin Error", message);
 }
 
@@ -203,7 +204,7 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 	if (manuallyTriggered) {
 		StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
 			QDialog *toast = new QDialog();
-			toast->setWindowTitle(obs_module_text("StreamUP"));
+			toast->setWindowTitle(obs_module_text("App.Name"));
 			toast->setWindowFlags(Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint | Qt::WindowStaysOnTopHint);
 			toast->setAttribute(Qt::WA_DeleteOnClose);
 			toast->setStyleSheet(QString("QDialog { background: %1; border-radius: %2px; }")
@@ -219,7 +220,7 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 				StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
 			toastLayout->setSpacing(8);
 			
-			QLabel *messageLabel = new QLabel(obs_module_text("AllPluginsUpToDate"));
+			QLabel *messageLabel = new QLabel(obs_module_text("Plugin.Status.AllUpToDate"));
 			messageLabel->setStyleSheet(QString(
 				"QLabel {"
 				"color: white;"
@@ -231,7 +232,7 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 			messageLabel->setAlignment(Qt::AlignCenter);
 			toastLayout->addWidget(messageLabel);
 			
-			QLabel *countdownLabel = new QLabel(obs_module_text("AutoClosingIn3Seconds"));
+			QLabel *countdownLabel = new QLabel(obs_module_text("Plugin.Message.AutoClosing3"));
 			countdownLabel->setStyleSheet(QString(
 				"QLabel {"
 				"color: rgba(255, 255, 255, 0.8);"
@@ -252,7 +253,7 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 			QObject::connect(countdownTimer, &QTimer::timeout, [countdownLabel, remainingSeconds, toast, countdownTimer]() {
 				(*remainingSeconds)--;
 				if (*remainingSeconds > 0) {
-					countdownLabel->setText(QString(obs_module_text("AutoClosingInNSeconds")).arg(*remainingSeconds));
+					countdownLabel->setText(QString(obs_module_text("Plugin.Message.AutoClosingN")).arg(*remainingSeconds));
 				} else {
 					countdownTimer->stop();
 					toast->close();
@@ -273,11 +274,11 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		
 		QString titleText;
 		if (hasMissing && hasUpdates) {
-			titleText = obs_module_text("MissingPluginsAndUpdatesAvailable");
+			titleText = obs_module_text("Plugin.Status.MissingAndUpdatesAvailable");
 		} else if (hasMissing) {
-			titleText = obs_module_text("MissingRequiredPlugins");
+			titleText = obs_module_text("Plugin.Status.MissingRequired");
 		} else if (hasUpdates) {
-			titleText = obs_module_text("PluginUpdatesAvailable");
+			titleText = obs_module_text("Plugin.Status.UpdatesAvailable");
 		}
 
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
@@ -307,11 +308,11 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		
 		QString descText;
 		if (hasMissing && hasUpdates) {
-			descText = obs_module_text("SomePluginsMissingAndNeedUpdates");
+			descText = obs_module_text("Plugin.Status.SomeMissingAndNeedUpdates");
 		} else if (hasMissing) {
-			descText = obs_module_text("FollowingPluginsRequiredNotInstalled");
+			descText = obs_module_text("Plugin.Message.RequiredNotInstalled");
 		} else if (hasUpdates) {
-			descText = obs_module_text("FollowingPluginsHaveUpdatesAvailable");
+			descText = obs_module_text("Plugin.Message.UpdatesAvailable");
 		}
 		
 		QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(descText);
@@ -332,7 +333,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 
 		if (hasMissing) {
 			// Create expandable GroupBox with table
-			QGroupBox *missingGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowPluginErrorMissingGroup"), "error");
+			QGroupBox *missingGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Plugin.Dialog.MissingGroup"), "error");
 			missingGroup->setMinimumWidth(500);
 			missingGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
 			
@@ -391,7 +392,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 
 		if (hasUpdates) {
 			// Create expandable GroupBox with table
-			QGroupBox *updateGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("UpdatesAvailable"), "warning");
+			QGroupBox *updateGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Plugin.Dialog.UpdateGroup"), "warning");
 			updateGroup->setMinimumWidth(500);
 			updateGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
 			
@@ -455,7 +456,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			// Add spacing before warning
 			dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 			
-			QLabel *warningLabel = new QLabel("⚠️ " + QString(obs_module_text("WarningContinueAnyway")));
+			QLabel *warningLabel = new QLabel("⚠️ " + QString(obs_module_text("Plugin.Dialog.WarningContinue")));
 			warningLabel->setWordWrap(true);
 			warningLabel->setStyleSheet(QString(
 				"QLabel {"
@@ -487,7 +488,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		
 		// Add Continue Anyway button if callback is provided
 		if (continueCallback) {
-			QPushButton *continueButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("ContinueAnyway"), "warning");
+			QPushButton *continueButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Message.ContinueAnyway"), "warning");
 			QObject::connect(continueButton, &QPushButton::clicked, [dialog, continueCallback]() {
 				dialog->close();
 				continueCallback();
@@ -495,7 +496,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			buttonLayout->addWidget(continueButton);
 		}
 		
-		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("OK"), "neutral", 30, 100);
+		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.OK"), "neutral", 30, 100);
 		QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
 		buttonLayout->addWidget(okButton);
 
@@ -513,7 +514,7 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 {
 	const auto& allPlugins = StreamUP::GetAllPlugins();
 	if (allPlugins.empty()) {
-		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
+		ErrorDialog(obs_module_text("Plugin.Error.LoadIssue"));
 		return;
 	}
 
@@ -575,7 +576,7 @@ void InitialiseRequiredModules()
 	}
 
 	if (api_response.empty()) {
-		StreamUP::ErrorHandler::ShowErrorDialog("Plugin Load Error", obs_module_text("WindowErrorLoadIssue"));
+		StreamUP::ErrorHandler::ShowErrorDialog("Plugin Load Error", obs_module_text("Plugin.Error.LoadIssue"));
 		return;
 	}
 
@@ -634,7 +635,15 @@ bool CheckrequiredOBSPluginsWithoutUI(bool isLoadStreamUpFile)
 			continue;
 		}
 
-		std::string installed_version = SearchStringInFileForVersion(filepath, search_string.c_str());
+		std::string installed_version;
+		// Check if this is a theme entry (special handling)
+		if (search_string.find("[THEME_CHECK]") != std::string::npos) {
+			// For theme checking, use the theme-specific search function
+			installed_version = SearchThemeFileForVersion("Version:");
+		} else {
+			// Regular plugin checking in log files
+			installed_version = SearchStringInFileForVersion(filepath, search_string.c_str());
+		}
 
 		if (installed_version.empty() && plugin_info.required) {
 			missing_modules.emplace(plugin_name, required_version);
@@ -653,7 +662,7 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 {
 	const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
 	if (requiredPlugins.empty()) {
-		ErrorDialog(obs_module_text("WindowErrorLoadIssue"));
+		ErrorDialog(obs_module_text("Plugin.Error.LoadIssue"));
 		return false;
 	}
 
@@ -676,7 +685,15 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 			continue; // Skip to the next iteration
 		}
 
-		std::string installed_version = SearchStringInFileForVersion(filepath, search_string.c_str());
+		std::string installed_version;
+		// Check if this is a theme entry (special handling)
+		if (search_string.find("[THEME_CHECK]") != std::string::npos) {
+			// For theme checking, use the theme-specific search function
+			installed_version = SearchThemeFileForVersion("Version:");
+		} else {
+			// Regular plugin checking in log files
+			installed_version = SearchStringInFileForVersion(filepath, search_string.c_str());
+		}
 
 		if (installed_version.empty() && plugin_info.required) {
 			missing_modules.emplace(plugin_name, required_version);
@@ -754,6 +771,102 @@ std::string SearchStringInFileForVersion(const char *path, const char *search)
 	return "";
 }
 
+std::string SearchThemeFileForVersion(const char *search)
+{
+	// Get theme directory paths similar to how GetFilePath() gets log paths
+	QStringList themePaths;
+	
+	// Use OBS module config path to find themes directory (similar to logs)
+	char *config_path = nullptr;
+	char *theme_path_abs = nullptr;
+	
+	if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
+		// Try multiple relative paths to find the actual data/themes directory
+		QStringList relativePaths = {
+			"../../../../data/obs-studio/themes/",  // From config back to build data
+			"../../data/obs-studio/themes/",       // Original attempt
+			"../../../themes/",                    // User themes in config
+			"../../../../../build_x64/rundir/RelWithDebInfo/data/obs-studio/themes/"  // Development build specific
+		};
+		
+		for (const QString& relPath : relativePaths) {
+			config_path = obs_module_config_path(relPath.toLocal8Bit().constData());
+			theme_path_abs = os_get_abs_path_ptr(config_path);
+			
+			if (theme_path_abs) {
+				QString themeDirPath = QString::fromLocal8Bit(theme_path_abs);
+				QString fullThemePath = themeDirPath + "StreamUP.obt";
+				themePaths << fullThemePath;
+			}
+			
+			bfree(config_path);
+			bfree(theme_path_abs);
+			config_path = nullptr;
+			theme_path_abs = nullptr;
+		}
+	} else {
+		// macOS/Linux paths
+		config_path = obs_module_config_path("../../data/obs-studio/themes/");
+		theme_path_abs = os_get_abs_path_ptr(config_path);
+		
+		if (theme_path_abs) {
+			QString themeDirPath = QString::fromLocal8Bit(theme_path_abs);
+			themePaths << themeDirPath + "StreamUP.obt";
+		}
+	}
+	
+	if (config_path) bfree(config_path);
+	if (theme_path_abs) bfree(theme_path_abs);
+	
+	// Also try direct path construction based on module location
+	char *module_config_path = obs_module_config_path("");
+	if (module_config_path) {
+		QString configBase = QString::fromLocal8Bit(module_config_path);
+		// Remove trailing slash and plugin-specific part to get base config
+		configBase = configBase.left(configBase.lastIndexOf("plugins"));
+		
+		// Build path to data directory themes
+		QString directDataPath = configBase + "../data/obs-studio/themes/StreamUP.obt";
+		themePaths << directDataPath;
+		
+		bfree(module_config_path);
+	}
+	
+	static const std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
+	static const std::regex version_regex_double("[0-9]+\\.[0-9]+");
+	const size_t search_len = strlen(search);
+	
+	// Try each potential theme file location
+	for (const QString& themePath : themePaths) {
+		FILE *file = fopen(themePath.toLocal8Bit().constData(), "r");
+		if (!file) {
+			continue; // Try next path
+		}
+		
+		char line[1024];
+		while (fgets(line, sizeof(line), file)) {
+			char *found_ptr = strstr(line, search);
+			if (found_ptr) {
+				std::string remaining_line(found_ptr + search_len);
+				std::smatch match;
+
+				if (std::regex_search(remaining_line, match, version_regex_triple)) {
+					fclose(file);
+					return match.str(0);
+				}
+
+				if (std::regex_search(remaining_line, match, version_regex_double)) {
+					fclose(file);
+					return match.str(0);
+				}
+			}
+		}
+		fclose(file);
+	}
+	
+	return ""; // Theme file not found or version not found
+}
+
 std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 {
 	std::vector<std::pair<std::string, std::string>> installedPlugins;
@@ -794,16 +907,29 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 		const StreamUP::PluginInfo &plugin_info = module.second;
 		const std::string &search_string = plugin_info.searchString;
 
-		size_t found_pos = file_content.find(search_string);
-		if (found_pos != std::string::npos) {
-			std::string remaining = file_content.substr(found_pos + search_string.length());
-			std::smatch match;
-			
-			if (std::regex_search(remaining, match, version_regex_triple)) {
-				installedPlugins.emplace_back(plugin_name, match.str(0));
-			} else if (std::regex_search(remaining, match, version_regex_double)) {
-				installedPlugins.emplace_back(plugin_name, match.str(0));
+		std::string installed_version;
+		// Check if this is a theme entry (special handling)
+		if (search_string.find("[THEME_CHECK]") != std::string::npos) {
+			// For theme checking, use the theme-specific search function
+			installed_version = SearchThemeFileForVersion("Version:");
+		} else {
+			// Search in log file content for regular plugins
+			size_t found_pos = file_content.find(search_string);
+			if (found_pos != std::string::npos) {
+				std::string remaining = file_content.substr(found_pos + search_string.length());
+				std::smatch match;
+				
+				if (std::regex_search(remaining, match, version_regex_triple)) {
+					installed_version = match.str(0);
+				} else if (std::regex_search(remaining, match, version_regex_double)) {
+					installed_version = match.str(0);
+				}
 			}
+		}
+
+		// Add to installed plugins list if version was found
+		if (!installed_version.empty()) {
+			installedPlugins.emplace_back(plugin_name, installed_version);
 		}
 	}
 
@@ -862,17 +988,24 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 			continue;
 		}
 
-		// Search in cached file content
+		// Search for version
 		std::string installed_version;
-		size_t found_pos = file_content.find(search_string);
-		if (found_pos != std::string::npos) {
-			std::string remaining = file_content.substr(found_pos + search_string.length());
-			std::smatch match;
-			
-			if (std::regex_search(remaining, match, version_regex_triple)) {
-				installed_version = match.str(0);
-			} else if (std::regex_search(remaining, match, version_regex_double)) {
-				installed_version = match.str(0);
+		// Check if this is a theme entry (special handling)
+		if (search_string.find("[THEME_CHECK]") != std::string::npos) {
+			// For theme checking, use the theme-specific search function
+			installed_version = SearchThemeFileForVersion("Version:");
+		} else {
+			// Search in cached log file content for regular plugins
+			size_t found_pos = file_content.find(search_string);
+			if (found_pos != std::string::npos) {
+				std::string remaining = file_content.substr(found_pos + search_string.length());
+				std::smatch match;
+				
+				if (std::regex_search(remaining, match, version_regex_triple)) {
+					installed_version = match.str(0);
+				} else if (std::regex_search(remaining, match, version_regex_double)) {
+					installed_version = match.str(0);
+				}
 			}
 		}
 

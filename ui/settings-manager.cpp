@@ -348,7 +348,7 @@ void ShowSettingsDialog(int tabIndex)
 		}
 
 		// Create modern unified dialog with darkest background
-		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsTitle"));
+		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Window.Title"));
 		dialog->resize(900, 600);
 		dialog->setStyleSheet(QString("QDialog { background-color: %1; }")
 				      .arg(StreamUP::UIStyles::Colors::BG_DARKEST));
@@ -424,11 +424,11 @@ void ShowSettingsDialog(int tabIndex)
 
 		// Add categories to sidebar
 		QStringList categories = {
-			obs_module_text("WindowSettingsGeneralGroup"),
-			"Toolbar Settings",
-			obs_module_text("WindowSettingsPluginManagementGroup"),
-			obs_module_text("WindowSettingsHotkeysGroup"),
-			obs_module_text("WindowSettingsDockConfigGroup")
+			obs_module_text("Settings.Group.General"),
+			obs_module_text("Settings.Group.Toolbar"),
+			obs_module_text("Settings.Group.PluginManagement"),
+			obs_module_text("Settings.Group.Hotkeys"),
+			obs_module_text("Settings.Group.DockConfig")
 		};
 
 		for (const QString &category : categories) {
@@ -490,12 +490,12 @@ void ShowSettingsDialog(int tabIndex)
 
 		// Run at startup setting
 		obs_property_t *runAtStartupProp =
-			obs_properties_add_bool(props, "run_at_startup", obs_module_text("WindowSettingsRunOnStartup"));
+			obs_properties_add_bool(props, "run_at_startup", obs_module_text("Settings.Plugin.RunOnStartup"));
 
 		// Create horizontal layout for run at startup setting
 		QHBoxLayout *runAtStartupLayout = new QHBoxLayout();
 
-		QLabel *runAtStartupLabel = new QLabel(obs_module_text("WindowSettingsRunOnStartup"));
+		QLabel *runAtStartupLabel = new QLabel(obs_module_text("Settings.Plugin.RunOnStartup"));
 		runAtStartupLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
 							 .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
@@ -517,20 +517,20 @@ void ShowSettingsDialog(int tabIndex)
 
 		// Notifications mute setting
 		obs_property_t *notificationsMuteProp =
-			obs_properties_add_bool(props, "notifications_mute", obs_module_text("WindowSettingsNotificationsMute"));
+			obs_properties_add_bool(props, "notifications_mute", obs_module_text("Settings.Notifications.Mute"));
 
 		// Create horizontal layout for notifications setting
 		QHBoxLayout *notificationsLayout = new QHBoxLayout();
 
-		QLabel *notificationsLabel = new QLabel(obs_module_text("WindowSettingsNotificationsMute"));
+		QLabel *notificationsLabel = new QLabel(obs_module_text("Settings.Notifications.Mute"));
 		notificationsLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
 							  .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							  .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-		notificationsLabel->setToolTip(obs_module_text("WindowSettingsNotificationsMuteTooltip"));
+		notificationsLabel->setToolTip(obs_module_text("Settings.Notifications.MuteTooltip"));
 
 		StreamUP::UIStyles::SwitchButton *notificationsMuteSwitch = StreamUP::UIStyles::CreateStyledSwitch(
 			"", obs_data_get_bool(settings, obs_property_name(notificationsMuteProp)));
-		notificationsMuteSwitch->setToolTip(obs_module_text("WindowSettingsNotificationsMuteTooltip"));
+		notificationsMuteSwitch->setToolTip(obs_module_text("Settings.Notifications.MuteTooltip"));
 
 		QObject::connect(notificationsMuteSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
 			// Use modern settings system to avoid conflicts with dock settings
@@ -546,20 +546,20 @@ void ShowSettingsDialog(int tabIndex)
 
 		// CPH Integration setting
 		obs_property_t *cphIntegrationProp =
-			obs_properties_add_bool(props, "show_cph_integration", obs_module_text("WindowSettingsCPHIntegration"));
+			obs_properties_add_bool(props, "show_cph_integration", obs_module_text("Settings.CPH.Integration"));
 
 		// Create horizontal layout for CPH integration setting
 		QHBoxLayout *cphLayout = new QHBoxLayout();
 
-		QLabel *cphLabel = new QLabel(obs_module_text("WindowSettingsCPHIntegration"));
+		QLabel *cphLabel = new QLabel(obs_module_text("Settings.CPH.Integration"));
 		cphLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
 						.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-		cphLabel->setToolTip(obs_module_text("WindowSettingsCPHIntegrationTooltip"));
+		cphLabel->setToolTip(obs_module_text("Settings.CPH.IntegrationTooltip"));
 
 		StreamUP::UIStyles::SwitchButton *cphIntegrationSwitch = StreamUP::UIStyles::CreateStyledSwitch(
 			"", obs_data_get_bool(settings, obs_property_name(cphIntegrationProp)));
-		cphIntegrationSwitch->setToolTip(obs_module_text("WindowSettingsCPHIntegrationTooltip"));
+		cphIntegrationSwitch->setToolTip(obs_module_text("Settings.CPH.IntegrationTooltip"));
 
 		QObject::connect(cphIntegrationSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
 			// Use modern settings system to avoid conflicts with dock settings
@@ -629,11 +629,11 @@ void ShowSettingsDialog(int tabIndex)
 		showToolbarLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-		showToolbarLabel->setToolTip("Show/hide the StreamUP controls toolbar");
+		showToolbarLabel->setToolTip(obs_module_text("Toolbar.Tooltip.ShowHideToolbar"));
 
 		StreamUP::UIStyles::SwitchButton *showToolbarSwitch =
 			StreamUP::UIStyles::CreateStyledSwitch("", obs_data_get_bool(settings, obs_property_name(showToolbarProp)));
-		showToolbarSwitch->setToolTip("Show/hide the StreamUP controls toolbar");
+		showToolbarSwitch->setToolTip(obs_module_text("Toolbar.Tooltip.ShowHideToolbar"));
 
 		QObject::connect(showToolbarSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
 			// Use modern settings system
@@ -781,7 +781,7 @@ void ShowSettingsDialog(int tabIndex)
 		pluginLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
 		QPushButton *pluginButton =
-			StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsViewInstalledPlugins"), "info");
+			StreamUP::UIStyles::CreateStyledButton(obs_module_text("Settings.Plugin.ViewInstalled"), "info");
 
 		// Connect plugin button to open plugins dialog
 		QObject::connect(pluginButton, &QPushButton::clicked, []() {
@@ -854,8 +854,8 @@ void ShowSettingsDialog(int tabIndex)
 		lockingLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 		
 		std::vector<HotkeyInfo> lockingHotkeys = {
-			{obs_module_text("HotkeyLockAllSources"), obs_module_text("HotkeyLockAllSourcesDesc"), "streamup_lock_all_sources"},
-			{obs_module_text("HotkeyLockCurrentSources"), obs_module_text("HotkeyLockCurrentSourcesDesc"), "streamup_lock_current_sources"}
+			{obs_module_text("Hotkey.LockAllSources.Name"), obs_module_text("Hotkey.LockAllSources.Description"), "streamup_lock_all_sources"},
+			{obs_module_text("Hotkey.LockCurrentSources.Name"), obs_module_text("Hotkey.LockCurrentSources.Description"), "streamup_lock_current_sources"}
 		};
 		
 		// Refresh Operations Section
@@ -864,8 +864,8 @@ void ShowSettingsDialog(int tabIndex)
 		refreshLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 		
 		std::vector<HotkeyInfo> refreshHotkeys = {
-			{obs_module_text("HotkeyRefreshBrowserSources"), obs_module_text("HotkeyRefreshBrowserSourcesDesc"), "streamup_refresh_browser_sources"},
-			{obs_module_text("HotkeyRefreshAudioMonitoring"), obs_module_text("HotkeyRefreshAudioMonitoringDesc"), "streamup_refresh_audio_monitoring"}
+			{obs_module_text("Hotkey.RefreshBrowserSources.Name"), obs_module_text("Hotkey.RefreshBrowserSources.Description"), "streamup_refresh_browser_sources"},
+			{obs_module_text("Hotkey.RefreshAudioMonitoring.Name"), obs_module_text("Hotkey.RefreshAudioMonitoring.Description"), "streamup_refresh_audio_monitoring"}
 		};
 		
 		// Source Interaction Section
@@ -874,10 +874,10 @@ void ShowSettingsDialog(int tabIndex)
 		interactionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 		
 		std::vector<HotkeyInfo> interactionHotkeys = {
-			{obs_module_text("HotkeyOpenSourceProperties"), obs_module_text("HotkeyOpenSourcePropertiesDesc"), "streamup_open_source_properties"},
-			{obs_module_text("HotkeyOpenSourceFilters"), obs_module_text("HotkeyOpenSourceFiltersDesc"), "streamup_open_source_filters"},
-			{obs_module_text("HotkeyOpenSourceInteract"), obs_module_text("HotkeyOpenSourceInteractDesc"), "streamup_open_source_interact"},
-			{obs_module_text("HotkeyOpenSceneFilters"), obs_module_text("HotkeyOpenSceneFiltersDesc"), "streamup_open_scene_filters"}
+			{obs_module_text("Hotkey.OpenSourceProperties.Name"), obs_module_text("Hotkey.OpenSourceProperties.Description"), "streamup_open_source_properties"},
+			{obs_module_text("Hotkey.OpenSourceFilters.Name"), obs_module_text("Hotkey.OpenSourceFilters.Description"), "streamup_open_source_filters"},
+			{obs_module_text("Hotkey.OpenSourceInteract.Name"), obs_module_text("Hotkey.OpenSourceInteract.Description"), "streamup_open_source_interact"},
+			{obs_module_text("Hotkey.OpenSceneFilters.Name"), obs_module_text("Hotkey.OpenSceneFilters.Description"), "streamup_open_scene_filters"}
 		};
 		
 		// Video Capture Device Section
@@ -886,9 +886,9 @@ void ShowSettingsDialog(int tabIndex)
 		videoCaptureLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 		
 		std::vector<HotkeyInfo> videoCaptureHotkeys = {
-			{obs_module_text("HotkeyActivateVideoCaptureDevices"), obs_module_text("HotkeyActivateVideoCaptureDevicesDesc"), "streamup_activate_video_capture_devices"},
-			{obs_module_text("HotkeyDeactivateVideoCaptureDevices"), obs_module_text("HotkeyDeactivateVideoCaptureDevicesDesc"), "streamup_deactivate_video_capture_devices"},
-			{obs_module_text("HotkeyRefreshVideoCaptureDevices"), obs_module_text("HotkeyRefreshVideoCaptureDevicesDesc"), "streamup_refresh_video_capture_devices"}
+			{obs_module_text("Hotkey.ActivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.ActivateVideoCaptureDevices.Description"), "streamup_activate_video_capture_devices"},
+			{obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Description"), "streamup_deactivate_video_capture_devices"},
+			{obs_module_text("Hotkey.RefreshVideoCaptureDevices.Name"), obs_module_text("Hotkey.RefreshVideoCaptureDevices.Description"), "streamup_refresh_video_capture_devices"}
 		};
 		
 		// Helper function to build hotkey rows for each section
@@ -1033,7 +1033,7 @@ void ShowSettingsDialog(int tabIndex)
 		dockContentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
 
 		// Create GroupBox for dock tools using UI styles
-		QGroupBox *toolsGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsDockToolsGroupTitle"), "info");
+		QGroupBox *toolsGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Settings.Dock.ToolsGroupTitle"), "info");
 		
 		QVBoxLayout *toolsGroupLayout = new QVBoxLayout(toolsGroup);
 		toolsGroupLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0, StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
@@ -1052,11 +1052,11 @@ void ShowSettingsDialog(int tabIndex)
 		
 		// List of all dock tools with pointers to their settings
 		std::vector<ToolInfo> dockTools = {
-			{obs_module_text("DockToolLockAllSources"), obs_module_text("DockToolLockAllSourcesDesc"), &dockSettings.showLockAllSources, 0},
-			{obs_module_text("DockToolLockCurrentSources"), obs_module_text("DockToolLockCurrentSourcesDesc"), &dockSettings.showLockCurrentSources, 1},
-			{obs_module_text("DockToolRefreshBrowserSources"), obs_module_text("DockToolRefreshBrowserSourcesDesc"), &dockSettings.showRefreshBrowserSources, 2},
-			{obs_module_text("DockToolRefreshAudioMonitoring"), obs_module_text("DockToolRefreshAudioMonitoringDesc"), &dockSettings.showRefreshAudioMonitoring, 3},
-			{obs_module_text("DockToolVideoCaptureOptions"), obs_module_text("DockToolVideoCaptureOptionsDesc"), &dockSettings.showVideoCaptureOptions, 4}
+			{obs_module_text("Dock.Tool.LockAllSources.Title"), obs_module_text("Dock.Tool.LockAllSources.Description"), &dockSettings.showLockAllSources, 0},
+			{obs_module_text("Dock.Tool.LockCurrentSources.Title"), obs_module_text("Dock.Tool.LockCurrentSources.Description"), &dockSettings.showLockCurrentSources, 1},
+			{obs_module_text("Dock.Tool.RefreshBrowserSources.Title"), obs_module_text("Dock.Tool.RefreshBrowserSources.Description"), &dockSettings.showRefreshBrowserSources, 2},
+			{obs_module_text("Dock.Tool.RefreshAudioMonitoring.Title"), obs_module_text("Dock.Tool.RefreshAudioMonitoring.Description"), &dockSettings.showRefreshAudioMonitoring, 3},
+			{obs_module_text("Dock.Tool.VideoCaptureOptions.Title"), obs_module_text("Dock.Tool.VideoCaptureOptions.Description"), &dockSettings.showVideoCaptureOptions, 4}
 		};
 		
 		// Create tool rows
@@ -1177,7 +1177,7 @@ void ShowSettingsDialog(int tabIndex)
 						 StreamUP::UIStyles::Sizes::PADDING_XL, 
 						 StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
 
-		QPushButton *closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Close"), "neutral");
+		QPushButton *closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Close"), "neutral");
 		QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
 
 		buttonLayout->addStretch();
@@ -1241,21 +1241,21 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
 	headerSectionLayout->setContentsMargins(0, 0, 0, 0);
 	headerSectionLayout->setSpacing(0); // Same as main header - no base spacing
 
-	QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsInstalledPluginsTitle"));
+	QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("Settings.Plugin.InstalledPluginsTitle"));
 	titleLabel->setAlignment(Qt::AlignCenter);
 	headerSectionLayout->addWidget(titleLabel);
 
 	// Add small spacing between title and description for readability
 	//headerSectionLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
 
-	QLabel *descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsInstalledPluginsDesc"));
+	QLabel *descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("Settings.Plugin.InstalledPluginsDesc"));
 	descLabel->setAlignment(Qt::AlignCenter);
 	headerSectionLayout->addWidget(descLabel);
 
 	pluginsLayout->addWidget(headerSection);
 
 	// Info section - constrain width properly
-	QLabel *infoLabel = new QLabel(obs_module_text("WindowSettingsInstalledPluginsInfo"));
+	QLabel *infoLabel = new QLabel(obs_module_text("Settings.Plugin.InstalledPluginsInfo"));
 	infoLabel->setStyleSheet(QString("QLabel {"
 					 "color: %1;"
 					 "font-size: %2px;"
@@ -1297,7 +1297,7 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
 	int totalRows = pluginTable->rowCount();
 	if (totalRows == 0) {
 		// Show empty state
-		QLabel *emptyLabel = new QLabel(obs_module_text("WindowSettingsInstalledPlugins"));
+		QLabel *emptyLabel = new QLabel(obs_module_text("Settings.Plugin.InstalledPlugins"));
 		emptyLabel->setAlignment(Qt::AlignCenter);
 		emptyLabel->setStyleSheet(QString("QLabel {"
 						  "color: %1;"
@@ -1374,7 +1374,7 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 		auto installedPlugins = StreamUP::PluginManager::GetInstalledPluginsCached();
 
 		QDialog *dialog =
-			StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsInstalledPlugins"), parentWidget);
+			StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Plugin.InstalledPlugins"), parentWidget);
 
 		// Start smaller - will be resized based on content
 		dialog->resize(600, 500);
@@ -1393,11 +1393,11 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 		QVBoxLayout *headerLayout = new QVBoxLayout(headerWidget);
 		headerLayout->setContentsMargins(0, 0, 0, 0);
 
-		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsInstalledPluginsTitle"));
+		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("Settings.Plugin.InstalledPluginsTitle"));
 		headerLayout->addWidget(titleLabel);
 
 		QLabel *subtitleLabel =
-			StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsInstalledPluginsDesc"));
+			StreamUP::UIStyles::CreateStyledDescription(obs_module_text("Settings.Plugin.InstalledPluginsDesc"));
 		headerLayout->addWidget(subtitleLabel);
 
 		mainLayout->addWidget(headerWidget);
@@ -1413,7 +1413,7 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 		mainLayout->addLayout(contentLayout);
 
 		// Info section - fit to UI width
-		QLabel *infoLabel = new QLabel(obs_module_text("WindowSettingsInstalledPluginsInfo"));
+		QLabel *infoLabel = new QLabel(obs_module_text("Settings.Plugin.InstalledPluginsInfo"));
 		infoLabel->setStyleSheet(QString("QLabel {"
 						 "color: %1;"
 						 "font-size: %2px;"
@@ -1453,7 +1453,7 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 		int totalRows = pluginTable->rowCount();
 		if (totalRows == 0) {
 			// Show empty state
-			QLabel *emptyLabel = new QLabel(obs_module_text("WindowSettingsInstalledPlugins"));
+			QLabel *emptyLabel = new QLabel(obs_module_text("Settings.Plugin.InstalledPlugins"));
 			emptyLabel->setAlignment(Qt::AlignCenter);
 			emptyLabel->setStyleSheet(QString("QLabel {"
 							  "color: %1;"
@@ -1533,21 +1533,21 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 	headerSectionLayout->setContentsMargins(0, 0, 0, 0);
 	headerSectionLayout->setSpacing(0); // Same as main header - no base spacing
 
-	QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsHotkeysTitle"));
+	QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("Settings.Hotkeys.Title"));
 	titleLabel->setAlignment(Qt::AlignCenter);
 	headerSectionLayout->addWidget(titleLabel);
 
 	// Add small spacing between title and description for readability
 	// headerSectionLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
 
-	QLabel *descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsHotkeysDesc"));
+	QLabel *descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("Settings.Hotkeys.Description"));
 	descLabel->setAlignment(Qt::AlignCenter);
 	headerSectionLayout->addWidget(descLabel);
 
 	hotkeysLayout->addWidget(headerSection);
 
 	// Info section
-	QLabel *infoLabel = new QLabel(obs_module_text("WindowSettingsHotkeysInfo"));
+	QLabel *infoLabel = new QLabel(obs_module_text("Settings.Hotkeys.Info"));
 	infoLabel->setStyleSheet(QString("QLabel {"
 					 "color: %1;"
 					 "font-size: %2px;"
@@ -1568,7 +1568,7 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 
 	// Create GroupBox for hotkeys
 	QGroupBox *hotkeysGroup =
-		StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsHotkeysGroupTitle"), "info");
+		StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Settings.Hotkeys.GroupTitle"), "info");
 
 	QVBoxLayout *hotkeysGroupLayout = new QVBoxLayout(hotkeysGroup);
 	hotkeysGroupLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
@@ -1582,26 +1582,26 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 
 	// List of all StreamUP hotkeys
 	std::vector<HotkeyInfo> streamupHotkeys = {
-		{obs_module_text("HotkeyRefreshBrowserSources"), obs_module_text("HotkeyRefreshBrowserSourcesDesc"),
+		{obs_module_text("Hotkey.RefreshBrowserSources.Name"), obs_module_text("Hotkey.RefreshBrowserSources.Description"),
 		 "streamup_refresh_browser_sources"},
-		{obs_module_text("HotkeyRefreshAudioMonitoring"), obs_module_text("HotkeyRefreshAudioMonitoringDesc"),
+		{obs_module_text("Hotkey.RefreshAudioMonitoring.Name"), obs_module_text("Hotkey.RefreshAudioMonitoring.Description"),
 		 "streamup_refresh_audio_monitoring"},
-		{obs_module_text("HotkeyLockAllSources"), obs_module_text("HotkeyLockAllSourcesDesc"), "streamup_lock_all_sources"},
-		{obs_module_text("HotkeyLockCurrentSources"), obs_module_text("HotkeyLockCurrentSourcesDesc"),
+		{obs_module_text("Hotkey.LockAllSources.Name"), obs_module_text("Hotkey.LockAllSources.Description"), "streamup_lock_all_sources"},
+		{obs_module_text("Hotkey.LockCurrentSources.Name"), obs_module_text("Hotkey.LockCurrentSources.Description"),
 		 "streamup_lock_current_sources"},
-		{obs_module_text("HotkeyOpenSourceProperties"), obs_module_text("HotkeyOpenSourcePropertiesDesc"),
+		{obs_module_text("Hotkey.OpenSourceProperties.Name"), obs_module_text("Hotkey.OpenSourceProperties.Description"),
 		 "streamup_open_source_properties"},
-		{obs_module_text("HotkeyOpenSourceFilters"), obs_module_text("HotkeyOpenSourceFiltersDesc"),
+		{obs_module_text("Hotkey.OpenSourceFilters.Name"), obs_module_text("Hotkey.OpenSourceFilters.Description"),
 		 "streamup_open_source_filters"},
-		{obs_module_text("HotkeyOpenSourceInteract"), obs_module_text("HotkeyOpenSourceInteractDesc"),
+		{obs_module_text("Hotkey.OpenSourceInteract.Name"), obs_module_text("Hotkey.OpenSourceInteract.Description"),
 		 "streamup_open_source_interact"},
-		{obs_module_text("HotkeyOpenSceneFilters"), obs_module_text("HotkeyOpenSceneFiltersDesc"),
+		{obs_module_text("Hotkey.OpenSceneFilters.Name"), obs_module_text("Hotkey.OpenSceneFilters.Description"),
 		 "streamup_open_scene_filters"},
-		{obs_module_text("HotkeyActivateVideoCaptureDevices"), obs_module_text("HotkeyActivateVideoCaptureDevicesDesc"),
+		{obs_module_text("Hotkey.ActivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.ActivateVideoCaptureDevices.Description"),
 		 "streamup_activate_video_capture_devices"},
-		{obs_module_text("HotkeyDeactivateVideoCaptureDevices"), obs_module_text("HotkeyDeactivateVideoCaptureDevicesDesc"),
+		{obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Description"),
 		 "streamup_deactivate_video_capture_devices"},
-		{obs_module_text("HotkeyRefreshVideoCaptureDevices"), obs_module_text("HotkeyRefreshVideoCaptureDevicesDesc"),
+		{obs_module_text("Hotkey.RefreshVideoCaptureDevices.Name"), obs_module_text("Hotkey.RefreshVideoCaptureDevices.Description"),
 		 "streamup_refresh_video_capture_devices"}};
 
 	// Create direct layout for hotkeys (no scrolling, fit to content)
@@ -1732,7 +1732,7 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 	actionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
 	QPushButton *resetButton =
-		StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsResetAllHotkeys"), "error");
+		StreamUP::UIStyles::CreateStyledButton(obs_module_text("Settings.Hotkeys.ResetAll"), "error");
 
 	// Store all hotkey widgets so we can refresh them after reset
 	QList<StreamUP::UI::HotkeyWidget *> allHotkeyWidgets;
@@ -1756,12 +1756,12 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 		// Show confirmation dialog for reset
 		StreamUP::UIHelpers::ShowDialogOnUIThread([allHotkeyWidgets]() {
 			QDialog *confirmDialog =
-				StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsResetHotkeysTitle"));
+				StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Hotkeys.ResetTitle"));
 			confirmDialog->resize(400, 200);
 
 			QVBoxLayout *layout = new QVBoxLayout(confirmDialog);
 
-			QLabel *warningLabel = new QLabel(obs_module_text("WindowSettingsResetHotkeysWarning"));
+			QLabel *warningLabel = new QLabel(obs_module_text("Settings.Hotkeys.ResetWarning"));
 			warningLabel->setStyleSheet(QString("color: %1; font-size: %2px; padding: %3px;")
 							    .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							    .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)
@@ -1773,9 +1773,9 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 
 			QHBoxLayout *buttonLayout = new QHBoxLayout();
 
-			QPushButton *cancelBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Cancel"), "neutral");
+			QPushButton *cancelBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
 			QPushButton *resetBtn = StreamUP::UIStyles::CreateStyledButton(
-				obs_module_text("WindowSettingsResetHotkeysButton"), "error");
+				obs_module_text("Settings.Hotkeys.ResetButton"), "error");
 
 			QObject::connect(cancelBtn, &QPushButton::clicked, confirmDialog, &QDialog::close);
 			QObject::connect(resetBtn, &QPushButton::clicked, [confirmDialog, allHotkeyWidgets]() {
@@ -1853,21 +1853,21 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 	headerSectionLayout->setContentsMargins(0, 0, 0, 0);
 	headerSectionLayout->setSpacing(0); // Same as main header - no base spacing
 
-	QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsDockConfigTitle"));
+	QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("Settings.Dock.Title"));
 	titleLabel->setAlignment(Qt::AlignCenter);
 	headerSectionLayout->addWidget(titleLabel);
 
 	// Add small spacing between title and description for readability
 	// headerSectionLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
 
-	QLabel *descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsDockConfigDesc"));
+	QLabel *descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("Settings.Dock.Description"));
 	descLabel->setAlignment(Qt::AlignCenter);
 	headerSectionLayout->addWidget(descLabel);
 
 	dockConfigLayout->addWidget(headerSection);
 
 	// Info section
-	QLabel *infoLabel = new QLabel(obs_module_text("WindowSettingsDockConfigInfo"));
+	QLabel *infoLabel = new QLabel(obs_module_text("Settings.Dock.Info"));
 	infoLabel->setStyleSheet(QString("QLabel {"
 					 "color: %1;"
 					 "font-size: %2px;"
@@ -1888,7 +1888,7 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 
 	// Create GroupBox for dock tools configuration
 	QGroupBox *toolsGroup =
-		StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsDockToolsGroupTitle"), "info");
+		StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Settings.Dock.ToolsGroupTitle"), "info");
 
 	QVBoxLayout *toolsGroupLayout = new QVBoxLayout(toolsGroup);
 	toolsGroupLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
@@ -1910,15 +1910,15 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 
 	// List of all dock tools with pointers to their settings
 	std::vector<ToolInfo> dockTools = {
-		{obs_module_text("DockToolLockAllSources"), obs_module_text("DockToolLockAllSourcesDesc"),
+		{obs_module_text("Dock.Tool.LockAllSources.Title"), obs_module_text("Dock.Tool.LockAllSources.Description"),
 		 &currentDockSettings.showLockAllSources, 0},
-		{obs_module_text("DockToolLockCurrentSources"), obs_module_text("DockToolLockCurrentSourcesDesc"),
+		{obs_module_text("Dock.Tool.LockCurrentSources.Title"), obs_module_text("Dock.Tool.LockCurrentSources.Description"),
 		 &currentDockSettings.showLockCurrentSources, 1},
-		{obs_module_text("DockToolRefreshBrowserSources"), obs_module_text("DockToolRefreshBrowserSourcesDesc"),
+		{obs_module_text("Dock.Tool.RefreshBrowserSources.Title"), obs_module_text("Dock.Tool.RefreshBrowserSources.Description"),
 		 &currentDockSettings.showRefreshBrowserSources, 2},
-		{obs_module_text("DockToolRefreshAudioMonitoring"), obs_module_text("DockToolRefreshAudioMonitoringDesc"),
+		{obs_module_text("Dock.Tool.RefreshAudioMonitoring.Title"), obs_module_text("Dock.Tool.RefreshAudioMonitoring.Description"),
 		 &currentDockSettings.showRefreshAudioMonitoring, 3},
-		{obs_module_text("DockToolVideoCaptureOptions"), obs_module_text("DockToolVideoCaptureOptionsDesc"),
+		{obs_module_text("Dock.Tool.VideoCaptureOptions.Title"), obs_module_text("Dock.Tool.VideoCaptureOptions.Description"),
 		 &currentDockSettings.showVideoCaptureOptions, 4}};
 
 	// Create tool rows matching WebSocket/hotkeys UI pattern
@@ -2075,7 +2075,7 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 					 StreamUP::UIStyles::Sizes::PADDING_SMALL + 3);
 
 	QPushButton *resetButton =
-		StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsResetDockConfig"), "error");
+		StreamUP::UIStyles::CreateStyledButton(obs_module_text("Settings.Dock.ResetConfig"), "error");
 
 	// Store all switches so we can update them after reset
 	QList<StreamUP::UIStyles::SwitchButton *> allSwitches;
@@ -2097,12 +2097,12 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 		// Show confirmation dialog for reset (matching hotkeys pattern)
 		StreamUP::UIHelpers::ShowDialogOnUIThread([allSwitches]() {
 			QDialog *confirmDialog =
-				StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsResetDockConfigTitle"));
+				StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Dock.ResetTitle"));
 			confirmDialog->resize(400, 200);
 
 			QVBoxLayout *layout = new QVBoxLayout(confirmDialog);
 
-			QLabel *warningLabel = new QLabel(obs_module_text("WindowSettingsResetDockConfigWarning"));
+			QLabel *warningLabel = new QLabel(obs_module_text("Settings.Dock.ResetWarning"));
 			warningLabel->setStyleSheet(QString("color: %1; font-size: %2px; padding: %3px;")
 							    .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							    .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)
@@ -2114,9 +2114,9 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 
 			QHBoxLayout *buttonLayout = new QHBoxLayout();
 
-			QPushButton *cancelBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Cancel"), "neutral");
+			QPushButton *cancelBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
 			QPushButton *resetBtn = StreamUP::UIStyles::CreateStyledButton(
-				obs_module_text("WindowSettingsResetDockConfigButton"), "error");
+				obs_module_text("Settings.Dock.ResetButton"), "error");
 
 			QObject::connect(cancelBtn, &QPushButton::clicked, confirmDialog, &QDialog::close);
 			QObject::connect(resetBtn, &QPushButton::clicked, [confirmDialog, allSwitches]() {

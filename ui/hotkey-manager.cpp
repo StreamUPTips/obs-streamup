@@ -35,8 +35,8 @@ void HotkeyRefreshBrowserSources(void *data, obs_hotkey_id id, obs_hotkey_t *hot
 	if (!pressed)
 		return;
 	obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr);
-	StreamUP::NotificationManager::SendInfoNotification(obs_module_text("RefreshBrowserSources"),
-			     obs_module_text("HotkeyManager.ActionCompleted"));
+	StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Feature.BrowserSources.Title"),
+			     obs_module_text("Hotkey.ActionCompleted"));
 }
 
 void HotkeyLockAllSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
@@ -57,8 +57,8 @@ void HotkeyRefreshAudioMonitoring(void *data, obs_hotkey_id id, obs_hotkey_t *ho
 	if (!pressed)
 		return;
 	obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr);
-	StreamUP::NotificationManager::SendInfoNotification(obs_module_text("RefreshAudioMonitoring"),
-			     obs_module_text("HotkeyManager.ActionCompleted"));
+	StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Feature.AudioMonitoring.Title"),
+			     obs_module_text("Hotkey.ActionCompleted"));
 }
 
 void HotkeyLockCurrentSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
