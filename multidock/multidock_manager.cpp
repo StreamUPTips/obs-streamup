@@ -172,7 +172,9 @@ bool MultiDockManager::RemoveMultiDock(const QString& id)
     SaveAllMultiDocks();
     
     // Now unregister the empty MultiDock from OBS
-    // obs_frontend_remove_dock(id.toUtf8().constData()); // Not available in all builds
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
+    obs_frontend_remove_dock(id.toUtf8().constData());
+#endif
     
     return true;
 }
@@ -526,7 +528,9 @@ void MultiDockManager::UnregisterFromObs(MultiDockDock* multiDock)
     QString id = multiDock->GetId();
     QString name = multiDock->GetName();
     
-    // obs_frontend_remove_dock(id.toUtf8().constData()); // Not available in all builds
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
+    obs_frontend_remove_dock(id.toUtf8().constData());
+#endif
     
     blog(LOG_INFO, "[StreamUP MultiDock] Unregistered MultiDock '%s' from OBS (ID: %s)", 
          name.toUtf8().constData(), id.toUtf8().constData());

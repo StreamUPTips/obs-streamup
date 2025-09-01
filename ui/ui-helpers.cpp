@@ -352,7 +352,11 @@ void CopyToClipboard(const QString &text)
 QString GetThemedIconPath(const QString &iconName)
 {
 	// Check if we're using a dark theme (requires OBS 29.0.0+)
-	bool isDarkTheme = false; // Fallback to light theme
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
+	bool isDarkTheme = obs_frontend_is_theme_dark();
+#else
+	bool isDarkTheme = false; // Fallback to light theme for older versions
+#endif
 	
 	// Use appropriate suffix based on theme
 	QString themeSuffix = isDarkTheme ? "-dark" : "-light";
@@ -373,7 +377,11 @@ QIcon CreateThemedIcon(const QString &baseName)
 	QString darkIconPath = QString(":images/icons/ui/%1-dark.svg").arg(baseName);
 	
 	// Add the current theme's icon as the default
-	bool isDarkTheme = false; // Fallback to light theme
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
+	bool isDarkTheme = obs_frontend_is_theme_dark();
+#else
+	bool isDarkTheme = false; // Fallback to light theme for older versions
+#endif
 	QString currentIconPath = isDarkTheme ? darkIconPath : lightIconPath;
 	
 	icon.addFile(currentIconPath);
@@ -383,9 +391,14 @@ QIcon CreateThemedIcon(const QString &baseName)
 
 bool IsOBSThemeDark()
 {
-	// Function may not be available in all build configurations
-	// Return false as fallback (light theme)
+	// obs_frontend_is_theme_dark was introduced in OBS 29.0.0
+	// Check if we're running on a compatible version
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
+	return obs_frontend_is_theme_dark();
+#else
+	// Fallback for older OBS versions - assume light theme
 	return false;
+#endif
 }
 
 } // namespace UIHelpers
