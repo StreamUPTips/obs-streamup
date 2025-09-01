@@ -167,7 +167,8 @@ void ShowDialogCentered(QDialog *dialog, QWidget *parentWidget)
 void CreateToolDialog(const char *infoText1, const char *infoText2, const char *infoText3, const QString &titleText,
 		      const QStyle::StandardPixmap &iconType)
 {
-	ShowDialogOnUIThread([infoText1, infoText2, infoText3, titleText, iconType]() {
+	(void)iconType; // Suppress unused parameter warning
+	ShowDialogOnUIThread([infoText1, infoText2, infoText3, titleText]() {
 		const char *titleTextChar = titleText.toUtf8().constData();
 		QString titleStr = obs_module_text(titleTextChar);
 		QString infoText1Str = obs_module_text(infoText1);

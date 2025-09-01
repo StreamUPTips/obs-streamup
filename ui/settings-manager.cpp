@@ -14,6 +14,7 @@
 #include <obs-data.h>
 #include <obs-properties.h>
 #include <obs-frontend-api.h>
+#include <QMetaType>
 #include <QDialog>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -39,6 +40,9 @@
 
 // Forward declarations for functions that may need to be moved from streamup.cpp
 extern char *GetFilePath();
+
+// Register obs_data_array_t* as opaque pointer with Qt's metatype system
+Q_DECLARE_OPAQUE_POINTER(obs_data_array_t*)
 
 namespace StreamUP {
 namespace SettingsManager {

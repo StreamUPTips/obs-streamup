@@ -480,7 +480,7 @@ QTableWidget* CreateStyledTableWidget(QWidget* parent) {
         
         // Copy cell content
         QAction* copyAction = contextMenu.addAction("Copy");
-        QObject::connect(copyAction, &QAction::triggered, [table, item]() {
+        QObject::connect(copyAction, &QAction::triggered, [item]() {
             QApplication::clipboard()->setText(item->text());
         });
         
