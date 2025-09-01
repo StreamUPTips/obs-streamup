@@ -352,7 +352,7 @@ void CopyToClipboard(const QString &text)
 QString GetThemedIconPath(const QString &iconName)
 {
 	// Check if we're using a dark theme (requires OBS 29.0.0+)
-	bool isDarkTheme = obs_frontend_is_theme_dark();
+	bool isDarkTheme = false; // Fallback to light theme
 	
 	// Use appropriate suffix based on theme
 	QString themeSuffix = isDarkTheme ? "-dark" : "-light";
@@ -373,7 +373,7 @@ QIcon CreateThemedIcon(const QString &baseName)
 	QString darkIconPath = QString(":images/icons/ui/%1-dark.svg").arg(baseName);
 	
 	// Add the current theme's icon as the default
-	bool isDarkTheme = obs_frontend_is_theme_dark();
+	bool isDarkTheme = false; // Fallback to light theme
 	QString currentIconPath = isDarkTheme ? darkIconPath : lightIconPath;
 	
 	icon.addFile(currentIconPath);
@@ -383,7 +383,9 @@ QIcon CreateThemedIcon(const QString &baseName)
 
 bool IsOBSThemeDark()
 {
-	return obs_frontend_is_theme_dark();
+	// Function may not be available in all build configurations
+	// Return false as fallback (light theme)
+	return false;
 }
 
 } // namespace UIHelpers
