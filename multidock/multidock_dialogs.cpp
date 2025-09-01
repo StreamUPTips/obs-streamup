@@ -24,7 +24,7 @@ void ShowNewMultiDockDialog()
     }
     
     QDialog dialog(mainWindow);
-    dialog.setWindowTitle("New MultiDock");
+    dialog.setWindowTitle(obs_module_text("MultiDock.Dialog.NewTitle"));
     dialog.setModal(true);
     dialog.resize(300, 120);
     
@@ -34,9 +34,9 @@ void ShowNewMultiDockDialog()
     QVBoxLayout* layout = new QVBoxLayout(&dialog);
     
     // Name input
-    layout->addWidget(new QLabel("MultiDock Name:"));
+    layout->addWidget(new QLabel(obs_module_text("MultiDock.Label.Name")));
     QLineEdit* nameEdit = new QLineEdit(&dialog);
-    nameEdit->setPlaceholderText("Enter MultiDock name...");
+    nameEdit->setPlaceholderText(obs_module_text("MultiDock.Placeholder.Name"));
     
     // Style the input box
     nameEdit->setStyleSheet(StreamUP::UIStyles::GetLineEditStyle());
@@ -45,8 +45,8 @@ void ShowNewMultiDockDialog()
     
     // Buttons
     QHBoxLayout* buttonLayout = new QHBoxLayout();
-    QPushButton* createButton = new QPushButton("Create", &dialog);
-    QPushButton* cancelButton = new QPushButton("Cancel", &dialog);
+    QPushButton* createButton = new QPushButton(obs_module_text("MultiDock.Button.Create"), &dialog);
+    QPushButton* cancelButton = new QPushButton(obs_module_text("UI.Button.Cancel"), &dialog);
     
     // Style buttons
     createButton->setStyleSheet(StreamUP::UIStyles::GetButtonStyle());
@@ -62,20 +62,20 @@ void ShowNewMultiDockDialog()
     QObject::connect(createButton, &QPushButton::clicked, [&dialog, nameEdit]() {
         QString name = nameEdit->text().trimmed();
         if (name.isEmpty()) {
-            QMessageBox::warning(&dialog, "Invalid Name", "Please enter a valid MultiDock name.");
+            QMessageBox::warning(&dialog, obs_module_text("Plugin.Error.InvalidName"), obs_module_text("MultiDock.Error.InvalidName"));
             return;
         }
         
         // Create the MultiDock using the manager
         MultiDockManager* manager = MultiDockManager::Instance();
         if (!manager) {
-            QMessageBox::critical(&dialog, "Error", "MultiDock system not initialized.");
+            QMessageBox::critical(&dialog, obs_module_text("Plugin.Error.Title"), obs_module_text("MultiDock.Error.SystemNotInitialized"));
             return;
         }
         
         QString id = manager->CreateMultiDock(name);
         if (id.isEmpty()) {
-            QMessageBox::critical(&dialog, "Error", "Failed to create MultiDock.");
+            QMessageBox::critical(&dialog, obs_module_text("Plugin.Error.Title"), obs_module_text("MultiDock.Error.CreationFailed"));
             return;
         }
         
@@ -100,7 +100,7 @@ void ShowManageMultiDocksDialog()
     }
     
     QDialog dialog(mainWindow);
-    dialog.setWindowTitle("Manage MultiDocks");
+    dialog.setWindowTitle(obs_module_text("MultiDock.Dialog.ManageTitle"));
     dialog.setModal(true);
     dialog.resize(400, 300);
     
@@ -110,7 +110,7 @@ void ShowManageMultiDocksDialog()
     QVBoxLayout* layout = new QVBoxLayout(&dialog);
     
     // List widget
-    layout->addWidget(new QLabel("Existing MultiDocks:"));
+    layout->addWidget(new QLabel(obs_module_text("MultiDock.Label.ExistingDocks")));
     QListWidget* listWidget = new QListWidget(&dialog);
     
     // Style the list widget with rounded corners and proper background
@@ -154,27 +154,27 @@ void ShowManageMultiDocksDialog()
         }
         
         if (multiDocks.isEmpty()) {
-            listWidget->addItem("(No MultiDocks created yet)");
+            listWidget->addItem(obs_module_text("MultiDock.Message.NoMultiDocksCreated"));
         }
     } else {
-        listWidget->addItem("(MultiDock system not initialized)");
+        listWidget->addItem(obs_module_text("MultiDock.Message.SystemNotInitialized"));
     }
     
     // Buttons
     QHBoxLayout* buttonLayout = new QHBoxLayout();
     QPushButton* newButton = new QPushButton(&dialog);
     newButton->setProperty("class", "icon-plus");
-    newButton->setToolTip("New");
+    newButton->setToolTip(obs_module_text("MultiDock.Button.New"));
     newButton->setStyleSheet(StreamUP::UIStyles::GetSquircleButtonStyle("", "", 28));
     newButton->setFixedSize(28, 28);
-    QPushButton* openButton = new QPushButton("Open", &dialog);
-    QPushButton* renameButton = new QPushButton("Rename", &dialog);
+    QPushButton* openButton = new QPushButton(obs_module_text("UI.Button.Open"), &dialog);
+    QPushButton* renameButton = new QPushButton(obs_module_text("MultiDock.Button.Rename"), &dialog);
     QPushButton* deleteButton = new QPushButton(&dialog);
     deleteButton->setProperty("class", "icon-trash");
-    deleteButton->setToolTip("Delete");
+    deleteButton->setToolTip(obs_module_text("MultiDock.Button.Delete"));
     deleteButton->setStyleSheet(StreamUP::UIStyles::GetSquircleButtonStyle("", "", 28));
     deleteButton->setFixedSize(28, 28);
-    QPushButton* closeButton = new QPushButton("Close", &dialog);
+    QPushButton* closeButton = new QPushButton(obs_module_text("UI.Button.Close"), &dialog);
     
     // Enable/disable buttons based on selection
     bool hasSelection = listWidget->currentItem() != nullptr && 
@@ -241,9 +241,9 @@ void ShowManageMultiDocksDialog()
         
         // Create a separate dialog for confirmation to avoid any lifecycle issues
         QMessageBox confirmDialog(&dialog);
-        confirmDialog.setWindowTitle("Delete MultiDock");
-        confirmDialog.setText(QString("Are you sure you want to delete the MultiDock '%1'?").arg(name));
-        confirmDialog.setInformativeText("This will return all captured docks to the main window.");
+        confirmDialog.setWindowTitle(obs_module_text("MultiDock.Dialog.DeleteTitle"));
+        confirmDialog.setText(QString(obs_module_text("MultiDock.Confirm.Delete")).arg(name));
+        confirmDialog.setInformativeText(obs_module_text("MultiDock.Info.DeleteRestore"));
         confirmDialog.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
         confirmDialog.setDefaultButton(QMessageBox::No);
         confirmDialog.setIcon(QMessageBox::Question);
@@ -273,7 +273,7 @@ void ShowManageMultiDocksDialog()
     QObject::connect(newButton, &QPushButton::clicked, [listWidget, manager, &dialog]() {
         // Show the new MultiDock dialog
         QDialog newDialog(&dialog);
-        newDialog.setWindowTitle("New MultiDock");
+        newDialog.setWindowTitle(obs_module_text("MultiDock.Dialog.NewTitle"));
         newDialog.setModal(true);
         newDialog.resize(300, 120);
         
@@ -283,9 +283,9 @@ void ShowManageMultiDocksDialog()
         QVBoxLayout* newLayout = new QVBoxLayout(&newDialog);
         
         // Name input
-        newLayout->addWidget(new QLabel("MultiDock Name:"));
+        newLayout->addWidget(new QLabel(obs_module_text("MultiDock.Label.Name")));
         QLineEdit* nameEdit = new QLineEdit(&newDialog);
-        nameEdit->setPlaceholderText("Enter MultiDock name...");
+        nameEdit->setPlaceholderText(obs_module_text("MultiDock.Placeholder.Name"));
         
         // Style the input box
         nameEdit->setStyleSheet(StreamUP::UIStyles::GetLineEditStyle());
@@ -294,8 +294,8 @@ void ShowManageMultiDocksDialog()
         
         // Buttons
         QHBoxLayout* newButtonLayout = new QHBoxLayout();
-        QPushButton* createButton = new QPushButton("Create", &newDialog);
-        QPushButton* cancelButton = new QPushButton("Cancel", &newDialog);
+        QPushButton* createButton = new QPushButton(obs_module_text("MultiDock.Button.Create"), &newDialog);
+        QPushButton* cancelButton = new QPushButton(obs_module_text("UI.Button.Cancel"), &newDialog);
         
         // Style buttons
         createButton->setStyleSheet(StreamUP::UIStyles::GetButtonStyle());
@@ -311,18 +311,18 @@ void ShowManageMultiDocksDialog()
         QObject::connect(createButton, &QPushButton::clicked, [&newDialog, nameEdit, manager, listWidget]() {
             QString name = nameEdit->text().trimmed();
             if (name.isEmpty()) {
-                QMessageBox::warning(&newDialog, "Invalid Name", "Please enter a valid MultiDock name.");
+                QMessageBox::warning(&newDialog, obs_module_text("Plugin.Error.InvalidName"), obs_module_text("MultiDock.Error.InvalidName"));
                 return;
             }
             
             if (!manager) {
-                QMessageBox::critical(&newDialog, "Error", "MultiDock system not initialized.");
+                QMessageBox::critical(&newDialog, obs_module_text("Plugin.Error.Title"), obs_module_text("MultiDock.Error.SystemNotInitialized"));
                 return;
             }
             
             QString id = manager->CreateMultiDock(name);
             if (id.isEmpty()) {
-                QMessageBox::critical(&newDialog, "Error", "Failed to create MultiDock.");
+                QMessageBox::critical(&newDialog, obs_module_text("Plugin.Error.Title"), obs_module_text("MultiDock.Error.CreationFailed"));
                 return;
             }
             
@@ -368,7 +368,7 @@ void ShowManageMultiDocksDialog()
         
         // Show rename dialog
         QDialog renameDialog(&dialog);
-        renameDialog.setWindowTitle("Rename MultiDock");
+        renameDialog.setWindowTitle(obs_module_text("MultiDock.Dialog.RenameTitle"));
         renameDialog.setModal(true);
         renameDialog.resize(300, 120);
         
@@ -378,7 +378,7 @@ void ShowManageMultiDocksDialog()
         QVBoxLayout* renameLayout = new QVBoxLayout(&renameDialog);
         
         // Name input
-        renameLayout->addWidget(new QLabel("New MultiDock Name:"));
+        renameLayout->addWidget(new QLabel(obs_module_text("MultiDock.Label.NewName")));
         QLineEdit* nameEdit = new QLineEdit(&renameDialog);
         nameEdit->setText(currentName);
         nameEdit->selectAll();
@@ -390,8 +390,8 @@ void ShowManageMultiDocksDialog()
         
         // Buttons
         QHBoxLayout* renameButtonLayout = new QHBoxLayout();
-        QPushButton* saveButton = new QPushButton("Save", &renameDialog);
-        QPushButton* cancelButton = new QPushButton("Cancel", &renameDialog);
+        QPushButton* saveButton = new QPushButton(obs_module_text("UI.Button.Save"), &renameDialog);
+        QPushButton* cancelButton = new QPushButton(obs_module_text("UI.Button.Cancel"), &renameDialog);
         
         // Style buttons
         saveButton->setStyleSheet(StreamUP::UIStyles::GetButtonStyle());
@@ -407,7 +407,7 @@ void ShowManageMultiDocksDialog()
         QObject::connect(saveButton, &QPushButton::clicked, [&renameDialog, nameEdit, manager, item, id, currentName]() {
             QString newName = nameEdit->text().trimmed();
             if (newName.isEmpty()) {
-                QMessageBox::warning(&renameDialog, "Invalid Name", "Please enter a valid MultiDock name.");
+                QMessageBox::warning(&renameDialog, obs_module_text("Plugin.Error.InvalidName"), obs_module_text("MultiDock.Error.InvalidName"));
                 return;
             }
             

@@ -64,7 +64,7 @@ void LoadMenuItems(QMenu* menu)
 
     // Platform-specific actions (Windows only)
     if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
-        action = menu->addAction(obs_module_text("MenuInstallProduct"));
+        action = menu->addAction(obs_module_text("Menu.Plugin.InstallProduct"));
         QObject::connect(action, &QAction::triggered, []() { 
             // Check if Shift is held to force load
             if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
@@ -74,12 +74,12 @@ void LoadMenuItems(QMenu* menu)
             }
         });
         
-        action = menu->addAction(obs_module_text("MenuDownloadProduct"));
+        action = menu->addAction(obs_module_text("Menu.Plugin.DownloadProduct"));
         QObject::connect(action, &QAction::triggered, []() { 
             QDesktopServices::openUrl(QUrl("https://streamup.tips/")); 
         });
 
-        action = menu->addAction(obs_module_text("MenuCheckRequirements"));
+        action = menu->addAction(obs_module_text("Menu.Plugin.CheckRequirements"));
         QObject::connect(action, &QAction::triggered, []() { 
             // Hold Shift to force refresh cache
             if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
@@ -92,7 +92,7 @@ void LoadMenuItems(QMenu* menu)
     }
 
     // Plugin updates (all platforms)
-    action = menu->addAction(obs_module_text("MenuCheckPluginUpdates"));
+    action = menu->addAction(obs_module_text("Menu.Plugin.CheckUpdates"));
     QObject::connect(action, &QAction::triggered, []() { 
         // Hold Shift to force refresh cache
         if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
@@ -102,15 +102,15 @@ void LoadMenuItems(QMenu* menu)
     });
 
     // Tools submenu
-    QMenu* toolsMenu = menu->addMenu(obs_module_text("MenuTools"));
+    QMenu* toolsMenu = menu->addMenu(obs_module_text("Menu.Tools"));
     
     // Source Management tools
-    action = toolsMenu->addAction(obs_module_text("MenuLockAllSources"));
+    action = toolsMenu->addAction(obs_module_text("Menu.Source.LockAllSources"));
     QObject::connect(action, &QAction::triggered, []() { 
         StreamUP::SourceManager::ToggleLockAllSources(); 
     });
     
-    action = toolsMenu->addAction(obs_module_text("MenuLockAllCurrentSources"));
+    action = toolsMenu->addAction(obs_module_text("Menu.Source.LockCurrentSources"));
     QObject::connect(action, &QAction::triggered, []() { 
         StreamUP::SourceManager::ToggleLockSourcesInCurrentScene(); 
     });
@@ -118,30 +118,30 @@ void LoadMenuItems(QMenu* menu)
     toolsMenu->addSeparator();
     
     // Audio/Video tools
-    action = toolsMenu->addAction(obs_module_text("MenuRefreshAudioMonitoring"));
+    action = toolsMenu->addAction(obs_module_text("Menu.Source.RefreshAudioMonitoring"));
     QObject::connect(action, &QAction::triggered, []() { 
         obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr); 
     });
     
-    action = toolsMenu->addAction(obs_module_text("MenuRefreshBrowserSources"));
+    action = toolsMenu->addAction(obs_module_text("Menu.Source.RefreshBrowserSources"));
     QObject::connect(action, &QAction::triggered, []() { 
         obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr); 
     });
     
     // Video device management submenu
-    QMenu* videoDeviceMenu = toolsMenu->addMenu(obs_module_text("MenuVideoCaptureDevices"));
+    QMenu* videoDeviceMenu = toolsMenu->addMenu(obs_module_text("Menu.VideoCapture.Root"));
     
-    action = videoDeviceMenu->addAction(obs_module_text("MenuActivateVideoCaptureDevices"));
+    action = videoDeviceMenu->addAction(obs_module_text("Menu.VideoCapture.ActivateAll"));
     QObject::connect(action, &QAction::triggered, []() { 
         StreamUP::SourceManager::ActivateAllVideoCaptureDevices(); 
     });
     
-    action = videoDeviceMenu->addAction(obs_module_text("MenuDeactivateVideoCaptureDevices"));
+    action = videoDeviceMenu->addAction(obs_module_text("Menu.VideoCapture.DeactivateAll"));
     QObject::connect(action, &QAction::triggered, []() { 
         StreamUP::SourceManager::DeactivateAllVideoCaptureDevices(); 
     });
     
-    action = videoDeviceMenu->addAction(obs_module_text("MenuRefreshVideoCaptureDevices"));
+    action = videoDeviceMenu->addAction(obs_module_text("Menu.VideoCapture.RefreshAll"));
     QObject::connect(action, &QAction::triggered, []() { 
         StreamUP::SourceManager::RefreshAllVideoCaptureDevices(); 
     });
@@ -188,23 +188,23 @@ void LoadMenuItems(QMenu* menu)
     menu->addSeparator();
 
     // Theme, WebSocket Commands, Settings, Patch Notes, About (in requested order)
-    action = menu->addAction(obs_module_text("MenuTheme"));
+    action = menu->addAction(obs_module_text("Menu.Theme"));
     QObject::connect(action, &QAction::triggered, []() { StreamUP::ThemeWindow::ShowThemeWindow(); });
 
-    action = menu->addAction(obs_module_text("MenuWebSocket"));
+    action = menu->addAction(obs_module_text("Menu.WebSocket"));
     QObject::connect(action, &QAction::triggered, []() { 
         // Check if Shift is held to show internal tools
         bool showInternalTools = QApplication::keyboardModifiers() & Qt::ShiftModifier;
         StreamUP::WebSocketWindow::ShowWebSocketWindow(showInternalTools); 
     });
 
-    action = menu->addAction(obs_module_text("MenuSettings"));
+    action = menu->addAction(obs_module_text("Menu.Settings"));
     QObject::connect(action, &QAction::triggered, []() { SettingsDialog(); });
 
-    action = menu->addAction(obs_module_text("MenuPatchNotes"));
+    action = menu->addAction(obs_module_text("Menu.PatchNotes"));
     QObject::connect(action, &QAction::triggered, []() { StreamUP::PatchNotesWindow::ShowPatchNotesWindow(); });
 
-    action = menu->addAction(obs_module_text("MenuAbout"));
+    action = menu->addAction(obs_module_text("Menu.About"));
     QObject::connect(action, &QAction::triggered, []() { StreamUP::SplashScreen::ShowSplashScreen(); });
 }
 

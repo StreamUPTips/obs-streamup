@@ -36,9 +36,9 @@ VideoCapturePopup::VideoCapturePopup(QWidget *parent)
 	setButtonProperties(refreshButton);
 	
 	// Set tooltips
-	activateButton->setToolTip(obs_module_text("ActivateAllVideoCaptureDevices"));
-	deactivateButton->setToolTip(obs_module_text("DeactivateAllVideoCaptureDevices"));
-	refreshButton->setToolTip(obs_module_text("RefreshAllVideoCaptureDevices"));
+	activateButton->setToolTip(obs_module_text("Menu.VideoCapture.ActivateAll"));
+	deactivateButton->setToolTip(obs_module_text("Menu.VideoCapture.DeactivateAll"));
+	refreshButton->setToolTip(obs_module_text("Menu.VideoCapture.RefreshAll"));
 	
 	// Create horizontal layout
 	layout = new QHBoxLayout(this);

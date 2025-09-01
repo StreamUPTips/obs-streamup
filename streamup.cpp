@@ -153,7 +153,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 
-		StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("Cancel"), [dialog]() { dialog->close(); });
+		StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("UI.Button.Cancel"), [dialog]() { dialog->close(); });
 
 		StreamUP::UIHelpers::CreateButton(buttonLayout, titleStr, [=]() {
 			buttonCallback();
@@ -170,7 +170,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		dialogLayout->addWidget(info2, 0, Qt::AlignTop);
 		dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
-		QGroupBox *info3Box = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("HowToUse"), "info");
+		QGroupBox *info3Box = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("UI.Message.HowToUse"), "info");
 		info3Box->setMinimumWidth(350); // Keep specific width requirement for this dialog
 		QVBoxLayout *info3BoxLayout = StreamUP::UIHelpers::CreateVBoxLayout(info3Box);
 		QLabel *info3 = StreamUP::UIHelpers::CreateRichTextLabel(infoText3Str, false, true);
@@ -185,8 +185,8 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		info3BoxLayout->addWidget(howTo3);
 		info3BoxLayout->addWidget(howTo4);
 
-		QPushButton *copyJsonButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("CopyWebsocketJson"), "neutral");
-		copyJsonButton->setToolTip(obs_module_text("CopyWebsocketJsonTooltip"));
+		QPushButton *copyJsonButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WebSocket.Button.Copy"), "neutral");
+		copyJsonButton->setToolTip(obs_module_text("WebSocket.Button.CopyTooltip"));
 		QObject::connect(copyJsonButton, &QPushButton::clicked, [=]() { StreamUP::UIHelpers::CopyToClipboard(jsonString); });
 		info3BoxLayout->addWidget(copyJsonButton);
 		dialogLayout->addWidget(info3Box);
@@ -537,7 +537,7 @@ static void LoadStreamUPDock()
 
 	auto *dock_widget = new StreamUPDock(main_window);
 
-	const QString title = QString::fromUtf8(obs_module_text("StreamUPDock"));
+	const QString title = QString::fromUtf8(obs_module_text("Dock.Title"));
 	const auto name = "StreamUPDock";
 
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
@@ -767,10 +767,10 @@ void obs_module_unload()
 
 MODULE_EXPORT const char *obs_module_description(void)
 {
-	return obs_module_text("Description");
+	return obs_module_text("App.Description");
 }
 
 MODULE_EXPORT const char *obs_module_name(void)
 {
-	return obs_module_text("StreamUP");
+	return obs_module_text("App.Name");
 }

@@ -21,14 +21,14 @@ AddDockDialog::AddDockDialog(const QString& multiDockId, QWidget* parent)
     , m_addButton(nullptr)
     , m_cancelButton(nullptr)
 {
-    setWindowTitle("Add Dock to MultiDock");
+    setWindowTitle(obs_module_text("MultiDock.Dialog.AddDockTitle"));
     setModal(true);
     resize(400, 300);
     
     QVBoxLayout* layout = new QVBoxLayout(this);
     
     // Header
-    layout->addWidget(new QLabel("Select a dock to add to this MultiDock:"));
+    layout->addWidget(new QLabel(obs_module_text("MultiDock.Label.SelectDock")));
     
     // Dock list
     m_dockList = new QListWidget(this);
@@ -38,8 +38,8 @@ AddDockDialog::AddDockDialog(const QString& multiDockId, QWidget* parent)
     
     // Buttons
     QHBoxLayout* buttonLayout = new QHBoxLayout();
-    m_addButton = StreamUP::UIStyles::CreateStyledButton("Add", "info");
-    m_cancelButton = StreamUP::UIStyles::CreateStyledButton("Cancel", "neutral");
+    m_addButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("MultiDock.Button.Add"), "info");
+    m_cancelButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
     
     m_addButton->setEnabled(false);
     m_addButton->setDefault(true);
@@ -92,7 +92,7 @@ void AddDockDialog::PopulateAvailableDocks()
     
     QMainWindow* mainWindow = GetObsMainWindow();
     if (!mainWindow) {
-        m_dockList->addItem("(Unable to access OBS main window)");
+        m_dockList->addItem(obs_module_text("MultiDock.Message.UnableToAccessMainWindow"));
         return;
     }
     
@@ -106,7 +106,7 @@ void AddDockDialog::PopulateAvailableDocks()
             QString displayName = dock->windowTitle();
             
             if (displayName.isEmpty()) {
-                displayName = "(Unnamed Dock)";
+                displayName = obs_module_text("MultiDock.Message.UnnamedDock");
             }
             
             // Only show the dock name, not the identifier
@@ -127,7 +127,7 @@ void AddDockDialog::PopulateAvailableDocks()
     }
     
     if (m_availableDocks.isEmpty()) {
-        m_dockList->addItem("(No available docks found)");
+        m_dockList->addItem(obs_module_text("MultiDock.Message.NoAvailableDocksFound"));
     }
     
     blog(LOG_INFO, "[StreamUP MultiDock] AddDockDialog: Found %d available docks", 

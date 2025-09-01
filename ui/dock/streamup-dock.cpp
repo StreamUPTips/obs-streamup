@@ -38,7 +38,7 @@ static QList<StreamUPDock*> dockInstances;
 void ShowDockConfigDialog()
 {
 	StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
-		QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsDockConfigTitle"));
+		QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Dock.Title"));
 		dialog->resize(600, 450);
 		
 		QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
@@ -56,13 +56,13 @@ void ShowDockConfigDialog()
 		QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
 		headerLayout->setContentsMargins(0, 0, 0, 0);
 		
-		QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WindowSettingsDockConfigTitle"));
+		QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("Settings.Dock.Title"));
 		titleLabel->setAlignment(Qt::AlignCenter);
 		headerLayout->addWidget(titleLabel);
 		
 		headerLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
 		
-		QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WindowSettingsDockConfigDesc"));
+		QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("Settings.Dock.Description"));
 		headerLayout->addWidget(subtitleLabel);
 		
 		mainLayout->addWidget(headerWidget);
@@ -78,7 +78,7 @@ void ShowDockConfigDialog()
 		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
 
 		// Info section
-		QLabel* infoLabel = new QLabel(obs_module_text("WindowSettingsDockConfigInfo"));
+		QLabel* infoLabel = new QLabel(obs_module_text("Settings.Dock.Info"));
 		infoLabel->setStyleSheet(QString(
 			"QLabel {"
 			"color: %1;"
@@ -99,7 +99,7 @@ void ShowDockConfigDialog()
 		contentLayout->addWidget(infoLabel);
 
 		// Create GroupBox for dock tools configuration
-		QGroupBox* toolsGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("WindowSettingsDockToolsGroupTitle"), "info");
+		QGroupBox* toolsGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Settings.Dock.ToolsGroupTitle"), "info");
 		
 		QVBoxLayout* toolsGroupLayout = new QVBoxLayout(toolsGroup);
 		toolsGroupLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0, StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
@@ -117,11 +117,11 @@ void ShowDockConfigDialog()
 		
 		// List of all dock tools
 		std::vector<ToolInfo> dockTools = {
-			{obs_module_text("DockToolLockAllSources"), obs_module_text("DockToolLockAllSourcesDesc"), 0},
-			{obs_module_text("DockToolLockCurrentSources"), obs_module_text("DockToolLockCurrentSourcesDesc"), 1},
-			{obs_module_text("DockToolRefreshBrowserSources"), obs_module_text("DockToolRefreshBrowserSourcesDesc"), 2},
-			{obs_module_text("DockToolRefreshAudioMonitoring"), obs_module_text("DockToolRefreshAudioMonitoringDesc"), 3},
-			{obs_module_text("DockToolVideoCaptureOptions"), obs_module_text("DockToolVideoCaptureOptionsDesc"), 4}
+			{obs_module_text("Dock.Tool.LockAllSources.Title"), obs_module_text("Dock.Tool.LockAllSources.Description"), 0},
+			{obs_module_text("Dock.Tool.LockCurrentSources.Title"), obs_module_text("Dock.Tool.LockCurrentSources.Description"), 1},
+			{obs_module_text("Dock.Tool.RefreshBrowserSources.Title"), obs_module_text("Dock.Tool.RefreshBrowserSources.Description"), 2},
+			{obs_module_text("Dock.Tool.RefreshAudioMonitoring.Title"), obs_module_text("Dock.Tool.RefreshAudioMonitoring.Description"), 3},
+			{obs_module_text("Dock.Tool.VideoCaptureOptions.Title"), obs_module_text("Dock.Tool.VideoCaptureOptions.Description"), 4}
 		};
 		
 		// Create tool rows and collect switches
@@ -244,16 +244,16 @@ void ShowDockConfigDialog()
 		actionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 		actionLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3, 0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3);
 		
-		QPushButton* resetButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsResetDockConfig"), "error");
+		QPushButton* resetButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Settings.Dock.ResetConfig"), "error");
 		
 		QObject::connect(resetButton, &QPushButton::clicked, [toolsGroup]() {
 			StreamUP::UIHelpers::ShowDialogOnUIThread([toolsGroup]() {
-				QDialog* confirmDialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WindowSettingsResetDockConfigTitle"));
+				QDialog* confirmDialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Dock.ResetTitle"));
 				confirmDialog->resize(400, 200);
 				
 				QVBoxLayout* layout = new QVBoxLayout(confirmDialog);
 				
-				QLabel* warningLabel = new QLabel(obs_module_text("WindowSettingsResetDockConfigWarning"));
+				QLabel* warningLabel = new QLabel(obs_module_text("Settings.Dock.ResetWarning"));
 				warningLabel->setStyleSheet(QString("color: %1; font-size: %2px; padding: %3px;")
 					.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 					.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)
@@ -265,8 +265,8 @@ void ShowDockConfigDialog()
 				
 				QHBoxLayout* buttonLayout = new QHBoxLayout();
 				
-				QPushButton* cancelBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Cancel"), "neutral");
-				QPushButton* resetBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WindowSettingsResetDockConfigButton"), "error");
+				QPushButton* cancelBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
+				QPushButton* resetBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Settings.Dock.ResetButton"), "error");
 				
 				QObject::connect(cancelBtn, &QPushButton::clicked, confirmDialog, &QDialog::close);
 				QObject::connect(resetBtn, &QPushButton::clicked, [confirmDialog, toolsGroup]() {
@@ -314,7 +314,7 @@ void ShowDockConfigDialog()
 			StreamUP::UIStyles::Sizes::PADDING_XL, 
 			StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
 
-		QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Close"), "neutral");
+		QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Close"), "neutral");
 		QObject::connect(closeButton, &QPushButton::clicked, [=]() {
 			dialog->close();
 		});
@@ -373,11 +373,11 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	setButtonProperties(videoCaptureButton);
 
 	// Set tooltips for buttons
-	button1->setToolTip(obs_module_text("LockAllSources"));
-	button2->setToolTip(obs_module_text("LockAllCurrentSources"));
-	button3->setToolTip(obs_module_text("RefreshBrowserSources"));
-	button4->setToolTip(obs_module_text("RefreshAudioMonitoring"));
-	videoCaptureButton->setToolTip(obs_module_text("VideoCaptureDeviceOptions"));
+	button1->setToolTip(obs_module_text("Feature.SourceLock.All.Title"));
+	button2->setToolTip(obs_module_text("Feature.SourceLock.Current.Title"));
+	button3->setToolTip(obs_module_text("Feature.BrowserSources.Title"));
+	button4->setToolTip(obs_module_text("Feature.AudioMonitoring.Title"));
+	videoCaptureButton->setToolTip(obs_module_text("Feature.VideoCapture.Title"));
 
 	// Create a flow layout to hold the buttons
 	mainDockLayout = new FlowLayout(this, 5, 5, 5);
@@ -688,7 +688,7 @@ void StreamUPDock::showContextMenu(const QPoint& position)
 {
 	QMenu contextMenu(this);
 	
-	QAction* configureAction = contextMenu.addAction(obs_module_text("DockContextMenuConfigure"));
+	QAction* configureAction = contextMenu.addAction(obs_module_text("Dock.ContextMenu.Configure"));
 	connect(configureAction, &QAction::triggered, []() {
 		ShowDockConfigDialog();
 	});

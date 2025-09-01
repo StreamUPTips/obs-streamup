@@ -15,7 +15,6 @@
 #include <QDateTime>
 #include <QPainter>
 #include <QPolygon>
-#include <QDrag>
 #include <QStyleOptionViewItem>
 #include <QJsonDocument>
 #include <QJsonObject>

@@ -70,6 +70,13 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile = false);
 std::string SearchStringInFileForVersion(const char *path, const char *search);
 
 /**
+ * Search for StreamUP theme version in theme files
+ * @param search The search string to look for in theme files
+ * @return std::string The version number found, or empty string if not found
+ */
+std::string SearchThemeFileForVersion(const char *search);
+
+/**
  * Get installed plugins list with versions
  * @return std::vector containing pairs of plugin names and versions
  */
