@@ -40,6 +40,15 @@
 #include <util/platform.h>
 #include <obs-frontend-api.h>
 
+#ifdef _WIN32
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+#endif
+
 // UI functions now accessed through StreamUP::UIHelpers namespace
 extern char *GetFilePath();
 
@@ -613,6 +622,7 @@ void InitialiseRequiredModules()
 
 bool CheckrequiredOBSPluginsWithoutUI(bool isLoadStreamUpFile)
 {
+	UNUSED_PARAMETER(isLoadStreamUpFile);
 	const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
 	if (requiredPlugins.empty()) {
 		return false;

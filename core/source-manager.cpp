@@ -55,7 +55,7 @@ bool RefreshAudioMonitoring(void *data, obs_source_t *source)
 		return false;
 	}
 
-	const char *source_name = obs_source_get_name(source);
+	UNUSED_PARAMETER(obs_source_get_name(source));
 
 	obs_monitoring_type original_monitoring_type = obs_source_get_monitoring_type(source);
 
@@ -91,7 +91,7 @@ bool RefreshBrowserSources(void *data, obs_source_t *source)
 	UNUSED_PARAMETER(data);
 
 	const char *source_id = obs_source_get_id(source);
-	const char *source_name = obs_source_get_name(source);
+	UNUSED_PARAMETER(obs_source_get_name(source));
 
 	if (strcmp(source_id, "browser_source") == 0) {
 		obs_data_t *settings = obs_source_get_settings(source);

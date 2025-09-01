@@ -897,7 +897,7 @@ void ShowSettingsDialog(int tabIndex)
 			sectionLayout->setSpacing(0);
 			sectionLayout->setContentsMargins(0, 0, 0, 0);
 			
-			for (int i = 0; i < hotkeys.size(); ++i) {
+			for (size_t i = 0; i < hotkeys.size(); ++i) {
 				const auto &hotkey = hotkeys[i];
 				
 				QWidget *hotkeyRow = new QWidget();
@@ -1060,7 +1060,7 @@ void ShowSettingsDialog(int tabIndex)
 		};
 		
 		// Create tool rows
-		for (int i = 0; i < dockTools.size(); ++i) {
+		for (size_t i = 0; i < dockTools.size(); ++i) {
 			const auto &tool = dockTools[i];
 			
 			QWidget *toolRow = new QWidget();
@@ -1610,7 +1610,7 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 	hotkeyContentLayout->setContentsMargins(0, 0, 0, 0); // No padding inside the box (like WebSocket UI)
 
 	// Add each hotkey as a row with actual hotkey widget (WebSocket UI style)
-	for (int i = 0; i < streamupHotkeys.size(); ++i) {
+	for (size_t i = 0; i < streamupHotkeys.size(); ++i) {
 		const auto &hotkey = streamupHotkeys[i];
 
 		QWidget *hotkeyRow = new QWidget();
@@ -1922,7 +1922,7 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 		 &currentDockSettings.showVideoCaptureOptions, 4}};
 
 	// Create tool rows matching WebSocket/hotkeys UI pattern
-	for (int i = 0; i < dockTools.size(); ++i) {
+	for (size_t i = 0; i < dockTools.size(); ++i) {
 		const auto &tool = dockTools[i];
 
 		QWidget *toolRow = new QWidget();

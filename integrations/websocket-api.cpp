@@ -1,6 +1,6 @@
 #include "websocket-api.hpp"
 #include "streamup-common.hpp"
-#include "version.h"
+#include "../version.h"
 #include "plugin-manager.hpp"
 #include "source-manager.hpp"
 #include "file-manager.hpp"

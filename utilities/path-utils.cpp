@@ -7,6 +7,12 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
 #endif
 
 namespace StreamUP {
@@ -65,7 +71,7 @@ QString ToAbsolutePath(const QString &relativePath)
 std::string GetMostRecentTxtFile(const std::string &directoryPath)
 {
 	auto it = std::filesystem::directory_iterator(directoryPath);
-	auto last_write_time = decltype(it->last_write_time())::min();
+	auto last_write_time = std::filesystem::file_time_type::min();
 	std::filesystem::directory_entry newest_file;
 
 	for (const auto &entry : it) {
