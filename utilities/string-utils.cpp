@@ -74,12 +74,21 @@ QString GetPlatformURL(const QString &windowsURL, const QString &macURL,
                       const QString &linuxURL, const QString &generalURL)
 {
 #ifdef _WIN32
+	UNUSED_PARAMETER(macURL);
+	UNUSED_PARAMETER(linuxURL);
 	return windowsURL.isEmpty() ? generalURL : windowsURL;
 #elif defined(__APPLE__)
+	UNUSED_PARAMETER(windowsURL);
+	UNUSED_PARAMETER(linuxURL);
 	return macURL.isEmpty() ? generalURL : macURL;
 #elif defined(__linux__)
+	UNUSED_PARAMETER(windowsURL);
+	UNUSED_PARAMETER(macURL);
 	return linuxURL.isEmpty() ? generalURL : linuxURL;
 #else
+	UNUSED_PARAMETER(windowsURL);
+	UNUSED_PARAMETER(macURL);
+	UNUSED_PARAMETER(linuxURL);
 	return generalURL;
 #endif
 }

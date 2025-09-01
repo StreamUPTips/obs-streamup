@@ -11,6 +11,7 @@
 #include "streamup-toolbar.hpp"
 #include "streamup-toolbar-configurator.hpp"
 #include <obs-module.h>
+#include <obs-data.h>
 #include <obs-properties.h>
 #include <obs-frontend-api.h>
 #include <QDialog>
