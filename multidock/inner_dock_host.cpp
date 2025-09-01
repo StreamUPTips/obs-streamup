@@ -65,9 +65,9 @@ void InnerDockHost::SetupDockOptions()
         "QDockWidget { background-color: transparent; }"
         "QDockWidget::title { background-color: #161617; text-align: left; padding-left: 8px; }"
         "QDockWidget::close-button { subcontrol-position: top right; right: 10px; top: 4px; }"
-        "QDockWidget::float-button { display: none; }"
-        "InnerDockHost QDockWidget::float-button { display: none; }"
-        "InnerDockHost > QDockWidget::float-button { display: none; }"
+        "QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
+        "InnerDockHost QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
+        "InnerDockHost > QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
     ).arg(bgColor));
 }
 
@@ -417,7 +417,7 @@ void InnerDockHost::ReapplyDockFeatures()
 {
     // Reapply stylesheet first to ensure close buttons show/hide correctly but keep 12px padding
     QString bgColor = "#0d0d0d";
-    QString closeButtonStyle = m_docksLocked ? "display: none;" : "";
+    QString closeButtonStyle = m_docksLocked ? "width: 0px; height: 0px; subcontrol-position: top right; right: -20px;" : "";
     // When locked, disable separator interaction but keep visual spacing
     QString separatorStyle = m_docksLocked ? 
         "background-color: %1; width: 12px; height: 12px; border: none;" :
@@ -435,11 +435,11 @@ void InnerDockHost::ReapplyDockFeatures()
         "QDockWidget { background-color: transparent; }"
         "QDockWidget::title { background-color: #161617; text-align: left; padding-left: 8px; }"
         "QDockWidget::close-button { subcontrol-position: top right; right: 10px; top: 4px; %2 }"
-        "QDockWidget::float-button { display: none; }"
+        "QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
         "InnerDockHost QDockWidget::close-button { %2 }"
         "InnerDockHost > QDockWidget::close-button { %2 }"
-        "InnerDockHost QDockWidget::float-button { display: none; }"
-        "InnerDockHost > QDockWidget::float-button { display: none; }"
+        "InnerDockHost QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
+        "InnerDockHost > QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
     ).arg(bgColor).arg(closeButtonStyle));
     
     // Reapply dock options based on lock state
@@ -481,7 +481,7 @@ void InnerDockHost::SetDocksLocked(bool locked)
     
     // Update stylesheet to show/hide close buttons but keep 12px padding when locked
     QString bgColor = "#0d0d0d";
-    QString closeButtonStyle = m_docksLocked ? "display: none;" : "";
+    QString closeButtonStyle = m_docksLocked ? "width: 0px; height: 0px; subcontrol-position: top right; right: -20px;" : "";
     // When locked, disable separator interaction but keep visual spacing
     QString separatorStyle = m_docksLocked ? 
         "background-color: %1; width: 12px; height: 12px; border: none;" :
@@ -499,11 +499,11 @@ void InnerDockHost::SetDocksLocked(bool locked)
         "QDockWidget { background-color: transparent; border: none; }"
         "QDockWidget::title { background-color: #161617; text-align: left; padding-left: 8px; }"
         "QDockWidget::close-button { subcontrol-position: top right; right: 10px; top: 4px; %2 }"
-        "QDockWidget::float-button { display: none; }"
+        "QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
         "InnerDockHost QDockWidget::close-button { %2 }"
         "InnerDockHost > QDockWidget::close-button { %2 }"
-        "InnerDockHost QDockWidget::float-button { display: none; }"
-        "InnerDockHost > QDockWidget::float-button { display: none; }"
+        "InnerDockHost QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
+        "InnerDockHost > QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
     ).arg(bgColor).arg(closeButtonStyle));
     
     // Disable/enable dock resizing by setting dock options
