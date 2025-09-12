@@ -1015,8 +1015,11 @@ void StreamUPToolbar::setupDynamicUI()
 	streamUPSettingsButton = nullptr;
 	
 	// Create widgets from configuration in two passes to ensure proper positioning
+	// Get flattened items (ignoring groups since they're just for UI organization)
+	auto flattenedItems = toolbarConfig.getFlattenedItems();
+	
 	// First pass: Add all items that are NOT StreamUP settings buttons
-	for (const auto& item : toolbarConfig.items) {
+	for (const auto& item : flattenedItems) {
 		if (!item->visible) continue;
 		
 		// Skip StreamUP settings buttons in first pass
@@ -1123,7 +1126,7 @@ void StreamUPToolbar::setupDynamicUI()
 	
 	// Add stretch to push StreamUP settings buttons to the right
 	bool hasStreamUPSettings = false;
-	for (const auto& item : toolbarConfig.items) {
+	for (const auto& item : flattenedItems) {
 		if (!item->visible) continue;
 		if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
 			if (auto buttonItem = std::dynamic_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item)) {
@@ -1139,7 +1142,7 @@ void StreamUPToolbar::setupDynamicUI()
 	}
 	
 	// Second pass: Add StreamUP settings buttons (they go on the right)
-	for (const auto& item : toolbarConfig.items) {
+	for (const auto& item : flattenedItems) {
 		if (!item->visible) continue;
 		
 		// Only process StreamUP settings buttons in second pass

@@ -18,6 +18,8 @@
 #include <QSplitter>
 #include <QTabWidget>
 #include <QMetaType>
+#include <QMenu>
+#include <QAction>
 #include "streamup-toolbar-config.hpp"
 
 QT_BEGIN_NAMESPACE
@@ -47,6 +49,7 @@ private slots:
     void onDockItemDoubleClicked(QTreeWidgetItem* item, int column);
     void onAddSeparator();
     void onAddCustomSpacer();
+    void onAddGroup();
     void onRemoveItem();
     void onMoveUp();
     void onMoveDown();
@@ -57,6 +60,8 @@ private slots:
     void onSave();
     void onCancel();
     void onSpacerSettingsChanged();
+    void onItemContextMenu(const QPoint& pos);
+    void onMoveToGroup();
 
 private:
     void setupUI();
@@ -67,8 +72,9 @@ private:
     void clearSpacerForm();
     void createExpandIndicator(QTreeWidget* treeWidget, QTreeWidgetItem* item);
     
-    QListWidgetItem* createConfigurationItem(std::shared_ptr<ToolbarConfig::ToolbarItem> item);
+    QListWidgetItem* createConfigurationItem(std::shared_ptr<ToolbarConfig::ToolbarItem> item, int indentLevel = 0);
     std::shared_ptr<ToolbarConfig::ToolbarItem> createItemFromSelection();
+    void addItemToList(std::shared_ptr<ToolbarConfig::ToolbarItem> item, int indentLevel, std::shared_ptr<ToolbarConfig::GroupItem> parentGroup = nullptr, int positionInGroup = -1);
     
     // UI Components
     QSplitter* mainSplitter;
@@ -88,6 +94,9 @@ private:
     QPushButton* addCustomSpacerButton;
     
     QPushButton* addSeparatorButton;
+    
+    QLineEdit* groupNameLineEdit;
+    QPushButton* addGroupButton;
     
     // Right panel - Current configuration
     QWidget* rightPanel;
@@ -132,6 +141,8 @@ protected:
 private:
     int dragStartIndex;
     int dropIndicatorIndex;
+    int groupDropIndex; // Index of group being hovered over (-1 if none)
+    bool isGroupDrop; // True if we're dropping INTO a group
 };
 
 } // namespace StreamUP
