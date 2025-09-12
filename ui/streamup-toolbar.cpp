@@ -1437,6 +1437,9 @@ void StreamUPToolbar::executeDockActionWithButton(const QString& actionType, QTo
 			videoCapturePopup = nullptr;
 		});
 		
+		// Ensure popup icons are themed correctly for current theme
+		videoCapturePopup->updateIconsForTheme();
+		
 		// Show popup next to the toolbar button (not dock button)
 		QPoint buttonPos = button->mapToGlobal(QPoint(0, 0));
 		videoCapturePopup->showNearButton(buttonPos, button->size());
