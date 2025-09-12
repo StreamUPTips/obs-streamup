@@ -86,6 +86,110 @@ void DockButtonItem::fromJson(const QJsonObject& json) {
     tooltip = json["tooltip"].toString();
 }
 
+// GroupItem implementation
+QJsonObject GroupItem::toJson() const {
+    QJsonObject obj = ToolbarItem::toJson();
+    obj["name"] = name;
+    obj["expanded"] = expanded;
+    
+    QJsonArray childArray;
+    for (const auto& child : childItems) {
+        childArray.append(child->toJson());
+    }
+    obj["childItems"] = childArray;
+    
+    return obj;
+}
+
+void GroupItem::fromJson(const QJsonObject& json) {
+    ToolbarItem::fromJson(json);
+    name = json["name"].toString();
+    expanded = json["expanded"].toBool(true);
+    
+    childItems.clear();
+    QJsonArray childArray = json["childItems"].toArray();
+    
+    for (const auto& childValue : childArray) {
+        QJsonObject childObj = childValue.toObject();
+        ItemType childType = static_cast<ItemType>(childObj["type"].toInt());
+        
+        std::shared_ptr<ToolbarItem> childItem;
+        switch (childType) {
+            case ItemType::Button:
+                childItem = std::make_shared<ButtonItem>("", "");
+                break;
+            case ItemType::Separator:
+                childItem = std::make_shared<SeparatorItem>("");
+                break;
+            case ItemType::CustomSpacer:
+                childItem = std::make_shared<CustomSpacerItem>("", 20);
+                break;
+            case ItemType::DockButton:
+                childItem = std::make_shared<DockButtonItem>("", "", "");
+                break;
+            case ItemType::Group:
+                childItem = std::make_shared<GroupItem>("", "");
+                break;
+        }
+        
+        if (childItem) {
+            childItem->fromJson(childObj);
+            childItems.append(childItem);
+        }
+    }
+}
+
+void GroupItem::addChild(std::shared_ptr<ToolbarItem> child) {
+    if (child) {
+        childItems.append(child);
+    }
+}
+
+void GroupItem::removeChild(const QString& childId) {
+    for (int i = 0; i < childItems.size(); ++i) {
+        if (childItems[i]->id == childId) {
+            childItems.removeAt(i);
+            break;
+        }
+    }
+}
+
+void GroupItem::moveChild(int fromIndex, int toIndex) {
+    if (fromIndex >= 0 && fromIndex < childItems.size() && 
+        toIndex >= 0 && toIndex < childItems.size() && 
+        fromIndex != toIndex) {
+        
+        auto item = childItems.takeAt(fromIndex);
+        childItems.insert(toIndex, item);
+    }
+}
+
+std::shared_ptr<ToolbarItem> GroupItem::findChild(const QString& childId) const {
+    for (const auto& child : childItems) {
+        if (child->id == childId) {
+            return child;
+        }
+        // Recursively search in nested groups
+        if (child->type == ItemType::Group) {
+            auto groupChild = std::static_pointer_cast<GroupItem>(child);
+            auto found = groupChild->findChild(childId);
+            if (found) {
+                return found;
+            }
+        }
+    }
+    return nullptr;
+}
+
+int GroupItem::getChildIndex(const QString& childId) const {
+    for (int i = 0; i < childItems.size(); ++i) {
+        if (childItems[i]->id == childId) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 // ToolbarConfiguration implementation
 bool ToolbarConfiguration::saveToSettings() const {
     obs_data_t* settings = StreamUP::SettingsManager::LoadSettings();
@@ -222,6 +326,13 @@ void ToolbarConfiguration::fromJson(const QJsonObject& json) {
             item = dockItem;
             break;
         }
+        case ItemType::Group: {
+            QString name = itemObj["name"].toString();
+            auto groupItem = std::make_shared<GroupItem>(id, name);
+            groupItem->fromJson(itemObj);
+            item = groupItem;
+            break;
+        }
         }
         
         if (item) {
@@ -301,6 +412,76 @@ int ToolbarConfiguration::getItemIndex(const QString& id) const {
     return -1;
 }
 
+void ToolbarConfiguration::addItemToGroup(const QString& groupId, std::shared_ptr<ToolbarItem> item) {
+    if (!item) return;
+    
+    // Find the group
+    for (auto& existingItem : items) {
+        if (existingItem->type == ItemType::Group && existingItem->id == groupId) {
+            auto group = std::static_pointer_cast<GroupItem>(existingItem);
+            group->addChild(item);
+            invalidateCache();
+            return;
+        }
+    }
+}
+
+void ToolbarConfiguration::removeItemFromGroup(const QString& groupId, const QString& itemId) {
+    // Find the group
+    for (auto& existingItem : items) {
+        if (existingItem->type == ItemType::Group && existingItem->id == groupId) {
+            auto group = std::static_pointer_cast<GroupItem>(existingItem);
+            group->removeChild(itemId);
+            invalidateCache();
+            return;
+        }
+    }
+}
+
+void ToolbarConfiguration::moveItemToGroup(const QString& itemId, const QString& targetGroupId) {
+    // Find the item first
+    std::shared_ptr<ToolbarItem> itemToMove = findItem(itemId);
+    if (!itemToMove) return;
+    
+    // Remove from current location
+    removeItem(itemId);
+    
+    // Add to target group
+    addItemToGroup(targetGroupId, itemToMove);
+}
+
+void ToolbarConfiguration::moveItemOutOfGroup(const QString& itemId) {
+    // Search for the item in all groups and remove it
+    for (auto& existingItem : items) {
+        if (existingItem->type == ItemType::Group) {
+            auto group = std::static_pointer_cast<GroupItem>(existingItem);
+            auto foundItem = group->findChild(itemId);
+            if (foundItem) {
+                group->removeChild(itemId);
+                // Add to main items list
+                items.append(foundItem);
+                invalidateCache();
+                return;
+            }
+        }
+    }
+}
+
+QList<std::shared_ptr<ToolbarItem>> ToolbarConfiguration::getFlattenedItems() const {
+    QList<std::shared_ptr<ToolbarItem>> result;
+    
+    for (const auto& item : items) {
+        if (item->type == ItemType::Group) {
+            auto group = std::static_pointer_cast<GroupItem>(item);
+            // Add all child items from the group (but not the group itself)
+            result.append(group->childItems);
+        } else {
+            result.append(item);
+        }
+    }
+    
+    return result;
+}
 
 QList<DockButtonItem> ToolbarConfiguration::getAvailableDockButtons() {
     QList<DockButtonItem> buttons;
