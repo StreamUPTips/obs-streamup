@@ -169,7 +169,7 @@ std::string ProcessInlineFormatting(const std::string& text)
 void LoadSupportersData() 
 {
     StreamUP::HttpClient::MakeAsyncGetRequest("https://streamup.tips/api/supporters", 
-        [](const std::string& url, const std::string& response, bool success) {
+        [](const std::string& /* url */, const std::string& response, bool success) {
             if (!success) {
                 supportersData.errorMessage = "Failed to fetch supporters data";
                 supportersData.loaded = true;
@@ -734,7 +734,7 @@ void CreateSplashDialog(ShowCondition condition)
         LoadSupportersData();
     }
 
-    UIHelpers::ShowSingletonDialogOnUIThread("splash", [condition]() -> QDialog* {
+    UIHelpers::ShowSingletonDialogOnUIThread("splash", []() -> QDialog* {
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP");
         dialog->setModal(false);
         dialog->setFixedSize(800, 600);
@@ -1073,7 +1073,7 @@ void CreateSplashDialog(ShowCondition condition)
         
         // Check for Plugin Update button
         QPushButton* updateBtn = StreamUP::UIStyles::CreateStyledButton("Check for Plugin Update", "info");
-        QObject::connect(updateBtn, &QPushButton::clicked, [dialog]() {
+        QObject::connect(updateBtn, &QPushButton::clicked, []() {
             StreamUP::PluginManager::ShowCachedPluginUpdatesDialog();
         });
         

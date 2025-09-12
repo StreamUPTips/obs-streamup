@@ -528,6 +528,9 @@ void StreamUPDock::ButtonShowVideoCapturePopup()
 		videoCapturePopup = nullptr;
 	});
 
+	// Ensure popup icons are themed correctly for current theme
+	videoCapturePopup->updateIconsForTheme();
+
 	// Show popup next to button
 	QPoint buttonPos = videoCaptureButton->mapToGlobal(QPoint(0, 0));
 	videoCapturePopup->showNearButton(buttonPos, videoCaptureButton->size());
