@@ -1,4 +1,5 @@
 #include "streamup-toolbar-configurator.hpp"
+#include "hotkey-button-config-dialog.hpp"
 #include "settings-manager.hpp"
 #include "ui-styles.hpp"
 #include <QApplication>
@@ -293,7 +294,46 @@ void ToolbarConfigurator::setupUI()
     
     itemTabWidget->addTab(dockTab, "StreamUP");
     
-    // === TAB 3: Spacers & Separators ===
+    // === TAB 3: Hotkey Buttons ===
+    QWidget* hotkeyTab = new QWidget();
+    QVBoxLayout* hotkeyTabLayout = new QVBoxLayout(hotkeyTab);
+    hotkeyTabLayout->setContentsMargins(12, 12, 12, 12); // Standard margins
+    hotkeyTabLayout->setSpacing(12);
+    
+    // Create background container to match other tabs
+    QWidget* hotkeyContainer = new QWidget();
+    hotkeyContainer->setStyleSheet(
+        "QWidget { "
+        "    border: none; "
+        "    border-radius: 12px; "
+        "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_DARKEST) + "; "
+        "}"
+    );
+    QVBoxLayout* hotkeyContainerLayout = new QVBoxLayout(hotkeyContainer);
+    hotkeyContainerLayout->setContentsMargins(8, 8, 8, 8);
+    hotkeyContainerLayout->setSpacing(6);
+    
+    // Hotkey button section
+    QLabel* hotkeyLabel = new QLabel("Hotkey Buttons");
+    hotkeyLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
+    hotkeyContainerLayout->addWidget(hotkeyLabel);
+    
+    QLabel* hotkeyDescription = new QLabel("Create custom buttons that trigger OBS hotkeys when clicked.");
+    hotkeyDescription->setWordWrap(true);
+    hotkeyDescription->setStyleSheet("QLabel { color: " + QString(StreamUP::UIStyles::Colors::TEXT_SECONDARY) + "; font-size: 12px; }");
+    hotkeyContainerLayout->addWidget(hotkeyDescription);
+    
+    addHotkeyButton = new QPushButton("Add Hotkey Button...");
+    addHotkeyButton->setStyleSheet(UIStyles::GetButtonStyle());
+    hotkeyContainerLayout->addWidget(addHotkeyButton);
+    
+    hotkeyContainerLayout->addStretch(); // Push content to top
+    hotkeyTabLayout->addWidget(hotkeyContainer);
+    hotkeyTabLayout->addStretch(); // Push content to top
+    
+    itemTabWidget->addTab(hotkeyTab, "Hotkeys");
+    
+    // === TAB 4: Spacers & Separators ===
     QWidget* spacerTab = new QWidget();
     QVBoxLayout* spacerTabLayout = new QVBoxLayout(spacerTab);
     spacerTabLayout->setContentsMargins(12, 12, 12, 12); // Standard margins  
@@ -678,14 +718,10 @@ void ToolbarConfigurator::setupUI()
                 sourceGroup->removeChild(draggedItemId);
                 
                 if (targetParentGroup && targetParentGroup != sourceGroup) {
-                    blog(LOG_INFO, "[StreamUP] Moving to different group: %s at position %d", targetParentGroup->name.toUtf8().constData(), targetPositionInGroup);
+                    blog(LOG_INFO, "[StreamUP] Moving to different group: %s", targetParentGroup->name.toUtf8().constData());
                     // Moving to a different group
                     if (targetPositionInGroup >= 0) {
-                        // When dropping between items, we typically want to go AFTER the target item
-                        // So we need to adjust the position
-                        int insertPosition = targetPositionInGroup + 1;
-                        blog(LOG_INFO, "[StreamUP] Inserting at adjusted position: %d", insertPosition);
-                        targetParentGroup->childItems.insert(insertPosition, draggedItem);
+                        targetParentGroup->childItems.insert(targetPositionInGroup, draggedItem);
                     } else {
                         targetParentGroup->addChild(draggedItem);
                     }
@@ -708,14 +744,11 @@ void ToolbarConfigurator::setupUI()
             
             // Check if we're moving from main list to a group
             if (targetParentGroup) {
-                blog(LOG_INFO, "[StreamUP] MAIN-TO-GROUP move detected, target group: %s at position %d", targetParentGroup->name.toUtf8().constData(), targetPositionInGroup);
+                blog(LOG_INFO, "[StreamUP] MAIN-TO-GROUP move detected, target group: %s", targetParentGroup->name.toUtf8().constData());
                 // Moving from main list to a group
                 config.items.removeAt(fromConfigIndex);
                 if (targetPositionInGroup >= 0) {
-                    // When dropping between items, we typically want to go AFTER the target item
-                    int insertPosition = targetPositionInGroup + 1;
-                    blog(LOG_INFO, "[StreamUP] Inserting at adjusted position: %d", insertPosition);
-                    targetParentGroup->childItems.insert(insertPosition, draggedItem);
+                    targetParentGroup->childItems.insert(targetPositionInGroup, draggedItem);
                 } else {
                     targetParentGroup->addChild(draggedItem);
                 }
@@ -747,6 +780,7 @@ void ToolbarConfigurator::setupUI()
     
     connect(addBuiltinButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddBuiltinButton);
     connect(addDockButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddDockButton);
+    connect(addHotkeyButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddHotkeyButton);
     connect(addSeparatorButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddSeparator);
     connect(addCustomSpacerButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddCustomSpacer);
     connect(addGroupButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddGroup);
@@ -1379,6 +1413,19 @@ void ToolbarConfigurator::onItemContextMenu(const QPoint& pos)
     }
     
     contextMenu.exec(currentConfigList->mapToGlobal(pos));
+}
+
+void ToolbarConfigurator::onAddHotkeyButton()
+{
+    // Open the hotkey button configuration dialog
+    HotkeyButtonConfigDialog dialog(this);
+    if (dialog.exec() == QDialog::Accepted) {
+        auto hotkeyItem = dialog.getHotkeyButtonItem();
+        if (hotkeyItem) {
+            config.addItem(hotkeyItem);
+            populateCurrentConfiguration();
+        }
+    }
 }
 
 void ToolbarConfigurator::onMoveToGroup()

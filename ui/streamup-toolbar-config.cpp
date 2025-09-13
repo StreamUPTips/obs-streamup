@@ -86,6 +86,28 @@ void DockButtonItem::fromJson(const QJsonObject& json) {
     tooltip = json["tooltip"].toString();
 }
 
+// HotkeyButtonItem implementation
+QJsonObject HotkeyButtonItem::toJson() const {
+    QJsonObject obj = ToolbarItem::toJson();
+    obj["hotkeyName"] = hotkeyName;
+    obj["displayName"] = displayName;
+    obj["iconPath"] = iconPath;
+    obj["customIconPath"] = customIconPath;
+    obj["tooltip"] = tooltip;
+    obj["useCustomIcon"] = useCustomIcon;
+    return obj;
+}
+
+void HotkeyButtonItem::fromJson(const QJsonObject& json) {
+    ToolbarItem::fromJson(json);
+    hotkeyName = json["hotkeyName"].toString();
+    displayName = json["displayName"].toString();
+    iconPath = json["iconPath"].toString();
+    customIconPath = json["customIconPath"].toString();
+    tooltip = json["tooltip"].toString();
+    useCustomIcon = json["useCustomIcon"].toBool(false);
+}
+
 // GroupItem implementation
 QJsonObject GroupItem::toJson() const {
     QJsonObject obj = ToolbarItem::toJson();
@@ -129,6 +151,9 @@ void GroupItem::fromJson(const QJsonObject& json) {
                 break;
             case ItemType::Group:
                 childItem = std::make_shared<GroupItem>("", "");
+                break;
+            case ItemType::HotkeyButton:
+                childItem = std::make_shared<HotkeyButtonItem>("", "", "");
                 break;
         }
         
@@ -331,6 +356,14 @@ void ToolbarConfiguration::fromJson(const QJsonObject& json) {
             auto groupItem = std::make_shared<GroupItem>(id, name);
             groupItem->fromJson(itemObj);
             item = groupItem;
+            break;
+        }
+        case ItemType::HotkeyButton: {
+            QString hotkeyName = itemObj["hotkeyName"].toString();
+            QString displayName = itemObj["displayName"].toString();
+            auto hotkeyItem = std::make_shared<HotkeyButtonItem>(id, hotkeyName, displayName);
+            hotkeyItem->fromJson(itemObj);
+            item = hotkeyItem;
             break;
         }
         }

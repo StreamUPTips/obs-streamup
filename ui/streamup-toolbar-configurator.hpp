@@ -47,6 +47,7 @@ private slots:
     void onBuiltinItemDoubleClicked(QTreeWidgetItem* item, int column);
     void onAddDockButton();
     void onDockItemDoubleClicked(QTreeWidgetItem* item, int column);
+    void onAddHotkeyButton();
     void onAddSeparator();
     void onAddCustomSpacer();
     void onAddGroup();
@@ -89,6 +90,8 @@ private:
     
     QTreeWidget* dockButtonsList;
     QPushButton* addDockButton;
+    
+    QPushButton* addHotkeyButton;
     
     QSpinBox* spacerSizeSpinBox;
     QPushButton* addCustomSpacerButton;

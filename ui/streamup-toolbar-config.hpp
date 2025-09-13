@@ -18,7 +18,8 @@ enum class ItemType {
     Separator,
     CustomSpacer,
     DockButton,
-    Group
+    Group,
+    HotkeyButton
 };
 
 // Base class for all toolbar items
@@ -84,6 +85,23 @@ public:
     
     DockButtonItem(const QString& itemId, const QString& type, const QString& displayName) 
         : ToolbarItem(ItemType::DockButton, itemId), dockButtonType(type), name(displayName) {}
+    
+    QJsonObject toJson() const override;
+    void fromJson(const QJsonObject& json) override;
+};
+
+// Hotkey buttons that trigger OBS hotkeys
+class HotkeyButtonItem : public ToolbarItem {
+public:
+    QString hotkeyName;        // OBS hotkey internal name (e.g., "OBSBasic.StartStreaming")
+    QString displayName;       // User-friendly name for the hotkey
+    QString iconPath;          // Icon for the button (from available icons)
+    QString customIconPath;    // User-uploaded custom icon path
+    QString tooltip;           // Button tooltip
+    bool useCustomIcon = false; // Whether to use custom icon vs default/selected icon
+    
+    HotkeyButtonItem(const QString& itemId, const QString& hotkey, const QString& display) 
+        : ToolbarItem(ItemType::HotkeyButton, itemId), hotkeyName(hotkey), displayName(display) {}
     
     QJsonObject toJson() const override;
     void fromJson(const QJsonObject& json) override;
