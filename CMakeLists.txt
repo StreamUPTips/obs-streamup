@@ -92,7 +92,15 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/streamup-toolbar-config.hpp
   ui/streamup-toolbar-config.cpp
   ui/streamup-toolbar-configurator.hpp
-  ui/streamup-toolbar-configurator.cpp)
+  ui/streamup-toolbar-configurator.cpp
+  ui/obs-hotkey-manager.hpp
+  ui/obs-hotkey-manager.cpp
+  ui/icon-selector-dialog.hpp
+  ui/icon-selector-dialog.cpp
+  ui/hotkey-selector-dialog.hpp
+  ui/hotkey-selector-dialog.cpp
+  ui/hotkey-button-config-dialog.hpp
+  ui/hotkey-button-config-dialog.cpp)
 
 # Integrations module files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -190,7 +198,15 @@ source_group("UI\\Toolbar" FILES
   ui/streamup-toolbar-config.hpp
   ui/streamup-toolbar-config.cpp
   ui/streamup-toolbar-configurator.hpp
-  ui/streamup-toolbar-configurator.cpp)
+  ui/streamup-toolbar-configurator.cpp
+  ui/obs-hotkey-manager.hpp
+  ui/obs-hotkey-manager.cpp
+  ui/icon-selector-dialog.hpp
+  ui/icon-selector-dialog.cpp
+  ui/hotkey-selector-dialog.hpp
+  ui/hotkey-selector-dialog.cpp
+  ui/hotkey-button-config-dialog.hpp
+  ui/hotkey-button-config-dialog.cpp)
 
 source_group("Integrations" FILES
   integrations/websocket-api.hpp

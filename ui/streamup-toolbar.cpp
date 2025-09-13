@@ -5,6 +5,7 @@
 #include "ui-styles.hpp"
 #include "ui-helpers.hpp"
 #include "settings-manager.hpp"
+#include "obs-hotkey-manager.hpp"
 #include <QIcon>
 #include <QHBoxLayout>
 #include <QWidget>
@@ -16,6 +17,7 @@
 #include <QContextMenuEvent>
 #include <QMenu>
 #include <QMessageBox>
+#include <QFile>
 #include <util/config-file.h>
 
 StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent), 
@@ -1254,6 +1256,34 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 		// Store dock action type in button's property
 		button->setProperty("dockActionType", dockItem->dockButtonType);
 		connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onDockButtonClicked);
+	} else if (item->type == StreamUP::ToolbarConfig::ItemType::HotkeyButton) {
+		auto hotkeyItem = std::static_pointer_cast<StreamUP::ToolbarConfig::HotkeyButtonItem>(item);
+		
+		// Set up hotkey button
+		if (hotkeyItem->useCustomIcon && !hotkeyItem->customIconPath.isEmpty()) {
+			// Use custom icon
+			button->setIcon(QIcon(hotkeyItem->customIconPath));
+		} else if (!hotkeyItem->iconPath.isEmpty()) {
+			// Check if iconPath is a full file path (from OBS icons) or just a name (from StreamUP icons)
+			if (QFile::exists(hotkeyItem->iconPath)) {
+				// Full file path - use directly
+				button->setIcon(QIcon(hotkeyItem->iconPath));
+			} else {
+				// Icon name - use themed icon system
+				button->setIcon(getCachedIcon(hotkeyItem->iconPath));
+			}
+		} else {
+			// Use default icon for this hotkey
+			QString defaultIcon = StreamUP::OBSHotkeyManager::getDefaultHotkeyIcon(hotkeyItem->hotkeyName);
+			button->setIcon(getCachedIcon(defaultIcon));
+		}
+		
+		button->setToolTip(hotkeyItem->tooltip.isEmpty() ? hotkeyItem->displayName : hotkeyItem->tooltip);
+		button->setCheckable(false); // Hotkey buttons are typically not checkable
+		
+		// Store hotkey name in button's property
+		button->setProperty("hotkeyName", hotkeyItem->hotkeyName);
+		connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onHotkeyButtonClicked);
 	}
 	
 	return button;
@@ -1348,6 +1378,24 @@ void StreamUPToolbar::onDockButtonClicked()
 		executeDockActionWithButton(actionType, button);
 	} else {
 		executeDockAction(actionType);
+	}
+}
+
+void StreamUPToolbar::onHotkeyButtonClicked()
+{
+	QToolButton* button = qobject_cast<QToolButton*>(sender());
+	if (!button) return;
+	
+	QString hotkeyName = button->property("hotkeyName").toString();
+	if (hotkeyName.isEmpty()) {
+		qWarning() << "[StreamUP] Hotkey button has no associated hotkey name";
+		return;
+	}
+	
+	// Trigger the OBS hotkey
+	bool success = StreamUP::OBSHotkeyManager::triggerHotkey(hotkeyName);
+	if (!success) {
+		qWarning() << "[StreamUP] Failed to trigger hotkey:" << hotkeyName;
 	}
 }
 

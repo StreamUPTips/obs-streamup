@@ -37,6 +37,7 @@ private slots:
     void onConfigureToolbarClicked();
     void onToolbarSettingsClicked();
     void onDockButtonClicked();
+    void onHotkeyButtonClicked();
 
 private:
     void setupDynamicUI();
