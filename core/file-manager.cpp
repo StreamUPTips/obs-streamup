@@ -433,11 +433,15 @@ void LoadStreamupFileWithWarning()
 {
 	// Use cached plugin status for instant response
 	if (StreamUP::PluginManager::IsAllPluginsUpToDateCached()) {
-		// Plugins are OK, proceed normally
-		LoadStreamupFile(false);
+		// Plugins are OK, directly open the Install Product dialog (file selector)
+		QString fileName =
+			QFileDialog::getOpenFileName(nullptr, QT_UTF8(obs_module_text("UI.Button.Load")), QString(), "StreamUP File (*.streamup)");
+		if (!fileName.isEmpty()) {
+			LoadStreamupFileFromPath(fileName, false);
+		}
 		return;
 	}
-	
+
 	// Plugins have issues, show cached plugin issues dialog with continue callback
 	StreamUP::PluginManager::ShowCachedPluginIssuesDialog([]() {
 		// Continue anyway callback - load with force
