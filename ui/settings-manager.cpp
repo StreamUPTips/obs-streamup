@@ -1,4 +1,5 @@
 #include "settings-manager.hpp"
+#include "../utilities/debug-logger.hpp"
 #include "ui-helpers.hpp"
 #include "ui-styles.hpp"
 #include "../utilities/obs-data-helpers.hpp"
@@ -166,7 +167,7 @@ obs_data_t *LoadSettings()
 	obs_data_t *data = obs_data_create_from_json_file(configPath);
 
 	if (!data) {
-		blog(LOG_INFO, "[StreamUP] Settings not found. Creating default settings...");
+		StreamUP::DebugLogger::LogDebug("Settings", "Initialize", "Settings not found. Creating default settings...");
 		char *config_path = obs_module_config_path("");
 		if (config_path) {
 			os_mkdirs(config_path);
@@ -178,6 +179,7 @@ obs_data_t *LoadSettings()
 		obs_data_set_bool(data, "notifications_mute", false);
 		obs_data_set_bool(data, "show_cph_integration", true);
 		obs_data_set_bool(data, "show_toolbar", true);
+		obs_data_set_bool(data, "debug_logging_enabled", false);
 		obs_data_set_string(data, "toolbar_position", "top");
 
 		// Set default dock tool settings
@@ -192,7 +194,7 @@ obs_data_t *LoadSettings()
 
 		if (obs_data_save_json(data, configPath)) {
 		} else {
-			blog(LOG_WARNING, "[StreamUP] Failed to save default settings to file.");
+			StreamUP::DebugLogger::LogWarning("Settings", "Failed to save default settings to file");
 		}
 	} else {
 		// Only log success message once
@@ -223,7 +225,7 @@ bool SaveSettings(obs_data_t *settings)
 			cachedSettings = nullptr;
 		}
 	} else {
-		blog(LOG_WARNING, "[StreamUP] Failed to save settings to file.");
+		StreamUP::DebugLogger::LogWarning("Settings", "Failed to save settings to file");
 	}
 
 	bfree(configPath);
@@ -240,6 +242,7 @@ PluginSettings GetCurrentSettings()
 		settings.notificationsMute = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "notifications_mute", false);
 		settings.showCPHIntegration = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "show_cph_integration", true);
 		settings.showToolbar = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "show_toolbar", true);
+		settings.debugLoggingEnabled = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "debug_logging_enabled", false);
 
 		// Load toolbar position setting (default to top if not set)
 		const char *positionStr = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "toolbar_position", "top");
@@ -283,6 +286,7 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "notifications_mute", settings.notificationsMute);
 	obs_data_set_bool(data, "show_cph_integration", settings.showCPHIntegration);
 	obs_data_set_bool(data, "show_toolbar", settings.showToolbar);
+	obs_data_set_bool(data, "debug_logging_enabled", settings.debugLoggingEnabled);
 
 	// Save toolbar position setting
 	const char *positionStr;
@@ -328,14 +332,14 @@ void InitializeSettingsSystem()
 
 	if (settings) {
 		bool runAtStartup = obs_data_get_bool(settings, "run_at_startup");
-		blog(LOG_INFO, "[StreamUP] Run at startup setting: %s", runAtStartup ? "true" : "false");
+		StreamUP::DebugLogger::LogDebugFormat("Settings", "Startup", "Run at startup setting: %s", runAtStartup ? "true" : "false");
 
 		notificationsMuted = obs_data_get_bool(settings, "notifications_mute");
-		blog(LOG_INFO, "[StreamUP] Notifications mute setting: %s", notificationsMuted ? "true" : "false");
+		StreamUP::DebugLogger::LogDebugFormat("Settings", "Notifications", "Notifications mute setting: %s", notificationsMuted ? "true" : "false");
 
 		obs_data_release(settings);
 	} else {
-		blog(LOG_WARNING, "[StreamUP] Failed to load settings in initialization.");
+		StreamUP::DebugLogger::LogWarning("Settings", "Failed to load settings in initialization");
 	}
 }
 
@@ -577,6 +581,35 @@ void ShowSettingsDialog(int tabIndex)
 		cphLayout->addStretch();
 		cphLayout->addWidget(cphIntegrationSwitch);
 		generalLayout->addLayout(cphLayout);
+
+		// Debug Logging setting
+		obs_property_t *debugLoggingProp =
+			obs_properties_add_bool(props, "debug_logging_enabled", obs_module_text("Settings.Debug.Logging"));
+
+		// Create horizontal layout for debug logging setting
+		QHBoxLayout *debugLoggingLayout = new QHBoxLayout();
+
+		QLabel *debugLoggingLabel = new QLabel(obs_module_text("Settings.Debug.Logging"));
+		debugLoggingLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							  .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							  .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		debugLoggingLabel->setToolTip(obs_module_text("Settings.Debug.LoggingTooltip"));
+
+		StreamUP::UIStyles::SwitchButton *debugLoggingSwitch = StreamUP::UIStyles::CreateStyledSwitch(
+			"", obs_data_get_bool(settings, obs_property_name(debugLoggingProp)));
+		debugLoggingSwitch->setToolTip(obs_module_text("Settings.Debug.LoggingTooltip"));
+
+		QObject::connect(debugLoggingSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+			// Use modern settings system to avoid conflicts with dock settings
+			PluginSettings currentSettings = GetCurrentSettings();
+			currentSettings.debugLoggingEnabled = checked;
+			UpdateSettings(currentSettings);
+		});
+
+		debugLoggingLayout->addWidget(debugLoggingLabel);
+		debugLoggingLayout->addStretch();
+		debugLoggingLayout->addWidget(debugLoggingSwitch);
+		generalLayout->addLayout(debugLoggingLayout);
 
 		generalContentLayout->addWidget(generalSettingsWidget);
 		generalContentLayout->addStretch();
@@ -2161,6 +2194,19 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 	components.scrollArea->setWidget(dockConfigWidget);
 
 	// Don't resize dialog when switching to sub-menus to maintain consistent header appearance
+}
+
+bool IsDebugLoggingEnabled()
+{
+	PluginSettings settings = GetCurrentSettings();
+	return settings.debugLoggingEnabled;
+}
+
+void SetDebugLoggingEnabled(bool enabled)
+{
+	PluginSettings settings = GetCurrentSettings();
+	settings.debugLoggingEnabled = enabled;
+	UpdateSettings(settings);
 }
 
 void CleanupSettingsCache()

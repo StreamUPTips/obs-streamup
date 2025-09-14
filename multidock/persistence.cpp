@@ -1,4 +1,5 @@
 #include "persistence.hpp"
+#include "../utilities/debug-logger.hpp"
 #include <obs-module.h>
 #include <obs.h>
 #include <QStandardPaths>
@@ -44,7 +45,7 @@ static QJsonObject LoadConfig()
     QJsonDocument doc = QJsonDocument::fromJson(data, &error);
     
     if (error.error != QJsonParseError::NoError) {
-        blog(LOG_WARNING, "[StreamUP MultiDock] Failed to parse config file: %s", 
+        StreamUP::DebugLogger::LogWarningFormat("MultiDock", "Failed to parse config file: %s", 
              error.errorString().toUtf8().constData());
         return QJsonObject();
     }
@@ -58,7 +59,7 @@ static void SaveConfig(const QJsonObject& config)
     QFile file(configPath);
     
     if (!file.open(QIODevice::WriteOnly)) {
-        blog(LOG_ERROR, "[StreamUP MultiDock] Failed to write config file: %s", 
+        StreamUP::DebugLogger::LogErrorFormat("MultiDock", "Failed to write config file: %s", 
              configPath.toUtf8().constData());
         return;
     }
@@ -88,7 +89,7 @@ QList<MultiDockInfo> LoadMultiDockList()
         }
     }
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Loaded %d MultiDocks from config", result.size());
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Persistence", "Loaded %d MultiDocks from config", result.size());
     return result;
 }
 
@@ -97,7 +98,7 @@ void SaveMultiDockList(const QList<MultiDockInfo>& multiDocks)
     QJsonObject config = LoadConfig();
     QJsonArray multiDockArray;
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Saving %d MultiDocks to config", multiDocks.size());
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Persistence", "Saving %d MultiDocks to config", multiDocks.size());
     
     for (const MultiDockInfo& info : multiDocks) {
         QJsonObject obj;
@@ -105,18 +106,18 @@ void SaveMultiDockList(const QList<MultiDockInfo>& multiDocks)
         obj["name"] = info.name;
         multiDockArray.append(obj);
         
-        blog(LOG_INFO, "[StreamUP MultiDock] Saving MultiDock: id='%s', name='%s'", 
+        StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Persistence", "Saving MultiDock: id='%s', name='%s'",
              info.id.toUtf8().constData(), info.name.toUtf8().constData());
     }
     
     config["multidocks"] = multiDockArray;
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Final config to save: %s", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Persistence", "Final config to save: %s",
          QJsonDocument(config).toJson(QJsonDocument::Compact).constData());
     
     SaveConfig(config);
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Saved %d MultiDocks to config", multiDocks.size());
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Persistence", "Saved %d MultiDocks to config", multiDocks.size());
 }
 
 bool LoadMultiDockState(const QString& id, QStringList& capturedDocks, QByteArray& layout)
@@ -140,7 +141,7 @@ bool LoadMultiDockState(const QString& id, QStringList& capturedDocks, QByteArra
     QString layoutBase64 = state["layout"].toString();
     layout = QByteArray::fromBase64(layoutBase64.toUtf8());
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Loaded state for MultiDock '%s': %d captured docks", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Persistence", "Loaded state for MultiDock '%s': %d captured docks",
          id.toUtf8().constData(), capturedDocks.size());
     
     return true;
@@ -167,7 +168,7 @@ void SaveMultiDockState(const QString& id, const QStringList& capturedDocks, con
     config["states"] = states;
     SaveConfig(config);
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Saved state for MultiDock '%s': %d captured docks", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Persistence", "Saved state for MultiDock '%s': %d captured docks",
          id.toUtf8().constData(), capturedDocks.size());
 }
 
@@ -179,7 +180,7 @@ void RemoveMultiDockState(const QString& id)
     config["states"] = states;
     SaveConfig(config);
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Removed state for MultiDock '%s'", id.toUtf8().constData());
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Persistence", "Removed state for MultiDock '%s'", id.toUtf8().constData());
 }
 
 

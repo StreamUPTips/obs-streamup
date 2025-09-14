@@ -54,10 +54,11 @@ struct PluginSettings {
     bool notificationsMute;
     bool showCPHIntegration;
     bool showToolbar;
+    bool debugLoggingEnabled;
     ToolbarPosition toolbarPosition;
     DockToolSettings dockTools;
-    
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), toolbarPosition(ToolbarPosition::Top) {}
+
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), toolbarPosition(ToolbarPosition::Top) {}
 };
 
 /**
@@ -118,6 +119,18 @@ void SetNotificationsMuted(bool muted);
  * @return bool True if CPH integration should be shown
  */
 bool IsCPHIntegrationEnabled();
+
+/**
+ * @brief Check if debug logging is currently enabled
+ * @return bool True if debug logging is enabled
+ */
+bool IsDebugLoggingEnabled();
+
+/**
+ * @brief Set debug logging state
+ * @param enabled True to enable debug logging, false to disable it
+ */
+void SetDebugLoggingEnabled(bool enabled);
 
 /**
  * @brief Show the installed plugins page inline within the same window

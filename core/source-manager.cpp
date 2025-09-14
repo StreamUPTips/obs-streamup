@@ -1,4 +1,5 @@
 #include "source-manager.hpp"
+#include "../utilities/debug-logger.hpp"
 #include "streamup-common.hpp"
 #include "error-handler.hpp"
 #include <obs-module.h>
@@ -502,7 +503,7 @@ bool ActivateAllVideoCaptureDevices(bool sendNotification)
 		
 		if (proc_handler_call(ph, "activate", &cd)) {
 			activated++;
-			blog(LOG_INFO, "[StreamUP] Activated video capture device: %s", obs_source_get_name(source));
+			StreamUP::DebugLogger::LogDebugFormat("VideoCapture", "Activate Device", "Activated video capture device: %s", obs_source_get_name(source));
 		} else {
 			// Fallback to old method if procedure call fails
 			if (!obs_source_enabled(source)) {
@@ -532,7 +533,7 @@ bool ActivateAllVideoCaptureDevices(bool sendNotification)
 		}
 	}
 	
-	blog(LOG_INFO, "[StreamUP] Activated %d video capture devices (total found: %d)", 
+	StreamUP::DebugLogger::LogInfoFormat("VideoCapture", "Activated %d video capture devices (total found: %d)",
 		 activated_count, total_count);
 	return true;
 }
@@ -572,7 +573,7 @@ bool DeactivateAllVideoCaptureDevices(bool sendNotification)
 		
 		if (proc_handler_call(ph, "activate", &cd)) {
 			deactivated++;
-			blog(LOG_INFO, "[StreamUP] Deactivated video capture device: %s", obs_source_get_name(source));
+			StreamUP::DebugLogger::LogDebugFormat("VideoCapture", "Deactivate Device", "Deactivated video capture device: %s", obs_source_get_name(source));
 		} else {
 			// Fallback to old method if procedure call fails
 			if (obs_source_enabled(source)) {
@@ -602,7 +603,7 @@ bool DeactivateAllVideoCaptureDevices(bool sendNotification)
 		}
 	}
 	
-	blog(LOG_INFO, "[StreamUP] Deactivated %d video capture devices (total found: %d)", 
+	StreamUP::DebugLogger::LogInfoFormat("VideoCapture", "Deactivated %d video capture devices (total found: %d)", 
 		 deactivated_count, total_count);
 	return true;
 }
@@ -640,7 +641,7 @@ bool RefreshAllVideoCaptureDevices(bool sendNotification)
 				"No video capture devices found";
 			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
 		}
-		blog(LOG_INFO, "[StreamUP] No active video capture devices to refresh (total found: %d)", total_count);
+		StreamUP::DebugLogger::LogDebugFormat("VideoCapture", "Refresh", "No active video capture devices to refresh (total found: %d)", total_count);
 		return true;
 	}
 	
@@ -689,10 +690,10 @@ bool RefreshAllVideoCaptureDevices(bool sendNotification)
 			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
 		}
 		
-		blog(LOG_INFO, "[StreamUP] Refreshed %d video capture devices", reactivated);
+		StreamUP::DebugLogger::LogInfoFormat("VideoCapture", "Refreshed %d video capture devices", reactivated);
 	});
 	
-	blog(LOG_INFO, "[StreamUP] Started refresh process for %d video capture devices", 
+	StreamUP::DebugLogger::LogInfoFormat("VideoCapture", "Started refresh process for %d video capture devices", 
 		 static_cast<int>(activeSources.size()));
 	return true;
 }

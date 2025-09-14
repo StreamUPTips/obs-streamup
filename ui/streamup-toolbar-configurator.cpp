@@ -1,4 +1,5 @@
 #include "streamup-toolbar-configurator.hpp"
+#include "../utilities/debug-logger.hpp"
 #include "hotkey-button-config-dialog.hpp"
 #include "settings-manager.hpp"
 #include "ui-styles.hpp"
@@ -523,39 +524,39 @@ void ToolbarConfigurator::setupUI()
     
     // Connect drag-and-drop with proper ID-based indexing
     connect(currentConfigList, &DraggableListWidget::itemMoved, [this](int fromUIIndex, int toUIIndex) {
-        blog(LOG_INFO, "[StreamUP] === DRAG AND DROP START ===");
-        blog(LOG_INFO, "[StreamUP] From UI Index: %d, To UI Index: %d (already adjusted by DraggableListWidget)", fromUIIndex, toUIIndex);
+        StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "=== DRAG AND DROP START ===");
+        StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "From UI Index: %d, To UI Index: %d (already adjusted by DraggableListWidget)", fromUIIndex, toUIIndex);
         
         // Get the item being moved using the original fromUIIndex before any moves
         if (fromUIIndex < 0 || fromUIIndex >= currentConfigList->count()) {
-            blog(LOG_WARNING, "[StreamUP] Invalid fromUIIndex, aborting");
+            StreamUP::DebugLogger::LogWarning("Toolbar", "Drag & Drop: Invalid fromUIIndex, aborting");
             return;
         }
         
         QListWidgetItem* draggedUIItem = currentConfigList->item(fromUIIndex);
         if (!draggedUIItem) {
-            blog(LOG_WARNING, "[StreamUP] No dragged UI item found, aborting");
+            StreamUP::DebugLogger::LogWarning("Toolbar", "Drag & Drop: No dragged UI item found, aborting");
             return;
         }
         
         auto draggedItem = draggedUIItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
         if (!draggedItem) {
-            blog(LOG_WARNING, "[StreamUP] No dragged item data found, aborting");
+            StreamUP::DebugLogger::LogWarning("Toolbar", "Drag & Drop: No dragged item data found, aborting");
             return;
         }
         
         QString draggedItemId = draggedItem->id;
-        blog(LOG_INFO, "[StreamUP] Dragged item: %s, Type: %d", draggedItemId.toUtf8().constData(), (int)draggedItem->type);
+        StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "Dragged item: %s, Type: %d", draggedItemId.toUtf8().constData(), (int)draggedItem->type);
         
         // Find the actual config index of the dragged item
         int fromConfigIndex = config.getItemIndex(draggedItemId);
-        blog(LOG_INFO, "[StreamUP] Main list config index: %d", fromConfigIndex);
+        StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "Main list config index: %d", fromConfigIndex);
         
         // If not found in main list, it might be inside a group
         bool draggedFromGroup = false;
         std::shared_ptr<ToolbarConfig::GroupItem> sourceGroup = nullptr;
         if (fromConfigIndex < 0) {
-            blog(LOG_INFO, "[StreamUP] Item not in main list, searching in groups...");
+            StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "Item not in main list, searching in groups...");
             // Search for the item in groups
             for (const auto& item : config.items) {
                 if (item->type == ToolbarConfig::ItemType::Group) {
@@ -563,18 +564,18 @@ void ToolbarConfigurator::setupUI()
                     if (group->findChild(draggedItemId)) {
                         draggedFromGroup = true;
                         sourceGroup = group;
-                        blog(LOG_INFO, "[StreamUP] Found item in group: %s", group->name.toUtf8().constData());
+                        StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "Found item in group: %s", group->name.toUtf8().constData());
                         break;
                     }
                 }
             }
             
             if (!draggedFromGroup) {
-                blog(LOG_WARNING, "[StreamUP] Item not found anywhere, aborting");
+                StreamUP::DebugLogger::LogWarning("Toolbar", "Drag & Drop: Item not found anywhere, aborting");
                 return; // Item not found anywhere
             }
         } else {
-            blog(LOG_INFO, "[StreamUP] Item found in main list at index: %d", fromConfigIndex);
+            StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "Item found in main list at index: %d", fromConfigIndex);
         }
         
         // Handle special case: if target is a group, move the item into that group
@@ -583,7 +584,7 @@ void ToolbarConfigurator::setupUI()
             if (targetUIItem) {
                 auto targetItem = targetUIItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
                 if (targetItem && targetItem->type == ToolbarConfig::ItemType::Group) {
-                    blog(LOG_INFO, "[StreamUP] TARGET IS GROUP - but check if we're dropping between group children instead");
+                    StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "TARGET IS GROUP - but check if we're dropping between group children instead");
                     
                     // Check if we're actually dropping onto a child item within the group
                     // by looking at the next item in the UI list
@@ -598,13 +599,13 @@ void ToolbarConfigurator::setupUI()
                                 // The next item is a child of this group, so we're dropping at the beginning of the group
                                 insertPosition = 0;
                                 droppedOnChildItem = true;
-                                blog(LOG_INFO, "[StreamUP] Dropping at beginning of group");
+                                StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "Dropping at beginning of group");
                             }
                         }
                     }
                     
                     if (!droppedOnChildItem) {
-                        blog(LOG_INFO, "[StreamUP] Dropping into group (at end)");
+                        StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "Dropping into group (at end)");
                         // Normal drop into group - add at end
                         insertPosition = -1;
                     }
@@ -621,10 +622,10 @@ void ToolbarConfigurator::setupUI()
                     // Add the item to the target group at the appropriate position
                     if (insertPosition >= 0) {
                         targetGroup->childItems.insert(insertPosition, draggedItem);
-                        blog(LOG_INFO, "[StreamUP] Inserted at position %d in group", insertPosition);
+                        StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "Inserted at position %d in group", insertPosition);
                     } else {
                         targetGroup->addChild(draggedItem);
-                        blog(LOG_INFO, "[StreamUP] Added to end of group");
+                        StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "Added to end of group");
                     }
                     
                     // Refresh the display and return early
@@ -634,7 +635,7 @@ void ToolbarConfigurator::setupUI()
                     targetGroup->expanded = true;
                     populateCurrentConfiguration();
                     
-                    blog(LOG_INFO, "[StreamUP] Drop into group completed, returning early");
+                    StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "Drop into group completed, returning early");
                     return;
                 }
             }
@@ -657,9 +658,9 @@ void ToolbarConfigurator::setupUI()
         QListWidgetItem* targetUIItem = nullptr;
         if (toUIIndex < currentConfigList->count()) {
             targetUIItem = currentConfigList->item(toUIIndex);
-            blog(LOG_INFO, "[StreamUP] Target UI item found at index: %d", toUIIndex);
+            StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "Target UI item found at index: %d", toUIIndex);
         } else {
-            blog(LOG_INFO, "[StreamUP] Target is beyond list end (dropping at end)");
+            StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "Target is beyond list end (dropping at end)");
         }
         
         std::shared_ptr<ToolbarConfig::GroupItem> targetParentGroup = nullptr;
@@ -670,29 +671,29 @@ void ToolbarConfigurator::setupUI()
             targetPositionInGroup = targetUIItem->data(Qt::UserRole + 2).toInt();
             
             if (targetParentGroup) {
-                blog(LOG_INFO, "[StreamUP] Target is child of group: %s, position: %d", 
+                StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "Target is child of group: %s, position: %d",
                      targetParentGroup->name.toUtf8().constData(), targetPositionInGroup);
             } else {
-                blog(LOG_INFO, "[StreamUP] Target is in main list (no parent group)");
+                StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "Target is in main list (no parent group)");
             }
             
             auto targetItemData = targetUIItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
             if (targetItemData) {
-                blog(LOG_INFO, "[StreamUP] Target item: %s, Type: %d", 
+                StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "Target item: %s, Type: %d",
                      targetItemData->id.toUtf8().constData(), (int)targetItemData->type);
             }
         }
         
         // Handle the move based on source and destination
         if (draggedFromGroup) {
-            blog(LOG_INFO, "[StreamUP] Source is from group: %s", sourceGroup->name.toUtf8().constData());
+            StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "Source is from group: %s", sourceGroup->name.toUtf8().constData());
             
             // Check if we're moving within the same group
             if (targetParentGroup && targetParentGroup->id == sourceGroup->id) {
-                blog(LOG_INFO, "[StreamUP] WITHIN-GROUP REORDERING detected");
+                StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "WITHIN-GROUP REORDERING detected");
                 // Within-group reordering
                 int sourcePositionInGroup = sourceGroup->getChildIndex(draggedItemId);
-                blog(LOG_INFO, "[StreamUP] Source position in group: %d, Target position: %d", 
+                StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "Source position in group: %d, Target position: %d",
                      sourcePositionInGroup, targetPositionInGroup);
                 
                 if (sourcePositionInGroup >= 0 && targetPositionInGroup >= 0 && targetPositionInGroup != sourcePositionInGroup) {
@@ -701,24 +702,24 @@ void ToolbarConfigurator::setupUI()
                     // But Qt's move logic may need adjustment depending on implementation
                     
                     int finalTargetPosition = targetPositionInGroup;
-                    blog(LOG_INFO, "[StreamUP] Raw positions - Source: %d, Target: %d", sourcePositionInGroup, targetPositionInGroup);
+                    StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "Raw positions - Source: %d, Target: %d", sourcePositionInGroup, targetPositionInGroup);
                     
                     // Don't adjust - let moveChild handle the logic correctly
                     // The UI position should be the final desired position
                     
-                    blog(LOG_INFO, "[StreamUP] Executing moveChild(%d, %d)", sourcePositionInGroup, finalTargetPosition);
+                    StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "Executing moveChild(%d, %d)", sourcePositionInGroup, finalTargetPosition);
                     sourceGroup->moveChild(sourcePositionInGroup, finalTargetPosition);
                     populateCurrentConfiguration();
                 } else {
-                    blog(LOG_INFO, "[StreamUP] Within-group move conditions not met or same position");
+                    StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "Within-group move conditions not met or same position");
                 }
             } else {
-                blog(LOG_INFO, "[StreamUP] CROSS-GROUP or GROUP-TO-MAIN move detected");
+                StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "CROSS-GROUP or GROUP-TO-MAIN move detected");
                 // Moving out of group to main list or different group
                 sourceGroup->removeChild(draggedItemId);
                 
                 if (targetParentGroup && targetParentGroup != sourceGroup) {
-                    blog(LOG_INFO, "[StreamUP] Moving to different group: %s", targetParentGroup->name.toUtf8().constData());
+                    StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "Moving to different group: %s", targetParentGroup->name.toUtf8().constData());
                     // Moving to a different group
                     if (targetPositionInGroup >= 0) {
                         targetParentGroup->childItems.insert(targetPositionInGroup, draggedItem);
@@ -726,7 +727,7 @@ void ToolbarConfigurator::setupUI()
                         targetParentGroup->addChild(draggedItem);
                     }
                 } else {
-                    blog(LOG_INFO, "[StreamUP] Moving to main list at config index: %d", toConfigIndex);
+                    StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "Moving to main list at config index: %d", toConfigIndex);
                     // Moving to main list
                     if (toUIIndex >= currentConfigList->count()) {
                         // Add to end of main list
@@ -740,11 +741,11 @@ void ToolbarConfigurator::setupUI()
                 populateCurrentConfiguration();
             }
         } else {
-            blog(LOG_INFO, "[StreamUP] Source is from MAIN LIST");
+            StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "Source is from MAIN LIST");
             
             // Check if we're moving from main list to a group
             if (targetParentGroup) {
-                blog(LOG_INFO, "[StreamUP] MAIN-TO-GROUP move detected, target group: %s", targetParentGroup->name.toUtf8().constData());
+                StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "MAIN-TO-GROUP move detected, target group: %s", targetParentGroup->name.toUtf8().constData());
                 // Moving from main list to a group
                 config.items.removeAt(fromConfigIndex);
                 if (targetPositionInGroup >= 0) {
@@ -754,18 +755,18 @@ void ToolbarConfigurator::setupUI()
                 }
                 populateCurrentConfiguration();
             } else {
-                blog(LOG_INFO, "[StreamUP] MAIN LIST REORDERING from %d to %d", fromConfigIndex, toConfigIndex);
+                StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "MAIN LIST REORDERING from %d to %d", fromConfigIndex, toConfigIndex);
                 // Normal move within main list
                 if (fromConfigIndex != toConfigIndex) {
                     config.moveItem(fromConfigIndex, toConfigIndex);
                     populateCurrentConfiguration();
                 } else {
-                    blog(LOG_INFO, "[StreamUP] Same position, no move needed");
+                    StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "Same position, no move needed");
                 }
             }
         }
         
-        blog(LOG_INFO, "[StreamUP] === DRAG AND DROP END ===");
+        StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "=== DRAG AND DROP END ===");
         
         // Restore selection to moved item
         for (int i = 0; i < currentConfigList->count(); ++i) {
@@ -937,7 +938,7 @@ void ToolbarConfigurator::addItemToList(std::shared_ptr<ToolbarConfig::ToolbarIt
         
         // Debug logging for metadata storage
         if (parentGroup) {
-            blog(LOG_INFO, "[StreamUP] Storing metadata for item %s: parent=%s, position=%d", 
+            StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Configuration", "Storing metadata for item %s: parent=%s, position=%d",
                  item->id.toUtf8().constData(), parentGroup->name.toUtf8().constData(), positionInGroup);
         }
         

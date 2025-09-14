@@ -1,4 +1,5 @@
 #include "websocket-api.hpp"
+#include "../utilities/debug-logger.hpp"
 #include "streamup-common.hpp"
 #include "../version.h"
 #include "plugin-manager.hpp"
@@ -22,8 +23,11 @@ void WebsocketRequestBitrate(obs_data_t *request_data, obs_data_t *response_data
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
 
+	StreamUP::DebugLogger::LogDebug("WebSocket", "GetBitrate", "WebSocket request received for stream bitrate");
+
 	obs_output_t *streamOutput = obs_frontend_get_streaming_output();
 	if (!streamOutput || !obs_frontend_streaming_active()) {
+		StreamUP::DebugLogger::LogDebug("WebSocket", "GetBitrate", "Streaming is not active, returning error");
 		obs_data_set_string(response_data, "error", "Streaming is not active.");
 		return;
 	}
@@ -85,7 +89,7 @@ void WebsocketRequestCheckPlugins(obs_data_t *request_data, obs_data_t *response
 	if (isRecording || isStreaming) {
 		// Don't show UI when recording/streaming, just check silently
 		pluginsUpToDate = StreamUP::PluginManager::CheckrequiredOBSPluginsWithoutUI(true);
-		blog(LOG_INFO, "[StreamUP] Plugin check via WebSocket completed without UI (recording: %s, streaming: %s)", 
+		StreamUP::DebugLogger::LogDebugFormat("WebSocket", "Plugin Check", "Plugin check via WebSocket completed without UI (recording: %s, streaming: %s)", 
 			isRecording ? "active" : "inactive", isStreaming ? "active" : "inactive");
 	} else {
 		// Show UI normally when not recording/streaming
@@ -149,7 +153,7 @@ void WebsocketRequestGetCurrentSelectedSource(obs_data_t *request_data, obs_data
 	if (selected_source_name) {
 		obs_data_set_string(response_data, "selectedSource", selected_source_name);
 	} else {
-		blog(LOG_INFO, "[StreamUP] No selected source.");
+		StreamUP::DebugLogger::LogDebug("WebSocket", "Source Selection", "No selected source");
 		obs_data_set_string(response_data, "selectedSource", "None");
 	}
 }
@@ -245,7 +249,7 @@ void WebsocketLoadStreamupFile(obs_data_t *request_data, obs_data_t *response_da
 
 	// Log the entire request for debugging
 	const char *request_data_json = obs_data_get_json(request_data);
-	blog(LOG_INFO, "Websocket request data: %s", request_data_json);
+	StreamUP::DebugLogger::LogDebugFormat("WebSocket", "Request Data", "Websocket request data: %s", request_data_json);
 
 	// Extract the "file" parameter as a string (file path)
 	const char *file_path = obs_data_get_string(request_data, "file");
@@ -253,13 +257,13 @@ void WebsocketLoadStreamupFile(obs_data_t *request_data, obs_data_t *response_da
 
 	if (!file_path || !strlen(file_path)) {
 		// If the "file" path is missing, return an error response and log it
-		blog(LOG_ERROR, "WebsocketLoadStreamupFile: 'file' parameter is missing or invalid");
+		StreamUP::DebugLogger::LogError("WebSocket", "WebsocketLoadStreamupFile: 'file' parameter is missing or invalid");
 		obs_data_set_string(response_data, "error", "'file' path is missing or invalid");
 		return;
 	}
 
 	// Log the extracted file path for debugging
-	blog(LOG_INFO, "Extracted 'file' path: %s", file_path);
+	StreamUP::DebugLogger::LogDebugFormat("WebSocket", "File Path", "Extracted 'file' path: %s", file_path);
 
 	// Call the function to load the .streamup file from the path
 	if (!StreamUP::FileManager::LoadStreamupFileFromPath(QString::fromUtf8(file_path), force_load)) {
@@ -679,7 +683,7 @@ void WebsocketOpenSourceProperties(obs_data_t *request_data, obs_data_t *respons
 	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
 		obs_data_set_string(response_data, "error", "No source selected.");
-		blog(LOG_INFO, "[StreamUP] No source selected for properties.");
+		StreamUP::DebugLogger::LogDebug("WebSocket", "Source Properties", "No source selected for properties");
 		return;
 	}
 
@@ -701,7 +705,7 @@ void WebsocketOpenSourceFilters(obs_data_t *request_data, obs_data_t *response_d
 	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
 		obs_data_set_string(response_data, "error", "No source selected.");
-		blog(LOG_INFO, "[StreamUP] No source selected for filters.");
+		StreamUP::DebugLogger::LogDebug("WebSocket", "Source Filters", "No source selected for filters");
 		return;
 	}
 
@@ -723,7 +727,7 @@ void WebsocketOpenSourceInteract(obs_data_t *request_data, obs_data_t *response_
 	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
 		obs_data_set_string(response_data, "error", "No source selected.");
-		blog(LOG_INFO, "[StreamUP] No source selected for interaction.");
+		StreamUP::DebugLogger::LogDebug("WebSocket", "Source Interaction", "No source selected for interaction");
 		return;
 	}
 
@@ -745,7 +749,7 @@ void WebsocketOpenSceneFilters(obs_data_t *request_data, obs_data_t *response_da
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	if (!current_scene) {
 		obs_data_set_string(response_data, "error", "No current scene.");
-		blog(LOG_INFO, "[StreamUP] No current scene for filters.");
+		StreamUP::DebugLogger::LogDebug("WebSocket", "Scene Filters", "No current scene for filters");
 		return;
 	}
 

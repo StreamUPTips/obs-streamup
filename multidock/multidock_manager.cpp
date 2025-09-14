@@ -1,4 +1,5 @@
 #include "multidock_manager.hpp"
+#include "../utilities/debug-logger.hpp"
 #include "multidock_dock.hpp"
 #include "inner_dock_host.hpp"
 #include "multidock_utils.hpp"
@@ -38,7 +39,7 @@ MultiDockManager* MultiDockManager::Instance()
 void MultiDockManager::Initialize()
 {
     if (s_instance) {
-        blog(LOG_WARNING, "[StreamUP MultiDock] MultiDockManager already initialized");
+        StreamUP::DebugLogger::LogWarning("MultiDock", "MultiDockManager already initialized");
         return;
     }
     
@@ -99,7 +100,7 @@ void MultiDockManager::Shutdown()
 QString MultiDockManager::CreateMultiDock(const QString& name)
 {
     if (name.trimmed().isEmpty()) {
-        blog(LOG_WARNING, "[StreamUP MultiDock] Cannot create MultiDock with empty name");
+        StreamUP::DebugLogger::LogWarning("MultiDock", "Cannot create MultiDock with empty name");
         return QString();
     }
     
@@ -108,7 +109,7 @@ QString MultiDockManager::CreateMultiDock(const QString& name)
     
     QMainWindow* mainWindow = GetObsMainWindow();
     if (!mainWindow) {
-        blog(LOG_ERROR, "[StreamUP MultiDock] Cannot create MultiDock: main window not found");
+        StreamUP::DebugLogger::LogError("MultiDock", "Cannot create MultiDock: main window not found");
         return QString();
     }
     
@@ -200,7 +201,7 @@ bool MultiDockManager::RenameMultiDock(const QString& id, const QString& newName
     
     SaveAllMultiDocks();
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Renamed MultiDock '%s' to '%s'", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Management", "Renamed MultiDock '%s' to '%s'",
          oldName.toUtf8().constData(), trimmedName.toUtf8().constData());
     
     return true;
@@ -277,7 +278,7 @@ void MultiDockManager::LoadAllMultiDocks()
     
     QMainWindow* mainWindow = GetObsMainWindow();
     if (!mainWindow) {
-        blog(LOG_ERROR, "[StreamUP MultiDock] Cannot load MultiDocks: main window not found");
+        StreamUP::DebugLogger::LogError("MultiDock", "Cannot load MultiDocks: main window not found");
         return;
     }
     
@@ -306,16 +307,16 @@ void MultiDockManager::LoadAllMultiDocks()
             int currentDockCount = multiDock->GetInnerHost()->GetAllDocks().size();
             if (currentDockCount < capturedDockIds.size()) {
                 m_pendingRetryIds.append(info.id);
-                blog(LOG_INFO, "[StreamUP MultiDock] Added '%s' to retry list: has %d/%d docks", 
+                StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Loading", "Added '%s' to retry list: has %d/%d docks",
                      info.name.toUtf8().constData(), currentDockCount, capturedDockIds.size());
             } else {
-                blog(LOG_INFO, "[StreamUP MultiDock] Skipping retry for '%s': already has all %d docks", 
+                StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Loading", "Skipping retry for '%s': already has all %d docks",
                      info.name.toUtf8().constData(), capturedDockIds.size());
             }
         }
     }
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Loaded %d MultiDocks from persistent storage", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Loading", "Loaded %d MultiDocks from persistent storage",
          multiDockList.size());
 }
 
@@ -332,7 +333,7 @@ void MultiDockManager::SaveAllMultiDocks()
         }
     }
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Saved %d MultiDocks to persistent storage", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Saving", "Saved %d MultiDocks to persistent storage",
          multiDockList.size());
 }
 
@@ -344,12 +345,12 @@ void MultiDockManager::RetryFailedRestorations()
     
     m_hasRetriedRestoration = true;
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Starting retry restoration for %d MultiDocks after OBS finished loading", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Starting retry restoration for %d MultiDocks after OBS finished loading",
          m_pendingRetryIds.size());
     
     QMainWindow* mainWindow = GetObsMainWindow();
     if (!mainWindow) {
-        blog(LOG_ERROR, "[StreamUP MultiDock] Cannot retry restoration: main window not found");
+        StreamUP::DebugLogger::LogError("MultiDock", "Cannot retry restoration: main window not found");
         return;
     }
     
@@ -365,7 +366,7 @@ void MultiDockManager::RetryFailedRestorations()
         }
     }
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Pre-generated %d dock ID mappings for efficient retry restoration", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Pre-generated %d dock ID mappings for efficient retry restoration",
          availableDockMap.size());
     
     int totalRetryAttempts = 0;
@@ -389,12 +390,12 @@ void MultiDockManager::RetryFailedRestorations()
         
         // If we already have all expected docks, skip
         if (currentDockCount >= capturedDockIds.size()) {
-            blog(LOG_INFO, "[StreamUP MultiDock] MultiDock '%s' already has %d/%d docks, skipping retry", 
+            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "MultiDock '%s' already has %d/%d docks, skipping retry",
                  multiDockId.toUtf8().constData(), currentDockCount, capturedDockIds.size());
             continue;
         }
         
-        blog(LOG_INFO, "[StreamUP MultiDock] Retrying restoration for MultiDock '%s': has %d/%d docks", 
+        StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Retrying restoration for MultiDock '%s': has %d/%d docks",
              multiDockId.toUtf8().constData(), currentDockCount, capturedDockIds.size());
         
         // Pre-generate existing dock IDs to avoid redundant GenerateDockId() calls
@@ -417,10 +418,10 @@ void MultiDockManager::RetryFailedRestorations()
                 QDockWidget* dock = availableDockMap[dockId];
                 multiDock->GetInnerHost()->AddDock(dock);
                 successfulRetries++;
-                blog(LOG_INFO, "[StreamUP MultiDock] Successfully restored dock '%s' during retry", 
+                StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Successfully restored dock '%s' during retry",
                      dock->windowTitle().toUtf8().constData());
             } else {
-                blog(LOG_WARNING, "[StreamUP MultiDock] Still could not find dock with ID '%s' during retry", 
+                StreamUP::DebugLogger::LogWarningFormat("MultiDock", "Still could not find dock with ID '%s' during retry", 
                      dockId.toUtf8().constData());
             }
         }
@@ -431,7 +432,7 @@ void MultiDockManager::RetryFailedRestorations()
         }
     }
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Retry restoration completed: %d/%d dock restorations successful", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Retry restoration completed: %d/%d dock restorations successful",
          successfulRetries, totalRetryAttempts);
     
     // Clear the retry list
@@ -449,7 +450,7 @@ void MultiDockManager::OnMultiDockDestroyed(QObject* obj)
     for (auto it = m_multiDocks.begin(); it != m_multiDocks.end(); ++it) {
         if (it.value().data() == static_cast<MultiDockDock*>(obj)) {
             QString id = it.key();
-            blog(LOG_INFO, "[StreamUP MultiDock] Widget destroyed for MultiDock ID '%s', QPointer automatically set to null", 
+            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Management", "Widget destroyed for MultiDock ID '%s', QPointer automatically set to null",
                  id.toUtf8().constData());
             
             // QPointer automatically becomes null when object is destroyed
@@ -493,10 +494,10 @@ void MultiDockManager::RegisterWithObs(MultiDockDock* multiDock)
     bool success = obs_frontend_add_custom_qdock(id.toUtf8().constData(), dock);
     
     if (success) {
-        blog(LOG_INFO, "[StreamUP MultiDock] Registered MultiDock '%s' with OBS as custom dock (hidden from menu, ID: %s)", 
+        StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Registration", "Registered MultiDock '%s' with OBS as custom dock (hidden from menu, ID: %s)",
              title.toUtf8().constData(), id.toUtf8().constData());
     } else {
-        blog(LOG_ERROR, "[StreamUP MultiDock] Failed to register MultiDock '%s' with OBS", 
+        StreamUP::DebugLogger::LogErrorFormat("MultiDock", "Failed to register MultiDock '%s' with OBS", 
              title.toUtf8().constData());
     }
 #else
@@ -513,7 +514,7 @@ void MultiDockManager::RegisterWithObs(MultiDockDock* multiDock)
     // Hide from dock menu after registration
     dock->toggleViewAction()->setVisible(false);
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Registered MultiDock '%s' with OBS (hidden from menu)", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Registration", "Registered MultiDock '%s' with OBS (hidden from menu)",
          title.toUtf8().constData());
 #endif
 }
@@ -532,7 +533,7 @@ void MultiDockManager::UnregisterFromObs(MultiDockDock* multiDock)
     obs_frontend_remove_dock(id.toUtf8().constData());
 #endif
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Unregistered MultiDock '%s' from OBS (ID: %s)", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Registration", "Unregistered MultiDock '%s' from OBS (ID: %s)",
          name.toUtf8().constData(), id.toUtf8().constData());
 }
 

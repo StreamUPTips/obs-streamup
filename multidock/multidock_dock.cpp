@@ -1,4 +1,5 @@
 #include "multidock_dock.hpp"
+#include "../utilities/debug-logger.hpp"
 #include "inner_dock_host.hpp"
 #include "persistence.hpp"
 #include "multidock_utils.hpp"
@@ -57,13 +58,13 @@ MultiDockDock::MultiDockDock(const QString& id, const QString& name, QWidget* pa
 {
     SetupUi();
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Created MultiDockDock '%s' with ID '%s'", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Creation", "Created MultiDockDock '%s' with ID '%s'",
          m_name.toUtf8().constData(), m_id.toUtf8().constData());
 }
 
 MultiDockDock::~MultiDockDock()
 {
-    blog(LOG_INFO, "[StreamUP MultiDock] Destroying MultiDockDock '%s'", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Cleanup", "Destroying MultiDockDock '%s'",
          m_name.toUtf8().constData());
 }
 
@@ -120,14 +121,14 @@ void MultiDockDock::SetName(const QString& name)
         QDockWidget* obsDocWidget = mainWindow->findChild<QDockWidget*>(m_id);
         if (obsDocWidget) {
             obsDocWidget->setWindowTitle(name);
-            blog(LOG_INFO, "[StreamUP MultiDock] Updated OBS dock title to '%s'", 
+            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Management", "Updated OBS dock title to '%s'",
                  name.toUtf8().constData());
         } else {
-            blog(LOG_WARNING, "[StreamUP MultiDock] Could not find OBS dock widget to update title");
+            StreamUP::DebugLogger::LogWarning("MultiDock", "Management: Could not find OBS dock widget to update title");
         }
     }
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Renamed MultiDock '%s' to '%s'", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Management", "Renamed MultiDock '%s' to '%s'",
          m_id.toUtf8().constData(), m_name.toUtf8().constData());
 }
 
@@ -142,7 +143,7 @@ void MultiDockDock::SaveState()
     
     SaveMultiDockState(m_id, capturedDockIds, layout);
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Saved state for MultiDock '%s': %d captured docks", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "State", "Saved state for MultiDock '%s': %d captured docks",
          m_id.toUtf8().constData(), capturedDockIds.size());
 }
 
@@ -156,7 +157,7 @@ void MultiDockDock::LoadState()
     QByteArray layout;
     
     if (!LoadMultiDockState(m_id, capturedDockIds, layout)) {
-        blog(LOG_INFO, "[StreamUP MultiDock] No saved state found for MultiDock '%s'", 
+        StreamUP::DebugLogger::LogDebugFormat("MultiDock", "State", "No saved state found for MultiDock '%s'",
              m_id.toUtf8().constData());
         return;
     }
@@ -164,7 +165,7 @@ void MultiDockDock::LoadState()
     // Try to restore captured docks
     QMainWindow* mainWindow = GetObsMainWindow();
     if (!mainWindow) {
-        blog(LOG_ERROR, "[StreamUP MultiDock] Cannot restore docks: main window not found");
+        StreamUP::DebugLogger::LogError("MultiDock", "Cannot restore docks: main window not found");
         return;
     }
     
@@ -186,23 +187,23 @@ void MultiDockDock::LoadState()
         if (dock && !IsMultiDockContainer(dock)) {
             m_innerHost->AddDock(dock);
             restoredCount++;
-            blog(LOG_INFO, "[StreamUP MultiDock] Successfully restored dock '%s' with ID '%s'", 
+            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Successfully restored dock '%s' with ID '%s'",
                  dock->windowTitle().toUtf8().constData(), dockId.toUtf8().constData());
         } else {
             // Enhanced debugging for failed dock restoration
-            blog(LOG_WARNING, "[StreamUP MultiDock] Could not restore dock with ID '%s'", 
+            StreamUP::DebugLogger::LogWarningFormat("MultiDock", "Restoration", "Could not restore dock with ID '%s'",
                  dockId.toUtf8().constData());
             
             // Log all available dock IDs for debugging
-            blog(LOG_INFO, "[StreamUP MultiDock] Available docks for debugging:");
+            StreamUP::DebugLogger::LogDebug("MultiDock", "Restoration", "Available docks for debugging:");
             for (QDockWidget* candidate : allDocks) {
                 QString candidateId = GenerateDockId(candidate);
                 QString objectName = candidate->objectName();
                 QString title = candidate->windowTitle();
                 bool isMultiDock = IsMultiDockContainer(candidate);
                 
-                blog(LOG_INFO, "[StreamUP MultiDock]   - ID:'%s' ObjectName:'%s' Title:'%s' IsMultiDock:%s", 
-                     candidateId.toUtf8().constData(), 
+                StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "  - ID:'%s' ObjectName:'%s' Title:'%s' IsMultiDock:%s",
+                     candidateId.toUtf8().constData(),
                      objectName.toUtf8().constData(),
                      title.toUtf8().constData(),
                      isMultiDock ? "true" : "false");
@@ -228,7 +229,7 @@ void MultiDockDock::LoadState()
         });
     }
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Restored %d out of %d docks for MultiDock '%s'", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Restored %d out of %d docks for MultiDock '%s'",
          restoredCount, capturedDockIds.size(), m_id.toUtf8().constData());
 }
 
@@ -322,7 +323,7 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
     // Initialize toolbar button states
     UpdateToolbarState();
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Created bottom toolbar for MultiDock '%s'", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "UI", "Created bottom toolbar for MultiDock '%s'",
          m_id.toUtf8().constData());
 }
 

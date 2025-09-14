@@ -1,4 +1,5 @@
 #include "add_dock_dialog.hpp"
+#include "../utilities/debug-logger.hpp"
 #include "multidock_utils.hpp"
 #include "../ui/ui-styles.hpp"
 #include <obs-module.h>
@@ -130,7 +131,7 @@ void AddDockDialog::PopulateAvailableDocks()
         m_dockList->addItem(obs_module_text("MultiDock.Message.NoAvailableDocksFound"));
     }
     
-    blog(LOG_INFO, "[StreamUP MultiDock] AddDockDialog: Found %d available docks", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dialog", "AddDockDialog: Found %d available docks",
          m_availableDocks.size());
 }
 
