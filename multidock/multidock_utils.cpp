@@ -1,4 +1,5 @@
 #include "multidock_utils.hpp"
+#include "../utilities/debug-logger.hpp"
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <QCryptographicHash>
@@ -11,7 +12,7 @@ QMainWindow* GetObsMainWindow()
 {
     void* main_window_ptr = obs_frontend_get_main_window();
     if (!main_window_ptr) {
-        blog(LOG_ERROR, "[StreamUP MultiDock] Could not get main OBS window");
+        StreamUP::DebugLogger::LogError("MultiDock", "Could not get main OBS window");
         return nullptr;
     }
     return reinterpret_cast<QMainWindow*>(main_window_ptr);
@@ -25,14 +26,14 @@ QList<QDockWidget*> FindAllObsDocks(QMainWindow* mainWindow)
     
     QList<QDockWidget*> docks = mainWindow->findChildren<QDockWidget*>();
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Found %d dock widgets in main window", docks.size());
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Utils", "Found %d dock widgets in main window", docks.size());
     
     // Log dock names for debugging
     for (const auto* dock : docks) {
         if (dock) {
             QString name = dock->windowTitle();
             QString objectName = dock->objectName();
-            blog(LOG_INFO, "[StreamUP MultiDock] Dock: '%s' (objectName: '%s')", 
+            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Utils", "Dock: '%s' (objectName: '%s')",
                  name.toUtf8().constData(), objectName.toUtf8().constData());
         }
     }
@@ -77,7 +78,7 @@ QString GetQuickAccessStableId(QDockWidget* dock)
     QString title = dock->windowTitle();
     QString stableId = "qau_" + title.toLower().replace(" ", "_").replace("-", "_");
     
-    blog(LOG_DEBUG, "[StreamUP MultiDock] Quick Access Utility dock '%s' -> stable ID '%s'", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "ID Generation", "Quick Access Utility dock '%s' -> stable ID '%s'", 
          title.toUtf8().constData(), stableId.toUtf8().constData());
     
     return stableId;
@@ -124,7 +125,7 @@ QString CreateFallbackId(QDockWidget* dock)
     QByteArray hash = QCryptographicHash::hash(identifier.toUtf8(), QCryptographicHash::Md5);
     QString fallbackId = "dock_" + hash.toHex().left(12); // Shorter hash
     
-    blog(LOG_DEBUG, "[StreamUP MultiDock] Created fallback ID '%s' for dock '%s'", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "ID Generation", "Created fallback ID '%s' for dock '%s'", 
          fallbackId.toUtf8().constData(), title.toUtf8().constData());
     
     return fallbackId;

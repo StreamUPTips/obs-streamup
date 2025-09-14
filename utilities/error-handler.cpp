@@ -1,4 +1,5 @@
 #include "error-handler.hpp"
+#include "../ui/settings-manager.hpp"
 #include "ui-helpers.hpp"
 #include "ui-styles.hpp"
 #include <obs-module.h>
@@ -59,7 +60,10 @@ void Log(Severity severity, Category category, const std::string& message) {
 }
 
 void LogInfo(const std::string& message, Category category) {
-    Log(Severity::Info, category, message);
+    // Only log info messages when debug logging is enabled
+    if (StreamUP::SettingsManager::IsDebugLoggingEnabled()) {
+        Log(Severity::Info, category, message);
+    }
 }
 
 void LogWarning(const std::string& message, Category category) {

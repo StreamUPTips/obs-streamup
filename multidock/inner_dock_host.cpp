@@ -1,4 +1,5 @@
 #include "inner_dock_host.hpp"
+#include "../utilities/debug-logger.hpp"
 #include "multidock_dock.hpp"
 #include "add_dock_dialog.hpp"
 #include "persistence.hpp"
@@ -31,13 +32,13 @@ InnerDockHost::InnerDockHost(const QString& multiDockId, QWidget* parent)
     
     // No timers - we save on OBS shutdown and update UI immediately when needed
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Created InnerDockHost for '%s'", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Host Creation", "Created InnerDockHost for '%s'", 
          m_multiDockId.toUtf8().constData());
 }
 
 InnerDockHost::~InnerDockHost()
 {
-    blog(LOG_INFO, "[StreamUP MultiDock] Destroying InnerDockHost for '%s'", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Host Destruction", "Destroying InnerDockHost for '%s'", 
          m_multiDockId.toUtf8().constData());
 }
 
@@ -80,7 +81,7 @@ void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)
     
     DockId dockId = GenerateDockId(dock);
     if (m_capturedDocks.contains(dockId)) {
-        blog(LOG_WARNING, "[StreamUP MultiDock] Dock '%s' is already captured", 
+        StreamUP::DebugLogger::LogWarningFormat("MultiDock", "Add Dock", "Dock '%s' is already captured",
              dockId.toUtf8().constData());
         return;
     }
@@ -142,7 +143,7 @@ void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)
     // Update toolbar state
     UpdateToolBarState();
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Added dock '%s' to MultiDock '%s'", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dock Management", "Added dock '%s' to MultiDock '%s'", 
          dock->windowTitle().toUtf8().constData(), m_multiDockId.toUtf8().constData());
 }
 
@@ -186,7 +187,7 @@ void InnerDockHost::RemoveDock(QDockWidget* dock)
     // Update toolbar state
     UpdateToolBarState();
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Removed dock '%s' from MultiDock '%s'", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dock Management", "Removed dock '%s' from MultiDock '%s'", 
          dock->windowTitle().toUtf8().constData(), m_multiDockId.toUtf8().constData());
 }
 
@@ -247,7 +248,7 @@ void InnerDockHost::RestoreLayout(const QByteArray& layout)
         // Reapply dock features immediately after layout restoration
         ReapplyDockFeatures();
         
-        blog(LOG_INFO, "[StreamUP MultiDock] Restored layout for MultiDock '%s'", 
+        StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Layout Restore", "Restored layout for MultiDock '%s'", 
              m_multiDockId.toUtf8().constData());
     }
 }
@@ -385,7 +386,7 @@ void InnerDockHost::HideDockToolBars(QDockWidget* dock)
         for (QToolBar* toolBar : toolBars) {
             if (toolBar) {
                 toolBar->hide();
-                blog(LOG_INFO, "[StreamUP MultiDock] Hidden toolbar in captured dock: %s", 
+                StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Toolbar Management", "Hidden toolbar in captured dock: %s", 
                      toolBar->objectName().toUtf8().constData());
             }
         }
@@ -405,7 +406,7 @@ void InnerDockHost::RestoreDockToolBars(QDockWidget* dock)
         for (QToolBar* toolBar : toolBars) {
             if (toolBar) {
                 toolBar->show();
-                blog(LOG_INFO, "[StreamUP MultiDock] Restored toolbar in returned dock: %s", 
+                StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Toolbar Management", "Restored toolbar in returned dock: %s", 
                      toolBar->objectName().toUtf8().constData());
             }
         }
@@ -469,7 +470,7 @@ void InnerDockHost::ReapplyDockFeatures()
                 dock->widget()->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
             }
             
-            blog(LOG_INFO, "[StreamUP MultiDock] Reapplied features to dock '%s' (locked: %s)", 
+            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Feature Management", "Reapplied features to dock '%s' (locked: %s)", 
                  dock->windowTitle().toUtf8().constData(), m_docksLocked ? "yes" : "no");
         }
     }
@@ -529,13 +530,13 @@ void InnerDockHost::SetDocksLocked(bool locked)
                 dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
             }
             
-            blog(LOG_INFO, "[StreamUP MultiDock] %s dock '%s'", 
+            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Lock Management", "%s dock '%s'", 
                  m_docksLocked ? "Locked" : "Unlocked", 
                  dock->windowTitle().toUtf8().constData());
         }
     }
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Set docks locked state to: %s", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Lock Management", "Set docks locked state to: %s", 
          m_docksLocked ? "locked" : "unlocked");
 }
 

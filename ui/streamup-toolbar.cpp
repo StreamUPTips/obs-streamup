@@ -1,4 +1,5 @@
 #include "streamup-toolbar.hpp"
+#include "../utilities/debug-logger.hpp"
 #include "streamup-toolbar-configurator.hpp"
 #include "dock/streamup-dock.hpp"
 #include "../video-capture-popup.hpp"
@@ -316,7 +317,7 @@ void StreamUPToolbar::updateStreamButton()
 		streamButton->setChecked(streaming);
 		QString iconName = streaming ? "streaming" : "streaming-inactive";
 		streamButton->setIcon(getCachedIcon(iconName));
-		blog(LOG_DEBUG, "[StreamUP] Updated stream button with cached icon: %s", iconName.toUtf8().constData());
+		StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Update Stream Button", "Updated stream button with cached icon: %s", iconName.toUtf8().constData());
 		streamButton->setToolTip(streaming ? "Stop Streaming" : "Start Streaming");
 	}
 }
@@ -639,7 +640,7 @@ void StreamUPToolbar::updatePositionAwareTheme()
 	// Get current toolbar position from the main window
 	QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
 	if (!mainWindow) {
-		blog(LOG_WARNING, "[StreamUP] Unable to get main window for position-aware theming");
+		StreamUP::DebugLogger::LogWarning("Toolbar", "Theming: Unable to get main window for position-aware theming");
 		return;
 	}
 	
@@ -750,14 +751,14 @@ void StreamUPToolbar::updatePositionAwareTheme()
 void StreamUPToolbar::updateLayoutOrientation()
 {
 	if (!centralWidget || !mainLayout) {
-		blog(LOG_WARNING, "[StreamUP] Cannot update layout orientation - missing central widget or layout");
+		StreamUP::DebugLogger::LogWarning("Toolbar", "Layout: Cannot update layout orientation - missing central widget or layout");
 		return;
 	}
 	
 	// Get current toolbar position from the main window
 	QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
 	if (!mainWindow) {
-		blog(LOG_WARNING, "[StreamUP] Unable to get main window for layout orientation update");
+		StreamUP::DebugLogger::LogWarning("Toolbar", "Layout: Unable to get main window for layout orientation update");
 		return;
 	}
 	

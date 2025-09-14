@@ -1,4 +1,5 @@
 #include "http-client.hpp"
+#include "debug-logger.hpp"
 #include <curl/curl.h>
 #include <pthread.h>
 #include <obs-module.h>
@@ -17,7 +18,7 @@ bool MakeGetRequest(const std::string& url, std::string& response)
 {
     CURL* curl = curl_easy_init();
     if (!curl) {
-        blog(LOG_ERROR, "[StreamUP] Failed to initialize curl");
+        StreamUP::DebugLogger::LogError("HttpClient", "Failed to initialize curl");
         return false;
     }
 
@@ -39,7 +40,7 @@ bool MakeGetRequest(const std::string& url, std::string& response)
     curl_easy_cleanup(curl);
 
     if (res != CURLE_OK) {
-        blog(LOG_WARNING, "[StreamUP] HTTP request failed: %s", curl_easy_strerror(res));
+        StreamUP::DebugLogger::LogWarningFormat("HttpClient", "HTTP request failed: %s", curl_easy_strerror(res));
         return false;
     }
 
@@ -63,7 +64,7 @@ void* MakeApiRequestThread(void* arg)
         
         CURLcode res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
-            blog(LOG_WARNING, "[StreamUP] curl_easy_perform() failed: %s", curl_easy_strerror(res));
+            StreamUP::DebugLogger::LogWarningFormat("HttpClient", "curl_easy_perform() failed: %s", curl_easy_strerror(res));
         }
         curl_easy_cleanup(curl);
     }
@@ -94,7 +95,7 @@ bool MakeAsyncGetRequest(const std::string& url,
     int result = pthread_create(&thread, nullptr, AsyncRequestThread, asyncData);
     
     if (result != 0) {
-        blog(LOG_ERROR, "[StreamUP] Failed to create HTTP request thread");
+        StreamUP::DebugLogger::LogError("HttpClient", "Failed to create HTTP request thread");
         delete asyncData;
         return false;
     }

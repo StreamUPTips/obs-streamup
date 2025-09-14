@@ -1,4 +1,5 @@
 #include "plugin-manager.hpp"
+#include "../utilities/debug-logger.hpp"
 #include "streamup-common.hpp"
 #include "plugin-state.hpp"
 #include "string-utils.hpp"
@@ -1317,7 +1318,7 @@ std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath)
 		}
 		fclose(file);
 	} else {
-		blog(LOG_ERROR, "[StreamUP] Failed to open log file: %s", filepath.c_str());
+		StreamUP::DebugLogger::LogErrorFormat("PluginManager", "Failed to open log file: %s", filepath.c_str());
 	}
 
 	std::sort(collected_modules.begin(), collected_modules.end(), [](const std::string &a, const std::string &b) {

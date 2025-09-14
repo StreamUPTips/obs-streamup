@@ -1,4 +1,5 @@
 #include "plugin-state.hpp"
+#include "../utilities/debug-logger.hpp"
 #include <obs-module.h>
 
 namespace StreamUP {
@@ -21,13 +22,13 @@ const std::map<std::string, PluginInfo>& PluginState::GetRequiredPlugins() const
 void PluginState::SetAllPlugins(const std::map<std::string, PluginInfo>& plugins) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_allPlugins = plugins;
-    blog(LOG_INFO, "[StreamUP] Updated all plugins registry with %zu entries", plugins.size());
+    StreamUP::DebugLogger::LogInfoFormat("PluginState", "Updated all plugins registry with %zu entries", plugins.size());
 }
 
 void PluginState::SetRequiredPlugins(const std::map<std::string, PluginInfo>& plugins) {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_requiredPlugins = plugins;
-    blog(LOG_INFO, "[StreamUP] Updated required plugins registry with %zu entries", plugins.size());
+    StreamUP::DebugLogger::LogInfoFormat("PluginState", "Updated required plugins registry with %zu entries", plugins.size());
 }
 
 void PluginState::AddPlugin(const std::string& key, const PluginInfo& plugin) {
@@ -46,7 +47,7 @@ void PluginState::Reset() {
     m_requiredPlugins.clear();
     m_initialized = false;
     m_cachedStatus = PluginCheckResults(); // Reset cached status
-    blog(LOG_INFO, "[StreamUP] Plugin state reset");
+    StreamUP::DebugLogger::LogInfo("PluginState", "Plugin state reset");
 }
 
 const PluginState::PluginCheckResults& PluginState::GetCachedPluginStatus() const {

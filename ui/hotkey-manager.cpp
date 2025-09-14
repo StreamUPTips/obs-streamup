@@ -1,4 +1,5 @@
 #include "hotkey-manager.hpp"
+#include "../utilities/debug-logger.hpp"
 #include "streamup-common.hpp"
 #include "source-manager.hpp"
 #include "../utilities/obs-data-helpers.hpp"
@@ -158,7 +159,7 @@ void HotkeyOpenSceneFilters(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, 
 	// Get the current scene
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	if (!current_scene) {
-		blog(LOG_INFO, "[StreamUP] No current scene found, cannot open filters.");
+		StreamUP::DebugLogger::LogDebug("Hotkeys", "Scene Filters", "No current scene found, cannot open filters.");
 		return;
 	}
 
@@ -301,7 +302,7 @@ void ResetAllHotkeys()
 	
 	obs_data_array_release(emptyArray);
 	
-	blog(LOG_INFO, "[StreamUP] All hotkeys have been reset to no key assignments");
+	StreamUP::DebugLogger::LogDebug("Hotkeys", "Reset", "All hotkeys have been reset to no key assignments");
 }
 
 obs_hotkey_id GetHotkeyId(const char* hotkeyName)
@@ -336,7 +337,7 @@ obs_data_array_t* GetHotkeyBinding(const char* hotkeyName)
 {
 	obs_hotkey_id hotkeyId = GetHotkeyId(hotkeyName);
 	if (hotkeyId == OBS_INVALID_HOTKEY_ID) {
-		blog(LOG_WARNING, "[StreamUP] Invalid hotkey name: %s", hotkeyName);
+		StreamUP::DebugLogger::LogWarningFormat("Hotkeys", "Get Binding", "Invalid hotkey name: %s", hotkeyName);
 		return nullptr;
 	}
 	
@@ -347,12 +348,12 @@ void SetHotkeyBinding(const char* hotkeyName, obs_data_array_t* keyData)
 {
 	obs_hotkey_id hotkeyId = GetHotkeyId(hotkeyName);
 	if (hotkeyId == OBS_INVALID_HOTKEY_ID) {
-		blog(LOG_WARNING, "[StreamUP] Invalid hotkey name: %s", hotkeyName);
+		StreamUP::DebugLogger::LogWarningFormat("Hotkeys", "Set Binding", "Invalid hotkey name: %s", hotkeyName);
 		return;
 	}
 	
 	obs_hotkey_load(hotkeyId, keyData);
-	blog(LOG_INFO, "[StreamUP] Updated hotkey binding for: %s", hotkeyName);
+	StreamUP::DebugLogger::LogDebugFormat("Hotkeys", "Set Binding", "Updated hotkey binding for: %s", hotkeyName);
 	
 	// Force OBS to save the scene collection to persist hotkey changes
 	obs_frontend_save();

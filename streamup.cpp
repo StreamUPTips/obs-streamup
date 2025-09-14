@@ -17,6 +17,7 @@
 #include "notification-manager.hpp"
 #include "http-client.hpp"
 #include "utilities/path-utils.hpp"
+#include "utilities/debug-logger.hpp"
 #include "string-utils.hpp"
 #include "version-utils.hpp"
 #include "ui/splash-screen.hpp"
@@ -99,18 +100,18 @@ char *GetFilePath()
 	}
 	bfree(path);
 
-	blog(LOG_INFO, "[StreamUP] Path: %s", path_abs);
+	StreamUP::DebugLogger::LogDebugFormat("FileAccess", "Path Discovery", "Path: %s", path_abs);
 
 	// Use std::filesystem to check if the path exists
 	std::string path_abs_str(path_abs);
-	blog(LOG_INFO, "[StreamUP] Path: %s", path_abs_str.c_str());
+	StreamUP::DebugLogger::LogDebugFormat("FileAccess", "Path Discovery", "Path: %s", path_abs_str.c_str());
 
 	bool path_exists = std::filesystem::exists(path_abs_str);
 	if (path_exists) {
 		std::filesystem::directory_iterator dir(path_abs_str);
 		if (dir == std::filesystem::directory_iterator{}) {
 			// The directory is empty
-			blog(LOG_INFO, "[StreamUP] OBS doesn't have files in the install directory.");
+			StreamUP::DebugLogger::LogDebug("FileAccess", "Path Discovery", "OBS doesn't have files in the install directory");
 			bfree(path_abs);
 			return NULL;
 		} else {
@@ -119,7 +120,7 @@ char *GetFilePath()
 		}
 	} else {
 		// The directory does not exist
-		blog(LOG_INFO, "[StreamUP] OBS log file folder does not exist in the install directory.");
+		StreamUP::DebugLogger::LogDebug("FileAccess", "Path Discovery", "OBS log file folder does not exist in the install directory");
 		bfree(path_abs);
 		return NULL;
 	}
@@ -229,7 +230,7 @@ std::string SearchStringInFile(const char *path, const char *search)
 		}
 		fclose(file);
 	} else {
-		blog(LOG_ERROR, "[StreamUP] Failed to open file: %s", filepath.c_str());
+		StreamUP::DebugLogger::LogErrorFormat("FileAccess", "Failed to open file: %s", filepath.c_str());
 	}
 
 	return "";
@@ -308,7 +309,7 @@ void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 	// Fetch transition settings
 	obs_data_t *settings = obs_source_get_settings(transition);
 	if (!settings) {
-		blog(LOG_WARNING, "[StreamUP] Failed to get settings for transition: %s", obs_source_get_name(transition));
+		StreamUP::DebugLogger::LogWarningFormat("Transitions", "Failed to get settings for transition: %s", obs_source_get_name(transition));
 		obs_data_set_string(response_data, "error", "Failed to get transition settings.");
 		obs_data_set_bool(response_data, "success", false);
 		obs_source_release(scene_source);
@@ -350,7 +351,7 @@ const char *GetTransitionIDFromDisplayName(const char *display_name)
 
 		// Check if the display name is valid before calling strcmp
 		if (transition_display_name == NULL) {
-			blog(LOG_WARNING, "[StreamUP] Failed to get display name for transition ID: %s", transition_id);
+			StreamUP::DebugLogger::LogWarningFormat("Transitions", "Failed to get display name for transition ID: %s", transition_id);
 			continue; // Skip to the next transition type
 		}
 
@@ -638,7 +639,7 @@ void ApplyToolbarPosition()
 			globalToolbar->updatePositionAwareTheme();
 			
 			// Force a comprehensive style refresh to ensure position-aware styles are applied immediately
-			blog(LOG_DEBUG, "[StreamUP] Forcing style refresh after toolbar position change");
+			StreamUP::DebugLogger::LogDebug("Toolbar", "Position Change", "Forcing style refresh after toolbar position change");
 			
 			// Refresh the main window and all its children to pick up the new position-aware styling
 			main_window->style()->unpolish(main_window);
@@ -665,21 +666,30 @@ void ApplyToolbarPosition()
 
 bool obs_module_load()
 {
-	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
+	StreamUP::DebugLogger::LogInfoFormat("Plugin", "Loaded version %s", PROJECT_VERSION);
 
+	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Starting menu initialization");
 	StreamUP::MenuManager::InitializeMenu();
 
+	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Registering WebSocket requests");
 	RegisterWebsocketRequests();
+
+	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Registering hotkeys");
 	StreamUP::HotkeyManager::RegisterHotkeys();
 
+	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Adding save callback for hotkeys");
 	obs_frontend_add_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
 
+	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading StreamUP dock");
 	LoadStreamUPDock();
+
+	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading StreamUP toolbar");
 	LoadStreamUPToolbar();
 
-	// Initialize MultiDock system
+	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Initializing MultiDock system");
 	StreamUP::MultiDock::MultiDockManager::Initialize();
 
+	StreamUP::DebugLogger::LogInfo("Plugin", "Plugin initialization completed successfully");
 	return true;
 }
 
@@ -688,18 +698,22 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 	UNUSED_PARAMETER(private_data);
 	
 	if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
-		blog(LOG_INFO, "[StreamUP] OBS finished loading, initializing plugin data...");
-		
+		StreamUP::DebugLogger::LogInfo("Plugin", "OBS finished loading, initializing plugin data...");
+
 		// Remove the event callback since we only need this to run once
+		StreamUP::DebugLogger::LogDebug("Plugin", "OBS Finished Loading", "Removing event callback");
 		obs_frontend_remove_event_callback(OnOBSFinishedLoading, nullptr);
-		
+
 		// Run initialization asynchronously to avoid any potential blocking
+		StreamUP::DebugLogger::LogDebug("Plugin", "OBS Finished Loading", "Starting async initialization thread");
 		std::thread initThread([]() {
 			// Initialize plugin data from API
+			StreamUP::DebugLogger::LogDebug("Plugin", "Async Init", "Initializing required modules");
 			StreamUP::PluginManager::InitialiseRequiredModules();
-			
+
 			// Always perform initial plugin check and cache results for efficiency
 			// This ensures cached data is available even if startup check is disabled
+			StreamUP::DebugLogger::LogDebug("Plugin", "Async Init", "Performing plugin check and cache");
 			StreamUP::PluginManager::PerformPluginCheckAndCache();
 			
 			// Schedule startup UI to show on UI thread with delay
@@ -742,27 +756,43 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 
 void obs_module_post_load(void)
 {
+	StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Starting post-load initialization");
+
 	// Initialize settings system immediately (this is lightweight)
+	StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Initializing settings system");
 	StreamUP::SettingsManager::InitializeSettingsSystem();
-	
+
 	// Register callback to defer heavy initialization until OBS has finished loading
+	StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Registering OBS finished loading callback");
 	obs_frontend_add_event_callback(OnOBSFinishedLoading, nullptr);
+
+	StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Post-load initialization completed");
 }
 
 //--------------------EXIT COMMANDS--------------------
 void obs_module_unload()
 {
+	StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Starting plugin unload process");
+
+	StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Removing save callback for hotkeys");
 	obs_frontend_remove_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
+
+	StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Unregistering hotkeys");
 	StreamUP::HotkeyManager::UnregisterHotkeys();
-	
+
 	// Clean up toolbar - just nullify the pointer, let Qt/OBS handle destruction
+	StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up toolbar reference");
 	globalToolbar = nullptr;
-	
+
 	// Shutdown MultiDock system
+	StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Shutting down MultiDock system");
 	StreamUP::MultiDock::MultiDockManager::Shutdown();
-	
+
 	// Clean up settings cache
+	StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up settings cache");
 	StreamUP::SettingsManager::CleanupSettingsCache();
+
+	StreamUP::DebugLogger::LogInfo("Plugin", "Plugin unload completed successfully");
 }
 
 MODULE_EXPORT const char *obs_module_description(void)

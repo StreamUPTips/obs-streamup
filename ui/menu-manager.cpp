@@ -1,4 +1,5 @@
 #include "menu-manager.hpp"
+#include "../utilities/debug-logger.hpp"
 #include "source-manager.hpp"
 #include "file-manager.hpp"
 #include "plugin-manager.hpp"
@@ -33,14 +34,14 @@ void InitializeMenu()
     // Windows: Add to main menu bar
     void* main_window_ptr = obs_frontend_get_main_window();
     if (!main_window_ptr) {
-        blog(LOG_ERROR, "[StreamUP] Could not find main window");
+        StreamUP::DebugLogger::LogError("MenuManager", "Could not find main window");
         return;
     }
 
     QMainWindow* main_window = static_cast<QMainWindow*>(main_window_ptr);
     QMenuBar* menuBar = main_window->menuBar();
     if (!menuBar) {
-        blog(LOG_ERROR, "[StreamUP] Could not find main menu bar");
+        StreamUP::DebugLogger::LogError("MenuManager", "Could not find main menu bar");
         return;
     }
 

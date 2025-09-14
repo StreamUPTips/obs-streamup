@@ -1,4 +1,5 @@
 #include "../../core/source-manager.hpp"
+#include "../../utilities/debug-logger.hpp"
 #include "streamup-dock.hpp"
 #include "../../ui_StreamUPDock.h"
 #include "../../flow-layout.hpp"
@@ -636,7 +637,7 @@ void StreamUPDock::onFrontendEvent(enum obs_frontend_event event, void *private_
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
 	else if (event == OBS_FRONTEND_EVENT_THEME_CHANGED) {
 		// Theme changed, update button icons for new theme
-		blog(LOG_INFO, "[StreamUP] Dock received OBS_FRONTEND_EVENT_THEME_CHANGED event");
+		StreamUP::DebugLogger::LogDebug("UI", "Theme", "Dock received OBS_FRONTEND_EVENT_THEME_CHANGED event");
 		dock->updateButtonIcons();
 	}
 #endif

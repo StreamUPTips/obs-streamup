@@ -1,4 +1,5 @@
 #include "multidock_dialogs.hpp"
+#include "../utilities/debug-logger.hpp"
 #include "multidock_utils.hpp"
 #include "multidock_manager.hpp"
 #include "multidock_dock.hpp"
@@ -79,7 +80,7 @@ void ShowNewMultiDockDialog()
             return;
         }
         
-        blog(LOG_INFO, "[StreamUP MultiDock] Created MultiDock: '%s' with ID '%s'", 
+        StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dialog", "Created MultiDock: '%s' with ID '%s'",
              name.toUtf8().constData(), id.toUtf8().constData());
         
         dialog.accept();
@@ -219,7 +220,7 @@ void ShowManageMultiDocksDialog()
                             obsDocWidget->activateWindow();
                             dialog.accept();
                         } else {
-                            blog(LOG_WARNING, "[StreamUP MultiDock] Could not find OBS dock widget to open");
+                            StreamUP::DebugLogger::LogWarning("MultiDock", "Dialog: Could not find OBS dock widget to open");
                         }
                     }
                 }
@@ -254,7 +255,7 @@ void ShowManageMultiDocksDialog()
         }
         
         // Simple immediate deletion
-        blog(LOG_INFO, "[StreamUP MultiDock] Attempting to remove MultiDock '%s'", name.toUtf8().constData());
+        StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dialog", "Attempting to remove MultiDock '%s'", name.toUtf8().constData());
         
         bool success = manager->RemoveMultiDock(id);
         if (success) {
@@ -263,9 +264,9 @@ void ShowManageMultiDocksDialog()
             if (row >= 0) {
                 delete listWidget->takeItem(row);
             }
-            blog(LOG_INFO, "[StreamUP MultiDock] Successfully removed MultiDock from UI");
+            StreamUP::DebugLogger::LogDebug("MultiDock", "Dialog", "Successfully removed MultiDock from UI");
         } else {
-            blog(LOG_WARNING, "[StreamUP MultiDock] Failed to remove MultiDock");
+            StreamUP::DebugLogger::LogWarning("MultiDock", "Dialog: Failed to remove MultiDock");
             QMessageBox::warning(&dialog, "Error", "Failed to delete MultiDock.");
         }
     });
@@ -341,7 +342,7 @@ void ShowManageMultiDocksDialog()
             listWidget->addItem(item);
             listWidget->setCurrentItem(item);
             
-            blog(LOG_INFO, "[StreamUP MultiDock] Created MultiDock: '%s' with ID '%s'", 
+            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dialog", "Created MultiDock: '%s' with ID '%s'",
                  name.toUtf8().constData(), id.toUtf8().constData());
             
             newDialog.accept();
@@ -421,7 +422,7 @@ void ShowManageMultiDocksDialog()
             if (success) {
                 // Update the UI list
                 item->setText(newName);
-                blog(LOG_INFO, "[StreamUP MultiDock] Successfully renamed MultiDock to '%s'", newName.toUtf8().constData());
+                StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dialog", "Successfully renamed MultiDock to '%s'", newName.toUtf8().constData());
                 renameDialog.accept();
             } else {
                 QMessageBox::warning(&renameDialog, "Error", "Failed to rename MultiDock.");
@@ -437,7 +438,7 @@ void ShowManageMultiDocksDialog()
     
     QObject::connect(closeButton, &QPushButton::clicked, &dialog, &QDialog::accept);
     
-    blog(LOG_INFO, "[StreamUP MultiDock] Showing manage dialog");
+    StreamUP::DebugLogger::LogDebug("MultiDock", "Dialog", "Showing manage dialog");
     
     dialog.exec();
 }
