@@ -92,6 +92,7 @@ class SceneTreeModel : public QStandardItemModel {
 
 public:
     explicit SceneTreeModel(CanvasType canvasType, QObject *parent = nullptr);
+    ~SceneTreeModel();
 
     // Drag & drop support
     Qt::DropActions supportedDropActions() const override;
@@ -129,6 +130,7 @@ private:
     bool isManagedScene(obs_source_t *source);
     obs_data_array_t *createFolderArray(QStandardItem &parent);
     void loadFolderArray(obs_data_array_t *folder_array, QStandardItem &parent);
+    void removeSceneFromTracking(obs_weak_source_t *weak_source);
 
     // DigitOtter-style scene tracking
     using source_map_t = std::map<obs_weak_source_t*, QStandardItem*>;
@@ -172,6 +174,7 @@ private:
 class SceneTreeItem : public QStandardItem {
 public:
     explicit SceneTreeItem(const QString &sceneName, obs_weak_source_t *weak_source);
+    ~SceneTreeItem();
 
     int type() const override { return UserType + 2; }
     bool isScene() const { return true; }
