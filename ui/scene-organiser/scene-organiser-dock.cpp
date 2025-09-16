@@ -400,6 +400,12 @@ SceneTreeModel::SceneTreeModel(CanvasType canvasType, QObject *parent)
     // Don't call refreshFromObs() here - let the dock load configuration first
 }
 
+SceneTreeModel::~SceneTreeModel()
+{
+    // Clean up all weak source references
+    cleanupSceneTree();
+}
+
 void SceneTreeModel::setupRootItem()
 {
     setHorizontalHeaderLabels(QStringList() << "Scenes");
@@ -537,11 +543,11 @@ void SceneTreeModel::updateTree(const QModelIndex &selectedIndex)
         // Check if scene already in tree
         scene_it = m_scenesInTree.find(weak);
         if (scene_it != m_scenesInTree.end()) {
-            // Move to new tree
+            // Move existing scene to new tree
             auto new_scene_it = new_scene_tree.emplace(scene_it->first, scene_it->second).first;
             m_scenesInTree.erase(scene_it);
             scene_it = new_scene_it;
-            obs_weak_source_release(weak);
+            obs_weak_source_release(weak); // Release the duplicate weak reference
         } else {
             // Add new scene
             scene_it = new_scene_tree.emplace(weak, nullptr).first;
@@ -586,12 +592,14 @@ void SceneTreeModel::updateTree(const QModelIndex &selectedIndex)
             QStandardItem *parent = old_scene.second->parent();
             if (!parent) parent = invisibleRootItem();
 
+            QString sceneName = old_scene.second->text();
             int row = old_scene.second->row();
             parent->removeRow(row);
 
             StreamUP::DebugLogger::LogDebug("SceneOrganiser", "UpdateTree",
-                QString("Removed scene: %1").arg(old_scene.second->text()).toUtf8().constData());
+                QString("Removed scene: %1").arg(sceneName).toUtf8().constData());
         }
+        // Release the weak source reference
         obs_weak_source_release(old_scene.first);
     }
 
@@ -898,6 +906,9 @@ void SceneTreeModel::moveSceneItem(QStandardItem *item, int row, QStandardItem *
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Move",
         QString("Moving scene '%1'").arg(sceneName).toUtf8().constData());
 
+    // Add reference to weak source for new item
+    obs_weak_source_addref(weak);
+
     // Create new scene item with same weak reference
     QStandardItem *newItem = new SceneTreeItem(sceneName, weak);
     if (newItem) {
@@ -1081,6 +1092,18 @@ void SceneTreeModel::loadSceneTree()
     bfree(scene_collection);
 }
 
+void SceneTreeModel::removeSceneFromTracking(obs_weak_source_t *weak_source)
+{
+    auto it = m_scenesInTree.find(weak_source);
+    if (it != m_scenesInTree.end()) {
+        m_scenesInTree.erase(it);
+        obs_weak_source_release(weak_source);
+
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Cleanup",
+            "Removed scene from tracking and released weak reference");
+    }
+}
+
 obs_data_array_t *SceneTreeModel::createFolderArray(QStandardItem &parent)
 {
     obs_data_array_t *folder_array = obs_data_array_create();
@@ -1159,6 +1182,12 @@ void SceneTreeModel::loadFolderArray(obs_data_array_t *folder_array, QStandardIt
                 m_scenesInTree[weak] = sceneItem;
 
                 obs_source_release(source);
+
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "LoadConfig",
+                    QString("Loaded scene '%1' from config").arg(itemName).toUtf8().constData());
+            } else {
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "LoadConfig",
+                    QString("Scene '%1' not found in OBS, skipping").arg(itemName).toUtf8().constData());
             }
         }
 
@@ -1242,6 +1271,12 @@ SceneTreeItem::SceneTreeItem(const QString &sceneName, obs_weak_source_t *weak_s
 {
     setupSceneItem();
     updateFromObs();
+}
+
+SceneTreeItem::~SceneTreeItem()
+{
+    // Don't release weak source here - it's managed by the model
+    // The model will release all weak sources in its destructor
 }
 
 void SceneTreeItem::setupSceneItem()
