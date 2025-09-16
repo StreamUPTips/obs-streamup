@@ -10,6 +10,7 @@
 #include <QString>
 #include <QWidget>
 #include <QPointer>
+#include <QStandardItem>
 #include <functional>
 #include <unordered_map>
 
@@ -182,7 +183,16 @@ QIcon CreateThemedIcon(const QString &baseName);
  */
 bool IsOBSThemeDark();
 
-} // namespace UIHelpers  
+/**
+ * Recursively find a QStandardItem by text and type in a tree model
+ * @param parent The parent item to search from (use invisibleRootItem() for full tree)
+ * @param text The text to search for
+ * @param itemType The type of item to match (use QStandardItem::UserType + offset)
+ * @return QStandardItem* Pointer to found item or nullptr if not found
+ */
+QStandardItem* FindItemRecursive(QStandardItem* parent, const QString& text, int itemType);
+
+} // namespace UIHelpers
 } // namespace StreamUP
 
 #endif // STREAMUP_UI_HELPERS_HPP

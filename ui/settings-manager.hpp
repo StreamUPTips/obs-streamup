@@ -55,10 +55,12 @@ struct PluginSettings {
     bool showCPHIntegration;
     bool showToolbar;
     bool debugLoggingEnabled;
+    bool enableSceneOrganiserNormal;
+    bool enableSceneOrganiserVertical;
     ToolbarPosition toolbarPosition;
     DockToolSettings dockTools;
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), toolbarPosition(ToolbarPosition::Top) {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), enableSceneOrganiserNormal(true), enableSceneOrganiserVertical(true), toolbarPosition(ToolbarPosition::Top) {}
 };
 
 /**

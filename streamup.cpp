@@ -1,6 +1,7 @@
 #include "obs-websocket-api.h"
 #include "streamup.hpp"
 #include "ui/dock/streamup-dock.hpp"
+#include "ui/scene-organiser/scene-organiser-dock.hpp"
 #include "ui/streamup-toolbar.hpp"
 #include "ui/settings-manager.hpp"
 #include "version.h"
@@ -557,6 +558,80 @@ static void LoadStreamUPDock()
 	obs_frontend_pop_ui_translation();
 }
 
+// Global Scene Organiser dock instances
+static StreamUP::SceneOrganiser::SceneOrganiserDock* globalSceneOrganiserNormal = nullptr;
+static StreamUP::SceneOrganiser::SceneOrganiserDock* globalSceneOrganiserVertical = nullptr;
+
+static void LoadSceneOrganiserDocks()
+{
+	const auto main_window = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	obs_frontend_push_ui_translation(obs_module_get_string);
+
+	// Get current settings
+	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+
+	// Create Normal Canvas Scene Organiser if enabled
+	if (settings.enableSceneOrganiserNormal) {
+		globalSceneOrganiserNormal = new StreamUP::SceneOrganiser::SceneOrganiserDock(
+			StreamUP::SceneOrganiser::CanvasType::Normal, main_window);
+
+		const QString normalTitle = QString::fromUtf8(obs_module_text("SceneOrganiser.Label.NormalCanvas"));
+		const auto normalName = "StreamUPSceneOrganiserNormal";
+
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
+		obs_frontend_add_dock_by_id(normalName, normalTitle.toUtf8().constData(), globalSceneOrganiserNormal);
+#else
+		auto normalDock = new QDockWidget(main_window);
+		normalDock->setObjectName(normalName);
+		normalDock->setWindowTitle(normalTitle);
+		normalDock->setWidget(globalSceneOrganiserNormal);
+		normalDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+		normalDock->setFloating(true);
+		normalDock->hide();
+		obs_frontend_add_dock(normalDock);
+#endif
+	}
+
+	// Create Vertical Canvas Scene Organiser if enabled and Aitum Vertical plugin is detected
+	if (settings.enableSceneOrganiserVertical &&
+		StreamUP::SceneOrganiser::SceneOrganiserDock::IsVerticalPluginDetected()) {
+
+		globalSceneOrganiserVertical = new StreamUP::SceneOrganiser::SceneOrganiserDock(
+			StreamUP::SceneOrganiser::CanvasType::Vertical, main_window);
+
+		const QString verticalTitle = QString::fromUtf8(obs_module_text("SceneOrganiser.Label.VerticalCanvas"));
+		const auto verticalName = "StreamUPSceneOrganiserVertical";
+
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
+		obs_frontend_add_dock_by_id(verticalName, verticalTitle.toUtf8().constData(), globalSceneOrganiserVertical);
+#else
+		auto verticalDock = new QDockWidget(main_window);
+		verticalDock->setObjectName(verticalName);
+		verticalDock->setWindowTitle(verticalTitle);
+		verticalDock->setWidget(globalSceneOrganiserVertical);
+		verticalDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+		verticalDock->setFloating(true);
+		verticalDock->hide();
+		obs_frontend_add_dock(verticalDock);
+#endif
+	}
+
+	obs_frontend_pop_ui_translation();
+}
+
+// Function to apply scene organiser visibility changes
+void ApplySceneOrganiserVisibility()
+{
+	// This function will be called when settings change to show/hide Scene Organiser docks
+	// For now, we'll implement a full reload approach
+	// In the future, this could be optimized to dynamically show/hide existing docks
+
+	StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Scene Organiser visibility settings changed - restart OBS to apply changes");
+
+	// TODO: Implement dynamic dock visibility without requiring restart
+	// This would require keeping track of dock widgets and showing/hiding them
+}
+
 static StreamUPToolbar* globalToolbar = nullptr;
 
 // Forward declarations
@@ -682,6 +757,9 @@ bool obs_module_load()
 
 	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading StreamUP dock");
 	LoadStreamUPDock();
+
+	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading Scene Organiser docks");
+	LoadSceneOrganiserDocks();
 
 	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading StreamUP toolbar");
 	LoadStreamUPToolbar();

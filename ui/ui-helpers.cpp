@@ -402,5 +402,30 @@ bool IsOBSThemeDark()
 #endif
 }
 
+QStandardItem* FindItemRecursive(QStandardItem* parent, const QString& text, int itemType)
+{
+	if (!parent) {
+		return nullptr;
+	}
+
+	// Check current item
+	if (parent->text() == text && parent->type() == itemType) {
+		return parent;
+	}
+
+	// Search children recursively
+	for (int i = 0; i < parent->rowCount(); ++i) {
+		QStandardItem* child = parent->child(i);
+		if (child) {
+			QStandardItem* found = FindItemRecursive(child, text, itemType);
+			if (found) {
+				return found;
+			}
+		}
+	}
+
+	return nullptr;
+}
+
 } // namespace UIHelpers
 } // namespace StreamUP
