@@ -89,6 +89,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/websocket-window.cpp
   ui/dock/streamup-dock.hpp
   ui/dock/streamup-dock.cpp
+  ui/scene-organiser/scene-organiser-dock.hpp
+  ui/scene-organiser/scene-organiser-dock.cpp
   ui/streamup-toolbar.hpp
   ui/streamup-toolbar.cpp
   ui/streamup-toolbar-config.hpp
@@ -195,6 +197,10 @@ source_group("UI" FILES
 source_group("UI\\Dock" FILES
   ui/dock/streamup-dock.hpp
   ui/dock/streamup-dock.cpp)
+
+source_group("UI\\Scene Organiser" FILES
+  ui/scene-organiser/scene-organiser-dock.hpp
+  ui/scene-organiser/scene-organiser-dock.cpp)
 
 source_group("UI\\Toolbar" FILES
   ui/streamup-toolbar.hpp

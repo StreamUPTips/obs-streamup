@@ -9,6 +9,7 @@
 #include "hotkey-manager.hpp"
 #include "hotkey-widget.hpp"
 #include "dock/streamup-dock.hpp"
+#include "scene-organiser/scene-organiser-dock.hpp"
 #include "streamup-toolbar.hpp"
 #include "streamup-toolbar-configurator.hpp"
 #include <obs-module.h>
@@ -36,6 +37,7 @@
 #include <QComboBox>
 #include <QListWidget>
 #include <QStackedWidget>
+#include <QDesktopServices>
 #include <memory>
 #include <util/platform.h>
 
@@ -243,6 +245,8 @@ PluginSettings GetCurrentSettings()
 		settings.showCPHIntegration = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "show_cph_integration", true);
 		settings.showToolbar = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "show_toolbar", true);
 		settings.debugLoggingEnabled = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "debug_logging_enabled", false);
+		settings.enableSceneOrganiserNormal = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "enable_scene_organiser_normal", true);
+		settings.enableSceneOrganiserVertical = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "enable_scene_organiser_vertical", true);
 
 		// Load toolbar position setting (default to top if not set)
 		const char *positionStr = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "toolbar_position", "top");
@@ -287,6 +291,8 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "show_cph_integration", settings.showCPHIntegration);
 	obs_data_set_bool(data, "show_toolbar", settings.showToolbar);
 	obs_data_set_bool(data, "debug_logging_enabled", settings.debugLoggingEnabled);
+	obs_data_set_bool(data, "enable_scene_organiser_normal", settings.enableSceneOrganiserNormal);
+	obs_data_set_bool(data, "enable_scene_organiser_vertical", settings.enableSceneOrganiserVertical);
 
 	// Save toolbar position setting
 	const char *positionStr;
@@ -435,6 +441,7 @@ void ShowSettingsDialog(int tabIndex)
 		QStringList categories = {
 			obs_module_text("Settings.Group.General"),
 			obs_module_text("Settings.Group.Toolbar"),
+			obs_module_text("SceneOrganiser.Settings.Title"),
 			obs_module_text("Settings.Group.PluginManagement"),
 			obs_module_text("Settings.Group.Hotkeys"),
 			obs_module_text("Settings.Group.DockConfig")
@@ -779,7 +786,151 @@ void ShowSettingsDialog(int tabIndex)
 		toolbarPageLayout->addWidget(toolbarScrollArea);
 		stackedWidget->addWidget(toolbarPage);
 
-		// 3. Plugin Management Page
+		// 3. Scene Organiser Page
+		QWidget *sceneOrganiserPage = new QWidget();
+		QVBoxLayout *sceneOrganiserPageLayout = new QVBoxLayout(sceneOrganiserPage);
+		sceneOrganiserPageLayout->setContentsMargins(0, 0, 0, 0);
+		sceneOrganiserPageLayout->setSpacing(0);
+
+		// Create scrollable container with dialog box styling
+		QScrollArea *sceneOrganiserScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+		sceneOrganiserScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+		sceneOrganiserScrollArea->setStyleSheet(sceneOrganiserScrollArea->styleSheet() + QString(
+			"QScrollArea {"
+			"    background-color: %1;"
+			"    border: none;"
+			"    border-radius: %2px;"
+			"}"
+			"QScrollArea > QWidget > QWidget {"
+			"    background: transparent;"
+			"}"
+		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
+		 .arg(StreamUP::UIStyles::Sizes::RADIUS_DOCK));
+
+		// Create content container with dialog box background
+		QWidget *sceneOrganiserContentContainer = new QWidget();
+		sceneOrganiserContentContainer->setStyleSheet(QString(
+			"QWidget {"
+			"    background: transparent;"
+			"}"
+		));
+
+		QVBoxLayout *sceneOrganiserContentLayout = new QVBoxLayout(sceneOrganiserContentContainer);
+		sceneOrganiserContentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
+							 StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
+		sceneOrganiserContentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+
+		QWidget *sceneOrganiserSettingsWidget = new QWidget();
+		QVBoxLayout *sceneOrganiserLayout = new QVBoxLayout(sceneOrganiserSettingsWidget);
+		sceneOrganiserLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+		// Description header
+		QLabel *sceneOrganiserDescription = new QLabel(obs_module_text("SceneOrganiser.Settings.Description"));
+		sceneOrganiserDescription->setStyleSheet(QString("color: %1; font-size: %2px; margin-bottom: 16px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		sceneOrganiserDescription->setWordWrap(true);
+		sceneOrganiserLayout->addWidget(sceneOrganiserDescription);
+
+		// Enable Normal Canvas Organiser setting
+		QHBoxLayout *enableNormalLayout = new QHBoxLayout();
+
+		QLabel *enableNormalLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.EnableNormal"));
+		enableNormalLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		enableNormalLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.EnableNormalDesc"));
+
+		StreamUP::UIStyles::SwitchButton *enableNormalSwitch =
+			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.enableSceneOrganiserNormal);
+		enableNormalSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.EnableNormalDesc"));
+
+		QObject::connect(enableNormalSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+			PluginSettings settings = GetCurrentSettings();
+			settings.enableSceneOrganiserNormal = checked;
+			UpdateSettings(settings);
+
+			// Apply scene organiser visibility changes
+			extern void ApplySceneOrganiserVisibility();
+			ApplySceneOrganiserVisibility();
+		});
+
+		enableNormalLayout->addWidget(enableNormalLabel);
+		enableNormalLayout->addStretch();
+		enableNormalLayout->addWidget(enableNormalSwitch);
+		sceneOrganiserLayout->addLayout(enableNormalLayout);
+
+		// Enable Vertical Canvas Organiser setting (only if Aitum Vertical is detected)
+		bool verticalPluginDetected = StreamUP::SceneOrganiser::SceneOrganiserDock::IsVerticalPluginDetected();
+		if (verticalPluginDetected) {
+			QHBoxLayout *enableVerticalLayout = new QHBoxLayout();
+
+			QLabel *enableVerticalLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.EnableVertical"));
+			enableVerticalLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+								.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+								.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+			enableVerticalLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.EnableVerticalDesc"));
+
+			StreamUP::UIStyles::SwitchButton *enableVerticalSwitch =
+				StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.enableSceneOrganiserVertical);
+			enableVerticalSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.EnableVerticalDesc"));
+
+			QObject::connect(enableVerticalSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+				PluginSettings settings = GetCurrentSettings();
+				settings.enableSceneOrganiserVertical = checked;
+				UpdateSettings(settings);
+
+				// Apply scene organiser visibility changes
+				extern void ApplySceneOrganiserVisibility();
+				ApplySceneOrganiserVisibility();
+			});
+
+			enableVerticalLayout->addWidget(enableVerticalLabel);
+			enableVerticalLayout->addStretch();
+			enableVerticalLayout->addWidget(enableVerticalSwitch);
+			sceneOrganiserLayout->addLayout(enableVerticalLayout);
+		} else {
+			// Show informational text about vertical plugin requirement
+			QLabel *verticalRequirementLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.EnableVerticalDesc"));
+			verticalRequirementLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-style: italic; background: transparent;")
+								.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
+								.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+			verticalRequirementLabel->setWordWrap(true);
+			sceneOrganiserLayout->addWidget(verticalRequirementLabel);
+		}
+
+		// Credit section
+		sceneOrganiserLayout->addSpacing(20);
+
+		QGroupBox *creditGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("SceneOrganiser.Settings.Credit"), "info");
+		QVBoxLayout *creditLayout = new QVBoxLayout(creditGroup);
+		creditLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+		QLabel *creditText = new QLabel(obs_module_text("SceneOrganiser.Settings.CreditText"));
+		creditText->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+						.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		creditText->setWordWrap(true);
+		creditLayout->addWidget(creditText);
+
+		QPushButton *creditButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("SceneOrganiser.Settings.CreditLink"), "neutral");
+		creditButton->setToolTip("https://github.com/DigitOtter/obs_scene_tree_view");
+
+		QObject::connect(creditButton, &QPushButton::clicked, []() {
+			QDesktopServices::openUrl(QUrl("https://github.com/DigitOtter/obs_scene_tree_view"));
+		});
+
+		creditLayout->addWidget(creditButton);
+		sceneOrganiserLayout->addWidget(creditGroup);
+
+		sceneOrganiserContentLayout->addWidget(sceneOrganiserSettingsWidget);
+		sceneOrganiserContentLayout->addStretch();
+
+		sceneOrganiserScrollArea->setWidget(sceneOrganiserContentContainer);
+		sceneOrganiserPageLayout->addWidget(sceneOrganiserScrollArea);
+		stackedWidget->addWidget(sceneOrganiserPage);
+
+		// 4. Plugin Management Page
 		QWidget *pluginPage = new QWidget();
 		QVBoxLayout *pluginPageLayout = new QVBoxLayout(pluginPage);
 		pluginPageLayout->setContentsMargins(0, 0, 0, 0);
@@ -839,7 +990,7 @@ void ShowSettingsDialog(int tabIndex)
 		pluginPageLayout->addWidget(pluginScrollArea);
 		stackedWidget->addWidget(pluginPage);
 
-		// 4. Hotkeys Page - embed the full hotkeys UI directly
+		// 5. Hotkeys Page - embed the full hotkeys UI directly
 		QWidget *hotkeysPage = new QWidget();
 		QVBoxLayout *hotkeysPageLayout = new QVBoxLayout(hotkeysPage);
 		hotkeysPageLayout->setContentsMargins(0, 0, 0, 0);
@@ -1030,7 +1181,7 @@ void ShowSettingsDialog(int tabIndex)
 		hotkeysPageLayout->addWidget(hotkeysScrollArea);
 		stackedWidget->addWidget(hotkeysPage);
 
-		// 5. Dock Configuration Page - embed the full dock config UI directly
+		// 6. Dock Configuration Page - embed the full dock config UI directly
 		QWidget *dockPage = new QWidget();
 		QVBoxLayout *dockPageLayout = new QVBoxLayout(dockPage);
 		dockPageLayout->setContentsMargins(0, 0, 0, 0);
