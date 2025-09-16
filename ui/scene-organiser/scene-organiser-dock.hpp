@@ -13,6 +13,8 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QMenu>
+#include <QMessageBox>
+#include <QInputDialog>
 #include <map>
 #include <obs.h>
 #include <obs-frontend-api.h>
@@ -48,6 +50,10 @@ private slots:
     void onItemDoubleClicked(const QModelIndex &index);
     void onCustomContextMenuRequested(const QPoint &pos);
     void onAddFolderClicked();
+    void onRemoveClicked();
+    void onFiltersClicked();
+    void onMoveUpClicked();
+    void onMoveDownClicked();
     void onRefreshClicked();
     void onSettingsChanged();
 
@@ -71,6 +77,10 @@ private:
     SceneTreeModel *m_model;
     QHBoxLayout *m_buttonLayout;
     QPushButton *m_addFolderButton;
+    QPushButton *m_removeButton;
+    QPushButton *m_filtersButton;
+    QPushButton *m_upButton;
+    QPushButton *m_downButton;
     QPushButton *m_refreshButton;
 
     // Context menus

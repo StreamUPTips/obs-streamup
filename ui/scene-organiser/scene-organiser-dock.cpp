@@ -129,26 +129,72 @@ void SceneOrganiserDock::setupUI()
     // Tree view takes up most of the space (like OBS scenes dock)
     m_mainLayout->addWidget(m_treeView, 1);
 
-    // Bottom toolbar layout (like OBS scenes dock)
+    // Bottom toolbar layout (exactly like OBS scenes dock)
     m_buttonLayout = new QHBoxLayout();
-    m_buttonLayout->setContentsMargins(4, 4, 4, 4); // Small margins like OBS
-    m_buttonLayout->setSpacing(4); // Tight spacing like OBS
+    m_buttonLayout->setContentsMargins(4, 4, 4, 4);
+    m_buttonLayout->setSpacing(0);
 
-    // Add folder button - make it small like OBS toolbar buttons
-    m_addFolderButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("SceneOrganiser.Button.AddFolder"), "neutral");
+    // Add folder button (plus icon)
+    m_addFolderButton = new QPushButton(this);
+    m_addFolderButton->setProperty("themeID", "addIconSmall");
+    m_addFolderButton->setProperty("class", "icon-plus");
     m_addFolderButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.AddFolder"));
-    m_addFolderButton->setMaximumHeight(22); // Match OBS button height
+    m_addFolderButton->setMaximumSize(22, 22);
+    m_addFolderButton->setMinimumSize(22, 22);
     connect(m_addFolderButton, &QPushButton::clicked, this, &SceneOrganiserDock::onAddFolderClicked);
     m_buttonLayout->addWidget(m_addFolderButton);
 
-    // Refresh button - make it small like OBS toolbar buttons
-    m_refreshButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("SceneOrganiser.Button.Refresh"), "neutral");
-    m_refreshButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.Refresh"));
-    m_refreshButton->setMaximumHeight(22); // Match OBS button height
-    connect(m_refreshButton, &QPushButton::clicked, this, &SceneOrganiserDock::onRefreshClicked);
-    m_buttonLayout->addWidget(m_refreshButton);
+    // Remove/Delete button (trash icon)
+    m_removeButton = new QPushButton(this);
+    m_removeButton->setProperty("themeID", "removeIconSmall");
+    m_removeButton->setProperty("class", "icon-trash");
+    m_removeButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.Remove"));
+    m_removeButton->setMaximumSize(22, 22);
+    m_removeButton->setMinimumSize(22, 22);
+    m_removeButton->setEnabled(false); // Enable when item selected
+    connect(m_removeButton, &QPushButton::clicked, this, &SceneOrganiserDock::onRemoveClicked);
+    m_buttonLayout->addWidget(m_removeButton);
 
+    // Scene filters button (filters icon)
+    m_filtersButton = new QPushButton(this);
+    m_filtersButton->setProperty("themeID", "configIconSmall");
+    m_filtersButton->setProperty("class", "icon-filters");
+    m_filtersButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.Filters"));
+    m_filtersButton->setMaximumSize(22, 22);
+    m_filtersButton->setMinimumSize(22, 22);
+    m_filtersButton->setEnabled(false); // Enable when scene selected
+    connect(m_filtersButton, &QPushButton::clicked, this, &SceneOrganiserDock::onFiltersClicked);
+    m_buttonLayout->addWidget(m_filtersButton);
+
+    // Spacer
+    m_buttonLayout->addSpacing(4);
+
+    // Move up button (up arrow)
+    m_upButton = new QPushButton(this);
+    m_upButton->setProperty("themeID", "upArrowIconSmall");
+    m_upButton->setProperty("class", "icon-up");
+    m_upButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.MoveUp"));
+    m_upButton->setMaximumSize(22, 22);
+    m_upButton->setMinimumSize(22, 22);
+    m_upButton->setEnabled(false); // Enable when item selected
+    connect(m_upButton, &QPushButton::clicked, this, &SceneOrganiserDock::onMoveUpClicked);
+    m_buttonLayout->addWidget(m_upButton);
+
+    // Move down button (down arrow)
+    m_downButton = new QPushButton(this);
+    m_downButton->setProperty("themeID", "downArrowIconSmall");
+    m_downButton->setProperty("class", "icon-down");
+    m_downButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.MoveDown"));
+    m_downButton->setMaximumSize(22, 22);
+    m_downButton->setMinimumSize(22, 22);
+    m_downButton->setEnabled(false); // Enable when item selected
+    connect(m_downButton, &QPushButton::clicked, this, &SceneOrganiserDock::onMoveDownClicked);
+    m_buttonLayout->addWidget(m_downButton);
+
+    // Add spacer to push buttons left (like OBS)
     m_buttonLayout->addStretch();
+
+    // Add the button layout to main layout
     m_mainLayout->addLayout(m_buttonLayout);
 }
 
@@ -233,14 +279,40 @@ void SceneOrganiserDock::onSceneSelectionChanged(const QItemSelection &selected,
 {
     Q_UNUSED(deselected)
 
-    if (!selected.indexes().isEmpty()) {
-        auto item = m_model->itemFromIndex(selected.indexes().first());
-        if (item && item->type() == SceneTreeItem::UserType + 2) {
-            // This is a scene item - we could show preview or additional info here
-            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Selection",
-                QString("Scene selected: %1").arg(item->text()).toUtf8().constData());
+    bool hasSelection = !selected.indexes().isEmpty();
+    bool isScene = false;
+    bool isFolder = false;
+    bool canMoveUp = false;
+    bool canMoveDown = false;
+
+    if (hasSelection) {
+        QModelIndex index = selected.indexes().first();
+        QStandardItem *item = m_model->itemFromIndex(index);
+
+        if (item) {
+            isScene = (item->type() == SceneTreeItem::UserType + 2);
+            isFolder = (item->type() == SceneFolderItem::UserType + 1);
+
+            // Check if item can move up/down
+            QStandardItem *parent = item->parent();
+            if (!parent) parent = m_model->invisibleRootItem();
+
+            int itemRow = item->row();
+            canMoveUp = (itemRow > 0);
+            canMoveDown = (itemRow < parent->rowCount() - 1);
+
+            if (isScene) {
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Selection",
+                    QString("Scene selected: %1").arg(item->text()).toUtf8().constData());
+            }
         }
     }
+
+    // Update button states
+    m_removeButton->setEnabled(hasSelection);
+    m_filtersButton->setEnabled(isScene);
+    m_upButton->setEnabled(hasSelection && canMoveUp);
+    m_downButton->setEnabled(hasSelection && canMoveDown);
 }
 
 void SceneOrganiserDock::onItemDoubleClicked(const QModelIndex &index)
@@ -303,6 +375,100 @@ void SceneOrganiserDock::onAddFolderClicked()
         auto folderItem = m_model->createFolderItem(folderName);
         m_model->invisibleRootItem()->appendRow(folderItem);
         m_treeView->expand(folderItem->index());
+        m_saveTimer->start();
+    }
+}
+
+void SceneOrganiserDock::onRemoveClicked()
+{
+    QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
+    if (selected.isEmpty()) return;
+
+    QModelIndex index = selected.first();
+    QStandardItem *item = m_model->itemFromIndex(index);
+    if (!item) return;
+
+    QString itemName = item->text();
+    QString itemType = (item->type() == SceneFolderItem::UserType + 1) ? "folder" : "scene";
+
+    int ret = QMessageBox::question(this,
+        obs_module_text("SceneOrganiser.Dialog.Remove.Title"),
+        QString(obs_module_text("SceneOrganiser.Dialog.Remove.Text")).arg(itemType, itemName),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+
+    if (ret == QMessageBox::Yes) {
+        QStandardItem *parent = item->parent();
+        if (!parent) parent = m_model->invisibleRootItem();
+        parent->removeRow(item->row());
+        m_saveTimer->start();
+    }
+}
+
+void SceneOrganiserDock::onFiltersClicked()
+{
+    QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
+    if (selected.isEmpty()) return;
+
+    QModelIndex index = selected.first();
+    QStandardItem *item = m_model->itemFromIndex(index);
+    if (!item || item->type() != SceneTreeItem::UserType + 2) return;
+
+    QString sceneName = item->text();
+    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    if (source) {
+        // Open scene filters using OBS frontend API
+        obs_frontend_open_source_filters(source);
+        obs_source_release(source);
+    }
+}
+
+void SceneOrganiserDock::onMoveUpClicked()
+{
+    QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
+    if (selected.isEmpty()) return;
+
+    QModelIndex index = selected.first();
+    QStandardItem *item = m_model->itemFromIndex(index);
+    if (!item) return;
+
+    QStandardItem *parent = item->parent();
+    if (!parent) parent = m_model->invisibleRootItem();
+
+    int currentRow = item->row();
+    if (currentRow > 0) {
+        QList<QStandardItem*> items = parent->takeRow(currentRow);
+        parent->insertRow(currentRow - 1, items);
+
+        // Restore selection
+        QModelIndex newIndex = m_model->indexFromItem(items.first());
+        m_treeView->selectionModel()->select(newIndex, QItemSelectionModel::ClearAndSelect);
+
+        m_saveTimer->start();
+    }
+}
+
+void SceneOrganiserDock::onMoveDownClicked()
+{
+    QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
+    if (selected.isEmpty()) return;
+
+    QModelIndex index = selected.first();
+    QStandardItem *item = m_model->itemFromIndex(index);
+    if (!item) return;
+
+    QStandardItem *parent = item->parent();
+    if (!parent) parent = m_model->invisibleRootItem();
+
+    int currentRow = item->row();
+    if (currentRow < parent->rowCount() - 1) {
+        QList<QStandardItem*> items = parent->takeRow(currentRow);
+        parent->insertRow(currentRow + 1, items);
+
+        // Restore selection
+        QModelIndex newIndex = m_model->indexFromItem(items.first());
+        m_treeView->selectionModel()->select(newIndex, QItemSelectionModel::ClearAndSelect);
+
         m_saveTimer->start();
     }
 }
