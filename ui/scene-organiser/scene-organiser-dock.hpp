@@ -13,6 +13,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QMenu>
+#include <map>
 #include <obs.h>
 #include <obs-frontend-api.h>
 
@@ -101,16 +102,17 @@ public:
                      int row, int column, const QModelIndex &parent) override;
 
     // Scene management
-    void refreshFromObs();
-    QStandardItem *findSceneItem(const QString &sceneName);
+    void updateTree(const QModelIndex &selectedIndex = QModelIndex());
+    void saveSceneTree();
+    void loadSceneTree();
+    QStandardItem *findSceneItem(obs_weak_source_t *weak_source);
     QStandardItem *findFolderItem(const QString &folderName);
     QStandardItem *createFolderItem(const QString &folderName);
-    QStandardItem *createSceneItem(const QString &sceneName);
-    void moveSceneToFolder(const QString &sceneName, QStandardItem *folderItem);
+    QStandardItem *createSceneItem(const QString &sceneName, obs_weak_source_t *weak_source);
+    void moveSceneToFolder(obs_weak_source_t *weak_source, QStandardItem *folderItem);
 
-    // Configuration
-    void saveToConfig(obs_data_t *config);
-    void loadFromConfig(obs_data_t *config);
+    // Configuration (now handled by DigitOtter approach)
+    // saveToConfig and loadFromConfig removed - using saveSceneTree/loadSceneTree instead
 
     // Cleanup
     void cleanupEmptyItems();
@@ -123,9 +125,16 @@ private:
     void moveSceneItem(QStandardItem *item, int row, QStandardItem *parentItem);
     void moveSceneFolder(QStandardItem *item, int row, QStandardItem *parentItem);
     QString createUniqueFolderName(const QString &baseName, QStandardItem *parentItem);
+    void cleanupSceneTree();
+    bool isManagedScene(obs_source_t *source);
+    obs_data_array_t *createFolderArray(QStandardItem &parent);
+    void loadFolderArray(obs_data_array_t *folder_array, QStandardItem &parent);
+
+    // DigitOtter-style scene tracking
+    using source_map_t = std::map<obs_weak_source_t*, QStandardItem*>;
+    source_map_t m_scenesInTree;
 
     CanvasType m_canvasType;
-    QStringList m_validSceneNames;
 
 signals:
     void modelChanged();
@@ -162,14 +171,18 @@ private:
 
 class SceneTreeItem : public QStandardItem {
 public:
-    explicit SceneTreeItem(const QString &sceneName);
+    explicit SceneTreeItem(const QString &sceneName, obs_weak_source_t *weak_source);
 
     int type() const override { return UserType + 2; }
     bool isScene() const { return true; }
 
+    obs_weak_source_t* getWeakSource() const { return m_weakSource; }
+
 private:
     void setupSceneItem();
     void updateFromObs();
+
+    obs_weak_source_t* m_weakSource;
 };
 
 } // namespace SceneOrganiser

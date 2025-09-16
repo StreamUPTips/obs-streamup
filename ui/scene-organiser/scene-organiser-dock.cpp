@@ -221,7 +221,7 @@ void SceneOrganiserDock::setupObsSignals()
 
 void SceneOrganiserDock::refreshSceneList()
 {
-    m_model->refreshFromObs();
+    m_model->updateTree();
 }
 
 void SceneOrganiserDock::updateFromObsScenes()
@@ -323,9 +323,32 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
     auto dock = static_cast<SceneOrganiserDock*>(private_data);
 
     switch (event) {
+    case OBS_FRONTEND_EVENT_FINISHED_LOADING:
+        QTimer::singleShot(100, dock, [dock]() {
+            dock->m_model->loadSceneTree();
+            dock->m_model->updateTree();
+        });
+        break;
     case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
+        QTimer::singleShot(100, dock, [dock]() {
+            dock->m_model->updateTree();
+        });
+        break;
+    case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING:
+        // Save current scene tree before switching
+        dock->m_model->saveSceneTree();
+        break;
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
-        QTimer::singleShot(100, dock, &SceneOrganiserDock::updateFromObsScenes);
+        QTimer::singleShot(100, dock, [dock]() {
+            dock->m_model->loadSceneTree();
+            dock->m_model->updateTree();
+        });
+        break;
+    case OBS_FRONTEND_EVENT_SCENE_COLLECTION_RENAMED:
+        QTimer::singleShot(100, dock, [dock]() {
+            dock->m_model->saveSceneTree();
+            dock->m_model->updateTree();
+        });
         break;
     default:
         break;
@@ -349,47 +372,20 @@ void SceneOrganiserDock::SaveConfiguration()
         return;
     }
 
-    obs_data_t *config = obs_data_create();
-    m_model->saveToConfig(config);
+    // Now using DigitOtter approach - save is handled by saveSceneTree()
+    // which is called automatically on OBS frontend events
+    m_model->saveSceneTree();
 
-    // Save expanded state
-    obs_data_array_t *expandedArray = obs_data_array_create();
-    // TODO: Implement expanded state saving
-    obs_data_set_array(config, "expanded_folders", expandedArray);
-    obs_data_array_release(expandedArray);
-
-    if (!obs_data_save_json_safe(config, configFile.toUtf8().constData(), "tmp", "bak")) {
-        StreamUP::DebugLogger::LogInfo("SceneOrganiser",
-            QString("Failed to save Scene Organiser config: %1").arg(configFile).toUtf8().constData());
-    } else {
-        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-            QString("Successfully saved config: %1").arg(configFile).toUtf8().constData());
-    }
-
-    obs_data_release(config);
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
+        "Configuration saved using DigitOtter approach");
 }
 
 void SceneOrganiserDock::LoadConfiguration()
 {
-    char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
-    if (!configPath) return;
-
-    QString configFile = QString::fromUtf8(configPath) + "/" + m_configKey + ".json";
-    bfree(configPath);
-
-    obs_data_t *config = obs_data_create_from_json_file(configFile.toUtf8().constData());
-    if (config) {
-        m_model->loadFromConfig(config);
-
-        // TODO: Restore expanded state
-        obs_data_array_t *expandedArray = obs_data_get_array(config, "expanded_folders");
-        if (expandedArray) {
-            // Implement expanded state restoration
-            obs_data_array_release(expandedArray);
-        }
-
-        obs_data_release(config);
-    }
+    // Now using the DigitOtter approach - this is handled by frontend events
+    // No need to manually load configuration here
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
+        "Configuration loading handled by frontend events");
 }
 
 //==============================================================================
@@ -401,7 +397,7 @@ SceneTreeModel::SceneTreeModel(CanvasType canvasType, QObject *parent)
     , m_canvasType(canvasType)
 {
     setupRootItem();
-    refreshFromObs();
+    // Don't call refreshFromObs() here - let the dock load configuration first
 }
 
 void SceneTreeModel::setupRootItem()
@@ -515,63 +511,97 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
     return true;
 }
 
-void SceneTreeModel::refreshFromObs()
+void SceneTreeModel::updateTree(const QModelIndex &selectedIndex)
 {
-    // Get current structure to preserve organization
-    obs_data_t *tempData = obs_data_create();
-    saveToConfig(tempData);
-
-    // Clear model but preserve folder structure
-    clear();
-    setupRootItem();
-
     // Get all scenes from OBS
-    struct obs_frontend_source_list scenes = {0};
-    obs_frontend_get_scenes(&scenes);
+    struct obs_frontend_source_list scene_list = {0};
+    obs_frontend_get_scenes(&scene_list);
 
-    m_validSceneNames.clear();
+    source_map_t new_scene_tree;
 
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Refresh",
-        QString("Found %1 total sources from OBS").arg(scenes.sources.num).toUtf8().constData());
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "UpdateTree",
+        QString("Processing %1 scenes from OBS").arg(scene_list.sources.num).toUtf8().constData());
 
-    for (size_t i = 0; i < scenes.sources.num; i++) {
-        obs_source_t *source = scenes.sources.array[i];
+    for (size_t i = 0; i < scene_list.sources.num; i++) {
+        obs_source_t *source = scene_list.sources.array[i];
         if (!source) continue;
 
         obs_scene_t *scene = obs_scene_from_source(source);
         if (!scene) continue;
 
-        const char *name = obs_source_get_name(source);
-        if (!name || strlen(name) == 0) continue; // Skip sources with no name
+        if (!isManagedScene(source)) continue;
 
-        QString sceneName = QString::fromUtf8(name);
-        if (sceneName.isEmpty() || sceneName.trimmed().isEmpty()) continue; // Skip empty names
+        obs_weak_source_t *weak = obs_source_get_weak_source(source);
+        source_map_t::iterator scene_it;
 
-        if (isValidSceneForCanvas(scene)) {
-            m_validSceneNames.append(sceneName);
+        // Check if scene already in tree
+        scene_it = m_scenesInTree.find(weak);
+        if (scene_it != m_scenesInTree.end()) {
+            // Move to new tree
+            auto new_scene_it = new_scene_tree.emplace(scene_it->first, scene_it->second).first;
+            m_scenesInTree.erase(scene_it);
+            scene_it = new_scene_it;
+            obs_weak_source_release(weak);
+        } else {
+            // Add new scene
+            scene_it = new_scene_tree.emplace(weak, nullptr).first;
+        }
 
-            // Create scene item only for valid, non-empty scene names
-            QStandardItem *sceneItem = createSceneItem(sceneName);
-            if (sceneItem && !sceneItem->text().isEmpty()) {
-                invisibleRootItem()->appendRow(sceneItem);
+        if (!scene_it->second) {
+            // Scene not yet in tree, add it
+            const char *name = obs_source_get_name(source);
+            if (name) {
+                QString sceneName = QString::fromUtf8(name);
+                QStandardItem *newSceneItem = new SceneTreeItem(sceneName, scene_it->first);
+
+                // Determine where to add the scene
+                QStandardItem *parent = invisibleRootItem();
+                QStandardItem *selected = itemFromIndex(selectedIndex);
+                if (selected) {
+                    if (selected->type() == SceneFolderItem::UserType + 1) {
+                        parent = selected;
+                    } else if (selected->parent()) {
+                        parent = selected->parent();
+                    }
+                }
+
+                parent->appendRow(newSceneItem);
+                scene_it->second = newSceneItem;
+
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "UpdateTree",
+                    QString("Added new scene: %1").arg(sceneName).toUtf8().constData());
             }
-
-            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Refresh",
-                QString("Added valid scene: '%1'").arg(sceneName).toUtf8().constData());
+        } else {
+            // Update existing scene name
+            const char *name = obs_source_get_name(source);
+            if (name) {
+                scene_it->second->setText(QString::fromUtf8(name));
+            }
         }
     }
 
-    obs_frontend_source_list_free(&scenes);
+    // Remove scenes that are no longer in OBS
+    for (auto &old_scene : m_scenesInTree) {
+        if (old_scene.second) {
+            QStandardItem *parent = old_scene.second->parent();
+            if (!parent) parent = invisibleRootItem();
 
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Refresh",
-        QString("Total valid scenes added: %1").arg(m_validSceneNames.count()).toUtf8().constData());
+            int row = old_scene.second->row();
+            parent->removeRow(row);
 
-    // Restore organization from saved data
-    loadFromConfig(tempData);
-    obs_data_release(tempData);
+            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "UpdateTree",
+                QString("Removed scene: %1").arg(old_scene.second->text()).toUtf8().constData());
+        }
+        obs_weak_source_release(old_scene.first);
+    }
 
-    // Clean up any invalid items
-    cleanupEmptyItems();
+    // Update our scene tree
+    m_scenesInTree = std::move(new_scene_tree);
+
+    obs_frontend_source_list_free(&scene_list);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "UpdateTree",
+        QString("Tree updated - %1 scenes tracked").arg(m_scenesInTree.size()).toUtf8().constData());
 
     emit modelChanged();
 }
@@ -588,9 +618,10 @@ bool SceneTreeModel::isValidSceneForCanvas(obs_scene_t *scene)
     return true;
 }
 
-QStandardItem *SceneTreeModel::findSceneItem(const QString &sceneName)
+QStandardItem *SceneTreeModel::findSceneItem(obs_weak_source_t *weak_source)
 {
-    return StreamUP::UIHelpers::FindItemRecursive(invisibleRootItem(), sceneName, SceneTreeItem::UserType + 2);
+    auto it = m_scenesInTree.find(weak_source);
+    return (it != m_scenesInTree.end()) ? it->second : nullptr;
 }
 
 QStandardItem *SceneTreeModel::findFolderItem(const QString &folderName)
@@ -608,19 +639,19 @@ QStandardItem *SceneTreeModel::createFolderItem(const QString &folderName)
     return new SceneFolderItem(folderName);
 }
 
-QStandardItem *SceneTreeModel::createSceneItem(const QString &sceneName)
+QStandardItem *SceneTreeModel::createSceneItem(const QString &sceneName, obs_weak_source_t *weak_source)
 {
     if (sceneName.isEmpty() || sceneName.trimmed().isEmpty()) {
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Warning",
             "Attempted to create scene item with empty name");
         return nullptr;
     }
-    return new SceneTreeItem(sceneName);
+    return new SceneTreeItem(sceneName, weak_source);
 }
 
-void SceneTreeModel::moveSceneToFolder(const QString &sceneName, QStandardItem *folderItem)
+void SceneTreeModel::moveSceneToFolder(obs_weak_source_t *weak_source, QStandardItem *folderItem)
 {
-    QStandardItem *sceneItem = findSceneItem(sceneName);
+    QStandardItem *sceneItem = findSceneItem(weak_source);
     if (sceneItem && folderItem) {
         QStandardItem *oldParent = sceneItem->parent();
         if (!oldParent) oldParent = invisibleRootItem();
@@ -633,6 +664,8 @@ void SceneTreeModel::moveSceneToFolder(const QString &sceneName, QStandardItem *
     }
 }
 
+// OLD CONFIG METHODS - REPLACED BY DIGITOTTER APPROACH
+/*
 void SceneTreeModel::saveToConfig(obs_data_t *config)
 {
     obs_data_array_t *rootArray = obs_data_array_create();
@@ -748,10 +781,10 @@ void SceneTreeModel::loadFromConfig(obs_data_t *config)
                             continue;
                         }
 
-                        if (childType == SceneTreeItem::UserType + 2 &&
-                            m_validSceneNames.contains(childSceneName)) {
-                            // Move scene from root to folder
-                            QStandardItem *sceneItem = findSceneItem(childSceneName);
+                        if (childType == SceneTreeItem::UserType + 2) {
+                            // Scene handling is now done by updateTree - skip here
+                            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
+                                QString("Scene '%1' handling delegated to updateTree").arg(childSceneName).toUtf8().constData());
                             if (sceneItem && !sceneItem->text().isEmpty()) {
                                 QStandardItem *oldParent = sceneItem->parent();
                                 if (!oldParent) oldParent = invisibleRootItem();
@@ -779,6 +812,8 @@ void SceneTreeModel::loadFromConfig(obs_data_t *config)
 
     obs_data_array_release(rootArray);
 }
+*/
+// END OLD CONFIG METHODS
 
 void SceneTreeModel::cleanupEmptyItems()
 {
@@ -808,14 +843,10 @@ void SceneTreeModel::cleanupEmptyItemsRecursive(QStandardItem *parent)
             continue;
         }
 
-        // For scene items, verify they still exist in OBS
+        // For scene items, they are managed by updateTree now
         if (child->type() == SceneTreeItem::UserType + 2) {
-            if (!m_validSceneNames.contains(itemText)) {
-                parent->removeRow(i);
-                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Cleanup",
-                    QString("Removed scene '%1' - no longer exists in OBS").arg(itemText).toUtf8().constData());
-                continue;
-            }
+            // Scene validation is handled in updateTree - skip here
+            continue;
         }
 
         // Recursively clean up folders
@@ -860,14 +891,21 @@ void SceneTreeModel::moveSceneItem(QStandardItem *item, int row, QStandardItem *
         return;
     }
 
+    SceneTreeItem *sceneItem = static_cast<SceneTreeItem*>(item);
     QString sceneName = item->text();
+    obs_weak_source_t *weak = sceneItem->getWeakSource();
+
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Move",
         QString("Moving scene '%1'").arg(sceneName).toUtf8().constData());
 
-    // Create new scene item with same name
-    QStandardItem *newItem = createSceneItem(sceneName);
+    // Create new scene item with same weak reference
+    QStandardItem *newItem = new SceneTreeItem(sceneName, weak);
     if (newItem) {
         parentItem->insertRow(row, newItem);
+
+        // Update our tracking map
+        m_scenesInTree[weak] = newItem;
+
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Move",
             QString("Moved scene '%1' to row %2").arg(sceneName).arg(row).toUtf8().constData());
     }
@@ -950,6 +988,185 @@ QString SceneTreeModel::createUniqueFolderName(const QString &baseName, QStandar
     return uniqueName;
 }
 
+bool SceneTreeModel::isManagedScene(obs_source_t *source)
+{
+    if (!source) return false;
+
+    obs_scene_t *scene = obs_scene_from_source(source);
+    if (!scene) return false;
+
+    return isValidSceneForCanvas(scene);
+}
+
+void SceneTreeModel::cleanupSceneTree()
+{
+    // Release all weak references and clear the tree
+    for (auto &scene_pair : m_scenesInTree) {
+        obs_weak_source_release(scene_pair.first);
+    }
+    m_scenesInTree.clear();
+
+    // Clear the model
+    clear();
+    setupRootItem();
+}
+
+void SceneTreeModel::saveSceneTree()
+{
+    char *scene_collection = obs_frontend_get_current_scene_collection();
+    if (!scene_collection) return;
+
+    char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
+    if (!configPath) {
+        bfree(scene_collection);
+        return;
+    }
+
+    QString configDir = QString::fromUtf8(configPath);
+    QString configFile = configDir + "/scene_tree_" +
+        (m_canvasType == CanvasType::Vertical ? "vertical" : "normal") + ".json";
+
+    bfree(configPath);
+
+    // Create root data
+    obs_data_t *root_data = obs_data_create();
+    obs_data_array_t *folder_array = createFolderArray(*invisibleRootItem());
+    obs_data_set_array(root_data, scene_collection, folder_array);
+    obs_data_array_release(folder_array);
+
+    // Save to file
+    obs_data_save_json(root_data, configFile.toUtf8().constData());
+    obs_data_release(root_data);
+
+    bfree(scene_collection);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Save",
+        QString("Saved scene tree to: %1").arg(configFile).toUtf8().constData());
+}
+
+void SceneTreeModel::loadSceneTree()
+{
+    char *scene_collection = obs_frontend_get_current_scene_collection();
+    if (!scene_collection) return;
+
+    char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
+    if (!configPath) {
+        bfree(scene_collection);
+        return;
+    }
+
+    QString configDir = QString::fromUtf8(configPath);
+    QString configFile = configDir + "/scene_tree_" +
+        (m_canvasType == CanvasType::Vertical ? "vertical" : "normal") + ".json";
+
+    bfree(configPath);
+
+    // Clean up previous tree
+    cleanupSceneTree();
+
+    // Load from file
+    obs_data_t *root_data = obs_data_create_from_json_file(configFile.toUtf8().constData());
+    if (root_data) {
+        obs_data_array_t *folder_array = obs_data_get_array(root_data, scene_collection);
+        if (folder_array) {
+            loadFolderArray(folder_array, *invisibleRootItem());
+            obs_data_array_release(folder_array);
+        }
+        obs_data_release(root_data);
+
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Load",
+            QString("Loaded scene tree from: %1").arg(configFile).toUtf8().constData());
+    }
+
+    bfree(scene_collection);
+}
+
+obs_data_array_t *SceneTreeModel::createFolderArray(QStandardItem &parent)
+{
+    obs_data_array_t *folder_array = obs_data_array_create();
+
+    for (int i = 0; i < parent.rowCount(); ++i) {
+        QStandardItem *child = parent.child(i);
+        if (!child) continue;
+
+        obs_data_t *item_data = obs_data_create();
+
+        if (child->type() == SceneFolderItem::UserType + 1) {
+            // This is a folder
+            obs_data_set_string(item_data, "name", child->text().toUtf8().constData());
+            obs_data_set_string(item_data, "type", "folder");
+            obs_data_set_bool(item_data, "expanded", true); // TODO: Track expansion state
+
+            // Recursively save children
+            obs_data_array_t *children = createFolderArray(*child);
+            obs_data_set_array(item_data, "children", children);
+            obs_data_array_release(children);
+
+        } else if (child->type() == SceneTreeItem::UserType + 2) {
+            // This is a scene
+            obs_data_set_string(item_data, "name", child->text().toUtf8().constData());
+            obs_data_set_string(item_data, "type", "scene");
+        }
+
+        obs_data_array_push_back(folder_array, item_data);
+        obs_data_release(item_data);
+    }
+
+    return folder_array;
+}
+
+void SceneTreeModel::loadFolderArray(obs_data_array_t *folder_array, QStandardItem &parent)
+{
+    size_t count = obs_data_array_count(folder_array);
+    for (size_t i = 0; i < count; i++) {
+        obs_data_t *item_data = obs_data_array_item(folder_array, i);
+        if (!item_data) continue;
+
+        const char *name = obs_data_get_string(item_data, "name");
+        const char *type = obs_data_get_string(item_data, "type");
+
+        if (!name || !type) {
+            obs_data_release(item_data);
+            continue;
+        }
+
+        QString itemName = QString::fromUtf8(name);
+        QString itemType = QString::fromUtf8(type);
+
+        if (itemType == "folder") {
+            // Create folder
+            QStandardItem *folderItem = createFolderItem(itemName);
+            if (folderItem) {
+                parent.appendRow(folderItem);
+
+                // Load children
+                obs_data_array_t *children = obs_data_get_array(item_data, "children");
+                if (children) {
+                    loadFolderArray(children, *folderItem);
+                    obs_data_array_release(children);
+                }
+            }
+        } else if (itemType == "scene") {
+            // Create placeholder for scene - will be filled by updateTree
+            // Find the actual scene source
+            obs_source_t *source = obs_get_source_by_name(name);
+            if (source) {
+                obs_weak_source_t *weak = obs_source_get_weak_source(source);
+                QStandardItem *sceneItem = new SceneTreeItem(itemName, weak);
+                parent.appendRow(sceneItem);
+
+                // Add to our tracking map
+                m_scenesInTree[weak] = sceneItem;
+
+                obs_source_release(source);
+            }
+        }
+
+        obs_data_release(item_data);
+    }
+}
+
+
 //==============================================================================
 // SceneTreeView Implementation
 //==============================================================================
@@ -1020,8 +1237,8 @@ void SceneFolderItem::setupFolderItem()
     setDragEnabled(true);
 }
 
-SceneTreeItem::SceneTreeItem(const QString &sceneName)
-    : QStandardItem(sceneName)
+SceneTreeItem::SceneTreeItem(const QString &sceneName, obs_weak_source_t *weak_source)
+    : QStandardItem(sceneName), m_weakSource(weak_source)
 {
     setupSceneItem();
     updateFromObs();
