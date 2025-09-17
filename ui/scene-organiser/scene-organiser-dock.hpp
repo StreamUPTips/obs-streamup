@@ -15,6 +15,9 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QInputDialog>
+#include <QToolBar>
+#include <QToolButton>
+#include <QAction>
 #include <map>
 #include <obs.h>
 #include <obs-frontend-api.h>
@@ -50,6 +53,7 @@ private slots:
     void onItemDoubleClicked(const QModelIndex &index);
     void onCustomContextMenuRequested(const QPoint &pos);
     void onAddFolderClicked();
+    void onCreateSceneClicked();
     void onRemoveClicked();
     void onFiltersClicked();
     void onMoveUpClicked();
@@ -64,6 +68,8 @@ private:
     void setupUI();
     void setupContextMenu();
     void setupObsSignals();
+    void createBottomToolbar();
+    void updateToolbarState();
     void refreshSceneList();
     void updateFromObsScenes();
     void showFolderContextMenu(const QPoint &pos, const QModelIndex &index);
@@ -75,13 +81,21 @@ private:
     QVBoxLayout *m_mainLayout;
     SceneTreeView *m_treeView;
     SceneTreeModel *m_model;
-    QHBoxLayout *m_buttonLayout;
-    QPushButton *m_addFolderButton;
-    QPushButton *m_removeButton;
-    QPushButton *m_filtersButton;
-    QPushButton *m_upButton;
-    QPushButton *m_downButton;
-    QPushButton *m_refreshButton;
+
+    // Toolbar and buttons
+    QToolBar *m_toolbar;
+    QAction *m_addFolderAction;
+    QAction *m_removeAction;
+    QAction *m_filtersAction;
+    QAction *m_moveUpAction;
+    QAction *m_moveDownAction;
+
+    // Button references for state management
+    QToolButton *m_addButton;
+    QToolButton *m_removeButton;
+    QToolButton *m_filtersButton;
+    QToolButton *m_moveUpButton;
+    QToolButton *m_moveDownButton;
 
     // Context menus
     QMenu *m_folderContextMenu;

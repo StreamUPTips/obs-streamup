@@ -13,13 +13,42 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QInputDialog>
+#include <QToolBar>
+#include <QToolButton>
+#include <QAction>
 #include <QMessageBox>
+#include <QPainter>
+#include <QPixmap>
+#include <QIcon>
+#include <QColor>
+#include <QtSvg/QSvgRenderer>
 #include <QSortFilterProxyModel>
 #include <QDir>
 #include <util/platform.h>
 
 namespace StreamUP {
 namespace SceneOrganiser {
+
+// Helper function to create colored icons from SVG resources (copied from multidock)
+static QIcon CreateColoredIcon(const QString& svgPath, const QColor& color, const QSize& size = QSize(16, 16))
+{
+    QPixmap pixmap(size);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    QSvgRenderer renderer(svgPath);
+    if (renderer.isValid()) {
+        renderer.render(&painter);
+
+        // Apply color overlay
+        painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        painter.fillRect(pixmap.rect(), color);
+    }
+
+    return QIcon(pixmap);
+}
 
 // Static member initialization
 QList<SceneOrganiserDock*> SceneOrganiserDock::s_dockInstances;
@@ -34,9 +63,17 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_mainLayout(nullptr)
     , m_treeView(nullptr)
     , m_model(nullptr)
-    , m_buttonLayout(nullptr)
-    , m_addFolderButton(nullptr)
-    , m_refreshButton(nullptr)
+    , m_toolbar(nullptr)
+    , m_addFolderAction(nullptr)
+    , m_removeAction(nullptr)
+    , m_filtersAction(nullptr)
+    , m_moveUpAction(nullptr)
+    , m_moveDownAction(nullptr)
+    , m_addButton(nullptr)
+    , m_removeButton(nullptr)
+    , m_filtersButton(nullptr)
+    , m_moveUpButton(nullptr)
+    , m_moveDownButton(nullptr)
     , m_folderContextMenu(nullptr)
     , m_sceneContextMenu(nullptr)
     , m_backgroundContextMenu(nullptr)
@@ -129,73 +166,151 @@ void SceneOrganiserDock::setupUI()
     // Tree view takes up most of the space (like OBS scenes dock)
     m_mainLayout->addWidget(m_treeView, 1);
 
-    // Bottom toolbar layout (exactly like OBS scenes dock)
-    m_buttonLayout = new QHBoxLayout();
-    m_buttonLayout->setContentsMargins(4, 4, 4, 4);
-    m_buttonLayout->setSpacing(0);
+    // Create and add the toolbar at the bottom
+    createBottomToolbar();
+}
 
-    // Add folder button (plus icon)
-    m_addFolderButton = new QPushButton(this);
-    m_addFolderButton->setProperty("themeID", "addIconSmall");
-    m_addFolderButton->setProperty("class", "icon-plus");
-    m_addFolderButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.AddFolder"));
-    m_addFolderButton->setMaximumSize(22, 22);
-    m_addFolderButton->setMinimumSize(22, 22);
-    connect(m_addFolderButton, &QPushButton::clicked, this, &SceneOrganiserDock::onAddFolderClicked);
-    m_buttonLayout->addWidget(m_addFolderButton);
+void SceneOrganiserDock::createBottomToolbar()
+{
+    if (!m_mainLayout) {
+        return;
+    }
 
-    // Remove/Delete button (trash icon)
-    m_removeButton = new QPushButton(this);
-    m_removeButton->setProperty("themeID", "removeIconSmall");
-    m_removeButton->setProperty("class", "icon-trash");
-    m_removeButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.Remove"));
-    m_removeButton->setMaximumSize(22, 22);
-    m_removeButton->setMinimumSize(22, 22);
-    m_removeButton->setEnabled(false); // Enable when item selected
-    connect(m_removeButton, &QPushButton::clicked, this, &SceneOrganiserDock::onRemoveClicked);
-    m_buttonLayout->addWidget(m_removeButton);
+    // Create a proper QToolBar like in the multidock
+    m_toolbar = new QToolBar("Scene Organiser Controls", this);
+    m_toolbar->setObjectName("SceneOrganiserBottomToolbar");
+    m_toolbar->setMovable(false);
+    m_toolbar->setFloatable(false);
+    m_toolbar->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    m_toolbar->setOrientation(Qt::Horizontal);
 
-    // Scene filters button (filters icon)
-    m_filtersButton = new QPushButton(this);
-    m_filtersButton->setProperty("themeID", "configIconSmall");
-    m_filtersButton->setProperty("class", "icon-filters");
-    m_filtersButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.Filters"));
-    m_filtersButton->setMaximumSize(22, 22);
-    m_filtersButton->setMinimumSize(22, 22);
-    m_filtersButton->setEnabled(false); // Enable when scene selected
-    connect(m_filtersButton, &QPushButton::clicked, this, &SceneOrganiserDock::onFiltersClicked);
-    m_buttonLayout->addWidget(m_filtersButton);
+    // Match native OBS scenes dock styling exactly
+    m_toolbar->setIconSize(QSize(14, 14));
 
-    // Spacer
-    m_buttonLayout->addSpacing(4);
+    // Apply exact OBS scenes dock toolbar styling (with proper padding and spacing)
+    m_toolbar->setStyleSheet(
+        "QToolBar {"
+        "    background-color: #161617;"
+        "    min-height: 24px;"
+        "    max-height: 24px;"
+        "    border: none;"
+        "    padding: 2px 4px 2px 4px;"
+        "    spacing: 2px;"
+        "}"
+        "QToolButton {"
+        "    background: transparent;"
+        "    border: none;"
+        "    border-radius: 4px;"
+        "    margin: 0px 1px 0px 1px;"
+        "    min-width: 20px;"
+        "    max-width: 20px;"
+        "    min-height: 20px;"
+        "    max-height: 20px;"
+        "    padding: 1px;"
+        "}"
+        "QToolButton:hover {"
+        "    background-color: #0f7bcf;"
+        "    border-radius: 4px;"
+        "}"
+        "QToolButton:pressed {"
+        "    background-color: #0a5a9c;"
+        "    border-radius: 4px;"
+        "}"
+        "QToolButton:disabled {"
+        "    background: transparent;"
+        "}"
+        "QToolButton::menu-indicator {"
+        "    image: none;"
+        "    width: 0px;"
+        "    height: 0px;"
+        "}"
+        "QToolButton::menu-button {"
+        "    border: none;"
+        "    background: transparent;"
+        "    width: 0px;"
+        "}"
+    );
 
-    // Move up button (up arrow)
-    m_upButton = new QPushButton(this);
-    m_upButton->setProperty("themeID", "upArrowIconSmall");
-    m_upButton->setProperty("class", "icon-up");
-    m_upButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.MoveUp"));
-    m_upButton->setMaximumSize(22, 22);
-    m_upButton->setMinimumSize(22, 22);
-    m_upButton->setEnabled(false); // Enable when item selected
-    connect(m_upButton, &QPushButton::clicked, this, &SceneOrganiserDock::onMoveUpClicked);
-    m_buttonLayout->addWidget(m_upButton);
+    // Create QToolButtons and add them to toolbar (to properly support themeID)
+    // This approach allows themeID properties to work while maintaining proper toolbar styling
 
-    // Move down button (down arrow)
-    m_downButton = new QPushButton(this);
-    m_downButton->setProperty("themeID", "downArrowIconSmall");
-    m_downButton->setProperty("class", "icon-down");
-    m_downButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.MoveDown"));
-    m_downButton->setMaximumSize(22, 22);
-    m_downButton->setMinimumSize(22, 22);
-    m_downButton->setEnabled(false); // Enable when item selected
-    connect(m_downButton, &QPushButton::clicked, this, &SceneOrganiserDock::onMoveDownClicked);
-    m_buttonLayout->addWidget(m_downButton);
+    // Add button with dropdown menu
+    QToolButton *addButton = new QToolButton(this);
+    addButton->setProperty("themeID", "addIconSmall");
+    addButton->setProperty("class", "icon-plus");
+    addButton->setToolTip("Add folder or create scene");
+    addButton->setPopupMode(QToolButton::InstantPopup);
 
-    // Add spacer to push buttons left (like OBS)
-    m_buttonLayout->addStretch();
+    // Create a menu for the add button
+    QMenu *addMenu = new QMenu(this);
+    addMenu->addAction(obs_module_text("SceneOrganiser.Action.AddFolder"), this, &SceneOrganiserDock::onAddFolderClicked);
+    addMenu->addAction(obs_module_text("SceneOrganiser.Action.CreateScene"), this, &SceneOrganiserDock::onCreateSceneClicked);
+    addButton->setMenu(addMenu);
 
-    // Add the button layout to main layout
-    m_mainLayout->addLayout(m_buttonLayout);
+    // Don't set a default action to avoid icon overlap - just connect the clicked signal
+    connect(addButton, &QToolButton::clicked, this, &SceneOrganiserDock::onAddFolderClicked);
+
+    m_toolbar->addWidget(addButton);
+    m_addFolderAction = nullptr; // No separate action needed for dropdown button
+
+    // Remove button
+    QToolButton *removeButton = new QToolButton(this);
+    removeButton->setProperty("themeID", "removeIconSmall");
+    removeButton->setProperty("class", "icon-trash");
+    removeButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.Remove"));
+    removeButton->setEnabled(false);
+    connect(removeButton, &QToolButton::clicked, this, &SceneOrganiserDock::onRemoveClicked);
+
+    m_toolbar->addWidget(removeButton);
+    m_removeAction = nullptr; // Direct button connection
+
+    // Filters button (using theme info: .icon-filter uses url(theme:Dark/filter.svg))
+    QToolButton *filtersButton = new QToolButton(this);
+    filtersButton->setProperty("class", "icon-filter");
+    filtersButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.Filters"));
+    filtersButton->setEnabled(false);
+    connect(filtersButton, &QToolButton::clicked, this, &SceneOrganiserDock::onFiltersClicked);
+
+    m_toolbar->addWidget(filtersButton);
+    m_filtersAction = nullptr; // Direct button connection
+
+    // Add separator
+    m_toolbar->addSeparator();
+
+    // Move up button
+    QToolButton *moveUpButton = new QToolButton(this);
+    moveUpButton->setProperty("themeID", "upArrowIconSmall");
+    moveUpButton->setProperty("class", "icon-up");
+    moveUpButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.MoveUp"));
+    moveUpButton->setEnabled(false);
+    connect(moveUpButton, &QToolButton::clicked, this, &SceneOrganiserDock::onMoveUpClicked);
+
+    m_toolbar->addWidget(moveUpButton);
+    m_moveUpAction = nullptr; // Direct button connection
+
+    // Move down button
+    QToolButton *moveDownButton = new QToolButton(this);
+    moveDownButton->setProperty("themeID", "downArrowIconSmall");
+    moveDownButton->setProperty("class", "icon-down");
+    moveDownButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.MoveDown"));
+    moveDownButton->setEnabled(false);
+    connect(moveDownButton, &QToolButton::clicked, this, &SceneOrganiserDock::onMoveDownClicked);
+
+    m_toolbar->addWidget(moveDownButton);
+    m_moveDownAction = nullptr; // Direct button connection
+
+    // Store button references for additional state management if needed
+    m_addButton = addButton;
+    m_removeButton = removeButton;
+    m_filtersButton = filtersButton;
+    m_moveUpButton = moveUpButton;
+    m_moveDownButton = moveDownButton;
+
+    // Add toolbar to the bottom of the layout
+    m_mainLayout->addWidget(m_toolbar, 0); // 0 means don't stretch
+
+    // Initialize toolbar button states
+    updateToolbarState();
 }
 
 void SceneOrganiserDock::setupContextMenu()
@@ -308,11 +423,21 @@ void SceneOrganiserDock::onSceneSelectionChanged(const QItemSelection &selected,
         }
     }
 
-    // Update button states
-    m_removeButton->setEnabled(hasSelection);
-    m_filtersButton->setEnabled(isScene);
-    m_upButton->setEnabled(hasSelection && canMoveUp);
-    m_downButton->setEnabled(hasSelection && canMoveDown);
+    // Update toolbar button states (direct button control)
+    if (m_removeButton) m_removeButton->setEnabled(hasSelection);
+    if (m_filtersButton) m_filtersButton->setEnabled(isScene);
+    if (m_moveUpButton) m_moveUpButton->setEnabled(hasSelection && canMoveUp);
+    if (m_moveDownButton) m_moveDownButton->setEnabled(hasSelection && canMoveDown);
+}
+
+void SceneOrganiserDock::updateToolbarState()
+{
+    if (!m_toolbar) {
+        return;
+    }
+
+    // This method can be used for additional toolbar state updates if needed
+    // Currently, the selection-based state updates are handled in onSceneSelectionChanged
 }
 
 void SceneOrganiserDock::onItemDoubleClicked(const QModelIndex &index)
@@ -376,6 +501,34 @@ void SceneOrganiserDock::onAddFolderClicked()
         m_model->invisibleRootItem()->appendRow(folderItem);
         m_treeView->expand(folderItem->index());
         m_saveTimer->start();
+    }
+}
+
+void SceneOrganiserDock::onCreateSceneClicked()
+{
+    bool ok;
+    QString sceneName = QInputDialog::getText(this,
+        obs_module_text("SceneOrganiser.Dialog.CreateScene.Title"),
+        obs_module_text("SceneOrganiser.Dialog.CreateScene.Text"),
+        QLineEdit::Normal, QString(), &ok);
+
+    if (ok && !sceneName.isEmpty()) {
+        // Create a new scene in OBS
+        obs_scene_t *scene = obs_scene_create(sceneName.toUtf8().constData());
+        if (scene) {
+            obs_source_t *scene_source = obs_scene_get_source(scene);
+
+            // The scene will automatically appear in our tree view due to the OBS event system
+            // We don't need to manually add it here
+
+            // Optionally switch to the new scene
+            obs_frontend_set_current_scene(scene_source);
+
+            obs_scene_release(scene);
+
+            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Creation",
+                QString("Created new scene: %1").arg(sceneName).toUtf8().constData());
+        }
     }
 }
 
