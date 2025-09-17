@@ -828,9 +828,9 @@ void SceneOrganiserDock::clearCustomColorFromItem(QStandardItem *item)
         item->setBackground(QBrush(QColor(26, 127, 207))); // OBS active blue
         item->setForeground(QBrush(QColor(255, 255, 255))); // White text
     } else {
-        // Clear all custom styling to return to theme defaults
+        // Clear custom styling and set default theme text color
         item->setBackground(QBrush());
-        item->setForeground(QBrush());
+        item->setForeground(QBrush(getDefaultThemeTextColor()));
     }
 }
 
@@ -851,6 +851,15 @@ QColor SceneOrganiserDock::getContrastTextColor(const QColor &backgroundColor)
 
     // Return white for dark backgrounds, black for light backgrounds
     return (luminance > 0.5) ? QColor(0, 0, 0) : QColor(255, 255, 255);
+}
+
+QColor SceneOrganiserDock::getDefaultThemeTextColor()
+{
+    if (m_treeView) {
+        return m_treeView->palette().color(QPalette::Text);
+    }
+    // Fallback to a reasonable default if tree view is not available
+    return QColor(255, 255, 255); // White text for dark themes (common in OBS)
 }
 
 void SceneOrganiserDock::onSettingsChanged()
@@ -943,9 +952,9 @@ void SceneOrganiserDock::updateActiveSceneHighlightRecursive(QStandardItem *pare
                     // Apply custom color
                     applyCustomColorToItem(item, customColor.value<QColor>());
                 } else {
-                    // Clear background and foreground to use default theme colors
+                    // Clear background and use default theme text color
                     item->setBackground(QBrush());
-                    item->setForeground(QBrush());
+                    item->setForeground(QBrush(getDefaultThemeTextColor()));
                 }
             }
 
@@ -959,7 +968,7 @@ void SceneOrganiserDock::updateActiveSceneHighlightRecursive(QStandardItem *pare
             } else {
                 // Clear styling to use defaults
                 item->setBackground(QBrush());
-                item->setForeground(QBrush());
+                item->setForeground(QBrush(getDefaultThemeTextColor()));
             }
 
             // Recursively update folder children
