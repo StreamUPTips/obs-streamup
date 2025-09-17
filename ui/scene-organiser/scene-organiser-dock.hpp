@@ -68,6 +68,7 @@ public:
 
 private slots:
     void onSceneSelectionChanged(const QItemSelection &selected, const QItemSelection &deselected);
+    void onItemClicked(const QModelIndex &index);
     void onItemDoubleClicked(const QModelIndex &index);
     void onCustomContextMenuRequested(const QPoint &pos);
     void onAddFolderClicked();
@@ -79,6 +80,8 @@ private slots:
     void onSettingsChanged();
     void onIconsChanged();
     void onSettingsClicked();
+    void onRenameSceneClicked();
+    void onRenameFolderClicked();
 
 public slots:
     static void onFrontendEvent(enum obs_frontend_event event, void *private_data);
@@ -159,6 +162,9 @@ public:
 
     // Lock state management
     bool m_isLocked;
+
+    // Click tracking for rename functionality
+    QPersistentModelIndex m_lastClickedIndex;
     QAction *m_lockAction;
 
     // OBS integration
@@ -177,6 +183,9 @@ public:
     Qt::DropActions supportedDropActions() const override;
     Qt::ItemFlags flags(const QModelIndex &index) const override;
     QStringList mimeTypes() const override;
+
+    // Editing support
+    bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole) override;
     QMimeData *mimeData(const QModelIndexList &indexes) const override;
     bool dropMimeData(const QMimeData *data, Qt::DropAction action,
                      int row, int column, const QModelIndex &parent) override;

@@ -204,6 +204,7 @@ void SceneOrganiserDock::setupUI()
     m_treeView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setIndentation(20); // Match OBS indentation
+    m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers); // We'll trigger editing manually
 
     // Install custom delegate for smooth color transitions
     m_colorDelegate = new CustomColorDelegate(this, this);
@@ -212,6 +213,8 @@ void SceneOrganiserDock::setupUI()
     // Connect signals
     connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged,
             this, &SceneOrganiserDock::onSceneSelectionChanged);
+    connect(m_treeView, &QAbstractItemView::clicked,
+            this, &SceneOrganiserDock::onItemClicked);
     connect(m_treeView, &QAbstractItemView::doubleClicked,
             this, &SceneOrganiserDock::onItemDoubleClicked);
     connect(m_treeView, &QWidget::customContextMenuRequested,
@@ -400,24 +403,7 @@ void SceneOrganiserDock::setupContextMenu()
 {
     // Folder context menu
     m_folderContextMenu = new QMenu(this);
-    m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.RenameFolder"), [this]() {
-        // Implement rename folder functionality
-        auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
-        if (!selectedIndexes.isEmpty()) {
-            auto item = m_model->itemFromIndex(selectedIndexes.first());
-            if (item && item->type() == SceneFolderItem::UserType + 1) {
-                bool ok;
-                QString newName = QInputDialog::getText(this,
-                    obs_module_text("SceneOrganiser.Dialog.RenameFolder.Title"),
-                    obs_module_text("SceneOrganiser.Dialog.RenameFolder.Text"),
-                    QLineEdit::Normal, item->text(), &ok);
-                if (ok && !newName.isEmpty()) {
-                    item->setText(newName);
-                    m_saveTimer->start();
-                }
-            }
-        }
-    });
+    m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.RenameFolder"), this, &SceneOrganiserDock::onRenameFolderClicked);
 
     m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.DeleteFolder"), [this]() {
         // Implement delete folder functionality
@@ -445,6 +431,8 @@ void SceneOrganiserDock::setupContextMenu()
 
     // Scene context menu
     m_sceneContextMenu = new QMenu(this);
+    m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.RenameScene"), this, &SceneOrganiserDock::onRenameSceneClicked);
+    m_sceneContextMenu->addSeparator();
     m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.SwitchToScene"), [this]() {
         auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
         if (!selectedIndexes.isEmpty()) {
@@ -540,6 +528,21 @@ void SceneOrganiserDock::updateToolbarState()
 
     // This method can be used for additional toolbar state updates if needed
     // Currently, the selection-based state updates are handled in onSceneSelectionChanged
+}
+
+void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
+{
+    // Check if this is a second click on the same already-selected item
+    if (m_lastClickedIndex.isValid() && m_lastClickedIndex == index) {
+        auto item = m_model->itemFromIndex(index);
+        if (item && (item->type() == SceneTreeItem::UserType + 2 || item->type() == SceneFolderItem::UserType + 1)) {
+            // Start inline editing
+            m_treeView->edit(index);
+        }
+    }
+
+    // Update the last clicked index
+    m_lastClickedIndex = index;
 }
 
 void SceneOrganiserDock::onItemDoubleClicked(const QModelIndex &index)
@@ -970,6 +973,30 @@ void SceneOrganiserDock::onSettingsClicked()
     StreamUP::SettingsManager::ShowSettingsDialog(2);
 }
 
+void SceneOrganiserDock::onRenameSceneClicked()
+{
+    auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
+    if (selectedIndexes.isEmpty()) return;
+
+    auto item = m_model->itemFromIndex(selectedIndexes.first());
+    if (!item || item->type() != SceneTreeItem::UserType + 2) return;
+
+    // Start inline editing
+    m_treeView->edit(selectedIndexes.first());
+}
+
+void SceneOrganiserDock::onRenameFolderClicked()
+{
+    auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
+    if (selectedIndexes.isEmpty()) return;
+
+    auto item = m_model->itemFromIndex(selectedIndexes.first());
+    if (!item || item->type() != SceneFolderItem::UserType + 1) return;
+
+    // Start inline editing
+    m_treeView->edit(selectedIndexes.first());
+}
+
 void SceneOrganiserDock::setLocked(bool locked)
 {
     m_isLocked = locked;
@@ -1318,7 +1345,61 @@ Qt::ItemFlags SceneTreeModel::flags(const QModelIndex &index) const
     if (!index.isValid())
         return Qt::ItemIsDropEnabled;
 
-    return Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled;
+    Qt::ItemFlags flags = Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled;
+
+    // Allow editing for scenes and folders
+    QStandardItem *item = itemFromIndex(index);
+    if (item && (item->type() == SceneTreeItem::UserType + 2 || item->type() == SceneFolderItem::UserType + 1)) {
+        flags |= Qt::ItemIsEditable;
+    }
+
+    return flags;
+}
+
+bool SceneTreeModel::setData(const QModelIndex &index, const QVariant &value, int role)
+{
+    if (role != Qt::EditRole || !index.isValid())
+        return false;
+
+    QStandardItem *item = itemFromIndex(index);
+    if (!item)
+        return false;
+
+    QString newName = value.toString().trimmed();
+    QString oldName = item->text();
+
+    // Validate the new name
+    if (newName.isEmpty() || newName == oldName)
+        return false;
+
+    if (item->type() == SceneTreeItem::UserType + 2) {
+        // Scene item - rename in OBS
+        obs_source_t *source = obs_get_source_by_name(oldName.toUtf8().constData());
+        if (source) {
+            obs_source_set_name(source, newName.toUtf8().constData());
+            obs_source_release(source);
+
+            // Update the item text
+            item->setText(newName);
+
+            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Inline Rename",
+                QString("Renamed scene from '%1' to '%2'").arg(oldName, newName).toUtf8().constData());
+
+            emit modelChanged();
+            return true;
+        }
+    } else if (item->type() == SceneFolderItem::UserType + 1) {
+        // Folder item - simple rename
+        item->setText(newName);
+
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Inline Rename",
+            QString("Renamed folder from '%1' to '%2'").arg(oldName, newName).toUtf8().constData());
+
+        emit modelChanged();
+        return true;
+    }
+
+    return false;
 }
 
 QStringList SceneTreeModel::mimeTypes() const
