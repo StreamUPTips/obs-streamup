@@ -542,7 +542,9 @@ void SceneOrganiserDock::onRemoveClicked()
     if (!item) return;
 
     QString itemName = item->text();
-    QString itemType = (item->type() == SceneFolderItem::UserType + 1) ? "folder" : "scene";
+    bool isFolder = (item->type() == SceneFolderItem::UserType + 1);
+    bool isScene = (item->type() == SceneTreeItem::UserType + 2);
+    QString itemType = isFolder ? "folder" : "scene";
 
     int ret = QMessageBox::question(this,
         obs_module_text("SceneOrganiser.Dialog.Remove.Title"),
@@ -551,10 +553,26 @@ void SceneOrganiserDock::onRemoveClicked()
         QMessageBox::No);
 
     if (ret == QMessageBox::Yes) {
-        QStandardItem *parent = item->parent();
-        if (!parent) parent = m_model->invisibleRootItem();
-        parent->removeRow(item->row());
-        m_saveTimer->start();
+        if (isScene) {
+            // Delete the actual scene from OBS
+            obs_source_t *source = obs_get_source_by_name(itemName.toUtf8().constData());
+            if (source) {
+                obs_source_remove(source);
+                obs_source_release(source);
+
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Removal",
+                    QString("Deleted scene from OBS: %1").arg(itemName).toUtf8().constData());
+            }
+        }
+
+        // Remove from tree model (this will be handled by OBS events for scenes)
+        if (isFolder) {
+            QStandardItem *parent = item->parent();
+            if (!parent) parent = m_model->invisibleRootItem();
+            parent->removeRow(item->row());
+            m_saveTimer->start();
+        }
+        // For scenes, the tree will be updated automatically by OBS events
     }
 }
 
