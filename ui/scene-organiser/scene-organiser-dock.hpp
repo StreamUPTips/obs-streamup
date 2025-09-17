@@ -59,7 +59,6 @@ private slots:
     void onFiltersClicked();
     void onMoveUpClicked();
     void onMoveDownClicked();
-    void onRefreshClicked();
     void onToggleIconsClicked();
     void onSettingsChanged();
     void onIconsChanged();
@@ -151,6 +150,7 @@ public:
 
     // Cleanup
     void cleanupEmptyItems();
+    void removeSceneFromTracking(obs_weak_source_t *weak_source);
 
 private:
     void setupRootItem();
@@ -164,7 +164,6 @@ private:
     bool isManagedScene(obs_source_t *source);
     obs_data_array_t *createFolderArray(QStandardItem &parent);
     void loadFolderArray(obs_data_array_t *folder_array, QStandardItem &parent);
-    void removeSceneFromTracking(obs_weak_source_t *weak_source);
 
     // DigitOtter-style scene tracking
     using source_map_t = std::map<obs_weak_source_t*, QStandardItem*>;
