@@ -44,6 +44,7 @@ public:
 
     static bool IsVerticalPluginDetected();
     static void NotifyAllDocksSettingsChanged();
+    static void NotifySceneOrganiserIconsChanged();
 
     void SaveConfiguration();
     void LoadConfiguration();
@@ -59,7 +60,9 @@ private slots:
     void onMoveUpClicked();
     void onMoveDownClicked();
     void onRefreshClicked();
+    void onToggleIconsClicked();
     void onSettingsChanged();
+    void onIconsChanged();
 
 public slots:
     static void onFrontendEvent(enum obs_frontend_event event, void *private_data);
@@ -75,6 +78,8 @@ private:
     void showFolderContextMenu(const QPoint &pos, const QModelIndex &index);
     void showSceneContextMenu(const QPoint &pos, const QModelIndex &index);
     void showBackgroundContextMenu(const QPoint &pos);
+    void updateAllItemIcons(QStandardItem *parent);
+    void updateToggleIconsState();
 
     // Data members
     CanvasType m_canvasType;
@@ -101,6 +106,11 @@ private:
     QMenu *m_folderContextMenu;
     QMenu *m_sceneContextMenu;
     QMenu *m_backgroundContextMenu;
+
+    // Toggle actions (for checkmarks)
+    QAction *m_folderToggleIconsAction;
+    QAction *m_sceneToggleIconsAction;
+    QAction *m_backgroundToggleIconsAction;
 
     // Configuration
     QString m_configKey;
@@ -191,6 +201,9 @@ public:
     int type() const override { return UserType + 1; }
     bool isFolder() const { return true; }
 
+public:
+    void updateIcon();
+
 private:
     void setupFolderItem();
 };
@@ -204,6 +217,7 @@ public:
     bool isScene() const { return true; }
 
     obs_weak_source_t* getWeakSource() const { return m_weakSource; }
+    void updateIcon();
 
 private:
     void setupSceneItem();

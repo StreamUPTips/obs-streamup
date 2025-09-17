@@ -57,10 +57,11 @@ struct PluginSettings {
     bool debugLoggingEnabled;
     bool enableSceneOrganiserNormal;
     bool enableSceneOrganiserVertical;
+    bool sceneOrganiserShowIcons;
     ToolbarPosition toolbarPosition;
     DockToolSettings dockTools;
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), enableSceneOrganiserNormal(true), enableSceneOrganiserVertical(true), toolbarPosition(ToolbarPosition::Top) {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), enableSceneOrganiserNormal(true), enableSceneOrganiserVertical(true), sceneOrganiserShowIcons(true), toolbarPosition(ToolbarPosition::Top) {}
 };
 
 /**
