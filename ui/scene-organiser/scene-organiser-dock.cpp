@@ -106,6 +106,7 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_moveUpButton(nullptr)
     , m_moveDownButton(nullptr)
     , m_lockButton(nullptr)
+    , m_settingsButton(nullptr)
     , m_folderContextMenu(nullptr)
     , m_sceneContextMenu(nullptr)
     , m_backgroundContextMenu(nullptr)
@@ -352,8 +353,10 @@ void SceneOrganiserDock::createBottomToolbar()
     m_toolbar->addWidget(moveDownButton);
     m_moveDownAction = nullptr; // Direct button connection
 
-    // Add separator before lock button
-    m_toolbar->addSeparator();
+    // Add spacer to push remaining buttons to the right
+    QWidget *spacer = new QWidget(this);
+    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    m_toolbar->addWidget(spacer);
 
     // Lock button - using the same colored icons as multidock
     QToolButton *lockButton = new QToolButton(this);
@@ -363,12 +366,25 @@ void SceneOrganiserDock::createBottomToolbar()
 
     m_toolbar->addWidget(lockButton);
 
+    // Add separator before settings button
+    m_toolbar->addSeparator();
+
+    // Settings button - using gear icon
+    QToolButton *settingsButton = new QToolButton(this);
+    settingsButton->setProperty("themeID", "configIconSmall");
+    settingsButton->setProperty("class", "icon-gear");
+    settingsButton->setToolTip("Open StreamUP settings for Scene Organiser");
+    connect(settingsButton, &QToolButton::clicked, this, &SceneOrganiserDock::onSettingsClicked);
+
+    m_toolbar->addWidget(settingsButton);
+
     // Store button references for additional state management if needed
     m_addButton = addButton;
     m_removeButton = removeButton;
     m_filtersButton = filtersButton;
     m_moveUpButton = moveUpButton;
     m_moveDownButton = moveDownButton;
+    m_settingsButton = settingsButton;
     m_lockButton = lockButton;
 
     // Add toolbar to the bottom of the layout
@@ -931,6 +947,12 @@ QColor SceneOrganiserDock::getHoverColor(const QColor &baseColor)
 void SceneOrganiserDock::onToggleLockClicked()
 {
     setLocked(!m_isLocked);
+}
+
+void SceneOrganiserDock::onSettingsClicked()
+{
+    // Open StreamUP settings dialog on Scene Organiser page (tab index 2)
+    StreamUP::SettingsManager::ShowSettingsDialog(2);
 }
 
 void SceneOrganiserDock::setLocked(bool locked)

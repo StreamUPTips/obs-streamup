@@ -79,6 +79,7 @@ private slots:
     void onToggleIconsClicked();
     void onSettingsChanged();
     void onIconsChanged();
+    void onSettingsClicked();
 
 public slots:
     static void onFrontendEvent(enum obs_frontend_event event, void *private_data);
@@ -137,6 +138,7 @@ public:
     QToolButton *m_moveUpButton;
     QToolButton *m_moveDownButton;
     QToolButton *m_lockButton;
+    QToolButton *m_settingsButton;
 
     // Context menus
     QMenu *m_folderContextMenu;
