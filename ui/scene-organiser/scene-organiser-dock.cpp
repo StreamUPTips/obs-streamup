@@ -93,6 +93,7 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_mainLayout(nullptr)
     , m_treeView(nullptr)
     , m_model(nullptr)
+    , m_colorDelegate(nullptr)
     , m_toolbar(nullptr)
     , m_addFolderAction(nullptr)
     , m_removeAction(nullptr)
@@ -200,6 +201,10 @@ void SceneOrganiserDock::setupUI()
     m_treeView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setIndentation(20); // Match OBS indentation
+
+    // Install custom delegate for smooth color transitions
+    m_colorDelegate = new CustomColorDelegate(this, this);
+    m_treeView->setItemDelegate(m_colorDelegate);
 
     // Connect signals
     connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged,
@@ -814,6 +819,9 @@ void SceneOrganiserDock::applyCustomColorToItem(QStandardItem *item, const QColo
         return;
     }
 
+    // Store the original custom color in a separate data role for reference
+    item->setData(color, Qt::UserRole + 2); // UserRole + 2 for original color
+
     // Apply the background color
     item->setBackground(QBrush(color));
 
@@ -879,6 +887,45 @@ QColor SceneOrganiserDock::getDefaultThemeTextColor()
     }
     // Fallback to a reasonable default if tree view is not available
     return QColor(255, 255, 255); // White text for dark themes (common in OBS)
+}
+
+QColor SceneOrganiserDock::adjustColorBrightness(const QColor &color, float factor)
+{
+    if (!color.isValid()) {
+        return color;
+    }
+
+    // Convert to HSV to maintain hue and saturation while adjusting brightness
+    int h, s, v;
+    color.getHsv(&h, &s, &v);
+
+    // Adjust the value (brightness) component
+    v = qBound(0, static_cast<int>(v * factor), 255);
+
+    return QColor::fromHsv(h, s, v);
+}
+
+QColor SceneOrganiserDock::getSelectionColor(const QColor &baseColor)
+{
+    if (!baseColor.isValid()) {
+        // No custom color, use default theme selection
+        return m_treeView ? m_treeView->palette().color(QPalette::Highlight) : QColor(26, 127, 207);
+    }
+
+    // For custom colors, brighten them for selection
+    return adjustColorBrightness(baseColor, 1.3f); // 30% brighter
+}
+
+QColor SceneOrganiserDock::getHoverColor(const QColor &baseColor)
+{
+    if (!baseColor.isValid()) {
+        // No custom color, use default theme hover (slightly dimmed selection)
+        QColor highlight = m_treeView ? m_treeView->palette().color(QPalette::Highlight) : QColor(26, 127, 207);
+        return adjustColorBrightness(highlight, 0.7f);
+    }
+
+    // For custom colors, slightly brighten them for hover
+    return adjustColorBrightness(baseColor, 1.1f); // 10% brighter
 }
 
 void SceneOrganiserDock::onToggleLockClicked()
@@ -2249,3 +2296,116 @@ void SceneTreeItem::updateFromObs()
 
 } // namespace SceneOrganiser
 } // namespace StreamUP
+
+//==============================================================================
+// CustomColorDelegate Implementation
+//==============================================================================
+
+StreamUP::SceneOrganiser::CustomColorDelegate::CustomColorDelegate(SceneOrganiserDock *dock, QObject *parent)
+    : QStyledItemDelegate(parent), m_dock(dock)
+{
+}
+
+void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    if (!m_dock || !index.isValid()) {
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+
+    // Get the item from the model
+    QStandardItemModel *model = qobject_cast<QStandardItemModel*>(const_cast<QAbstractItemModel*>(index.model()));
+    if (!model) {
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+
+    QStandardItem *item = model->itemFromIndex(index);
+    if (!item) {
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+
+    // Check if item has a custom color
+    QVariant customColorData = item->data(Qt::UserRole + 1);
+    if (!customColorData.isValid()) {
+        // No custom color, use default painting
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+
+    QColor customColor = customColorData.value<QColor>();
+    if (!customColor.isValid()) {
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+
+    // Check if this is the active scene (active scene highlighting takes precedence)
+    bool isActiveScene = false;
+    if (item->type() == SceneTreeItem::UserType + 2) {
+        obs_source_t *current_scene = obs_frontend_get_current_scene();
+        if (current_scene) {
+            QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
+            isActiveScene = (item->text() == current_scene_name);
+            obs_source_release(current_scene);
+        }
+    }
+
+    if (isActiveScene) {
+        // Let default painting handle active scene (OBS blue highlighting)
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+
+    // Determine the background color based on state
+    QColor backgroundColor = customColor;
+
+    if (option.state & QStyle::State_Selected) {
+        // Item is selected - brighten the custom color
+        backgroundColor = m_dock->getSelectionColor(customColor);
+    } else if (option.state & QStyle::State_MouseOver) {
+        // Item is hovered - slightly brighten the custom color
+        backgroundColor = m_dock->getHoverColor(customColor);
+    }
+
+    // Create a copy of the style option to modify
+    QStyleOptionViewItem customOption = option;
+
+    // Draw the background with our custom color
+    painter->save();
+    painter->fillRect(option.rect, backgroundColor);
+
+    // Get contrasting text color
+    QColor textColor = m_dock->getContrastTextColor(backgroundColor);
+
+    // Set up the palette for text rendering
+    customOption.palette.setColor(QPalette::Text, textColor);
+    customOption.palette.setColor(QPalette::HighlightedText, textColor);
+
+    // Clear the background drawing to avoid double-drawing
+    customOption.backgroundBrush = QBrush();
+
+    painter->restore();
+
+    // Draw the text and other content
+    painter->save();
+    painter->setPen(textColor);
+
+    // Draw the display text
+    QString text = index.data(Qt::DisplayRole).toString();
+    QRect textRect = option.rect;
+    textRect.setLeft(textRect.left() + 4); // Add some padding
+
+    // Apply font styling if needed
+    QFont font = option.font;
+    if (option.state & QStyle::State_Selected) {
+        font.setBold(true);
+    }
+    painter->setFont(font);
+
+    painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
+
+    painter->restore();
+}
+
+#include "scene-organiser-dock.moc"

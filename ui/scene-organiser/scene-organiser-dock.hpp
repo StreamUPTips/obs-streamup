@@ -18,6 +18,7 @@
 #include <QToolBar>
 #include <QToolButton>
 #include <QAction>
+#include <QStyledItemDelegate>
 #include <map>
 #include <obs.h>
 #include <obs-frontend-api.h>
@@ -27,6 +28,22 @@ namespace SceneOrganiser {
 
 class SceneTreeModel;
 class SceneTreeView;
+class SceneOrganiserDock;
+
+// Custom delegate for handling selection and hover states with custom colors
+class CustomColorDelegate : public QStyledItemDelegate
+{
+    Q_OBJECT
+
+public:
+    explicit CustomColorDelegate(SceneOrganiserDock *dock, QObject *parent = nullptr);
+
+protected:
+    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+
+private:
+    SceneOrganiserDock *m_dock;
+};
 
 enum class CanvasType {
     Normal,
@@ -85,17 +102,25 @@ private:
     void onClearCustomColorClicked();
     void applyCustomColorToItem(QStandardItem *item, const QColor &color);
     void clearCustomColorFromItem(QStandardItem *item);
-    QColor getContrastTextColor(const QColor &backgroundColor);
-    QColor getDefaultThemeTextColor();
+    void updateTreeViewStylesheet();
     void onToggleLockClicked();
     void setLocked(bool locked);
     void updateUIEnabledState();
+
+public:
+    // Color helper methods (public for CustomColorDelegate access)
+    QColor getContrastTextColor(const QColor &backgroundColor);
+    QColor getDefaultThemeTextColor();
+    QColor adjustColorBrightness(const QColor &color, float factor);
+    QColor getSelectionColor(const QColor &baseColor);
+    QColor getHoverColor(const QColor &baseColor);
 
     // Data members
     CanvasType m_canvasType;
     QVBoxLayout *m_mainLayout;
     SceneTreeView *m_treeView;
     SceneTreeModel *m_model;
+    CustomColorDelegate *m_colorDelegate;
 
     // Toolbar and buttons
     QToolBar *m_toolbar;
