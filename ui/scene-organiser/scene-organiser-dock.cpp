@@ -1,6 +1,7 @@
 #include "scene-organiser-dock.hpp"
 #include "../ui-styles.hpp"
 #include "../ui-helpers.hpp"
+#include "../settings-manager.hpp"
 #include "../../utilities/debug-logger.hpp"
 #include "../../utilities/obs-data-helpers.hpp"
 #include "../../core/plugin-manager.hpp"
@@ -28,6 +29,32 @@
 
 namespace StreamUP {
 namespace SceneOrganiser {
+
+// Helper function to get theme icon from OBS main window properties
+static QIcon GetThemeIcon(const QString& propertyName)
+{
+    // Get the main OBS window to access theme properties
+    QWidget *mainWindow = nullptr;
+
+    // Find the main OBS window
+    for (QWidget* widget : QApplication::topLevelWidgets()) {
+        if (widget->objectName() == "OBSBasic") {
+            mainWindow = widget;
+            break;
+        }
+    }
+
+    if (mainWindow) {
+        // Get the icon from the main window's theme properties
+        QVariant iconProperty = mainWindow->property(propertyName.toUtf8().constData());
+        if (iconProperty.isValid()) {
+            return iconProperty.value<QIcon>();
+        }
+    }
+
+    // Fallback to empty icon if property not found
+    return QIcon();
+}
 
 // Helper function to create colored icons from SVG resources (copied from multidock)
 static QIcon CreateColoredIcon(const QString& svgPath, const QColor& color, const QSize& size = QSize(16, 16))
@@ -96,6 +123,9 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     // Load configuration after setup
     QTimer::singleShot(100, this, &SceneOrganiserDock::LoadConfiguration);
 
+    // Initialize toggle icons state in context menus
+    updateToggleIconsState();
+
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Initialize",
         QString("Scene Organiser Dock created for %1 canvas")
         .arg(m_canvasType == CanvasType::Vertical ? "vertical" : "normal").toUtf8().constData());
@@ -129,6 +159,14 @@ void SceneOrganiserDock::NotifyAllDocksSettingsChanged()
         dock->onSettingsChanged();
     }
 }
+
+void SceneOrganiserDock::NotifySceneOrganiserIconsChanged()
+{
+    for (auto dock : s_dockInstances) {
+        dock->onIconsChanged();
+    }
+}
+
 
 void SceneOrganiserDock::setupUI()
 {
@@ -353,6 +391,10 @@ void SceneOrganiserDock::setupContextMenu()
         }
     });
 
+    m_folderContextMenu->addSeparator();
+    m_folderToggleIconsAction = m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
+    m_folderToggleIconsAction->setCheckable(true);
+
     // Scene context menu
     m_sceneContextMenu = new QMenu(this);
     m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.SwitchToScene"), [this]() {
@@ -369,9 +411,16 @@ void SceneOrganiserDock::setupContextMenu()
         }
     });
 
+    m_sceneContextMenu->addSeparator();
+    m_sceneToggleIconsAction = m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
+    m_sceneToggleIconsAction->setCheckable(true);
+
     // Background context menu
     m_backgroundContextMenu = new QMenu(this);
     m_backgroundContextMenu->addAction(obs_module_text("SceneOrganiser.Action.AddFolder"), this, &SceneOrganiserDock::onAddFolderClicked);
+    m_backgroundContextMenu->addSeparator();
+    m_backgroundToggleIconsAction = m_backgroundContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
+    m_backgroundToggleIconsAction->setCheckable(true);
     m_backgroundContextMenu->addAction(obs_module_text("SceneOrganiser.Action.Refresh"), this, &SceneOrganiserDock::onRefreshClicked);
 }
 
@@ -649,10 +698,72 @@ void SceneOrganiserDock::onRefreshClicked()
     refreshSceneList();
 }
 
+void SceneOrganiserDock::onToggleIconsClicked()
+{
+    // Toggle the icons setting
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+    settings.sceneOrganiserShowIcons = !settings.sceneOrganiserShowIcons;
+    StreamUP::SettingsManager::UpdateSettings(settings);
+
+    // Update all docks' icons immediately
+    NotifySceneOrganiserIconsChanged();
+}
+
 void SceneOrganiserDock::onSettingsChanged()
 {
     // Handle settings changes if needed
     LoadConfiguration();
+}
+
+void SceneOrganiserDock::onIconsChanged()
+{
+    // Update all existing items to show/hide icons based on current setting
+    if (m_model) {
+        updateAllItemIcons(m_model->invisibleRootItem());
+    }
+
+    // Update checkmarks in context menus
+    updateToggleIconsState();
+}
+
+void SceneOrganiserDock::updateToggleIconsState()
+{
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+    bool iconsEnabled = settings.sceneOrganiserShowIcons;
+
+    if (m_folderToggleIconsAction) {
+        m_folderToggleIconsAction->setChecked(iconsEnabled);
+    }
+    if (m_sceneToggleIconsAction) {
+        m_sceneToggleIconsAction->setChecked(iconsEnabled);
+    }
+    if (m_backgroundToggleIconsAction) {
+        m_backgroundToggleIconsAction->setChecked(iconsEnabled);
+    }
+}
+
+void SceneOrganiserDock::updateAllItemIcons(QStandardItem *parent)
+{
+    if (!parent) return;
+
+    for (int i = 0; i < parent->rowCount(); ++i) {
+        QStandardItem *item = parent->child(i);
+        if (!item) continue;
+
+        // Update icon for this item
+        if (item->type() == SceneFolderItem::UserType + 1) {
+            // Folder item
+            SceneFolderItem *folderItem = static_cast<SceneFolderItem*>(item);
+            folderItem->updateIcon();
+        } else if (item->type() == SceneTreeItem::UserType + 2) {
+            // Scene item
+            SceneTreeItem *sceneItem = static_cast<SceneTreeItem*>(item);
+            sceneItem->updateIcon();
+        }
+
+        // Recursively update children
+        updateAllItemIcons(item);
+    }
 }
 
 void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *private_data)
@@ -1598,9 +1709,21 @@ SceneFolderItem::SceneFolderItem(const QString &folderName)
 
 void SceneFolderItem::setupFolderItem()
 {
-    setIcon(QIcon(":/images/folder.png")); // TODO: Add proper folder icon
+    updateIcon();
     setDropEnabled(true);
     setDragEnabled(true);
+}
+
+void SceneFolderItem::updateIcon()
+{
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+    if (settings.sceneOrganiserShowIcons) {
+        // Use OBS group icon for folders from theme properties
+        QIcon groupIcon = GetThemeIcon("groupIcon");
+        setIcon(groupIcon);
+    } else {
+        setIcon(QIcon());
+    }
 }
 
 SceneTreeItem::SceneTreeItem(const QString &sceneName, obs_weak_source_t *weak_source)
@@ -1618,13 +1741,37 @@ SceneTreeItem::~SceneTreeItem()
 
 void SceneTreeItem::setupSceneItem()
 {
-    setIcon(QIcon(":/images/scene.png")); // TODO: Add proper scene icon
+    updateIcon();
     setDropEnabled(false);
     setDragEnabled(true);
 }
 
+void SceneTreeItem::updateIcon()
+{
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+    if (settings.sceneOrganiserShowIcons) {
+        // Use scene icon from theme properties
+        QIcon sceneIcon = GetThemeIcon("sceneIcon");
+        setIcon(sceneIcon);
+
+        // Could add special styling for current scene in the future
+        // obs_source_t *current_scene = obs_frontend_get_current_scene();
+        // obs_source_t *this_scene = obs_weak_source_get_source(m_weakSource);
+        // if (current_scene && this_scene && obs_source_get_ref(current_scene) == obs_source_get_ref(this_scene)) {
+        //     // Current scene - could use different color or styling
+        // }
+        // if (current_scene) obs_source_release(current_scene);
+        // if (this_scene) obs_source_release(this_scene);
+    } else {
+        setIcon(QIcon());
+    }
+}
+
 void SceneTreeItem::updateFromObs()
 {
+    // Update icon in case current scene changed
+    updateIcon();
+
     // Get scene info from OBS and update display
     obs_source_t *source = obs_get_source_by_name(text().toUtf8().constData());
     if (source) {

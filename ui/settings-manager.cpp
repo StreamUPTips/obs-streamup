@@ -247,6 +247,7 @@ PluginSettings GetCurrentSettings()
 		settings.debugLoggingEnabled = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "debug_logging_enabled", false);
 		settings.enableSceneOrganiserNormal = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "enable_scene_organiser_normal", true);
 		settings.enableSceneOrganiserVertical = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "enable_scene_organiser_vertical", true);
+		settings.sceneOrganiserShowIcons = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_icons", true);
 
 		// Load toolbar position setting (default to top if not set)
 		const char *positionStr = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "toolbar_position", "top");
@@ -293,6 +294,7 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "debug_logging_enabled", settings.debugLoggingEnabled);
 	obs_data_set_bool(data, "enable_scene_organiser_normal", settings.enableSceneOrganiserNormal);
 	obs_data_set_bool(data, "enable_scene_organiser_vertical", settings.enableSceneOrganiserVertical);
+	obs_data_set_bool(data, "scene_organiser_show_icons", settings.sceneOrganiserShowIcons);
 
 	// Save toolbar position setting
 	const char *positionStr;
@@ -898,6 +900,34 @@ void ShowSettingsDialog(int tabIndex)
 			verticalRequirementLabel->setWordWrap(true);
 			sceneOrganiserLayout->addWidget(verticalRequirementLabel);
 		}
+
+		// Show Icons setting
+		sceneOrganiserLayout->addSpacing(16);
+		QHBoxLayout *showIconsLayout = new QHBoxLayout();
+
+		QLabel *showIconsLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.ShowIcons"));
+		showIconsLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+						.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		showIconsLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.ShowIconsDesc"));
+
+		StreamUP::UIStyles::SwitchButton *showIconsSwitch =
+			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.sceneOrganiserShowIcons);
+		showIconsSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.ShowIconsDesc"));
+
+		QObject::connect(showIconsSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+			PluginSettings settings = GetCurrentSettings();
+			settings.sceneOrganiserShowIcons = checked;
+			UpdateSettings(settings);
+
+			// Notify all scene organiser docks to update their icon visibility
+			StreamUP::SceneOrganiser::SceneOrganiserDock::NotifySceneOrganiserIconsChanged();
+		});
+
+		showIconsLayout->addWidget(showIconsLabel);
+		showIconsLayout->addStretch();
+		showIconsLayout->addWidget(showIconsSwitch);
+		sceneOrganiserLayout->addLayout(showIconsLayout);
 
 		// Credit section
 		sceneOrganiserLayout->addSpacing(20);
