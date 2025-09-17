@@ -72,7 +72,6 @@ private slots:
     void onCustomContextMenuRequested(const QPoint &pos);
     void onAddFolderClicked();
     void onCreateSceneClicked();
-    void onRemoveClicked();
     void onFiltersClicked();
     void onMoveUpClicked();
     void onMoveDownClicked();
@@ -83,6 +82,7 @@ private slots:
 
 public slots:
     static void onFrontendEvent(enum obs_frontend_event event, void *private_data);
+    void onRemoveClicked();
 
 private:
     void setupUI();
@@ -233,6 +233,7 @@ protected:
     void dragMoveEvent(QDragMoveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
 
 private:
     void setupView();
