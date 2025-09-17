@@ -87,6 +87,9 @@ private:
     void clearCustomColorFromItem(QStandardItem *item);
     QColor getContrastTextColor(const QColor &backgroundColor);
     QColor getDefaultThemeTextColor();
+    void onToggleLockClicked();
+    void setLocked(bool locked);
+    void updateUIEnabledState();
 
     // Data members
     CanvasType m_canvasType;
@@ -108,6 +111,7 @@ private:
     QToolButton *m_filtersButton;
     QToolButton *m_moveUpButton;
     QToolButton *m_moveDownButton;
+    QToolButton *m_lockButton;
 
     // Context menus
     QMenu *m_folderContextMenu;
@@ -125,6 +129,10 @@ private:
 
     // Color management
     QStandardItem *m_currentContextItem;
+
+    // Lock state management
+    bool m_isLocked;
+    QAction *m_lockAction;
 
     // OBS integration
     static QList<SceneOrganiserDock*> s_dockInstances;

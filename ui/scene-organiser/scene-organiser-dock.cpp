@@ -23,6 +23,8 @@
 #include <QPixmap>
 #include <QIcon>
 #include <QColor>
+#include <QFile>
+#include <QTextStream>
 #include <QtSvg/QSvgRenderer>
 #include <QSortFilterProxyModel>
 #include <QDir>
@@ -102,11 +104,14 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_filtersButton(nullptr)
     , m_moveUpButton(nullptr)
     , m_moveDownButton(nullptr)
+    , m_lockButton(nullptr)
     , m_folderContextMenu(nullptr)
     , m_sceneContextMenu(nullptr)
     , m_backgroundContextMenu(nullptr)
     , m_saveTimer(new QTimer(this))
     , m_currentContextItem(nullptr)
+    , m_isLocked(false)
+    , m_lockAction(nullptr)
 {
     s_dockInstances.append(this);
 
@@ -342,12 +347,24 @@ void SceneOrganiserDock::createBottomToolbar()
     m_toolbar->addWidget(moveDownButton);
     m_moveDownAction = nullptr; // Direct button connection
 
+    // Add separator before lock button
+    m_toolbar->addSeparator();
+
+    // Lock button - using the same colored icons as multidock
+    QToolButton *lockButton = new QToolButton(this);
+    lockButton->setIcon(CreateColoredIcon(":/res/images/unlocked.svg", QColor("#3a3a3d")));
+    lockButton->setToolTip("Scene organizer is unlocked (click to lock)");
+    connect(lockButton, &QToolButton::clicked, this, &SceneOrganiserDock::onToggleLockClicked);
+
+    m_toolbar->addWidget(lockButton);
+
     // Store button references for additional state management if needed
     m_addButton = addButton;
     m_removeButton = removeButton;
     m_filtersButton = filtersButton;
     m_moveUpButton = moveUpButton;
     m_moveDownButton = moveDownButton;
+    m_lockButton = lockButton;
 
     // Add toolbar to the bottom of the layout
     m_mainLayout->addWidget(m_toolbar, 0); // 0 means don't stretch
@@ -483,11 +500,13 @@ void SceneOrganiserDock::onSceneSelectionChanged(const QItemSelection &selected,
         }
     }
 
-    // Update toolbar button states (direct button control)
-    if (m_removeButton) m_removeButton->setEnabled(hasSelection);
-    if (m_filtersButton) m_filtersButton->setEnabled(isScene);
-    if (m_moveUpButton) m_moveUpButton->setEnabled(hasSelection && canMoveUp);
-    if (m_moveDownButton) m_moveDownButton->setEnabled(hasSelection && canMoveDown);
+    // Update toolbar button states (direct button control) - but respect lock state
+    if (!m_isLocked) {
+        if (m_removeButton) m_removeButton->setEnabled(hasSelection);
+        if (m_filtersButton) m_filtersButton->setEnabled(isScene);
+        if (m_moveUpButton) m_moveUpButton->setEnabled(hasSelection && canMoveUp);
+        if (m_moveDownButton) m_moveDownButton->setEnabled(hasSelection && canMoveDown);
+    }
 }
 
 void SceneOrganiserDock::updateToolbarState()
@@ -862,6 +881,79 @@ QColor SceneOrganiserDock::getDefaultThemeTextColor()
     return QColor(255, 255, 255); // White text for dark themes (common in OBS)
 }
 
+void SceneOrganiserDock::onToggleLockClicked()
+{
+    setLocked(!m_isLocked);
+}
+
+void SceneOrganiserDock::setLocked(bool locked)
+{
+    m_isLocked = locked;
+
+    // Update lock button icon and tooltip
+    if (m_lockButton) {
+        if (m_isLocked) {
+            m_lockButton->setIcon(CreateColoredIcon(":/res/images/locked.svg", QColor("#fefefe")));
+            m_lockButton->setToolTip("Scene organizer is locked (click to unlock)");
+        } else {
+            m_lockButton->setIcon(CreateColoredIcon(":/res/images/unlocked.svg", QColor("#3a3a3d")));
+            m_lockButton->setToolTip("Scene organizer is unlocked (click to lock)");
+        }
+    }
+
+    // Update UI enabled state
+    updateUIEnabledState();
+
+    // Save lock state
+    m_saveTimer->start();
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "LockState",
+        QString("Scene organizer %1").arg(m_isLocked ? "locked" : "unlocked").toUtf8().constData());
+}
+
+void SceneOrganiserDock::updateUIEnabledState()
+{
+    bool enabled = !m_isLocked;
+
+    // Disable/enable toolbar buttons
+    if (m_addButton) m_addButton->setEnabled(enabled);
+
+    // For selection-based buttons, check current selection
+    bool hasSelection = false;
+    bool isScene = false;
+    if (enabled && m_treeView && m_treeView->selectionModel()) {
+        auto selected = m_treeView->selectionModel()->selectedIndexes();
+        hasSelection = !selected.isEmpty();
+        if (hasSelection) {
+            QStandardItem *item = m_model->itemFromIndex(selected.first());
+            isScene = (item && item->type() == SceneTreeItem::UserType + 2);
+        }
+    }
+
+    if (m_removeButton) m_removeButton->setEnabled(enabled && hasSelection);
+    if (m_filtersButton) m_filtersButton->setEnabled(enabled && isScene);
+    if (m_moveUpButton) m_moveUpButton->setEnabled(enabled && hasSelection);
+    if (m_moveDownButton) m_moveDownButton->setEnabled(enabled && hasSelection);
+
+    // Disable/enable tree view interactions
+    if (m_treeView) {
+        m_treeView->setDragEnabled(enabled);
+        m_treeView->setAcceptDrops(enabled);
+        m_treeView->setDragDropMode(enabled ? QAbstractItemView::InternalMove : QAbstractItemView::NoDragDrop);
+    }
+
+    // Disable/enable context menus by clearing their actions when locked
+    if (m_folderContextMenu) {
+        m_folderContextMenu->setEnabled(enabled);
+    }
+    if (m_sceneContextMenu) {
+        m_sceneContextMenu->setEnabled(enabled);
+    }
+    if (m_backgroundContextMenu) {
+        m_backgroundContextMenu->setEnabled(enabled);
+    }
+}
+
 void SceneOrganiserDock::onSettingsChanged()
 {
     // Handle settings changes if needed
@@ -1064,20 +1156,48 @@ void SceneOrganiserDock::SaveConfiguration()
         return;
     }
 
+    // Save lock state separately using simple approach
+    QString lockStateFile = configDir + "/" + m_configKey + "_lock_state.txt";
+    QFile file(lockStateFile);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&file);
+        out << (m_isLocked ? "locked" : "unlocked");
+        file.close();
+    }
+
     // Now using DigitOtter approach - save is handled by saveSceneTree()
     // which is called automatically on OBS frontend events
     m_model->saveSceneTree();
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-        "Configuration saved using DigitOtter approach");
+        QString("Configuration saved using DigitOtter approach (lock state: %1)")
+        .arg(m_isLocked ? "locked" : "unlocked").toUtf8().constData());
 }
 
 void SceneOrganiserDock::LoadConfiguration()
 {
+    // Load lock state
+    char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
+    if (configPath) {
+        QString configDir = QString::fromUtf8(configPath);
+        QString lockStateFile = configDir + "/" + m_configKey + "_lock_state.txt";
+        bfree(configPath);
+
+        QFile file(lockStateFile);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream in(&file);
+            QString lockState = in.readAll().trimmed();
+            bool shouldBeLocked = (lockState == "locked");
+            setLocked(shouldBeLocked);
+            file.close();
+        }
+    }
+
     // Now using the DigitOtter approach - this is handled by frontend events
     // No need to manually load configuration here
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-        "Configuration loading handled by frontend events");
+        QString("Configuration loading handled by frontend events (lock state: %1)")
+        .arg(m_isLocked ? "locked" : "unlocked").toUtf8().constData());
 }
 
 //==============================================================================
