@@ -79,6 +79,13 @@ private:
     void showBackgroundContextMenu(const QPoint &pos);
     void updateAllItemIcons(QStandardItem *parent);
     void updateToggleIconsState();
+    void updateActiveSceneHighlight();
+    void updateActiveSceneHighlightRecursive(QStandardItem *parent, const QString &activeSceneName);
+    void onSetCustomColorClicked();
+    void onClearCustomColorClicked();
+    void applyCustomColorToItem(QStandardItem *item, const QColor &color);
+    void clearCustomColorFromItem(QStandardItem *item);
+    QColor getContrastTextColor(const QColor &backgroundColor);
 
     // Data members
     CanvasType m_canvasType;
@@ -114,6 +121,9 @@ private:
     // Configuration
     QString m_configKey;
     QTimer *m_saveTimer;
+
+    // Color management
+    QStandardItem *m_currentContextItem;
 
     // OBS integration
     static QList<SceneOrganiserDock*> s_dockInstances;

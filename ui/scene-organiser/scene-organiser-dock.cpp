@@ -18,6 +18,7 @@
 #include <QToolButton>
 #include <QAction>
 #include <QMessageBox>
+#include <QColorDialog>
 #include <QPainter>
 #include <QPixmap>
 #include <QIcon>
@@ -105,6 +106,7 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_sceneContextMenu(nullptr)
     , m_backgroundContextMenu(nullptr)
     , m_saveTimer(new QTimer(this))
+    , m_currentContextItem(nullptr)
 {
     s_dockInstances.append(this);
 
@@ -125,6 +127,9 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
 
     // Initialize toggle icons state in context menus
     updateToggleIconsState();
+
+    // Initialize active scene highlighting
+    QTimer::singleShot(200, this, &SceneOrganiserDock::updateActiveSceneHighlight);
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Initialize",
         QString("Scene Organiser Dock created for %1 canvas")
@@ -392,6 +397,9 @@ void SceneOrganiserDock::setupContextMenu()
     });
 
     m_folderContextMenu->addSeparator();
+    m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.SetColor"), this, &SceneOrganiserDock::onSetCustomColorClicked);
+    m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ClearColor"), this, &SceneOrganiserDock::onClearCustomColorClicked);
+    m_folderContextMenu->addSeparator();
     m_folderToggleIconsAction = m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
     m_folderToggleIconsAction->setCheckable(true);
 
@@ -412,6 +420,9 @@ void SceneOrganiserDock::setupContextMenu()
     });
 
     m_sceneContextMenu->addSeparator();
+    m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.SetColor"), this, &SceneOrganiserDock::onSetCustomColorClicked);
+    m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ClearColor"), this, &SceneOrganiserDock::onClearCustomColorClicked);
+    m_sceneContextMenu->addSeparator();
     m_sceneToggleIconsAction = m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
     m_sceneToggleIconsAction->setCheckable(true);
 
@@ -431,6 +442,7 @@ void SceneOrganiserDock::setupObsSignals()
 void SceneOrganiserDock::refreshSceneList()
 {
     m_model->updateTree();
+    updateActiveSceneHighlight();
 }
 
 void SceneOrganiserDock::updateFromObsScenes()
@@ -521,13 +533,13 @@ void SceneOrganiserDock::onCustomContextMenuRequested(const QPoint &pos)
 
 void SceneOrganiserDock::showFolderContextMenu(const QPoint &pos, const QModelIndex &index)
 {
-    Q_UNUSED(index)
+    m_currentContextItem = m_model->itemFromIndex(index);
     m_folderContextMenu->exec(pos);
 }
 
 void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelIndex &index)
 {
-    Q_UNUSED(index)
+    m_currentContextItem = m_model->itemFromIndex(index);
     m_sceneContextMenu->exec(pos);
 }
 
@@ -713,6 +725,134 @@ void SceneOrganiserDock::onToggleIconsClicked()
     NotifySceneOrganiserIconsChanged();
 }
 
+void SceneOrganiserDock::onSetCustomColorClicked()
+{
+    if (!m_currentContextItem) {
+        return;
+    }
+
+    // Get current color if any
+    QVariant colorData = m_currentContextItem->data(Qt::UserRole + 1);
+    QColor currentColor = colorData.isValid() ? colorData.value<QColor>() : QColor();
+
+    // Open color picker dialog
+    QColor selectedColor = QColorDialog::getColor(currentColor, this, "Choose Color");
+
+    if (selectedColor.isValid()) {
+        // Store the color in the item
+        m_currentContextItem->setData(selectedColor, Qt::UserRole + 1);
+
+        // Apply the color immediately
+        applyCustomColorToItem(m_currentContextItem, selectedColor);
+
+        // Save configuration
+        m_saveTimer->start();
+
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "CustomColor",
+            QString("Set custom color for item '%1': %2")
+            .arg(m_currentContextItem->text(), selectedColor.name()).toUtf8().constData());
+    }
+}
+
+void SceneOrganiserDock::onClearCustomColorClicked()
+{
+    if (!m_currentContextItem) {
+        return;
+    }
+
+    // Remove the custom color
+    m_currentContextItem->setData(QVariant(), Qt::UserRole + 1);
+
+    // Clear the color styling
+    clearCustomColorFromItem(m_currentContextItem);
+
+    // Save configuration
+    m_saveTimer->start();
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "CustomColor",
+        QString("Cleared custom color for item '%1'").arg(m_currentContextItem->text()).toUtf8().constData());
+}
+
+void SceneOrganiserDock::applyCustomColorToItem(QStandardItem *item, const QColor &color)
+{
+    if (!item || !color.isValid()) {
+        return;
+    }
+
+    // Don't override active scene highlighting
+    bool isActiveScene = false;
+    if (item->type() == SceneTreeItem::UserType + 2) {
+        obs_source_t *current_scene = obs_frontend_get_current_scene();
+        if (current_scene) {
+            QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
+            isActiveScene = (item->text() == current_scene_name);
+            obs_source_release(current_scene);
+        }
+    }
+
+    if (isActiveScene) {
+        // For active scenes, store the color but don't apply it (active highlighting takes precedence)
+        return;
+    }
+
+    // Apply the background color
+    item->setBackground(QBrush(color));
+
+    // Set contrasting text color
+    QColor textColor = getContrastTextColor(color);
+    item->setForeground(QBrush(textColor));
+}
+
+void SceneOrganiserDock::clearCustomColorFromItem(QStandardItem *item)
+{
+    if (!item) {
+        return;
+    }
+
+    // Check if this is the active scene
+    bool isActiveScene = false;
+    if (item->type() == SceneTreeItem::UserType + 2) {
+        obs_source_t *current_scene = obs_frontend_get_current_scene();
+        if (current_scene) {
+            QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
+            isActiveScene = (item->text() == current_scene_name);
+            obs_source_release(current_scene);
+        }
+    }
+
+    if (isActiveScene) {
+        // For active scenes, reapply the active scene highlighting
+        QFont font = item->font();
+        font.setBold(true);
+        item->setFont(font);
+        item->setBackground(QBrush(QColor(26, 127, 207))); // OBS active blue
+        item->setForeground(QBrush(QColor(255, 255, 255))); // White text
+    } else {
+        // Clear all custom styling to return to theme defaults
+        item->setBackground(QBrush());
+        item->setForeground(QBrush());
+    }
+}
+
+QColor SceneOrganiserDock::getContrastTextColor(const QColor &backgroundColor)
+{
+    // Calculate luminance using the standard formula
+    double r = backgroundColor.redF();
+    double g = backgroundColor.greenF();
+    double b = backgroundColor.blueF();
+
+    // Apply gamma correction
+    r = (r <= 0.03928) ? r / 12.92 : qPow((r + 0.055) / 1.055, 2.4);
+    g = (g <= 0.03928) ? g / 12.92 : qPow((g + 0.055) / 1.055, 2.4);
+    b = (b <= 0.03928) ? b / 12.92 : qPow((b + 0.055) / 1.055, 2.4);
+
+    // Calculate relative luminance
+    double luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+    // Return white for dark backgrounds, black for light backgrounds
+    return (luminance > 0.5) ? QColor(0, 0, 0) : QColor(255, 255, 255);
+}
+
 void SceneOrganiserDock::onSettingsChanged()
 {
     // Handle settings changes if needed
@@ -743,6 +883,88 @@ void SceneOrganiserDock::updateToggleIconsState()
     }
     if (m_backgroundToggleIconsAction) {
         m_backgroundToggleIconsAction->setChecked(iconsEnabled);
+    }
+}
+
+void SceneOrganiserDock::updateActiveSceneHighlight()
+{
+    if (!m_model || !m_treeView) {
+        return;
+    }
+
+    // Get the current active scene from OBS
+    obs_source_t *current_scene = obs_frontend_get_current_scene();
+    if (!current_scene) {
+        return;
+    }
+
+    QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
+    obs_source_release(current_scene);
+
+    // Update all scene items in the tree
+    updateActiveSceneHighlightRecursive(m_model->invisibleRootItem(), current_scene_name);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "ActiveScene",
+        QString("Updated active scene highlight for: %1").arg(current_scene_name).toUtf8().constData());
+}
+
+void SceneOrganiserDock::updateActiveSceneHighlightRecursive(QStandardItem *parent, const QString &activeSceneName)
+{
+    if (!parent) return;
+
+    for (int i = 0; i < parent->rowCount(); ++i) {
+        QStandardItem *item = parent->child(i);
+        if (!item) continue;
+
+        if (item->type() == SceneTreeItem::UserType + 2) {
+            // This is a scene item
+            SceneTreeItem *sceneItem = static_cast<SceneTreeItem*>(item);
+            bool isActive = (item->text() == activeSceneName);
+
+            // Apply OBS active scene styling
+            if (isActive) {
+                // Use OBS active blue color scheme
+                QFont font = item->font();
+                font.setBold(true);
+                item->setFont(font);
+
+                // Set background color to match OBS active scene color
+                item->setBackground(QBrush(QColor(26, 127, 207))); // OBS active blue
+                item->setForeground(QBrush(QColor(255, 255, 255))); // White text
+            } else {
+                // Reset to normal styling
+                QFont font = item->font();
+                font.setBold(false);
+                item->setFont(font);
+
+                // Check if item has custom color
+                QVariant customColor = item->data(Qt::UserRole + 1);
+                if (customColor.isValid()) {
+                    // Apply custom color
+                    applyCustomColorToItem(item, customColor.value<QColor>());
+                } else {
+                    // Clear background and foreground to use default theme colors
+                    item->setBackground(QBrush());
+                    item->setForeground(QBrush());
+                }
+            }
+
+            // Update the scene item's visual state
+            sceneItem->updateIcon();
+        } else if (item->type() == SceneFolderItem::UserType + 1) {
+            // Apply custom colors to folders too
+            QVariant customColor = item->data(Qt::UserRole + 1);
+            if (customColor.isValid()) {
+                applyCustomColorToItem(item, customColor.value<QColor>());
+            } else {
+                // Clear styling to use defaults
+                item->setBackground(QBrush());
+                item->setForeground(QBrush());
+            }
+
+            // Recursively update folder children
+            updateActiveSceneHighlightRecursive(item, activeSceneName);
+        }
     }
 }
 
@@ -779,11 +1001,13 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
         QTimer::singleShot(100, dock, [dock]() {
             dock->m_model->loadSceneTree();
             dock->m_model->updateTree();
+            dock->updateActiveSceneHighlight();
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
         QTimer::singleShot(100, dock, [dock]() {
             dock->m_model->updateTree();
+            dock->updateActiveSceneHighlight();
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING:
@@ -794,12 +1018,19 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
         QTimer::singleShot(100, dock, [dock]() {
             dock->m_model->loadSceneTree();
             dock->m_model->updateTree();
+            dock->updateActiveSceneHighlight();
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_RENAMED:
         QTimer::singleShot(100, dock, [dock]() {
             dock->m_model->saveSceneTree();
             dock->m_model->updateTree();
+            dock->updateActiveSceneHighlight();
+        });
+        break;
+    case OBS_FRONTEND_EVENT_SCENE_CHANGED:
+        QTimer::singleShot(50, dock, [dock]() {
+            dock->updateActiveSceneHighlight();
         });
         break;
     default:
@@ -965,12 +1196,22 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
         if (originalItem->type() == SceneTreeItem::UserType + 2) {
             // Move scene item - create new item and update tracking
             SceneTreeItem *sceneItem = static_cast<SceneTreeItem*>(originalItem);
-            obs_weak_source_addref(sceneItem->getWeakSource());
-            QStandardItem *newItem = new SceneTreeItem(originalItem->text(), sceneItem->getWeakSource());
+            obs_weak_source_t *weak_source = sceneItem->getWeakSource();
+
+            // Add reference for the new item (since the old item will release its reference when destroyed)
+            obs_weak_source_addref(weak_source);
+            QStandardItem *newItem = new SceneTreeItem(originalItem->text(), weak_source);
+
+            // Copy custom color from original item
+            QVariant customColor = originalItem->data(Qt::UserRole + 1);
+            if (customColor.isValid()) {
+                newItem->setData(customColor, Qt::UserRole + 1);
+            }
+
             parentItem->insertRow(row, newItem);
 
-            // Update tracking map
-            m_scenesInTree[sceneItem->getWeakSource()] = newItem;
+            // Update tracking map with new item
+            m_scenesInTree[weak_source] = newItem;
         } else if (originalItem->type() == SceneFolderItem::UserType + 1) {
             // Move folder item
             moveSceneFolder(originalItem, row, parentItem);
@@ -1417,6 +1658,12 @@ void SceneTreeModel::moveSceneFolder(QStandardItem *item, int row, QStandardItem
         return;
     }
 
+    // Copy custom color from original folder
+    QVariant customColor = item->data(Qt::UserRole + 1);
+    if (customColor.isValid()) {
+        newFolder->setData(customColor, Qt::UserRole + 1);
+    }
+
     parentItem->insertRow(row, newFolder);
 
     // Recursively move child items
@@ -1475,15 +1722,13 @@ bool SceneTreeModel::isManagedScene(obs_source_t *source)
 
 void SceneTreeModel::cleanupSceneTree()
 {
-    // Release all weak references and clear the tree
-    for (auto &scene_pair : m_scenesInTree) {
-        obs_weak_source_release(scene_pair.first);
-    }
-    m_scenesInTree.clear();
-
-    // Clear the model
+    // Clear the model first - this will trigger SceneTreeItem destructors
+    // which will release their own weak source references
     clear();
     setupRootItem();
+
+    // Clear the tracking map (weak sources already released by item destructors)
+    m_scenesInTree.clear();
 }
 
 void SceneTreeModel::saveSceneTree()
@@ -1561,10 +1806,10 @@ void SceneTreeModel::removeSceneFromTracking(obs_weak_source_t *weak_source)
     auto it = m_scenesInTree.find(weak_source);
     if (it != m_scenesInTree.end()) {
         m_scenesInTree.erase(it);
-        obs_weak_source_release(weak_source);
+        // Note: Don't release weak_source here - it will be released by the SceneTreeItem destructor
 
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Cleanup",
-            "Removed scene from tracking and released weak reference");
+            "Removed scene from tracking (weak reference managed by item)");
     }
 }
 
@@ -1584,6 +1829,13 @@ obs_data_array_t *SceneTreeModel::createFolderArray(QStandardItem &parent)
             obs_data_set_string(item_data, "type", "folder");
             obs_data_set_bool(item_data, "expanded", true); // TODO: Track expansion state
 
+            // Save custom color if set
+            QVariant colorData = child->data(Qt::UserRole + 1);
+            if (colorData.isValid()) {
+                QColor color = colorData.value<QColor>();
+                obs_data_set_string(item_data, "custom_color", color.name().toUtf8().constData());
+            }
+
             // Recursively save children
             obs_data_array_t *children = createFolderArray(*child);
             obs_data_set_array(item_data, "children", children);
@@ -1593,6 +1845,13 @@ obs_data_array_t *SceneTreeModel::createFolderArray(QStandardItem &parent)
             // This is a scene
             obs_data_set_string(item_data, "name", child->text().toUtf8().constData());
             obs_data_set_string(item_data, "type", "scene");
+
+            // Save custom color if set
+            QVariant colorData = child->data(Qt::UserRole + 1);
+            if (colorData.isValid()) {
+                QColor color = colorData.value<QColor>();
+                obs_data_set_string(item_data, "custom_color", color.name().toUtf8().constData());
+            }
         }
 
         obs_data_array_push_back(folder_array, item_data);
@@ -1626,6 +1885,15 @@ void SceneTreeModel::loadFolderArray(obs_data_array_t *folder_array, QStandardIt
             if (folderItem) {
                 parent.appendRow(folderItem);
 
+                // Load custom color if present
+                const char *colorName = obs_data_get_string(item_data, "custom_color");
+                if (colorName && strlen(colorName) > 0) {
+                    QColor color(colorName);
+                    if (color.isValid()) {
+                        folderItem->setData(color, Qt::UserRole + 1);
+                    }
+                }
+
                 // Load children
                 obs_data_array_t *children = obs_data_get_array(item_data, "children");
                 if (children) {
@@ -1641,6 +1909,15 @@ void SceneTreeModel::loadFolderArray(obs_data_array_t *folder_array, QStandardIt
                 obs_weak_source_t *weak = obs_source_get_weak_source(source);
                 QStandardItem *sceneItem = new SceneTreeItem(itemName, weak);
                 parent.appendRow(sceneItem);
+
+                // Load custom color if present
+                const char *colorName = obs_data_get_string(item_data, "custom_color");
+                if (colorName && strlen(colorName) > 0) {
+                    QColor color(colorName);
+                    if (color.isValid()) {
+                        sceneItem->setData(color, Qt::UserRole + 1);
+                    }
+                }
 
                 // Add to our tracking map
                 m_scenesInTree[weak] = sceneItem;
@@ -1793,8 +2070,11 @@ SceneTreeItem::SceneTreeItem(const QString &sceneName, obs_weak_source_t *weak_s
 
 SceneTreeItem::~SceneTreeItem()
 {
-    // Don't release weak source here - it's managed by the model
-    // The model will release all weak sources in its destructor
+    // Release the weak source reference when this item is destroyed
+    if (m_weakSource) {
+        obs_weak_source_release(m_weakSource);
+        m_weakSource = nullptr;
+    }
 }
 
 void SceneTreeItem::setupSceneItem()
