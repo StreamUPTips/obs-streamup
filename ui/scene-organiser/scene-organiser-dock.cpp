@@ -18,6 +18,7 @@
 #include <QToolButton>
 #include <QAction>
 #include <QMessageBox>
+#include <QKeyEvent>
 #include <QColorDialog>
 #include <QPainter>
 #include <QPixmap>
@@ -128,6 +129,7 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     m_saveTimer->setSingleShot(true);
     m_saveTimer->setInterval(1000); // Save 1 second after last change
     connect(m_saveTimer, &QTimer::timeout, this, &SceneOrganiserDock::SaveConfiguration);
+
 
     // Load configuration after setup
     QTimer::singleShot(100, this, &SceneOrganiserDock::LoadConfiguration);
@@ -657,20 +659,33 @@ void SceneOrganiserDock::onRemoveClicked()
             // Delete the actual scene from OBS
             obs_source_t *source = obs_get_source_by_name(itemName.toUtf8().constData());
             if (source) {
-                // Before removing from OBS, clean up our tracking
+                // Before removing from OBS, clean up our tracking and UI
                 if (item->type() == SceneTreeItem::UserType + 2) {
                     SceneTreeItem *sceneItem = static_cast<SceneTreeItem*>(item);
                     obs_weak_source_t *weak = sceneItem->getWeakSource();
 
-                    // Remove from our tracking map and release the weak reference
+                    // Remove from our tracking map
                     m_model->removeSceneFromTracking(weak);
                 }
 
+                // Clear selection first
+                m_treeView->selectionModel()->clearSelection();
+
+                // Remove the item from the tree view immediately
+                QStandardItem *parent = item->parent();
+                if (!parent) parent = m_model->invisibleRootItem();
+                parent->removeRow(item->row());
+
+                // Now remove from OBS
                 obs_source_remove(source);
                 obs_source_release(source);
 
                 StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Removal",
-                    QString("Deleted scene from OBS: %1").arg(itemName).toUtf8().constData());
+                    QString("Deleted scene from OBS and removed from dock: %1").arg(itemName).toUtf8().constData());
+
+                // Clean up any empty folders and save
+                m_model->cleanupEmptyItems();
+                m_saveTimer->start();
             }
         }
 
@@ -1175,7 +1190,8 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
-        QTimer::singleShot(100, dock, [dock]() {
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Event", "Scene list changed event received");
+        QTimer::singleShot(50, dock, [dock]() {
             dock->m_model->updateTree();
             dock->updateActiveSceneHighlight();
         });
@@ -1530,6 +1546,7 @@ bool SceneTreeModel::isValidSceneForCanvas(obs_scene_t *scene)
 
     return true;
 }
+
 
 QStandardItem *SceneTreeModel::findSceneItem(obs_weak_source_t *weak_source)
 {
@@ -2228,6 +2245,27 @@ void SceneTreeView::contextMenuEvent(QContextMenuEvent *event)
 {
     // This is handled by the custom context menu signal
     event->accept();
+}
+
+void SceneTreeView::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
+        // Find the parent dock to trigger the remove action
+        QWidget *parentWidget = this->parentWidget();
+        while (parentWidget) {
+            SceneOrganiserDock *dock = qobject_cast<SceneOrganiserDock*>(parentWidget);
+            if (dock) {
+                // Trigger the remove button logic
+                dock->onRemoveClicked();
+                event->accept();
+                return;
+            }
+            parentWidget = parentWidget->parentWidget();
+        }
+    }
+
+    // Let the parent handle other keys
+    QTreeView::keyPressEvent(event);
 }
 
 //==============================================================================
