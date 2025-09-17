@@ -917,8 +917,16 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
     if (!parentItem) {
         parentItem = invisibleRootItem();
     } else if (parentItem->type() == SceneTreeItem::UserType + 2) {
-        // Can't drop on scene items
-        return false;
+        // If dropping on a scene item, adjust to drop beside it instead
+        QStandardItem *sceneParent = parentItem->parent();
+        if (!sceneParent) {
+            sceneParent = invisibleRootItem();
+        }
+
+        // Get the row of the scene item and position the drop after it
+        int sceneRow = parentItem->row();
+        row = sceneRow + 1; // Position after the scene
+        parentItem = sceneParent;
     }
 
     if (row < 0)
@@ -1681,7 +1689,49 @@ void SceneTreeView::dragEnterEvent(QDragEnterEvent *event)
 void SceneTreeView::dragMoveEvent(QDragMoveEvent *event)
 {
     if (event->mimeData()->hasFormat("application/x-streamup-sceneorganiser")) {
+        // Get the index under the cursor
+        QModelIndex index = indexAt(event->position().toPoint());
+
+        if (index.isValid()) {
+            // Get the item at this position
+            QStandardItemModel *model = qobject_cast<QStandardItemModel*>(this->model());
+            if (model) {
+                QStandardItem *item = model->itemFromIndex(index);
+                if (item && item->type() == SceneTreeItem::UserType + 2) {
+                    // This is a scene item - force drop above or below based on cursor position
+                    QRect itemRect = visualRect(index);
+                    QPoint cursorPos = event->position().toPoint();
+
+                    // Calculate if cursor is in top half or bottom half of the scene item
+                    int itemMiddle = itemRect.top() + (itemRect.height() / 2);
+                    bool dropAbove = cursorPos.y() < itemMiddle;
+
+                    // Create a fake event position to force the drop indicator above or below
+                    QPoint adjustedPos;
+                    if (dropAbove) {
+                        // Position just above the item
+                        adjustedPos = QPoint(cursorPos.x(), itemRect.top() - 2);
+                    } else {
+                        // Position just below the item
+                        adjustedPos = QPoint(cursorPos.x(), itemRect.bottom() + 2);
+                    }
+
+                    // Create a new drag move event with the adjusted position
+                    QDragMoveEvent adjustedEvent(adjustedPos, event->possibleActions(),
+                                               event->mimeData(), event->buttons(), event->modifiers());
+
+                    // Accept the original event and let the adjusted event handle positioning
+                    event->acceptProposedAction();
+                    QTreeView::dragMoveEvent(&adjustedEvent);
+                    return;
+                }
+            }
+        }
+
+        // For non-scene items (folders/empty space), use normal behavior
         event->acceptProposedAction();
+    } else {
+        event->ignore();
     }
     QTreeView::dragMoveEvent(event);
 }
