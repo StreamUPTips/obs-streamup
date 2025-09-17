@@ -421,7 +421,6 @@ void SceneOrganiserDock::setupContextMenu()
     m_backgroundContextMenu->addSeparator();
     m_backgroundToggleIconsAction = m_backgroundContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
     m_backgroundToggleIconsAction->setCheckable(true);
-    m_backgroundContextMenu->addAction(obs_module_text("SceneOrganiser.Action.Refresh"), this, &SceneOrganiserDock::onRefreshClicked);
 }
 
 void SceneOrganiserDock::setupObsSignals()
@@ -606,6 +605,15 @@ void SceneOrganiserDock::onRemoveClicked()
             // Delete the actual scene from OBS
             obs_source_t *source = obs_get_source_by_name(itemName.toUtf8().constData());
             if (source) {
+                // Before removing from OBS, clean up our tracking
+                if (item->type() == SceneTreeItem::UserType + 2) {
+                    SceneTreeItem *sceneItem = static_cast<SceneTreeItem*>(item);
+                    obs_weak_source_t *weak = sceneItem->getWeakSource();
+
+                    // Remove from our tracking map and release the weak reference
+                    m_model->removeSceneFromTracking(weak);
+                }
+
                 obs_source_remove(source);
                 obs_source_release(source);
 
@@ -693,10 +701,6 @@ void SceneOrganiserDock::onMoveDownClicked()
     }
 }
 
-void SceneOrganiserDock::onRefreshClicked()
-{
-    refreshSceneList();
-}
 
 void SceneOrganiserDock::onToggleIconsClicked()
 {
@@ -959,8 +963,14 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
         }
 
         if (originalItem->type() == SceneTreeItem::UserType + 2) {
-            // Move scene item
-            moveSceneItem(originalItem, row, parentItem);
+            // Move scene item - create new item and update tracking
+            SceneTreeItem *sceneItem = static_cast<SceneTreeItem*>(originalItem);
+            obs_weak_source_addref(sceneItem->getWeakSource());
+            QStandardItem *newItem = new SceneTreeItem(originalItem->text(), sceneItem->getWeakSource());
+            parentItem->insertRow(row, newItem);
+
+            // Update tracking map
+            m_scenesInTree[sceneItem->getWeakSource()] = newItem;
         } else if (originalItem->type() == SceneFolderItem::UserType + 1) {
             // Move folder item
             moveSceneFolder(originalItem, row, parentItem);
@@ -1351,6 +1361,8 @@ bool SceneTreeModel::isChildOf(QStandardItem *potentialChild, QStandardItem *pot
 
 void SceneTreeModel::moveSceneItem(QStandardItem *item, int row, QStandardItem *parentItem)
 {
+    // This function is now only used for internal moves, not drag & drop
+    // Drag & drop is handled directly in dropMimeData
     if (!item || item->type() != SceneTreeItem::UserType + 2) {
         return;
     }
@@ -1362,22 +1374,18 @@ void SceneTreeModel::moveSceneItem(QStandardItem *item, int row, QStandardItem *
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Move",
         QString("Moving scene '%1'").arg(sceneName).toUtf8().constData());
 
-    // Add reference to weak source for new item
-    obs_weak_source_addref(weak);
+    // For internal moves, we can safely move the item directly
+    QStandardItem *oldParent = item->parent();
+    if (!oldParent) oldParent = invisibleRootItem();
 
-    // Create new scene item with same weak reference
-    QStandardItem *newItem = new SceneTreeItem(sceneName, weak);
-    if (newItem) {
-        parentItem->insertRow(row, newItem);
-
-        // Update our tracking map
-        m_scenesInTree[weak] = newItem;
+    QStandardItem *takenItem = oldParent->takeChild(item->row());
+    if (takenItem) {
+        parentItem->insertRow(row, takenItem);
+        m_scenesInTree[weak] = takenItem;
 
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Move",
             QString("Moved scene '%1' to row %2").arg(sceneName).arg(row).toUtf8().constData());
     }
-
-    // Original item will be removed by Qt's drag/drop system
 }
 
 void SceneTreeModel::moveSceneFolder(QStandardItem *item, int row, QStandardItem *parentItem)
