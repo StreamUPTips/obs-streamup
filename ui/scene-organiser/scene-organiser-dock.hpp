@@ -86,6 +86,7 @@ private:
     void applyCustomColorToItem(QStandardItem *item, const QColor &color);
     void clearCustomColorFromItem(QStandardItem *item);
     QColor getContrastTextColor(const QColor &backgroundColor);
+    QColor getDefaultThemeTextColor();
 
     // Data members
     CanvasType m_canvasType;
