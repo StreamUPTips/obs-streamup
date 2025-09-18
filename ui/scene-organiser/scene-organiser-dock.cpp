@@ -130,10 +130,10 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     // Set configuration key based on canvas type
     m_configKey = (m_canvasType == CanvasType::Vertical) ? "scene_organiser_vertical" : "scene_organiser_normal";
 
+    setupSearchBar();
     setupUI();
     setupContextMenu();
     setupObsSignals();
-    setupSearchBar();
 
     // Setup auto-save timer
     m_saveTimer->setSingleShot(true);
@@ -256,6 +256,11 @@ void SceneOrganiserDock::createBottomToolbar()
 {
     if (!m_mainLayout) {
         return;
+    }
+
+    // Add search bar above the toolbar
+    if (m_searchWidget) {
+        m_mainLayout->addWidget(m_searchWidget);
     }
 
     // Create a proper QToolBar like in the multidock
@@ -544,9 +549,6 @@ void SceneOrganiserDock::setupSearchBar()
     escapeAction->setShortcut(QKeySequence(Qt::Key_Escape));
     connect(escapeAction, &QAction::triggered, this, &SceneOrganiserDock::onClearSearch);
     m_searchEdit->addAction(escapeAction);
-
-    // Add to main layout at bottom
-    m_mainLayout->addWidget(m_searchWidget);
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Search", "Search bar initialized");
 }
