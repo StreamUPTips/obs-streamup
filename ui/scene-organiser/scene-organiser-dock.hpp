@@ -82,6 +82,19 @@ private slots:
     void onSettingsClicked();
     void onRenameSceneClicked();
     void onRenameFolderClicked();
+    void onDuplicateSceneClicked();
+    void onDeleteSceneClicked();
+    void onCopyFiltersClicked();
+    void onPasteFiltersClicked();
+    void onSceneFiltersClicked();
+    void onScreenshotSceneClicked();
+    void onShowInMultiviewClicked();
+    void onOpenProjectorClicked();
+    void onOpenProjectorWindowClicked();
+    void onSceneMoveUpClicked();
+    void onSceneMoveDownClicked();
+    void onSceneMoveToTopClicked();
+    void onSceneMoveToBottomClicked();
 
 public slots:
     static void onFrontendEvent(enum obs_frontend_event event, void *private_data);
@@ -147,6 +160,8 @@ public:
     QMenu *m_folderContextMenu;
     QMenu *m_sceneContextMenu;
     QMenu *m_backgroundContextMenu;
+    QMenu *m_sceneOrderMenu;
+    QMenu *m_sceneProjectorMenu;
 
     // Toggle actions (for checkmarks)
     QAction *m_folderToggleIconsAction;
@@ -156,6 +171,9 @@ public:
     // Configuration
     QString m_configKey;
     QTimer *m_saveTimer;
+
+    // Clipboard for filters
+    obs_weak_source_t *m_copyFiltersSource;
 
     // Color management
     QStandardItem *m_currentContextItem;

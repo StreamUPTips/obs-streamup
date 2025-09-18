@@ -111,10 +111,13 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_folderContextMenu(nullptr)
     , m_sceneContextMenu(nullptr)
     , m_backgroundContextMenu(nullptr)
+    , m_sceneOrderMenu(nullptr)
+    , m_sceneProjectorMenu(nullptr)
     , m_saveTimer(new QTimer(this))
     , m_currentContextItem(nullptr)
     , m_isLocked(false)
     , m_lockAction(nullptr)
+    , m_copyFiltersSource(nullptr)
 {
     s_dockInstances.append(this);
 
@@ -147,6 +150,12 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
 
 SceneOrganiserDock::~SceneOrganiserDock()
 {
+    // Clean up copy filters source
+    if (m_copyFiltersSource) {
+        obs_weak_source_release(m_copyFiltersSource);
+        m_copyFiltersSource = nullptr;
+    }
+
     s_dockInstances.removeAll(this);
     SaveConfiguration();
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Cleanup", "Scene Organiser Dock destroyed");
@@ -429,24 +438,48 @@ void SceneOrganiserDock::setupContextMenu()
     m_folderToggleIconsAction = m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
     m_folderToggleIconsAction->setCheckable(true);
 
-    // Scene context menu
+    // Scene context menu - matching OBS standard functionality
     m_sceneContextMenu = new QMenu(this);
-    m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.RenameScene"), this, &SceneOrganiserDock::onRenameSceneClicked);
-    m_sceneContextMenu->addSeparator();
-    m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.SwitchToScene"), [this]() {
-        auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
-        if (!selectedIndexes.isEmpty()) {
-            auto item = m_model->itemFromIndex(selectedIndexes.first());
-            if (item && item->type() == SceneTreeItem::UserType + 2) {
-                obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
-                if (source) {
-                    obs_frontend_set_current_scene(source);
-                    obs_source_release(source);
-                }
-            }
-        }
-    });
 
+    // Main actions
+    m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Rename"), -1), this, &SceneOrganiserDock::onRenameSceneClicked);
+    m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Duplicate"), -1), this, &SceneOrganiserDock::onDuplicateSceneClicked);
+
+    // Filter actions
+    m_sceneContextMenu->addSeparator();
+    m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Copy.Filters"), -1), this, &SceneOrganiserDock::onCopyFiltersClicked);
+    m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Paste.Filters"), -1), this, &SceneOrganiserDock::onPasteFiltersClicked);
+
+    // Delete action
+    m_sceneContextMenu->addSeparator();
+    m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Remove"), -1), this, &SceneOrganiserDock::onDeleteSceneClicked);
+
+    // Order submenu
+    m_sceneContextMenu->addSeparator();
+    m_sceneOrderMenu = new QMenu(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order"), -1), this);
+    m_sceneOrderMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order.MoveUp"), -1), this, &SceneOrganiserDock::onSceneMoveUpClicked);
+    m_sceneOrderMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order.MoveDown"), -1), this, &SceneOrganiserDock::onSceneMoveDownClicked);
+    m_sceneOrderMenu->addSeparator();
+    m_sceneOrderMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order.MoveToTop"), -1), this, &SceneOrganiserDock::onSceneMoveToTopClicked);
+    m_sceneOrderMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order.MoveToBottom"), -1), this, &SceneOrganiserDock::onSceneMoveToBottomClicked);
+    m_sceneContextMenu->addMenu(m_sceneOrderMenu);
+
+    // Projector submenu
+    m_sceneProjectorMenu = new QMenu(QString::fromUtf8(obs_frontend_get_locale_string("Projector.Open.Scene"), -1), this);
+    // We'll populate projector options dynamically when the menu is shown
+    m_sceneProjectorMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Projector.Window"), -1), this, &SceneOrganiserDock::onOpenProjectorWindowClicked);
+    m_sceneContextMenu->addMenu(m_sceneProjectorMenu);
+
+    // Additional OBS actions
+    m_sceneContextMenu->addSeparator();
+    m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Screenshot.Scene"), -1), this, &SceneOrganiserDock::onScreenshotSceneClicked);
+    m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Filters"), -1), this, &SceneOrganiserDock::onSceneFiltersClicked);
+
+    // Show in multiview toggle
+    m_sceneContextMenu->addSeparator();
+    m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("ShowInMultiview"), -1), this, &SceneOrganiserDock::onShowInMultiviewClicked);
+
+    // Custom actions
     m_sceneContextMenu->addSeparator();
     m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.SetColor"), this, &SceneOrganiserDock::onSetCustomColorClicked);
     m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ClearColor"), this, &SceneOrganiserDock::onClearCustomColorClicked);
@@ -456,6 +489,7 @@ void SceneOrganiserDock::setupContextMenu()
 
     // Background context menu
     m_backgroundContextMenu = new QMenu(this);
+    m_backgroundContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("AddScene"), -1), this, &SceneOrganiserDock::onCreateSceneClicked);
     m_backgroundContextMenu->addAction(obs_module_text("SceneOrganiser.Action.AddFolder"), this, &SceneOrganiserDock::onAddFolderClicked);
     m_backgroundContextMenu->addSeparator();
     m_backgroundToggleIconsAction = m_backgroundContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
@@ -615,6 +649,45 @@ void SceneOrganiserDock::showFolderContextMenu(const QPoint &pos, const QModelIn
 void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelIndex &index)
 {
     m_currentContextItem = m_model->itemFromIndex(index);
+
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) {
+        return;
+    }
+
+    // Update dynamic menu states
+    QString sceneName = m_currentContextItem->text();
+    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+
+    // Enable/disable "Paste Filters" based on whether we have copied filters
+    QList<QAction*> actions = m_sceneContextMenu->actions();
+    for (QAction *action : actions) {
+        QString actionText = action->text();
+        if (actionText.contains("Paste") && actionText.contains("Filter")) {
+            action->setEnabled(m_copyFiltersSource && !obs_weak_source_expired(m_copyFiltersSource));
+        }
+        else if (actionText.contains("Copy") && actionText.contains("Filter")) {
+            // Enable "Copy Filters" only if the scene has filters
+            action->setEnabled(source && obs_source_filter_count(source) > 0);
+        }
+    }
+
+    // Update "Show in Multiview" checkable state
+    if (source) {
+        obs_data_t *privateSettings = obs_source_get_private_settings(source);
+        bool showInMultiview = obs_data_get_bool(privateSettings, "show_in_multiview");
+
+        for (QAction *action : actions) {
+            if (action->text().contains("Multiview")) {
+                action->setCheckable(true);
+                action->setChecked(showInMultiview);
+                break;
+            }
+        }
+
+        obs_data_release(privateSettings);
+        obs_source_release(source);
+    }
+
     m_sceneContextMenu->exec(pos);
 }
 
@@ -1340,6 +1413,253 @@ void SceneOrganiserDock::LoadConfiguration()
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
         QString("Configuration loading handled by frontend events (lock state: %1)")
         .arg(m_isLocked ? "locked" : "unlocked").toUtf8().constData());
+}
+
+// New OBS-compatible context menu actions
+
+void SceneOrganiserDock::onDuplicateSceneClicked()
+{
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
+
+    QString currentSceneName = m_currentContextItem->text();
+    obs_source_t *currentSource = obs_get_source_by_name(currentSceneName.toUtf8().constData());
+    if (!currentSource) return;
+
+    obs_scene_t *currentScene = obs_scene_from_source(currentSource);
+    if (!currentScene) {
+        obs_source_release(currentSource);
+        return;
+    }
+
+    // Generate unique name for duplicated scene
+    QString format = currentSceneName + " %1";
+    int i = 2;
+    QString newName = format.arg(i);
+    while (obs_get_source_by_name(newName.toUtf8().constData())) {
+        newName = format.arg(++i);
+    }
+
+    // Duplicate the scene
+    obs_scene_t *duplicatedScene = obs_scene_duplicate(currentScene, newName.toUtf8().constData(), OBS_SCENE_DUP_REFS);
+    if (duplicatedScene) {
+        obs_source_t *newSource = obs_scene_get_source(duplicatedScene);
+        obs_frontend_set_current_scene(newSource);
+
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Duplication",
+            QString("Duplicated scene '%1' to '%2'").arg(currentSceneName, newName).toUtf8().constData());
+    }
+
+    obs_source_release(currentSource);
+}
+
+void SceneOrganiserDock::onDeleteSceneClicked()
+{
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
+
+    QString sceneName = m_currentContextItem->text();
+    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    if (!source) return;
+
+    // Confirm deletion
+    int ret = QMessageBox::question(this,
+        QString::fromUtf8(obs_frontend_get_locale_string("ConfirmRemove.Title"), -1),
+        QString::fromUtf8(obs_frontend_get_locale_string("ConfirmRemove.Text"), -1).arg(sceneName),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+
+    if (ret == QMessageBox::Yes) {
+        obs_source_remove(source);
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Deletion",
+            QString("Deleted scene: %1").arg(sceneName).toUtf8().constData());
+    }
+
+    obs_source_release(source);
+}
+
+void SceneOrganiserDock::onCopyFiltersClicked()
+{
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
+
+    QString sceneName = m_currentContextItem->text();
+    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    if (!source) return;
+
+    // Release previous copy source if any
+    if (m_copyFiltersSource) {
+        obs_weak_source_release(m_copyFiltersSource);
+    }
+
+    // Store weak reference to source for filter copying
+    m_copyFiltersSource = obs_source_get_weak_source(source);
+    obs_source_release(source);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Filter Copy",
+        QString("Copied filters from scene: %1").arg(sceneName).toUtf8().constData());
+}
+
+void SceneOrganiserDock::onPasteFiltersClicked()
+{
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
+    if (!m_copyFiltersSource || obs_weak_source_expired(m_copyFiltersSource)) return;
+
+    QString targetSceneName = m_currentContextItem->text();
+    obs_source_t *targetSource = obs_get_source_by_name(targetSceneName.toUtf8().constData());
+    obs_source_t *sourceSource = obs_weak_source_get_source(m_copyFiltersSource);
+
+    if (!targetSource || !sourceSource) {
+        if (targetSource) obs_source_release(targetSource);
+        if (sourceSource) obs_source_release(sourceSource);
+        return;
+    }
+
+    // Copy all filters from source to target
+    obs_source_copy_filters(targetSource, sourceSource);
+
+    obs_source_release(targetSource);
+    obs_source_release(sourceSource);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Filter Paste",
+        QString("Pasted filters to scene: %1").arg(targetSceneName).toUtf8().constData());
+}
+
+void SceneOrganiserDock::onSceneFiltersClicked()
+{
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
+
+    QString sceneName = m_currentContextItem->text();
+    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    if (!source) return;
+
+    obs_frontend_open_source_filters(source);
+    obs_source_release(source);
+}
+
+void SceneOrganiserDock::onScreenshotSceneClicked()
+{
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
+
+    QString sceneName = m_currentContextItem->text();
+    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    if (!source) return;
+
+    obs_frontend_take_source_screenshot(source);
+    obs_source_release(source);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Screenshot",
+        QString("Taking screenshot of scene: %1").arg(sceneName).toUtf8().constData());
+}
+
+void SceneOrganiserDock::onShowInMultiviewClicked()
+{
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
+
+    QString sceneName = m_currentContextItem->text();
+    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    if (!source) return;
+
+    obs_data_t *privateSettings = obs_source_get_private_settings(source);
+    bool showInMultiview = obs_data_get_bool(privateSettings, "show_in_multiview");
+    obs_data_set_bool(privateSettings, "show_in_multiview", !showInMultiview);
+    obs_data_release(privateSettings);
+
+    obs_source_release(source);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Multiview Toggle",
+        QString("Toggled multiview for scene: %1").arg(sceneName).toUtf8().constData());
+}
+
+void SceneOrganiserDock::onOpenProjectorClicked()
+{
+    // This would be called by monitor-specific projector actions
+    // Implementation would involve creating projectors for specific monitors
+}
+
+void SceneOrganiserDock::onOpenProjectorWindowClicked()
+{
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
+
+    QString sceneName = m_currentContextItem->text();
+    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    if (!source) return;
+
+    obs_frontend_open_projector("Scene", -1, nullptr, obs_source_get_name(source));
+    obs_source_release(source);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Projector Window",
+        QString("Opened projector window for scene: %1").arg(sceneName).toUtf8().constData());
+}
+
+void SceneOrganiserDock::onSceneMoveUpClicked()
+{
+    if (!m_currentContextItem) return;
+
+    QStandardItem *parent = m_currentContextItem->parent();
+    if (!parent) parent = m_model->invisibleRootItem();
+
+    int currentRow = m_currentContextItem->row();
+    if (currentRow > 0) {
+        QStandardItem *item = parent->takeChild(currentRow);
+        if (item) {
+            parent->insertRow(currentRow - 1, item);
+            m_treeView->setCurrentIndex(item->index());
+            m_saveTimer->start();
+        }
+    }
+}
+
+void SceneOrganiserDock::onSceneMoveDownClicked()
+{
+    if (!m_currentContextItem) return;
+
+    QStandardItem *parent = m_currentContextItem->parent();
+    if (!parent) parent = m_model->invisibleRootItem();
+
+    int currentRow = m_currentContextItem->row();
+    if (currentRow < parent->rowCount() - 1) {
+        QStandardItem *item = parent->takeChild(currentRow);
+        if (item) {
+            parent->insertRow(currentRow + 1, item);
+            m_treeView->setCurrentIndex(item->index());
+            m_saveTimer->start();
+        }
+    }
+}
+
+void SceneOrganiserDock::onSceneMoveToTopClicked()
+{
+    if (!m_currentContextItem) return;
+
+    QStandardItem *parent = m_currentContextItem->parent();
+    if (!parent) parent = m_model->invisibleRootItem();
+
+    int currentRow = m_currentContextItem->row();
+    if (currentRow > 0) {
+        QStandardItem *item = parent->takeChild(currentRow);
+        if (item) {
+            parent->insertRow(0, item);
+            m_treeView->setCurrentIndex(item->index());
+            m_saveTimer->start();
+        }
+    }
+}
+
+void SceneOrganiserDock::onSceneMoveToBottomClicked()
+{
+    if (!m_currentContextItem) return;
+
+    QStandardItem *parent = m_currentContextItem->parent();
+    if (!parent) parent = m_model->invisibleRootItem();
+
+    int currentRow = m_currentContextItem->row();
+    int maxRow = parent->rowCount() - 1;
+    if (currentRow < maxRow) {
+        QStandardItem *item = parent->takeChild(currentRow);
+        if (item) {
+            parent->insertRow(maxRow, item);
+            m_treeView->setCurrentIndex(item->index());
+            m_saveTimer->start();
+        }
+    }
 }
 
 //==============================================================================
