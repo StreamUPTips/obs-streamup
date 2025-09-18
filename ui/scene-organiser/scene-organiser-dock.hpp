@@ -186,6 +186,14 @@ public:
     QAction *m_sceneToggleIconsAction;
     QAction *m_backgroundToggleIconsAction;
 
+    // Context menu actions for lock state management
+    QAction *m_deleteFolderAction;
+    QAction *m_deleteSceneAction;
+    QAction *m_sceneMoveUpAction;
+    QAction *m_sceneMoveDownAction;
+    QAction *m_sceneMoveToTopAction;
+    QAction *m_sceneMoveToBottomAction;
+
     // Configuration
     QString m_configKey;
     QTimer *m_saveTimer;
