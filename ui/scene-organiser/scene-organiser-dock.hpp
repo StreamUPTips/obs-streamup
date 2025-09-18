@@ -19,6 +19,8 @@
 #include <QToolButton>
 #include <QAction>
 #include <QStyledItemDelegate>
+#include <QLineEdit>
+#include <QSortFilterProxyModel>
 #include <map>
 #include <obs.h>
 #include <obs-frontend-api.h>
@@ -110,6 +112,9 @@ private:
     void setupUI();
     void setupContextMenu();
     void setupObsSignals();
+    void setupSearchBar();
+    void onSearchTextChanged(const QString &text);
+    void onClearSearch();
     void createBottomToolbar();
     void updateToolbarState();
     void refreshSceneList();
@@ -144,7 +149,13 @@ public:
     QVBoxLayout *m_mainLayout;
     SceneTreeView *m_treeView;
     SceneTreeModel *m_model;
+    QSortFilterProxyModel *m_proxyModel;
     CustomColorDelegate *m_colorDelegate;
+
+    // Search functionality
+    QWidget *m_searchWidget;
+    QHBoxLayout *m_searchLayout;
+    QLineEdit *m_searchEdit;
 
     // Toolbar and buttons
     QToolBar *m_toolbar;
