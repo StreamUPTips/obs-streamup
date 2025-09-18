@@ -28,6 +28,8 @@
 #include <QTextStream>
 #include <QtSvg/QSvgRenderer>
 #include <QSortFilterProxyModel>
+#include <QScreen>
+#include <QGuiApplication>
 #include <QDir>
 #include <util/platform.h>
 
@@ -412,9 +414,10 @@ void SceneOrganiserDock::setupContextMenu()
 {
     // Folder context menu
     m_folderContextMenu = new QMenu(this);
-    m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.RenameFolder"), this, &SceneOrganiserDock::onRenameFolderClicked);
+    QAction *renameFolderAction = m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.RenameFolder"), this, &SceneOrganiserDock::onRenameFolderClicked);
+    renameFolderAction->setShortcut(QKeySequence(Qt::Key_F2));
 
-    m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.DeleteFolder"), [this]() {
+    QAction *deleteFolderAction = m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.DeleteFolder"), [this]() {
         // Implement delete folder functionality
         auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
         if (!selectedIndexes.isEmpty()) {
@@ -430,6 +433,7 @@ void SceneOrganiserDock::setupContextMenu()
             }
         }
     });
+    deleteFolderAction->setShortcut(QKeySequence(Qt::Key_Delete));
 
     m_folderContextMenu->addSeparator();
     m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.SetColor"), this, &SceneOrganiserDock::onSetCustomColorClicked);
@@ -442,7 +446,8 @@ void SceneOrganiserDock::setupContextMenu()
     m_sceneContextMenu = new QMenu(this);
 
     // Main actions
-    m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Rename"), -1), this, &SceneOrganiserDock::onRenameSceneClicked);
+    QAction *renameSceneAction = m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Rename"), -1), this, &SceneOrganiserDock::onRenameSceneClicked);
+    renameSceneAction->setShortcut(QKeySequence(Qt::Key_F2));
     m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Duplicate"), -1), this, &SceneOrganiserDock::onDuplicateSceneClicked);
 
     // Filter actions
@@ -452,7 +457,8 @@ void SceneOrganiserDock::setupContextMenu()
 
     // Delete action
     m_sceneContextMenu->addSeparator();
-    m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Remove"), -1), this, &SceneOrganiserDock::onDeleteSceneClicked);
+    QAction *deleteSceneAction = m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Remove"), -1), this, &SceneOrganiserDock::onDeleteSceneClicked);
+    deleteSceneAction->setShortcut(QKeySequence(Qt::Key_Delete));
 
     // Order submenu
     m_sceneContextMenu->addSeparator();
@@ -658,6 +664,9 @@ void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelInd
     QString sceneName = m_currentContextItem->text();
     obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
 
+    // Populate projector menu with current monitors
+    populateProjectorMenu();
+
     // Enable/disable "Paste Filters" based on whether we have copied filters
     QList<QAction*> actions = m_sceneContextMenu->actions();
     for (QAction *action : actions) {
@@ -674,6 +683,7 @@ void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelInd
     // Update "Show in Multiview" checkable state
     if (source) {
         obs_data_t *privateSettings = obs_source_get_private_settings(source);
+        obs_data_set_default_bool(privateSettings, "show_in_multiview", true);
         bool showInMultiview = obs_data_get_bool(privateSettings, "show_in_multiview");
 
         for (QAction *action : actions) {
@@ -1415,6 +1425,30 @@ void SceneOrganiserDock::LoadConfiguration()
         .arg(m_isLocked ? "locked" : "unlocked").toUtf8().constData());
 }
 
+// Public methods for keyboard shortcuts
+void SceneOrganiserDock::triggerRename()
+{
+    QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
+    if (!selected.isEmpty()) {
+        QModelIndex index = selected.first();
+        QStandardItem *item = m_model->itemFromIndex(index);
+        if (item) {
+            if (item->type() == SceneTreeItem::UserType + 2) {
+                // Scene item - trigger scene rename
+                onRenameSceneClicked();
+            } else if (item->type() == SceneFolderItem::UserType + 1) {
+                // Folder item - trigger folder rename
+                onRenameFolderClicked();
+            }
+        }
+    }
+}
+
+void SceneOrganiserDock::triggerRemove()
+{
+    onRemoveClicked();
+}
+
 // New OBS-compatible context menu actions
 
 void SceneOrganiserDock::onDuplicateSceneClicked()
@@ -1558,6 +1592,7 @@ void SceneOrganiserDock::onShowInMultiviewClicked()
     if (!source) return;
 
     obs_data_t *privateSettings = obs_source_get_private_settings(source);
+    obs_data_set_default_bool(privateSettings, "show_in_multiview", true);
     bool showInMultiview = obs_data_get_bool(privateSettings, "show_in_multiview");
     obs_data_set_bool(privateSettings, "show_in_multiview", !showInMultiview);
     obs_data_release(privateSettings);
@@ -1565,13 +1600,29 @@ void SceneOrganiserDock::onShowInMultiviewClicked()
     obs_source_release(source);
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Multiview Toggle",
-        QString("Toggled multiview for scene: %1").arg(sceneName).toUtf8().constData());
+        QString("Toggled multiview for scene: %1 (now %2)").arg(sceneName, !showInMultiview ? "visible" : "hidden").toUtf8().constData());
 }
 
 void SceneOrganiserDock::onOpenProjectorClicked()
 {
     // This would be called by monitor-specific projector actions
     // Implementation would involve creating projectors for specific monitors
+}
+
+void SceneOrganiserDock::onOpenProjectorOnMonitorClicked()
+{
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
+
+    QAction *action = qobject_cast<QAction*>(sender());
+    if (!action) return;
+
+    int monitorIndex = action->property("monitor").toInt();
+    QString sceneName = m_currentContextItem->text();
+
+    obs_frontend_open_projector("Scene", monitorIndex, nullptr, sceneName.toUtf8().constData());
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Projector Monitor",
+        QString("Opened projector for scene '%1' on monitor %2").arg(sceneName).arg(monitorIndex).toUtf8().constData());
 }
 
 void SceneOrganiserDock::onOpenProjectorWindowClicked()
@@ -1598,10 +1649,11 @@ void SceneOrganiserDock::onSceneMoveUpClicked()
 
     int currentRow = m_currentContextItem->row();
     if (currentRow > 0) {
-        QStandardItem *item = parent->takeChild(currentRow);
-        if (item) {
-            parent->insertRow(currentRow - 1, item);
-            m_treeView->setCurrentIndex(item->index());
+        // Take the entire row (this includes all columns)
+        QList<QStandardItem*> items = parent->takeRow(currentRow);
+        if (!items.isEmpty()) {
+            parent->insertRow(currentRow - 1, items);
+            m_treeView->setCurrentIndex(items[0]->index());
             m_saveTimer->start();
         }
     }
@@ -1616,10 +1668,11 @@ void SceneOrganiserDock::onSceneMoveDownClicked()
 
     int currentRow = m_currentContextItem->row();
     if (currentRow < parent->rowCount() - 1) {
-        QStandardItem *item = parent->takeChild(currentRow);
-        if (item) {
-            parent->insertRow(currentRow + 1, item);
-            m_treeView->setCurrentIndex(item->index());
+        // Take the entire row (this includes all columns)
+        QList<QStandardItem*> items = parent->takeRow(currentRow);
+        if (!items.isEmpty()) {
+            parent->insertRow(currentRow + 1, items);
+            m_treeView->setCurrentIndex(items[0]->index());
             m_saveTimer->start();
         }
     }
@@ -1634,10 +1687,11 @@ void SceneOrganiserDock::onSceneMoveToTopClicked()
 
     int currentRow = m_currentContextItem->row();
     if (currentRow > 0) {
-        QStandardItem *item = parent->takeChild(currentRow);
-        if (item) {
-            parent->insertRow(0, item);
-            m_treeView->setCurrentIndex(item->index());
+        // Take the entire row (this includes all columns)
+        QList<QStandardItem*> items = parent->takeRow(currentRow);
+        if (!items.isEmpty()) {
+            parent->insertRow(0, items);
+            m_treeView->setCurrentIndex(items[0]->index());
             m_saveTimer->start();
         }
     }
@@ -1653,11 +1707,61 @@ void SceneOrganiserDock::onSceneMoveToBottomClicked()
     int currentRow = m_currentContextItem->row();
     int maxRow = parent->rowCount() - 1;
     if (currentRow < maxRow) {
-        QStandardItem *item = parent->takeChild(currentRow);
-        if (item) {
-            parent->insertRow(maxRow, item);
-            m_treeView->setCurrentIndex(item->index());
+        // Take the entire row (this includes all columns)
+        QList<QStandardItem*> items = parent->takeRow(currentRow);
+        if (!items.isEmpty()) {
+            parent->insertRow(maxRow, items);
+            m_treeView->setCurrentIndex(items[0]->index());
             m_saveTimer->start();
+        }
+    }
+}
+
+void SceneOrganiserDock::populateProjectorMenu()
+{
+    if (!m_sceneProjectorMenu) return;
+
+    // Clear existing monitor actions (but keep the window projector action)
+    QList<QAction*> actions = m_sceneProjectorMenu->actions();
+    for (QAction *action : actions) {
+        if (action->property("monitor").isValid()) {
+            m_sceneProjectorMenu->removeAction(action);
+            action->deleteLater();
+        }
+    }
+
+    // Add monitor actions at the beginning
+    QList<QScreen*> screens = QGuiApplication::screens();
+    for (int i = 0; i < screens.size(); ++i) {
+        QScreen *screen = screens[i];
+        QString monitorText;
+
+        if (screens.size() > 1) {
+            // Multiple monitors - show monitor number and name
+            monitorText = QString("Monitor %1").arg(i + 1);
+            if (!screen->name().isEmpty()) {
+                monitorText += QString(" (%1)").arg(screen->name());
+            }
+        } else {
+            // Single monitor - just show "Fullscreen"
+            monitorText = "Fullscreen";
+        }
+
+        QAction *monitorAction = new QAction(monitorText, m_sceneProjectorMenu);
+        monitorAction->setProperty("monitor", i);
+        connect(monitorAction, &QAction::triggered, this, &SceneOrganiserDock::onOpenProjectorOnMonitorClicked);
+
+        // Insert before the separator (which should be before "Windowed")
+        QList<QAction*> currentActions = m_sceneProjectorMenu->actions();
+        if (!currentActions.isEmpty() && currentActions.first()->isSeparator()) {
+            m_sceneProjectorMenu->insertAction(currentActions.first(), monitorAction);
+        } else {
+            // If no separator found, add at the beginning
+            if (!currentActions.isEmpty()) {
+                m_sceneProjectorMenu->insertAction(currentActions.first(), monitorAction);
+            } else {
+                m_sceneProjectorMenu->addAction(monitorAction);
+            }
         }
     }
 }
@@ -2680,19 +2784,30 @@ void SceneTreeView::contextMenuEvent(QContextMenuEvent *event)
 
 void SceneTreeView::keyPressEvent(QKeyEvent *event)
 {
+    // Find the parent dock for all hotkey actions
+    QWidget *parentWidget = this->parentWidget();
+    SceneOrganiserDock *dock = nullptr;
+    while (parentWidget && !dock) {
+        dock = qobject_cast<SceneOrganiserDock*>(parentWidget);
+        parentWidget = parentWidget->parentWidget();
+    }
+
+    if (!dock) {
+        QTreeView::keyPressEvent(event);
+        return;
+    }
+
+    // Handle hotkeys
     if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
-        // Find the parent dock to trigger the remove action
-        QWidget *parentWidget = this->parentWidget();
-        while (parentWidget) {
-            SceneOrganiserDock *dock = qobject_cast<SceneOrganiserDock*>(parentWidget);
-            if (dock) {
-                // Trigger the remove button logic
-                dock->onRemoveClicked();
-                event->accept();
-                return;
-            }
-            parentWidget = parentWidget->parentWidget();
-        }
+        // Delete/Remove hotkey
+        dock->triggerRemove();
+        event->accept();
+        return;
+    } else if (event->key() == Qt::Key_F2) {
+        // Rename hotkey (F2)
+        dock->triggerRename();
+        event->accept();
+        return;
     }
 
     // Let the parent handle other keys
