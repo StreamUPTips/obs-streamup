@@ -532,12 +532,34 @@ void SceneOrganiserDock::updateToolbarState()
 
 void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
 {
-    // Check if this is a second click on the same already-selected item
+    auto item = m_model->itemFromIndex(index);
+    if (!item) {
+        m_lastClickedIndex = index;
+        return;
+    }
+
+    // Get current settings to check switch mode
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+
+    // Handle single-click scene switching if enabled
+    if (settings.sceneOrganiserSwitchMode == StreamUP::SettingsManager::SceneSwitchMode::SingleClick &&
+        item->type() == SceneTreeItem::UserType + 2) {
+        // Switch to scene on single-click
+        obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
+        if (source) {
+            obs_frontend_set_current_scene(source);
+            obs_source_release(source);
+        }
+    }
+
+    // Check if this is a second click on the same already-selected item for renaming
     if (m_lastClickedIndex.isValid() && m_lastClickedIndex == index) {
-        auto item = m_model->itemFromIndex(index);
-        if (item && (item->type() == SceneTreeItem::UserType + 2 || item->type() == SceneFolderItem::UserType + 1)) {
-            // Start inline editing
-            m_treeView->edit(index);
+        if (item->type() == SceneTreeItem::UserType + 2 || item->type() == SceneFolderItem::UserType + 1) {
+            // Start inline editing (but only if we're not doing single-click switching for scenes)
+            if (!(settings.sceneOrganiserSwitchMode == StreamUP::SettingsManager::SceneSwitchMode::SingleClick &&
+                  item->type() == SceneTreeItem::UserType + 2)) {
+                m_treeView->edit(index);
+            }
         }
     }
 
@@ -548,7 +570,15 @@ void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
 void SceneOrganiserDock::onItemDoubleClicked(const QModelIndex &index)
 {
     auto item = m_model->itemFromIndex(index);
-    if (item && item->type() == SceneTreeItem::UserType + 2) {
+    if (!item || item->type() != SceneTreeItem::UserType + 2) {
+        return;
+    }
+
+    // Get current settings to check switch mode
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+
+    // Only switch to scene on double-click if double-click mode is enabled
+    if (settings.sceneOrganiserSwitchMode == StreamUP::SettingsManager::SceneSwitchMode::DoubleClick) {
         // Switch to scene on double-click
         obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
         if (source) {

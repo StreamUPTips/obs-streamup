@@ -245,9 +245,19 @@ PluginSettings GetCurrentSettings()
 		settings.showCPHIntegration = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "show_cph_integration", true);
 		settings.showToolbar = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "show_toolbar", true);
 		settings.debugLoggingEnabled = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "debug_logging_enabled", false);
-		settings.enableSceneOrganiserNormal = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "enable_scene_organiser_normal", true);
-		settings.enableSceneOrganiserVertical = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "enable_scene_organiser_vertical", true);
 		settings.sceneOrganiserShowIcons = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_icons", true);
+
+		// Load scene switch mode setting (default to single-click if not set)
+		const char *switchModeStr = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "scene_organiser_switch_mode", "single_click");
+		if (switchModeStr && strlen(switchModeStr) > 0) {
+			if (strcmp(switchModeStr, "double_click") == 0) {
+				settings.sceneOrganiserSwitchMode = SceneSwitchMode::DoubleClick;
+			} else {
+				settings.sceneOrganiserSwitchMode = SceneSwitchMode::SingleClick;
+			}
+		} else {
+			settings.sceneOrganiserSwitchMode = SceneSwitchMode::SingleClick;
+		}
 
 		// Load toolbar position setting (default to top if not set)
 		const char *positionStr = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "toolbar_position", "top");
@@ -292,9 +302,20 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "show_cph_integration", settings.showCPHIntegration);
 	obs_data_set_bool(data, "show_toolbar", settings.showToolbar);
 	obs_data_set_bool(data, "debug_logging_enabled", settings.debugLoggingEnabled);
-	obs_data_set_bool(data, "enable_scene_organiser_normal", settings.enableSceneOrganiserNormal);
-	obs_data_set_bool(data, "enable_scene_organiser_vertical", settings.enableSceneOrganiserVertical);
 	obs_data_set_bool(data, "scene_organiser_show_icons", settings.sceneOrganiserShowIcons);
+
+	// Save scene switch mode setting
+	const char *switchModeStr;
+	switch (settings.sceneOrganiserSwitchMode) {
+	case SceneSwitchMode::DoubleClick:
+		switchModeStr = "double_click";
+		break;
+	case SceneSwitchMode::SingleClick:
+	default:
+		switchModeStr = "single_click";
+		break;
+	}
+	obs_data_set_string(data, "scene_organiser_switch_mode", switchModeStr);
 
 	// Save toolbar position setting
 	const char *positionStr;
@@ -834,72 +855,6 @@ void ShowSettingsDialog(int tabIndex)
 		sceneOrganiserDescription->setWordWrap(true);
 		sceneOrganiserLayout->addWidget(sceneOrganiserDescription);
 
-		// Enable Normal Canvas Organiser setting
-		QHBoxLayout *enableNormalLayout = new QHBoxLayout();
-
-		QLabel *enableNormalLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.EnableNormal"));
-		enableNormalLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
-							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-		enableNormalLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.EnableNormalDesc"));
-
-		StreamUP::UIStyles::SwitchButton *enableNormalSwitch =
-			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.enableSceneOrganiserNormal);
-		enableNormalSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.EnableNormalDesc"));
-
-		QObject::connect(enableNormalSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
-			PluginSettings settings = GetCurrentSettings();
-			settings.enableSceneOrganiserNormal = checked;
-			UpdateSettings(settings);
-
-			// Apply scene organiser visibility changes
-			extern void ApplySceneOrganiserVisibility();
-			ApplySceneOrganiserVisibility();
-		});
-
-		enableNormalLayout->addWidget(enableNormalLabel);
-		enableNormalLayout->addStretch();
-		enableNormalLayout->addWidget(enableNormalSwitch);
-		sceneOrganiserLayout->addLayout(enableNormalLayout);
-
-		// Enable Vertical Canvas Organiser setting (only if Aitum Vertical is detected)
-		bool verticalPluginDetected = StreamUP::SceneOrganiser::SceneOrganiserDock::IsVerticalPluginDetected();
-		if (verticalPluginDetected) {
-			QHBoxLayout *enableVerticalLayout = new QHBoxLayout();
-
-			QLabel *enableVerticalLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.EnableVertical"));
-			enableVerticalLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
-								.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-								.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-			enableVerticalLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.EnableVerticalDesc"));
-
-			StreamUP::UIStyles::SwitchButton *enableVerticalSwitch =
-				StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.enableSceneOrganiserVertical);
-			enableVerticalSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.EnableVerticalDesc"));
-
-			QObject::connect(enableVerticalSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
-				PluginSettings settings = GetCurrentSettings();
-				settings.enableSceneOrganiserVertical = checked;
-				UpdateSettings(settings);
-
-				// Apply scene organiser visibility changes
-				extern void ApplySceneOrganiserVisibility();
-				ApplySceneOrganiserVisibility();
-			});
-
-			enableVerticalLayout->addWidget(enableVerticalLabel);
-			enableVerticalLayout->addStretch();
-			enableVerticalLayout->addWidget(enableVerticalSwitch);
-			sceneOrganiserLayout->addLayout(enableVerticalLayout);
-		} else {
-			// Show informational text about vertical plugin requirement
-			QLabel *verticalRequirementLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.EnableVerticalDesc"));
-			verticalRequirementLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-style: italic; background: transparent;")
-								.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-								.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
-			verticalRequirementLabel->setWordWrap(true);
-			sceneOrganiserLayout->addWidget(verticalRequirementLabel);
-		}
 
 		// Show Icons setting
 		sceneOrganiserLayout->addSpacing(16);
@@ -928,6 +883,43 @@ void ShowSettingsDialog(int tabIndex)
 		showIconsLayout->addStretch();
 		showIconsLayout->addWidget(showIconsSwitch);
 		sceneOrganiserLayout->addLayout(showIconsLayout);
+
+		// Scene switching mode setting
+		QHBoxLayout *switchModeLayout = new QHBoxLayout();
+		switchModeLayout->setContentsMargins(0, 0, 0, 0);
+
+		QLabel *switchModeLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.SwitchMode"));
+		switchModeLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		switchModeLabel->setWordWrap(true);
+
+		// Create combobox for switch mode selection
+		QComboBox *switchModeComboBox = new QComboBox();
+		switchModeComboBox->addItem(obs_module_text("SceneOrganiser.Settings.SwitchMode.SingleClick"), static_cast<int>(SceneSwitchMode::SingleClick));
+		switchModeComboBox->addItem(obs_module_text("SceneOrganiser.Settings.SwitchMode.DoubleClick"), static_cast<int>(SceneSwitchMode::DoubleClick));
+
+		// Set current selection
+		int currentSwitchModeIndex = static_cast<int>(currentSettings.sceneOrganiserSwitchMode);
+		switchModeComboBox->setCurrentIndex(switchModeComboBox->findData(currentSwitchModeIndex));
+
+		// Connect change handler
+		QObject::connect(switchModeComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+				 [switchModeComboBox](int index) {
+					 if (index >= 0) {
+						 QVariant data = switchModeComboBox->itemData(index);
+						 if (data.isValid()) {
+							 PluginSettings currentSettings = GetCurrentSettings();
+							 currentSettings.sceneOrganiserSwitchMode = static_cast<SceneSwitchMode>(data.toInt());
+							 UpdateSettings(currentSettings);
+						 }
+					 }
+				 });
+
+		switchModeLayout->addWidget(switchModeLabel);
+		switchModeLayout->addStretch();
+		switchModeLayout->addWidget(switchModeComboBox);
+		sceneOrganiserLayout->addLayout(switchModeLayout);
 
 		// Credit section
 		sceneOrganiserLayout->addSpacing(20);

@@ -567,34 +567,28 @@ static void LoadSceneOrganiserDocks()
 	const auto main_window = static_cast<QMainWindow *>(obs_frontend_get_main_window());
 	obs_frontend_push_ui_translation(obs_module_get_string);
 
-	// Get current settings
-	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+	// Always create Normal Canvas Scene Organiser
+	globalSceneOrganiserNormal = new StreamUP::SceneOrganiser::SceneOrganiserDock(
+		StreamUP::SceneOrganiser::CanvasType::Normal, main_window);
 
-	// Create Normal Canvas Scene Organiser if enabled
-	if (settings.enableSceneOrganiserNormal) {
-		globalSceneOrganiserNormal = new StreamUP::SceneOrganiser::SceneOrganiserDock(
-			StreamUP::SceneOrganiser::CanvasType::Normal, main_window);
-
-		const QString normalTitle = QString::fromUtf8(obs_module_text("SceneOrganiser.Label.NormalCanvas"));
-		const auto normalName = "StreamUPSceneOrganiserNormal";
+	const QString normalTitle = QString::fromUtf8(obs_module_text("SceneOrganiser.Label.NormalCanvas"));
+	const auto normalName = "StreamUPSceneOrganiserNormal";
 
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
-		obs_frontend_add_dock_by_id(normalName, normalTitle.toUtf8().constData(), globalSceneOrganiserNormal);
+	obs_frontend_add_dock_by_id(normalName, normalTitle.toUtf8().constData(), globalSceneOrganiserNormal);
 #else
-		auto normalDock = new QDockWidget(main_window);
-		normalDock->setObjectName(normalName);
-		normalDock->setWindowTitle(normalTitle);
-		normalDock->setWidget(globalSceneOrganiserNormal);
-		normalDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-		normalDock->setFloating(true);
-		normalDock->hide();
-		obs_frontend_add_dock(normalDock);
+	auto normalDock = new QDockWidget(main_window);
+	normalDock->setObjectName(normalName);
+	normalDock->setWindowTitle(normalTitle);
+	normalDock->setWidget(globalSceneOrganiserNormal);
+	normalDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+	normalDock->setFloating(true);
+	normalDock->hide();
+	obs_frontend_add_dock(normalDock);
 #endif
-	}
 
-	// Create Vertical Canvas Scene Organiser if enabled and Aitum Vertical plugin is detected
-	if (settings.enableSceneOrganiserVertical &&
-		StreamUP::SceneOrganiser::SceneOrganiserDock::IsVerticalPluginDetected()) {
+	// Create Vertical Canvas Scene Organiser only if Aitum Vertical plugin is detected
+	if (StreamUP::SceneOrganiser::SceneOrganiserDock::IsVerticalPluginDetected()) {
 
 		globalSceneOrganiserVertical = new StreamUP::SceneOrganiser::SceneOrganiserDock(
 			StreamUP::SceneOrganiser::CanvasType::Vertical, main_window);
@@ -622,14 +616,9 @@ static void LoadSceneOrganiserDocks()
 // Function to apply scene organiser visibility changes
 void ApplySceneOrganiserVisibility()
 {
-	// This function will be called when settings change to show/hide Scene Organiser docks
-	// For now, we'll implement a full reload approach
-	// In the future, this could be optimized to dynamically show/hide existing docks
-
-	StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Scene Organiser visibility settings changed - restart OBS to apply changes");
-
-	// TODO: Implement dynamic dock visibility without requiring restart
-	// This would require keeping track of dock widgets and showing/hiding them
+	// This function is maintained for compatibility but no longer needed
+	// since Scene Organisers are now always enabled
+	StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Visibility", "ApplySceneOrganiserVisibility called - Scene Organisers are now always enabled");
 }
 
 static StreamUPToolbar* globalToolbar = nullptr;

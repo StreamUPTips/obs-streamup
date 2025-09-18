@@ -47,6 +47,14 @@ enum class ToolbarPosition {
 };
 
 /**
+ * @brief Scene switching click mode options
+ */
+enum class SceneSwitchMode {
+    SingleClick,
+    DoubleClick
+};
+
+/**
  * @brief Settings structure to hold plugin configuration
  */
 struct PluginSettings {
@@ -55,13 +63,12 @@ struct PluginSettings {
     bool showCPHIntegration;
     bool showToolbar;
     bool debugLoggingEnabled;
-    bool enableSceneOrganiserNormal;
-    bool enableSceneOrganiserVertical;
     bool sceneOrganiserShowIcons;
+    SceneSwitchMode sceneOrganiserSwitchMode;
     ToolbarPosition toolbarPosition;
     DockToolSettings dockTools;
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), enableSceneOrganiserNormal(true), enableSceneOrganiserVertical(true), sceneOrganiserShowIcons(true), toolbarPosition(ToolbarPosition::Top) {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), toolbarPosition(ToolbarPosition::Top) {}
 };
 
 /**
