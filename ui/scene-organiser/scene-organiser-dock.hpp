@@ -125,7 +125,7 @@ private:
     void updateAllItemIcons(QStandardItem *parent);
     void updateToggleIconsState();
     void updateActiveSceneHighlight();
-    void updateActiveSceneHighlightRecursive(QStandardItem *parent, const QString &activeSceneName);
+    void updateActiveSceneHighlightRecursive(QStandardItem *parent, const QString &activeSceneName, const QString &previewSceneName = QString());
     void onSetCustomColorClicked();
     void onClearCustomColorClicked();
     void applyCustomColorToItem(QStandardItem *item, const QColor &color);
