@@ -2498,15 +2498,29 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
         return;
     }
 
+    // Dim the custom color to make it less bright (reduce saturation and increase darkness)
+    QColor dimmedColor = customColor;
+    if (dimmedColor.isValid()) {
+        // Convert to HSV to modify saturation and value
+        int h, s, v;
+        dimmedColor.getHsv(&h, &s, &v);
+
+        // Reduce saturation by 40% and reduce value (brightness) by 25%
+        s = qMax(0, static_cast<int>(s * 0.6));  // 40% less saturated
+        v = qMax(0, static_cast<int>(v * 0.75)); // 25% darker
+
+        dimmedColor.setHsv(h, s, v);
+    }
+
     // Determine the background color based on state
-    QColor backgroundColor = customColor;
+    QColor backgroundColor = dimmedColor;
 
     if (option.state & QStyle::State_Selected) {
-        // Item is selected - brighten the custom color
-        backgroundColor = m_dock->getSelectionColor(customColor);
+        // Item is selected - brighten the dimmed custom color
+        backgroundColor = m_dock->getSelectionColor(dimmedColor);
     } else if (option.state & QStyle::State_MouseOver) {
-        // Item is hovered - slightly brighten the custom color
-        backgroundColor = m_dock->getHoverColor(customColor);
+        // Item is hovered - slightly brighten the dimmed custom color
+        backgroundColor = m_dock->getHoverColor(dimmedColor);
     }
 
     // Create a copy of the style option to modify
@@ -2528,14 +2542,34 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
 
     painter->restore();
 
-    // Draw the text and other content
+    // Draw the icon and text
     painter->save();
     painter->setPen(textColor);
 
-    // Draw the display text
+    // Get icon and text data
+    QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
     QString text = index.data(Qt::DisplayRole).toString();
-    QRect textRect = option.rect;
-    textRect.setLeft(textRect.left() + 4); // Add some padding
+
+    // Calculate layout
+    QRect contentRect = option.rect;
+    contentRect.setLeft(contentRect.left() + 4); // Add some padding
+
+    QRect iconRect;
+    QRect textRect = contentRect;
+
+    // Draw icon if it exists
+    if (!icon.isNull()) {
+        int iconSize = qMin(contentRect.height() - 4, 16); // Standard icon size with padding
+        iconRect = QRect(contentRect.left(),
+                        contentRect.top() + (contentRect.height() - iconSize) / 2,
+                        iconSize, iconSize);
+
+        // Adjust text rect to make room for icon
+        textRect.setLeft(iconRect.right() + 4);
+
+        // Draw the icon
+        icon.paint(painter, iconRect, Qt::AlignCenter);
+    }
 
     // Apply font styling if needed
     QFont font = option.font;
@@ -2544,6 +2578,7 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
     }
     painter->setFont(font);
 
+    // Draw the text
     painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
 
     painter->restore();
