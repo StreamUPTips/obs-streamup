@@ -429,7 +429,7 @@ void SceneOrganiserDock::setupContextMenu()
     QAction *renameFolderAction = m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.RenameFolder"), this, &SceneOrganiserDock::onRenameFolderClicked);
     renameFolderAction->setShortcut(QKeySequence(Qt::Key_F2));
 
-    QAction *deleteFolderAction = m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.DeleteFolder"), [this]() {
+    m_deleteFolderAction = m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.DeleteFolder"), [this]() {
         // Implement delete folder functionality
         auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
         if (!selectedIndexes.isEmpty()) {
@@ -446,7 +446,7 @@ void SceneOrganiserDock::setupContextMenu()
             }
         }
     });
-    deleteFolderAction->setShortcut(QKeySequence(Qt::Key_Delete));
+    m_deleteFolderAction->setShortcut(QKeySequence(Qt::Key_Delete));
 
     m_folderContextMenu->addSeparator();
     m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.SetColor"), this, &SceneOrganiserDock::onSetCustomColorClicked);
@@ -470,17 +470,17 @@ void SceneOrganiserDock::setupContextMenu()
 
     // Delete action
     m_sceneContextMenu->addSeparator();
-    QAction *deleteSceneAction = m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Remove"), -1), this, &SceneOrganiserDock::onDeleteSceneClicked);
-    deleteSceneAction->setShortcut(QKeySequence(Qt::Key_Delete));
+    m_deleteSceneAction = m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Remove"), -1), this, &SceneOrganiserDock::onDeleteSceneClicked);
+    m_deleteSceneAction->setShortcut(QKeySequence(Qt::Key_Delete));
 
     // Order submenu
     m_sceneContextMenu->addSeparator();
     m_sceneOrderMenu = new QMenu(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order"), -1), this);
-    m_sceneOrderMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order.MoveUp"), -1), this, &SceneOrganiserDock::onSceneMoveUpClicked);
-    m_sceneOrderMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order.MoveDown"), -1), this, &SceneOrganiserDock::onSceneMoveDownClicked);
+    m_sceneMoveUpAction = m_sceneOrderMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order.MoveUp"), -1), this, &SceneOrganiserDock::onSceneMoveUpClicked);
+    m_sceneMoveDownAction = m_sceneOrderMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order.MoveDown"), -1), this, &SceneOrganiserDock::onSceneMoveDownClicked);
     m_sceneOrderMenu->addSeparator();
-    m_sceneOrderMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order.MoveToTop"), -1), this, &SceneOrganiserDock::onSceneMoveToTopClicked);
-    m_sceneOrderMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order.MoveToBottom"), -1), this, &SceneOrganiserDock::onSceneMoveToBottomClicked);
+    m_sceneMoveToTopAction = m_sceneOrderMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order.MoveToTop"), -1), this, &SceneOrganiserDock::onSceneMoveToTopClicked);
+    m_sceneMoveToBottomAction = m_sceneOrderMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order.MoveToBottom"), -1), this, &SceneOrganiserDock::onSceneMoveToBottomClicked);
     m_sceneContextMenu->addMenu(m_sceneOrderMenu);
 
     // Projector submenu
@@ -1238,15 +1238,12 @@ void SceneOrganiserDock::setLocked(bool locked)
 
 void SceneOrganiserDock::updateUIEnabledState()
 {
-    bool enabled = !m_isLocked;
+    bool unlocked = !m_isLocked;
 
-    // Disable/enable toolbar buttons
-    if (m_addButton) m_addButton->setEnabled(enabled);
-
-    // For selection-based buttons, check current selection
+    // Check current selection for selective enabling
     bool hasSelection = false;
     bool isScene = false;
-    if (enabled && m_treeView && m_treeView->selectionModel()) {
+    if (m_treeView && m_treeView->selectionModel()) {
         auto selected = m_treeView->selectionModel()->selectedIndexes();
         hasSelection = !selected.isEmpty();
         if (hasSelection) {
@@ -1256,27 +1253,51 @@ void SceneOrganiserDock::updateUIEnabledState()
         }
     }
 
-    if (m_removeButton) m_removeButton->setEnabled(enabled && hasSelection);
-    if (m_filtersButton) m_filtersButton->setEnabled(enabled && isScene);
-    if (m_moveUpButton) m_moveUpButton->setEnabled(enabled && hasSelection);
-    if (m_moveDownButton) m_moveDownButton->setEnabled(enabled && hasSelection);
+    // NON-DESTRUCTIVE operations - always allowed when unlocked
+    if (m_addButton) m_addButton->setEnabled(true); // Add scene/folder is always allowed
+    if (m_filtersButton) m_filtersButton->setEnabled(isScene); // Scene filters are non-destructive
 
-    // Disable/enable tree view interactions
+    // DESTRUCTIVE operations - only allowed when unlocked
+    if (m_removeButton) m_removeButton->setEnabled(unlocked && hasSelection);
+    if (m_moveUpButton) m_moveUpButton->setEnabled(unlocked && hasSelection);
+    if (m_moveDownButton) m_moveDownButton->setEnabled(unlocked && hasSelection);
+
+    // Tree view drag & drop - only allow when unlocked (moving is destructive)
     if (m_treeView) {
-        m_treeView->setDragEnabled(enabled);
-        m_treeView->setAcceptDrops(enabled);
-        m_treeView->setDragDropMode(enabled ? QAbstractItemView::InternalMove : QAbstractItemView::NoDragDrop);
+        m_treeView->setDragEnabled(unlocked);
+        m_treeView->setAcceptDrops(unlocked);
+        m_treeView->setDragDropMode(unlocked ? QAbstractItemView::InternalMove : QAbstractItemView::NoDragDrop);
     }
 
-    // Disable/enable context menus by clearing their actions when locked
+    // Context menus - enable but control individual destructive actions
     if (m_folderContextMenu) {
-        m_folderContextMenu->setEnabled(enabled);
+        m_folderContextMenu->setEnabled(true);
     }
     if (m_sceneContextMenu) {
-        m_sceneContextMenu->setEnabled(enabled);
+        m_sceneContextMenu->setEnabled(true);
     }
     if (m_backgroundContextMenu) {
-        m_backgroundContextMenu->setEnabled(enabled);
+        m_backgroundContextMenu->setEnabled(true);
+    }
+
+    // Control individual destructive context menu actions
+    if (m_deleteFolderAction) {
+        m_deleteFolderAction->setEnabled(unlocked);
+    }
+    if (m_deleteSceneAction) {
+        m_deleteSceneAction->setEnabled(unlocked);
+    }
+    if (m_sceneMoveUpAction) {
+        m_sceneMoveUpAction->setEnabled(unlocked);
+    }
+    if (m_sceneMoveDownAction) {
+        m_sceneMoveDownAction->setEnabled(unlocked);
+    }
+    if (m_sceneMoveToTopAction) {
+        m_sceneMoveToTopAction->setEnabled(unlocked);
+    }
+    if (m_sceneMoveToBottomAction) {
+        m_sceneMoveToBottomAction->setEnabled(unlocked);
     }
 }
 
