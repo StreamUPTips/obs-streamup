@@ -624,17 +624,30 @@ void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
         return;
     }
 
-    // Get current settings to check switch mode
+    // Get current settings for later use
     StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 
-    // Handle single-click scene switching if enabled
-    if (settings.sceneOrganiserSwitchMode == StreamUP::SettingsManager::SceneSwitchMode::SingleClick &&
-        item->type() == SceneTreeItem::UserType + 2) {
-        // Switch to scene on single-click
+    // Check if studio mode is active - it overrides normal click behavior
+    if (obs_frontend_preview_program_mode_active() && item->type() == SceneTreeItem::UserType + 2) {
+        // Studio mode: single-click always sets preview scene
         obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
         if (source) {
-            obs_frontend_set_current_scene(source);
+            obs_frontend_set_current_preview_scene(source);
+            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
+                QString("Single-click: Set preview scene to '%1'").arg(item->text()).toUtf8().constData());
             obs_source_release(source);
+        }
+    } else {
+        // Normal mode: use settings to determine behavior
+        // Handle single-click scene switching if enabled
+        if (settings.sceneOrganiserSwitchMode == StreamUP::SettingsManager::SceneSwitchMode::SingleClick &&
+            item->type() == SceneTreeItem::UserType + 2) {
+            // Switch to scene on single-click
+            obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
+            if (source) {
+                obs_frontend_set_current_scene(source);
+                obs_source_release(source);
+            }
         }
     }
 
@@ -642,7 +655,9 @@ void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
     if (m_lastClickedIndex.isValid() && m_lastClickedIndex == index) {
         if (item->type() == SceneTreeItem::UserType + 2 || item->type() == SceneFolderItem::UserType + 1) {
             // Start inline editing (but only if we're not doing single-click switching for scenes)
-            if (!(settings.sceneOrganiserSwitchMode == StreamUP::SettingsManager::SceneSwitchMode::SingleClick &&
+            // In studio mode, never allow rename on second click since single-click has special meaning
+            if (!obs_frontend_preview_program_mode_active() &&
+                !(settings.sceneOrganiserSwitchMode == StreamUP::SettingsManager::SceneSwitchMode::SingleClick &&
                   item->type() == SceneTreeItem::UserType + 2)) {
                 m_treeView->edit(index);
             }
@@ -661,16 +676,30 @@ void SceneOrganiserDock::onItemDoubleClicked(const QModelIndex &index)
         return;
     }
 
-    // Get current settings to check switch mode
-    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-
-    // Only switch to scene on double-click if double-click mode is enabled
-    if (settings.sceneOrganiserSwitchMode == StreamUP::SettingsManager::SceneSwitchMode::DoubleClick) {
-        // Switch to scene on double-click
+    // Check if studio mode is active - it overrides normal double-click behavior
+    if (obs_frontend_preview_program_mode_active() && item->type() == SceneTreeItem::UserType + 2) {
+        // Studio mode: double-click transitions preview to program (goes live)
         obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
         if (source) {
-            obs_frontend_set_current_scene(source);
+            // First set as preview, then trigger transition
+            obs_frontend_set_current_preview_scene(source);
+            obs_frontend_preview_program_trigger_transition();
+            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
+                QString("Double-click: Transitioned scene '%1' to program").arg(item->text()).toUtf8().constData());
             obs_source_release(source);
+        }
+    } else {
+        // Normal mode: use settings to determine behavior
+        StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+
+        // Only switch to scene on double-click if double-click mode is enabled
+        if (settings.sceneOrganiserSwitchMode == StreamUP::SettingsManager::SceneSwitchMode::DoubleClick) {
+            // Switch to scene on double-click
+            obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
+            if (source) {
+                obs_frontend_set_current_scene(source);
+                obs_source_release(source);
+            }
         }
     }
 }
@@ -1002,19 +1031,30 @@ void SceneOrganiserDock::applyCustomColorToItem(QStandardItem *item, const QColo
         return;
     }
 
-    // Don't override active scene highlighting
-    bool isActiveScene = false;
+    // Don't override program/preview scene highlighting
+    bool isProgramScene = false;
+    bool isPreviewScene = false;
     if (item->type() == SceneTreeItem::UserType + 2) {
         obs_source_t *current_scene = obs_frontend_get_current_scene();
         if (current_scene) {
             QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
-            isActiveScene = (item->text() == current_scene_name);
+            isProgramScene = (item->text() == current_scene_name);
             obs_source_release(current_scene);
+        }
+
+        // Check preview scene in studio mode
+        if (obs_frontend_preview_program_mode_active()) {
+            obs_source_t *preview_scene = obs_frontend_get_current_preview_scene();
+            if (preview_scene) {
+                QString preview_scene_name = QString::fromUtf8(obs_source_get_name(preview_scene));
+                isPreviewScene = (item->text() == preview_scene_name);
+                obs_source_release(preview_scene);
+            }
         }
     }
 
-    if (isActiveScene) {
-        // For active scenes, store the color but don't apply it (active highlighting takes precedence)
+    if (isProgramScene || isPreviewScene) {
+        // For program/preview scenes, store the color but don't apply it (special highlighting takes precedence)
         return;
     }
 
@@ -1035,24 +1075,31 @@ void SceneOrganiserDock::clearCustomColorFromItem(QStandardItem *item)
         return;
     }
 
-    // Check if this is the active scene
-    bool isActiveScene = false;
+    // Check if this is a program or preview scene
+    bool isProgramScene = false;
+    bool isPreviewScene = false;
     if (item->type() == SceneTreeItem::UserType + 2) {
         obs_source_t *current_scene = obs_frontend_get_current_scene();
         if (current_scene) {
             QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
-            isActiveScene = (item->text() == current_scene_name);
+            isProgramScene = (item->text() == current_scene_name);
             obs_source_release(current_scene);
+        }
+
+        // Check preview scene in studio mode
+        if (obs_frontend_preview_program_mode_active()) {
+            obs_source_t *preview_scene = obs_frontend_get_current_preview_scene();
+            if (preview_scene) {
+                QString preview_scene_name = QString::fromUtf8(obs_source_get_name(preview_scene));
+                isPreviewScene = (item->text() == preview_scene_name);
+                obs_source_release(preview_scene);
+            }
         }
     }
 
-    if (isActiveScene) {
-        // For active scenes, reapply the active scene highlighting
-        QFont font = item->font();
-        font.setBold(true);
-        item->setFont(font);
-        item->setBackground(QBrush(QColor(26, 127, 207))); // OBS active blue
-        item->setForeground(QBrush(QColor(255, 255, 255))); // White text
+    if (isProgramScene || isPreviewScene) {
+        // For program/preview scenes, don't clear custom colors - let special highlighting remain
+        return;
     } else {
         // Clear custom styling and set default theme text color
         item->setBackground(QBrush());
@@ -1272,23 +1319,36 @@ void SceneOrganiserDock::updateActiveSceneHighlight()
         return;
     }
 
-    // Get the current active scene from OBS
+    QString current_scene_name;
+    QString preview_scene_name;
+
+    // Get the current active (program) scene from OBS
     obs_source_t *current_scene = obs_frontend_get_current_scene();
-    if (!current_scene) {
-        return;
+    if (current_scene) {
+        current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
+        obs_source_release(current_scene);
     }
 
-    QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
-    obs_source_release(current_scene);
+    // If in studio mode, also get the preview scene
+    if (obs_frontend_preview_program_mode_active()) {
+        obs_source_t *preview_scene = obs_frontend_get_current_preview_scene();
+        if (preview_scene) {
+            preview_scene_name = QString::fromUtf8(obs_source_get_name(preview_scene));
+            obs_source_release(preview_scene);
+        }
+    }
 
     // Update all scene items in the tree
-    updateActiveSceneHighlightRecursive(m_model->invisibleRootItem(), current_scene_name);
+    updateActiveSceneHighlightRecursive(m_model->invisibleRootItem(), current_scene_name, preview_scene_name);
 
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "ActiveScene",
-        QString("Updated active scene highlight for: %1").arg(current_scene_name).toUtf8().constData());
+    QString debugMsg = QString("Updated active scene highlight - Program: %1").arg(current_scene_name);
+    if (!preview_scene_name.isEmpty()) {
+        debugMsg += QString(", Preview: %1").arg(preview_scene_name);
+    }
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "ActiveScene", debugMsg.toUtf8().constData());
 }
 
-void SceneOrganiserDock::updateActiveSceneHighlightRecursive(QStandardItem *parent, const QString &activeSceneName)
+void SceneOrganiserDock::updateActiveSceneHighlightRecursive(QStandardItem *parent, const QString &activeSceneName, const QString &previewSceneName)
 {
     if (!parent) return;
 
@@ -1299,17 +1359,27 @@ void SceneOrganiserDock::updateActiveSceneHighlightRecursive(QStandardItem *pare
         if (item->type() == SceneTreeItem::UserType + 2) {
             // This is a scene item
             SceneTreeItem *sceneItem = static_cast<SceneTreeItem*>(item);
-            bool isActive = (item->text() == activeSceneName);
+            bool isProgramScene = (item->text() == activeSceneName);
+            bool isPreviewScene = (!previewSceneName.isEmpty() && item->text() == previewSceneName);
 
-            // Apply OBS active scene styling
-            if (isActive) {
-                // Use OBS active blue color scheme
+            // Apply styling based on scene role
+            if (isProgramScene) {
+                // Program scene - use OBS active blue color scheme (live/on-air)
                 QFont font = item->font();
                 font.setBold(true);
                 item->setFont(font);
 
                 // Set background color to match OBS active scene color
                 item->setBackground(QBrush(QColor(26, 127, 207))); // OBS active blue
+                item->setForeground(QBrush(QColor(255, 255, 255))); // White text
+            } else if (isPreviewScene) {
+                // Preview scene in studio mode - use distinct styling
+                QFont font = item->font();
+                font.setBold(true);
+                item->setFont(font);
+
+                // Use green background for preview (common studio mode convention)
+                item->setBackground(QBrush(QColor(100, 180, 100))); // Green for preview
                 item->setForeground(QBrush(QColor(255, 255, 255))); // White text
             } else {
                 // Reset to normal styling
@@ -1343,7 +1413,7 @@ void SceneOrganiserDock::updateActiveSceneHighlightRecursive(QStandardItem *pare
             }
 
             // Recursively update folder children
-            updateActiveSceneHighlightRecursive(item, activeSceneName);
+            updateActiveSceneHighlightRecursive(item, activeSceneName, previewSceneName);
         }
     }
 }
@@ -1410,6 +1480,19 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_CHANGED:
+        QTimer::singleShot(50, dock, [dock]() {
+            dock->updateActiveSceneHighlight();
+        });
+        break;
+    case OBS_FRONTEND_EVENT_PREVIEW_SCENE_CHANGED:
+        // Update highlighting when preview scene changes in studio mode
+        QTimer::singleShot(50, dock, [dock]() {
+            dock->updateActiveSceneHighlight();
+        });
+        break;
+    case OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED:
+    case OBS_FRONTEND_EVENT_STUDIO_MODE_DISABLED:
+        // Update highlighting when studio mode is toggled
         QTimer::singleShot(50, dock, [dock]() {
             dock->updateActiveSceneHighlight();
         });
@@ -3048,19 +3131,30 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
         return;
     }
 
-    // Check if this is the active scene (active scene highlighting takes precedence)
-    bool isActiveScene = false;
+    // Check if this is the active scene or preview scene (special highlighting takes precedence)
+    bool isProgramScene = false;
+    bool isPreviewScene = false;
     if (item->type() == SceneTreeItem::UserType + 2) {
         obs_source_t *current_scene = obs_frontend_get_current_scene();
         if (current_scene) {
             QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
-            isActiveScene = (item->text() == current_scene_name);
+            isProgramScene = (item->text() == current_scene_name);
             obs_source_release(current_scene);
+        }
+
+        // Check preview scene in studio mode
+        if (obs_frontend_preview_program_mode_active()) {
+            obs_source_t *preview_scene = obs_frontend_get_current_preview_scene();
+            if (preview_scene) {
+                QString preview_scene_name = QString::fromUtf8(obs_source_get_name(preview_scene));
+                isPreviewScene = (item->text() == preview_scene_name);
+                obs_source_release(preview_scene);
+            }
         }
     }
 
-    if (isActiveScene) {
-        // Let default painting handle active scene (OBS blue highlighting)
+    if (isProgramScene || isPreviewScene) {
+        // Let default painting handle active/preview scene highlighting
         QStyledItemDelegate::paint(painter, option, index);
         return;
     }
