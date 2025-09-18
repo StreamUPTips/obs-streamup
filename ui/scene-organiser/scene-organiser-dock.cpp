@@ -96,7 +96,11 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_mainLayout(nullptr)
     , m_treeView(nullptr)
     , m_model(nullptr)
+    , m_proxyModel(nullptr)
     , m_colorDelegate(nullptr)
+    , m_searchWidget(nullptr)
+    , m_searchLayout(nullptr)
+    , m_searchEdit(nullptr)
     , m_toolbar(nullptr)
     , m_addFolderAction(nullptr)
     , m_removeAction(nullptr)
@@ -129,6 +133,7 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     setupUI();
     setupContextMenu();
     setupObsSignals();
+    setupSearchBar();
 
     // Setup auto-save timer
     m_saveTimer->setSingleShot(true);
@@ -202,10 +207,17 @@ void SceneOrganiserDock::setupUI()
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
     m_mainLayout->setSpacing(0);
 
-    // Create model and view
+    // Create model, proxy model, and view
     m_model = new SceneTreeModel(m_canvasType, this);
+
+    // Create proxy model for search/filtering
+    m_proxyModel = new QSortFilterProxyModel(this);
+    m_proxyModel->setSourceModel(m_model);
+    m_proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    m_proxyModel->setRecursiveFilteringEnabled(true);
+
     m_treeView = new SceneTreeView(this);
-    m_treeView->setModel(m_model);
+    m_treeView->setModel(m_proxyModel);
 
     // Configure tree view to match OBS scenes dock exactly
     m_treeView->setHeaderHidden(true);
@@ -421,7 +433,8 @@ void SceneOrganiserDock::setupContextMenu()
         // Implement delete folder functionality
         auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
         if (!selectedIndexes.isEmpty()) {
-            auto item = m_model->itemFromIndex(selectedIndexes.first());
+            QModelIndex sourceIndex = m_proxyModel->mapToSource(selectedIndexes.first());
+            auto item = m_model->itemFromIndex(sourceIndex);
             if (item && item->type() == SceneFolderItem::UserType + 1) {
                 // Move children to root before deleting folder
                 while (item->hasChildren()) {
@@ -507,6 +520,37 @@ void SceneOrganiserDock::setupObsSignals()
     obs_frontend_add_event_callback(onFrontendEvent, this);
 }
 
+void SceneOrganiserDock::setupSearchBar()
+{
+    // Create search widget container
+    m_searchWidget = new QWidget(this);
+    m_searchLayout = new QHBoxLayout(m_searchWidget);
+    m_searchLayout->setContentsMargins(4, 2, 4, 2);
+    m_searchLayout->setSpacing(4);
+
+    // Create search input
+    m_searchEdit = new QLineEdit(m_searchWidget);
+    m_searchEdit->setPlaceholderText(obs_module_text("SceneOrganiser.Search.Placeholder"));
+    m_searchEdit->setClearButtonEnabled(true);
+
+    // Layout search elements
+    m_searchLayout->addWidget(m_searchEdit);
+
+    // Connect search functionality
+    connect(m_searchEdit, &QLineEdit::textChanged, this, &SceneOrganiserDock::onSearchTextChanged);
+
+    // Add Escape key shortcut to clear search
+    QAction *escapeAction = new QAction(this);
+    escapeAction->setShortcut(QKeySequence(Qt::Key_Escape));
+    connect(escapeAction, &QAction::triggered, this, &SceneOrganiserDock::onClearSearch);
+    m_searchEdit->addAction(escapeAction);
+
+    // Add to main layout at bottom
+    m_mainLayout->addWidget(m_searchWidget);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Search", "Search bar initialized");
+}
+
 void SceneOrganiserDock::refreshSceneList()
 {
     m_model->updateTree();
@@ -530,7 +574,8 @@ void SceneOrganiserDock::onSceneSelectionChanged(const QItemSelection &selected,
 
     if (hasSelection) {
         QModelIndex index = selected.indexes().first();
-        QStandardItem *item = m_model->itemFromIndex(index);
+        QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
+        QStandardItem *item = m_model->itemFromIndex(sourceIndex);
 
         if (item) {
             isScene = (item->type() == SceneTreeItem::UserType + 2);
@@ -572,7 +617,8 @@ void SceneOrganiserDock::updateToolbarState()
 
 void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
 {
-    auto item = m_model->itemFromIndex(index);
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
+    auto item = m_model->itemFromIndex(sourceIndex);
     if (!item) {
         m_lastClickedIndex = index;
         return;
@@ -609,7 +655,8 @@ void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
 
 void SceneOrganiserDock::onItemDoubleClicked(const QModelIndex &index)
 {
-    auto item = m_model->itemFromIndex(index);
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
+    auto item = m_model->itemFromIndex(sourceIndex);
     if (!item || item->type() != SceneTreeItem::UserType + 2) {
         return;
     }
@@ -633,7 +680,8 @@ void SceneOrganiserDock::onCustomContextMenuRequested(const QPoint &pos)
     QModelIndex index = m_treeView->indexAt(pos);
 
     if (index.isValid()) {
-        auto item = m_model->itemFromIndex(index);
+        QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
+        auto item = m_model->itemFromIndex(sourceIndex);
         if (item) {
             if (item->type() == SceneFolderItem::UserType + 1) {
                 showFolderContextMenu(m_treeView->mapToGlobal(pos), index);
@@ -648,13 +696,15 @@ void SceneOrganiserDock::onCustomContextMenuRequested(const QPoint &pos)
 
 void SceneOrganiserDock::showFolderContextMenu(const QPoint &pos, const QModelIndex &index)
 {
-    m_currentContextItem = m_model->itemFromIndex(index);
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
+    m_currentContextItem = m_model->itemFromIndex(sourceIndex);
     m_folderContextMenu->exec(pos);
 }
 
 void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelIndex &index)
 {
-    m_currentContextItem = m_model->itemFromIndex(index);
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
+    m_currentContextItem = m_model->itemFromIndex(sourceIndex);
 
     if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) {
         return;
@@ -755,8 +805,8 @@ void SceneOrganiserDock::onRemoveClicked()
     QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
     if (selected.isEmpty()) return;
 
-    QModelIndex index = selected.first();
-    QStandardItem *item = m_model->itemFromIndex(index);
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(selected.first());
+    QStandardItem *item = m_model->itemFromIndex(sourceIndex);
     if (!item) return;
 
     QString itemName = item->text();
@@ -821,8 +871,8 @@ void SceneOrganiserDock::onFiltersClicked()
     QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
     if (selected.isEmpty()) return;
 
-    QModelIndex index = selected.first();
-    QStandardItem *item = m_model->itemFromIndex(index);
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(selected.first());
+    QStandardItem *item = m_model->itemFromIndex(sourceIndex);
     if (!item || item->type() != SceneTreeItem::UserType + 2) return;
 
     QString sceneName = item->text();
@@ -839,8 +889,8 @@ void SceneOrganiserDock::onMoveUpClicked()
     QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
     if (selected.isEmpty()) return;
 
-    QModelIndex index = selected.first();
-    QStandardItem *item = m_model->itemFromIndex(index);
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(selected.first());
+    QStandardItem *item = m_model->itemFromIndex(sourceIndex);
     if (!item) return;
 
     QStandardItem *parent = item->parent();
@@ -853,7 +903,8 @@ void SceneOrganiserDock::onMoveUpClicked()
 
         // Restore selection
         QModelIndex newIndex = m_model->indexFromItem(items.first());
-        m_treeView->selectionModel()->select(newIndex, QItemSelectionModel::ClearAndSelect);
+        QModelIndex proxyIndex = m_proxyModel->mapFromSource(newIndex);
+        m_treeView->selectionModel()->select(proxyIndex, QItemSelectionModel::ClearAndSelect);
 
         m_saveTimer->start();
     }
@@ -864,8 +915,8 @@ void SceneOrganiserDock::onMoveDownClicked()
     QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
     if (selected.isEmpty()) return;
 
-    QModelIndex index = selected.first();
-    QStandardItem *item = m_model->itemFromIndex(index);
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(selected.first());
+    QStandardItem *item = m_model->itemFromIndex(sourceIndex);
     if (!item) return;
 
     QStandardItem *parent = item->parent();
@@ -878,7 +929,8 @@ void SceneOrganiserDock::onMoveDownClicked()
 
         // Restore selection
         QModelIndex newIndex = m_model->indexFromItem(items.first());
-        m_treeView->selectionModel()->select(newIndex, QItemSelectionModel::ClearAndSelect);
+        QModelIndex proxyIndex = m_proxyModel->mapFromSource(newIndex);
+        m_treeView->selectionModel()->select(proxyIndex, QItemSelectionModel::ClearAndSelect);
 
         m_saveTimer->start();
     }
@@ -1091,7 +1143,8 @@ void SceneOrganiserDock::onRenameSceneClicked()
     auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
     if (selectedIndexes.isEmpty()) return;
 
-    auto item = m_model->itemFromIndex(selectedIndexes.first());
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(selectedIndexes.first());
+    auto item = m_model->itemFromIndex(sourceIndex);
     if (!item || item->type() != SceneTreeItem::UserType + 2) return;
 
     // Start inline editing
@@ -1103,7 +1156,8 @@ void SceneOrganiserDock::onRenameFolderClicked()
     auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
     if (selectedIndexes.isEmpty()) return;
 
-    auto item = m_model->itemFromIndex(selectedIndexes.first());
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(selectedIndexes.first());
+    auto item = m_model->itemFromIndex(sourceIndex);
     if (!item || item->type() != SceneFolderItem::UserType + 1) return;
 
     // Start inline editing
@@ -1149,7 +1203,8 @@ void SceneOrganiserDock::updateUIEnabledState()
         auto selected = m_treeView->selectionModel()->selectedIndexes();
         hasSelection = !selected.isEmpty();
         if (hasSelection) {
-            QStandardItem *item = m_model->itemFromIndex(selected.first());
+            QModelIndex sourceIndex = m_proxyModel->mapToSource(selected.first());
+            QStandardItem *item = m_model->itemFromIndex(sourceIndex);
             isScene = (item && item->type() == SceneTreeItem::UserType + 2);
         }
     }
@@ -1425,13 +1480,48 @@ void SceneOrganiserDock::LoadConfiguration()
         .arg(m_isLocked ? "locked" : "unlocked").toUtf8().constData());
 }
 
+// Search functionality implementation
+void SceneOrganiserDock::onSearchTextChanged(const QString &text)
+{
+    if (!m_proxyModel) return;
+
+    // Apply filter to proxy model
+    m_proxyModel->setFilterWildcard(text);
+
+    // Check if we have search text for expansion logic
+    bool hasText = !text.isEmpty();
+
+    // Expand all items when searching to show matches
+    if (hasText) {
+        m_treeView->expandAll();
+    } else {
+        // Restore previous expansion state when cleared
+        // For now, just expand the root level
+        m_treeView->expandToDepth(0);
+    }
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Search",
+        QString("Search filter applied: '%1'").arg(text).toUtf8().constData());
+}
+
+void SceneOrganiserDock::onClearSearch()
+{
+    if (!m_searchEdit) return;
+
+    m_searchEdit->clear();
+    m_searchEdit->clearFocus();
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Search", "Search cleared");
+}
+
 // Public methods for keyboard shortcuts
 void SceneOrganiserDock::triggerRename()
 {
     QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
     if (!selected.isEmpty()) {
-        QModelIndex index = selected.first();
-        QStandardItem *item = m_model->itemFromIndex(index);
+        QModelIndex proxyIndex = selected.first();
+        QModelIndex sourceIndex = m_proxyModel->mapToSource(proxyIndex);
+        QStandardItem *item = m_model->itemFromIndex(sourceIndex);
         if (item) {
             if (item->type() == SceneTreeItem::UserType + 2) {
                 // Scene item - trigger scene rename
@@ -1653,7 +1743,9 @@ void SceneOrganiserDock::onSceneMoveUpClicked()
         QList<QStandardItem*> items = parent->takeRow(currentRow);
         if (!items.isEmpty()) {
             parent->insertRow(currentRow - 1, items);
-            m_treeView->setCurrentIndex(items[0]->index());
+            QModelIndex sourceIndex = items[0]->index();
+            QModelIndex proxyIndex = m_proxyModel->mapFromSource(sourceIndex);
+            m_treeView->setCurrentIndex(proxyIndex);
             m_saveTimer->start();
         }
     }
@@ -1672,7 +1764,9 @@ void SceneOrganiserDock::onSceneMoveDownClicked()
         QList<QStandardItem*> items = parent->takeRow(currentRow);
         if (!items.isEmpty()) {
             parent->insertRow(currentRow + 1, items);
-            m_treeView->setCurrentIndex(items[0]->index());
+            QModelIndex sourceIndex = items[0]->index();
+            QModelIndex proxyIndex = m_proxyModel->mapFromSource(sourceIndex);
+            m_treeView->setCurrentIndex(proxyIndex);
             m_saveTimer->start();
         }
     }
@@ -1691,7 +1785,9 @@ void SceneOrganiserDock::onSceneMoveToTopClicked()
         QList<QStandardItem*> items = parent->takeRow(currentRow);
         if (!items.isEmpty()) {
             parent->insertRow(0, items);
-            m_treeView->setCurrentIndex(items[0]->index());
+            QModelIndex sourceIndex = items[0]->index();
+            QModelIndex proxyIndex = m_proxyModel->mapFromSource(sourceIndex);
+            m_treeView->setCurrentIndex(proxyIndex);
             m_saveTimer->start();
         }
     }
@@ -1711,7 +1807,9 @@ void SceneOrganiserDock::onSceneMoveToBottomClicked()
         QList<QStandardItem*> items = parent->takeRow(currentRow);
         if (!items.isEmpty()) {
             parent->insertRow(maxRow, items);
-            m_treeView->setCurrentIndex(items[0]->index());
+            QModelIndex sourceIndex = items[0]->index();
+            QModelIndex proxyIndex = m_proxyModel->mapFromSource(sourceIndex);
+            m_treeView->setCurrentIndex(proxyIndex);
             m_saveTimer->start();
         }
     }
@@ -2728,37 +2826,41 @@ void SceneTreeView::dragMoveEvent(QDragMoveEvent *event)
         QModelIndex index = indexAt(event->position().toPoint());
 
         if (index.isValid()) {
-            // Get the item at this position
-            QStandardItemModel *model = qobject_cast<QStandardItemModel*>(this->model());
-            if (model) {
-                QStandardItem *item = model->itemFromIndex(index);
-                if (item && item->type() == SceneTreeItem::UserType + 2) {
-                    // This is a scene item - force drop above or below based on cursor position
-                    QRect itemRect = visualRect(index);
-                    QPoint cursorPos = event->position().toPoint();
+            // Get the proxy model and map to source
+            QSortFilterProxyModel *proxyModel = qobject_cast<QSortFilterProxyModel*>(this->model());
+            if (proxyModel) {
+                QModelIndex sourceIndex = proxyModel->mapToSource(index);
+                QStandardItemModel *sourceModel = qobject_cast<QStandardItemModel*>(proxyModel->sourceModel());
+                if (sourceModel) {
+                    QStandardItem *item = sourceModel->itemFromIndex(sourceIndex);
+                    if (item && item->type() == SceneTreeItem::UserType + 2) {
+                        // This is a scene item - force drop above or below based on cursor position
+                        QRect itemRect = visualRect(index);
+                        QPoint cursorPos = event->position().toPoint();
 
-                    // Calculate if cursor is in top half or bottom half of the scene item
-                    int itemMiddle = itemRect.top() + (itemRect.height() / 2);
-                    bool dropAbove = cursorPos.y() < itemMiddle;
+                        // Calculate if cursor is in top half or bottom half of the scene item
+                        int itemMiddle = itemRect.top() + (itemRect.height() / 2);
+                        bool dropAbove = cursorPos.y() < itemMiddle;
 
-                    // Create a fake event position to force the drop indicator above or below
-                    QPoint adjustedPos;
-                    if (dropAbove) {
-                        // Position just above the item
-                        adjustedPos = QPoint(cursorPos.x(), itemRect.top() - 2);
-                    } else {
-                        // Position just below the item
-                        adjustedPos = QPoint(cursorPos.x(), itemRect.bottom() + 2);
+                        // Create a fake event position to force the drop indicator above or below
+                        QPoint adjustedPos;
+                        if (dropAbove) {
+                            // Position just above the item
+                            adjustedPos = QPoint(cursorPos.x(), itemRect.top() - 2);
+                        } else {
+                            // Position just below the item
+                            adjustedPos = QPoint(cursorPos.x(), itemRect.bottom() + 2);
+                        }
+
+                        // Create a new drag move event with the adjusted position
+                        QDragMoveEvent adjustedEvent(adjustedPos, event->possibleActions(),
+                                                   event->mimeData(), event->buttons(), event->modifiers());
+
+                        // Accept the original event and let the adjusted event handle positioning
+                        event->acceptProposedAction();
+                        QTreeView::dragMoveEvent(&adjustedEvent);
+                        return;
                     }
-
-                    // Create a new drag move event with the adjusted position
-                    QDragMoveEvent adjustedEvent(adjustedPos, event->possibleActions(),
-                                               event->mimeData(), event->buttons(), event->modifiers());
-
-                    // Accept the original event and let the adjusted event handle positioning
-                    event->acceptProposedAction();
-                    QTreeView::dragMoveEvent(&adjustedEvent);
-                    return;
                 }
             }
         }
