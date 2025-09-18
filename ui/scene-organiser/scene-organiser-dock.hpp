@@ -91,6 +91,7 @@ private slots:
     void onShowInMultiviewClicked();
     void onOpenProjectorClicked();
     void onOpenProjectorWindowClicked();
+    void onOpenProjectorOnMonitorClicked();
     void onSceneMoveUpClicked();
     void onSceneMoveDownClicked();
     void onSceneMoveToTopClicked();
@@ -99,6 +100,11 @@ private slots:
 public slots:
     static void onFrontendEvent(enum obs_frontend_event event, void *private_data);
     void onRemoveClicked();
+
+public:
+    // Public methods for keyboard shortcuts
+    void triggerRename();
+    void triggerRemove();
 
 private:
     void setupUI();
@@ -123,6 +129,7 @@ private:
     void onToggleLockClicked();
     void setLocked(bool locked);
     void updateUIEnabledState();
+    void populateProjectorMenu();
 
 public:
     // Color helper methods (public for CustomColorDelegate access)
