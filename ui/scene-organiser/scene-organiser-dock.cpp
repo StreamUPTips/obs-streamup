@@ -123,6 +123,9 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_currentContextItem(nullptr)
     , m_isLocked(false)
     , m_lockAction(nullptr)
+    , m_folderLockAction(nullptr)
+    , m_sceneLockAction(nullptr)
+    , m_backgroundLockAction(nullptr)
     , m_copyFiltersSource(nullptr)
 {
     s_dockInstances.append(this);
@@ -146,6 +149,9 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
 
     // Initialize toggle icons state in context menus
     updateToggleIconsState();
+
+    // Initialize lock action states in context menus
+    updateLockActionStates();
 
     // Initialize active scene highlighting
     QTimer::singleShot(200, this, &SceneOrganiserDock::updateActiveSceneHighlight);
@@ -460,6 +466,11 @@ void SceneOrganiserDock::setupContextMenu()
     m_folderToggleIconsAction = m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
     m_folderToggleIconsAction->setCheckable(true);
 
+    // Add lock/unlock option
+    m_folderContextMenu->addSeparator();
+    m_folderLockAction = m_folderContextMenu->addAction("", this, &SceneOrganiserDock::onToggleLockClicked);
+    m_folderLockAction->setCheckable(true);
+
     // Scene context menu - matching OBS standard functionality
     m_sceneContextMenu = new QMenu(this);
 
@@ -511,6 +522,11 @@ void SceneOrganiserDock::setupContextMenu()
     m_sceneToggleIconsAction = m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
     m_sceneToggleIconsAction->setCheckable(true);
 
+    // Add lock/unlock option
+    m_sceneContextMenu->addSeparator();
+    m_sceneLockAction = m_sceneContextMenu->addAction("", this, &SceneOrganiserDock::onToggleLockClicked);
+    m_sceneLockAction->setCheckable(true);
+
     // Background context menu
     m_backgroundContextMenu = new QMenu(this);
     m_backgroundContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("AddScene"), -1), this, &SceneOrganiserDock::onCreateSceneClicked);
@@ -518,6 +534,11 @@ void SceneOrganiserDock::setupContextMenu()
     m_backgroundContextMenu->addSeparator();
     m_backgroundToggleIconsAction = m_backgroundContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
     m_backgroundToggleIconsAction->setCheckable(true);
+
+    // Add lock/unlock option
+    m_backgroundContextMenu->addSeparator();
+    m_backgroundLockAction = m_backgroundContextMenu->addAction("", this, &SceneOrganiserDock::onToggleLockClicked);
+    m_backgroundLockAction->setCheckable(true);
 }
 
 void SceneOrganiserDock::setupObsSignals()
@@ -1231,6 +1252,9 @@ void SceneOrganiserDock::setLocked(bool locked)
     // Update UI enabled state
     updateUIEnabledState();
 
+    // Update lock action states in context menus
+    updateLockActionStates();
+
     // Save lock state
     m_saveTimer->start();
 
@@ -1333,6 +1357,24 @@ void SceneOrganiserDock::updateToggleIconsState()
     }
     if (m_backgroundToggleIconsAction) {
         m_backgroundToggleIconsAction->setChecked(iconsEnabled);
+    }
+}
+
+void SceneOrganiserDock::updateLockActionStates()
+{
+    QString lockText = m_isLocked ? "Unlock Scene Organiser" : "Lock Scene Organiser";
+
+    if (m_folderLockAction) {
+        m_folderLockAction->setText(lockText);
+        m_folderLockAction->setChecked(m_isLocked);
+    }
+    if (m_sceneLockAction) {
+        m_sceneLockAction->setText(lockText);
+        m_sceneLockAction->setChecked(m_isLocked);
+    }
+    if (m_backgroundLockAction) {
+        m_backgroundLockAction->setText(lockText);
+        m_backgroundLockAction->setChecked(m_isLocked);
     }
 }
 

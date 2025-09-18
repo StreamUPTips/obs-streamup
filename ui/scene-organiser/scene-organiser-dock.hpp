@@ -124,6 +124,7 @@ private:
     void showBackgroundContextMenu(const QPoint &pos);
     void updateAllItemIcons(QStandardItem *parent);
     void updateToggleIconsState();
+    void updateLockActionStates();
     void updateActiveSceneHighlight();
     void updateActiveSceneHighlightRecursive(QStandardItem *parent, const QString &activeSceneName, const QString &previewSceneName = QString());
     void onSetCustomColorClicked();
@@ -193,6 +194,11 @@ public:
     QAction *m_sceneMoveDownAction;
     QAction *m_sceneMoveToTopAction;
     QAction *m_sceneMoveToBottomAction;
+
+    // Lock/unlock actions in context menus
+    QAction *m_folderLockAction;
+    QAction *m_sceneLockAction;
+    QAction *m_backgroundLockAction;
 
     // Configuration
     QString m_configKey;
