@@ -230,6 +230,7 @@ void SceneOrganiserDock::setupUI()
     m_treeView->setRootIsDecorated(true);
     m_treeView->setDragDropMode(QAbstractItemView::InternalMove);
     m_treeView->setDefaultDropAction(Qt::MoveAction);
+    m_treeView->setDropIndicatorShown(true);
     m_treeView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setIndentation(20); // Match OBS indentation
@@ -2143,51 +2144,27 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
     if (!data->hasFormat("application/x-streamup-sceneorganiser"))
         return false;
 
+    // Get parent item - use root if none specified
     QStandardItem *parentItem = itemFromIndex(parent);
-    QString parentType = "null";
     if (!parentItem) {
         parentItem = invisibleRootItem();
-        parentType = "root";
+    }
 
-        // Check if we're dropping immediately after a folder
-        // This handles the case where you drop in empty space below an expanded folder
-        if (row > 0) {
-            QStandardItem *previousItem = parentItem->child(row - 1);
-            if (previousItem && previousItem->type() == SceneFolderItem::UserType + 1) {
-                // We're dropping right after a folder - redirect to inside the folder at position 0
-                parentItem = previousItem;
-                row = 0;
-                parentType = "root->redirected_to_folder";
-            }
-        }
-    } else if (parentItem->type() == SceneTreeItem::UserType + 2) {
-        parentType = "scene";
-        // If dropping on a scene item, adjust to drop beside it instead
+    // Prevent dropping scenes into scenes (DigitOtter approach)
+    if (parentItem->type() == SceneTreeItem::UserType + 2) {
+        // Dropping on a scene - place it beside the scene instead
         QStandardItem *sceneParent = parentItem->parent();
         if (!sceneParent) {
             sceneParent = invisibleRootItem();
         }
-
-        // Get the row of the scene item and position the drop after it
-        int sceneRow = parentItem->row();
-        row = sceneRow + 1; // Position after the scene
+        row = parentItem->row() + 1;
         parentItem = sceneParent;
-        parentType = "scene->redirected_to_parent";
-    } else if (parentItem->type() == SceneFolderItem::UserType + 1) {
-        parentType = "folder";
-        // Force items dropped into folders to go to position 0 (top of folder)
-        row = 0;
     }
-    // Note: For folders (SceneFolderItem::UserType + 1), we allow drops inside them
 
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "DragDrop",
-        QString("Parent type: %1, parent name: '%2', forced row: %3")
-        .arg(parentType)
-        .arg(parentItem == invisibleRootItem() ? "root" : parentItem->text())
-        .arg(row).toUtf8().constData());
-
-    if (row < 0)
-        row = 0;
+    // Ensure valid row
+    if (row < 0) {
+        row = parentItem->rowCount();
+    }
 
     QByteArray mimeDataBytes = data->data("application/x-streamup-sceneorganiser");
     if (mimeDataBytes.size() < static_cast<int>(sizeof(int))) {
@@ -2199,10 +2176,9 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
     dat += sizeof(int);
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "DragDrop",
-        QString("Dropping %1 items at row %2 into '%3' (original row passed: %4)")
+        QString("Dropping %1 items at row %2 into '%3'")
         .arg(numIndexes).arg(row)
-        .arg(parentItem == invisibleRootItem() ? "root" : parentItem->text())
-        .arg(row).toUtf8().constData());
+        .arg(parentItem == invisibleRootItem() ? "root" : parentItem->text()).toUtf8().constData());
 
     for (int i = 0; i < numIndexes; ++i) {
         if (dat + sizeof(QStandardItem*) > mimeDataBytes.constData() + mimeDataBytes.size()) {
