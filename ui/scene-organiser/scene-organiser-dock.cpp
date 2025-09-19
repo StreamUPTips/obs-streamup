@@ -2172,9 +2172,10 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
     dat += sizeof(int);
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "DragDrop",
-        QString("Dropping %1 items at row %2 into '%3'")
+        QString("Dropping %1 items at row %2 into '%3' (original row passed: %4)")
         .arg(numIndexes).arg(row)
-        .arg(parentItem == invisibleRootItem() ? "root" : parentItem->text()).toUtf8().constData());
+        .arg(parentItem == invisibleRootItem() ? "root" : parentItem->text())
+        .arg(row).toUtf8().constData());
 
     for (int i = 0; i < numIndexes; ++i) {
         if (dat + sizeof(QStandardItem*) > mimeDataBytes.constData() + mimeDataBytes.size()) {
@@ -2203,7 +2204,15 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
                 newItem->setData(customColor, Qt::UserRole + 1);
             }
 
+            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "DragDrop",
+                QString("Inserting scene '%1' at row %2 (parent has %3 children)")
+                .arg(newItem->text()).arg(row).arg(parentItem->rowCount()).toUtf8().constData());
+
             parentItem->insertRow(row, newItem);
+
+            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "DragDrop",
+                QString("After insert: scene '%1' is now at row %2 (parent has %3 children)")
+                .arg(newItem->text()).arg(newItem->row()).arg(parentItem->rowCount()).toUtf8().constData());
 
             // Update tracking map with new item
             m_scenesInTree[weak_source] = newItem;
@@ -2970,50 +2979,6 @@ void SceneTreeView::dragEnterEvent(QDragEnterEvent *event)
 void SceneTreeView::dragMoveEvent(QDragMoveEvent *event)
 {
     if (event->mimeData()->hasFormat("application/x-streamup-sceneorganiser")) {
-        // Get the index under the cursor
-        QModelIndex index = indexAt(event->position().toPoint());
-
-        if (index.isValid()) {
-            // Get the proxy model and map to source
-            QSortFilterProxyModel *proxyModel = qobject_cast<QSortFilterProxyModel*>(this->model());
-            if (proxyModel) {
-                QModelIndex sourceIndex = proxyModel->mapToSource(index);
-                QStandardItemModel *sourceModel = qobject_cast<QStandardItemModel*>(proxyModel->sourceModel());
-                if (sourceModel) {
-                    QStandardItem *item = sourceModel->itemFromIndex(sourceIndex);
-                    if (item && item->type() == SceneTreeItem::UserType + 2) {
-                        // This is a scene item - force drop above or below based on cursor position
-                        QRect itemRect = visualRect(index);
-                        QPoint cursorPos = event->position().toPoint();
-
-                        // Calculate if cursor is in top half or bottom half of the scene item
-                        int itemMiddle = itemRect.top() + (itemRect.height() / 2);
-                        bool dropAbove = cursorPos.y() < itemMiddle;
-
-                        // Create a fake event position to force the drop indicator above or below
-                        QPoint adjustedPos;
-                        if (dropAbove) {
-                            // Position just above the item
-                            adjustedPos = QPoint(cursorPos.x(), itemRect.top() - 2);
-                        } else {
-                            // Position just below the item
-                            adjustedPos = QPoint(cursorPos.x(), itemRect.bottom() + 2);
-                        }
-
-                        // Create a new drag move event with the adjusted position
-                        QDragMoveEvent adjustedEvent(adjustedPos, event->possibleActions(),
-                                                   event->mimeData(), event->buttons(), event->modifiers());
-
-                        // Accept the original event and let the adjusted event handle positioning
-                        event->acceptProposedAction();
-                        QTreeView::dragMoveEvent(&adjustedEvent);
-                        return;
-                    }
-                }
-            }
-        }
-
-        // For non-scene items (folders/empty space), use normal behavior
         event->acceptProposedAction();
     } else {
         event->ignore();
