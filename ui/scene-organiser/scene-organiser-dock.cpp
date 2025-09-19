@@ -2144,9 +2144,24 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
         return false;
 
     QStandardItem *parentItem = itemFromIndex(parent);
+    QString parentType = "null";
     if (!parentItem) {
         parentItem = invisibleRootItem();
+        parentType = "root";
+
+        // Check if we're dropping immediately after a folder
+        // This handles the case where you drop in empty space below an expanded folder
+        if (row > 0) {
+            QStandardItem *previousItem = parentItem->child(row - 1);
+            if (previousItem && previousItem->type() == SceneFolderItem::UserType + 1) {
+                // We're dropping right after a folder - redirect to inside the folder at position 0
+                parentItem = previousItem;
+                row = 0;
+                parentType = "root->redirected_to_folder";
+            }
+        }
     } else if (parentItem->type() == SceneTreeItem::UserType + 2) {
+        parentType = "scene";
         // If dropping on a scene item, adjust to drop beside it instead
         QStandardItem *sceneParent = parentItem->parent();
         if (!sceneParent) {
@@ -2157,7 +2172,19 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
         int sceneRow = parentItem->row();
         row = sceneRow + 1; // Position after the scene
         parentItem = sceneParent;
+        parentType = "scene->redirected_to_parent";
+    } else if (parentItem->type() == SceneFolderItem::UserType + 1) {
+        parentType = "folder";
+        // Force items dropped into folders to go to position 0 (top of folder)
+        row = 0;
     }
+    // Note: For folders (SceneFolderItem::UserType + 1), we allow drops inside them
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "DragDrop",
+        QString("Parent type: %1, parent name: '%2', forced row: %3")
+        .arg(parentType)
+        .arg(parentItem == invisibleRootItem() ? "root" : parentItem->text())
+        .arg(row).toUtf8().constData());
 
     if (row < 0)
         row = 0;
