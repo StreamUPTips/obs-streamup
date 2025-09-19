@@ -3137,14 +3137,25 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
         return;
     }
 
-    // Get the item from the model
-    QStandardItemModel *model = qobject_cast<QStandardItemModel*>(const_cast<QAbstractItemModel*>(index.model()));
-    if (!model) {
+    // Get the item from the model - handle proxy model
+    QStandardItemModel *sourceModel = nullptr;
+    QModelIndex sourceIndex = index;
+
+    // Check if we're dealing with a proxy model
+    const QSortFilterProxyModel *proxyModel = qobject_cast<const QSortFilterProxyModel*>(index.model());
+    if (proxyModel) {
+        sourceModel = qobject_cast<QStandardItemModel*>(proxyModel->sourceModel());
+        sourceIndex = proxyModel->mapToSource(index);
+    } else {
+        sourceModel = qobject_cast<QStandardItemModel*>(const_cast<QAbstractItemModel*>(index.model()));
+    }
+
+    if (!sourceModel) {
         QStyledItemDelegate::paint(painter, option, index);
         return;
     }
 
-    QStandardItem *item = model->itemFromIndex(index);
+    QStandardItem *item = sourceModel->itemFromIndex(sourceIndex);
     if (!item) {
         QStyledItemDelegate::paint(painter, option, index);
         return;
