@@ -115,6 +115,8 @@ private:
     void setupSearchBar();
     void onSearchTextChanged(const QString &text);
     void onClearSearch();
+    void saveExpansionState();
+    void restoreExpansionState();
     void createBottomToolbar();
     void updateToolbarState();
     void refreshSceneList();
@@ -160,6 +162,7 @@ public:
     QWidget *m_searchWidget;
     QHBoxLayout *m_searchLayout;
     QLineEdit *m_searchEdit;
+    QMap<QPersistentModelIndex, bool> m_savedExpansionState;
 
     // Toolbar and buttons
     QToolBar *m_toolbar;
