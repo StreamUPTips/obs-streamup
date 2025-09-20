@@ -145,6 +145,9 @@ public:
     QColor getSelectionColor(const QColor &baseColor);
     QColor getHoverColor(const QColor &baseColor);
 
+    // Force tree view repaint (used after drag and drop)
+    void forceTreeViewRepaint();
+
     // Data members
     CanvasType m_canvasType;
     QVBoxLayout *m_mainLayout;
