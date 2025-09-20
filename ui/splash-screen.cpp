@@ -54,7 +54,8 @@ struct SupportersData {
 static SupportersData supportersData;
 
 // Monthly supporters list (you'll want to update this regularly)
-static const char* MONTHLY_SUPPORTERS = R"(
+// Note: Currently using dynamic API loading instead of static list
+[[maybe_unused]] static const char* MONTHLY_SUPPORTERS = R"(
 <h3>💝 Thank You to Our Monthly Supporters!</h3>
 <p><i>Your support makes StreamUP possible and helps us continue developing amazing features!</i></p>
 
