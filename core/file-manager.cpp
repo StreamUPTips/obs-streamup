@@ -6,6 +6,7 @@
 #include "error-handler.hpp"
 #include "string-utils.hpp"
 #include "version-utils.hpp"
+#include "path-utils.hpp"
 #include <obs-module.h>
 #include <QFile>
 #include <QFileInfo>
@@ -13,9 +14,6 @@
 #include <QApplication>
 #include <list>
 #include <map>
-
-// Forward declaration
-extern char *GetFilePath();
 
 namespace StreamUP {
 namespace FileManager {

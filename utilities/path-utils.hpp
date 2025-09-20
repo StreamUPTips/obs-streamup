@@ -42,6 +42,22 @@ QString ToAbsolutePath(const QString &relativePath);
  */
 std::string GetMostRecentTxtFile(const std::string &directoryPath);
 
+/**
+ * Get the OBS log file directory path (replaces GetFilePath() function)
+ * This handles platform-specific path resolution for OBS logs
+ * @return char* containing the log directory path, or nullptr if not found
+ *         Caller is responsible for freeing the returned pointer with bfree()
+ */
+char* GetOBSLogPath();
+
+/**
+ * Get OBS module config path for a specific file/directory
+ * @param relativePath Relative path from the module config directory
+ * @return char* containing the absolute config path
+ *         Caller is responsible for freeing the returned pointer with bfree()
+ */
+char* GetOBSConfigPath(const char* relativePath);
+
 } // namespace PathUtils
 } // namespace StreamUP
 

@@ -223,6 +223,16 @@ public:
     QPersistentModelIndex m_lastClickedIndex;
     QAction *m_lockAction;
 
+    // Performance optimization members
+    QTimer *m_updateBatchTimer;
+    bool m_updatesPending;
+    void scheduleOptimizedUpdate();
+    void processBatchedUpdates();
+
+    // Cache management
+    static void clearIconCaches();
+    static void onThemeChanged();
+
     // OBS integration
     static QList<SceneOrganiserDock*> s_dockInstances;
 };

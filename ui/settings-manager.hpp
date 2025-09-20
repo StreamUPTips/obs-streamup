@@ -179,6 +179,11 @@ void UpdateDockToolSettings(const DockToolSettings& dockSettings);
 void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents& components);
 
 /**
+ * Invalidate settings cache (forces reload on next access)
+ */
+void InvalidateSettingsCache();
+
+/**
  * Clean up cached settings on plugin shutdown
  */
 void CleanupSettingsCache();

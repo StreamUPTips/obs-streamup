@@ -20,37 +20,46 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QFile>
+#include <QTimer>
 #include <util/config-file.h>
 
-StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent), 
-	streamButton(nullptr), recordButton(nullptr), pauseButton(nullptr), 
-	replayBufferButton(nullptr), saveReplayButton(nullptr), virtualCameraButton(nullptr), 
+StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent),
+	streamButton(nullptr), recordButton(nullptr), pauseButton(nullptr),
+	replayBufferButton(nullptr), saveReplayButton(nullptr), virtualCameraButton(nullptr),
 	virtualCameraConfigButton(nullptr), studioModeButton(nullptr), settingsButton(nullptr),
-	streamUPSettingsButton(nullptr), centralWidget(nullptr), mainLayout(nullptr), 
-	contextMenu(nullptr), configureAction(nullptr)
+	streamUPSettingsButton(nullptr), centralWidget(nullptr), mainLayout(nullptr),
+	contextMenu(nullptr), configureAction(nullptr), iconUpdateTimer(nullptr), m_updateBatchTimer(nullptr)
 {
 	setObjectName("StreamUPToolbar");
 	setWindowTitle(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Title")));
+
+	// Initialize optimized update system
+	m_updateBatchTimer = new QTimer(this);
+	m_updateBatchTimer->setSingleShot(true);
+	m_updateBatchTimer->setInterval(50); // 50ms batching delay
+	connect(m_updateBatchTimer, &QTimer::timeout, this, &StreamUPToolbar::processBatchedUpdates);
 
 	// Setup context menu
 	contextMenu = new QMenu(this);
 	configureAction = contextMenu->addAction(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.Title")));
 	connect(configureAction, &QAction::triggered, this, &StreamUPToolbar::onConfigureToolbarClicked);
-	
+
 	toolbarSettingsAction = contextMenu->addAction(QString::fromUtf8(obs_module_text("StreamUP.Settings.ToolbarSettings")));
 	connect(toolbarSettingsAction, &QAction::triggered, this, &StreamUPToolbar::onToolbarSettingsClicked);
 
 	// Load configuration and setup UI
 	toolbarConfig.loadFromSettings();
 	setupDynamicUI();
-	updateAllButtons();
-	
-	// Ensure icons are properly themed on startup
-	updateIconsForTheme();
-	
+
+	// Preload commonly used icons for better performance
+	preloadCommonIcons();
+
+	// Initial update using optimized system
+	scheduleUpdate();
+
 	// Set initial position-aware theming (will be updated when actually added to main window)
 	updatePositionAwareTheme();
-	
+
 	// Register for OBS frontend events to update button states
 	obs_frontend_add_event_callback(OnFrontendEvent, this);
 }
@@ -468,14 +477,11 @@ void StreamUPToolbar::updateDockButtonIcons()
 
 void StreamUPToolbar::updateAllButtons()
 {
-	updateStreamButton();
-	updateRecordButton();
-	updatePauseButton();
-	updateReplayBufferButton();
-	updateSaveReplayButton();
-	updateVirtualCameraButton();
+	// Use the new efficient batched update system
+	updateButtonStatesEfficiently();
+
+	// Update non-state dependent buttons individually
 	updateVirtualCameraConfigButton();
-	updateStudioModeButton();
 	updateSettingsButton();
 	updateStreamUPSettingsButton();
 }
@@ -484,43 +490,30 @@ void StreamUPToolbar::OnFrontendEvent(enum obs_frontend_event event, void *data)
 {
 	StreamUPToolbar* toolbar = static_cast<StreamUPToolbar*>(data);
 	if (!toolbar) return;
-	
+
+	// Use optimized batched update system for all state-changing events
 	switch (event) {
 	case OBS_FRONTEND_EVENT_STREAMING_STARTED:
 	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
-		toolbar->updateStreamButton();
-		break;
-		
 	case OBS_FRONTEND_EVENT_RECORDING_STARTED:
 	case OBS_FRONTEND_EVENT_RECORDING_STOPPED:
 	case OBS_FRONTEND_EVENT_RECORDING_PAUSED:
 	case OBS_FRONTEND_EVENT_RECORDING_UNPAUSED:
-		toolbar->updateRecordButton();
-		toolbar->updatePauseButton();
-		toolbar->updateSaveReplayButton(); // Save replay can be disabled during recording pause
-		break;
-		
 	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_STARTED:
 	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_STOPPED:
-		toolbar->updateReplayBufferButton();
-		toolbar->updateSaveReplayButton();
-		break;
-		
 	case OBS_FRONTEND_EVENT_VIRTUALCAM_STARTED:
 	case OBS_FRONTEND_EVENT_VIRTUALCAM_STOPPED:
-		toolbar->updateVirtualCameraButton();
-		break;
-		
 	case OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED:
 	case OBS_FRONTEND_EVENT_STUDIO_MODE_DISABLED:
-		toolbar->updateStudioModeButton();
+		// Schedule efficient batched update instead of individual updates
+		toolbar->scheduleUpdate();
 		break;
-		
+
 	case OBS_FRONTEND_EVENT_PROFILE_CHANGED:
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
-		// Settings may have changed, update button visibility
+		// Settings may have changed, force immediate update with button visibility
 		toolbar->updateButtonVisibility();
-		toolbar->updateAllButtons();
+		toolbar->scheduleUpdate();
 		break;
 		
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
@@ -579,6 +572,109 @@ void StreamUPToolbar::clearStyleSheetCache()
 {
 	cachedStyleSheet.clear();
 	styleSheetCacheValid = false;
+}
+
+void StreamUPToolbar::preloadCommonIcons()
+{
+	// Preload frequently used icons to reduce load time during updates
+	const QStringList commonIcons = {
+		"streaming", "streaming-inactive",
+		"record-on", "record-off",
+		"pause", "save-replay",
+		"replay-buffer-on", "replay-buffer-off",
+		"virtual-camera-on", "virtual-camera-off",
+		"virtual-camera-settings", "settings"
+	};
+
+	for (const QString& iconName : commonIcons) {
+		getCachedIcon(iconName); // This will cache the icon
+	}
+
+	StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Icon Preload", "Preloaded %d common icons", commonIcons.size());
+}
+
+void StreamUPToolbar::scheduleUpdate()
+{
+	if (!m_updatesPending) {
+		m_updatesPending = true;
+		m_updateBatchTimer->start();
+	}
+}
+
+void StreamUPToolbar::processBatchedUpdates()
+{
+	if (!m_updatesPending) {
+		return;
+	}
+
+	m_updatesPending = false;
+	updateButtonStatesEfficiently();
+}
+
+void StreamUPToolbar::updateButtonStatesEfficiently()
+{
+	if (isReconstructingUI) {
+		return;
+	}
+
+	// Batch all state checks to minimize OBS API calls
+	bool streaming = obs_frontend_streaming_active();
+	bool recording = obs_frontend_recording_active();
+	bool paused = obs_frontend_recording_paused();
+	bool replayActive = obs_frontend_replay_buffer_active();
+	bool vcamActive = obs_frontend_virtualcam_active();
+	bool studioMode = obs_frontend_preview_program_mode_active();
+
+	// Update all buttons efficiently with batched state
+	if (streamButton) {
+		streamButton->setChecked(streaming);
+		QString iconName = streaming ? "streaming" : "streaming-inactive";
+		streamButton->setIcon(getCachedIcon(iconName));
+		streamButton->setToolTip(streaming ? "Stop Streaming" : "Start Streaming");
+	}
+
+	if (recordButton) {
+		recordButton->setChecked(recording);
+		QString iconName = recording ? "record-on" : "record-off";
+		recordButton->setIcon(getCachedIcon(iconName));
+		recordButton->setToolTip(recording ? "Stop Recording" : "Start Recording");
+	}
+
+	if (pauseButton) {
+		bool canPause = recording && isRecordingPausable();
+		pauseButton->setVisible(canPause);
+		pauseButton->setEnabled(canPause);
+		pauseButton->setChecked(paused);
+		pauseButton->setIcon(getCachedIcon("pause"));
+		pauseButton->setToolTip(paused ? "Resume Recording" : "Pause Recording");
+	}
+
+	if (replayBufferButton) {
+		replayBufferButton->setChecked(replayActive);
+		QString iconName = replayActive ? "replay-buffer-on" : "replay-buffer-off";
+		replayBufferButton->setIcon(getCachedIcon(iconName));
+		replayBufferButton->setToolTip(replayActive ? "Stop Replay Buffer" : "Start Replay Buffer");
+	}
+
+	if (saveReplayButton) {
+		saveReplayButton->setVisible(replayActive);
+		saveReplayButton->setEnabled(replayActive && !paused);
+		saveReplayButton->setIcon(getCachedIcon("save-replay"));
+	}
+
+	if (virtualCameraButton) {
+		virtualCameraButton->setChecked(vcamActive);
+		QString iconName = vcamActive ? "virtual-camera-on" : "virtual-camera-off";
+		virtualCameraButton->setIcon(getCachedIcon(iconName));
+		virtualCameraButton->setToolTip(vcamActive ? "Stop Virtual Camera" : "Start Virtual Camera");
+	}
+
+	if (studioModeButton) {
+		studioModeButton->setChecked(studioMode);
+		studioModeButton->setToolTip(studioMode ? "Disable Studio Mode" : "Enable Studio Mode");
+	}
+
+	StreamUP::DebugLogger::LogDebug("Toolbar", "Batch Update", "Completed efficient button state update");
 }
 
 void StreamUPToolbar::updateIconsForTheme()
