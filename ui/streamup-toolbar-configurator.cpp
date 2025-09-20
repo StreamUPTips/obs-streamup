@@ -778,7 +778,67 @@ void ToolbarConfigurator::setupUI()
             }
         }
     });
-    
+
+    // Handle dropping items INTO groups
+    connect(currentConfigList, &DraggableListWidget::itemMovedToGroup, [this](int fromUIIndex, int groupUIIndex) {
+        StreamUP::DebugLogger::LogDebug("Toolbar", "GroupDrop", "=== GROUP DROP START ===");
+        StreamUP::DebugLogger::LogDebugFormat("Toolbar", "GroupDrop", "From UI Index: %d, Group UI Index: %d", fromUIIndex, groupUIIndex);
+
+        // Get the item being moved
+        if (fromUIIndex < 0 || fromUIIndex >= currentConfigList->count()) {
+            StreamUP::DebugLogger::LogWarning("Toolbar", "GroupDrop: Invalid fromUIIndex, aborting");
+            return;
+        }
+
+        QListWidgetItem* draggedUIItem = currentConfigList->item(fromUIIndex);
+        if (!draggedUIItem) {
+            StreamUP::DebugLogger::LogWarning("Toolbar", "GroupDrop: No dragged UI item found, aborting");
+            return;
+        }
+
+        auto draggedItem = draggedUIItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+        if (!draggedItem) {
+            StreamUP::DebugLogger::LogWarning("Toolbar", "GroupDrop: No dragged item data found, aborting");
+            return;
+        }
+
+        // Get the target group
+        if (groupUIIndex < 0 || groupUIIndex >= currentConfigList->count()) {
+            StreamUP::DebugLogger::LogWarning("Toolbar", "GroupDrop: Invalid groupUIIndex, aborting");
+            return;
+        }
+
+        QListWidgetItem* groupUIItem = currentConfigList->item(groupUIIndex);
+        if (!groupUIItem) {
+            StreamUP::DebugLogger::LogWarning("Toolbar", "GroupDrop: No group UI item found, aborting");
+            return;
+        }
+
+        auto groupItem = groupUIItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+        if (!groupItem || groupItem->type != ToolbarConfig::ItemType::Group) {
+            StreamUP::DebugLogger::LogWarning("Toolbar", "GroupDrop: Target is not a group, aborting");
+            return;
+        }
+
+        auto group = std::static_pointer_cast<ToolbarConfig::GroupItem>(groupItem);
+
+        StreamUP::DebugLogger::LogDebugFormat("Toolbar", "GroupDrop", "Moving item '%s' into group '%s'",
+            draggedItem->id.toUtf8().constData(), group->name.toUtf8().constData());
+
+        // Remove item from its current location
+        QString draggedItemId = draggedItem->id;
+        config.removeItem(draggedItemId);
+
+        // Add item to the group
+        group->addChild(draggedItem);
+        group->expanded = true; // Expand group to show the new item
+
+        // Refresh the display
+        populateCurrentConfiguration();
+
+        StreamUP::DebugLogger::LogDebug("Toolbar", "GroupDrop", "=== GROUP DROP COMPLETE ===");
+    });
+
     connect(addBuiltinButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddBuiltinButton);
     connect(addDockButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddDockButton);
     connect(addHotkeyButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddHotkeyButton);
@@ -1529,22 +1589,37 @@ void DraggableListWidget::dropEvent(QDropEvent* event)
         event->ignore();
         return;
     }
-    
-    // Use the calculated dropIndicatorIndex from dragMoveEvent
-    int dropIndex = dropIndicatorIndex;
-    if (dropIndex < 0) {
-        dropIndex = count();
-    }
-    
-    if (dragStartIndex >= 0 && dragStartIndex != dropIndex) {
-        // Adjust drop index if dropping below the dragged item
-        if (dropIndex > dragStartIndex) {
-            dropIndex--;
+
+    if (dragStartIndex >= 0) {
+        if (isGroupDrop && groupDropIndex >= 0) {
+            // Dropping INTO a group
+            StreamUP::DebugLogger::LogDebug("Toolbar", "DragDrop",
+                QString("Dropping item %1 INTO group at index %2")
+                .arg(dragStartIndex).arg(groupDropIndex).toUtf8().constData());
+
+            emit itemMovedToGroup(dragStartIndex, groupDropIndex);
+        } else {
+            // Standard drop (not into a group)
+            int dropIndex = dropIndicatorIndex;
+            if (dropIndex < 0) {
+                dropIndex = count();
+            }
+
+            if (dragStartIndex != dropIndex) {
+                // Adjust drop index if dropping below the dragged item
+                if (dropIndex > dragStartIndex) {
+                    dropIndex--;
+                }
+
+                StreamUP::DebugLogger::LogDebug("Toolbar", "DragDrop",
+                    QString("Standard drop: moving item %1 to position %2")
+                    .arg(dragStartIndex).arg(dropIndex).toUtf8().constData());
+
+                emit itemMoved(dragStartIndex, dropIndex);
+            }
         }
-        
-        emit itemMoved(dragStartIndex, dropIndex);
     }
-    
+
     dragStartIndex = -1;
     dropIndicatorIndex = -1;
     groupDropIndex = -1;
