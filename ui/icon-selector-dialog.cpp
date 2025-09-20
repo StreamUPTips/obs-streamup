@@ -441,16 +441,23 @@ void IconSelectorDialog::createIconButton(const QString& iconPath, const QString
     button->setCheckable(true);
     button->setAutoRaise(true);
     button->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    
+
+    // Add styling to make selection more visible
+    button->setStyleSheet(
+        "QToolButton { border: 2px solid transparent; border-radius: 4px; }"
+        "QToolButton:checked { border: 2px solid #007ACC; background-color: rgba(0, 122, 204, 0.2); }"
+        "QToolButton:hover { border: 2px solid #005A9E; background-color: rgba(0, 90, 158, 0.1); }"
+    );
+
     // Load icon
     QIcon icon = loadPreviewIcon(iconPath);
     button->setIcon(icon);
     button->setToolTip(iconName); // Move text to tooltip instead
-    
+
     // Store icon path in button properties
     button->setProperty("iconPath", iconPath);
     button->setProperty("category", category);
-    
+
     // Add to button group
     iconButtonGroup->addButton(button);
     

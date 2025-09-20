@@ -4,13 +4,13 @@
 #include "ui-helpers.hpp"
 #include <QMessageBox>
 #include <QUuid>
+#include <QFileInfo>
 #include <obs-module.h>
 
 namespace StreamUP {
 
 HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(QWidget* parent)
     : QDialog(parent)
-    , useCustomIcon(false)
     , isEditMode(false)
 {
     setWindowTitle(obs_module_text("HotkeyButton.Dialog.AddTitle"));
@@ -23,7 +23,6 @@ HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(QWidget* parent)
 
 HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(std::shared_ptr<StreamUP::ToolbarConfig::HotkeyButtonItem> existingItem, QWidget* parent)
     : QDialog(parent)
-    , useCustomIcon(false)
     , isEditMode(true)
 {
     setWindowTitle(obs_module_text("HotkeyButton.Dialog.EditTitle"));
@@ -62,42 +61,27 @@ void HotkeyButtonConfigDialog::setupUI() {
     // Icon selection section
     iconGroup = new QGroupBox(obs_module_text("HotkeyButton.Group.Icon"), this);
     iconLayout = new QVBoxLayout(iconGroup);
-    
-    iconTypeGroup = new QButtonGroup(this);
-    
-    useDefaultIconRadio = new QRadioButton(obs_module_text("HotkeyButton.Radio.DefaultIcon"), iconGroup);
-    useCustomIconRadio = new QRadioButton(obs_module_text("HotkeyButton.Radio.CustomIcon"), iconGroup);
-    
-    iconTypeGroup->addButton(useDefaultIconRadio, 0);
-    iconTypeGroup->addButton(useCustomIconRadio, 1);
-    
-    useDefaultIconRadio->setChecked(true); // Default selection
-    
-    iconLayout->addWidget(useDefaultIconRadio);
-    iconLayout->addWidget(useCustomIconRadio);
-    
+
     // Icon preview section
     iconPreviewLayout = new QHBoxLayout();
     iconPreviewLabel = new QLabel(obs_module_text("HotkeyButton.Label.Preview"), iconGroup);
     iconPreview = new QLabel(iconGroup);
     iconPreview->setFixedSize(32, 32);
-    iconPreview->setStyleSheet("border: 1px solid gray; background: white;");
+    iconPreview->setStyleSheet("border: 1px solid gray;");
     iconPreview->setAlignment(Qt::AlignCenter);
     iconPreview->setScaledContents(true);
-    
+
     selectIconButton = new QPushButton(obs_module_text("HotkeyButton.Button.SelectIcon"), iconGroup);
-    selectIconButton->setEnabled(false); // Initially disabled
-    
+
     iconPreviewLayout->addWidget(iconPreviewLabel);
     iconPreviewLayout->addWidget(iconPreview);
     iconPreviewLayout->addWidget(selectIconButton);
     iconPreviewLayout->addStretch();
-    
+
     iconLayout->addLayout(iconPreviewLayout);
-    
+
     mainLayout->addWidget(iconGroup);
-    
-    connect(useDefaultIconRadio, &QRadioButton::toggled, this, &HotkeyButtonConfigDialog::onUseDefaultIconToggled);
+
     connect(selectIconButton, &QPushButton::clicked, this, &HotkeyButtonConfigDialog::onSelectIconClicked);
     
     // Button customization section
@@ -149,17 +133,13 @@ void HotkeyButtonConfigDialog::setExistingItem(std::shared_ptr<StreamUP::Toolbar
     
     updateHotkeyDisplay();
     
-    // Set icon info
-    useCustomIcon = item->useCustomIcon;
-    selectedIconPath = item->iconPath;
-    selectedCustomIconPath = item->customIconPath;
-    
-    if (useCustomIcon) {
-        useCustomIconRadio->setChecked(true);
+    // Set icon info - now just use whichever icon path is set
+    if (!item->customIconPath.isEmpty()) {
+        selectedIconPath = item->customIconPath;
     } else {
-        useDefaultIconRadio->setChecked(true);
+        selectedIconPath = item->iconPath;
     }
-    
+
     updateIconDisplay();
     
     // Set customization info
@@ -178,39 +158,21 @@ void HotkeyButtonConfigDialog::onSelectHotkeyClicked() {
 }
 
 void HotkeyButtonConfigDialog::onSelectIconClicked() {
-    IconSelectorDialog dialog(selectedIconPath, selectedCustomIconPath, useCustomIcon, this);
+    IconSelectorDialog dialog(selectedIconPath, QString(), false, this);
     if (dialog.exec() == QDialog::Accepted) {
-        selectedIconPath = dialog.getSelectedIcon();
-        selectedCustomIconPath = dialog.getSelectedCustomIcon();
-        useCustomIcon = dialog.shouldUseCustomIcon();
-        
-        // Update radio buttons based on selection
-        if (useCustomIcon) {
-            useCustomIconRadio->setChecked(true);
-        } else {
-            useDefaultIconRadio->setChecked(true);
+        // Get the selected icon (either built-in or custom)
+        QString newIconPath = dialog.getSelectedIcon();
+        if (newIconPath.isEmpty()) {
+            newIconPath = dialog.getSelectedCustomIcon();
         }
-        
-        updateIconDisplay();
+
+        if (!newIconPath.isEmpty()) {
+            selectedIconPath = newIconPath;
+            updateIconDisplay();
+        }
     }
 }
 
-void HotkeyButtonConfigDialog::onUseDefaultIconToggled(bool checked) {
-    selectIconButton->setEnabled(!checked);
-    
-    if (checked) {
-        useCustomIcon = false;
-        // Show default icon for selected hotkey
-        updateIconDisplay();
-    } else {
-        useCustomIcon = true;
-        if (selectedCustomIconPath.isEmpty() && selectedIconPath.isEmpty()) {
-            // No custom icon selected yet, show placeholder
-            iconPreview->clear();
-            iconPreview->setText(obs_module_text("HotkeyButton.Message.NoIcon"));
-        }
-    }
-}
 
 void HotkeyButtonConfigDialog::updateHotkeyDisplay() {
     if (selectedHotkey.name.isEmpty()) {
@@ -236,38 +198,44 @@ void HotkeyButtonConfigDialog::updateHotkeyDisplay() {
 }
 
 void HotkeyButtonConfigDialog::updateIconDisplay() {
-    if (useCustomIcon && !selectedCustomIconPath.isEmpty()) {
-        // Show custom icon
-        QPixmap pixmap(selectedCustomIconPath);
+    iconPreview->clear();
+
+    if (!selectedIconPath.isEmpty()) {
+        // Try to load the selected icon
+        QPixmap pixmap;
+
+        // Check if it's a custom file path (absolute path) or built-in icon
+        if (QFileInfo(selectedIconPath).isAbsolute() && QFileInfo(selectedIconPath).exists()) {
+            // It's a custom icon file
+            pixmap.load(selectedIconPath);
+        } else {
+            // It's a built-in icon, get the themed version
+            QString themedPath = StreamUP::UIHelpers::GetThemedIconPath(selectedIconPath);
+            pixmap.load(themedPath);
+        }
+
         if (!pixmap.isNull()) {
             iconPreview->setPixmap(pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         } else {
             iconPreview->setText(obs_module_text("HotkeyButton.Message.Invalid"));
         }
-    } else if (!useCustomIcon && !selectedIconPath.isEmpty()) {
-        // Show selected built-in icon
-        QString themedPath = StreamUP::UIHelpers::GetThemedIconPath(selectedIconPath);
-        QPixmap pixmap(themedPath);
-        if (!pixmap.isNull()) {
-            iconPreview->setPixmap(pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-        } else {
-            iconPreview->setText(obs_module_text("HotkeyButton.Message.NotFound"));
-        }
-    } else if (!useCustomIcon && !selectedHotkey.name.isEmpty()) {
-        // Show default icon for this hotkey
+    } else if (!selectedHotkey.name.isEmpty()) {
+        // No icon selected, try to use default for this hotkey
         QString defaultIcon = StreamUP::OBSHotkeyManager::getDefaultHotkeyIcon(selectedHotkey.name);
-        QString themedPath = StreamUP::UIHelpers::GetThemedIconPath(defaultIcon);
-        QPixmap pixmap(themedPath);
-        if (!pixmap.isNull()) {
-            iconPreview->setPixmap(pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        if (!defaultIcon.isEmpty()) {
+            QString themedPath = StreamUP::UIHelpers::GetThemedIconPath(defaultIcon);
+            QPixmap pixmap(themedPath);
+            if (!pixmap.isNull()) {
+                iconPreview->setPixmap(pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+                selectedIconPath = defaultIcon; // Update to use this default
+            } else {
+                iconPreview->setText(obs_module_text("HotkeyButton.Message.Default"));
+            }
         } else {
-            iconPreview->setText(obs_module_text("HotkeyButton.Message.Default"));
+            iconPreview->setText(obs_module_text("HotkeyButton.Message.NoIcon"));
         }
-        // Update selectedIconPath to the default
-        selectedIconPath = defaultIcon;
     } else {
-        // No icon to show
-        iconPreview->clear();
+        // No hotkey and no icon selected
         iconPreview->setText(obs_module_text("HotkeyButton.Message.NoIcon"));
     }
 }
@@ -297,14 +265,17 @@ std::shared_ptr<StreamUP::ToolbarConfig::HotkeyButtonItem> HotkeyButtonConfigDia
         selectedHotkey.description
     );
     
-    // Set icon configuration
-    item->useCustomIcon = useCustomIcon;
-    if (useCustomIcon) {
-        item->customIconPath = selectedCustomIconPath;
-        item->iconPath = ""; // Clear built-in icon path
+    // Set icon configuration - determine if it's custom or built-in based on path
+    if (QFileInfo(selectedIconPath).isAbsolute() && QFileInfo(selectedIconPath).exists()) {
+        // It's a custom icon file
+        item->useCustomIcon = true;
+        item->customIconPath = selectedIconPath;
+        item->iconPath = "";
     } else {
+        // It's a built-in icon
+        item->useCustomIcon = false;
         item->iconPath = selectedIconPath;
-        item->customIconPath = ""; // Clear custom icon path
+        item->customIconPath = "";
     }
     
     // Set customization

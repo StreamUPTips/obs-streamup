@@ -730,7 +730,7 @@ void ApplyToolbarPosition()
 
 bool obs_module_load()
 {
-	StreamUP::DebugLogger::LogInfoFormat("Plugin", "Loaded version %s", PROJECT_VERSION);
+	StreamUP::DebugLogger::LogInfoFormat("", "Loaded version %s", PROJECT_VERSION);
 
 	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Starting menu initialization");
 	StreamUP::MenuManager::InitializeMenu();
