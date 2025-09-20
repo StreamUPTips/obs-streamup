@@ -267,7 +267,7 @@ void ShowManageMultiDocksDialog()
             StreamUP::DebugLogger::LogDebug("MultiDock", "Dialog", "Successfully removed MultiDock from UI");
         } else {
             StreamUP::DebugLogger::LogWarning("MultiDock", "Dialog: Failed to remove MultiDock");
-            QMessageBox::warning(&dialog, "Error", "Failed to delete MultiDock.");
+            QMessageBox::warning(&dialog, obs_module_text("StreamUP.MultiDock.Error"), obs_module_text("StreamUP.MultiDock.FailedToDelete"));
         }
     });
     
@@ -425,7 +425,7 @@ void ShowManageMultiDocksDialog()
                 StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dialog", "Successfully renamed MultiDock to '%s'", newName.toUtf8().constData());
                 renameDialog.accept();
             } else {
-                QMessageBox::warning(&renameDialog, "Error", "Failed to rename MultiDock.");
+                QMessageBox::warning(&renameDialog, obs_module_text("StreamUP.MultiDock.Error"), obs_module_text("StreamUP.MultiDock.FailedToRename"));
             }
         });
         

@@ -3,6 +3,7 @@
 #include "hotkey-button-config-dialog.hpp"
 #include "settings-manager.hpp"
 #include "ui-styles.hpp"
+#include <obs-module.h>
 #include <QApplication>
 #include <QMimeData>
 #include <QDrag>
@@ -32,7 +33,7 @@ ToolbarConfigurator::ToolbarConfigurator(QWidget *parent)
     // Register custom types for QVariant
     qRegisterMetaType<std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem>>();
     
-    setWindowTitle("Configure StreamUP Toolbar");
+    setWindowTitle(obs_module_text("StreamUP.Toolbar.Configurator.Title"));
     setModal(true);
     resize(900, 650);
     
@@ -78,7 +79,7 @@ void ToolbarConfigurator::setupUI()
     leftLayout->setSpacing(12);
     
     // Add heading to left panel
-    QLabel* leftHeading = new QLabel("Available Items");
+    QLabel* leftHeading = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AvailableItems")));
     leftHeading->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
     leftLayout->addWidget(leftHeading);
     
@@ -199,7 +200,7 @@ void ToolbarConfigurator::setupUI()
     // Add spacer to push button to bottom
     builtinTabLayout->addStretch(0);
     
-    addBuiltinButton = new QPushButton("Add Selected Button");
+    addBuiltinButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddSelectedButton")));
     addBuiltinButton->setEnabled(false);
     addBuiltinButton->setStyleSheet(UIStyles::GetButtonStyle());
     builtinTabLayout->addWidget(addBuiltinButton, 0); // Don't stretch button
@@ -289,12 +290,12 @@ void ToolbarConfigurator::setupUI()
     // Add spacer to push button to bottom
     dockTabLayout->addStretch(0);
     
-    addDockButton = new QPushButton("Add Selected Dock Button");
+    addDockButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddSelectedDockButton")));
     addDockButton->setEnabled(false);
     addDockButton->setStyleSheet(UIStyles::GetButtonStyle());
     dockTabLayout->addWidget(addDockButton, 0); // Don't stretch button
     
-    itemTabWidget->addTab(dockTab, "StreamUP");
+    itemTabWidget->addTab(dockTab, QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.StreamUPTab")));
     
     // === TAB 3: Hotkey Buttons ===
     QWidget* hotkeyTab = new QWidget();
@@ -316,16 +317,16 @@ void ToolbarConfigurator::setupUI()
     hotkeyContainerLayout->setSpacing(6);
     
     // Hotkey button section
-    QLabel* hotkeyLabel = new QLabel("Hotkey Buttons");
+    QLabel* hotkeyLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.HotkeyButtons")));
     hotkeyLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
     hotkeyContainerLayout->addWidget(hotkeyLabel);
     
-    QLabel* hotkeyDescription = new QLabel("Create custom buttons that trigger OBS hotkeys when clicked.");
+    QLabel* hotkeyDescription = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.HotkeyDescription")));
     hotkeyDescription->setWordWrap(true);
     hotkeyDescription->setStyleSheet("QLabel { color: " + QString(StreamUP::UIStyles::Colors::TEXT_SECONDARY) + "; font-size: 12px; }");
     hotkeyContainerLayout->addWidget(hotkeyDescription);
     
-    addHotkeyButton = new QPushButton("Add Hotkey Button...");
+    addHotkeyButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddHotkeyButton")));
     addHotkeyButton->setStyleSheet(UIStyles::GetButtonStyle());
     hotkeyContainerLayout->addWidget(addHotkeyButton);
     
@@ -355,12 +356,12 @@ void ToolbarConfigurator::setupUI()
     spacerContainerLayout->setSpacing(6);
     
     // Custom spacer section
-    QLabel* spacerLabel = new QLabel("Custom Spacer");
+    QLabel* spacerLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.CustomSpacer")));
     spacerLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
     spacerContainerLayout->addWidget(spacerLabel);
     
     QHBoxLayout* sizeLayout = new QHBoxLayout();
-    sizeLayout->addWidget(new QLabel("Size (px):"));
+    sizeLayout->addWidget(new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.SizeLabel"))));
     spacerSizeSpinBox = new QSpinBox();
     spacerSizeSpinBox->setRange(5, 200);
     spacerSizeSpinBox->setValue(20);
@@ -369,33 +370,33 @@ void ToolbarConfigurator::setupUI()
     sizeLayout->addStretch();
     spacerContainerLayout->addLayout(sizeLayout);
     
-    addCustomSpacerButton = new QPushButton("Add Custom Spacer");
+    addCustomSpacerButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddCustomSpacer")));
     addCustomSpacerButton->setStyleSheet(UIStyles::GetButtonStyle());
     spacerContainerLayout->addWidget(addCustomSpacerButton);
     
     // Separator section
-    QLabel* separatorLabel = new QLabel("Separator");
+    QLabel* separatorLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.Separator")));
     separatorLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
     spacerContainerLayout->addWidget(separatorLabel);
     
-    addSeparatorButton = new QPushButton("Add Separator");
+    addSeparatorButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddSeparator")));
     addSeparatorButton->setStyleSheet(UIStyles::GetButtonStyle());
     spacerContainerLayout->addWidget(addSeparatorButton);
     
     // Group section
-    QLabel* groupLabel = new QLabel("Group");
+    QLabel* groupLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.Group")));
     groupLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
     spacerContainerLayout->addWidget(groupLabel);
     
     QHBoxLayout* groupLayout = new QHBoxLayout();
-    groupLayout->addWidget(new QLabel("Name:"));
+    groupLayout->addWidget(new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.GroupName"))));
     groupNameLineEdit = new QLineEdit();
     groupNameLineEdit->setPlaceholderText("Enter group name");
     groupNameLineEdit->setStyleSheet(UIStyles::GetLineEditStyle());
     groupLayout->addWidget(groupNameLineEdit);
     spacerContainerLayout->addLayout(groupLayout);
     
-    addGroupButton = new QPushButton("Add Group");
+    addGroupButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddGroup")));
     addGroupButton->setStyleSheet(UIStyles::GetButtonStyle());
     spacerContainerLayout->addWidget(addGroupButton);
     
@@ -412,7 +413,7 @@ void ToolbarConfigurator::setupUI()
     rightLayout->setContentsMargins(12, 12, 12, 12);
     rightLayout->setSpacing(12);
     
-    configLabel = new QLabel("Current Toolbar Configuration:\n(Right-click items to move them into groups)");
+    configLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.CurrentConfiguration")));
     configLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle() + "font-weight: bold;");
     rightLayout->addWidget(configLabel);
     
@@ -467,24 +468,24 @@ void ToolbarConfigurator::setupUI()
     // Configuration control buttons
     configButtonsLayout = new QHBoxLayout();
     
-    removeButton = new QPushButton("Remove");
+    removeButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.Remove")));
     removeButton->setEnabled(false);
     removeButton->setStyleSheet(UIStyles::GetButtonStyle());
     configButtonsLayout->addWidget(removeButton);
     
-    moveUpButton = new QPushButton("Move Up");
+    moveUpButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.MoveUp")));
     moveUpButton->setEnabled(false);
     moveUpButton->setStyleSheet(UIStyles::GetButtonStyle());
     configButtonsLayout->addWidget(moveUpButton);
     
-    moveDownButton = new QPushButton("Move Down");
+    moveDownButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.MoveDown")));
     moveDownButton->setEnabled(false);
     moveDownButton->setStyleSheet(UIStyles::GetButtonStyle());
     configButtonsLayout->addWidget(moveDownButton);
     
     configButtonsLayout->addStretch();
     
-    resetButton = new QPushButton("Reset to Default");
+    resetButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.ResetToDefault")));
     resetButton->setStyleSheet(UIStyles::GetButtonStyle());
     configButtonsLayout->addWidget(resetButton);
     
@@ -499,12 +500,12 @@ void ToolbarConfigurator::setupUI()
     bottomButtonsLayout = new QHBoxLayout();
     bottomButtonsLayout->addStretch();
     
-    saveButton = new QPushButton("Save");
+    saveButton = new QPushButton(QString::fromUtf8(obs_module_text("UI.Button.Save")));
     saveButton->setDefault(true);
     saveButton->setStyleSheet(UIStyles::GetButtonStyle());
     bottomButtonsLayout->addWidget(saveButton);
     
-    cancelButton = new QPushButton("Cancel");
+    cancelButton = new QPushButton(QString::fromUtf8(obs_module_text("UI.Button.Cancel")));
     cancelButton->setStyleSheet(UIStyles::GetButtonStyle());
     bottomButtonsLayout->addWidget(cancelButton);
     
@@ -1239,8 +1240,8 @@ void ToolbarConfigurator::onAddGroup()
     if (groupName.isEmpty()) {
         bool ok;
         groupName = QInputDialog::getText(this,
-                                          "Add Group",
-                                          "Enter group name:",
+                                          QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddGroup")),
+                                          QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.GroupName")),
                                           QLineEdit::Normal,
                                           "",
                                           &ok);
@@ -1397,8 +1398,8 @@ void ToolbarConfigurator::onItemDoubleClicked(QListWidgetItem* listItem)
 
 void ToolbarConfigurator::onResetToDefault()
 {
-    int ret = QMessageBox::question(this, "Reset Configuration",
-                                    "Are you sure you want to reset the toolbar to its default configuration? This will remove all custom buttons and separators.",
+    int ret = QMessageBox::question(this, QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.ResetConfirmation")),
+                                    QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.ResetMessage")),
                                     QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     
     if (ret == QMessageBox::Yes) {
@@ -1443,7 +1444,7 @@ void ToolbarConfigurator::onItemContextMenu(const QPoint& pos)
     }
 
     // Always add "Add Group" option
-    QAction* addGroupAction = contextMenu.addAction("Add Group");
+    QAction* addGroupAction = contextMenu.addAction(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddGroup")));
     connect(addGroupAction, &QAction::triggered, this, &ToolbarConfigurator::onAddGroup);
 
     // Only add item-specific options if we have a valid item
@@ -1461,7 +1462,7 @@ void ToolbarConfigurator::onItemContextMenu(const QPoint& pos)
             contextMenu.addSeparator();
 
             // Add "Move to Group" submenu
-            QMenu* moveToGroupMenu = contextMenu.addMenu("Move to Group");
+            QMenu* moveToGroupMenu = contextMenu.addMenu(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.MoveToGroup")));
             for (const auto& group : availableGroups) {
                 auto groupItem = std::static_pointer_cast<ToolbarConfig::GroupItem>(group);
                 QAction* action = moveToGroupMenu->addAction(groupItem->name);
@@ -1511,7 +1512,7 @@ void ToolbarConfigurator::onItemContextMenu(const QPoint& pos)
         }
 
         if (itemInGroup) {
-            QAction* moveOutAction = contextMenu.addAction("Move out of Group");
+            QAction* moveOutAction = contextMenu.addAction(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.MoveOutOfGroup")));
             connect(moveOutAction, &QAction::triggered, [this, configItem]() {
                 config.moveItemOutOfGroup(configItem->id);
                 populateCurrentConfiguration();

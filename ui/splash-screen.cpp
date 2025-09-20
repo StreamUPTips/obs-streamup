@@ -735,7 +735,7 @@ void CreateSplashDialog(ShowCondition condition)
     }
 
     UIHelpers::ShowSingletonDialogOnUIThread("splash", []() -> QDialog* {
-        QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP");
+        QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("StreamUP.SplashScreen.Title"));
         dialog->setModal(false);
         dialog->setFixedSize(800, 600);
         
@@ -811,7 +811,7 @@ void CreateSplashDialog(ShowCondition condition)
         }
         textLogoLabel->setAlignment(Qt::AlignCenter);
         
-        QString versionText = QString("Advanced Toolkit for OBS Studio • Version %1").arg(PROJECT_VERSION);
+        QString versionText = QString(obs_module_text("StreamUP.SplashScreen.VersionText")).arg(PROJECT_VERSION);
         QLabel* versionLabel = StreamUP::UIStyles::CreateStyledDescription(versionText);
         versionLabel->setObjectName("versionLabel");
         
@@ -1072,13 +1072,13 @@ void CreateSplashDialog(ShowCondition condition)
         buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
         
         // Check for Plugin Update button
-        QPushButton* updateBtn = StreamUP::UIStyles::CreateStyledButton("Check for Plugin Update", "info");
+        QPushButton* updateBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("StreamUP.SplashScreen.CheckForUpdate"), "info");
         QObject::connect(updateBtn, &QPushButton::clicked, []() {
             StreamUP::PluginManager::ShowCachedPluginUpdatesDialog();
         });
         
         // Close button
-        QPushButton* closeBtn = StreamUP::UIStyles::CreateStyledButton("Close", "neutral");
+        QPushButton* closeBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Close"), "neutral");
         closeBtn->setDefault(true);
         QObject::connect(closeBtn, &QPushButton::clicked, [dialog]() {
             dialog->close();
