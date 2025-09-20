@@ -1,5 +1,6 @@
 #include "icon-selector-dialog.hpp"
 #include "ui-helpers.hpp"
+#include "ui-styles.hpp"
 #include <QApplication>
 #include <QCoreApplication>
 #include <QStyle>
@@ -30,6 +31,9 @@ IconSelectorDialog::IconSelectorDialog(const QString& currentIcon,
     setWindowTitle(obs_module_text("IconSelector.Dialog.Title"));
     setModal(true);
     resize(700, 600);
+
+    // Apply StreamUP dialog styling
+    setStyleSheet(UIStyles::GetDialogStyle());
 
     // Determine the initial selected path
     if (useCustomIconFlag && !currentCustomIcon.isEmpty()) {
@@ -71,6 +75,9 @@ void IconSelectorDialog::setupUI() {
     
     okButton = new QPushButton(obs_module_text("UI.Button.OK"), this);
     cancelButton = new QPushButton(obs_module_text("UI.Button.Cancel"), this);
+
+    okButton->setStyleSheet(UIStyles::GetButtonStyle());
+    cancelButton->setStyleSheet(UIStyles::GetButtonStyle());
     
     buttonLayout->addWidget(okButton);
     buttonLayout->addWidget(cancelButton);
@@ -110,6 +117,7 @@ void IconSelectorDialog::setupIconTabs() {
     customIconPath = new QLineEdit(customIconsWidget);
     customIconPath->setPlaceholderText(obs_module_text("IconSelector.Placeholder.Path"));
     browseCustomButton = new QPushButton(obs_module_text("UI.Button.Browse"), customIconsWidget);
+    browseCustomButton->setStyleSheet(UIStyles::GetButtonStyle());
 
     customPathLayout->addWidget(customIconPath);
     customPathLayout->addWidget(browseCustomButton);

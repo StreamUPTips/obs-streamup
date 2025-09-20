@@ -2,6 +2,7 @@
 #include "hotkey-selector-dialog.hpp"
 #include "icon-selector-dialog.hpp"
 #include "ui-helpers.hpp"
+#include "ui-styles.hpp"
 #include <QMessageBox>
 #include <QUuid>
 #include <QFileInfo>
@@ -16,7 +17,10 @@ HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(QWidget* parent)
     setWindowTitle(obs_module_text("HotkeyButton.Dialog.AddTitle"));
     setModal(true);
     resize(500, 400);
-    
+
+    // Apply StreamUP dialog styling
+    setStyleSheet(UIStyles::GetDialogStyle());
+
     setupUI();
     validateInput();
 }
@@ -28,7 +32,10 @@ HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(std::shared_ptr<StreamUP::Too
     setWindowTitle(obs_module_text("HotkeyButton.Dialog.EditTitle"));
     setModal(true);
     resize(500, 400);
-    
+
+    // Apply StreamUP dialog styling
+    setStyleSheet(UIStyles::GetDialogStyle());
+
     setupUI();
     setExistingItem(existingItem);
     validateInput();
@@ -39,6 +46,7 @@ void HotkeyButtonConfigDialog::setupUI() {
     
     // Hotkey selection section
     hotkeyGroup = new QGroupBox(obs_module_text("HotkeyButton.Group.Hotkey"), this);
+    hotkeyGroup->setStyleSheet(UIStyles::GetGroupBoxStyle("", ""));
     hotkeyFormLayout = new QFormLayout(hotkeyGroup);
     
     selectedHotkeyLabel = new QLabel(obs_module_text("HotkeyButton.Message.NoSelection"), hotkeyGroup);
@@ -49,6 +57,7 @@ void HotkeyButtonConfigDialog::setupUI() {
     hotkeyDescriptionLabel->setStyleSheet("color: white;");
     
     selectHotkeyButton = new QPushButton(obs_module_text("HotkeyButton.Button.SelectHotkey"), hotkeyGroup);
+    selectHotkeyButton->setStyleSheet(UIStyles::GetButtonStyle());
     
     hotkeyFormLayout->addRow(QString(obs_module_text("HotkeyButton.Label.Selected")), selectedHotkeyLabel);
     hotkeyFormLayout->addRow(QString(obs_module_text("HotkeyButton.Label.Description")), hotkeyDescriptionLabel);
@@ -60,6 +69,7 @@ void HotkeyButtonConfigDialog::setupUI() {
     
     // Icon selection section
     iconGroup = new QGroupBox(obs_module_text("HotkeyButton.Group.Icon"), this);
+    iconGroup->setStyleSheet(UIStyles::GetGroupBoxStyle("", ""));
     iconLayout = new QVBoxLayout(iconGroup);
 
     // Icon preview section
@@ -72,6 +82,7 @@ void HotkeyButtonConfigDialog::setupUI() {
     iconPreview->setScaledContents(true);
 
     selectIconButton = new QPushButton(obs_module_text("HotkeyButton.Button.SelectIcon"), iconGroup);
+    selectIconButton->setStyleSheet(UIStyles::GetButtonStyle());
 
     iconPreviewLayout->addWidget(iconPreviewLabel);
     iconPreviewLayout->addWidget(iconPreview);
@@ -86,6 +97,7 @@ void HotkeyButtonConfigDialog::setupUI() {
     
     // Button customization section
     customizationGroup = new QGroupBox(obs_module_text("HotkeyButton.Group.Customization"), this);
+    customizationGroup->setStyleSheet(UIStyles::GetGroupBoxStyle("", ""));
     customizationLayout = new QFormLayout(customizationGroup);
     
     buttonTextEdit = new QLineEdit(customizationGroup);
@@ -105,7 +117,10 @@ void HotkeyButtonConfigDialog::setupUI() {
     
     okButton = new QPushButton(isEditMode ? obs_module_text("HotkeyButton.Button.Update") : obs_module_text("HotkeyButton.Button.Add"), this);
     cancelButton = new QPushButton(obs_module_text("UI.Button.Cancel"), this);
-    
+
+    okButton->setStyleSheet(UIStyles::GetButtonStyle());
+    cancelButton->setStyleSheet(UIStyles::GetButtonStyle());
+
     okButton->setDefault(true);
     okButton->setEnabled(false); // Initially disabled until hotkey is selected
     
