@@ -1,5 +1,6 @@
 #include "settings-manager.hpp"
 #include "../utilities/debug-logger.hpp"
+#include "../utilities/path-utils.hpp"
 #include "ui-helpers.hpp"
 #include "ui-styles.hpp"
 #include "../utilities/obs-data-helpers.hpp"
@@ -39,10 +40,10 @@
 #include <QStackedWidget>
 #include <QDesktopServices>
 #include <memory>
+#include <mutex>
 #include <util/platform.h>
 
-// Forward declarations for functions that may need to be moved from streamup.cpp
-extern char *GetFilePath();
+// UI settings management implementation
 
 // Register obs_data_array_t* as opaque pointer with Qt's metatype system
 Q_DECLARE_OPAQUE_POINTER(obs_data_array_t*)
@@ -53,9 +54,10 @@ namespace SettingsManager {
 // Global settings state
 static bool notificationsMuted = false;
 
-// Cache for settings to avoid repeated file loading
+// Enhanced cache for settings to avoid repeated file loading
 static obs_data_t* cachedSettings = nullptr;
 static bool settingsLoadLogged = false;
+static std::mutex settingsCacheMutex; // Thread safety for settings cache
 
 // Helper function to extract domain from URL
 QString ExtractDomain(const QString &url)
@@ -159,18 +161,20 @@ void AddIncompatiblePluginRow(QTableWidget *table, const std::string &moduleName
 
 obs_data_t *LoadSettings()
 {
+	std::lock_guard<std::mutex> lock(settingsCacheMutex);
+
 	// Return cached settings if available
 	if (cachedSettings) {
 		obs_data_addref(cachedSettings);
 		return cachedSettings;
 	}
 
-	char *configPath = obs_module_config_path("configs.json");
+	char *configPath = StreamUP::PathUtils::GetOBSConfigPath("configs.json");
 	obs_data_t *data = obs_data_create_from_json_file(configPath);
 
 	if (!data) {
 		StreamUP::DebugLogger::LogDebug("Settings", "Initialize", "Settings not found. Creating default settings...");
-		char *config_path = obs_module_config_path("");
+		char *config_path = StreamUP::PathUtils::GetOBSConfigPath("");
 		if (config_path) {
 			os_mkdirs(config_path);
 			bfree(config_path);
@@ -215,12 +219,14 @@ obs_data_t *LoadSettings()
 
 bool SaveSettings(obs_data_t *settings)
 {
-	char *configPath = obs_module_config_path("configs.json");
+	std::lock_guard<std::mutex> lock(settingsCacheMutex);
+
+	char *configPath = StreamUP::PathUtils::GetOBSConfigPath("configs.json");
 	bool success = false;
 
 	if (obs_data_save_json(settings, configPath)) {
 		success = true;
-		
+
 		// Invalidate cache so next load picks up the updated settings
 		if (cachedSettings) {
 			obs_data_release(cachedSettings);
@@ -1496,7 +1502,7 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
 	}
 
 	// Add incompatible plugins
-	char *filePath = GetFilePath();
+	char *filePath = StreamUP::PathUtils::GetOBSLogPath();
 	std::vector<std::string> incompatibleModules = StreamUP::PluginManager::SearchLoadedModulesInLogFile(filePath);
 	bfree(filePath);
 
@@ -1652,7 +1658,7 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 		}
 
 		// Add incompatible plugins
-		char *filePath = GetFilePath();
+		char *filePath = StreamUP::PathUtils::GetOBSLogPath();
 		std::vector<std::string> incompatibleModules = StreamUP::PluginManager::SearchLoadedModulesInLogFile(filePath);
 		bfree(filePath);
 
@@ -2382,8 +2388,18 @@ void SetDebugLoggingEnabled(bool enabled)
 	UpdateSettings(settings);
 }
 
+void InvalidateSettingsCache()
+{
+	std::lock_guard<std::mutex> lock(settingsCacheMutex);
+	if (cachedSettings) {
+		obs_data_release(cachedSettings);
+		cachedSettings = nullptr;
+	}
+}
+
 void CleanupSettingsCache()
 {
+	std::lock_guard<std::mutex> lock(settingsCacheMutex);
 	// Release cached settings on plugin shutdown
 	if (cachedSettings) {
 		obs_data_release(cachedSettings);

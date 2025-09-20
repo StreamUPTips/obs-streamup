@@ -1,4 +1,5 @@
 #include "obs-data-helpers.hpp"
+#include "path-utils.hpp"
 #include "error-handler.hpp"
 #include <obs-module.h>
 #include <obs-frontend-api.h>
@@ -18,7 +19,7 @@ obs_data_t* LoadSettingsWithDefaults(const char* filename, const std::function<v
         return nullptr;
     }
 
-    char* configPath = obs_module_config_path(filename);
+    char* configPath = StreamUP::PathUtils::GetOBSConfigPath(filename);
     if (!configPath) {
         ErrorHandler::LogError("LoadSettingsWithDefaults: Failed to get config path", ErrorHandler::Category::FileSystem);
         return nullptr;
@@ -44,7 +45,7 @@ bool SaveSettingsToFile(obs_data_t* settings, const char* filename)
         return false;
     }
 
-    char* configPath = obs_module_config_path(filename);
+    char* configPath = StreamUP::PathUtils::GetOBSConfigPath(filename);
     if (!configPath) {
         ErrorHandler::LogError("SaveSettingsToFile: Failed to get config path", ErrorHandler::Category::FileSystem);
         return false;
@@ -64,7 +65,7 @@ char* GetConfigFilePath(const char* filename)
     if (!filename) {
         return nullptr;
     }
-    return obs_module_config_path(filename);
+    return StreamUP::PathUtils::GetOBSConfigPath(filename);
 }
 
 //-------------------SAFE GETTERS WITH DEFAULTS-------------------

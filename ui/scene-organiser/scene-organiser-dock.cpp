@@ -36,35 +36,59 @@
 namespace StreamUP {
 namespace SceneOrganiser {
 
-// Helper function to get theme icon from OBS main window properties
+// Optimized theme icon cache
+static QHash<QString, QIcon> s_themeIconCache;
+static QWidget* s_cachedMainWindow = nullptr;
+
+// Helper function to get theme icon from OBS main window properties (cached)
 static QIcon GetThemeIcon(const QString& propertyName)
 {
-    // Get the main OBS window to access theme properties
-    QWidget *mainWindow = nullptr;
+    // Check cache first
+    auto it = s_themeIconCache.find(propertyName);
+    if (it != s_themeIconCache.end()) {
+        return it.value();
+    }
 
-    // Find the main OBS window
-    for (QWidget* widget : QApplication::topLevelWidgets()) {
-        if (widget->objectName() == "OBSBasic") {
-            mainWindow = widget;
-            break;
+    // Find main window only once and cache it
+    if (!s_cachedMainWindow) {
+        for (QWidget* widget : QApplication::topLevelWidgets()) {
+            if (widget->objectName() == "OBSBasic") {
+                s_cachedMainWindow = widget;
+                break;
+            }
         }
     }
 
-    if (mainWindow) {
+    QIcon icon;
+    if (s_cachedMainWindow) {
         // Get the icon from the main window's theme properties
-        QVariant iconProperty = mainWindow->property(propertyName.toUtf8().constData());
+        QVariant iconProperty = s_cachedMainWindow->property(propertyName.toUtf8().constData());
         if (iconProperty.isValid()) {
-            return iconProperty.value<QIcon>();
+            icon = iconProperty.value<QIcon>();
         }
     }
 
-    // Fallback to empty icon if property not found
-    return QIcon();
+    // Cache the result (even if empty)
+    s_themeIconCache.insert(propertyName, icon);
+    return icon;
 }
 
-// Helper function to create colored icons from SVG resources (copied from multidock)
+// Optimized colored icon cache
+static QHash<QString, QIcon> s_coloredIconCache;
+
+// Helper function to create colored icons from SVG resources (optimized with caching)
 static QIcon CreateColoredIcon(const QString& svgPath, const QColor& color, const QSize& size = QSize(16, 16))
 {
+    // Create cache key from path, color, and size
+    QString cacheKey = QString("%1_%2_%3x%4").arg(svgPath, color.name(), QString::number(size.width()), QString::number(size.height()));
+
+    // Check cache first
+    auto it = s_coloredIconCache.find(cacheKey);
+    if (it != s_coloredIconCache.end()) {
+        return it.value();
+    }
+
+    // Create the icon only if not cached
     QPixmap pixmap(size);
     pixmap.fill(Qt::transparent);
 
@@ -80,7 +104,30 @@ static QIcon CreateColoredIcon(const QString& svgPath, const QColor& color, cons
         painter.fillRect(pixmap.rect(), color);
     }
 
-    return QIcon(pixmap);
+    QIcon icon(pixmap);
+
+    // Cache the result for future use
+    s_coloredIconCache.insert(cacheKey, icon);
+
+    return icon;
+}
+
+// Cache management functions
+static void ClearIconCaches()
+{
+    s_themeIconCache.clear();
+    s_coloredIconCache.clear();
+    s_cachedMainWindow = nullptr;
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Cache", "Cleared icon caches");
+}
+
+// Theme change handler (call this when theme changes)
+static void OnThemeChanged()
+{
+    // Clear theme-dependent caches
+    s_themeIconCache.clear();
+    s_coloredIconCache.clear(); // Color icons may also be theme-dependent
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Theme", "Cleared caches for theme change");
 }
 
 // Static member initialization
@@ -127,11 +174,18 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_sceneLockAction(nullptr)
     , m_backgroundLockAction(nullptr)
     , m_copyFiltersSource(nullptr)
+    , m_updateBatchTimer(new QTimer(this))
+    , m_updatesPending(false)
 {
     s_dockInstances.append(this);
 
     // Set configuration key based on canvas type
     m_configKey = (m_canvasType == CanvasType::Vertical) ? "scene_organiser_vertical" : "scene_organiser_normal";
+
+    // Initialize optimized update system
+    m_updateBatchTimer->setSingleShot(true);
+    m_updateBatchTimer->setInterval(30); // 30ms batching delay for smooth updates
+    connect(m_updateBatchTimer, &QTimer::timeout, this, &SceneOrganiserDock::processBatchedUpdates);
 
     setupSearchBar();
     setupUI();
@@ -252,12 +306,8 @@ void SceneOrganiserDock::setupUI()
     connect(m_model, &SceneTreeModel::modelChanged,
             [this]() {
                 m_saveTimer->start();
-                // Force view update to refresh active scene highlighting
-                m_treeView->viewport()->update();
-                // Add a small delay to ensure proper repaint after drag and drop
-                QTimer::singleShot(10, this, [this]() {
-                    forceTreeViewRepaint();
-                });
+                // Use optimized batched update instead of immediate repaints
+                scheduleOptimizedUpdate();
             });
 
     // Tree view takes up most of the space (like OBS scenes dock)
@@ -3421,6 +3471,48 @@ void StreamUP::SceneOrganiser::SceneOrganiserDock::forceTreeViewRepaint()
         m_treeView->viewport()->repaint();
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Repaint",
             "Forced tree view repaint after drag and drop");
+    }
+}
+
+void StreamUP::SceneOrganiser::SceneOrganiserDock::scheduleOptimizedUpdate()
+{
+    if (!m_updatesPending) {
+        m_updatesPending = true;
+        m_updateBatchTimer->start();
+    }
+}
+
+void StreamUP::SceneOrganiser::SceneOrganiserDock::processBatchedUpdates()
+{
+    if (!m_updatesPending) {
+        return;
+    }
+
+    m_updatesPending = false;
+
+    // Perform efficient batched updates
+    if (m_treeView) {
+        // Update the viewport instead of forcing a full repaint
+        m_treeView->viewport()->update();
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Batch Update", "Processed batched tree view update");
+    }
+}
+
+void StreamUP::SceneOrganiser::SceneOrganiserDock::clearIconCaches()
+{
+    ClearIconCaches();
+}
+
+void StreamUP::SceneOrganiser::SceneOrganiserDock::onThemeChanged()
+{
+    // Clear caches and notify all dock instances to refresh
+    OnThemeChanged();
+
+    // Update all dock instances efficiently
+    for (auto* dock : s_dockInstances) {
+        if (dock) {
+            dock->scheduleOptimizedUpdate();
+        }
     }
 }
 

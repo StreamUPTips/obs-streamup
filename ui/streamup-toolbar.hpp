@@ -8,6 +8,7 @@
 #include <QAction>
 #include <QHash>
 #include <QIcon>
+#include <QTimer>
 #include <obs.h>
 #include <obs-frontend-api.h>
 #include "streamup-toolbar-config.hpp"
@@ -68,13 +69,19 @@ private:
     // Helper functions to check button availability
     bool isReplayBufferAvailable();
     bool isRecordingPausable();
-    
+
     // Theme-aware icon helper
     QString getThemedIconPath(const QString& iconName);
-    
-    // Cached icon loading system
+
+    // Enhanced cached icon loading system
     QIcon getCachedIcon(const QString& iconName);
     void clearIconCache();
+    void preloadCommonIcons(); // Preload frequently used icons
+
+    // Optimized update system
+    void scheduleUpdate();
+    void processBatchedUpdates();
+    void updateButtonStatesEfficiently();
     
     // Apply theme-aware styling
     void updateToolbarStyling();
@@ -82,14 +89,19 @@ private:
     // Flag to prevent updates during UI reconstruction
     bool isReconstructingUI = false;
     
-    // Icon cache for performance optimization
+    // Enhanced icon cache for performance optimization
     QHash<QString, QIcon> iconCache;
     bool currentThemeIsDark = false;  // Track theme for cache invalidation
-    
+    mutable QTimer* iconUpdateTimer; // Debounce icon updates
+
     // Stylesheet cache for performance optimization
     QString cachedStyleSheet;
     bool styleSheetCacheValid = false;
     void clearStyleSheetCache();
+
+    // Update batching system
+    bool m_updatesPending = false;
+    QTimer* m_updateBatchTimer;
     
     // OBS event handling
     static void OnFrontendEvent(enum obs_frontend_event event, void *data);

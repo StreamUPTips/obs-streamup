@@ -1,9 +1,13 @@
 #include "path-utils.hpp"
+#include "debug-logger.hpp"
 #include <filesystem>
 #include <QDir>
 #include <QFileInfo>
 #include <QStandardPaths>
 #include <cstdlib>
+#include <cstring>
+#include <obs-module.h>
+#include <util/platform.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -85,6 +89,88 @@ std::string GetMostRecentTxtFile(const std::string &directoryPath)
 	}
 
 	return newest_file.path().string();
+}
+
+char* GetOBSLogPath()
+{
+	char *path = nullptr;
+	char *path_abs = nullptr;
+
+#ifdef _WIN32
+	constexpr const char* STREAMUP_PLATFORM_NAME = "windows";
+#else
+	constexpr const char* STREAMUP_PLATFORM_NAME = "other";
+#endif
+
+	if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
+		path = obs_module_config_path("../../logs/");
+		path_abs = os_get_abs_path_ptr(path);
+
+		if (path_abs && (path_abs[strlen(path_abs) - 1] != '/' && path_abs[strlen(path_abs) - 1] != '\\')) {
+			// Create a new string with appended "/"
+			size_t new_path_abs_size = strlen(path_abs) + 2;
+			char *newPathAbs = (char *)bmalloc(new_path_abs_size);
+			strcpy(newPathAbs, path_abs);
+			strcat(newPathAbs, "/");
+
+			// Free the old path_abs and reassign it
+			bfree(path_abs);
+			path_abs = newPathAbs;
+		}
+	} else {
+		path = obs_module_config_path("");
+
+		std::string path_str(path);
+		std::string to_search = "/plugin_config/streamup/";
+		std::string replace_str = "/logs/";
+
+		size_t pos = path_str.find(to_search);
+
+		// If found then replace it
+		if (pos != std::string::npos) {
+			path_str.replace(pos, to_search.size(), replace_str);
+		}
+
+		size_t path_abs_size = path_str.size() + 1;
+		path_abs = (char *)bmalloc(path_abs_size);
+		std::strcpy(path_abs, path_str.c_str());
+	}
+
+	if (path) {
+		bfree(path);
+	}
+
+	if (path_abs) {
+		StreamUP::DebugLogger::LogDebugFormat("PathUtils", "Log Path Discovery", "Path: %s", path_abs);
+
+		// Use std::filesystem to check if the path exists
+		std::string path_abs_str(path_abs);
+		bool path_exists = std::filesystem::exists(path_abs_str);
+		if (path_exists) {
+			std::filesystem::directory_iterator dir(path_abs_str);
+			if (dir == std::filesystem::directory_iterator{}) {
+				// The directory is empty
+				StreamUP::DebugLogger::LogDebug("PathUtils", "Log Path Discovery", "OBS doesn't have files in the install directory");
+				bfree(path_abs);
+				return nullptr;
+			} else {
+				// The directory contains files
+				return path_abs;
+			}
+		} else {
+			// The directory does not exist
+			StreamUP::DebugLogger::LogDebug("PathUtils", "Log Path Discovery", "OBS log file folder does not exist in the install directory");
+			bfree(path_abs);
+			return nullptr;
+		}
+	}
+
+	return nullptr;
+}
+
+char* GetOBSConfigPath(const char* relativePath)
+{
+	return obs_module_config_path(relativePath);
 }
 
 } // namespace PathUtils

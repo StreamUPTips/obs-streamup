@@ -51,7 +51,6 @@
 #endif
 
 // UI functions now accessed through StreamUP::UIHelpers namespace
-extern char *GetFilePath();
 
 namespace StreamUP {
 namespace PluginManager {
@@ -631,8 +630,8 @@ bool CheckrequiredOBSPluginsWithoutUI(bool isLoadStreamUpFile)
 
 	std::map<std::string, std::string> missing_modules;
 	std::map<std::string, std::string> version_mismatch_modules;
-	char *filepath = GetFilePath();
-	if (filepath == NULL) {
+	char *filepath = StreamUP::PathUtils::GetOBSLogPath();
+	if (filepath == nullptr) {
 		return false;
 	}
 
@@ -681,8 +680,8 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 	std::map<std::string, std::string> version_mismatch_modules;
 	std::string errorMsgMissing = "";
 	std::string errorMsgUpdate = "";
-	char *filepath = GetFilePath();
-	if (filepath == NULL) {
+	char *filepath = StreamUP::PathUtils::GetOBSLogPath();
+	if (filepath == nullptr) {
 		return false;
 	}
 
@@ -899,8 +898,8 @@ std::string SearchThemeFileForVersion(const char *search)
 std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 {
 	std::vector<std::pair<std::string, std::string>> installedPlugins;
-	char *filepath = GetFilePath();
-	if (filepath == NULL) {
+	char *filepath = StreamUP::PathUtils::GetOBSLogPath();
+	if (filepath == nullptr) {
 		return installedPlugins;
 	}
 
@@ -996,8 +995,8 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 
 	std::map<std::string, std::string> missing_modules;
 	std::map<std::string, std::string> version_mismatch_modules;
-	char *filepath = GetFilePath();
-	if (filepath == NULL) {
+	char *filepath = StreamUP::PathUtils::GetOBSLogPath();
+	if (filepath == nullptr) {
 		return;
 	}
 

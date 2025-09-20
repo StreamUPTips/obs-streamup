@@ -1,51 +1,53 @@
+// Core plugin headers
 #include "obs-websocket-api.h"
 #include "streamup.hpp"
+#include "version.h"
+
+// Core functionality modules
+#include "core/streamup-common.hpp"
+#include "core/plugin-state.hpp"
+#include "core/plugin-manager.hpp"
+#include "integrations/websocket-api.hpp"
+#include "utilities/path-utils.hpp"
+#include "utilities/debug-logger.hpp"
+
+// UI modules
 #include "ui/dock/streamup-dock.hpp"
 #include "ui/scene-organiser/scene-organiser-dock.hpp"
 #include "ui/streamup-toolbar.hpp"
 #include "ui/settings-manager.hpp"
-#include "version.h"
-#include "streamup-common.hpp"
-#include "plugin-state.hpp"
-#include "source-manager.hpp"
-#include "file-manager.hpp"
-#include "plugin-manager.hpp"
-#include "websocket-api.hpp"
-#include "hotkey-manager.hpp"
-#include "ui-helpers.hpp"
+#include "ui/ui-helpers.hpp"
 #include "ui/ui-styles.hpp"
-#include "menu-manager.hpp"
-#include "notification-manager.hpp"
-#include "http-client.hpp"
-#include "utilities/path-utils.hpp"
-#include "utilities/debug-logger.hpp"
-#include "string-utils.hpp"
-#include "version-utils.hpp"
+#include "ui/menu-manager.hpp"
+#include "ui/notification-manager.hpp"
+#include "ui/hotkey-manager.hpp"
 #include "ui/splash-screen.hpp"
 #include "ui/patch-notes-window.hpp"
 #include "multidock/multidock_manager.hpp"
+
+// Standard library
 #include <filesystem>
-#include <fstream>
+#include <string>
+#include <regex>
+#include <thread>
+
+// OBS headers
 #include <obs.h>
 #include <obs-data.h>
 #include <obs-frontend-api.h>
 #include <obs-module.h>
-#include <QDesktopServices>
-#include <QDialog>
+#include <util/platform.h>
+
+// Qt headers - only what's needed for this file
 #include <QDockWidget>
-#include <QGroupBox>
-#include <QLabel>
 #include <QMainWindow>
-#include <QObject>
-#include <QPushButton>
-#include <QStyle>
 #include <QTimer>
 #include <QVBoxLayout>
-#include <QUrl>
-#include <regex>
-#include <thread>
-#include <unordered_set>
-#include <util/platform.h>
+#include <QLabel>
+#include <QGroupBox>
+#include <QPushButton>
+#include <QStyle>
+#include <QObject>
 
 
 
@@ -60,73 +62,7 @@ OBS_MODULE_USE_DEFAULT_LOCALE("streamup", "en-US")
 
 
 //--------------------PATH HELPERS--------------------
-
-char *GetFilePath()
-{
-	char *path = nullptr;
-	char *path_abs = nullptr;
-
-	if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
-		path = obs_module_config_path("../../logs/");
-		path_abs = os_get_abs_path_ptr(path);
-
-		if (path_abs[strlen(path_abs) - 1] != '/' && path_abs[strlen(path_abs) - 1] != '\\') {
-			// Create a new string with appended "/"
-			size_t new_path_abs_size = strlen(path_abs) + 2;
-			char *newPathAbs = (char *)bmalloc(new_path_abs_size);
-			strcpy(newPathAbs, path_abs);
-			strcat(newPathAbs, "/");
-
-			// Free the old path_abs and reassign it
-			bfree(path_abs);
-			path_abs = newPathAbs;
-		}
-	} else {
-		path = obs_module_config_path("");
-
-		std::string path_str(path);
-		std::string to_search = "/plugin_config/streamup/";
-		std::string replace_str = "/logs/";
-
-		size_t pos = path_str.find(to_search);
-
-		// If found then replace it
-		if (pos != std::string::npos) {
-			path_str.replace(pos, to_search.size(), replace_str);
-		}
-
-		size_t path_abs_size = path_str.size() + 1;
-		path_abs = (char *)bmalloc(path_abs_size);
-		std::strcpy(path_abs, path_str.c_str());
-	}
-	bfree(path);
-
-	StreamUP::DebugLogger::LogDebugFormat("FileAccess", "Path Discovery", "Path: %s", path_abs);
-
-	// Use std::filesystem to check if the path exists
-	std::string path_abs_str(path_abs);
-	StreamUP::DebugLogger::LogDebugFormat("FileAccess", "Path Discovery", "Path: %s", path_abs_str.c_str());
-
-	bool path_exists = std::filesystem::exists(path_abs_str);
-	if (path_exists) {
-		std::filesystem::directory_iterator dir(path_abs_str);
-		if (dir == std::filesystem::directory_iterator{}) {
-			// The directory is empty
-			StreamUP::DebugLogger::LogDebug("FileAccess", "Path Discovery", "OBS doesn't have files in the install directory");
-			bfree(path_abs);
-			return NULL;
-		} else {
-			// The directory contains files
-			return path_abs;
-		}
-	} else {
-		// The directory does not exist
-		StreamUP::DebugLogger::LogDebug("FileAccess", "Path Discovery", "OBS log file folder does not exist in the install directory");
-		bfree(path_abs);
-		return NULL;
-	}
-}
-
+// GetFilePath functionality moved to StreamUP::PathUtils::GetOBSLogPath()
 // GetMostRecentFile moved to StreamUP::PathUtils::GetMostRecentTxtFile
 
 
@@ -240,8 +176,8 @@ std::string SearchStringInFile(const char *path, const char *search)
 std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 {
 	std::vector<std::pair<std::string, std::string>> installedPlugins;
-	char *filepath = GetFilePath();
-	if (filepath == NULL) {
+	char *filepath = StreamUP::PathUtils::GetOBSLogPath();
+	if (filepath == nullptr) {
 		return installedPlugins;
 	}
 
