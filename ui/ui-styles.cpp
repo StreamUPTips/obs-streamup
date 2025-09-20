@@ -117,11 +117,11 @@ QString GetGroupBoxStyle(const QString& borderColor, const QString& titleColor) 
         "    font-size: 14px;"
         "}"
     ).arg(Sizes::PADDING_LARGE)        // 1. General padding (20px)
-     .arg(Sizes::PADDING_LARGE + 10)   // 2. Top padding (30px)  
+     .arg(Sizes::PADDING_LARGE + 10)   // 2. Top padding (30px)
      .arg(Sizes::SPACE_10)             // 3. Margin right (10px)
      .arg(Sizes::SPACE_14 + 1)         // 4. Margin top (15px)
-     .arg(Sizes::RADIUS_DOCK)          // 5. Border radius (22px)
-     .arg(Colors::BG_SECONDARY)        // 6. Background color
+     .arg(Sizes::RADIUS_GROUPBOX)      // 5. Border radius (32px) - Increased for more rounded corners
+     .arg(Colors::BG_PRIMARY)          // 6. Background color - Match main toolbar configurator
      .arg(Colors::TEXT_PRIMARY)        // 7. Title text color
      .arg(Sizes::SPACE_4)              // 8. Title padding vertical (4px)
      .arg(Sizes::SPACE_16)             // 9. Title padding horizontal (16px)
@@ -1225,7 +1225,7 @@ QString GetOBSCompliantGroupBoxStyle() {
         "QGroupBox {"
         "    background-color: palette(base);"
         "    border: 1px solid palette(mid);"
-        "    border-radius: 4px;"
+        "    border-radius: 12px;"
         "    margin-top: 10px;"
         "    padding-top: 4px;"
         "}"

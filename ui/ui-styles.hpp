@@ -112,6 +112,7 @@ namespace Sizes {
     constexpr int RADIUS_BUTTON_CIRCLE = 8;
     constexpr int RADIUS_MENU_ITEM = 6;
     constexpr int ICON_BUTTON_RADIUS = 11;
+    constexpr int RADIUS_GROUPBOX = 32;  // Increased rounded corners for dialog group boxes
     
     // Component Heights & Sizes
     constexpr int BUTTON_HEIGHT = 20;

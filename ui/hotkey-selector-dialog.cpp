@@ -59,6 +59,7 @@ void HotkeySelectorDialog::setupUI() {
     rightLayout = new QVBoxLayout(rightPanel);
     
     detailsGroup = new QGroupBox(obs_module_text("HotkeySelector.Group.Details"), rightPanel);
+    detailsGroup->setStyleSheet(UIStyles::GetGroupBoxStyle("", ""));
     QVBoxLayout* detailsLayout = new QVBoxLayout(detailsGroup);
     
     selectedHotkeyName = new QLabel(obs_module_text("HotkeySelector.Message.NoSelection"), detailsGroup);
@@ -94,7 +95,10 @@ void HotkeySelectorDialog::setupUI() {
     
     okButton = new QPushButton(obs_module_text("HotkeySelector.Button.Add"), this);
     cancelButton = new QPushButton(obs_module_text("UI.Button.Cancel"), this);
-    
+
+    okButton->setStyleSheet(UIStyles::GetButtonStyle());
+    cancelButton->setStyleSheet(UIStyles::GetButtonStyle());
+
     okButton->setEnabled(false); // Disabled until selection is made
     
     buttonLayout->addWidget(okButton);
