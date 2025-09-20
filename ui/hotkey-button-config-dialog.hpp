@@ -28,7 +28,6 @@ public:
 private slots:
     void onSelectHotkeyClicked();
     void onSelectIconClicked();
-    void onUseDefaultIconToggled(bool checked);
     void validateInput();
 
 private:
@@ -50,10 +49,7 @@ private:
     // Icon selection section
     QGroupBox* iconGroup;
     QVBoxLayout* iconLayout;
-    QRadioButton* useDefaultIconRadio;
-    QRadioButton* useCustomIconRadio;
-    QButtonGroup* iconTypeGroup;
-    
+
     QHBoxLayout* iconPreviewLayout;
     QLabel* iconPreviewLabel;
     QLabel* iconPreview;
@@ -73,8 +69,6 @@ private:
     // Data
     StreamUP::HotkeyInfo selectedHotkey;
     QString selectedIconPath;
-    QString selectedCustomIconPath;
-    bool useCustomIcon;
     bool isEditMode;
     QString originalItemId; // For edit mode
 };

@@ -1,4 +1,5 @@
 #include "hotkey-selector-dialog.hpp"
+#include "ui-styles.hpp"
 #include <QHeaderView>
 #include <QApplication>
 #include <QDebug>
@@ -14,7 +15,10 @@ HotkeySelectorDialog::HotkeySelectorDialog(QWidget* parent)
     setWindowTitle(obs_module_text("HotkeySelector.Dialog.Title"));
     setModal(true);
     resize(800, 600);
-    
+
+    // Apply StreamUP dialog styling
+    setStyleSheet(UIStyles::GetDialogStyle());
+
     setupUI();
     populateHotkeys();
 }
@@ -198,14 +202,16 @@ QTreeWidgetItem* HotkeySelectorDialog::createCategoryItem(const QString& categor
     QTreeWidgetItem* item = new QTreeWidgetItem();
     item->setText(0, categoryName);
     item->setFlags(Qt::ItemIsEnabled); // Not selectable
-    item->setBackground(0, QColor(240, 240, 240));
-    item->setBackground(1, QColor(240, 240, 240));
-    
+
+    // Use theme-appropriate text color (no background color)
+    item->setForeground(0, QApplication::palette().text().color());
+    item->setForeground(1, QApplication::palette().text().color());
+
     QFont font = item->font(0);
     font.setBold(true);
     item->setFont(0, font);
     item->setFont(1, font);
-    
+
     return item;
 }
 
@@ -216,7 +222,11 @@ QTreeWidgetItem* HotkeySelectorDialog::createHotkeyItem(const StreamUP::HotkeyIn
     item->setText(0, hotkey.description);
     item->setText(1, getHotkeyKeybinding(hotkey.name));
     item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
-    
+
+    // Ensure text is visible (use theme-appropriate colors)
+    item->setForeground(0, QApplication::palette().text().color());
+    item->setForeground(1, QApplication::palette().text().color());
+
     // Store hotkey info
     itemHotkeyMap[item] = hotkey;
     
