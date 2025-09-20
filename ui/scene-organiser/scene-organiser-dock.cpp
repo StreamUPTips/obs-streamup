@@ -250,7 +250,15 @@ void SceneOrganiserDock::setupUI()
     connect(m_treeView, &QWidget::customContextMenuRequested,
             this, &SceneOrganiserDock::onCustomContextMenuRequested);
     connect(m_model, &SceneTreeModel::modelChanged,
-            [this]() { m_saveTimer->start(); });
+            [this]() {
+                m_saveTimer->start();
+                // Force view update to refresh active scene highlighting
+                m_treeView->viewport()->update();
+                // Add a small delay to ensure proper repaint after drag and drop
+                QTimer::singleShot(10, this, [this]() {
+                    forceTreeViewRepaint();
+                });
+            });
 
     // Tree view takes up most of the space (like OBS scenes dock)
     m_mainLayout->addWidget(m_treeView, 1);
@@ -2219,6 +2227,28 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
 
             // Update tracking map with new item
             m_scenesInTree[weak_source] = newItem;
+
+            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "DragDrop",
+                QString("Updated tracking for scene '%1' - new item at %2")
+                .arg(newItem->text()).arg(reinterpret_cast<uintptr_t>(newItem)).toUtf8().constData());
+
+            // Check if this is the active scene and mark it for immediate update
+            obs_source_t *current_scene = obs_frontend_get_current_scene();
+            if (current_scene) {
+                QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
+                if (newItem->text() == current_scene_name) {
+                    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "DragDrop",
+                        QString("Moved scene '%1' is the active scene - forcing immediate repaint")
+                        .arg(newItem->text()).toUtf8().constData());
+
+                    // Force immediate repaint of this specific item
+                    QModelIndex newIndex = indexFromItem(newItem);
+                    if (newIndex.isValid()) {
+                        emit dataChanged(newIndex, newIndex);
+                    }
+                }
+                obs_source_release(current_scene);
+            }
         } else if (originalItem->type() == SceneFolderItem::UserType + 1) {
             // Move folder item
             moveSceneFolder(originalItem, row, parentItem);
@@ -3161,21 +3191,7 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
         return;
     }
 
-    // Check if item has a custom color
-    QVariant customColorData = item->data(Qt::UserRole + 1);
-    if (!customColorData.isValid()) {
-        // No custom color, use default painting
-        QStyledItemDelegate::paint(painter, option, index);
-        return;
-    }
-
-    QColor customColor = customColorData.value<QColor>();
-    if (!customColor.isValid()) {
-        QStyledItemDelegate::paint(painter, option, index);
-        return;
-    }
-
-    // Check if this is the active scene or preview scene (special highlighting takes precedence)
+    // FIRST: Check if this is the active scene or preview scene (special highlighting takes precedence)
     bool isProgramScene = false;
     bool isPreviewScene = false;
     if (item->type() == SceneTreeItem::UserType + 2) {
@@ -3183,6 +3199,11 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
         if (current_scene) {
             QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
             isProgramScene = (item->text() == current_scene_name);
+
+            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Paint",
+                QString("Checking scene '%1' vs current scene '%2' - isProgramScene: %3")
+                .arg(item->text()).arg(current_scene_name).arg(isProgramScene ? "true" : "false").toUtf8().constData());
+
             obs_source_release(current_scene);
         }
 
@@ -3198,7 +3219,53 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
     }
 
     if (isProgramScene || isPreviewScene) {
-        // Let default painting handle active/preview scene highlighting
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Paint",
+            QString("Painting %1 scene '%2' with custom active highlighting")
+            .arg(isProgramScene ? "program" : "preview")
+            .arg(item->text()).toUtf8().constData());
+
+        // Custom active/preview scene highlighting - paint it ourselves
+        QColor activeColor;
+        if (isProgramScene) {
+            activeColor = QColor(26, 127, 207); // OBS active blue
+        } else if (isPreviewScene) {
+            activeColor = QColor(76, 175, 80); // OBS preview green
+        }
+
+        // Paint the active scene with custom background (similar to custom color logic)
+        painter->save();
+
+        // Fill background with active color
+        painter->fillRect(option.rect, activeColor);
+
+        // Create option for text painting
+        QStyleOptionViewItem textOption = option;
+        textOption.palette.setColor(QPalette::Text, Qt::white);
+        textOption.palette.setColor(QPalette::HighlightedText, Qt::white);
+
+        // Remove background brush to avoid double-drawing
+        textOption.backgroundBrush = QBrush();
+
+        // Remove selection and hover states to prevent Qt from overriding our colors
+        textOption.state &= ~QStyle::State_Selected;
+        textOption.state &= ~QStyle::State_MouseOver;
+
+        // Use the default delegate to paint the text/icon with our custom background
+        painter->restore();
+        QStyledItemDelegate::paint(painter, textOption, index);
+        return;
+    }
+
+    // SECOND: Check if item has a custom color (only for non-active scenes)
+    QVariant customColorData = item->data(Qt::UserRole + 1);
+    if (!customColorData.isValid()) {
+        // No custom color and not active scene, use default painting
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+
+    QColor customColor = customColorData.value<QColor>();
+    if (!customColor.isValid()) {
         QStyledItemDelegate::paint(painter, option, index);
         return;
     }
@@ -3287,6 +3354,15 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
     painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
 
     painter->restore();
+}
+
+void StreamUP::SceneOrganiser::SceneOrganiserDock::forceTreeViewRepaint()
+{
+    if (m_treeView) {
+        m_treeView->viewport()->repaint();
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Repaint",
+            "Forced tree view repaint after drag and drop");
+    }
 }
 
 #include "scene-organiser-dock.moc"
