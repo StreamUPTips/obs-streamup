@@ -20,98 +20,51 @@
 
 namespace StreamUP {
 
-IconSelectorDialog::IconSelectorDialog(const QString& currentIcon, 
+IconSelectorDialog::IconSelectorDialog(const QString& currentIcon,
                                       const QString& currentCustomIcon,
                                       bool useCustomIconFlag,
                                       QWidget* parent)
     : QDialog(parent)
-    , selectedIcon(currentIcon)
-    , selectedCustomIcon(currentCustomIcon)
-    , useCustomIcon(useCustomIconFlag)
     , iconButtonGroup(new QButtonGroup(this))
 {
     setWindowTitle(obs_module_text("IconSelector.Dialog.Title"));
     setModal(true);
-    resize(600, 500);
-    
-    setupUI();
-    
-    // Set initial selection
-    if (useCustomIcon && !currentCustomIcon.isEmpty()) {
-        useCustomRadio->setChecked(true);
-        customIconPath->setText(currentCustomIcon);
-        customIconPreview->setPixmap(QPixmap(currentCustomIcon).scaled(ICON_SIZE, ICON_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    resize(700, 600);
+
+    // Determine the initial selected path
+    if (useCustomIconFlag && !currentCustomIcon.isEmpty()) {
+        selectedIconPath = currentCustomIcon;
     } else if (!currentIcon.isEmpty()) {
-        useIconRadio->setChecked(true);
+        selectedIconPath = currentIcon;
+    }
+
+    loadCustomIconHistory();
+    setupUI();
+
+    // Set initial selection after UI is set up
+    if (!selectedIconPath.isEmpty()) {
         // Find and select the current icon button
         for (QAbstractButton* button : iconButtonGroup->buttons()) {
-            if (button->property("iconPath").toString() == currentIcon) {
+            if (button->property("iconPath").toString() == selectedIconPath) {
                 button->setChecked(true);
                 break;
             }
         }
-    } else {
-        useIconRadio->setChecked(true);
+
+        // If it's a custom icon, also set it in the custom tab
+        if (useCustomIconFlag && !currentCustomIcon.isEmpty()) {
+            customIconPath->setText(currentCustomIcon);
+        }
     }
-    
-    onIconTypeChanged();
 }
 
 void IconSelectorDialog::setupUI() {
     mainLayout = new QVBoxLayout(this);
-    
-    
-    // Icon selection type
-    QGroupBox* selectionGroup = new QGroupBox(obs_module_text("IconSelector.Group.Source"), this);
-    QVBoxLayout* selectionLayout = new QVBoxLayout(selectionGroup);
-    
-    useIconRadio = new QRadioButton(obs_module_text("IconSelector.Radio.BuiltIn"), selectionGroup);
-    useCustomRadio = new QRadioButton(obs_module_text("IconSelector.Radio.Custom"), selectionGroup);
-    
-    selectionLayout->addWidget(useIconRadio);
-    selectionLayout->addWidget(useCustomRadio);
-    
-    mainLayout->addWidget(selectionGroup);
-    
-    connect(useIconRadio, &QRadioButton::toggled, this, &IconSelectorDialog::onIconTypeChanged);
-    connect(useCustomRadio, &QRadioButton::toggled, this, &IconSelectorDialog::onIconTypeChanged);
-    
-    // Icon tabs (for built-in icons)
+
+    // Icon tabs
     setupIconTabs();
     mainLayout->addWidget(iconTabs);
-    
-    // Custom icon section
-    customIconGroup = new QGroupBox(obs_module_text("IconSelector.Group.Custom"), this);
-    QVBoxLayout* customLayout = new QVBoxLayout(customIconGroup);
-    
-    QHBoxLayout* customPathLayout = new QHBoxLayout();
-    customIconPath = new QLineEdit(customIconGroup);
-    customIconPath->setPlaceholderText(obs_module_text("IconSelector.Placeholder.Path"));
-    customIconPath->setReadOnly(true);
-    browseCustomButton = new QPushButton(obs_module_text("UI.Button.Browse"), customIconGroup);
-    
-    customPathLayout->addWidget(customIconPath);
-    customPathLayout->addWidget(browseCustomButton);
-    customLayout->addLayout(customPathLayout);
-    
-    // Custom icon preview
-    QHBoxLayout* previewLayout = new QHBoxLayout();
-    QLabel* previewLabel = new QLabel(obs_module_text("IconSelector.Label.Preview"), customIconGroup);
-    customIconPreview = new QLabel(customIconGroup);
-    customIconPreview->setFixedSize(ICON_SIZE + 8, ICON_SIZE + 8);
-    customIconPreview->setStyleSheet("border: 1px solid gray; background: white;");
-    customIconPreview->setAlignment(Qt::AlignCenter);
-    customIconPreview->setText(obs_module_text("IconSelector.Message.NoIcon"));
-    
-    previewLayout->addWidget(previewLabel);
-    previewLayout->addWidget(customIconPreview);
-    previewLayout->addStretch();
-    customLayout->addLayout(previewLayout);
-    
-    mainLayout->addWidget(customIconGroup);
-    
-    connect(browseCustomButton, &QPushButton::clicked, this, &IconSelectorDialog::onBrowseCustomIcon);
-    
+
     // Dialog buttons
     buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
@@ -130,27 +83,55 @@ void IconSelectorDialog::setupUI() {
 
 void IconSelectorDialog::setupIconTabs() {
     iconTabs = new QTabWidget(this);
-    
+
     // OBS Icons Tab
     obsScrollArea = new QScrollArea(iconTabs);
     obsIconsWidget = new QWidget();
     obsIconsLayout = new QGridLayout(obsIconsWidget);
     obsScrollArea->setWidget(obsIconsWidget);
     obsScrollArea->setWidgetResizable(true);
-    iconTabs->addTab(obsScrollArea, obs_module_text("IconSelector.Tab.OBS"));
-    
-    
-    // Default Hotkey Icons Tab
-    defaultScrollArea = new QScrollArea(iconTabs);
-    defaultIconsWidget = new QWidget();
-    defaultIconsLayout = new QGridLayout(defaultIconsWidget);
-    defaultScrollArea->setWidget(defaultIconsWidget);
-    defaultScrollArea->setWidgetResizable(true);
-    iconTabs->addTab(defaultScrollArea, obs_module_text("IconSelector.Tab.Common"));
-    
+    iconTabs->addTab(obsScrollArea, "OBS Icons");
+
+    // Common Icons Tab
+    commonScrollArea = new QScrollArea(iconTabs);
+    commonIconsWidget = new QWidget();
+    commonIconsLayout = new QGridLayout(commonIconsWidget);
+    commonScrollArea->setWidget(commonIconsWidget);
+    commonScrollArea->setWidgetResizable(true);
+    iconTabs->addTab(commonScrollArea, "Common Icons");
+
+    // Custom Icons Tab
+    customScrollArea = new QScrollArea(iconTabs);
+    customIconsWidget = new QWidget();
+    QVBoxLayout* customTabLayout = new QVBoxLayout(customIconsWidget);
+
+    // Custom icon path selection
+    QHBoxLayout* customPathLayout = new QHBoxLayout();
+    customIconPath = new QLineEdit(customIconsWidget);
+    customIconPath->setPlaceholderText(obs_module_text("IconSelector.Placeholder.Path"));
+    browseCustomButton = new QPushButton(obs_module_text("UI.Button.Browse"), customIconsWidget);
+
+    customPathLayout->addWidget(customIconPath);
+    customPathLayout->addWidget(browseCustomButton);
+    customTabLayout->addLayout(customPathLayout);
+
+    // Custom icon history grid
+    customIconsLayout = new QGridLayout();
+    customTabLayout->addLayout(customIconsLayout);
+    customTabLayout->addStretch();
+
+    customScrollArea->setWidget(customIconsWidget);
+    customScrollArea->setWidgetResizable(true);
+    iconTabs->addTab(customScrollArea, "Custom Icons");
+
+    // Connect signals
+    connect(browseCustomButton, &QPushButton::clicked, this, &IconSelectorDialog::onBrowseCustomIcon);
+    connect(customIconPath, &QLineEdit::textChanged, this, &IconSelectorDialog::onCustomIconPathChanged);
+
     // Populate icons
     populateOBSIcons();
-    populateDefaultHotkeyIcons();
+    populateCommonIcons();
+    populateCustomIcons();
 }
 
 void IconSelectorDialog::populateOBSIcons() {
@@ -280,7 +261,7 @@ void IconSelectorDialog::populateOBSIcons() {
 }
 
 
-void IconSelectorDialog::populateDefaultHotkeyIcons() {
+void IconSelectorDialog::populateCommonIcons() {
     // Use standard Qt icons that are guaranteed to exist
     struct IconMapping {
         QStyle::StandardPixmap pixmap;
@@ -346,26 +327,33 @@ void IconSelectorDialog::populateDefaultHotkeyIcons() {
     
     // Add Qt standard icons
     for (const IconMapping& iconMapping : standardIcons) {
-        defaultIcons.append({iconMapping.name, iconMapping.displayName});
-        
+        commonIcons.append({iconMapping.name, iconMapping.displayName});
+
         QToolButton* button = new QToolButton();
         button->setFixedSize(BUTTON_SIZE, BUTTON_SIZE);
         button->setIconSize(QSize(ICON_SIZE, ICON_SIZE));
         button->setCheckable(true);
         button->setAutoRaise(true);
         button->setToolButtonStyle(Qt::ToolButtonIconOnly);
-        
+
         QIcon icon = QApplication::style()->standardIcon(iconMapping.pixmap);
         button->setIcon(icon);
         button->setToolTip(iconMapping.displayName);
-        
+
         button->setProperty("iconPath", iconMapping.name);
-        button->setProperty("category", "default");
-        
+        button->setProperty("category", "common");
+
+        // Add styling to make selection more visible
+        button->setStyleSheet(
+            "QToolButton { border: 2px solid transparent; border-radius: 4px; }"
+            "QToolButton:checked { border: 2px solid #007ACC; background-color: rgba(0, 122, 204, 0.2); }"
+            "QToolButton:hover { border: 2px solid #005A9E; background-color: rgba(0, 90, 158, 0.1); }"
+        );
+
         iconButtonGroup->addButton(button);
         connect(button, &QToolButton::clicked, this, &IconSelectorDialog::onIconButtonClicked);
-        
-        defaultIconsLayout->addWidget(button, row, col);
+
+        commonIconsLayout->addWidget(button, row, col);
         
         col++;
         if (col >= GRID_COLUMNS) {
@@ -405,8 +393,8 @@ void IconSelectorDialog::populateDefaultHotkeyIcons() {
         if (QFile::exists(resourcePath)) {
             QString displayName = getIconDisplayName(iconName);
             
-            defaultIcons.append({resourcePath, displayName});
-            createIconButton(resourcePath, displayName, defaultIconsLayout, row, col, "streamup");
+            obsIcons.append({resourcePath, displayName});
+            createIconButton(resourcePath, displayName, obsIconsLayout, row, col, "streamup");
         }
     }
     
@@ -424,14 +412,14 @@ void IconSelectorDialog::populateDefaultHotkeyIcons() {
         if (QFile::exists(resourcePath)) {
             QString displayName = getIconDisplayName(iconName);
             
-            defaultIcons.append({resourcePath, displayName});
-            createIconButton(resourcePath, displayName, defaultIconsLayout, row, col, "streamup");
+            obsIcons.append({resourcePath, displayName});
+            createIconButton(resourcePath, displayName, obsIconsLayout, row, col, "streamup");
         }
     }
     
     
     // Add some spacing at the end
-    defaultIconsLayout->setRowStretch(row + 1, 1);
+    obsIconsLayout->setRowStretch(row + 1, 1);
 }
 
 void IconSelectorDialog::createIconButton(const QString& iconPath, const QString& iconName, QGridLayout* layout, int& row, int& col, const QString& category) {
@@ -557,9 +545,13 @@ QString IconSelectorDialog::getOBSThemeIconPath(const QString& iconName) {
 void IconSelectorDialog::onIconButtonClicked() {
     QToolButton* button = qobject_cast<QToolButton*>(sender());
     if (button) {
-        selectedIcon = button->property("iconPath").toString();
-        useIconRadio->setChecked(true);
-        useCustomIcon = false;
+        selectedIconPath = button->property("iconPath").toString();
+
+        // If it's a custom icon, also update the custom tab
+        QString category = button->property("category").toString();
+        if (category == "custom") {
+            customIconPath->setText(selectedIconPath);
+        }
     }
 }
 
@@ -573,37 +565,145 @@ void IconSelectorDialog::onBrowseCustomIcon() {
     
     if (!fileName.isEmpty()) {
         customIconPath->setText(fileName);
-        selectedCustomIcon = fileName;
-        
-        // Show preview
+        selectedIconPath = fileName;
+
+        // Validate the image and save to history
         QPixmap pixmap(fileName);
         if (!pixmap.isNull()) {
-            customIconPreview->setPixmap(pixmap.scaled(ICON_SIZE, ICON_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-            useCustomRadio->setChecked(true);
-            useCustomIcon = true;
+            saveCustomIcon(fileName); // Save to history
         } else {
             QMessageBox::warning(this, obs_module_text("IconSelector.Error.InvalidImageTitle"), obs_module_text("IconSelector.Error.InvalidImage"));
-            customIconPreview->setText(obs_module_text("IconSelector.Message.Invalid"));
         }
     }
 }
 
-void IconSelectorDialog::onIconTypeChanged() {
-    bool useBuiltIn = useIconRadio->isChecked();
-    
-    iconTabs->setEnabled(useBuiltIn);
-    customIconGroup->setEnabled(!useBuiltIn);
-    
-    // Clear icon button selection if switching to custom
-    if (!useBuiltIn) {
-        iconButtonGroup->setExclusive(false);
-        for (QAbstractButton* button : iconButtonGroup->buttons()) {
-            button->setChecked(false);
-        }
-        iconButtonGroup->setExclusive(true);
+void IconSelectorDialog::onCustomIconPathChanged() {
+    QString path = customIconPath->text();
+    if (!path.isEmpty()) {
+        selectedIconPath = path;
+    } else {
+        selectedIconPath.clear();
     }
-    
-    useCustomIcon = !useBuiltIn;
+}
+
+void IconSelectorDialog::populateCustomIcons() {
+    // Clear existing custom icon buttons
+    QLayoutItem* item;
+    while ((item = customIconsLayout->takeAt(0)) != nullptr) {
+        delete item->widget();
+        delete item;
+    }
+
+    int row = 0, col = 0;
+
+    // Add custom icons from history
+    for (const QString& iconPath : customIconHistory) {
+        if (!QFileInfo(iconPath).exists()) {
+            continue; // Skip non-existent files
+        }
+
+        QToolButton* button = new QToolButton();
+        button->setFixedSize(BUTTON_SIZE, BUTTON_SIZE);
+        button->setIconSize(QSize(ICON_SIZE, ICON_SIZE));
+        button->setCheckable(true);
+        button->setAutoRaise(true);
+        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+
+        QPixmap pixmap(iconPath);
+        if (!pixmap.isNull()) {
+            button->setIcon(QIcon(pixmap));
+            button->setToolTip(QFileInfo(iconPath).fileName());
+
+            button->setProperty("iconPath", iconPath);
+            button->setProperty("category", "custom");
+
+            // Add styling to make selection more visible
+            button->setStyleSheet(
+                "QToolButton { border: 2px solid transparent; border-radius: 4px; }"
+                "QToolButton:checked { border: 2px solid #007ACC; background-color: rgba(0, 122, 204, 0.2); }"
+                "QToolButton:hover { border: 2px solid #005A9E; background-color: rgba(0, 90, 158, 0.1); }"
+            );
+
+            iconButtonGroup->addButton(button);
+            connect(button, &QToolButton::clicked, this, &IconSelectorDialog::onIconButtonClicked);
+
+            customIconsLayout->addWidget(button, row, col);
+
+            col++;
+            if (col >= GRID_COLUMNS) {
+                col = 0;
+                row++;
+            }
+        }
+    }
+}
+
+void IconSelectorDialog::saveCustomIcon(const QString& iconPath) {
+    if (!iconPath.isEmpty() && !customIconHistory.contains(iconPath)) {
+        customIconHistory.prepend(iconPath); // Add to beginning
+
+        // Limit history size to 50 items
+        while (customIconHistory.size() > 50) {
+            customIconHistory.removeLast();
+        }
+
+        // Save to settings
+        obs_data_t* settings = obs_data_create();
+        obs_data_array_t* historyArray = obs_data_array_create();
+
+        for (const QString& path : customIconHistory) {
+            obs_data_t* item = obs_data_create();
+            obs_data_set_string(item, "path", path.toUtf8().constData());
+            obs_data_array_push_back(historyArray, item);
+            obs_data_release(item);
+        }
+
+        obs_data_set_array(settings, "custom_icon_history", historyArray);
+
+        // Save to module config
+        char* configPath = obs_module_config_path("streamup_custom_icons.json");
+        if (configPath) {
+            obs_data_save_json(settings, configPath);
+            bfree(configPath);
+        }
+
+        obs_data_array_release(historyArray);
+        obs_data_release(settings);
+
+        // Refresh the custom icons display
+        populateCustomIcons();
+    }
+}
+
+void IconSelectorDialog::loadCustomIconHistory() {
+    char* configPath = obs_module_config_path("streamup_custom_icons.json");
+    if (!configPath) {
+        return;
+    }
+
+    obs_data_t* settings = obs_data_create_from_json_file(configPath);
+    if (settings) {
+        obs_data_array_t* historyArray = obs_data_get_array(settings, "custom_icon_history");
+        if (historyArray) {
+            size_t count = obs_data_array_count(historyArray);
+            for (size_t i = 0; i < count; i++) {
+                obs_data_t* item = obs_data_array_item(historyArray, i);
+                const char* path = obs_data_get_string(item, "path");
+                if (path && strlen(path) > 0) {
+                    customIconHistory.append(QString::fromUtf8(path));
+                }
+                obs_data_release(item);
+            }
+            obs_data_array_release(historyArray);
+        }
+        obs_data_release(settings);
+    }
+
+    bfree(configPath);
+}
+
+QString IconSelectorDialog::getSelectedIcon() const {
+    return selectedIconPath;
 }
 
 

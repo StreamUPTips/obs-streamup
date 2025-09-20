@@ -23,26 +23,27 @@ class IconSelectorDialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit IconSelectorDialog(const QString& currentIcon = QString(), 
+    explicit IconSelectorDialog(const QString& currentIcon = QString(),
                                const QString& currentCustomIcon = QString(),
                                bool useCustomIcon = false,
                                QWidget* parent = nullptr);
-    
-    // Get selected icon information
-    QString getSelectedIcon() const { return selectedIcon; }
-    QString getSelectedCustomIcon() const { return selectedCustomIcon; }
-    bool shouldUseCustomIcon() const { return useCustomIcon; }
+
+    // Get selected icon information - now returns the path regardless of type
+    QString getSelectedIcon() const;
     
 private slots:
     void onIconButtonClicked();
     void onBrowseCustomIcon();
-    void onIconTypeChanged();
+    void onCustomIconPathChanged();
 
 private:
     void setupUI();
     void setupIconTabs();
     void populateOBSIcons();
-    void populateDefaultHotkeyIcons();
+    void populateCommonIcons();
+    void populateCustomIcons();
+    void saveCustomIcon(const QString& iconPath);
+    void loadCustomIconHistory();
     void createIconButton(const QString& iconPath, const QString& iconName, QGridLayout* layout, int& row, int& col, const QString& category);
     QString getIconDisplayName(const QString& iconPath);
     QIcon loadPreviewIcon(const QString& iconPath);
@@ -52,16 +53,16 @@ private:
     QVBoxLayout* mainLayout;
     QTabWidget* iconTabs;
     QScrollArea* obsScrollArea;
-    QScrollArea* defaultScrollArea;
+    QScrollArea* commonScrollArea;
+    QScrollArea* customScrollArea;
     QWidget* obsIconsWidget;
-    QWidget* defaultIconsWidget;
+    QWidget* commonIconsWidget;
+    QWidget* customIconsWidget;
     QGridLayout* obsIconsLayout;
-    QGridLayout* defaultIconsLayout;
-    
-    QGroupBox* customIconGroup;
-    QRadioButton* useIconRadio;
-    QRadioButton* useCustomRadio;
-    QLabel* customIconPreview;
+    QGridLayout* commonIconsLayout;
+    QGridLayout* customIconsLayout;
+
+    // Custom tab components
     QPushButton* browseCustomButton;
     QLineEdit* customIconPath;
     
@@ -70,15 +71,14 @@ private:
     QPushButton* cancelButton;
     
     QButtonGroup* iconButtonGroup;
-    
+
     // Selected values
-    QString selectedIcon;
-    QString selectedCustomIcon;
-    bool useCustomIcon;
-    
+    QString selectedIconPath;  // The final selected path (any type)
+
     // Icon collections
     QList<QPair<QString, QString>> obsIcons;        // (path, name) pairs
-    QList<QPair<QString, QString>> defaultIcons;    // (path, name) pairs
+    QList<QPair<QString, QString>> commonIcons;     // (path, name) pairs
+    QStringList customIconHistory;                  // Previously used custom icon paths
     
     // Constants
     static const int ICON_SIZE = 32;

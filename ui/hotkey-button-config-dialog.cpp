@@ -46,7 +46,7 @@ void HotkeyButtonConfigDialog::setupUI() {
     
     hotkeyDescriptionLabel = new QLabel("", hotkeyGroup);
     hotkeyDescriptionLabel->setWordWrap(true);
-    hotkeyDescriptionLabel->setStyleSheet("color: blue;");
+    hotkeyDescriptionLabel->setStyleSheet("color: white;");
     
     selectHotkeyButton = new QPushButton(obs_module_text("HotkeyButton.Button.SelectHotkey"), hotkeyGroup);
     
@@ -158,14 +158,18 @@ void HotkeyButtonConfigDialog::onSelectHotkeyClicked() {
 }
 
 void HotkeyButtonConfigDialog::onSelectIconClicked() {
-    IconSelectorDialog dialog(selectedIconPath, QString(), false, this);
-    if (dialog.exec() == QDialog::Accepted) {
-        // Get the selected icon (either built-in or custom)
-        QString newIconPath = dialog.getSelectedIcon();
-        if (newIconPath.isEmpty()) {
-            newIconPath = dialog.getSelectedCustomIcon();
-        }
+    // Determine if current icon is custom (absolute path) or built-in (relative)
+    bool isCustomIcon = QFileInfo(selectedIconPath).isAbsolute();
 
+    IconSelectorDialog dialog(
+        isCustomIcon ? QString() : selectedIconPath,  // currentIcon
+        isCustomIcon ? selectedIconPath : QString(),  // currentCustomIcon
+        isCustomIcon,                                  // useCustomIcon
+        this
+    );
+
+    if (dialog.exec() == QDialog::Accepted) {
+        QString newIconPath = dialog.getSelectedIcon();
         if (!newIconPath.isEmpty()) {
             selectedIconPath = newIconPath;
             updateIconDisplay();
@@ -181,7 +185,7 @@ void HotkeyButtonConfigDialog::updateHotkeyDisplay() {
         hotkeyDescriptionLabel->clear();
     } else {
         selectedHotkeyLabel->setText(selectedHotkey.name);
-        selectedHotkeyLabel->setStyleSheet("color: black; font-weight: bold;");
+        selectedHotkeyLabel->setStyleSheet("color: white; font-weight: bold;");
         hotkeyDescriptionLabel->setText(selectedHotkey.description);
         
         // Auto-fill button text and tooltip if empty

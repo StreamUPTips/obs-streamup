@@ -1088,6 +1088,11 @@ QListWidgetItem* ToolbarConfigurator::createConfigurationItem(std::shared_ptr<To
                         .arg(groupItem->childItems.size());
         break;
     }
+    case ToolbarConfig::ItemType::HotkeyButton: {
+        auto hotkeyItem = std::static_pointer_cast<ToolbarConfig::HotkeyButtonItem>(item);
+        displayText = QString("%1%2 %3 (Hotkey)").arg(indent).arg(enabledDot).arg(hotkeyItem->displayName);
+        break;
+    }
     }
     
     listItem->setText(displayText);
