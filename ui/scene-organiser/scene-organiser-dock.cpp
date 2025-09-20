@@ -1642,19 +1642,24 @@ void SceneOrganiserDock::onSearchTextChanged(const QString &text)
 {
     if (!m_proxyModel) return;
 
-    // Apply filter to proxy model
-    m_proxyModel->setFilterWildcard(text);
-
     // Check if we have search text for expansion logic
     bool hasText = !text.isEmpty();
+    bool hadText = !m_proxyModel->filterRegularExpression().pattern().isEmpty();
+
+    // Save expansion state when starting a search
+    if (hasText && !hadText) {
+        saveExpansionState();
+    }
+
+    // Apply filter to proxy model
+    m_proxyModel->setFilterWildcard(text);
 
     // Expand all items when searching to show matches
     if (hasText) {
         m_treeView->expandAll();
     } else {
-        // Restore previous expansion state when cleared
-        // For now, just expand the root level
-        m_treeView->expandToDepth(0);
+        // Restore previous expansion state when search is cleared
+        restoreExpansionState();
     }
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Search",
@@ -1669,6 +1674,60 @@ void SceneOrganiserDock::onClearSearch()
     m_searchEdit->clearFocus();
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Search", "Search cleared");
+}
+
+void SceneOrganiserDock::saveExpansionState()
+{
+    if (!m_treeView || !m_proxyModel) return;
+
+    m_savedExpansionState.clear();
+
+    // Recursively save expansion state for all items
+    std::function<void(const QModelIndex&)> saveRecursive = [&](const QModelIndex& index) {
+        if (!index.isValid()) return;
+
+        // Save expansion state for this index
+        bool isExpanded = m_treeView->isExpanded(index);
+        m_savedExpansionState[QPersistentModelIndex(index)] = isExpanded;
+
+        // Recursively save children
+        int rowCount = m_proxyModel->rowCount(index);
+        for (int i = 0; i < rowCount; ++i) {
+            QModelIndex childIndex = m_proxyModel->index(i, 0, index);
+            saveRecursive(childIndex);
+        }
+    };
+
+    // Start from root items
+    int rootRowCount = m_proxyModel->rowCount();
+    for (int i = 0; i < rootRowCount; ++i) {
+        QModelIndex rootIndex = m_proxyModel->index(i, 0);
+        saveRecursive(rootIndex);
+    }
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Search",
+        QString("Saved expansion state for %1 items").arg(m_savedExpansionState.size()).toUtf8().constData());
+}
+
+void SceneOrganiserDock::restoreExpansionState()
+{
+    if (!m_treeView || m_savedExpansionState.isEmpty()) return;
+
+    // Restore expansion state for all saved items
+    for (auto it = m_savedExpansionState.begin(); it != m_savedExpansionState.end(); ++it) {
+        QPersistentModelIndex index = it.key();
+        bool wasExpanded = it.value();
+
+        if (index.isValid()) {
+            m_treeView->setExpanded(index, wasExpanded);
+        }
+    }
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Search",
+        QString("Restored expansion state for %1 items").arg(m_savedExpansionState.size()).toUtf8().constData());
+
+    // Clear the saved state after restoring
+    m_savedExpansionState.clear();
 }
 
 // Public methods for keyboard shortcuts
