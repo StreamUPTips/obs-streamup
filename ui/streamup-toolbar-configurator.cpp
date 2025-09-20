@@ -10,6 +10,7 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QMessageBox>
+#include <QInputDialog>
 #include <QStandardPaths>
 #include <QFileInfo>
 #include <QPixmap>
@@ -619,6 +620,12 @@ void ToolbarConfigurator::setupUI()
                         config.items.removeAt(fromConfigIndex);
                     }
                     
+                    // Prevent groups from being placed within other groups (would cause crash)
+                    if (draggedItem->type == ToolbarConfig::ItemType::Group) {
+                        StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "Cannot place group within another group - operation blocked");
+                        return;
+                    }
+
                     // Add the item to the target group at the appropriate position
                     if (insertPosition >= 0) {
                         targetGroup->childItems.insert(insertPosition, draggedItem);
@@ -746,6 +753,13 @@ void ToolbarConfigurator::setupUI()
             // Check if we're moving from main list to a group
             if (targetParentGroup) {
                 StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Drag & Drop", "MAIN-TO-GROUP move detected, target group: %s", targetParentGroup->name.toUtf8().constData());
+
+                // Prevent groups from being placed within other groups (would cause crash)
+                if (draggedItem->type == ToolbarConfig::ItemType::Group) {
+                    StreamUP::DebugLogger::LogDebug("Toolbar", "Drag & Drop", "Cannot place group within another group - operation blocked");
+                    return;
+                }
+
                 // Moving from main list to a group
                 config.items.removeAt(fromConfigIndex);
                 if (targetPositionInGroup >= 0) {
@@ -824,6 +838,12 @@ void ToolbarConfigurator::setupUI()
 
         StreamUP::DebugLogger::LogDebugFormat("Toolbar", "GroupDrop", "Moving item '%s' into group '%s'",
             draggedItem->id.toUtf8().constData(), group->name.toUtf8().constData());
+
+        // Prevent groups from being placed within other groups (would cause crash)
+        if (draggedItem->type == ToolbarConfig::ItemType::Group) {
+            StreamUP::DebugLogger::LogDebug("Toolbar", "GroupDrop", "Cannot place group within another group - operation blocked");
+            return;
+        }
 
         // Remove item from its current location
         QString draggedItemId = draggedItem->id;
@@ -1214,21 +1234,34 @@ void ToolbarConfigurator::onAddCustomSpacer()
 void ToolbarConfigurator::onAddGroup()
 {
     QString groupName = groupNameLineEdit->text().trimmed();
-    
-    // Validate group name
+
+    // If the line edit is empty (likely called from context menu), show input dialog
     if (groupName.isEmpty()) {
-        groupNameLineEdit->setFocus();
-        return;
+        bool ok;
+        groupName = QInputDialog::getText(this,
+                                          "Add Group",
+                                          "Enter group name:",
+                                          QLineEdit::Normal,
+                                          "",
+                                          &ok);
+
+        if (!ok || groupName.trimmed().isEmpty()) {
+            return; // User cancelled or entered empty name
+        }
+
+        groupName = groupName.trimmed();
     }
-    
+
     QString id = QString("group_%1").arg(QDateTime::currentMSecsSinceEpoch());
     auto groupItem = std::make_shared<ToolbarConfig::GroupItem>(id, groupName);
-    
+
     config.addItem(groupItem);
     populateCurrentConfiguration();
-    
-    // Clear the form
-    groupNameLineEdit->clear();
+
+    // Clear the form if it was used
+    if (!groupNameLineEdit->text().isEmpty()) {
+        groupNameLineEdit->clear();
+    }
 }
 
 void ToolbarConfigurator::onRemoveItem()
@@ -1400,34 +1433,40 @@ void ToolbarConfigurator::onSpacerSettingsChanged()
 
 void ToolbarConfigurator::onItemContextMenu(const QPoint& pos)
 {
-    QListWidgetItem* item = currentConfigList->itemAt(pos);
-    if (!item) return;
-    
-    auto configItem = item->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
-    if (!configItem) return;
-    
-    // Don't show context menu for groups themselves (they can't be moved into other groups)
-    if (configItem->type == ToolbarConfig::ItemType::Group) return;
-    
-    // Check if there are any groups to move to
-    QList<std::shared_ptr<ToolbarConfig::ToolbarItem>> availableGroups;
-    for (const auto& item : config.items) {
-        if (item->type == ToolbarConfig::ItemType::Group) {
-            availableGroups.append(item);
-        }
-    }
-    
-    if (availableGroups.isEmpty()) return; // No groups available
-    
     QMenu contextMenu(this);
-    
-    // Add "Move to Group" submenu
-    QMenu* moveToGroupMenu = contextMenu.addMenu("Move to Group");
-    for (const auto& group : availableGroups) {
-        auto groupItem = std::static_pointer_cast<ToolbarConfig::GroupItem>(group);
-        QAction* action = moveToGroupMenu->addAction(groupItem->name);
-        action->setData(groupItem->id);
-        connect(action, &QAction::triggered, [this, configItem, groupItem]() {
+
+    QListWidgetItem* item = currentConfigList->itemAt(pos);
+    std::shared_ptr<ToolbarConfig::ToolbarItem> configItem = nullptr;
+
+    if (item) {
+        configItem = item->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+    }
+
+    // Always add "Add Group" option
+    QAction* addGroupAction = contextMenu.addAction("Add Group");
+    connect(addGroupAction, &QAction::triggered, this, &ToolbarConfigurator::onAddGroup);
+
+    // Only add item-specific options if we have a valid item
+    if (configItem && configItem->type != ToolbarConfig::ItemType::Group) {
+        // Check if there are any groups to move to
+        QList<std::shared_ptr<ToolbarConfig::ToolbarItem>> availableGroups;
+        for (const auto& item : config.items) {
+            if (item->type == ToolbarConfig::ItemType::Group) {
+                availableGroups.append(item);
+            }
+        }
+
+        // Add separator before item-specific options
+        if (!availableGroups.isEmpty()) {
+            contextMenu.addSeparator();
+
+            // Add "Move to Group" submenu
+            QMenu* moveToGroupMenu = contextMenu.addMenu("Move to Group");
+            for (const auto& group : availableGroups) {
+                auto groupItem = std::static_pointer_cast<ToolbarConfig::GroupItem>(group);
+                QAction* action = moveToGroupMenu->addAction(groupItem->name);
+                action->setData(groupItem->id);
+                connect(action, &QAction::triggered, [this, configItem, groupItem]() {
             // Find and remove item from current location (could be in main list or another group)
             bool foundInMain = false;
             for (int i = 0; i < config.items.size(); ++i) {
@@ -1456,28 +1495,30 @@ void ToolbarConfigurator::onItemContextMenu(const QPoint& pos)
             // Refresh the display
             populateCurrentConfiguration();
         });
-    }
-    
-    // Add "Move out of Group" if item is currently in a group
-    bool itemInGroup = false;
-    for (const auto& item : config.items) {
-        if (item->type == ToolbarConfig::ItemType::Group) {
-            auto group = std::static_pointer_cast<ToolbarConfig::GroupItem>(item);
-            if (group->findChild(configItem->id)) {
-                itemInGroup = true;
-                break;
             }
         }
+
+        // Add "Move out of Group" if item is currently in a group
+        bool itemInGroup = false;
+        for (const auto& item : config.items) {
+            if (item->type == ToolbarConfig::ItemType::Group) {
+                auto group = std::static_pointer_cast<ToolbarConfig::GroupItem>(item);
+                if (group->findChild(configItem->id)) {
+                    itemInGroup = true;
+                    break;
+                }
+            }
+        }
+
+        if (itemInGroup) {
+            QAction* moveOutAction = contextMenu.addAction("Move out of Group");
+            connect(moveOutAction, &QAction::triggered, [this, configItem]() {
+                config.moveItemOutOfGroup(configItem->id);
+                populateCurrentConfiguration();
+            });
+        }
     }
-    
-    if (itemInGroup) {
-        QAction* moveOutAction = contextMenu.addAction("Move out of Group");
-        connect(moveOutAction, &QAction::triggered, [this, configItem]() {
-            config.moveItemOutOfGroup(configItem->id);
-            populateCurrentConfiguration();
-        });
-    }
-    
+
     contextMenu.exec(currentConfigList->mapToGlobal(pos));
 }
 
