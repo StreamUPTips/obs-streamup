@@ -724,6 +724,8 @@ void UpdateVersionTracking()
 
 void CreateSplashDialog(ShowCondition condition)
 {
+    (void)condition; // Suppress unused parameter warning
+
     // Use DialogManager for singleton pattern, but condition logic still needed
     if (UIHelpers::DialogManager::IsSingletonDialogOpen("splash")) {
         return; // Dialog already handled by DialogManager

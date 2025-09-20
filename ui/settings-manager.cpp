@@ -1440,6 +1440,7 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
 {
 	// Store the current widget temporarily
 	QWidget *currentWidget = components.scrollArea->takeWidget();
+	(void)currentWidget; // Suppress unused variable warning
 
 	// Keep the main header unchanged - only replace content below it
 
@@ -1733,6 +1734,7 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 {
 	// Store the current widget temporarily
 	QWidget *currentWidget = components.scrollArea->takeWidget();
+	(void)currentWidget; // Suppress unused variable warning
 
 	// Keep the main header unchanged - only replace content below it
 
@@ -2053,6 +2055,7 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 {
 	// Store the current widget temporarily
 	QWidget *currentWidget = components.scrollArea->takeWidget();
+	(void)currentWidget; // Suppress unused variable warning
 
 	// Keep the main header unchanged - only replace content below it
 

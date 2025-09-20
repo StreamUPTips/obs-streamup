@@ -108,7 +108,8 @@ void ShowDockConfigDialog()
 		
 		// Get current dock settings
 		StreamUP::SettingsManager::DockToolSettings currentSettings = StreamUP::SettingsManager::GetDockToolSettings();
-		
+		(void)currentSettings; // Suppress unused variable warning
+
 		// Define tool information structure
 		struct ToolInfo {
 			QString name;
@@ -337,7 +338,7 @@ void StreamUPDock::applyFileIconToButton(QPushButton *button, const QString &fil
 	button->setIcon(QIcon(filePath));
 }
 
-StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamUPDock), isProcessing(false), videoCapturePopup(nullptr)
+StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamUPDock), videoCapturePopup(nullptr), isProcessing(false)
 {
 	ui->setupUi(this);
 
