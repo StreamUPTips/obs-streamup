@@ -688,12 +688,12 @@ void ShowSettingsDialog(int tabIndex)
 		toolbarLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
 		// Show toolbar setting
-		obs_property_t *showToolbarProp = obs_properties_add_bool(props, "show_toolbar", "Show StreamUP Toolbar");
+		obs_property_t *showToolbarProp = obs_properties_add_bool(props, "show_toolbar", obs_module_text("StreamUP.Settings.ShowToolbar"));
 
 		// Create horizontal layout for show toolbar setting
 		QHBoxLayout *showToolbarLayout = new QHBoxLayout();
 
-		QLabel *showToolbarLabel = new QLabel("Show StreamUP Toolbar");
+		QLabel *showToolbarLabel = new QLabel(obs_module_text("StreamUP.Settings.ShowToolbar"));
 		showToolbarLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
@@ -722,7 +722,7 @@ void ShowSettingsDialog(int tabIndex)
 		// Toolbar position setting with combobox
 		QHBoxLayout *toolbarPositionLayout = new QHBoxLayout();
 
-		QLabel *toolbarPositionLabel = new QLabel("Toolbar Position");
+		QLabel *toolbarPositionLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarPosition"));
 		toolbarPositionLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
 							    .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							    .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
@@ -773,13 +773,13 @@ void ShowSettingsDialog(int tabIndex)
 		// Add "Configure Toolbar" button
 		QHBoxLayout *configureToolbarLayout = new QHBoxLayout();
 		
-		QLabel *configureToolbarLabel = new QLabel("Toolbar Configuration");
+		QLabel *configureToolbarLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarConfiguration"));
 		configureToolbarLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
 							    .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							    .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
 		configureToolbarLabel->setToolTip("Customize toolbar buttons and layout");
 
-		QPushButton *configureToolbarButton = StreamUP::UIStyles::CreateStyledButton("Configure Toolbar", "neutral");
+		QPushButton *configureToolbarButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("StreamUP.Settings.ConfigureToolbar"), "neutral");
 		configureToolbarButton->setToolTip("Open toolbar configuration dialog");
 		
 		QObject::connect(configureToolbarButton, &QPushButton::clicked, [dialog]() {
@@ -1704,7 +1704,7 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 		buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0,
 						 StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
 
-		QPushButton *updateButton = StreamUP::UIStyles::CreateStyledButton("Check for Plugin Update", "info");
+		QPushButton *updateButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("StreamUP.Settings.CheckForUpdate"), "info");
 		QObject::connect(updateButton, &QPushButton::clicked, [dialog]() {
 			StreamUP::PluginManager::ShowCachedPluginUpdatesDialog();
 			dialog->close();

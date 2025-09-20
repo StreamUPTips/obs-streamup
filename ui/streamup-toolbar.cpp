@@ -7,6 +7,7 @@
 #include "ui-helpers.hpp"
 #include "settings-manager.hpp"
 #include "obs-hotkey-manager.hpp"
+#include <obs-module.h>
 #include <QIcon>
 #include <QHBoxLayout>
 #include <QWidget>
@@ -29,14 +30,14 @@ StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent),
 	contextMenu(nullptr), configureAction(nullptr)
 {
 	setObjectName("StreamUPToolbar");
-	setWindowTitle("StreamUP Controls");
+	setWindowTitle(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Title")));
 
 	// Setup context menu
 	contextMenu = new QMenu(this);
-	configureAction = contextMenu->addAction("Configure Toolbar...");
+	configureAction = contextMenu->addAction(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.Title")));
 	connect(configureAction, &QAction::triggered, this, &StreamUPToolbar::onConfigureToolbarClicked);
 	
-	toolbarSettingsAction = contextMenu->addAction("Toolbar Settings");
+	toolbarSettingsAction = contextMenu->addAction(QString::fromUtf8(obs_module_text("StreamUP.Settings.ToolbarSettings")));
 	connect(toolbarSettingsAction, &QAction::triggered, this, &StreamUPToolbar::onToolbarSettingsClicked);
 
 	// Load configuration and setup UI
@@ -1409,8 +1410,8 @@ void StreamUPToolbar::executeDockAction(const QString& actionType)
 	
 	StreamUPDock* dock = mainWindow->findChild<StreamUPDock*>();
 	if (!dock) {
-		QMessageBox::warning(this, "StreamUP Dock", 
-			"StreamUP dock is not available. Please make sure it is loaded.");
+		QMessageBox::warning(this, QString::fromUtf8(obs_module_text("Dock.Title")),
+			QString::fromUtf8(obs_module_text("StreamUP.Toolbar.DockNotAvailable")));
 		return;
 	}
 	
@@ -1439,7 +1440,7 @@ void StreamUPToolbar::executeDockAction(const QString& actionType)
 		// Open StreamUP settings dialog
 		ShowDockConfigDialog();
 	} else {
-		QMessageBox::warning(this, "Unknown Action", 
+		QMessageBox::warning(this, QString::fromUtf8(obs_module_text("StreamUP.Toolbar.UnknownAction")),
 			QString("Unknown dock action: %1").arg(actionType));
 	}
 }
@@ -1452,8 +1453,8 @@ void StreamUPToolbar::executeDockActionWithButton(const QString& actionType, QTo
 	
 	StreamUPDock* dock = mainWindow->findChild<StreamUPDock*>();
 	if (!dock) {
-		QMessageBox::warning(this, "StreamUP Dock", 
-			"StreamUP dock is not available. Please make sure it is loaded.");
+		QMessageBox::warning(this, QString::fromUtf8(obs_module_text("Dock.Title")),
+			QString::fromUtf8(obs_module_text("StreamUP.Toolbar.DockNotAvailable")));
 		return;
 	}
 	
