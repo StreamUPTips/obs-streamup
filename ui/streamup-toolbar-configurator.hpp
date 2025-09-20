@@ -132,6 +132,7 @@ public:
 
 signals:
     void itemMoved(int from, int to);
+    void itemMovedToGroup(int from, int groupIndex);
 
 protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
