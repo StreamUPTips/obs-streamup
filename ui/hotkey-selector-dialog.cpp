@@ -246,6 +246,7 @@ QTreeWidgetItem* HotkeySelectorDialog::createHotkeyItem(const StreamUP::HotkeyIn
 }
 
 QString HotkeySelectorDialog::getHotkeyKeybinding(const QString& hotkeyName) {
+    (void)hotkeyName;
     // This is a simplified implementation - in practice you might want to
     // query OBS for actual key bindings, but that's quite complex
     return obs_module_text("HotkeySelector.Keys.NotBound");
