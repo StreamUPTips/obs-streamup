@@ -6,7 +6,7 @@ else()
   cmake_minimum_required(VERSION 3.18)
 endif()
 
-project(streamup VERSION 2.0.0)
+project(streamup VERSION 2.1.0)
 set(PROJECT_FULL_NAME "StreamUP")
 
 # Set new UUIDs when you start to create a new plugin.

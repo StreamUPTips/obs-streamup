@@ -1,4 +1,4 @@
-# StreamUP v2.0.0 - Major Update 🚀
+# StreamUP v2.1.0 - Major Update 🚀
 
 We've listened to your feedback and completely rebuilt the StreamUP OBS plugin from scratch. This has been an enormous project that's taken months of work. The plugin remains completely free - if you find it useful, please share it with friends and consider supporting us!
 
@@ -11,10 +11,13 @@ Fresh, modern UI that makes all our features easily accessible. We've also creat
 Shows what's new, how to support the project, showcases our supporters, and provides all the important links you need.
 
 ## StreamUP Toolbar
-The OBS Controls dock is bulky and wastes space. Our sleek toolbar gives you access to all controls plus StreamUP settings. Position it at the top, left, right, or bottom of OBS. Enable it in StreamUP > Settings.
+The OBS Controls dock is bulky and wastes space. Our sleek toolbar gives you access to a lot of controls and hotkeys plus StreamUP settings. Position it at the top, left, right, or bottom of OBS. Enable it in StreamUP > Settings.
 
 ## Multi-Dock System  
 Combine multiple functions into single, organised docks. Create themed setups like a 'Vertical Canvas' dock with everything for vertical streaming in one place. Perfect for keeping your workspace tidy and efficient.
+
+## Scene Organiser
+Organise your scenes into folders and even colour code them. This is based on the SceneTree plugin by DigitOtter with some extra StreamUP spice added such as a search function for your scenes!
 
 ## Enhanced WebSocket Commands
 Previously available but poorly documented commands now have a proper interface at StreamUP > WebSocket Commands. Copy OBSRaw websocket requests directly for your workflow. Streamer.Bot users can copy CPH (custom C#) code when enabled in settings.
