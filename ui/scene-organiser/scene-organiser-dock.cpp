@@ -230,16 +230,52 @@ SceneOrganiserDock::~SceneOrganiserDock()
 
 bool SceneOrganiserDock::IsVerticalPluginDetected()
 {
-    // Check if Aitum Vertical plugin is installed using StreamUP's plugin detection system
+    // Primary method: Check if Aitum Vertical plugin is installed using StreamUP's plugin detection system
     auto installedPlugins = StreamUP::PluginManager::GetInstalledPluginsCached();
 
+    StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Checking for vertical plugin among %zu installed plugins", installedPlugins.size());
+
     for (const auto& plugin : installedPlugins) {
+        StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Found plugin: %s", plugin.first.c_str());
         if (plugin.first.find("aitum-vertical") != std::string::npos ||
-            plugin.first.find("Aitum Vertical") != std::string::npos) {
+            plugin.first.find("Aitum Vertical") != std::string::npos ||
+            plugin.first.find("aitum_vertical") != std::string::npos) {
+            StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin detected via plugin list!");
             return true;
         }
     }
 
+    // Fallback method: Check if vertical sources exist (indicates vertical plugin is active)
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "VerticalDetection", "Checking for vertical sources as fallback detection");
+
+    bool foundVerticalScene = false;
+    obs_enum_scenes([](void *param, obs_source_t *source) {
+        bool *found = static_cast<bool*>(param);
+        if (*found) return false; // Already found, stop enumeration
+
+        const char *scene_name = obs_source_get_name(source);
+        if (scene_name && (strstr(scene_name, "[Vertical]") || strstr(scene_name, "(Vertical)"))) {
+            StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Found vertical scene: %s", scene_name);
+            *found = true;
+            return false; // Stop enumeration
+        }
+        return true; // Continue enumeration
+    }, &foundVerticalScene);
+
+    if (foundVerticalScene) {
+        StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin detected via vertical scenes!");
+        return true;
+    }
+
+    // Also check for vertical canvas output existence (more direct approach)
+    obs_output_t *vertical_output = obs_get_output_by_name("aitum_vertical_output");
+    if (vertical_output) {
+        StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin detected via output!");
+        obs_output_release(vertical_output);
+        return true;
+    }
+
+    StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin not found via any detection method");
     return false;
 }
 
@@ -2470,14 +2506,52 @@ void SceneTreeModel::updateTree(const QModelIndex &selectedIndex)
 
 bool SceneTreeModel::isValidSceneForCanvas(obs_scene_t *scene)
 {
-    // For now, show all scenes. In the future, we could filter based on canvas resolution
-    // or other properties to determine if a scene belongs to vertical vs normal canvas
-    Q_UNUSED(scene)
+    if (!scene) return false;
 
-    // TODO: Implement canvas-specific filtering based on scene properties
-    // This could check scene resolution, special naming conventions, or metadata
+    obs_source_t *source = obs_scene_get_source(scene);
+    if (!source) return false;
 
-    return true;
+    const char *scene_name = obs_source_get_name(source);
+    if (!scene_name) return false;
+
+    // Check for common vertical scene naming patterns
+    bool isVerticalScene = (strstr(scene_name, "[Vertical]") != nullptr ||
+                           strstr(scene_name, "(Vertical)") != nullptr ||
+                           strstr(scene_name, "_Vertical") != nullptr ||
+                           strstr(scene_name, " Vertical") != nullptr ||
+                           strstr(scene_name, "[V]") != nullptr ||
+                           strstr(scene_name, "(V)") != nullptr);
+
+    // Additional check: examine scene resolution if available
+    // Vertical scenes typically have portrait aspect ratios (height > width)
+    bool isProbablyVertical = false;
+    uint32_t width = obs_source_get_width(source);
+    uint32_t height = obs_source_get_height(source);
+
+    if (width > 0 && height > 0) {
+        // Consider it vertical if height is significantly greater than width
+        // Using 1.3 ratio as threshold (height/width > 1.3)
+        isProbablyVertical = (height * 10 > width * 13);
+    }
+
+    // If naming pattern and resolution both suggest vertical, treat as vertical
+    if (isVerticalScene || isProbablyVertical) {
+        StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "SceneFilter",
+            "Scene '%s' detected as vertical (name: %s, resolution: %s) for %s canvas",
+            scene_name,
+            isVerticalScene ? "yes" : "no",
+            isProbablyVertical ? QString("%1x%2").arg(width).arg(height).toUtf8().constData() : "unknown",
+            (m_canvasType == CanvasType::Vertical) ? "vertical" : "normal");
+    }
+
+    // Filter based on canvas type:
+    // - Normal canvas: show non-vertical scenes
+    // - Vertical canvas: show only vertical scenes
+    if (m_canvasType == CanvasType::Vertical) {
+        return isVerticalScene || isProbablyVertical;
+    } else {
+        return !isVerticalScene && !isProbablyVertical;
+    }
 }
 
 

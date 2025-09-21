@@ -50,21 +50,9 @@
 #include <QObject>
 
 
-
 OBS_DECLARE_MODULE()
 OBS_MODULE_AUTHOR("Andilippi");
 OBS_MODULE_USE_DEFAULT_LOCALE("streamup", "en-US")
-
-
-//--------------------STRUCTS & GLOBALS--------------------
-// All structures and global state have been moved to appropriate modules
-
-
-
-//--------------------PATH HELPERS--------------------
-// GetFilePath functionality moved to StreamUP::PathUtils::GetOBSLogPath()
-// GetMostRecentFile moved to StreamUP::PathUtils::GetMostRecentTxtFile
-
 
 void CreateToolDialog(const char *infoText1, const char *infoText2, const char *infoText3, const QString &titleText,
 		      const std::function<void()> &buttonCallback, const QString &jsonString, const char *how1, const char *how2,
@@ -198,16 +186,6 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 
 	return installedPlugins;
 }
-
-
-//-------------------ERROR AND UPDATE HANDLING-------------------
-
-
-
-
-//-------------------OBS API HELPER FUNCTIONS-------------------
-
-
 
 //-------------------- HELPER FUNCTIONS--------------------
 
@@ -358,28 +336,8 @@ void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 	obs_source_release(scene_source);
 }
 
-//-------------------UTILITY FUNCTIONS-------------------
-
-
-
-
-
-
 //--------------------WEBSOCKET VENDOR REQUESTS--------------------
 obs_websocket_vendor vendor = nullptr;
-
-
-
-
-
-
-
-// GetForumLink moved to StreamUP::PluginManager::GetPluginForumLink
-
-// SetLabelWithSortedModules functionality moved to UI helper functions
-
-// SearchModulesInFile moved to StreamUP::PluginManager::SearchLoadedModulesInLogFile
-
 
 void SettingsDialog()
 {
@@ -387,11 +345,7 @@ void SettingsDialog()
 	StreamUP::SettingsManager::ShowSettingsDialog();
 }
 
-//--------------------MAIN MENU--------------------
-
-
 //--------------------WEBSOCKET REGISTRATION--------------------
-
 static void RegisterWebsocketRequests()
 {
 	vendor = obs_websocket_register_vendor("streamup");
