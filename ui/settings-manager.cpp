@@ -716,7 +716,6 @@ void ShowSettingsDialog(int tabIndex)
 			UpdateSettings(currentSettings);
 
 			// Apply toolbar visibility
-			extern void ApplyToolbarVisibility();
 			ApplyToolbarVisibility();
 		});
 
@@ -763,7 +762,6 @@ void ShowSettingsDialog(int tabIndex)
 						 UpdateSettings(currentSettings);
 
 						 // Apply toolbar position
-						 extern void ApplyToolbarPosition();
 						 ApplyToolbarPosition();
 					 }
 				 });

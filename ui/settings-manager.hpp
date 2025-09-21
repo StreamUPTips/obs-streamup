@@ -191,4 +191,8 @@ void CleanupSettingsCache();
 } // namespace SettingsManager
 } // namespace StreamUP
 
+// Global functions for toolbar management (defined in streamup.cpp)
+extern void ApplyToolbarVisibility();
+extern void ApplyToolbarPosition();
+
 #endif // STREAMUP_SETTINGS_MANAGER_HPP
