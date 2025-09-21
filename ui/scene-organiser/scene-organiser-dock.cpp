@@ -166,14 +166,14 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_backgroundContextMenu(nullptr)
     , m_sceneOrderMenu(nullptr)
     , m_sceneProjectorMenu(nullptr)
-    , m_saveTimer(new QTimer(this))
-    , m_currentContextItem(nullptr)
-    , m_isLocked(false)
-    , m_lockAction(nullptr)
     , m_folderLockAction(nullptr)
     , m_sceneLockAction(nullptr)
     , m_backgroundLockAction(nullptr)
+    , m_saveTimer(new QTimer(this))
     , m_copyFiltersSource(nullptr)
+    , m_currentContextItem(nullptr)
+    , m_isLocked(false)
+    , m_lockAction(nullptr)
     , m_updateBatchTimer(new QTimer(this))
     , m_updatesPending(false)
 {
@@ -651,6 +651,7 @@ void SceneOrganiserDock::onSceneSelectionChanged(const QItemSelection &selected,
     bool hasSelection = !selected.indexes().isEmpty();
     bool isScene = false;
     bool isFolder = false;
+    (void)isFolder; // Suppress unused variable warning
     bool canMoveUp = false;
     bool canMoveDown = false;
 
@@ -2373,7 +2374,7 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
 void SceneTreeModel::updateTree(const QModelIndex &selectedIndex)
 {
     // Get all scenes from OBS
-    struct obs_frontend_source_list scene_list = {0};
+    struct obs_frontend_source_list scene_list = {};
     obs_frontend_get_scenes(&scene_list);
 
     source_map_t new_scene_tree;

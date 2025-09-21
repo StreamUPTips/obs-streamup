@@ -24,11 +24,11 @@
 #include <util/config-file.h>
 
 StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent),
-	streamButton(nullptr), recordButton(nullptr), pauseButton(nullptr),
-	replayBufferButton(nullptr), saveReplayButton(nullptr), virtualCameraButton(nullptr),
-	virtualCameraConfigButton(nullptr), studioModeButton(nullptr), settingsButton(nullptr),
-	streamUPSettingsButton(nullptr), centralWidget(nullptr), mainLayout(nullptr),
-	contextMenu(nullptr), configureAction(nullptr), iconUpdateTimer(nullptr), m_updateBatchTimer(nullptr)
+	iconUpdateTimer(nullptr), m_updateBatchTimer(nullptr), streamButton(nullptr),
+	recordButton(nullptr), pauseButton(nullptr), replayBufferButton(nullptr),
+	saveReplayButton(nullptr), virtualCameraButton(nullptr), virtualCameraConfigButton(nullptr),
+	studioModeButton(nullptr), settingsButton(nullptr), streamUPSettingsButton(nullptr),
+	centralWidget(nullptr), mainLayout(nullptr), contextMenu(nullptr), configureAction(nullptr)
 {
 	setObjectName("StreamUPToolbar");
 	setWindowTitle(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Title")));
@@ -542,6 +542,7 @@ QIcon StreamUPToolbar::getCachedIcon(const QString& iconName)
 	bool isDark = obs_frontend_is_theme_dark();
 #else
 	bool isDark = false; // Fallback for older OBS versions
+	(void)isDark; // Suppress unused variable warning
 #endif
 	if (currentThemeIsDark != isDark) {
 		clearIconCache();
@@ -684,6 +685,7 @@ void StreamUPToolbar::updateIconsForTheme()
 	bool isDark = obs_frontend_is_theme_dark();
 #else
 	bool isDark = false; // Fallback for older OBS versions
+	(void)isDark; // Suppress unused variable warning
 #endif
 	
 	// Update buttons with cached icons (eliminates redundant QIcon construction)
