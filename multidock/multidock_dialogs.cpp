@@ -228,7 +228,7 @@ void ShowManageMultiDocksDialog()
         }
     });
     
-    QObject::connect(deleteButton, &QPushButton::clicked, [listWidget, manager, &dialog, openButton, renameButton, deleteButton]() {
+    QObject::connect(deleteButton, &QPushButton::clicked, [listWidget, manager, &dialog]() {
         QListWidgetItem* item = listWidget->currentItem();
         if (!item || !manager) {
             return;

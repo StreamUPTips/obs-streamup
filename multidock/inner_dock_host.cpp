@@ -332,6 +332,7 @@ void InnerDockHost::ConnectDockSignals(QDockWidget* dock)
     
     // Connect to dock widget's visibility changes to update toolbar
     connect(dock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        (void)visible;
         UpdateToolBarState(); // Update toolbar when visibility changes
     });
     
