@@ -67,6 +67,7 @@ static void SaveConfig(const QJsonObject& config)
     QJsonDocument doc(config);
     QByteArray jsonData = doc.toJson();
     qint64 written = file.write(jsonData);
+    (void)written;
     file.flush();
     
 }
