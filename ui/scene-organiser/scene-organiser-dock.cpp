@@ -1627,6 +1627,7 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->updateActiveSceneHighlight();
         });
         break;
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
     case OBS_FRONTEND_EVENT_THEME_CHANGED:
         // Handle theme changes - clear caches and update icons
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Theme", "Theme changed event received");
@@ -1634,6 +1635,7 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->onThemeChanged();
         });
         break;
+#endif
     default:
         break;
     }
