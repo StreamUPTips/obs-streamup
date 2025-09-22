@@ -933,9 +933,12 @@ void ShowSettingsDialog(int tabIndex)
 		creditLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
 		QLabel *creditText = new QLabel(obs_module_text("SceneOrganiser.Settings.CreditText"));
-		creditText->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
-						.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		creditText->setStyleSheet(QString("color: %1; font-size: %2px; background: %3; padding: %4px; border-radius: %5px;")
+						.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
+						.arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
+						.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+						.arg(StreamUP::UIStyles::Sizes::RADIUS_SM));
 		creditText->setWordWrap(true);
 		creditLayout->addWidget(creditText);
 
