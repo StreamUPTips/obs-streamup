@@ -492,9 +492,9 @@ void SceneOrganiserDock::createBottomToolbar()
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     m_toolbar->addWidget(spacer);
 
-    // Lock button - using the same colored icons as multidock
+    // Lock button - using OBS theme icons
     QToolButton *lockButton = new QToolButton(this);
-    lockButton->setIcon(CreateColoredIcon(":/res/images/unlocked.svg", QColor("#3a3a3d")));
+    lockButton->setProperty("class", "icon-unlock");
     lockButton->setToolTip("Scene organizer is unlocked (click to lock)");
     connect(lockButton, &QToolButton::clicked, this, &SceneOrganiserDock::onToggleLockClicked);
 
@@ -1337,12 +1337,13 @@ void SceneOrganiserDock::setLocked(bool locked)
     // Update lock button icon and tooltip
     if (m_lockButton) {
         if (m_isLocked) {
-            m_lockButton->setIcon(CreateColoredIcon(":/res/images/locked.svg", QColor("#fefefe")));
+            m_lockButton->setProperty("class", "icon-lock");
             m_lockButton->setToolTip("Scene organizer is locked (click to unlock)");
         } else {
-            m_lockButton->setIcon(CreateColoredIcon(":/res/images/unlocked.svg", QColor("#3a3a3d")));
+            m_lockButton->setProperty("class", "icon-unlock");
             m_lockButton->setToolTip("Scene organizer is unlocked (click to lock)");
         }
+        m_lockButton->style()->polish(m_lockButton);
     }
 
     // Update UI enabled state
@@ -1656,6 +1657,13 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
         // Update highlighting when studio mode is toggled
         QTimer::singleShot(50, dock, [dock]() {
             dock->updateActiveSceneHighlight();
+        });
+        break;
+    case OBS_FRONTEND_EVENT_THEME_CHANGED:
+        // Handle theme changes - clear caches and update icons
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Theme", "Theme changed event received");
+        QTimer::singleShot(50, dock, [dock]() {
+            dock->onThemeChanged();
         });
         break;
     default:

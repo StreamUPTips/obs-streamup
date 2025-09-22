@@ -635,6 +635,12 @@ void StreamUPDock::onFrontendEvent(enum obs_frontend_event event, void *private_
 		dock->connectSceneSignals();
 		dock->updateButtonIcons();
 	}
+	else if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING || event == OBS_FRONTEND_EVENT_PROFILE_CHANGED) {
+		// OBS finished loading or profile changed, update icons with proper theme detection
+		StreamUP::DebugLogger::LogDebugFormat("UI", "Event", "Dock received %s event",
+			event == OBS_FRONTEND_EVENT_FINISHED_LOADING ? "FINISHED_LOADING" : "PROFILE_CHANGED");
+		dock->updateButtonIcons();
+	}
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
 	else if (event == OBS_FRONTEND_EVENT_THEME_CHANGED) {
 		// Theme changed, update button icons for new theme

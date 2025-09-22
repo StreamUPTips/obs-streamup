@@ -12,8 +12,10 @@
 #include <QFrame>
 #include <QTimer>
 #include <QToolBar>
+#include <QToolButton>
 #include <QAction>
 #include <QIcon>
+#include <QStyle>
 #include <QDockWidget>
 #include <QMainWindow>
 #include <QPainter>
@@ -281,8 +283,12 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
         "}"
     );
     
-    // Add Dock action with #fefefe plus icon
-    QAction* addDockAction = toolBar->addAction(CreateColoredIcon(":/res/images/plus.svg", QColor("#fefefe")), "");
+    // Add Dock action with OBS theme plus icon
+    QAction* addDockAction = toolBar->addAction(QIcon(), "");
+    QToolButton* addButton = qobject_cast<QToolButton*>(toolBar->widgetForAction(addDockAction));
+    if (addButton) {
+        addButton->setProperty("class", "icon-plus");
+    }
     addDockAction->setToolTip("Add an OBS dock to this MultiDock");
     connect(addDockAction, &QAction::triggered, [this]() {
         if (m_innerHost) {
@@ -290,16 +296,24 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
         }
     });
     
-    // Lock Docks action with colored lock icons (start unlocked with #3a3a3d)
-    QAction* lockDockAction = toolBar->addAction(CreateColoredIcon(":/res/images/unlocked.svg", QColor("#3a3a3d")), "");
+    // Lock Docks action with OBS theme lock icons (start unlocked)
+    QAction* lockDockAction = toolBar->addAction(QIcon(), "");
+    QToolButton* lockButton = qobject_cast<QToolButton*>(toolBar->widgetForAction(lockDockAction));
+    if (lockButton) {
+        lockButton->setProperty("class", "icon-unlock");
+    }
     lockDockAction->setToolTip("Docks are unlocked (click to lock)");
     // Remove checkable to prevent blue background when locked
-    connect(lockDockAction, &QAction::triggered, [this, lockDockAction]() {
+    connect(lockDockAction, &QAction::triggered, [this, lockDockAction, toolBar]() {
         m_docksLocked = !m_docksLocked;
-        if (m_docksLocked) {
-            lockDockAction->setIcon(CreateColoredIcon(":/res/images/locked.svg", QColor("#fefefe")));
-        } else {
-            lockDockAction->setIcon(CreateColoredIcon(":/res/images/unlocked.svg", QColor("#3a3a3d")));
+        QToolButton* lockButton = qobject_cast<QToolButton*>(toolBar->widgetForAction(lockDockAction));
+        if (lockButton) {
+            if (m_docksLocked) {
+                lockButton->setProperty("class", "icon-lock");
+            } else {
+                lockButton->setProperty("class", "icon-unlock");
+            }
+            lockButton->style()->polish(lockButton);
         }
         lockDockAction->setToolTip(m_docksLocked ? "Docks are locked (click to unlock)" : "Docks are unlocked (click to lock)");
         
@@ -338,11 +352,7 @@ void MultiDockDock::UpdateToolbarState()
     // Update button states based on lock status
     if (m_addDockAction) {
         m_addDockAction->setEnabled(!isLocked);
-        if (isLocked) {
-            m_addDockAction->setIcon(CreateColoredIcon(":/res/images/plus.svg", QColor("#3a3a3d")));
-        } else {
-            m_addDockAction->setIcon(CreateColoredIcon(":/res/images/plus.svg", QColor("#fefefe")));
-        }
+        // OBS theme handles disabled state automatically, no need to change icons
     }
 }
 
