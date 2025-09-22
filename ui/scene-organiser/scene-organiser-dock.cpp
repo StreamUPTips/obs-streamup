@@ -173,7 +173,6 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_copyFiltersSource(nullptr)
     , m_currentContextItem(nullptr)
     , m_isLocked(false)
-    , m_lockAction(nullptr)
     , m_updateBatchTimer(new QTimer(this))
     , m_updatesPending(false)
 {
@@ -373,39 +372,13 @@ void SceneOrganiserDock::createBottomToolbar()
     m_toolbar->setOrientation(Qt::Horizontal);
 
     // Match native OBS scenes dock styling exactly
-    m_toolbar->setIconSize(QSize(14, 14));
+    m_toolbar->setIconSize(QSize(16, 16));  // Standard OBS toolbar icon size
 
-    // Apply exact OBS scenes dock toolbar styling (with proper padding and spacing)
+    // Minimal styling - let OBS theme handle appearance like standard toolbars
     m_toolbar->setStyleSheet(
         "QToolBar {"
-        "    background-color: #161617;"
-        "    min-height: 24px;"
-        "    max-height: 24px;"
         "    border: none;"
-        "    padding: 2px 4px 2px 4px;"
-        "    spacing: 2px;"
-        "}"
-        "QToolButton {"
-        "    background: transparent;"
-        "    border: none;"
-        "    border-radius: 4px;"
-        "    margin: 0px 1px 0px 1px;"
-        "    min-width: 20px;"
-        "    max-width: 20px;"
-        "    min-height: 20px;"
-        "    max-height: 20px;"
-        "    padding: 1px;"
-        "}"
-        "QToolButton:hover {"
-        "    background-color: #0f7bcf;"
-        "    border-radius: 4px;"
-        "}"
-        "QToolButton:pressed {"
-        "    background-color: #0a5a9c;"
-        "    border-radius: 4px;"
-        "}"
-        "QToolButton:disabled {"
-        "    background: transparent;"
+        "    spacing: 3px;"  // Standard OBS toolbar spacing
         "}"
         "QToolButton::menu-indicator {"
         "    image: none;"
@@ -492,18 +465,16 @@ void SceneOrganiserDock::createBottomToolbar()
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     m_toolbar->addWidget(spacer);
 
-    // Lock button - using OBS theme icons
-    QToolButton *lockButton = new QToolButton(this);
-    lockButton->setProperty("class", "icon-unlock");
-    lockButton->setToolTip("Scene organizer is unlocked (click to lock)");
-    connect(lockButton, &QToolButton::clicked, this, &SceneOrganiserDock::onToggleLockClicked);
+    // Lock checkbox - using exact same approach as OBS source dock
+    QCheckBox *lockCheckbox = new QCheckBox(this);
+    lockCheckbox->setProperty("class", "checkbox-icon indicator-lock");
+    lockCheckbox->setChecked(false); // Start unlocked
+    lockCheckbox->setToolTip("Scene organizer is unlocked (click to lock)");
+    connect(lockCheckbox, &QCheckBox::toggled, this, &SceneOrganiserDock::onToggleLockClicked);
 
-    m_toolbar->addWidget(lockButton);
+    m_toolbar->addWidget(lockCheckbox);
 
-    // Add separator before settings button
-    m_toolbar->addSeparator();
-
-    // Settings button - using gear icon
+    // Settings button - using OBS theming but addWidget approach for right-side buttons
     QToolButton *settingsButton = new QToolButton(this);
     settingsButton->setProperty("themeID", "configIconSmall");
     settingsButton->setProperty("class", "icon-gear");
@@ -519,7 +490,7 @@ void SceneOrganiserDock::createBottomToolbar()
     m_moveUpButton = moveUpButton;
     m_moveDownButton = moveDownButton;
     m_settingsButton = settingsButton;
-    m_lockButton = lockButton;
+    m_lockButton = lockCheckbox;
 
     // Add toolbar to the bottom of the layout
     m_mainLayout->addWidget(m_toolbar, 0); // 0 means don't stretch
@@ -1334,16 +1305,13 @@ void SceneOrganiserDock::setLocked(bool locked)
 {
     m_isLocked = locked;
 
-    // Update lock button icon and tooltip
+    // Update lock checkbox state and tooltip (matching OBS source dock)
     if (m_lockButton) {
-        if (m_isLocked) {
-            m_lockButton->setProperty("class", "icon-lock");
-            m_lockButton->setToolTip("Scene organizer is locked (click to unlock)");
-        } else {
-            m_lockButton->setProperty("class", "icon-unlock");
-            m_lockButton->setToolTip("Scene organizer is unlocked (click to lock)");
-        }
-        m_lockButton->style()->polish(m_lockButton);
+        // Block signals to prevent infinite recursion when updating checkbox state
+        m_lockButton->blockSignals(true);
+        m_lockButton->setChecked(m_isLocked);
+        m_lockButton->blockSignals(false);
+        m_lockButton->setToolTip(m_isLocked ? "Scene organizer is locked (click to unlock)" : "Scene organizer is unlocked (click to lock)");
     }
 
     // Update UI enabled state
