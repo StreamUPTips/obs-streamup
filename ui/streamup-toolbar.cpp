@@ -511,8 +511,9 @@ void StreamUPToolbar::OnFrontendEvent(enum obs_frontend_event event, void *data)
 
 	case OBS_FRONTEND_EVENT_PROFILE_CHANGED:
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
-		// Settings may have changed, force immediate update with button visibility
+		// Settings may have changed, force immediate update with button visibility and theme icons
 		toolbar->updateButtonVisibility();
+		toolbar->updateIconsForTheme();
 		toolbar->scheduleUpdate();
 		break;
 		
@@ -545,6 +546,8 @@ QIcon StreamUPToolbar::getCachedIcon(const QString& iconName)
 	(void)isDark; // Suppress unused variable warning
 #endif
 	if (currentThemeIsDark != isDark) {
+		StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Theme Change", "Theme changed from %s to %s, clearing icon cache",
+			currentThemeIsDark ? "dark" : "light", isDark ? "dark" : "light");
 		clearIconCache();
 		clearStyleSheetCache();  // Stylesheet also depends on theme
 		currentThemeIsDark = isDark;
@@ -577,6 +580,15 @@ void StreamUPToolbar::clearStyleSheetCache()
 
 void StreamUPToolbar::preloadCommonIcons()
 {
+	// Initialize current theme state first to ensure proper icon loading
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
+	currentThemeIsDark = obs_frontend_is_theme_dark();
+#else
+	currentThemeIsDark = false; // Fallback for older OBS versions
+#endif
+
+	StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Icon Preload", "Current theme is %s", currentThemeIsDark ? "dark" : "light");
+
 	// Preload frequently used icons to reduce load time during updates
 	const QStringList commonIcons = {
 		"streaming", "streaming-inactive",
@@ -680,13 +692,20 @@ void StreamUPToolbar::updateButtonStatesEfficiently()
 
 void StreamUPToolbar::updateIconsForTheme()
 {
-	// Update all button icons for the current theme using cached icons
+	// Force clear icon cache to ensure fresh icons are loaded for the new theme
+	clearIconCache();
+
+	// Update theme tracking
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
 	bool isDark = obs_frontend_is_theme_dark();
+	currentThemeIsDark = isDark;
 #else
 	bool isDark = false; // Fallback for older OBS versions
+	currentThemeIsDark = false;
 	(void)isDark; // Suppress unused variable warning
 #endif
+
+	StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Theme Update", "Updating icons for %s theme", isDark ? "dark" : "light");
 	
 	// Update buttons with cached icons (eliminates redundant QIcon construction)
 	if (streamButton) {

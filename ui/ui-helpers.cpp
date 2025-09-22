@@ -1,6 +1,7 @@
 #include "ui-helpers.hpp"
 #include "ui-styles.hpp"
 #include "../core/streamup-common.hpp"
+#include "../utilities/debug-logger.hpp"
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <util/platform.h>
@@ -358,11 +359,14 @@ QString GetThemedIconPath(const QString &iconName)
 #else
 	bool isDarkTheme = false; // Fallback to light theme for older versions
 #endif
-	
+
 	// Use appropriate suffix based on theme
 	QString themeSuffix = isDarkTheme ? "-dark" : "-light";
 	QString iconPath = QString(":images/icons/ui/%1%2.svg").arg(iconName).arg(themeSuffix);
-	
+
+	StreamUP::DebugLogger::LogDebugFormat("UI", "Icon Path", "Icon '%s' -> %s theme -> %s",
+		iconName.toUtf8().constData(), isDarkTheme ? "dark" : "light", iconPath.toUtf8().constData());
+
 	return iconPath;
 }
 
