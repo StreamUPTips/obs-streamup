@@ -7,6 +7,7 @@ class QVBoxLayout;
 class QToolBar;
 class QAction;
 class QLabel;
+class QCheckBox;
 
 namespace StreamUP {
 namespace MultiDock {
@@ -82,7 +83,7 @@ private:
     QAction* m_addDockAction;
     QAction* m_returnDockAction;
     QAction* m_closeDockAction;
-    QAction* m_lockDockAction;
+    QCheckBox* m_lockCheckbox;
     bool m_docksLocked;
 };
 

@@ -21,6 +21,7 @@
 #include <QStyledItemDelegate>
 #include <QLineEdit>
 #include <QSortFilterProxyModel>
+#include <QCheckBox>
 #include <map>
 #include <obs.h>
 #include <obs-frontend-api.h>
@@ -178,7 +179,7 @@ public:
     QToolButton *m_filtersButton;
     QToolButton *m_moveUpButton;
     QToolButton *m_moveDownButton;
-    QToolButton *m_lockButton;
+    QCheckBox *m_lockButton;
     QToolButton *m_settingsButton;
 
     // Context menus
@@ -221,7 +222,7 @@ public:
 
     // Click tracking for rename functionality
     QPersistentModelIndex m_lastClickedIndex;
-    QAction *m_lockAction;
+    // Action references removed - using direct button approach for right-side buttons
 
     // Performance optimization members
     QTimer *m_updateBatchTimer;

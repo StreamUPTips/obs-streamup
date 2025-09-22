@@ -13,6 +13,7 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
+#include <QCheckBox>
 #include <QAction>
 #include <QIcon>
 #include <QStyle>
@@ -55,7 +56,7 @@ MultiDockDock::MultiDockDock(const QString& id, const QString& name, QWidget* pa
     , m_addDockAction(nullptr)
     , m_returnDockAction(nullptr)
     , m_closeDockAction(nullptr)
-    , m_lockDockAction(nullptr)
+    , m_lockCheckbox(nullptr)
     , m_docksLocked(false)
 {
     SetupUi();
@@ -252,34 +253,11 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
     // Make it look more like a standard OBS toolbar
     toolBar->setIconSize(QSize(16, 16));
     
-    // Apply exact OBS toolbar styling with correct colors and height
+    // Minimal styling - let OBS theme handle appearance like standard toolbars
     toolBar->setStyleSheet(
         "QToolBar {"
-        "    background-color: #161617;"
-        "    min-height: 24px;"
-        "    max-height: 24px;"
         "    border: none;"
-        "    padding: 2px 4px 2px 4px;"
-        "}"
-        "QToolButton {"
-        "    background: transparent;"
-        "    border: none;"
-        "    border-radius: 6px;"
-        "    margin: 0px 8px 0px 8px;"
-        "    min-width: 20px;"
-        "    max-width: 20px;"
-        "    min-height: 20px;"
-        "    max-height: 20px;"
-        "    padding: 0px;"
-        "}"
-        "QToolButton:hover {"
-        "    background-color: #0f7bcf;"
-        "}"
-        "QToolButton:pressed {"
-        "    background-color: #0a5a9c;"
-        "}"
-        "QToolButton:disabled {"
-        "    background: transparent;"
+        "    spacing: 3px;"  // Standard OBS toolbar spacing
         "}"
     );
     
@@ -288,6 +266,7 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
     QToolButton* addButton = qobject_cast<QToolButton*>(toolBar->widgetForAction(addDockAction));
     if (addButton) {
         addButton->setProperty("class", "icon-plus");
+        addButton->setProperty("themeID", "addIconSmall");
     }
     addDockAction->setToolTip("Add an OBS dock to this MultiDock");
     connect(addDockAction, &QAction::triggered, [this]() {
@@ -295,41 +274,35 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
             m_innerHost->ShowAddDockDialog();
         }
     });
-    
-    // Lock Docks action with OBS theme lock icons (start unlocked)
-    QAction* lockDockAction = toolBar->addAction(QIcon(), "");
-    QToolButton* lockButton = qobject_cast<QToolButton*>(toolBar->widgetForAction(lockDockAction));
-    if (lockButton) {
-        lockButton->setProperty("class", "icon-unlock");
-    }
-    lockDockAction->setToolTip("Docks are unlocked (click to lock)");
-    // Remove checkable to prevent blue background when locked
-    connect(lockDockAction, &QAction::triggered, [this, lockDockAction, toolBar]() {
-        m_docksLocked = !m_docksLocked;
-        QToolButton* lockButton = qobject_cast<QToolButton*>(toolBar->widgetForAction(lockDockAction));
-        if (lockButton) {
-            if (m_docksLocked) {
-                lockButton->setProperty("class", "icon-lock");
-            } else {
-                lockButton->setProperty("class", "icon-unlock");
-            }
-            lockButton->style()->polish(lockButton);
-        }
-        lockDockAction->setToolTip(m_docksLocked ? "Docks are locked (click to unlock)" : "Docks are unlocked (click to lock)");
-        
+
+    // Add separator between add and lock actions (OBS standard pattern)
+    toolBar->addSeparator();
+
+    // Lock Docks checkbox - using exact same approach as OBS source dock
+    QCheckBox* lockCheckbox = new QCheckBox(this);
+    lockCheckbox->setProperty("class", "checkbox-icon indicator-lock");
+    lockCheckbox->setChecked(false); // Start unlocked
+    lockCheckbox->setToolTip("Docks are unlocked (click to lock)");
+
+    connect(lockCheckbox, &QCheckBox::toggled, [this, lockCheckbox](bool checked) {
+        m_docksLocked = checked;
+        lockCheckbox->setToolTip(m_docksLocked ? "Docks are locked (click to unlock)" : "Docks are unlocked (click to lock)");
+
         if (m_innerHost) {
             m_innerHost->SetDocksLocked(m_docksLocked);
             // Update toolbar state after lock change
             UpdateToolbarState();
         }
     });
+
+    toolBar->addWidget(lockCheckbox);
     
     // Store references for later access
     m_statusLabel = nullptr; // No status label anymore
     m_addDockAction = addDockAction;
     m_returnDockAction = nullptr; // No separate return action
     m_closeDockAction = nullptr; // No close dock action anymore
-    m_lockDockAction = lockDockAction;
+    m_lockCheckbox = lockCheckbox;
     
     // Add toolbar widget to the bottom of the layout
     layout->addWidget(toolBar, 0); // 0 means don't stretch
@@ -351,8 +324,9 @@ void MultiDockDock::UpdateToolbarState()
     
     // Update button states based on lock status
     if (m_addDockAction) {
-        m_addDockAction->setEnabled(!isLocked);
-        // OBS theme handles disabled state automatically, no need to change icons
+        // Keep add button always enabled - lock only affects dock manipulation, not adding new docks
+        // This matches OBS source dock behavior where add source is always available
+        m_addDockAction->setEnabled(true);
     }
 }
 
