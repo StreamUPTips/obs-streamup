@@ -320,8 +320,6 @@ void MultiDockDock::UpdateToolbarState()
         return;
     }
     
-    bool isLocked = m_docksLocked;
-    
     // Update button states based on lock status
     if (m_addDockAction) {
         // Keep add button always enabled - lock only affects dock manipulation, not adding new docks
