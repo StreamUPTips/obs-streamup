@@ -104,46 +104,32 @@ void StreamUPToolbar::updateToolbarStyling()
 		return;
 	}
 	
-	// Generate new stylesheet with theme-aware styling using StreamUP UI constants
+	// Generate new stylesheet with minimal styling for StreamUP toolbar buttons
 	cachedStyleSheet = QString(R"(
-		/* Base styling for all StreamUP toolbar buttons */
-		QToolButton[buttonType="streamup-button"] {
+		/* Minimal styling for all StreamUP toolbar buttons - no backgrounds */
+		QToolButton[class="streamup-toolbar-button"] {
 			background: transparent;
 			border: none;
 			border-radius: %1px;
 			padding: %2px;
 		}
-		QToolButton[buttonType="streamup-button"]:hover {
+		QToolButton[class="streamup-toolbar-button"]:hover {
 			background-color: %3;
 		}
-		QToolButton[buttonType="streamup-button"]:pressed {
+		QToolButton[class="streamup-toolbar-button"]:pressed {
 			background-color: %4;
 		}
-		QToolButton[buttonType="streamup-button"]:checked {
+		QToolButton[class="streamup-toolbar-button"]:checked {
 			background: transparent;
 			border: none;
 		}
-		QToolButton[buttonType="streamup-button"]:checked:hover {
+		QToolButton[class="streamup-toolbar-button"]:checked:hover {
 			background-color: %3;
 		}
-		/* Special styling for virtual camera and studio mode buttons when active */
-		QToolButton[objectName^="virtualCameraButton"]:checked {
-			background-color: %5;
-			border: 1px solid %6;
-		}
-		QToolButton[objectName^="virtualCameraButton"]:checked:hover {
-			background-color: %7;
-		}
-		QToolButton[objectName^="studioModeButton"]:checked {
-			background-color: %5;
-			border: 1px solid %6;
-		}
-		QToolButton[objectName^="studioModeButton"]:checked:hover {
-			background-color: %7;
-		}
+		/* No special styling for virtual camera and studio mode buttons */
 		/* Base styling for all StreamUP toolbar separators */
 		QFrame[separatorType="streamup-separator"] {
-			background-color: %8;
+			background-color: %5;
 			border: none;
 		}
 		/* Spacer widgets styling */
@@ -154,10 +140,7 @@ void StreamUPToolbar::updateToolbarStyling()
 	   .arg(StreamUP::UIStyles::Sizes::SPACE_2)                    // padding
 	   .arg(StreamUP::UIStyles::Colors::HOVER_OVERLAY)             // hover background
 	   .arg(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30)          // pressed background
-	   .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR)             // checked background
-	   .arg(StreamUP::UIStyles::Colors::PRIMARY_INACTIVE)          // checked border
-	   .arg(StreamUP::UIStyles::Colors::PRIMARY_HOVER)             // checked hover background
-	   .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE);            // frame background
+	   .arg(StreamUP::UIStyles::Colors::BORDER_MEDIUM);            // separator background (more visible)
 	
 	// Mark cache as valid and apply stylesheet
 	styleSheetCacheValid = true;
@@ -327,7 +310,6 @@ void StreamUPToolbar::updateStreamButton()
 		streamButton->setChecked(streaming);
 		QString iconName = streaming ? "streaming" : "streaming-inactive";
 		streamButton->setIcon(getCachedIcon(iconName));
-		StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Update Stream Button", "Updated stream button with cached icon: %s", iconName.toUtf8().constData());
 		streamButton->setToolTip(streaming ? "Stop Streaming" : "Start Streaming");
 	}
 }
@@ -391,10 +373,9 @@ void StreamUPToolbar::updateSaveReplayButton()
 	}
 	if (saveReplayButton) {
 		bool replayActive = obs_frontend_replay_buffer_active();
-		
-		// Ensure icon is set correctly
+
 		saveReplayButton->setIcon(getCachedIcon("save-replay"));
-		
+
 		// Show only when replay buffer is active, enable/disable based on recording pause state
 		saveReplayButton->setVisible(replayActive);
 		bool recordingPaused = obs_frontend_recording_paused();
@@ -595,7 +576,7 @@ void StreamUPToolbar::preloadCommonIcons()
 		"record-on", "record-off",
 		"pause", "save-replay",
 		"replay-buffer-on", "replay-buffer-off",
-		"virtual-camera-on", "virtual-camera-off",
+		"virtual-camera",
 		"virtual-camera-settings", "settings"
 	};
 
@@ -677,13 +658,13 @@ void StreamUPToolbar::updateButtonStatesEfficiently()
 
 	if (virtualCameraButton) {
 		virtualCameraButton->setChecked(vcamActive);
-		QString iconName = vcamActive ? "virtual-camera-on" : "virtual-camera-off";
-		virtualCameraButton->setIcon(getCachedIcon(iconName));
+		virtualCameraButton->setIcon(getCachedIcon("virtual-camera"));
 		virtualCameraButton->setToolTip(vcamActive ? "Stop Virtual Camera" : "Start Virtual Camera");
 	}
 
 	if (studioModeButton) {
 		studioModeButton->setChecked(studioMode);
+		studioModeButton->setIcon(getCachedIcon("studio-mode"));
 		studioModeButton->setToolTip(studioMode ? "Disable Studio Mode" : "Enable Studio Mode");
 	}
 
@@ -707,45 +688,45 @@ void StreamUPToolbar::updateIconsForTheme()
 
 	StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Theme Update", "Updating icons for %s theme", isDark ? "dark" : "light");
 	
-	// Update buttons with cached icons (eliminates redundant QIcon construction)
+	// Update buttons with cached icons - all StreamUP toolbar buttons use custom icons
 	if (streamButton) {
 		bool streaming = obs_frontend_streaming_active();
 		QString iconName = streaming ? "streaming" : "streaming-inactive";
 		streamButton->setIcon(getCachedIcon(iconName));
 	}
-	
+
 	if (recordButton) {
 		bool recording = obs_frontend_recording_active();
 		QString iconName = recording ? "record-on" : "record-off";
 		recordButton->setIcon(getCachedIcon(iconName));
 	}
-	
+
 	if (pauseButton) {
 		pauseButton->setIcon(getCachedIcon("pause"));
 	}
-	
+
 	if (replayBufferButton) {
 		bool active = obs_frontend_replay_buffer_active();
 		QString iconName = active ? "replay-buffer-on" : "replay-buffer-off";
 		replayBufferButton->setIcon(getCachedIcon(iconName));
 	}
-	
+
 	if (saveReplayButton && saveReplayButton->isVisible()) {
 		saveReplayButton->setIcon(getCachedIcon("save-replay"));
 	}
-	
+
 	if (virtualCameraButton) {
 		virtualCameraButton->setIcon(getCachedIcon("virtual-camera"));
 	}
-	
+
 	if (virtualCameraConfigButton) {
 		virtualCameraConfigButton->setIcon(getCachedIcon("virtual-camera-settings"));
 	}
-	
+
 	if (studioModeButton) {
 		studioModeButton->setIcon(getCachedIcon("studio-mode"));
 	}
-	
+
 	if (settingsButton) {
 		settingsButton->setIcon(getCachedIcon("settings"));
 	}
@@ -1201,9 +1182,9 @@ void StreamUPToolbar::setupDynamicUI()
 							
 							// Create new pause button for this position
 							QToolButton* newPauseButton = new QToolButton(centralWidget);
-											newPauseButton->setProperty("buttonType", "streamup-button");
-							newPauseButton->setFixedSize(28, 28);
-							newPauseButton->setIconSize(QSize(20, 20));
+							newPauseButton->setProperty("class", "streamup-toolbar-button");
+							newPauseButton->setFixedSize(QSize(22, 22));
+							newPauseButton->setIconSize(QSize(16, 16));
 							newPauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newPauseButton->setIcon(getCachedIcon("pause"));
 											newPauseButton->setToolTip("Pause Recording");
@@ -1220,11 +1201,11 @@ void StreamUPToolbar::setupDynamicUI()
 						}
 						// Add save_replay button immediately after replay_buffer button
 						else if (buttonItem->buttonType == "replay_buffer") {
-											// Create new save_replay button for this position
+							// Create new save_replay button for this position
 							QToolButton* newSaveReplayButton = new QToolButton(centralWidget);
-							newSaveReplayButton->setProperty("buttonType", "streamup-button");
-							newSaveReplayButton->setFixedSize(28, 28);
-							newSaveReplayButton->setIconSize(QSize(20, 20));
+							newSaveReplayButton->setProperty("class", "streamup-toolbar-button");
+							newSaveReplayButton->setFixedSize(QSize(22, 22));
+							newSaveReplayButton->setIconSize(QSize(16, 16));
 							newSaveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newSaveReplayButton->setIcon(getCachedIcon("save-replay"));
 											newSaveReplayButton->setToolTip("Save Replay");
@@ -1300,28 +1281,41 @@ void StreamUPToolbar::setupDynamicUI()
 QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem> item)
 {
 	QToolButton* button = new QToolButton(centralWidget);
-	button->setProperty("buttonType", "streamup-button");
-	button->setFixedSize(28, 28);
-	button->setIconSize(QSize(20, 20));
+
+	// Standardize button appearance for consistent custom icon rendering
+	button->setIconSize(QSize(16, 16));  // Standard icon size
 	button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+
+	// Add consistent styling properties for custom StreamUP icons
+	button->setProperty("class", "streamup-toolbar-button");
+
+	// Ensure consistent button sizing
+	button->setFixedSize(QSize(22, 22));  // Consistent button size
 	
 	if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
 		auto buttonItem = std::static_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item);
 		
-		// Set up built-in button - ensure we have a valid icon path
-		QString iconPath = buttonItem->iconPath;
-		if (iconPath.isEmpty()) {
-			iconPath = StreamUP::ToolbarConfig::ButtonRegistry::getButtonInfo(buttonItem->buttonType).defaultIcon;
-		}
-		// If still empty, use a default icon to prevent empty path errors
-		if (iconPath.isEmpty()) {
-			iconPath = "settings"; // Use settings icon as fallback
-		}
-		button->setIcon(getCachedIcon(iconPath));
-		button->setToolTip(buttonItem->tooltip.isEmpty() ? 
-			StreamUP::ToolbarConfig::ButtonRegistry::getButtonInfo(buttonItem->buttonType).defaultTooltip : 
+		// Set up built-in button using appropriate theming approach
+		button->setToolTip(buttonItem->tooltip.isEmpty() ?
+			StreamUP::ToolbarConfig::ButtonRegistry::getButtonInfo(buttonItem->buttonType).defaultTooltip :
 			buttonItem->tooltip);
 		button->setCheckable(buttonItem->checkable);
+
+		// All StreamUP toolbar icons are custom - use consistent theming approach
+		if (buttonItem->buttonType == "streamup_settings") {
+			// Use the special StreamUP logo icon (social icon, not themed)
+			button->setIcon(QIcon(":images/icons/social/streamup-logo-button.svg"));
+		} else {
+			// For all other buttons, use custom StreamUP icons via cached icon system
+			QString iconPath = buttonItem->iconPath;
+			if (iconPath.isEmpty()) {
+				iconPath = StreamUP::ToolbarConfig::ButtonRegistry::getButtonInfo(buttonItem->buttonType).defaultIcon;
+			}
+			if (iconPath.isEmpty()) {
+				iconPath = "settings"; // Use settings icon as fallback
+			}
+			button->setIcon(getCachedIcon(iconPath));
+		}
 		
 		// Connect to appropriate slot based on button type
 		if (buttonItem->buttonType == "stream") {
@@ -1353,8 +1347,6 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onSettingsButtonClicked);
 		} else if (buttonItem->buttonType == "streamup_settings") {
 			streamUPSettingsButton = button;
-			// Use the special StreamUP logo icon
-			button->setIcon(QIcon(":images/icons/social/streamup-logo-button.svg"));
 			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onStreamUPSettingsButtonClicked);
 		}
 		
