@@ -869,12 +869,20 @@ bool obs_module_load()
 
 		blog(LOG_INFO, "[StreamUP] Plugin initialization completed successfully");
 		StreamUP::DebugLogger::LogInfo("Plugin", "Plugin initialization completed successfully");
+
+		// Mark initialization as complete - debug logging will now respect user settings
+		StreamUP::DebugLogger::SetInitializationComplete(true);
+
 		return true;
 	} catch (const std::exception& e) {
 		blog(LOG_ERROR, "[StreamUP] Exception during module load: %s", e.what());
+		// Reset initialization status on error
+		StreamUP::DebugLogger::SetInitializationComplete(false);
 		return false;
 	} catch (...) {
 		blog(LOG_ERROR, "[StreamUP] Unknown exception during module load");
+		// Reset initialization status on error
+		StreamUP::DebugLogger::SetInitializationComplete(false);
 		return false;
 	}
 }
@@ -972,6 +980,9 @@ void obs_module_unload()
 {
 	blog(LOG_INFO, "[StreamUP] Starting plugin unload process");
 	StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Starting plugin unload process");
+
+	// Reset initialization status during unload
+	StreamUP::DebugLogger::SetInitializationComplete(false);
 
 	try {
 		blog(LOG_INFO, "[StreamUP] Unload step 1/5: Removing save callback for hotkeys");

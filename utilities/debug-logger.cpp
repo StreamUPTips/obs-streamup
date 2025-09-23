@@ -3,9 +3,13 @@
 #include <cstdarg>
 #include <cstdio>
 #include <memory>
+#include <atomic>
 
 namespace StreamUP {
 namespace DebugLogger {
+
+// Thread-safe initialization tracking
+static std::atomic<bool> initializationComplete{false};
 
 static std::string FormatMessage(const char* feature, const char* operation, const char* message)
 {
@@ -43,17 +47,19 @@ static std::string FormatStringArgs(const char* format, va_list args)
 
 void LogDebug(const char* feature, const char* operation, const char* message)
 {
-    // TEMP: Skip settings check to test if this fixes the macOS deadlock
-    // if (StreamUP::SettingsManager::IsDebugLoggingEnabled()) {
+    // During initialization, always log debug messages to avoid mutex deadlock
+    // After initialization, respect the user's debug logging setting
+    if (!initializationComplete.load() || StreamUP::SettingsManager::IsDebugLoggingEnabled()) {
         std::string formatted = FormatMessage(feature, operation, message);
         blog(LOG_DEBUG, "%s", formatted.c_str());
-    // }
+    }
 }
 
 void LogDebugFormat(const char* feature, const char* operation, const char* format, ...)
 {
-    // TEMP: Skip settings check to test if this fixes the macOS deadlock
-    // if (StreamUP::SettingsManager::IsDebugLoggingEnabled()) {
+    // During initialization, always log debug messages to avoid mutex deadlock
+    // After initialization, respect the user's debug logging setting
+    if (!initializationComplete.load() || StreamUP::SettingsManager::IsDebugLoggingEnabled()) {
         va_list args;
         va_start(args, format);
 
@@ -64,7 +70,7 @@ void LogDebugFormat(const char* feature, const char* operation, const char* form
         }
 
         va_end(args);
-    // }
+    }
 }
 
 void LogInfo(const char* feature, const char* message)
@@ -125,6 +131,16 @@ void LogErrorFormat(const char* feature, const char* format, ...)
     }
 
     va_end(args);
+}
+
+void SetInitializationComplete(bool completed)
+{
+    initializationComplete.store(completed);
+}
+
+bool IsInitializationComplete()
+{
+    return initializationComplete.load();
 }
 
 } // namespace DebugLogger
