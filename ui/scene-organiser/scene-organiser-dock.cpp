@@ -175,6 +175,8 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_isLocked(false)
     , m_updateBatchTimer(new QTimer(this))
     , m_updatesPending(false)
+    , themeMonitorTimer(nullptr)
+    , currentThemeIsDark(false)
 {
     s_dockInstances.append(this);
 
@@ -199,6 +201,18 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
 
     // Load configuration after setup
     QTimer::singleShot(100, this, &SceneOrganiserDock::LoadConfiguration);
+
+    // Initialize current theme state
+    currentThemeIsDark = StreamUP::UIHelpers::IsOBSThemeDark();
+
+    // Set up theme monitoring for older OBS versions that don't have theme change events
+#if LIBOBS_API_VER < MAKE_SEMANTIC_VERSION(30, 0, 0)
+    themeMonitorTimer = new QTimer(this);
+    themeMonitorTimer->setInterval(1000); // Check every second
+    connect(themeMonitorTimer, &QTimer::timeout, this, &SceneOrganiserDock::checkForThemeChange);
+    themeMonitorTimer->start();
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Theme Monitor", "Started theme monitoring for older OBS version");
+#endif
 
     // Initialize toggle icons state in context menus
     updateToggleIconsState();
@@ -3554,6 +3568,18 @@ void StreamUP::SceneOrganiser::SceneOrganiserDock::processBatchedUpdates()
 void StreamUP::SceneOrganiser::SceneOrganiserDock::clearIconCaches()
 {
     ClearIconCaches();
+}
+
+void StreamUP::SceneOrganiser::SceneOrganiserDock::checkForThemeChange()
+{
+    bool newThemeIsDark = StreamUP::UIHelpers::IsOBSThemeDark();
+    if (newThemeIsDark != currentThemeIsDark) {
+        StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "Theme Monitor", "Theme change detected: %s -> %s",
+            currentThemeIsDark ? "dark" : "light", newThemeIsDark ? "dark" : "light");
+
+        currentThemeIsDark = newThemeIsDark;
+        onThemeChanged();
+    }
 }
 
 void StreamUP::SceneOrganiser::SceneOrganiserDock::onThemeChanged()

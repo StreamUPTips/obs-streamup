@@ -48,6 +48,8 @@
 #include <QPushButton>
 #include <QStyle>
 #include <QObject>
+#include <QApplication>
+#include <QThread>
 
 
 OBS_DECLARE_MODULE()
@@ -348,9 +350,13 @@ void SettingsDialog()
 //--------------------WEBSOCKET REGISTRATION--------------------
 static void RegisterWebsocketRequests()
 {
+	blog(LOG_INFO, "[StreamUP] RegisterWebsocketRequests: Starting WebSocket vendor registration");
 	vendor = obs_websocket_register_vendor("streamup");
-	if (!vendor)
+	if (!vendor) {
+		blog(LOG_WARNING, "[StreamUP] RegisterWebsocketRequests: Failed to register WebSocket vendor - obs-websocket may not be available");
 		return;
+	}
+	blog(LOG_INFO, "[StreamUP] RegisterWebsocketRequests: WebSocket vendor registered successfully");
 
 	// Register new properly named commands (PascalCase following OBS WebSocket conventions)
 	// Utility commands
@@ -419,22 +425,60 @@ static void RegisterWebsocketRequests()
 	obs_websocket_vendor_register_request(vendor, "openSourceInteract", StreamUP::WebSocketAPI::WebsocketOpenSourceInteract, nullptr);
 	obs_websocket_vendor_register_request(vendor, "openSceneFilters", StreamUP::WebSocketAPI::WebsocketOpenSceneFilters, nullptr);
 	obs_websocket_vendor_register_request(vendor, "loadStreamupFile", StreamUP::WebSocketAPI::WebsocketLoadStreamupFile, nullptr);
+
+	blog(LOG_INFO, "[StreamUP] RegisterWebsocketRequests: All WebSocket requests registered successfully");
 }
 
 
 static void LoadStreamUPDock()
 {
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: Starting StreamUP dock creation");
+
 	const auto main_window = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	if (!main_window) {
+		blog(LOG_ERROR, "[StreamUP] LoadStreamUPDock: Failed to get main window");
+		return;
+	}
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: Got main window");
+
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: Pushing UI translation");
 	obs_frontend_push_ui_translation(obs_module_get_string);
 
-	auto *dock_widget = new StreamUPDock(main_window);
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: Creating StreamUPDock widget");
+
+#ifdef __APPLE__
+	blog(LOG_INFO, "[StreamUP] Mac: About to create StreamUPDock widget");
+#endif
+
+	auto *dock_widget = nullptr;
+	try {
+		dock_widget = new StreamUPDock(main_window);
+	} catch (const std::exception& e) {
+		blog(LOG_ERROR, "[StreamUP] LoadStreamUPDock: Exception creating StreamUPDock: %s", e.what());
+		obs_frontend_pop_ui_translation();
+		return;
+	} catch (...) {
+		blog(LOG_ERROR, "[StreamUP] LoadStreamUPDock: Unknown exception creating StreamUPDock");
+		obs_frontend_pop_ui_translation();
+		return;
+	}
+
+	if (!dock_widget) {
+		blog(LOG_ERROR, "[StreamUP] LoadStreamUPDock: Failed to create StreamUPDock widget");
+		obs_frontend_pop_ui_translation();
+		return;
+	}
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: StreamUPDock widget created successfully");
 
 	const QString title = QString::fromUtf8(obs_module_text("Dock.Title"));
 	const auto name = "StreamUPDock";
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: Dock title: %s", title.toUtf8().constData());
 
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: Using new API - adding dock by ID");
 	obs_frontend_add_dock_by_id(name, title.toUtf8().constData(), dock_widget);
 #else
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: Using legacy API - creating QDockWidget");
 	auto dock = new QDockWidget(main_window);
 	dock->setObjectName(name);
 	dock->setWindowTitle(title);
@@ -444,8 +488,10 @@ static void LoadStreamUPDock()
 	dock->hide();
 	obs_frontend_add_dock(dock);
 #endif
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: Dock added to frontend");
 
 	obs_frontend_pop_ui_translation();
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: StreamUP dock creation completed");
 }
 
 // Global Scene Organiser dock instances
@@ -454,19 +500,52 @@ static StreamUP::SceneOrganiser::SceneOrganiserDock* globalSceneOrganiserVertica
 
 static void LoadSceneOrganiserDocks()
 {
+	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Starting Scene Organiser dock creation");
+
 	const auto main_window = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	if (!main_window) {
+		blog(LOG_ERROR, "[StreamUP] LoadSceneOrganiserDocks: Failed to get main window");
+		return;
+	}
+	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Got main window");
+
 	obs_frontend_push_ui_translation(obs_module_get_string);
 
 	// Always create Normal Canvas Scene Organiser
-	globalSceneOrganiserNormal = new StreamUP::SceneOrganiser::SceneOrganiserDock(
-		StreamUP::SceneOrganiser::CanvasType::Normal, main_window);
+	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Creating Normal Canvas Scene Organiser");
+
+#ifdef __APPLE__
+	blog(LOG_INFO, "[StreamUP] Mac: About to create Normal Canvas Scene Organiser");
+#endif
+
+	try {
+		globalSceneOrganiserNormal = new StreamUP::SceneOrganiser::SceneOrganiserDock(
+			StreamUP::SceneOrganiser::CanvasType::Normal, main_window);
+	} catch (const std::exception& e) {
+		blog(LOG_ERROR, "[StreamUP] LoadSceneOrganiserDocks: Exception creating Normal Scene Organiser: %s", e.what());
+		obs_frontend_pop_ui_translation();
+		return;
+	} catch (...) {
+		blog(LOG_ERROR, "[StreamUP] LoadSceneOrganiserDocks: Unknown exception creating Normal Scene Organiser");
+		obs_frontend_pop_ui_translation();
+		return;
+	}
+
+	if (!globalSceneOrganiserNormal) {
+		blog(LOG_ERROR, "[StreamUP] LoadSceneOrganiserDocks: Failed to create Normal Scene Organiser");
+		obs_frontend_pop_ui_translation();
+		return;
+	}
+	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Normal Canvas Scene Organiser created successfully");
 
 	const QString normalTitle = QString::fromUtf8(obs_module_text("SceneOrganiser.Label.NormalCanvas"));
 	const auto normalName = "StreamUPSceneOrganiserNormal";
 
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
+	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Adding Normal dock with new API");
 	obs_frontend_add_dock_by_id(normalName, normalTitle.toUtf8().constData(), globalSceneOrganiserNormal);
 #else
+	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Adding Normal dock with legacy API");
 	auto normalDock = new QDockWidget(main_window);
 	normalDock->setObjectName(normalName);
 	normalDock->setWindowTitle(normalTitle);
@@ -476,31 +555,58 @@ static void LoadSceneOrganiserDocks()
 	normalDock->hide();
 	obs_frontend_add_dock(normalDock);
 #endif
+	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Normal Canvas dock added");
 
 	// Create Vertical Canvas Scene Organiser only if Aitum Vertical plugin is detected
+	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Checking for Vertical plugin");
 	if (StreamUP::SceneOrganiser::SceneOrganiserDock::IsVerticalPluginDetected()) {
+		blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Vertical plugin detected, creating Vertical Canvas Scene Organiser");
 
-		globalSceneOrganiserVertical = new StreamUP::SceneOrganiser::SceneOrganiserDock(
-			StreamUP::SceneOrganiser::CanvasType::Vertical, main_window);
+#ifdef __APPLE__
+		blog(LOG_INFO, "[StreamUP] Mac: About to create Vertical Canvas Scene Organiser");
+#endif
 
-		const QString verticalTitle = QString::fromUtf8(obs_module_text("SceneOrganiser.Label.VerticalCanvas"));
-		const auto verticalName = "StreamUPSceneOrganiserVertical";
+		try {
+			globalSceneOrganiserVertical = new StreamUP::SceneOrganiser::SceneOrganiserDock(
+				StreamUP::SceneOrganiser::CanvasType::Vertical, main_window);
+		} catch (const std::exception& e) {
+			blog(LOG_ERROR, "[StreamUP] LoadSceneOrganiserDocks: Exception creating Vertical Scene Organiser: %s", e.what());
+			globalSceneOrganiserVertical = nullptr;
+		} catch (...) {
+			blog(LOG_ERROR, "[StreamUP] LoadSceneOrganiserDocks: Unknown exception creating Vertical Scene Organiser");
+			globalSceneOrganiserVertical = nullptr;
+		}
+
+		if (!globalSceneOrganiserVertical) {
+			blog(LOG_ERROR, "[StreamUP] LoadSceneOrganiserDocks: Failed to create Vertical Scene Organiser");
+		} else {
+			blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Vertical Canvas Scene Organiser created successfully");
+
+			const QString verticalTitle = QString::fromUtf8(obs_module_text("SceneOrganiser.Label.VerticalCanvas"));
+			const auto verticalName = "StreamUPSceneOrganiserVertical";
 
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
-		obs_frontend_add_dock_by_id(verticalName, verticalTitle.toUtf8().constData(), globalSceneOrganiserVertical);
+			blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Adding Vertical dock with new API");
+			obs_frontend_add_dock_by_id(verticalName, verticalTitle.toUtf8().constData(), globalSceneOrganiserVertical);
 #else
-		auto verticalDock = new QDockWidget(main_window);
-		verticalDock->setObjectName(verticalName);
-		verticalDock->setWindowTitle(verticalTitle);
-		verticalDock->setWidget(globalSceneOrganiserVertical);
-		verticalDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-		verticalDock->setFloating(true);
-		verticalDock->hide();
-		obs_frontend_add_dock(verticalDock);
+			blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Adding Vertical dock with legacy API");
+			auto verticalDock = new QDockWidget(main_window);
+			verticalDock->setObjectName(verticalName);
+			verticalDock->setWindowTitle(verticalTitle);
+			verticalDock->setWidget(globalSceneOrganiserVertical);
+			verticalDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+			verticalDock->setFloating(true);
+			verticalDock->hide();
+			obs_frontend_add_dock(verticalDock);
 #endif
+			blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Vertical Canvas dock added");
+		}
+	} else {
+		blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Vertical plugin not detected, skipping Vertical Canvas");
 	}
 
 	obs_frontend_pop_ui_translation();
+	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Scene Organiser dock creation completed");
 }
 
 // Function to apply scene organiser visibility changes
@@ -519,38 +625,79 @@ void ApplyToolbarPosition();
 
 static void LoadStreamUPToolbar()
 {
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPToolbar: Starting toolbar creation");
+
 	const auto main_window = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	if (!main_window) {
+		blog(LOG_ERROR, "[StreamUP] LoadStreamUPToolbar: Failed to get main window");
+		return;
+	}
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPToolbar: Got main window");
+
 	obs_frontend_push_ui_translation(obs_module_get_string);
 
-	globalToolbar = new StreamUPToolbar(main_window);
-	
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPToolbar: Creating StreamUPToolbar");
+
+#ifdef __APPLE__
+	blog(LOG_INFO, "[StreamUP] Mac: About to create StreamUPToolbar");
+#endif
+
+	try {
+		globalToolbar = new StreamUPToolbar(main_window);
+	} catch (const std::exception& e) {
+		blog(LOG_ERROR, "[StreamUP] LoadStreamUPToolbar: Exception creating StreamUPToolbar: %s", e.what());
+		obs_frontend_pop_ui_translation();
+		return;
+	} catch (...) {
+		blog(LOG_ERROR, "[StreamUP] LoadStreamUPToolbar: Unknown exception creating StreamUPToolbar");
+		obs_frontend_pop_ui_translation();
+		return;
+	}
+
+	if (!globalToolbar) {
+		blog(LOG_ERROR, "[StreamUP] LoadStreamUPToolbar: Failed to create StreamUPToolbar");
+		obs_frontend_pop_ui_translation();
+		return;
+	}
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPToolbar: StreamUPToolbar created successfully");
+
 	// Get toolbar position from settings and add to appropriate area
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPToolbar: Getting toolbar position from settings");
 	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 	Qt::ToolBarArea area;
 	switch (settings.toolbarPosition) {
 		case StreamUP::SettingsManager::ToolbarPosition::Bottom:
 			area = Qt::BottomToolBarArea;
+			blog(LOG_INFO, "[StreamUP] LoadStreamUPToolbar: Toolbar position set to Bottom");
 			break;
 		case StreamUP::SettingsManager::ToolbarPosition::Left:
 			area = Qt::LeftToolBarArea;
+			blog(LOG_INFO, "[StreamUP] LoadStreamUPToolbar: Toolbar position set to Left");
 			break;
 		case StreamUP::SettingsManager::ToolbarPosition::Right:
 			area = Qt::RightToolBarArea;
+			blog(LOG_INFO, "[StreamUP] LoadStreamUPToolbar: Toolbar position set to Right");
 			break;
 		default:
 		case StreamUP::SettingsManager::ToolbarPosition::Top:
 			area = Qt::TopToolBarArea;
+			blog(LOG_INFO, "[StreamUP] LoadStreamUPToolbar: Toolbar position set to Top (default)");
 			break;
 	}
+
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPToolbar: Adding toolbar to main window");
 	main_window->addToolBar(area, globalToolbar);
-	
+
 	// Update position-aware theming after initial positioning
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPToolbar: Updating position-aware theme");
 	globalToolbar->updatePositionAwareTheme();
-	
+
 	// Apply initial visibility setting
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPToolbar: Applying toolbar visibility");
 	ApplyToolbarVisibility();
 
 	obs_frontend_pop_ui_translation();
+	blog(LOG_INFO, "[StreamUP] LoadStreamUPToolbar: Toolbar creation completed");
 }
 
 void ApplyToolbarVisibility()
@@ -620,34 +767,99 @@ void ApplyToolbarPosition()
 
 bool obs_module_load()
 {
-	blog(LOG_INFO, "[StreamUP] Loaded version %s", PROJECT_VERSION);
+	blog(LOG_INFO, "[StreamUP] Starting module load - version %s", PROJECT_VERSION);
+	blog(LOG_INFO, "[StreamUP] Platform: %s", os_get_platform_name());
 
-	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Starting menu initialization");
-	StreamUP::MenuManager::InitializeMenu();
+#ifdef __APPLE__
+	blog(LOG_INFO, "[StreamUP] Mac platform detected - enabling Mac-specific diagnostics");
+	blog(LOG_INFO, "[StreamUP] Mac: Checking Qt version and capabilities");
+	blog(LOG_INFO, "[StreamUP] Mac: QT_VERSION_STR = %s", QT_VERSION_STR);
+	blog(LOG_INFO, "[StreamUP] Mac: OBS API version = %d", LIBOBS_API_VER);
 
-	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Registering WebSocket requests");
-	RegisterWebsocketRequests();
+	// Check if main window is available (critical for dock creation on Mac)
+	auto *test_main_window = obs_frontend_get_main_window();
+	if (test_main_window) {
+		blog(LOG_INFO, "[StreamUP] Mac: Main window is available at startup");
+	} else {
+		blog(LOG_WARNING, "[StreamUP] Mac: Main window is NOT available at startup - this may cause issues");
+	}
 
-	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Registering hotkeys");
-	StreamUP::HotkeyManager::RegisterHotkeys();
+	// Check if obs-websocket is available (common issue on Mac)
+	blog(LOG_INFO, "[StreamUP] Mac: Checking obs-websocket availability");
+	obs_websocket_vendor test_vendor = obs_websocket_register_vendor("streamup_test");
+	if (test_vendor) {
+		blog(LOG_INFO, "[StreamUP] Mac: obs-websocket is available");
+		// Clean up test vendor immediately
+		// Note: There's no official unregister function, but this test confirms availability
+	} else {
+		blog(LOG_WARNING, "[StreamUP] Mac: obs-websocket is NOT available - WebSocket features will be disabled");
+	}
 
-	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Adding save callback for hotkeys");
-	obs_frontend_add_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
+	// Check Qt event loop and threading
+	blog(LOG_INFO, "[StreamUP] Mac: Checking Qt threading model");
+	if (QApplication::instance()) {
+		blog(LOG_INFO, "[StreamUP] Mac: Qt Application instance is available");
+		if (QThread::currentThread() == QApplication::instance()->thread()) {
+			blog(LOG_INFO, "[StreamUP] Mac: Running on main Qt thread - good");
+		} else {
+			blog(LOG_WARNING, "[StreamUP] Mac: NOT running on main Qt thread - potential threading issues");
+		}
+	} else {
+		blog(LOG_ERROR, "[StreamUP] Mac: Qt Application instance is NOT available - this is bad");
+	}
+#endif
 
-	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading StreamUP dock");
-	LoadStreamUPDock();
+	try {
+		blog(LOG_INFO, "[StreamUP] Step 1/8: Starting menu initialization");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Starting menu initialization");
+		StreamUP::MenuManager::InitializeMenu();
+		blog(LOG_INFO, "[StreamUP] Step 1/8: Menu initialization completed");
 
-	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading Scene Organiser docks");
-	LoadSceneOrganiserDocks();
+		blog(LOG_INFO, "[StreamUP] Step 2/8: Registering WebSocket requests");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Registering WebSocket requests");
+		RegisterWebsocketRequests();
+		blog(LOG_INFO, "[StreamUP] Step 2/8: WebSocket requests registered");
 
-	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading StreamUP toolbar");
-	LoadStreamUPToolbar();
+		blog(LOG_INFO, "[StreamUP] Step 3/8: Registering hotkeys");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Registering hotkeys");
+		StreamUP::HotkeyManager::RegisterHotkeys();
+		blog(LOG_INFO, "[StreamUP] Step 3/8: Hotkeys registered");
 
-	StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Initializing MultiDock system");
-	StreamUP::MultiDock::MultiDockManager::Initialize();
+		blog(LOG_INFO, "[StreamUP] Step 4/8: Adding save callback for hotkeys");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Adding save callback for hotkeys");
+		obs_frontend_add_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
+		blog(LOG_INFO, "[StreamUP] Step 4/8: Save callback added");
 
-	StreamUP::DebugLogger::LogInfo("Plugin", "Plugin initialization completed successfully");
-	return true;
+		blog(LOG_INFO, "[StreamUP] Step 5/8: Loading StreamUP dock");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading StreamUP dock");
+		LoadStreamUPDock();
+		blog(LOG_INFO, "[StreamUP] Step 5/8: StreamUP dock loaded");
+
+		blog(LOG_INFO, "[StreamUP] Step 6/8: Loading Scene Organiser docks");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading Scene Organiser docks");
+		LoadSceneOrganiserDocks();
+		blog(LOG_INFO, "[StreamUP] Step 6/8: Scene Organiser docks loaded");
+
+		blog(LOG_INFO, "[StreamUP] Step 7/8: Loading StreamUP toolbar");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading StreamUP toolbar");
+		LoadStreamUPToolbar();
+		blog(LOG_INFO, "[StreamUP] Step 7/8: StreamUP toolbar loaded");
+
+		blog(LOG_INFO, "[StreamUP] Step 8/8: Initializing MultiDock system");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Initializing MultiDock system");
+		StreamUP::MultiDock::MultiDockManager::Initialize();
+		blog(LOG_INFO, "[StreamUP] Step 8/8: MultiDock system initialized");
+
+		blog(LOG_INFO, "[StreamUP] Plugin initialization completed successfully");
+		StreamUP::DebugLogger::LogInfo("Plugin", "Plugin initialization completed successfully");
+		return true;
+	} catch (const std::exception& e) {
+		blog(LOG_ERROR, "[StreamUP] Exception during module load: %s", e.what());
+		return false;
+	} catch (...) {
+		blog(LOG_ERROR, "[StreamUP] Unknown exception during module load");
+		return false;
+	}
 }
 
 static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_data)
@@ -713,43 +925,68 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 
 void obs_module_post_load(void)
 {
+	blog(LOG_INFO, "[StreamUP] Starting post-load initialization");
 	StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Starting post-load initialization");
 
-	// Initialize settings system immediately (this is lightweight)
-	StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Initializing settings system");
-	StreamUP::SettingsManager::InitializeSettingsSystem();
+	try {
+		// Initialize settings system immediately (this is lightweight)
+		blog(LOG_INFO, "[StreamUP] Post-load step 1/2: Initializing settings system");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Initializing settings system");
+		StreamUP::SettingsManager::InitializeSettingsSystem();
+		blog(LOG_INFO, "[StreamUP] Post-load step 1/2: Settings system initialized");
 
-	// Register callback to defer heavy initialization until OBS has finished loading
-	StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Registering OBS finished loading callback");
-	obs_frontend_add_event_callback(OnOBSFinishedLoading, nullptr);
+		// Register callback to defer heavy initialization until OBS has finished loading
+		blog(LOG_INFO, "[StreamUP] Post-load step 2/2: Registering OBS finished loading callback");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Registering OBS finished loading callback");
+		obs_frontend_add_event_callback(OnOBSFinishedLoading, nullptr);
+		blog(LOG_INFO, "[StreamUP] Post-load step 2/2: OBS finished loading callback registered");
 
-	StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Post-load initialization completed");
+		blog(LOG_INFO, "[StreamUP] Post-load initialization completed successfully");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Post-load initialization completed");
+	} catch (const std::exception& e) {
+		blog(LOG_ERROR, "[StreamUP] Exception during post-load: %s", e.what());
+	} catch (...) {
+		blog(LOG_ERROR, "[StreamUP] Unknown exception during post-load");
+	}
 }
 
 //--------------------EXIT COMMANDS--------------------
 void obs_module_unload()
 {
+	blog(LOG_INFO, "[StreamUP] Starting plugin unload process");
 	StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Starting plugin unload process");
 
-	StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Removing save callback for hotkeys");
-	obs_frontend_remove_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
+	try {
+		blog(LOG_INFO, "[StreamUP] Unload step 1/5: Removing save callback for hotkeys");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Removing save callback for hotkeys");
+		obs_frontend_remove_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
 
-	StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Unregistering hotkeys");
-	StreamUP::HotkeyManager::UnregisterHotkeys();
+		blog(LOG_INFO, "[StreamUP] Unload step 2/5: Unregistering hotkeys");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Unregistering hotkeys");
+		StreamUP::HotkeyManager::UnregisterHotkeys();
 
-	// Clean up toolbar - just nullify the pointer, let Qt/OBS handle destruction
-	StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up toolbar reference");
-	globalToolbar = nullptr;
+		// Clean up toolbar - just nullify the pointer, let Qt/OBS handle destruction
+		blog(LOG_INFO, "[StreamUP] Unload step 3/5: Cleaning up toolbar reference");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up toolbar reference");
+		globalToolbar = nullptr;
 
-	// Shutdown MultiDock system
-	StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Shutting down MultiDock system");
-	StreamUP::MultiDock::MultiDockManager::Shutdown();
+		// Shutdown MultiDock system
+		blog(LOG_INFO, "[StreamUP] Unload step 4/5: Shutting down MultiDock system");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Shutting down MultiDock system");
+		StreamUP::MultiDock::MultiDockManager::Shutdown();
 
-	// Clean up settings cache
-	StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up settings cache");
-	StreamUP::SettingsManager::CleanupSettingsCache();
+		// Clean up settings cache
+		blog(LOG_INFO, "[StreamUP] Unload step 5/5: Cleaning up settings cache");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up settings cache");
+		StreamUP::SettingsManager::CleanupSettingsCache();
 
-	StreamUP::DebugLogger::LogInfo("Plugin", "Plugin unload completed successfully");
+		blog(LOG_INFO, "[StreamUP] Plugin unload completed successfully");
+		StreamUP::DebugLogger::LogInfo("Plugin", "Plugin unload completed successfully");
+	} catch (const std::exception& e) {
+		blog(LOG_ERROR, "[StreamUP] Exception during unload: %s", e.what());
+	} catch (...) {
+		blog(LOG_ERROR, "[StreamUP] Unknown exception during unload");
+	}
 }
 
 MODULE_EXPORT const char *obs_module_description(void)

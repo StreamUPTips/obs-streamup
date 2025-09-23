@@ -234,6 +234,11 @@ public:
     static void clearIconCaches();
     static void onThemeChanged();
 
+    // Theme monitoring for older OBS versions
+    QTimer* themeMonitorTimer;
+    bool currentThemeIsDark;
+    void checkForThemeChange();
+
     // OBS integration
     static QList<SceneOrganiserDock*> s_dockInstances;
 };
