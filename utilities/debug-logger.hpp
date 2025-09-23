@@ -69,6 +69,18 @@ void LogWarningFormat(const char* feature, const char* format, ...);
  */
 void LogErrorFormat(const char* feature, const char* format, ...);
 
+/**
+ * @brief Set the initialization phase completion status
+ * @param completed True when plugin initialization is complete, false during startup
+ */
+void SetInitializationComplete(bool completed);
+
+/**
+ * @brief Check if plugin initialization is complete
+ * @return True if initialization is complete, false during startup
+ */
+bool IsInitializationComplete();
+
 } // namespace DebugLogger
 } // namespace StreamUP
 
