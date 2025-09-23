@@ -17,6 +17,8 @@
 #include <QScreen>
 #include <QTimer>
 #include <QIcon>
+#include <QPalette>
+#include <QColor>
 
 
 // Forward declarations for functions from main streamup.cpp
@@ -353,11 +355,26 @@ void CopyToClipboard(const QString &text)
 
 QString GetThemedIconPath(const QString &iconName)
 {
-	// Check if we're using a dark theme (requires OBS 29.0.0+)
+	bool isDarkTheme = false;
+
+	// Try modern OBS API first (29.0.0+)
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
-	bool isDarkTheme = obs_frontend_is_theme_dark();
+	isDarkTheme = obs_frontend_is_theme_dark();
+	StreamUP::DebugLogger::LogDebugFormat("UI", "Theme Detection", "obs_frontend_is_theme_dark() returned: %s", isDarkTheme ? "true" : "false");
 #else
-	bool isDarkTheme = false; // Fallback to light theme for older versions
+	// Fallback theme detection for older OBS versions
+	// Check the main window's palette for dark theme detection
+	QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
+	if (mainWindow) {
+		QPalette palette = mainWindow->palette();
+		QColor bgColor = palette.color(QPalette::Window);
+		// If the background is dark (luminance < 128), we're probably in dark theme
+		isDarkTheme = bgColor.lightness() < 128;
+		StreamUP::DebugLogger::LogDebugFormat("UI", "Theme Detection", "Fallback palette detection: background lightness=%d, isDark=%s",
+			bgColor.lightness(), isDarkTheme ? "true" : "false");
+	} else {
+		StreamUP::DebugLogger::LogDebug("UI", "Theme Detection", "Could not access main window for palette detection, defaulting to light theme");
+	}
 #endif
 
 	// Use appropriate suffix based on theme
@@ -401,7 +418,13 @@ bool IsOBSThemeDark()
 #if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
 	return obs_frontend_is_theme_dark();
 #else
-	// Fallback for older OBS versions - assume light theme
+	// Fallback for older OBS versions - use palette detection
+	QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
+	if (mainWindow) {
+		QPalette palette = mainWindow->palette();
+		QColor bgColor = palette.color(QPalette::Window);
+		return bgColor.lightness() < 128;
+	}
 	return false;
 #endif
 }

@@ -522,6 +522,11 @@ QIcon StreamUPToolbar::getCachedIcon(const QString& iconName)
 	// Always use the reliable UI helpers approach instead of caching
 	// This ensures consistent theming behavior between test and GitHub builds
 	QString iconPath = StreamUP::UIHelpers::GetThemedIconPath(iconName);
+
+	// Debug logging to see what's happening
+	StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Icon Debug", "Icon '%s' resolved to path: %s",
+		iconName.toUtf8().constData(), iconPath.toUtf8().constData());
+
 	return QIcon(iconPath);
 }
 
