@@ -67,7 +67,7 @@ runs:
         if [[ '${{ inputs.notarize }}' == 'true' ]] package_args+=(--notarize)
         if [[ '${{ inputs.package }}' == 'true' ]] package_args+=(--package)
 
-        zsh .github/scripts/package-macos ${package_args}
+        .github/scripts/package-macos ${package_args}
 
     - name: Install Dependencies 🛍️
       if: runner.os == 'Linux'
@@ -94,7 +94,7 @@ runs:
 
         if [[ '${{ inputs.package }}' == 'true' ]] package_args+=(--package)
 
-        zsh .github/scripts/package-ubuntu ${package_args}
+        .github/scripts/package-ubuntu ${package_args}
 
     - name: Run Windows Packaging
       if: runner.os == 'Windows'

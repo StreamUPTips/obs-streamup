@@ -189,11 +189,11 @@ ${_usage_host:-}"
       *) cmake_args+=(--debug-output) ;;
     }
 
-    local -r _preset="${target%%-*}${CI:+-ci}"
+    local -r _preset="${target}${CI:+-ci}"
     case ${target} {
       ubuntu-*)
         cmake_args+=(
-          --preset ${_preset}-${target##*-}
+          --preset ${_preset}
           -G "${generator}"
           -DQT_VERSION=${QT_VERSION:-6}
           -DCMAKE_BUILD_TYPE=${config}
@@ -203,7 +203,7 @@ ${_usage_host:-}"
         local cmake_version
         read -r _ _ cmake_version <<< "$(cmake --version)"
 
-        cmake_build_args+=(--preset ${_preset}-${target##*-} --config ${config})
+        cmake_build_args+=(--preset ${_preset} --config ${config})
         if [[ ${generator} == 'Unix Makefiles' ]] {
           cmake_build_args+=(--parallel $(( $(nproc) + 1 )))
         } else {
