@@ -13,10 +13,6 @@ include(compilerconfig)
 include(defaults)
 include(helpers)
 
-# Set new UUIDs when you start to create a new plugin.
-set(MACOS_PACKAGE_UUID "526F4EB1-783F-466E-AA20-AE4F7461CE7E")
-set(MACOS_INSTALLER_UUID "C18E7256-5BEF-496C-A390-B71FC4935209")
-
 add_library(${PROJECT_NAME} MODULE)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE OBS::libobs)
@@ -29,7 +25,33 @@ else()
   target_link_libraries(${PROJECT_NAME} PRIVATE OBS::frontend-api)
 endif()
 
+find_package(Qt6 COMPONENTS Widgets Core)
+if(BUILD_OUT_OF_TREE)
+  if(OS_LINUX OR OS_FREEBSD OR OS_OPENBSD)
+    find_package(Qt6 REQUIRED Gui)
+  endif()
+endif()
+target_link_libraries(${PROJECT_NAME} PRIVATE Qt::Core Qt::Widgets)
+
+if((OS_LINUX OR OS_FREEBSD OR OS_OPENBSD) AND Qt_VERSION VERSION_LESS "6.9.0")
+	target_link_libraries(${PROJECT_NAME} PRIVATE Qt::GuiPrivate)
+endif()
+
+target_compile_options(
+${PROJECT_NAME} PRIVATE $<$<C_COMPILER_ID:Clang,AppleClang>:-Wno-quoted-include-in-framework-header
+                                -Wno-comma>)
+set_target_properties(${PROJECT_NAME} PROPERTIES MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+set_target_properties(
+${PROJECT_NAME}
+PROPERTIES AUTOMOC ON
+            AUTOUIC ON
+            AUTORCC ON)
+
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/version.h.in ${CMAKE_CURRENT_SOURCE_DIR}/version.h)
+
+if(OS_WINDOWS)
+  configure_file(cmake/windows/resources/installer-Windows.iss.in "${CMAKE_CURRENT_BINARY_DIR}/installer-Windows.generated.iss")
+endif()
 
 # Root files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -252,73 +274,8 @@ source_group("MultiDock" FILES
   multidock/multidock_manager.hpp
   multidock/multidock_manager.cpp)
 
-find_package(CURL REQUIRED)
-
-# Set common include directories for both build modes
-target_include_directories(${PROJECT_NAME} PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/core"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities"
-    "${CMAKE_CURRENT_SOURCE_DIR}/ui"
-    "${CMAKE_CURRENT_SOURCE_DIR}/integrations"
-    "${CMAKE_CURRENT_SOURCE_DIR}/multidock")
-
-if(OS_WINDOWS)
-	get_filename_component(ISS_FILES_DIR "${CMAKE_BINARY_DIR}\\..\\package" ABSOLUTE)
-	file(TO_NATIVE_PATH "${ISS_FILES_DIR}" ISS_FILES_DIR)
-	get_filename_component(ISS_PACKAGE_DIR "${CMAKE_PACKAGE_PREFIX}\\.." ABSOLUTE)
-	file(TO_NATIVE_PATH "${ISS_PACKAGE_DIR}" ISS_PACKAGE_DIR)
-	get_filename_component(ISS_SOURCE_DIR "${PROJECT_SOURCE_DIR}" ABSOLUTE)
-	file(TO_NATIVE_PATH "${ISS_SOURCE_DIR}" ISS_SOURCE_DIR)
-	configure_file("installer.iss.in"
-			"${PROJECT_BINARY_DIR}/installer.iss"
-		)
-	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/resource.rc.in ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.rc)
-	target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.rc)
-  target_link_libraries(${PROJECT_NAME} PRIVATE w32-pthreads)
-	
-elseif(OS_MACOS)
-	set(MACOS_BUNDLEID "com.andilippi.${PROJECT_NAME}")
-	set(MACOSX_PLUGIN_GUI_IDENTIFIER "${MACOS_BUNDLEID}")
-	set(MACOSX_PLUGIN_BUNDLE_VERSION "${PROJECT_VERSION}")
-	set(MACOSX_PLUGIN_SHORT_VERSION_STRING "1")
-	configure_file(cmake/macos/resources/installer-macos.pkgproj.in ${CMAKE_BINARY_DIR}/installer-macos.generated.pkgproj)
-	target_compile_options(${PROJECT_NAME} PRIVATE -Wall)
-endif()
-
-# Find Qt components
-find_package(Qt6 COMPONENTS Widgets Core Gui)
-find_package(Qt6 COMPONENTS Svg QUIET)
-if(BUILD_OUT_OF_TREE)
-  if(OS_LINUX OR OS_FREEBSD OR OS_OPENBSD)
-    find_package(Qt6 REQUIRED Gui)
-  endif()
-endif()
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt::Core Qt::Widgets Qt::Gui)
-if(TARGET Qt6::Svg)
-  target_link_libraries(${PROJECT_NAME} PRIVATE Qt::Svg)
-endif()
-
-if((OS_LINUX OR OS_FREEBSD OR OS_OPENBSD) AND Qt_VERSION VERSION_LESS "6.9.0")
-  target_link_libraries(${PROJECT_NAME} PRIVATE Qt::GuiPrivate)
-endif()
-
-target_compile_options(
-  ${PROJECT_NAME} PRIVATE $<$<C_COMPILER_ID:Clang,AppleClang>:-Wno-quoted-include-in-framework-header
-                                  -Wno-comma>)
-
-# Enable Qt Meta-Object Compiler, UI Compiler, and Resource Compiler
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    AUTOMOC ON
-    AUTOUIC ON
-    AUTORCC ON)
-
-# Link external libraries
-if(TARGET CURL::libcurl)
-  target_link_libraries(${PROJECT_NAME} PRIVATE CURL::libcurl)
-endif()
-
 if(BUILD_OUT_OF_TREE)
 	set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
 else()
-	set_target_properties_obs(${PROJECT_NAME} PROPERTIES FOLDER "plugins" PREFIX "")
+	set_target_properties_obs(${PROJECT_NAME} PROPERTIES FOLDER "plugins/exeldro" PREFIX "")
 endif()
