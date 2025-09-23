@@ -808,40 +808,40 @@ std::string SearchThemeFileForVersion(const char *search)
 	char *config_path = nullptr;
 	char *theme_path_abs = nullptr;
 	
-	if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
-		// Try multiple relative paths to find the actual data/themes directory
-		QStringList relativePaths = {
-			"../../../../data/obs-studio/themes/",  // From config back to build data
-			"../../data/obs-studio/themes/",       // Original attempt
-			"../../../themes/",                    // User themes in config
-			"../../../../../build_x64/rundir/RelWithDebInfo/data/obs-studio/themes/"  // Development build specific
-		};
-		
-		for (const QString& relPath : relativePaths) {
-			config_path = obs_module_config_path(relPath.toLocal8Bit().constData());
-			theme_path_abs = os_get_abs_path_ptr(config_path);
-			
-			if (theme_path_abs) {
-				QString themeDirPath = QString::fromLocal8Bit(theme_path_abs);
-				QString fullThemePath = themeDirPath + "StreamUP.obt";
-				themePaths << fullThemePath;
-			}
-			
-			bfree(config_path);
-			bfree(theme_path_abs);
-			config_path = nullptr;
-			theme_path_abs = nullptr;
-		}
-	} else {
-		// macOS/Linux paths
-		config_path = obs_module_config_path("../../data/obs-studio/themes/");
+#ifdef _WIN32
+	// Try multiple relative paths to find the actual data/themes directory
+	QStringList relativePaths = {
+		"../../../../data/obs-studio/themes/",  // From config back to build data
+		"../../data/obs-studio/themes/",       // Original attempt
+		"../../../themes/",                    // User themes in config
+		"../../../../../build_x64/rundir/RelWithDebInfo/data/obs-studio/themes/"  // Development build specific
+	};
+
+	for (const QString& relPath : relativePaths) {
+		config_path = obs_module_config_path(relPath.toLocal8Bit().constData());
 		theme_path_abs = os_get_abs_path_ptr(config_path);
-		
+
 		if (theme_path_abs) {
 			QString themeDirPath = QString::fromLocal8Bit(theme_path_abs);
-			themePaths << themeDirPath + "StreamUP.obt";
+			QString fullThemePath = themeDirPath + "StreamUP.obt";
+			themePaths << fullThemePath;
 		}
+
+		bfree(config_path);
+		bfree(theme_path_abs);
+		config_path = nullptr;
+		theme_path_abs = nullptr;
 	}
+#else
+	// macOS/Linux paths
+	config_path = obs_module_config_path("../../data/obs-studio/themes/");
+	theme_path_abs = os_get_abs_path_ptr(config_path);
+
+	if (theme_path_abs) {
+		QString themeDirPath = QString::fromLocal8Bit(theme_path_abs);
+		themePaths << themeDirPath + "StreamUP.obt";
+	}
+#endif
 	
 	if (config_path) bfree(config_path);
 	if (theme_path_abs) bfree(theme_path_abs);
@@ -1241,15 +1241,15 @@ QString GetPluginPlatformURL(const std::string &pluginName)
 
 	const StreamUP::PluginInfo &pluginInfo = allPlugins.at(pluginName);
 	std::string url;
-	if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
-		url = pluginInfo.windowsURL;
-	} else if (strcmp(STREAMUP_PLATFORM_NAME, "macos") == 0) {
-		url = pluginInfo.macURL;
-	} else if (strcmp(STREAMUP_PLATFORM_NAME, "linux") == 0) {
-		url = pluginInfo.linuxURL;
-	} else {
-		url = pluginInfo.windowsURL;
-	}
+#ifdef _WIN32
+	url = pluginInfo.windowsURL;
+#elif defined(__APPLE__)
+	url = pluginInfo.macURL;
+#elif defined(__linux__)
+	url = pluginInfo.linuxURL;
+#else
+	url = pluginInfo.windowsURL;
+#endif
 	return QString::fromStdString(url);
 }
 
@@ -1290,11 +1290,11 @@ std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath)
 
 			if (in_section && !str_line.empty() && str_line != "Loaded Modules:") {
 				size_t suffix_pos = std::string::npos;
-				if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
-					suffix_pos = str_line.find(".dll");
-				} else if (strcmp(STREAMUP_PLATFORM_NAME, "linux") == 0) {
-					suffix_pos = str_line.find(".so");
-				}
+#ifdef _WIN32
+				suffix_pos = str_line.find(".dll");
+#elif defined(__linux__)
+				suffix_pos = str_line.find(".so");
+#endif
 
 				if (suffix_pos != std::string::npos) {
 					str_line = str_line.substr(0, suffix_pos);
