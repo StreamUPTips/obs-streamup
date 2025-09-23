@@ -450,7 +450,7 @@ static void LoadStreamUPDock()
 	blog(LOG_INFO, "[StreamUP] Mac: About to create StreamUPDock widget");
 #endif
 
-	auto *dock_widget = nullptr;
+	StreamUPDock *dock_widget = nullptr;
 	try {
 		dock_widget = new StreamUPDock(main_window);
 	} catch (const std::exception& e) {
@@ -768,7 +768,15 @@ void ApplyToolbarPosition()
 bool obs_module_load()
 {
 	blog(LOG_INFO, "[StreamUP] Starting module load - version %s", PROJECT_VERSION);
-	blog(LOG_INFO, "[StreamUP] Platform: %s", os_get_platform_name());
+#ifdef _WIN32
+	blog(LOG_INFO, "[StreamUP] Platform: Windows");
+#elif defined(__APPLE__)
+	blog(LOG_INFO, "[StreamUP] Platform: macOS");
+#elif defined(__linux__)
+	blog(LOG_INFO, "[StreamUP] Platform: Linux");
+#else
+	blog(LOG_INFO, "[StreamUP] Platform: Unknown");
+#endif
 
 #ifdef __APPLE__
 	blog(LOG_INFO, "[StreamUP] Mac platform detected - enabling Mac-specific diagnostics");
