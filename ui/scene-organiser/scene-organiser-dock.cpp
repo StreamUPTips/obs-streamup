@@ -4,6 +4,7 @@
 #include "../settings-manager.hpp"
 #include "../../utilities/debug-logger.hpp"
 #include "../../utilities/obs-data-helpers.hpp"
+#include "../../utilities/path-utils.hpp"
 #include "../../core/plugin-manager.hpp"
 #include <obs-module.h>
 #include <QHeaderView>
@@ -243,7 +244,24 @@ SceneOrganiserDock::~SceneOrganiserDock()
 
 bool SceneOrganiserDock::IsVerticalPluginDetected()
 {
-    // Primary method: Check if Aitum Vertical plugin is installed using StreamUP's plugin detection system
+    // Primary method: Check if vertical-canvas.dll is loaded using our plugin checker
+    char *logPath = StreamUP::PathUtils::GetOBSLogPath();
+    if (logPath) {
+        std::vector<std::string> loadedModules = StreamUP::PluginManager::SearchLoadedModulesInLogFile(logPath);
+        bfree(logPath);
+
+        StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Checking for vertical-canvas module among %zu loaded modules", loadedModules.size());
+
+        for (const auto& module : loadedModules) {
+            StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Found loaded module: %s", module.c_str());
+            if (module == "vertical-canvas") {
+                StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin detected via loaded modules (vertical-canvas.dll)!");
+                return true;
+            }
+        }
+    }
+
+    // Secondary method: Check if Aitum Vertical plugin is detected in StreamUP's plugin list
     auto installedPlugins = StreamUP::PluginManager::GetInstalledPluginsCached();
 
     StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Checking for vertical plugin among %zu installed plugins", installedPlugins.size());
