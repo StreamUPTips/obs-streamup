@@ -79,7 +79,7 @@ QList<MultiDockInfo> LoadMultiDockList()
     
     QJsonArray multiDockArray = config["multidocks"].toArray();
     
-    for (const QJsonValue& value : multiDockArray) {
+    for (const QJsonValue value : multiDockArray) {
         QJsonObject obj = value.toObject();
         MultiDockInfo info;
         info.id = obj["id"].toString();
@@ -134,7 +134,7 @@ bool LoadMultiDockState(const QString& id, QStringList& capturedDocks, QByteArra
     // Load captured docks
     QJsonArray docksArray = state["captured"].toArray();
     capturedDocks.clear();
-    for (const QJsonValue& value : docksArray) {
+    for (const QJsonValue value : docksArray) {
         capturedDocks.append(value.toString());
     }
     
