@@ -817,30 +817,20 @@ bool obs_module_load()
 	}
 #endif
 
-	try {
-		blog(LOG_INFO, "[StreamUP] Step 1/8: Starting menu initialization");
-		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Starting menu initialization");
+	blog(LOG_INFO, "[StreamUP] About to enter try block for step 1/8");
 
-		blog(LOG_INFO, "[StreamUP] Step 1/8: About to call StreamUP::MenuManager::InitializeMenu()");
+	try {
+		blog(LOG_INFO, "[StreamUP] Inside try block - about to start step 1/8");
 
 #ifdef __APPLE__
-		// Temporary Mac workaround: Skip menu initialization if it's causing crashes
-		blog(LOG_WARNING, "[StreamUP] Step 1/8: Mac platform detected - temporarily skipping menu initialization to isolate crash");
-		blog(LOG_INFO, "[StreamUP] Step 1/8: Menu initialization skipped on Mac");
+		// Mac workaround: Skip menu initialization entirely to isolate crash
+		blog(LOG_INFO, "[StreamUP] Step 1/8: Mac detected - completely skipping menu initialization");
 #else
-		try {
-			StreamUP::MenuManager::InitializeMenu();
-			blog(LOG_INFO, "[StreamUP] Step 1/8: StreamUP::MenuManager::InitializeMenu() returned successfully");
-		} catch (const std::exception& e) {
-			blog(LOG_ERROR, "[StreamUP] Step 1/8: Exception in MenuManager::InitializeMenu(): %s", e.what());
-			throw; // Re-throw to be caught by outer try-catch
-		} catch (...) {
-			blog(LOG_ERROR, "[StreamUP] Step 1/8: Unknown exception in MenuManager::InitializeMenu()");
-			throw; // Re-throw to be caught by outer try-catch
-		}
-#endif
-
+		blog(LOG_INFO, "[StreamUP] Step 1/8: Starting menu initialization");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Starting menu initialization");
+		StreamUP::MenuManager::InitializeMenu();
 		blog(LOG_INFO, "[StreamUP] Step 1/8: Menu initialization completed");
+#endif
 
 		blog(LOG_INFO, "[StreamUP] Step 2/8: Registering WebSocket requests");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Registering WebSocket requests");
