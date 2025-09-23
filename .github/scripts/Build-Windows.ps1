@@ -47,7 +47,7 @@ function Build {
     Push-Location -Stack BuildTemp
     Ensure-Location $ProjectRoot
 
-    $CmakeArgs = @('--preset', "windows-${Target}-ci")
+    $CmakeArgs = @('--preset', "windows-${Target}-ci", '--debug-output')
     $CmakeBuildArgs = @('--build')
     $CmakeInstallArgs = @()
 
