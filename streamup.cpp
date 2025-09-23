@@ -820,7 +820,26 @@ bool obs_module_load()
 	try {
 		blog(LOG_INFO, "[StreamUP] Step 1/8: Starting menu initialization");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Starting menu initialization");
-		StreamUP::MenuManager::InitializeMenu();
+
+		blog(LOG_INFO, "[StreamUP] Step 1/8: About to call StreamUP::MenuManager::InitializeMenu()");
+
+#ifdef __APPLE__
+		// Temporary Mac workaround: Skip menu initialization if it's causing crashes
+		blog(LOG_WARNING, "[StreamUP] Step 1/8: Mac platform detected - temporarily skipping menu initialization to isolate crash");
+		blog(LOG_INFO, "[StreamUP] Step 1/8: Menu initialization skipped on Mac");
+#else
+		try {
+			StreamUP::MenuManager::InitializeMenu();
+			blog(LOG_INFO, "[StreamUP] Step 1/8: StreamUP::MenuManager::InitializeMenu() returned successfully");
+		} catch (const std::exception& e) {
+			blog(LOG_ERROR, "[StreamUP] Step 1/8: Exception in MenuManager::InitializeMenu(): %s", e.what());
+			throw; // Re-throw to be caught by outer try-catch
+		} catch (...) {
+			blog(LOG_ERROR, "[StreamUP] Step 1/8: Unknown exception in MenuManager::InitializeMenu()");
+			throw; // Re-throw to be caught by outer try-catch
+		}
+#endif
+
 		blog(LOG_INFO, "[StreamUP] Step 1/8: Menu initialization completed");
 
 		blog(LOG_INFO, "[StreamUP] Step 2/8: Registering WebSocket requests");
