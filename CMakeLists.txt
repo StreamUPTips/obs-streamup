@@ -286,7 +286,7 @@ elseif(OS_MACOS)
 endif()
 
 # Find Qt components
-find_package(Qt6 REQUIRED COMPONENTS Widgets Core Gui Svg)
+find_package(Qt6 COMPONENTS Widgets Core Gui Svg)
 if(BUILD_OUT_OF_TREE)
   if(OS_LINUX OR OS_FREEBSD OR OS_OPENBSD)
     find_package(Qt6 REQUIRED Gui)
