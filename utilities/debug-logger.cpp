@@ -43,15 +43,17 @@ static std::string FormatStringArgs(const char* format, va_list args)
 
 void LogDebug(const char* feature, const char* operation, const char* message)
 {
-    if (StreamUP::SettingsManager::IsDebugLoggingEnabled()) {
+    // TEMP: Skip settings check to test if this fixes the macOS deadlock
+    // if (StreamUP::SettingsManager::IsDebugLoggingEnabled()) {
         std::string formatted = FormatMessage(feature, operation, message);
         blog(LOG_DEBUG, "%s", formatted.c_str());
-    }
+    // }
 }
 
 void LogDebugFormat(const char* feature, const char* operation, const char* format, ...)
 {
-    if (StreamUP::SettingsManager::IsDebugLoggingEnabled()) {
+    // TEMP: Skip settings check to test if this fixes the macOS deadlock
+    // if (StreamUP::SettingsManager::IsDebugLoggingEnabled()) {
         va_list args;
         va_start(args, format);
 
@@ -62,7 +64,7 @@ void LogDebugFormat(const char* feature, const char* operation, const char* form
         }
 
         va_end(args);
-    }
+    // }
 }
 
 void LogInfo(const char* feature, const char* message)
