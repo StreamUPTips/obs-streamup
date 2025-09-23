@@ -519,33 +519,10 @@ QString StreamUPToolbar::getThemedIconPath(const QString& iconName)
 
 QIcon StreamUPToolbar::getCachedIcon(const QString& iconName)
 {
-	// Check if theme has changed and invalidate caches if needed
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
-	bool isDark = obs_frontend_is_theme_dark();
-#else
-	bool isDark = false; // Fallback for older OBS versions
-	(void)isDark; // Suppress unused variable warning
-#endif
-	if (currentThemeIsDark != isDark) {
-		StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Theme Change", "Theme changed from %s to %s, clearing icon cache",
-			currentThemeIsDark ? "dark" : "light", isDark ? "dark" : "light");
-		clearIconCache();
-		clearStyleSheetCache();  // Stylesheet also depends on theme
-		currentThemeIsDark = isDark;
-	}
-	
-	// Check cache first
-	auto it = iconCache.find(iconName);
-	if (it != iconCache.end()) {
-		return it.value();
-	}
-	
-	// Create and cache new icon
-	QString iconPath = getThemedIconPath(iconName);
-	QIcon icon(iconPath);
-	iconCache.insert(iconName, icon);
-	
-	return icon;
+	// Always use the reliable UI helpers approach instead of caching
+	// This ensures consistent theming behavior between test and GitHub builds
+	QString iconPath = StreamUP::UIHelpers::GetThemedIconPath(iconName);
+	return QIcon(iconPath);
 }
 
 void StreamUPToolbar::clearIconCache()
@@ -561,30 +538,9 @@ void StreamUPToolbar::clearStyleSheetCache()
 
 void StreamUPToolbar::preloadCommonIcons()
 {
-	// Initialize current theme state first to ensure proper icon loading
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
-	currentThemeIsDark = obs_frontend_is_theme_dark();
-#else
-	currentThemeIsDark = false; // Fallback for older OBS versions
-#endif
-
-	StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Icon Preload", "Current theme is %s", currentThemeIsDark ? "dark" : "light");
-
-	// Preload frequently used icons to reduce load time during updates
-	const QStringList commonIcons = {
-		"streaming", "streaming-inactive",
-		"record-on", "record-off",
-		"pause", "save-replay",
-		"replay-buffer-on", "replay-buffer-off",
-		"virtual-camera",
-		"virtual-camera-settings", "settings"
-	};
-
-	for (const QString& iconName : commonIcons) {
-		getCachedIcon(iconName); // This will cache the icon
-	}
-
-	StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Icon Preload", "Preloaded %d common icons", commonIcons.size());
+	// Icons are now loaded on-demand using reliable UI helpers approach
+	// No preloading needed since we're not caching for theme reliability
+	StreamUP::DebugLogger::LogDebug("Toolbar", "Icon Preload", "Using on-demand icon loading for reliable theming");
 }
 
 void StreamUPToolbar::scheduleUpdate()
@@ -673,22 +629,9 @@ void StreamUPToolbar::updateButtonStatesEfficiently()
 
 void StreamUPToolbar::updateIconsForTheme()
 {
-	// Force clear icon cache to ensure fresh icons are loaded for the new theme
-	clearIconCache();
+	StreamUP::DebugLogger::LogDebug("Toolbar", "Theme Update", "Updating icons for theme change");
 
-	// Update theme tracking
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
-	bool isDark = obs_frontend_is_theme_dark();
-	currentThemeIsDark = isDark;
-#else
-	bool isDark = false; // Fallback for older OBS versions
-	currentThemeIsDark = false;
-	(void)isDark; // Suppress unused variable warning
-#endif
-
-	StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Theme Update", "Updating icons for %s theme", isDark ? "dark" : "light");
-	
-	// Update buttons with cached icons - all StreamUP toolbar buttons use custom icons
+	// Update buttons with fresh themed icons - all StreamUP toolbar buttons use custom icons
 	if (streamButton) {
 		bool streaming = obs_frontend_streaming_active();
 		QString iconName = streaming ? "streaming" : "streaming-inactive";
@@ -730,7 +673,7 @@ void StreamUPToolbar::updateIconsForTheme()
 	if (settingsButton) {
 		settingsButton->setIcon(getCachedIcon("settings"));
 	}
-	
+
 	// StreamUP settings button keeps its original icon (social icon, not cached)
 }
 
