@@ -1,10 +1,90 @@
 <RCC>
 	<qresource prefix="/">
-		<file>images/all-scene-source-locked.svg</file>
-		<file>images/all-scene-source-unlocked.svg</file>
-		<file>images/current-scene-source-locked.svg</file>
-		<file>images/current-scene-source-unlocked.svg</file>
-		<file>images/refresh-browser-sources.svg</file>
-		<file>images/refresh-audio-monitoring.svg</file>
+		<!-- UI Icons -->
+		<!-- Streaming Icons -->
+		<file>images/icons/ui/streaming-inactive-light.svg</file>
+		<file>images/icons/ui/streaming-inactive-dark.svg</file>
+		<file>images/icons/ui/streaming-light.svg</file>
+		<file>images/icons/ui/streaming-dark.svg</file>
+		
+		<!-- Recording Icons -->
+		<file>images/icons/ui/record-off-light.svg</file>
+		<file>images/icons/ui/record-off-dark.svg</file>
+		<file>images/icons/ui/record-on-light.svg</file>
+		<file>images/icons/ui/record-on-dark.svg</file>
+		<file>images/icons/ui/pause-light.svg</file>
+		<file>images/icons/ui/pause-dark.svg</file>
+		
+		<!-- Replay Buffer Icons -->
+		<file>images/icons/ui/replay-buffer-off-light.svg</file>
+		<file>images/icons/ui/replay-buffer-off-dark.svg</file>
+		<file>images/icons/ui/replay-buffer-on-light.svg</file>
+		<file>images/icons/ui/replay-buffer-on-dark.svg</file>
+		<file>images/icons/ui/save-replay-light.svg</file>
+		<file>images/icons/ui/save-replay-dark.svg</file>
+		
+		<!-- Virtual Camera Icons -->
+		<file>images/icons/ui/virtual-camera-light.svg</file>
+		<file>images/icons/ui/virtual-camera-dark.svg</file>
+		<file>images/icons/ui/virtual-camera-settings-light.svg</file>
+		<file>images/icons/ui/virtual-camera-settings-dark.svg</file>
+		
+		<!-- Studio Mode & Settings Icons -->
+		<file>images/icons/ui/studio-mode-light.svg</file>
+		<file>images/icons/ui/studio-mode-dark.svg</file>
+		<file>images/icons/ui/settings-light.svg</file>
+		<file>images/icons/ui/settings-dark.svg</file>
+		
+		<!-- Source Management Icons -->
+		<file>images/icons/ui/all-scene-source-locked-light.svg</file>
+		<file>images/icons/ui/all-scene-source-locked-dark.svg</file>
+		<file>images/icons/ui/all-scene-source-unlocked-light.svg</file>
+		<file>images/icons/ui/all-scene-source-unlocked-dark.svg</file>
+		<file>images/icons/ui/current-scene-source-locked-light.svg</file>
+		<file>images/icons/ui/current-scene-source-locked-dark.svg</file>
+		<file>images/icons/ui/current-scene-source-unlocked-light.svg</file>
+		<file>images/icons/ui/current-scene-source-unlocked-dark.svg</file>
+		
+		<!-- Device & Refresh Icons -->
+		<file>images/icons/ui/camera-light.svg</file>
+		<file>images/icons/ui/camera-dark.svg</file>
+		<file>images/icons/ui/video-capture-device-activate-light.svg</file>
+		<file>images/icons/ui/video-capture-device-activate-dark.svg</file>
+		<file>images/icons/ui/video-capture-device-deactivate-light.svg</file>
+		<file>images/icons/ui/video-capture-device-deactivate-dark.svg</file>
+		<file>images/icons/ui/video-capture-device-refresh-light.svg</file>
+		<file>images/icons/ui/video-capture-device-refresh-dark.svg</file>
+		<file>images/icons/ui/refresh-browser-sources-light.svg</file>
+		<file>images/icons/ui/refresh-browser-sources-dark.svg</file>
+		<file>images/icons/ui/refresh-audio-monitoring-light.svg</file>
+		<file>images/icons/ui/refresh-audio-monitoring-dark.svg</file>
+		
+		<!-- Social Media Icons -->
+		<file>images/icons/social/patreon.svg</file>
+		<file>images/icons/social/kofi.svg</file>
+		<file>images/icons/social/beer.svg</file>
+		<file>images/icons/social/github.svg</file>
+		<file>images/icons/social/twitter.svg</file>
+		<file>images/icons/social/bluesky.svg</file>
+		<file>images/icons/social/doras.svg</file>
+		<file>images/icons/social/discord.svg</file>
+		<file>images/icons/social/streamup-logo-button.svg</file>
+		<file>images/icons/social/streamup-logo-stacked.svg</file>
+		<file>images/icons/social/streamup-logo-text.svg</file>
+		
+		<!-- Media Assets -->
+		<file>media/logo.png</file>
+		<file>media/icon.ico</file>
+		
+		<!-- Theme Preview Images -->
+		<file>images/misc/obs-theme-1.png</file>
+		<file>images/misc/obs-theme-2.png</file>
+		<file>images/misc/obs-theme-3.png</file>
+		<file>images/misc/obs-theme-4.png</file>
+		
+		<!-- Documentation -->
+		<file>patch-notes-summary.md</file>
+		<file>plugin-info.md</file>
+		<file>support-info.md</file>
 	</qresource>
 </RCC>
