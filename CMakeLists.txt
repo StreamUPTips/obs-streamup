@@ -1,19 +1,33 @@
-# --- Detect if the plugin is built out of tree or not ---
+# --- Detect if the plugin is build out of tree or not ---
 if(CMAKE_PROJECT_NAME STREQUAL "obs-studio")
   set(BUILD_OUT_OF_TREE OFF)
 else()
   set(BUILD_OUT_OF_TREE ON)
-  cmake_minimum_required(VERSION 3.18)
+  cmake_minimum_required(VERSION 3.16...3.26)
 endif()
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/common/bootstrap.cmake" NO_POLICY_SCOPE)
 
-project(streamup VERSION 2.1.0)
-set(PROJECT_FULL_NAME "StreamUP")
+project(${_name} VERSION ${_version})
+
+include(compilerconfig)
+include(defaults)
+include(helpers)
 
 # Set new UUIDs when you start to create a new plugin.
 set(MACOS_PACKAGE_UUID "526F4EB1-783F-466E-AA20-AE4F7461CE7E")
 set(MACOS_INSTALLER_UUID "C18E7256-5BEF-496C-A390-B71FC4935209")
 
 add_library(${PROJECT_NAME} MODULE)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE OBS::libobs)
+
+if(BUILD_OUT_OF_TREE)
+  find_package(libobs REQUIRED)
+  find_package(obs-frontend-api REQUIRED)
+  target_link_libraries(${PROJECT_NAME} PRIVATE OBS::obs-frontend-api)
+else()
+  target_link_libraries(${PROJECT_NAME} PRIVATE OBS::frontend-api)
+endif()
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/version.h.in ${CMAKE_CURRENT_SOURCE_DIR}/version.h)
 
@@ -239,14 +253,6 @@ source_group("MultiDock" FILES
   multidock/multidock_manager.cpp)
 
 find_package(CURL REQUIRED)
-if(BUILD_OUT_OF_TREE)
-    find_package(libobs REQUIRED)
-    find_package(obs-frontend-api REQUIRED)
-    include(cmake/ObsPluginHelpers.cmake)
-    set(OBS_FRONTEND_API_NAME "obs-frontend-api")
-else()
-    set(OBS_FRONTEND_API_NAME "frontend-api")
-endif()
 
 # Set common include directories for both build modes
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -279,51 +285,30 @@ elseif(OS_MACOS)
 	target_compile_options(${PROJECT_NAME} PRIVATE -Wall)
 endif()
 
-# Find Qt components (order matters for dependencies)
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg)
+# Find Qt components
+find_package(Qt6 COMPONENTS Widgets Core Gui Svg)
+if(BUILD_OUT_OF_TREE)
+  if(OS_LINUX OR OS_FREEBSD OR OS_OPENBSD)
+    find_package(Qt6 REQUIRED Gui)
+  endif()
+endif()
+target_link_libraries(${PROJECT_NAME} PRIVATE Qt::Core Qt::Widgets Qt::Gui Qt::Svg)
+
+if((OS_LINUX OR OS_FREEBSD OR OS_OPENBSD) AND Qt_VERSION VERSION_LESS "6.9.0")
+  target_link_libraries(${PROJECT_NAME} PRIVATE Qt::GuiPrivate)
+endif()
+
+target_compile_options(
+  ${PROJECT_NAME} PRIVATE $<$<C_COMPILER_ID:Clang,AppleClang>:-Wno-quoted-include-in-framework-header
+                                  -Wno-comma>)
 
 # Enable Qt Meta-Object Compiler, UI Compiler, and Resource Compiler
-set_target_properties(${PROJECT_NAME} PROPERTIES 
-    AUTOMOC ON 
-    AUTOUIC ON 
-    AUTORCC ON
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED ON)
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    AUTOMOC ON
+    AUTOUIC ON
+    AUTORCC ON)
 
-# Link required libraries (grouped by dependency order)
-target_link_libraries(${PROJECT_NAME}
-    # OBS Studio libraries
-    OBS::libobs
-    OBS::${OBS_FRONTEND_API_NAME}
-    # Qt6 libraries (Core must come before others)
-    Qt6::Core
-    Qt6::Gui  
-    Qt6::Widgets
-    Qt6::Svg
-    # External libraries
-    CURL::libcurl)
+# Link external libraries
+target_link_libraries(${PROJECT_NAME} PRIVATE CURL::libcurl)
 
-if(BUILD_OUT_OF_TREE)
-	if(NOT LIB_OUT_DIR)
-		set(LIB_OUT_DIR "/lib/obs-plugins")
-	endif()
-	if(NOT DATA_OUT_DIR)
-		set(DATA_OUT_DIR "/share/obs/obs-plugins/${PROJECT_NAME}")
-	endif()
-	set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
-	install(TARGETS ${PROJECT_NAME}
-		LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/${LIB_OUT_DIR})
-	install(DIRECTORY data/locale
-		DESTINATION ${CMAKE_INSTALL_PREFIX}/${DATA_OUT_DIR})
-	setup_plugin_target(${PROJECT_NAME})
-else()
-	# Add OBS frontend API include directory for in-tree builds
-	target_include_directories(${PROJECT_NAME} PRIVATE
-		"${CMAKE_SOURCE_DIR}/UI/obs-frontend-api")
-	if(OBS_CMAKE_VERSION VERSION_GREATER_EQUAL 3.0.0)
-		set_target_properties_obs(${PROJECT_NAME} PROPERTIES FOLDER "plugins/andilippi" PREFIX "")
-	else()
-		set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER "plugins/andilippi")
-		setup_plugin_target(${PROJECT_NAME})
-	endif()
-endif()
+set_target_properties_obs(${PROJECT_NAME} PROPERTIES FOLDER "plugins" PREFIX "")

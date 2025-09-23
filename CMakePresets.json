@@ -1,0 +1,175 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "template",
+      "hidden": true,
+      "cacheVariables": {
+        "ENABLE_FRONTEND_API": false,
+        "ENABLE_QT": false
+      }
+    },
+    {
+      "name": "macos",
+      "displayName": "macOS Universal",
+      "description": "Build for macOS (Universal binary)",
+      "inherits": ["template"],
+      "binaryDir": "${sourceDir}/build_macos",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "generator": "Xcode",
+      "warnings": {"dev": true, "deprecated": true},
+      "cacheVariables": {
+        "QT_VERSION": "6",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "12.0",
+        "CODESIGN_IDENTITY": "$penv{CODESIGN_IDENT}",
+        "CODESIGN_TEAM": "$penv{APPLE_TEAM}"
+      }
+    },
+    {
+      "name": "macos-ci",
+      "displayName": "macOS Universal (CI)",
+      "description": "Build for macOS (Universal binary) with CI-specific settings",
+      "inherits": ["macos"],
+      "cacheVariables": {
+        "MACOS_DEPLOYMENT_TARGET": "12.0",
+        "CMAKE_COMPILE_WARNING_AS_ERROR": true
+      }
+    },
+    {
+      "name": "windows-x64",
+      "displayName": "Windows x64",
+      "description": "Build for Windows (x64)",
+      "inherits": ["template"],
+      "binaryDir": "${sourceDir}/build_x64",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "generator": "Visual Studio 17 2022",
+      "warnings": {"dev": true, "deprecated": true},
+      "cacheVariables": {
+        "QT_VERSION": "6",
+        "CMAKE_SYSTEM_VERSION": "10.0.18363.657"
+      }
+    },
+    {
+      "name": "windows-x64-ci",
+      "displayName": "Windows x64 (CI)",
+      "description": "Build for Windows (x64) with CI-specific settings",
+      "inherits": ["windows-x64"],
+      "cacheVariables": {
+        "CMAKE_COMPILE_WARNING_AS_ERROR": true
+      }
+    },
+    {
+      "name": "ubuntu-x86_64",
+      "displayName": "Ubuntu x86_64",
+      "description": "Build for Ubuntu (x86_64)",
+      "inherits": ["template"],
+      "binaryDir": "${sourceDir}/build_x86_64",
+      "condition": {
+        "type": "inList",
+        "string": "${hostSystemName}",
+        "list": ["Linux"]
+      },
+      "generator": "Ninja",
+      "warnings": {"dev": true, "deprecated": true},
+      "cacheVariables": {
+        "QT_VERSION": "6",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "ubuntu-x86_64-ci",
+      "displayName": "Ubuntu x86_64 (CI)",
+      "description": "Build for Ubuntu (x86_64) with CI-specific settings",
+      "inherits": ["ubuntu-x86_64"],
+      "cacheVariables": {
+        "CMAKE_COMPILE_WARNING_AS_ERROR": true
+      }
+    },
+    {
+      "name": "linux-aarch64",
+      "displayName": "Linux AArch64",
+      "description": "Build for Linux (AArch64)",
+      "inherits": ["template"],
+      "binaryDir": "${sourceDir}/build_aarch64",
+      "condition": {
+        "type": "inList",
+        "string": "${hostSystemName}",
+        "list": ["Linux"]
+      },
+      "generator": "Ninja",
+      "warnings": {"dev": true, "deprecated": true},
+      "cacheVariables": {
+        "QT_VERSION": "6",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "macos",
+      "configurePreset": "macos",
+      "displayName": "macOS Universal",
+      "description": "Build with Xcode",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "macos-ci",
+      "configurePreset": "macos-ci",
+      "displayName": "macOS Universal (CI)",
+      "description": "Build with Xcode (CI)",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "windows-x64",
+      "configurePreset": "windows-x64",
+      "displayName": "Windows x64",
+      "description": "Build with Visual Studio 17 2022",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "windows-x64-ci",
+      "configurePreset": "windows-x64-ci",
+      "displayName": "Windows x64 (CI)",
+      "description": "Build with Visual Studio 17 2022 (CI)",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "ubuntu-x86_64",
+      "configurePreset": "ubuntu-x86_64",
+      "displayName": "Ubuntu x86_64",
+      "description": "Build with Ninja",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "ubuntu-x86_64-ci",
+      "configurePreset": "ubuntu-x86_64-ci",
+      "displayName": "Ubuntu x86_64 (CI)",
+      "description": "Build with Ninja (CI)",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "linux-aarch64",
+      "configurePreset": "linux-aarch64",
+      "displayName": "Linux AArch64",
+      "description": "Build with Ninja",
+      "configuration": "RelWithDebInfo"
+    }
+  ]
+}
