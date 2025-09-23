@@ -1,5 +1,6 @@
 #include "menu-manager.hpp"
 #include "../utilities/debug-logger.hpp"
+#include <obs.h>
 #include "source-manager.hpp"
 #include "file-manager.hpp"
 #include "plugin-manager.hpp"
@@ -28,7 +29,15 @@ namespace MenuManager {
 
 void InitializeMenu()
 {
+    blog(LOG_INFO, "[StreamUP] InitializeMenu: Starting menu initialization");
+
+    blog(LOG_INFO, "[StreamUP] InitializeMenu: Creating QMenu");
     QMenu* menu = new QMenu();
+    if (!menu) {
+        blog(LOG_ERROR, "[StreamUP] InitializeMenu: Failed to create QMenu");
+        return;
+    }
+    blog(LOG_INFO, "[StreamUP] InitializeMenu: QMenu created successfully");
     
 #if defined(_WIN32)
     // Windows: Add to main menu bar
@@ -50,12 +59,30 @@ void InitializeMenu()
     menu = topLevelMenu;
 #else
     // macOS and Linux: Add to Tools menu
-    QAction* action = static_cast<QAction*>(obs_frontend_add_tools_menu_qaction(obs_module_text("StreamUP")));
+    blog(LOG_INFO, "[StreamUP] InitializeMenu: Mac/Linux platform - adding to Tools menu");
+
+    blog(LOG_INFO, "[StreamUP] InitializeMenu: Getting menu text");
+    const char* menu_text = obs_module_text("StreamUP");
+    blog(LOG_INFO, "[StreamUP] InitializeMenu: Menu text: %s", menu_text ? menu_text : "NULL");
+
+    blog(LOG_INFO, "[StreamUP] InitializeMenu: Calling obs_frontend_add_tools_menu_qaction");
+    QAction* action = static_cast<QAction*>(obs_frontend_add_tools_menu_qaction(menu_text));
+    if (!action) {
+        blog(LOG_ERROR, "[StreamUP] InitializeMenu: obs_frontend_add_tools_menu_qaction returned NULL");
+        return;
+    }
+    blog(LOG_INFO, "[StreamUP] InitializeMenu: obs_frontend_add_tools_menu_qaction succeeded");
+
+    blog(LOG_INFO, "[StreamUP] InitializeMenu: Setting menu on action");
     action->setMenu(menu);
+    blog(LOG_INFO, "[StreamUP] InitializeMenu: Menu set on action successfully");
 #endif
 
     // Connect dynamic loader
+    blog(LOG_INFO, "[StreamUP] InitializeMenu: Connecting dynamic loader");
     QObject::connect(menu, &QMenu::aboutToShow, [menu] { LoadMenuItems(menu); });
+
+    blog(LOG_INFO, "[StreamUP] InitializeMenu: Menu initialization completed successfully");
 }
 
 void LoadMenuItems(QMenu* menu)
