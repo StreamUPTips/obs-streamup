@@ -313,6 +313,12 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     AUTORCC ON)
 
 # Link external libraries
-target_link_libraries(${PROJECT_NAME} PRIVATE CURL::libcurl)
+if(TARGET CURL::libcurl)
+  target_link_libraries(${PROJECT_NAME} PRIVATE CURL::libcurl)
+endif()
 
-set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER "plugins" PREFIX "")
+if(BUILD_OUT_OF_TREE)
+	set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
+else()
+	set_target_properties_obs(${PROJECT_NAME} PROPERTIES FOLDER "plugins" PREFIX "")
+endif()
