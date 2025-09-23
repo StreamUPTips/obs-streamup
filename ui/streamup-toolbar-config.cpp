@@ -131,7 +131,7 @@ void GroupItem::fromJson(const QJsonObject& json) {
     childItems.clear();
     QJsonArray childArray = json["childItems"].toArray();
     
-    for (const auto& childValue : childArray) {
+    for (const auto childValue : childArray) {
         QJsonObject childObj = childValue.toObject();
         ItemType childType = static_cast<ItemType>(childObj["type"].toInt());
         
@@ -308,7 +308,7 @@ void ToolbarConfiguration::fromJson(const QJsonObject& json) {
     items.clear();
     
     QJsonArray itemsArray = json["items"].toArray();
-    for (const auto& value : itemsArray) {
+    for (const auto value : itemsArray) {
         QJsonObject itemObj = value.toObject();
         ItemType type = static_cast<ItemType>(itemObj["type"].toInt());
         QString id = itemObj["id"].toString();
