@@ -301,7 +301,11 @@ QLabel *CreateRichTextLabel(const QString &text, bool bold, bool wrap, Qt::Align
 QLabel *CreateIconLabel(const QStyle::StandardPixmap &iconName)
 {
 	QLabel *icon = new QLabel();
-	int pixmapSize = (strcmp(STREAMUP_PLATFORM_NAME, "macos") == 0) ? 16 : 64;
+#ifdef __APPLE__
+	int pixmapSize = 16;
+#else
+	int pixmapSize = 64;
+#endif
 	icon->setPixmap(QApplication::style()->standardIcon(iconName).pixmap(pixmapSize, pixmapSize));
 	icon->setStyleSheet("padding-top: 3px;");
 	return icon;
