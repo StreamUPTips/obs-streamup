@@ -195,7 +195,7 @@ void LoadSupportersData()
                 QJsonObject andiObj = rootObj["andilippi"].toObject();
                 if (andiObj.contains("supporters") && andiObj["supporters"].isArray()) {
                     QJsonArray andiSupportersArray = andiObj["supporters"].toArray();
-                    for (const QJsonValue& value : andiSupportersArray) {
+                    for (const QJsonValue value : andiSupportersArray) {
                         if (value.isObject()) {
                             QJsonObject supporterObj = value.toObject();
                             Supporter supporter;
@@ -212,7 +212,7 @@ void LoadSupportersData()
                 QJsonObject streamupObj = rootObj["streamUP"].toObject();
                 if (streamupObj.contains("supporters") && streamupObj["supporters"].isArray()) {
                     QJsonArray streamupSupportersArray = streamupObj["supporters"].toArray();
-                    for (const QJsonValue& value : streamupSupportersArray) {
+                    for (const QJsonValue value : streamupSupportersArray) {
                         if (value.isObject()) {
                             QJsonObject supporterObj = value.toObject();
                             Supporter supporter;
