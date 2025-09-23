@@ -400,3 +400,4 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 
 } // namespace WebSocketWindow
 } // namespace StreamUP
+
