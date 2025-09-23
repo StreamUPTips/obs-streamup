@@ -24,7 +24,7 @@
 #include <util/config-file.h>
 
 StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent),
-	iconUpdateTimer(nullptr), m_updateBatchTimer(nullptr), themeMonitorTimer(nullptr), streamButton(nullptr),
+	iconUpdateTimer(nullptr), themeMonitorTimer(nullptr), m_updateBatchTimer(nullptr), streamButton(nullptr),
 	recordButton(nullptr), pauseButton(nullptr), replayBufferButton(nullptr),
 	saveReplayButton(nullptr), virtualCameraButton(nullptr), virtualCameraConfigButton(nullptr),
 	studioModeButton(nullptr), settingsButton(nullptr), streamUPSettingsButton(nullptr),
