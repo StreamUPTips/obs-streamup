@@ -91,33 +91,33 @@ void LoadMenuItems(QMenu* menu)
     QAction* action;
 
     // Platform-specific actions (Windows only)
-    if (strcmp(STREAMUP_PLATFORM_NAME, "windows") == 0) {
-        action = menu->addAction(obs_module_text("Menu.Plugin.InstallProduct"));
-        QObject::connect(action, &QAction::triggered, []() { 
-            // Check if Shift is held to force load
-            if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
-                StreamUP::FileManager::LoadStreamupFile(true);
-            } else {
-                StreamUP::FileManager::LoadStreamupFileWithWarning();
-            }
-        });
-        
-        action = menu->addAction(obs_module_text("Menu.Plugin.DownloadProduct"));
-        QObject::connect(action, &QAction::triggered, []() { 
-            QDesktopServices::openUrl(QUrl("https://streamup.tips/")); 
-        });
+#ifdef _WIN32
+    action = menu->addAction(obs_module_text("Menu.Plugin.InstallProduct"));
+    QObject::connect(action, &QAction::triggered, []() {
+        // Check if Shift is held to force load
+        if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
+            StreamUP::FileManager::LoadStreamupFile(true);
+        } else {
+            StreamUP::FileManager::LoadStreamupFileWithWarning();
+        }
+    });
 
-        action = menu->addAction(obs_module_text("Menu.Plugin.CheckRequirements"));
-        QObject::connect(action, &QAction::triggered, []() { 
-            // Hold Shift to force refresh cache
-            if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
-                StreamUP::PluginManager::PerformPluginCheckAndCache();
-            }
-            StreamUP::PluginManager::ShowCachedPluginIssuesDialog(); 
-        });
-        
-        menu->addSeparator();
-    }
+    action = menu->addAction(obs_module_text("Menu.Plugin.DownloadProduct"));
+    QObject::connect(action, &QAction::triggered, []() {
+        QDesktopServices::openUrl(QUrl("https://streamup.tips/"));
+    });
+
+    action = menu->addAction(obs_module_text("Menu.Plugin.CheckRequirements"));
+    QObject::connect(action, &QAction::triggered, []() {
+        // Hold Shift to force refresh cache
+        if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
+            StreamUP::PluginManager::PerformPluginCheckAndCache();
+        }
+        StreamUP::PluginManager::ShowCachedPluginIssuesDialog();
+    });
+
+    menu->addSeparator();
+#endif
 
     // Plugin updates (all platforms)
     action = menu->addAction(obs_module_text("Menu.Plugin.CheckUpdates"));
