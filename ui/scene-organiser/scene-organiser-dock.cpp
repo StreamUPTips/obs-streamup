@@ -174,6 +174,8 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_copyFiltersSource(nullptr)
     , m_currentContextItem(nullptr)
     , m_isLocked(false)
+    , m_hideSceneAction(nullptr)
+    , m_showSceneAction(nullptr)
     , m_updateBatchTimer(new QTimer(this))
     , m_updatesPending(false)
     , currentThemeIsDark(false)
@@ -578,6 +580,10 @@ void SceneOrganiserDock::setupContextMenu()
     m_deleteSceneAction = m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Remove"), -1), this, &SceneOrganiserDock::onDeleteSceneClicked);
     m_deleteSceneAction->setShortcut(QKeySequence(Qt::Key_Delete));
 
+    // Scene visibility actions
+    m_hideSceneAction = m_sceneContextMenu->addAction("Hide Scene", this, &SceneOrganiserDock::onHideSceneClicked);
+    m_showSceneAction = m_sceneContextMenu->addAction("Show Scene", this, &SceneOrganiserDock::onShowSceneClicked);
+
     // Order submenu
     m_sceneContextMenu->addSeparator();
     m_sceneOrderMenu = new QMenu(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order"), -1), this);
@@ -667,6 +673,8 @@ void SceneOrganiserDock::refreshSceneList()
 {
     m_model->updateTree();
     updateActiveSceneHighlight();
+    updateHiddenScenesStyling();
+    applySceneVisibility();
 }
 
 void SceneOrganiserDock::updateFromObsScenes()
@@ -889,6 +897,15 @@ void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelInd
         obs_data_release(privateSettings);
         obs_source_release(source);
     }
+
+    // Update hide/show scene action visibility based on current scene state
+    bool sceneIsHidden = m_hiddenScenes.contains(sceneName);
+    if (m_hideSceneAction) m_hideSceneAction->setVisible(!sceneIsHidden);
+    if (m_showSceneAction) m_showSceneAction->setVisible(sceneIsHidden);
+
+    // Only enable hide/show actions when unlocked
+    if (m_hideSceneAction) m_hideSceneAction->setEnabled(!m_isLocked);
+    if (m_showSceneAction) m_showSceneAction->setEnabled(!m_isLocked);
 
     m_sceneContextMenu->exec(pos);
 }
@@ -1340,6 +1357,9 @@ void SceneOrganiserDock::setLocked(bool locked)
     // Update UI enabled state
     updateUIEnabledState();
 
+    // Apply scene visibility based on lock state
+    applySceneVisibility();
+
     // Update lock action states in context menus
     updateLockActionStates();
 
@@ -1400,6 +1420,13 @@ void SceneOrganiserDock::updateUIEnabledState()
     }
     if (m_deleteSceneAction) {
         m_deleteSceneAction->setEnabled(unlocked);
+    }
+    // Scene visibility actions - only allowed when unlocked
+    if (m_hideSceneAction) {
+        m_hideSceneAction->setEnabled(unlocked);
+    }
+    if (m_showSceneAction) {
+        m_showSceneAction->setEnabled(unlocked);
     }
     if (m_sceneMoveUpAction) {
         m_sceneMoveUpAction->setEnabled(unlocked);
@@ -1603,15 +1630,13 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
     case OBS_FRONTEND_EVENT_FINISHED_LOADING:
         QTimer::singleShot(100, dock, [dock]() {
             dock->m_model->loadSceneTree();
-            dock->m_model->updateTree();
-            dock->updateActiveSceneHighlight();
+            dock->refreshSceneList();
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Event", "Scene list changed event received");
         QTimer::singleShot(50, dock, [dock]() {
-            dock->m_model->updateTree();
-            dock->updateActiveSceneHighlight();
+            dock->refreshSceneList();
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING:
@@ -1621,15 +1646,13 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
         QTimer::singleShot(100, dock, [dock]() {
             dock->m_model->loadSceneTree();
-            dock->m_model->updateTree();
-            dock->updateActiveSceneHighlight();
+            dock->refreshSceneList();
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_RENAMED:
         QTimer::singleShot(100, dock, [dock]() {
             dock->m_model->saveSceneTree();
-            dock->m_model->updateTree();
-            dock->updateActiveSceneHighlight();
+            dock->refreshSceneList();
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_CHANGED:
@@ -1688,6 +1711,16 @@ void SceneOrganiserDock::SaveConfiguration()
         file.close();
     }
 
+    // Save hidden scenes
+    QString hiddenScenesFile = configDir + "/" + m_configKey + "_hidden_scenes.txt";
+    QFile hiddenFile(hiddenScenesFile);
+    if (hiddenFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&hiddenFile);
+        QStringList hiddenScenesList = QStringList(m_hiddenScenes.begin(), m_hiddenScenes.end());
+        out << hiddenScenesList.join("\n");
+        hiddenFile.close();
+    }
+
     // Now using DigitOtter approach - save is handled by saveSceneTree()
     // which is called automatically on OBS frontend events
     m_model->saveSceneTree();
@@ -1714,6 +1747,26 @@ void SceneOrganiserDock::LoadConfiguration()
             setLocked(shouldBeLocked);
             file.close();
         }
+
+        // Load hidden scenes
+        QString hiddenScenesFile = configDir + "/" + m_configKey + "_hidden_scenes.txt";
+        QFile hiddenFile(hiddenScenesFile);
+        if (hiddenFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream in(&hiddenFile);
+            QString hiddenScenesText = in.readAll().trimmed();
+            if (!hiddenScenesText.isEmpty()) {
+                QStringList hiddenScenesList = hiddenScenesText.split("\n", Qt::SkipEmptyParts);
+                m_hiddenScenes = QSet<QString>(hiddenScenesList.begin(), hiddenScenesList.end());
+
+                // Apply scene visibility after loading hidden scenes
+                // Use longer delay to ensure scene tree is fully populated
+                QTimer::singleShot(500, this, [this]() {
+                    updateHiddenScenesStyling();
+                    applySceneVisibility();
+                });
+            }
+            hiddenFile.close();
+        }
     }
 
     // Now using the DigitOtter approach - this is handled by frontend events
@@ -1721,6 +1774,12 @@ void SceneOrganiserDock::LoadConfiguration()
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
         QString("Configuration loading handled by frontend events (lock state: %1)")
         .arg(m_isLocked ? "locked" : "unlocked").toUtf8().constData());
+
+    // Apply scene visibility one more time after full initialization with even longer delay
+    QTimer::singleShot(1000, this, [this]() {
+        updateHiddenScenesStyling();
+        applySceneVisibility();
+    });
 }
 
 // Search functionality implementation
@@ -1900,6 +1959,126 @@ void SceneOrganiserDock::onDeleteSceneClicked()
     }
 
     obs_source_release(source);
+}
+
+void SceneOrganiserDock::onHideSceneClicked()
+{
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
+
+    QString sceneName = m_currentContextItem->text();
+
+    // Add scene to hidden list
+    m_hiddenScenes.insert(sceneName);
+
+    // Apply visual styling when unlocked (italic font to indicate it will be hidden when locked)
+    m_currentContextItem->setFont(QFont("", -1, QFont::Normal, true)); // Make text italic
+
+    // If dock is locked, immediately hide the scene from the tree
+    if (m_isLocked) {
+        applySceneVisibility();
+    }
+
+    // Save configuration immediately to persist hidden scenes
+    m_saveTimer->start(500);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Visibility",
+        QString("Hidden scene: %1").arg(sceneName).toUtf8().constData());
+}
+
+void SceneOrganiserDock::onShowSceneClicked()
+{
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
+
+    QString sceneName = m_currentContextItem->text();
+
+    // Remove scene from hidden list
+    m_hiddenScenes.remove(sceneName);
+
+    // Reset font to normal
+    m_currentContextItem->setFont(QFont());
+
+    // If dock is locked, immediately show the scene in the tree
+    if (m_isLocked) {
+        applySceneVisibility();
+    }
+
+    // Save configuration immediately to persist visible scenes
+    m_saveTimer->start(500);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Visibility",
+        QString("Shown scene: %1").arg(sceneName).toUtf8().constData());
+}
+
+void SceneOrganiserDock::applySceneVisibility()
+{
+    if (!m_model || !m_treeView) return;
+
+    // Recursively apply visibility to all scene items in the tree
+    applySceneVisibilityRecursive(m_model->invisibleRootItem());
+
+    // Force update of the proxy model to refresh the view
+    if (m_proxyModel) {
+        m_proxyModel->invalidate();
+    }
+}
+
+void SceneOrganiserDock::applySceneVisibilityRecursive(QStandardItem *parent)
+{
+    if (!parent) return;
+
+    for (int i = 0; i < parent->rowCount(); ++i) {
+        QStandardItem *child = parent->child(i);
+        if (!child) continue;
+
+        if (child->type() == SceneTreeItem::UserType + 2) { // Scene item
+            QString sceneName = child->text();
+            bool shouldHide = m_isLocked && m_hiddenScenes.contains(sceneName);
+
+            // Get the model index for this item
+            QModelIndex index = child->index();
+            if (m_treeView) {
+                // Map to proxy model index
+                QModelIndex proxyIndex = m_proxyModel->mapFromSource(index);
+                // Hide/show the row in the tree view
+                m_treeView->setRowHidden(proxyIndex.row(), proxyIndex.parent(), shouldHide);
+            }
+        } else if (child->hasChildren()) {
+            // Recursively check folder contents
+            applySceneVisibilityRecursive(child);
+        }
+    }
+}
+
+void SceneOrganiserDock::updateHiddenScenesStyling()
+{
+    if (!m_model) return;
+    updateHiddenScenesStylingRecursive(m_model->invisibleRootItem());
+}
+
+void SceneOrganiserDock::updateHiddenScenesStylingRecursive(QStandardItem *parent)
+{
+    if (!parent) return;
+
+    for (int i = 0; i < parent->rowCount(); ++i) {
+        QStandardItem *child = parent->child(i);
+        if (!child) continue;
+
+        if (child->type() == SceneTreeItem::UserType + 2) { // Scene item
+            QString sceneName = child->text();
+            bool isHidden = m_hiddenScenes.contains(sceneName);
+
+            if (isHidden) {
+                // Apply italic styling to indicate scene is hidden (when unlocked)
+                child->setFont(QFont("", -1, QFont::Normal, true));
+            } else {
+                // Reset to normal font
+                child->setFont(QFont());
+            }
+        } else if (child->hasChildren()) {
+            // Recursively check folder contents
+            updateHiddenScenesStylingRecursive(child);
+        }
+    }
 }
 
 void SceneOrganiserDock::onCopyFiltersClicked()
