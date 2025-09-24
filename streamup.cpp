@@ -488,9 +488,8 @@ static void LoadStreamUPDock()
 	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: StreamUP dock creation completed");
 }
 
-// Global Scene Organiser dock instances
+// Global Scene Organiser dock instance
 static StreamUP::SceneOrganiser::SceneOrganiserDock* globalSceneOrganiserNormal = nullptr;
-static StreamUP::SceneOrganiser::SceneOrganiserDock* globalSceneOrganiserVertical = nullptr;
 
 static void LoadSceneOrganiserDocks()
 {
@@ -539,41 +538,6 @@ static void LoadSceneOrganiserDocks()
 	obs_frontend_add_dock_by_id(normalName, normalTitle.toUtf8().constData(), globalSceneOrganiserNormal);
 	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Normal Canvas dock added");
 
-	// Create Vertical Canvas Scene Organiser only if Aitum Vertical plugin is detected
-	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Checking for Vertical plugin");
-	if (StreamUP::SceneOrganiser::SceneOrganiserDock::IsVerticalPluginDetected()) {
-		blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Vertical plugin detected, creating Vertical Canvas Scene Organiser");
-
-#ifdef __APPLE__
-		blog(LOG_INFO, "[StreamUP] Mac: About to create Vertical Canvas Scene Organiser");
-#endif
-
-		try {
-			globalSceneOrganiserVertical = new StreamUP::SceneOrganiser::SceneOrganiserDock(
-				StreamUP::SceneOrganiser::CanvasType::Vertical, main_window);
-		} catch (const std::exception& e) {
-			blog(LOG_ERROR, "[StreamUP] LoadSceneOrganiserDocks: Exception creating Vertical Scene Organiser: %s", e.what());
-			globalSceneOrganiserVertical = nullptr;
-		} catch (...) {
-			blog(LOG_ERROR, "[StreamUP] LoadSceneOrganiserDocks: Unknown exception creating Vertical Scene Organiser");
-			globalSceneOrganiserVertical = nullptr;
-		}
-
-		if (!globalSceneOrganiserVertical) {
-			blog(LOG_ERROR, "[StreamUP] LoadSceneOrganiserDocks: Failed to create Vertical Scene Organiser");
-		} else {
-			blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Vertical Canvas Scene Organiser created successfully");
-
-			const QString verticalTitle = QString::fromUtf8(obs_module_text("SceneOrganiser.Label.VerticalCanvas"));
-			const auto verticalName = "StreamUPSceneOrganiserVertical";
-
-			blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Adding Vertical dock with new API");
-			obs_frontend_add_dock_by_id(verticalName, verticalTitle.toUtf8().constData(), globalSceneOrganiserVertical);
-			blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Vertical Canvas dock added");
-		}
-	} else {
-		blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Vertical plugin not detected, skipping Vertical Canvas");
-	}
 
 	obs_frontend_pop_ui_translation();
 	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Scene Organiser dock creation completed");
