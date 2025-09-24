@@ -182,8 +182,8 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
 {
     s_dockInstances.append(this);
 
-    // Set configuration key based on canvas type
-    m_configKey = (m_canvasType == CanvasType::Vertical) ? "scene_organiser_vertical" : "scene_organiser_normal";
+    // Set configuration key
+    m_configKey = "scene_organiser_normal";
 
     // Initialize optimized update system
     m_updateBatchTimer->setSingleShot(true);
@@ -218,8 +218,7 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     QTimer::singleShot(200, this, &SceneOrganiserDock::updateActiveSceneHighlight);
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Initialize",
-        QString("Scene Organiser Dock created for %1 canvas")
-        .arg(m_canvasType == CanvasType::Vertical ? "vertical" : "normal").toUtf8().constData());
+        "Scene Organiser Dock created for normal canvas");
 }
 
 SceneOrganiserDock::~SceneOrganiserDock()
@@ -235,73 +234,6 @@ SceneOrganiserDock::~SceneOrganiserDock()
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Cleanup", "Scene Organiser Dock destroyed");
 }
 
-bool SceneOrganiserDock::IsVerticalPluginDetected()
-{
-    // Primary method: Check if vertical-canvas.dll is loaded using our plugin checker
-    char *logPath = StreamUP::PathUtils::GetOBSLogPath();
-    if (logPath) {
-        std::vector<std::string> loadedModules = StreamUP::PluginManager::SearchLoadedModulesInLogFile(logPath);
-        bfree(logPath);
-
-        StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Checking for vertical-canvas module among %zu loaded modules", loadedModules.size());
-
-        for (const auto& module : loadedModules) {
-            StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Found loaded module: %s", module.c_str());
-            if (module == "vertical-canvas") {
-                StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin detected via loaded modules (vertical-canvas.dll)!");
-                return true;
-            }
-        }
-    }
-
-    // Secondary method: Check if Aitum Vertical plugin is detected in StreamUP's plugin list
-    auto installedPlugins = StreamUP::PluginManager::GetInstalledPluginsCached();
-
-    StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Checking for vertical plugin among %zu installed plugins", installedPlugins.size());
-
-    for (const auto& plugin : installedPlugins) {
-        StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Found plugin: %s", plugin.first.c_str());
-        if (plugin.first.find("aitum-vertical") != std::string::npos ||
-            plugin.first.find("Aitum Vertical") != std::string::npos ||
-            plugin.first.find("aitum_vertical") != std::string::npos) {
-            StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin detected via plugin list!");
-            return true;
-        }
-    }
-
-    // Fallback method: Check if vertical sources exist (indicates vertical plugin is active)
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "VerticalDetection", "Checking for vertical sources as fallback detection");
-
-    bool foundVerticalScene = false;
-    obs_enum_scenes([](void *param, obs_source_t *source) {
-        bool *found = static_cast<bool*>(param);
-        if (*found) return false; // Already found, stop enumeration
-
-        const char *scene_name = obs_source_get_name(source);
-        if (scene_name && (strstr(scene_name, "[Vertical]") || strstr(scene_name, "(Vertical)"))) {
-            StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Found vertical scene: %s", scene_name);
-            *found = true;
-            return false; // Stop enumeration
-        }
-        return true; // Continue enumeration
-    }, &foundVerticalScene);
-
-    if (foundVerticalScene) {
-        StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin detected via vertical scenes!");
-        return true;
-    }
-
-    // Also check for vertical canvas output existence (more direct approach)
-    obs_output_t *vertical_output = obs_get_output_by_name("aitum_vertical_output");
-    if (vertical_output) {
-        StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin detected via output!");
-        obs_output_release(vertical_output);
-        return true;
-    }
-
-    StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin not found via any detection method");
-    return false;
-}
 
 void SceneOrganiserDock::NotifyAllDocksSettingsChanged()
 {
@@ -320,7 +252,7 @@ void SceneOrganiserDock::NotifySceneOrganiserIconsChanged()
 
 void SceneOrganiserDock::setupUI()
 {
-    setObjectName(QString("StreamUPSceneOrganiser%1").arg(m_canvasType == CanvasType::Vertical ? "Vertical" : "Normal"));
+    setObjectName("StreamUPSceneOrganiserNormal");
 
     // Use zero margins and spacing to match OBS dock style
     m_mainLayout = new QVBoxLayout(this);
@@ -2692,44 +2624,8 @@ bool SceneTreeModel::isValidSceneForCanvas(obs_scene_t *scene)
     const char *scene_name = obs_source_get_name(source);
     if (!scene_name) return false;
 
-    // Check for common vertical scene naming patterns
-    bool isVerticalScene = (strstr(scene_name, "[Vertical]") != nullptr ||
-                           strstr(scene_name, "(Vertical)") != nullptr ||
-                           strstr(scene_name, "_Vertical") != nullptr ||
-                           strstr(scene_name, " Vertical") != nullptr ||
-                           strstr(scene_name, "[V]") != nullptr ||
-                           strstr(scene_name, "(V)") != nullptr);
-
-    // Additional check: examine scene resolution if available
-    // Vertical scenes typically have portrait aspect ratios (height > width)
-    bool isProbablyVertical = false;
-    uint32_t width = obs_source_get_width(source);
-    uint32_t height = obs_source_get_height(source);
-
-    if (width > 0 && height > 0) {
-        // Consider it vertical if height is significantly greater than width
-        // Using 1.3 ratio as threshold (height/width > 1.3)
-        isProbablyVertical = (height * 10 > width * 13);
-    }
-
-    // If naming pattern and resolution both suggest vertical, treat as vertical
-    if (isVerticalScene || isProbablyVertical) {
-        StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "SceneFilter",
-            "Scene '%s' detected as vertical (name: %s, resolution: %s) for %s canvas",
-            scene_name,
-            isVerticalScene ? "yes" : "no",
-            isProbablyVertical ? QString("%1x%2").arg(width).arg(height).toUtf8().constData() : "unknown",
-            (m_canvasType == CanvasType::Vertical) ? "vertical" : "normal");
-    }
-
-    // Filter based on canvas type:
-    // - Normal canvas: show non-vertical scenes
-    // - Vertical canvas: show only vertical scenes
-    if (m_canvasType == CanvasType::Vertical) {
-        return isVerticalScene || isProbablyVertical;
-    } else {
-        return !isVerticalScene && !isProbablyVertical;
-    }
+    // All scenes are valid for normal canvas
+    return true;
 }
 
 
@@ -3143,8 +3039,7 @@ void SceneTreeModel::saveSceneTree()
     }
 
     QString configDir = QString::fromUtf8(configPath);
-    QString configFile = configDir + "/scene_tree_" +
-        (m_canvasType == CanvasType::Vertical ? "vertical" : "normal") + ".json";
+    QString configFile = configDir + "/scene_tree_normal.json";
 
     bfree(configPath);
 
@@ -3176,8 +3071,7 @@ void SceneTreeModel::loadSceneTree()
     }
 
     QString configDir = QString::fromUtf8(configPath);
-    QString configFile = configDir + "/scene_tree_" +
-        (m_canvasType == CanvasType::Vertical ? "vertical" : "normal") + ".json";
+    QString configFile = configDir + "/scene_tree_normal.json";
 
     bfree(configPath);
 

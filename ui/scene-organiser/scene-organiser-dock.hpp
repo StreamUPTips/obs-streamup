@@ -49,8 +49,7 @@ private:
 };
 
 enum class CanvasType {
-    Normal,
-    Vertical
+    Normal
 };
 
 class SceneOrganiserDock : public QFrame {
@@ -62,7 +61,6 @@ public:
 
     CanvasType GetCanvasType() const { return m_canvasType; }
 
-    static bool IsVerticalPluginDetected();
     static void NotifyAllDocksSettingsChanged();
     static void NotifySceneOrganiserIconsChanged();
 
