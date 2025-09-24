@@ -24,7 +24,7 @@
 #include <util/config-file.h>
 
 StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent),
-	iconUpdateTimer(nullptr), themeMonitorTimer(nullptr), m_updateBatchTimer(nullptr), streamButton(nullptr),
+	iconUpdateTimer(nullptr), m_updateBatchTimer(nullptr), streamButton(nullptr),
 	recordButton(nullptr), pauseButton(nullptr), replayBufferButton(nullptr),
 	saveReplayButton(nullptr), virtualCameraButton(nullptr), virtualCameraConfigButton(nullptr),
 	studioModeButton(nullptr), settingsButton(nullptr), streamUPSettingsButton(nullptr),
@@ -63,14 +63,6 @@ StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent),
 	// Initialize current theme state
 	currentThemeIsDark = StreamUP::UIHelpers::IsOBSThemeDark();
 
-	// Set up theme monitoring for older OBS versions that don't have theme change events
-#if LIBOBS_API_VER < MAKE_SEMANTIC_VERSION(29, 0, 0)
-	themeMonitorTimer = new QTimer(this);
-	themeMonitorTimer->setInterval(1000); // Check every second
-	connect(themeMonitorTimer, &QTimer::timeout, this, &StreamUPToolbar::checkForThemeChange);
-	themeMonitorTimer->start();
-	StreamUP::DebugLogger::LogDebug("Toolbar", "Theme Monitor", "Started theme monitoring for older OBS version");
-#endif
 
 	// Register for OBS frontend events to update button states
 	obs_frontend_add_event_callback(OnFrontendEvent, this);
@@ -509,14 +501,12 @@ void StreamUPToolbar::OnFrontendEvent(enum obs_frontend_event event, void *data)
 		toolbar->updateIconsForTheme();
 		toolbar->scheduleUpdate();
 		break;
-		
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
+
 	case OBS_FRONTEND_EVENT_THEME_CHANGED:
 		// Theme changed, update icons and styling for new theme
 		toolbar->updateIconsForTheme();
 		toolbar->updateToolbarStyling();
 		break;
-#endif
 		
 	default:
 		break;
@@ -644,18 +634,6 @@ void StreamUPToolbar::updateButtonStatesEfficiently()
 	StreamUP::DebugLogger::LogDebug("Toolbar", "Batch Update", "Completed efficient button state update");
 }
 
-void StreamUPToolbar::checkForThemeChange()
-{
-	bool newThemeIsDark = StreamUP::UIHelpers::IsOBSThemeDark();
-	if (newThemeIsDark != currentThemeIsDark) {
-		StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Theme Monitor", "Theme change detected: %s -> %s",
-			currentThemeIsDark ? "dark" : "light", newThemeIsDark ? "dark" : "light");
-
-		currentThemeIsDark = newThemeIsDark;
-		updateIconsForTheme();
-		updateToolbarStyling();
-	}
-}
 
 void StreamUPToolbar::updateIconsForTheme()
 {

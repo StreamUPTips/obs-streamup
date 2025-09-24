@@ -173,9 +173,7 @@ bool MultiDockManager::RemoveMultiDock(const QString& id)
     SaveAllMultiDocks();
     
     // Now unregister the empty MultiDock from OBS
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
     obs_frontend_remove_dock(id.toUtf8().constData());
-#endif
     
     return true;
 }
@@ -480,7 +478,6 @@ void MultiDockManager::RegisterWithObs(MultiDockDock* multiDock)
     QString title = multiDock->GetName();
     QMainWindow* mainWindow = GetObsMainWindow();
     
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
     // Modern API - wrap in QDockWidget and use custom dock registration (no menu entry)
     auto dock = new QDockWidget(mainWindow);
     dock->setObjectName(id);
@@ -489,34 +486,17 @@ void MultiDockManager::RegisterWithObs(MultiDockDock* multiDock)
     dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     dock->setFloating(true);
     dock->hide();
-    
+
     // Use custom dock registration to avoid appearing in OBS View > Docks menu
     bool success = obs_frontend_add_custom_qdock(id.toUtf8().constData(), dock);
-    
+
     if (success) {
         StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Registration", "Registered MultiDock '%s' with OBS as custom dock (hidden from menu, ID: %s)",
              title.toUtf8().constData(), id.toUtf8().constData());
     } else {
-        StreamUP::DebugLogger::LogErrorFormat("MultiDock", "Failed to register MultiDock '%s' with OBS", 
+        StreamUP::DebugLogger::LogErrorFormat("MultiDock", "Failed to register MultiDock '%s' with OBS",
              title.toUtf8().constData());
     }
-#else
-    // Legacy API - wrap in QDockWidget and use regular dock registration
-    auto dock = new QDockWidget(mainWindow);
-    dock->setObjectName(id);
-    dock->setWindowTitle(title);
-    dock->setWidget(multiDock);
-    dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    dock->setFloating(true);
-    dock->hide();
-    obs_frontend_add_dock(dock);
-    
-    // Hide from dock menu after registration
-    dock->toggleViewAction()->setVisible(false);
-    
-    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Registration", "Registered MultiDock '%s' with OBS (hidden from menu)",
-         title.toUtf8().constData());
-#endif
 }
 
 void MultiDockManager::UnregisterFromObs(MultiDockDock* multiDock)
@@ -528,10 +508,8 @@ void MultiDockManager::UnregisterFromObs(MultiDockDock* multiDock)
     // Unregister the dock from OBS using the dock ID
     QString id = multiDock->GetId();
     QString name = multiDock->GetName();
-    
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
+
     obs_frontend_remove_dock(id.toUtf8().constData());
-#endif
     
     StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Registration", "Unregistered MultiDock '%s' from OBS (ID: %s)",
          name.toUtf8().constData(), id.toUtf8().constData());
