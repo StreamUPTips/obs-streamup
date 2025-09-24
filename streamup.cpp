@@ -474,20 +474,8 @@ static void LoadStreamUPDock()
 	const auto name = "StreamUPDock";
 	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: Dock title: %s", title.toUtf8().constData());
 
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
 	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: Using new API - adding dock by ID");
 	obs_frontend_add_dock_by_id(name, title.toUtf8().constData(), dock_widget);
-#else
-	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: Using legacy API - creating QDockWidget");
-	auto dock = new QDockWidget(main_window);
-	dock->setObjectName(name);
-	dock->setWindowTitle(title);
-	dock->setWidget(dock_widget);
-	dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-	dock->setFloating(true);
-	dock->hide();
-	obs_frontend_add_dock(dock);
-#endif
 	blog(LOG_INFO, "[StreamUP] LoadStreamUPDock: Dock added to frontend");
 
 	obs_frontend_pop_ui_translation();
@@ -541,20 +529,8 @@ static void LoadSceneOrganiserDocks()
 	const QString normalTitle = QString::fromUtf8(obs_module_text("SceneOrganiser.Label.NormalCanvas"));
 	const auto normalName = "StreamUPSceneOrganiserNormal";
 
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
 	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Adding Normal dock with new API");
 	obs_frontend_add_dock_by_id(normalName, normalTitle.toUtf8().constData(), globalSceneOrganiserNormal);
-#else
-	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Adding Normal dock with legacy API");
-	auto normalDock = new QDockWidget(main_window);
-	normalDock->setObjectName(normalName);
-	normalDock->setWindowTitle(normalTitle);
-	normalDock->setWidget(globalSceneOrganiserNormal);
-	normalDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-	normalDock->setFloating(true);
-	normalDock->hide();
-	obs_frontend_add_dock(normalDock);
-#endif
 	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Normal Canvas dock added");
 
 	// Create Vertical Canvas Scene Organiser only if Aitum Vertical plugin is detected
@@ -585,20 +561,8 @@ static void LoadSceneOrganiserDocks()
 			const QString verticalTitle = QString::fromUtf8(obs_module_text("SceneOrganiser.Label.VerticalCanvas"));
 			const auto verticalName = "StreamUPSceneOrganiserVertical";
 
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
 			blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Adding Vertical dock with new API");
 			obs_frontend_add_dock_by_id(verticalName, verticalTitle.toUtf8().constData(), globalSceneOrganiserVertical);
-#else
-			blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Adding Vertical dock with legacy API");
-			auto verticalDock = new QDockWidget(main_window);
-			verticalDock->setObjectName(verticalName);
-			verticalDock->setWindowTitle(verticalTitle);
-			verticalDock->setWidget(globalSceneOrganiserVertical);
-			verticalDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-			verticalDock->setFloating(true);
-			verticalDock->hide();
-			obs_frontend_add_dock(verticalDock);
-#endif
 			blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Vertical Canvas dock added");
 		}
 	} else {
