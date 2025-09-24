@@ -1382,7 +1382,13 @@ void ShowCachedPluginIssuesDialog(std::function<void()> continueCallback)
 	}
 	
 	if (filteredMissing.empty() && filteredOutdated.empty()) {
-		PluginsUpToDateOutput(true);
+		// If there's a continue callback, it means this was called from "Install a product"
+		// flow, so we should execute the callback instead of showing the up-to-date popup
+		if (continueCallback) {
+			continueCallback();
+		} else {
+			PluginsUpToDateOutput(true);
+		}
 		return;
 	}
 
