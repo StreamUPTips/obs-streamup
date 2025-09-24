@@ -99,6 +99,12 @@ private slots:
     void onSceneMoveDownClicked();
     void onSceneMoveToTopClicked();
     void onSceneMoveToBottomClicked();
+    void onHideSceneClicked();
+    void onShowSceneClicked();
+    void applySceneVisibility();
+    void applySceneVisibilityRecursive(QStandardItem *parent);
+    void updateHiddenScenesStyling();
+    void updateHiddenScenesStylingRecursive(QStandardItem *parent);
 
 public slots:
     static void onFrontendEvent(enum obs_frontend_event event, void *private_data);
@@ -201,6 +207,8 @@ public:
     QAction *m_sceneMoveDownAction;
     QAction *m_sceneMoveToTopAction;
     QAction *m_sceneMoveToBottomAction;
+    QAction *m_hideSceneAction;
+    QAction *m_showSceneAction;
 
     // Lock/unlock actions in context menus
     QAction *m_folderLockAction;
@@ -219,6 +227,9 @@ public:
 
     // Lock state management
     bool m_isLocked;
+
+    // Scene visibility management
+    QSet<QString> m_hiddenScenes;
 
     // Click tracking for rename functionality
     QPersistentModelIndex m_lastClickedIndex;
