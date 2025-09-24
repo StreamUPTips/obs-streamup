@@ -6,6 +6,7 @@
 #include "version-utils.hpp"
 #include "path-utils.hpp"
 #include "http-client.hpp"
+#include <sstream>
 #include "../ui/ui-helpers.hpp"
 #include "../ui/ui-styles.hpp"
 #include "obs-wrappers.hpp"
@@ -733,6 +734,80 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 	}
 }
 
+// Helper function to check if a line should be filtered out (not a plugin)
+static bool ShouldFilterOutLine(const std::string &line) {
+	// Filter out Qt version, OBS version, and other system information
+	const std::vector<std::string> filterPatterns = {
+		"Qt Version:",
+		"OBS Version:",
+		"OBS Studio - Version:",
+		"Build Date:",
+		"Runtime Info:",
+		"CPU Name:",
+		"Memory:",
+		"OS Name:",
+		"Windows Version:",
+		"Kernel Version:",
+		"Audio bitrate:",
+		"FTL stream:",
+		"Video bitrate:",
+		"Output resolution:",
+		"Base resolution:",
+		"Loaded Modules:",
+		"Loading module:",
+		"Failed to load module:",
+		"[rtmp-services]",
+		"[obs-browser]",
+		"[obs-websocket]"
+	};
+
+	for (const auto& pattern : filterPatterns) {
+		if (line.find(pattern) != std::string::npos) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Helper function to detect if a string is likely a git hash vs a version number
+static bool IsLikelyGitHash(const std::string &version) {
+	// Git hashes are typically much longer than version numbers
+	if (version.length() < 7) return false;
+
+	// Version numbers with dots are unlikely to be git hashes if they're short
+	size_t dot_count = std::count(version.begin(), version.end(), '.');
+	if (dot_count > 0 && version.length() <= 10) return false;
+
+	// If it contains only hex digits and maybe dots, and is long enough, it might be a git hash
+	bool only_hex_and_dots = std::all_of(version.begin(), version.end(),
+		[](char c) { return std::isxdigit(c) || c == '.'; });
+
+	// Real version numbers typically have reasonable numeric ranges
+	if (only_hex_and_dots && dot_count >= 1) {
+		// Parse the parts and check if they look like reasonable version numbers
+		std::vector<std::string> parts;
+		std::stringstream ss(version);
+		std::string part;
+		while (std::getline(ss, part, '.')) {
+			parts.push_back(part);
+		}
+
+		// If any part is longer than 3 digits or contains only hex a-f, it's likely a git hash
+		for (const auto& p : parts) {
+			if (p.length() > 3) return true;
+			// Check if it contains hex letters a-f (case insensitive)
+			for (char c : p) {
+				if ((c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+					return true;
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
 std::string SearchStringInFileForVersion(const char *path, const char *search)
 {
 	static QString cached_filepath;
@@ -757,46 +832,70 @@ std::string SearchStringInFileForVersion(const char *path, const char *search)
 	char line[1024]; // Further increased buffer size
 	static const std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_double("[0-9]+\\.[0-9]+");
+	static const std::regex version_regex_single("[0-9]+");
 	const size_t search_len = strlen(search);
-	
+
+	std::string best_version;
+	int best_priority = -1; // Higher number = better priority
+
 	while (fgets(line, sizeof(line), file)) {
+		std::string line_str(line);
+
+		// Skip filtered lines (Qt Version, OBS Version, etc.)
+		if (ShouldFilterOutLine(line_str)) {
+			continue;
+		}
+
 		char *found_ptr = strstr(line, search);
 		if (found_ptr) {
 			std::string remaining_line(found_ptr + search_len);
 			std::smatch match;
+			std::string found_version;
+			int priority = 0;
+
+			// Determine priority based on context
+			if (line_str.find("loaded") != std::string::npos || line_str.find("Loaded") != std::string::npos) {
+				priority = 10; // Highest priority for "loaded" messages
+			} else if (line_str.find("Version") != std::string::npos) {
+				priority = 5; // Medium priority for lines containing "Version"
+			} else {
+				priority = 1; // Lowest priority for other matches
+			}
 
 			// First try to find semantic version (x.y.z format)
 			if (std::regex_search(remaining_line, match, version_regex_triple)) {
 				std::string version = match.str(0);
-				// Check if this looks like a git hash (contains only hex chars and is long)
-				bool is_git_hash = version.length() >= 7 && std::all_of(version.begin(), version.end(), 
-					[](char c) { return std::isxdigit(c) || c == '.'; }) && 
-					std::count(version.begin(), version.end(), '.') >= 2;
-				
-				if (!is_git_hash) {
-					fclose(file);
-					return version;
+				if (!IsLikelyGitHash(version)) {
+					found_version = version;
 				}
 			}
 
 			// If triple version was a git hash or not found, try double version
-			if (std::regex_search(remaining_line, match, version_regex_double)) {
+			if (found_version.empty() && std::regex_search(remaining_line, match, version_regex_double)) {
 				std::string version = match.str(0);
-				// Check if this looks like a git hash (contains only hex chars and is long)
-				bool is_git_hash = version.length() >= 7 && std::all_of(version.begin(), version.end(), 
-					[](char c) { return std::isxdigit(c) || c == '.'; }) && 
-					std::count(version.begin(), version.end(), '.') >= 1;
-				
-				if (!is_git_hash) {
-					fclose(file);
-					return version;
+				if (!IsLikelyGitHash(version)) {
+					found_version = version;
 				}
+			}
+
+			// If neither triple nor double version found, try single version
+			if (found_version.empty() && std::regex_search(remaining_line, match, version_regex_single)) {
+				std::string version = match.str(0);
+				if (!IsLikelyGitHash(version)) {
+					found_version = version;
+				}
+			}
+
+			// Update best version if we found a better one
+			if (!found_version.empty() && priority > best_priority) {
+				best_version = found_version;
+				best_priority = priority;
 			}
 		}
 	}
 
 	fclose(file);
-	return "";
+	return best_version;
 }
 
 std::string SearchThemeFileForVersion(const char *search)
@@ -862,36 +961,83 @@ std::string SearchThemeFileForVersion(const char *search)
 	
 	static const std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_double("[0-9]+\\.[0-9]+");
+	static const std::regex version_regex_single("[0-9]+");
 	const size_t search_len = strlen(search);
-	
+
 	// Try each potential theme file location
 	for (const QString& themePath : themePaths) {
 		FILE *file = fopen(themePath.toLocal8Bit().constData(), "r");
 		if (!file) {
 			continue; // Try next path
 		}
-		
+
 		char line[1024];
+		std::string best_version;
+		int best_priority = -1;
+
 		while (fgets(line, sizeof(line), file)) {
+			std::string line_str(line);
+
+			// Skip filtered lines (Qt Version, OBS Version, etc.)
+			if (ShouldFilterOutLine(line_str)) {
+				continue;
+			}
+
 			char *found_ptr = strstr(line, search);
 			if (found_ptr) {
 				std::string remaining_line(found_ptr + search_len);
 				std::smatch match;
+				std::string found_version;
+				int priority = 0;
 
-				if (std::regex_search(remaining_line, match, version_regex_triple)) {
-					fclose(file);
-					return match.str(0);
+				// Determine priority based on context
+				if (line_str.find("loaded") != std::string::npos || line_str.find("Loaded") != std::string::npos) {
+					priority = 10; // Highest priority for "loaded" messages
+				} else if (line_str.find("Version") != std::string::npos) {
+					priority = 5; // Medium priority for lines containing "Version"
+				} else {
+					priority = 1; // Lowest priority for other matches
 				}
 
-				if (std::regex_search(remaining_line, match, version_regex_double)) {
-					fclose(file);
-					return match.str(0);
+				// First try to find semantic version (x.y.z format)
+				if (std::regex_search(remaining_line, match, version_regex_triple)) {
+					std::string version = match.str(0);
+					if (!IsLikelyGitHash(version)) {
+						found_version = version;
+					}
+				}
+
+				// If triple version was a git hash or not found, try double version
+				if (found_version.empty() && std::regex_search(remaining_line, match, version_regex_double)) {
+					std::string version = match.str(0);
+					if (!IsLikelyGitHash(version)) {
+						found_version = version;
+					}
+				}
+
+				// If neither triple nor double version found, try single version
+				if (found_version.empty() && std::regex_search(remaining_line, match, version_regex_single)) {
+					std::string version = match.str(0);
+					if (!IsLikelyGitHash(version)) {
+						found_version = version;
+					}
+				}
+
+				// Update best version if we found a better one
+				if (!found_version.empty() && priority > best_priority) {
+					best_version = found_version;
+					best_priority = priority;
 				}
 			}
 		}
 		fclose(file);
+
+		// If we found a version in this theme file, return it
+		if (!best_version.empty()) {
+			return best_version;
+		}
 	}
-	
+
 	return ""; // Theme file not found or version not found
 }
 
@@ -929,11 +1075,13 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 	
 	static const std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_double("[0-9]+\\.[0-9]+");
-	
+	static const std::regex version_regex_single("[0-9]+");
+
 	for (const auto &module : allPlugins) {
 		const std::string &plugin_name = module.first;
 		const StreamUP::PluginInfo &plugin_info = module.second;
 		const std::string &search_string = plugin_info.searchString;
+
 
 		std::string installed_version;
 		// Check if this is a theme entry (special handling)
@@ -941,38 +1089,95 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 			// For theme checking, use the theme-specific search function
 			installed_version = SearchThemeFileForVersion("Version:");
 		} else {
-			// Search in log file content for regular plugins
-			size_t found_pos = file_content.find(search_string);
-			if (found_pos != std::string::npos) {
-				std::string remaining = file_content.substr(found_pos + search_string.length());
-				std::smatch match;
-				
-				// First try to find semantic version (x.y.z format)
-				if (std::regex_search(remaining, match, version_regex_triple)) {
-					std::string version = match.str(0);
-					// Check if this looks like a git hash (contains only hex chars and is long)
-					bool is_git_hash = version.length() >= 7 && std::all_of(version.begin(), version.end(), 
-						[](char c) { return std::isxdigit(c) || c == '.'; }) && 
-						std::count(version.begin(), version.end(), '.') >= 2;
-					
-					if (!is_git_hash) {
-						installed_version = version;
+			// Search in log file content for regular plugins with prioritization
+			std::string best_version;
+			int best_priority = -1;
+			size_t search_pos = 0;
+
+			// Use the API-provided search string directly since we know they are specific
+			std::vector<std::string> search_strings_to_try;
+			search_strings_to_try.push_back(search_string);
+
+			// Try each search string in order of preference
+			for (const auto& current_search : search_strings_to_try) {
+				search_pos = 0;
+				bool found_match = false;
+
+				// Find all occurrences of the current search string
+				while ((search_pos = file_content.find(current_search, search_pos)) != std::string::npos) {
+					found_match = true;
+					// Find the start and end of the current line
+					size_t line_start = file_content.rfind('\n', search_pos);
+					line_start = (line_start == std::string::npos) ? 0 : line_start + 1;
+					size_t line_end = file_content.find('\n', search_pos);
+					line_end = (line_end == std::string::npos) ? file_content.length() : line_end;
+
+					std::string line = file_content.substr(line_start, line_end - line_start);
+
+					// Skip filtered lines (Qt Version, OBS Version, etc.)
+					if (ShouldFilterOutLine(line)) {
+						search_pos++;
+						continue;
 					}
+
+					// Only search within the current line, not the entire remaining file
+					size_t remaining_start = search_pos + current_search.length();
+					size_t remaining_end = line_end;
+					std::string remaining = file_content.substr(remaining_start, remaining_end - remaining_start);
+					std::smatch match;
+					std::string found_version;
+					int priority = 0;
+
+
+					// Determine priority based on context
+					if (line.find("loaded") != std::string::npos || line.find("Loaded") != std::string::npos) {
+						priority = 10; // Highest priority for "loaded" messages
+					} else if (line.find("Version") != std::string::npos) {
+						priority = 5; // Medium priority for lines containing "Version"
+					} else {
+						priority = 1; // Lowest priority for other matches
+					}
+
+					// First try to find semantic version (x.y.z format)
+					if (std::regex_search(remaining, match, version_regex_triple)) {
+						std::string version = match.str(0);
+						if (!IsLikelyGitHash(version)) {
+							found_version = version;
+						}
+					}
+
+					// If triple version was a git hash or not found, try double version
+					if (found_version.empty() && std::regex_search(remaining, match, version_regex_double)) {
+						std::string version = match.str(0);
+						if (!IsLikelyGitHash(version)) {
+							found_version = version;
+						}
+					}
+
+					// If neither triple nor double version found, try single version
+					if (found_version.empty() && std::regex_search(remaining, match, version_regex_single)) {
+						std::string version = match.str(0);
+						if (!IsLikelyGitHash(version)) {
+							found_version = version;
+						}
+					}
+
+					// Update best version if we found a better one
+					if (!found_version.empty() && priority > best_priority) {
+						best_version = found_version;
+						best_priority = priority;
+					}
+
+					search_pos++;
 				}
-				
-				// If triple version was a git hash or not found, try double version
-				if (installed_version.empty() && std::regex_search(remaining, match, version_regex_double)) {
-					std::string version = match.str(0);
-					// Check if this looks like a git hash (contains only hex chars and is long)
-					bool is_git_hash = version.length() >= 7 && std::all_of(version.begin(), version.end(), 
-						[](char c) { return std::isxdigit(c) || c == '.'; }) && 
-						std::count(version.begin(), version.end(), '.') >= 1;
-					
-					if (!is_git_hash) {
-						installed_version = version;
-					}
+
+				// If we found a good match with the current search string, stop trying other patterns
+				if (found_match && !best_version.empty()) {
+					break;
 				}
 			}
+
+			installed_version = best_version;
 		}
 
 		// Add to installed plugins list if version was found
@@ -1024,6 +1229,7 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 	
 	static const std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_double("[0-9]+\\.[0-9]+");
+	static const std::regex version_regex_single("[0-9]+");
 
 	// Check plugins based on parameter (all plugins or just required ones)
 	for (const auto &module : pluginsToCheck) {
@@ -1043,38 +1249,75 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 			// For theme checking, use the theme-specific search function
 			installed_version = SearchThemeFileForVersion("Version:");
 		} else {
-			// Search in cached log file content for regular plugins
-			size_t found_pos = file_content.find(search_string);
-			if (found_pos != std::string::npos) {
-				std::string remaining = file_content.substr(found_pos + search_string.length());
+			// Search in cached log file content for regular plugins with prioritization
+			std::string best_version;
+			int best_priority = -1;
+			size_t search_pos = 0;
+
+			// Find all occurrences of the search string
+			while ((search_pos = file_content.find(search_string, search_pos)) != std::string::npos) {
+				// Find the start and end of the current line
+				size_t line_start = file_content.rfind('\n', search_pos);
+				line_start = (line_start == std::string::npos) ? 0 : line_start + 1;
+				size_t line_end = file_content.find('\n', search_pos);
+				line_end = (line_end == std::string::npos) ? file_content.length() : line_end;
+
+				std::string line = file_content.substr(line_start, line_end - line_start);
+
+				// Skip filtered lines (Qt Version, OBS Version, etc.)
+				if (ShouldFilterOutLine(line)) {
+					search_pos++;
+					continue;
+				}
+
+				std::string remaining = file_content.substr(search_pos + search_string.length());
 				std::smatch match;
-				
+				std::string found_version;
+				int priority = 0;
+
+				// Determine priority based on context
+				if (line.find("loaded") != std::string::npos || line.find("Loaded") != std::string::npos) {
+					priority = 10; // Highest priority for "loaded" messages
+				} else if (line.find("Version") != std::string::npos) {
+					priority = 5; // Medium priority for lines containing "Version"
+				} else {
+					priority = 1; // Lowest priority for other matches
+				}
+
 				// First try to find semantic version (x.y.z format)
 				if (std::regex_search(remaining, match, version_regex_triple)) {
 					std::string version = match.str(0);
-					// Check if this looks like a git hash (contains only hex chars and is long)
-					bool is_git_hash = version.length() >= 7 && std::all_of(version.begin(), version.end(), 
-						[](char c) { return std::isxdigit(c) || c == '.'; }) && 
-						std::count(version.begin(), version.end(), '.') >= 2;
-					
-					if (!is_git_hash) {
-						installed_version = version;
+					if (!IsLikelyGitHash(version)) {
+						found_version = version;
 					}
 				}
-				
+
 				// If triple version was a git hash or not found, try double version
-				if (installed_version.empty() && std::regex_search(remaining, match, version_regex_double)) {
+				if (found_version.empty() && std::regex_search(remaining, match, version_regex_double)) {
 					std::string version = match.str(0);
-					// Check if this looks like a git hash (contains only hex chars and is long)
-					bool is_git_hash = version.length() >= 7 && std::all_of(version.begin(), version.end(), 
-						[](char c) { return std::isxdigit(c) || c == '.'; }) && 
-						std::count(version.begin(), version.end(), '.') >= 1;
-					
-					if (!is_git_hash) {
-						installed_version = version;
+					if (!IsLikelyGitHash(version)) {
+						found_version = version;
 					}
 				}
+
+				// If neither triple nor double version found, try single version
+				if (found_version.empty() && std::regex_search(remaining, match, version_regex_single)) {
+					std::string version = match.str(0);
+					if (!IsLikelyGitHash(version)) {
+						found_version = version;
+					}
+				}
+
+				// Update best version if we found a better one
+				if (!found_version.empty() && priority > best_priority) {
+					best_version = found_version;
+					best_priority = priority;
+				}
+
+				search_pos++;
 			}
+
+			installed_version = best_version;
 		}
 
 		// For missing plugins, only add to missing list if it's a required plugin
