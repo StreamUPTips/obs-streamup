@@ -136,6 +136,7 @@ std::string SearchStringInFile(const char *path, const char *search)
 	char line[LINE_BUFFER_SIZE];
 	std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
 	std::regex version_regex_double("[0-9]+\\.[0-9]+");
+	std::regex version_regex_single("[0-9]+");
 
 	if (file) {
 		while (fgets(line, LINE_BUFFER_SIZE, file)) {
@@ -150,6 +151,11 @@ std::string SearchStringInFile(const char *path, const char *search)
 				}
 
 				if (std::regex_search(remaining_line, match, version_regex_double) && match.size() > 0) {
+					fclose(file);
+					return match.str(0);
+				}
+
+				if (std::regex_search(remaining_line, match, version_regex_single) && match.size() > 0) {
 					fclose(file);
 					return match.str(0);
 				}
