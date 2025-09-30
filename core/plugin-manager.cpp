@@ -202,6 +202,84 @@ QTableWidget* CreateUpdatesTable(const std::map<std::string, std::string>& versi
 	return table;
 }
 
+QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& failed_modules) {
+	QStringList headers = {
+		obs_module_text("UI.Label.PluginName"),
+		obs_module_text("UI.Label.Status"),
+		obs_module_text("UI.Label.DownloadLink"),
+		obs_module_text("UI.Label.WebsiteLink")
+	};
+
+	QTableWidget* table = StreamUP::UIStyles::CreateStyledTable(headers);
+	table->setRowCount(static_cast<int>(failed_modules.size()));
+
+	int row = 0;
+	const auto& allPlugins = StreamUP::GetAllPlugins();
+
+	for (const auto& module_name : failed_modules) {
+		// Try to find this module in the API plugins by matching moduleName
+		bool found_in_api = false;
+		std::string plugin_name;
+		const StreamUP::PluginInfo* plugin_info = nullptr;
+
+		for (const auto& plugin : allPlugins) {
+			if (plugin.second.moduleName == module_name) {
+				found_in_api = true;
+				plugin_name = plugin.first;
+				plugin_info = &plugin.second;
+				break;
+			}
+		}
+
+		// Plugin Name column - use friendly name if found in API, otherwise use module name
+		QString displayName = found_in_api ? QString::fromStdString(plugin_name) : QString::fromStdString(module_name);
+		table->setItem(row, 0, new QTableWidgetItem(displayName));
+
+		// Status column - Failed to Load
+		QTableWidgetItem* statusItem = new QTableWidgetItem("⚠️ " + QString(obs_module_text("Plugin.Status.FailedToLoad")));
+		statusItem->setForeground(QColor("#f59e0b")); // Orange/amber color for warning
+		table->setItem(row, 1, statusItem);
+
+		if (found_in_api && plugin_info) {
+			// Plugin is in our API - show download link
+			const std::string& direct_download_link = StringUtils::GetPlatformURL(
+				QString::fromStdString(plugin_info->windowsURL),
+				QString::fromStdString(plugin_info->macURL),
+				QString::fromStdString(plugin_info->linuxURL),
+				QString::fromStdString(plugin_info->generalURL)).toStdString();
+
+			QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
+			downloadItem->setForeground(QColor("#3b82f6"));
+			downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
+			table->setItem(row, 2, downloadItem);
+
+			// Website Link column - show domain name
+			QString domainName = ExtractDomainFromUrl(QString::fromStdString(plugin_info->generalURL));
+			QTableWidgetItem* websiteItem = new QTableWidgetItem(domainName);
+			websiteItem->setForeground(QColor("#3b82f6"));
+			websiteItem->setData(Qt::UserRole, QString::fromStdString(plugin_info->generalURL));
+			table->setItem(row, 3, websiteItem);
+		} else {
+			// Plugin not in our API - show message to find manually
+			QTableWidgetItem* notSupportedItem = new QTableWidgetItem(obs_module_text("Plugin.Message.NotSupported"));
+			notSupportedItem->setForeground(QColor("#9ca3af")); // Gray
+			table->setItem(row, 2, notSupportedItem);
+
+			// Link to OBS forums for manual search
+			QString obsForumUrl = "https://obsproject.com/forum/resources/";
+			QTableWidgetItem* forumItem = new QTableWidgetItem("OBS Forums");
+			forumItem->setForeground(QColor("#3b82f6"));
+			forumItem->setData(Qt::UserRole, obsForumUrl);
+			table->setItem(row, 3, forumItem);
+		}
+
+		row++;
+	}
+
+	StreamUP::UIStyles::AutoResizeTableColumns(table);
+	return table;
+}
+
 //-------------------ERROR HANDLING FUNCTIONS-------------------
 void ErrorDialog(const QString &errorMessage)
 {
@@ -275,20 +353,31 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 	}
 }
 
-void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, std::function<void()> continueCallback)
+void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback)
 {
-	StreamUP::UIHelpers::ShowDialogOnUIThread([missing_modules, version_mismatch_modules, continueCallback]() {
+	StreamUP::UIHelpers::ShowDialogOnUIThread([missing_modules, version_mismatch_modules, failed_to_load_modules, continueCallback]() {
 		// Create styled dialog with dynamic title
 		bool hasMissing = !missing_modules.empty();
 		bool hasUpdates = !version_mismatch_modules.empty();
-		
+		bool hasFailedToLoad = !failed_to_load_modules.empty();
+
 		QString titleText;
+		// Prioritize title based on what issues exist
 		if (hasMissing && hasUpdates) {
+			// Both missing and updates
 			titleText = obs_module_text("Plugin.Status.MissingAndUpdatesAvailable");
+		} else if (hasMissing && hasFailedToLoad) {
+			// Missing and failed to load (no updates)
+			titleText = obs_module_text("Plugin.Status.MissingRequired");
 		} else if (hasMissing) {
+			// Only missing
 			titleText = obs_module_text("Plugin.Status.MissingRequired");
 		} else if (hasUpdates) {
+			// Updates available (may also have failed-to-load, but updates is primary)
 			titleText = obs_module_text("Plugin.Status.UpdatesAvailable");
+		} else if (hasFailedToLoad) {
+			// Only failed to load (no missing, no updates)
+			titleText = obs_module_text("Plugin.Status.FailedToLoadOnly");
 		}
 
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
@@ -315,14 +404,17 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		
 		// Add reduced spacing between title and description
 		headerLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
-		
+
 		QString descText;
+		// Description should match the title context
 		if (hasMissing && hasUpdates) {
 			descText = obs_module_text("Plugin.Status.SomeMissingAndNeedUpdates");
 		} else if (hasMissing) {
 			descText = obs_module_text("Plugin.Message.RequiredNotInstalled");
 		} else if (hasUpdates) {
 			descText = obs_module_text("Plugin.Message.UpdatesAvailable");
+		} else if (hasFailedToLoad) {
+			descText = obs_module_text("Plugin.Message.FailedToLoadDescription");
 		}
 		
 		QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(descText);
@@ -459,6 +551,65 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			contentLayout->addWidget(updateGroup);
 		}
 
+		if (hasFailedToLoad) {
+			// Create expandable GroupBox with table for failed to load plugins
+			QGroupBox *failedGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Plugin.Dialog.FailedToLoadGroup"), "warning");
+			failedGroup->setMinimumWidth(500);
+			failedGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+
+			QVBoxLayout *failedLayout = new QVBoxLayout(failedGroup);
+			failedLayout->setContentsMargins(8, 8, 8, 8);
+			failedLayout->setSpacing(0);
+
+			// Create modern table widget
+			QTableWidget *failedTable = CreateFailedToLoadPluginsTable(failed_to_load_modules);
+
+			// Dynamic height calculation: max 10 rows, auto-size otherwise
+			int rowCount = failedTable->rowCount();
+			int maxVisibleRows = std::min(rowCount, 10);
+			int headerHeight = 35; // Standard header height
+			int rowHeight = 30; // Standard row height for consistency
+			int tableHeight = headerHeight + (rowHeight * maxVisibleRows) + 6; // +6 for borders
+
+			failedTable->setFixedHeight(tableHeight);
+			if (rowCount > 10) {
+				failedTable->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+			} else {
+				failedTable->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+			}
+
+			// Remove table border and background to blend with group box
+			failedTable->setStyleSheet(
+				failedTable->styleSheet() +
+				"QTableWidget { "
+				"border: none; "
+				"background: transparent; "
+				"border-radius: 8px; "
+				"} "
+				"QTableWidget::item { "
+				"border-bottom: 1px solid #374151; "
+				"} "
+				"QTableWidget::item:last { "
+				"border-bottom: none; "
+				"} "
+				"QHeaderView::section:first { "
+				"border-top-left-radius: 8px; "
+				"} "
+				"QHeaderView::section:last { "
+				"border-top-right-radius: 8px; "
+				"}"
+			);
+
+			// Connect click handler for website/download links
+			QObject::connect(failedTable, &QTableWidget::cellClicked,
+							[failedTable](int row, int column) {
+				StreamUP::UIStyles::HandleTableCellClick(failedTable, row, column);
+			});
+
+			failedLayout->addWidget(failedTable);
+			contentLayout->addWidget(failedGroup);
+		}
+
 		// Content is now directly in the dialog layout
 
 		// Add warning message above buttons if there's a continue callback (meaning this is for install product)
@@ -562,7 +713,8 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 	
 	if (!version_mismatch_modules.empty()) {
 		std::map<std::string, std::string> empty_missing_modules;
-		PluginsHaveIssue(empty_missing_modules, version_mismatch_modules, nullptr);
+		std::vector<std::string> empty_failed_modules;
+		PluginsHaveIssue(empty_missing_modules, version_mismatch_modules, empty_failed_modules, nullptr);
 		version_mismatch_modules.clear();
 	} else {
 		PluginsUpToDateOutput(manuallyTriggered);
@@ -720,7 +872,8 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 	bool hasMissingPlugins = !missing_modules.empty();
 
 	if (hasUpdates || hasMissingPlugins) {
-		PluginsHaveIssue(missing_modules, version_mismatch_modules, nullptr);
+		std::vector<std::string> empty_failed_modules;
+		PluginsHaveIssue(missing_modules, version_mismatch_modules, empty_failed_modules, nullptr);
 
 		missing_modules.clear();
 		version_mismatch_modules.clear();
@@ -1225,8 +1378,12 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 		file_content += buffer;
 	}
 	fclose(file);
+
+	// Get failed to load plugins BEFORE freeing filepath
+	std::vector<std::string> failedToLoad = SearchFailedToLoadModulesInLogFile(filepath);
+
 	bfree(filepath);
-	
+
 	static const std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_double("[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_single("[0-9]+");
@@ -1334,11 +1491,12 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 	// Get all installed plugins for cache
 	std::vector<std::pair<std::string, std::string>> installedPlugins = GetInstalledPlugins();
 
-	// Cache the results
+	// Cache the results (failedToLoad was already retrieved earlier)
 	StreamUP::PluginState::PluginCheckResults results;
 	results.missingPlugins = std::move(missing_modules);
 	results.outdatedPlugins = std::move(version_mismatch_modules);
 	results.installedPlugins = std::move(installedPlugins);
+	results.failedToLoadPlugins = std::move(failedToLoad);
 	results.allRequiredUpToDate = results.missingPlugins.empty() && results.outdatedPlugins.empty();
 
 	StreamUP::PluginState::Instance().SetPluginStatus(results);
@@ -1380,8 +1538,25 @@ void ShowCachedPluginIssuesDialog(std::function<void()> continueCallback)
 			filteredOutdated[plugin.first] = plugin.second;
 		}
 	}
-	
-	if (filteredMissing.empty() && filteredOutdated.empty()) {
+
+	// Filter failed to load plugins to only show required ones
+	std::vector<std::string> filteredFailedToLoad;
+	const auto& allPlugins = StreamUP::GetAllPlugins();
+
+	for (const auto& module_name : status.failedToLoadPlugins) {
+		// Find the plugin in allPlugins by matching moduleName
+		for (const auto& plugin : allPlugins) {
+			if (plugin.second.moduleName == module_name) {
+				// Check if this plugin is in the required list
+				if (requiredPlugins.find(plugin.first) != requiredPlugins.end()) {
+					filteredFailedToLoad.push_back(module_name);
+				}
+				break;
+			}
+		}
+	}
+
+	if (filteredMissing.empty() && filteredOutdated.empty() && filteredFailedToLoad.empty()) {
 		// If there's a continue callback, it means this was called from "Install a product"
 		// flow, so we should execute the callback instead of showing the up-to-date popup
 		if (continueCallback) {
@@ -1393,7 +1568,7 @@ void ShowCachedPluginIssuesDialog(std::function<void()> continueCallback)
 	}
 
 	// Use modern table display for filtered results (only required plugins)
-	PluginsHaveIssue(filteredMissing, filteredOutdated, continueCallback);
+	PluginsHaveIssue(filteredMissing, filteredOutdated, filteredFailedToLoad, continueCallback);
 }
 
 void ShowCachedPluginUpdatesDialog()
@@ -1416,14 +1591,14 @@ void ShowCachedPluginUpdatesDialog()
 		outFile.close();
 	}
 	
-	if (status.outdatedPlugins.empty()) {
+	if (status.outdatedPlugins.empty() && status.failedToLoadPlugins.empty()) {
 		PluginsUpToDateOutput(true);
 		return;
 	}
 
 	// Use modern table display for cached results
 	std::map<std::string, std::string> empty_missing_modules;
-	PluginsHaveIssue(empty_missing_modules, status.outdatedPlugins, nullptr);
+	PluginsHaveIssue(empty_missing_modules, status.outdatedPlugins, status.failedToLoadPlugins, nullptr);
 }
 
 void ShowCachedPluginUpdatesDialogSilent()
@@ -1446,13 +1621,13 @@ void ShowCachedPluginUpdatesDialogSilent()
 		outFile.close();
 	}
 	
-	if (status.outdatedPlugins.empty()) {
+	if (status.outdatedPlugins.empty() && status.failedToLoadPlugins.empty()) {
 		return; // Silent success - don't show any dialog
 	}
 
 	// Use modern table display for cached results
 	std::map<std::string, std::string> empty_missing_modules;
-	PluginsHaveIssue(empty_missing_modules, status.outdatedPlugins, nullptr);
+	PluginsHaveIssue(empty_missing_modules, status.outdatedPlugins, status.failedToLoadPlugins, nullptr);
 }
 
 void InvalidatePluginCache()
@@ -1576,6 +1751,78 @@ std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath)
 	});
 
 	return collected_modules;
+}
+
+std::vector<std::string> SearchFailedToLoadModulesInLogFile(const char *logPath)
+{
+	std::vector<std::string> failed_modules;
+
+	if (!logPath) {
+		StreamUP::DebugLogger::LogError("PluginManager", "SearchFailedToLoadModulesInLogFile: logPath is null");
+		return failed_modules;
+	}
+
+	std::string filepath;
+	try {
+		filepath = StreamUP::PathUtils::GetMostRecentTxtFile(logPath);
+	} catch (const std::exception& e) {
+		StreamUP::DebugLogger::LogErrorFormat("PluginManager", "Failed to get most recent log file from %s: %s", logPath, e.what());
+		return failed_modules;
+	}
+
+	if (filepath.empty()) {
+		StreamUP::DebugLogger::LogErrorFormat("PluginManager", "No log file found in: %s", logPath);
+		return failed_modules;
+	}
+
+	FILE *file = fopen(filepath.c_str(), "r");
+	if (!file) {
+		StreamUP::DebugLogger::LogErrorFormat("PluginManager", "Failed to open log file: %s", filepath.c_str());
+		return failed_modules;
+	}
+
+	char line[512];
+	std::regex module_not_loaded_regex("Module '([^']+)' not loaded");
+
+	while (fgets(line, sizeof(line), file) != NULL) {
+		std::string str_line(line);
+		std::smatch match;
+
+		// Look for pattern: Module '../../obs-plugins/64bit/source-defaults.dll' not loaded
+		if (std::regex_search(str_line, match, module_not_loaded_regex)) {
+			if (match.size() > 1) {
+				std::string full_path = match[1].str();
+
+				// Extract just the module name from the path
+				size_t last_slash = full_path.find_last_of("/\\");
+				std::string module_name = (last_slash != std::string::npos)
+					? full_path.substr(last_slash + 1)
+					: full_path;
+
+				// Remove file extension to get module name
+				size_t ext_pos = module_name.find_last_of('.');
+				if (ext_pos != std::string::npos) {
+					module_name = module_name.substr(0, ext_pos);
+				}
+
+				// Check if already in list to avoid duplicates
+				if (std::find(failed_modules.begin(), failed_modules.end(), module_name) == failed_modules.end()) {
+					failed_modules.push_back(module_name);
+				}
+			}
+		}
+	}
+
+	fclose(file);
+
+	// Sort alphabetically (case-insensitive)
+	std::sort(failed_modules.begin(), failed_modules.end(), [](const std::string &a, const std::string &b) {
+		return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), [](char char1, char char2) {
+			return std::tolower(char1) < std::tolower(char2);
+		});
+	});
+
+	return failed_modules;
 }
 
 } // namespace PluginManager
