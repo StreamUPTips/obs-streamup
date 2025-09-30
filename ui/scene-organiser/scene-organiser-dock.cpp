@@ -1561,6 +1561,7 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
     switch (event) {
     case OBS_FRONTEND_EVENT_FINISHED_LOADING:
         QTimer::singleShot(100, dock, [dock]() {
+            dock->LoadConfiguration();
             dock->m_model->loadSceneTree();
             dock->refreshSceneList();
         });
@@ -1572,11 +1573,13 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING:
-        // Save current scene tree before switching
+        // Save current scene tree and settings before switching
         dock->m_model->saveSceneTree();
+        dock->SaveConfiguration();
         break;
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
         QTimer::singleShot(100, dock, [dock]() {
+            dock->LoadConfiguration();
             dock->m_model->loadSceneTree();
             dock->refreshSceneList();
         });
@@ -1619,12 +1622,19 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
 
 void SceneOrganiserDock::SaveConfiguration()
 {
+    char *scene_collection = obs_frontend_get_current_scene_collection();
+    if (!scene_collection) return;
+
     char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
-    if (!configPath) return;
+    if (!configPath) {
+        bfree(scene_collection);
+        return;
+    }
 
     QString configDir = QString::fromUtf8(configPath);
-    QString configFile = configDir + "/" + m_configKey + ".json";
+    QString sceneCollectionName = QString::fromUtf8(scene_collection);
     bfree(configPath);
+    bfree(scene_collection);
 
     // Ensure the directory exists
     QDir dir;
@@ -1634,8 +1644,8 @@ void SceneOrganiserDock::SaveConfiguration()
         return;
     }
 
-    // Save lock state separately using simple approach
-    QString lockStateFile = configDir + "/" + m_configKey + "_lock_state.txt";
+    // Save lock state per scene collection
+    QString lockStateFile = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_lock_state.txt";
     QFile file(lockStateFile);
     if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QTextStream out(&file);
@@ -1643,8 +1653,8 @@ void SceneOrganiserDock::SaveConfiguration()
         file.close();
     }
 
-    // Save hidden scenes
-    QString hiddenScenesFile = configDir + "/" + m_configKey + "_hidden_scenes.txt";
+    // Save hidden scenes per scene collection
+    QString hiddenScenesFile = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_hidden_scenes.txt";
     QFile hiddenFile(hiddenScenesFile);
     if (hiddenFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QTextStream out(&hiddenFile);
@@ -1658,53 +1668,69 @@ void SceneOrganiserDock::SaveConfiguration()
     m_model->saveSceneTree();
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-        QString("Configuration saved using DigitOtter approach (lock state: %1)")
+        QString("Configuration saved for scene collection '%1' (lock state: %2)")
+        .arg(sceneCollectionName)
         .arg(m_isLocked ? "locked" : "unlocked").toUtf8().constData());
 }
 
 void SceneOrganiserDock::LoadConfiguration()
 {
-    // Load lock state
+    char *scene_collection = obs_frontend_get_current_scene_collection();
+    if (!scene_collection) return;
+
     char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
-    if (configPath) {
-        QString configDir = QString::fromUtf8(configPath);
-        QString lockStateFile = configDir + "/" + m_configKey + "_lock_state.txt";
-        bfree(configPath);
+    if (!configPath) {
+        bfree(scene_collection);
+        return;
+    }
 
-        QFile file(lockStateFile);
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QTextStream in(&file);
-            QString lockState = in.readAll().trimmed();
-            bool shouldBeLocked = (lockState == "locked");
-            setLocked(shouldBeLocked);
-            file.close();
+    QString configDir = QString::fromUtf8(configPath);
+    QString sceneCollectionName = QString::fromUtf8(scene_collection);
+    bfree(configPath);
+    bfree(scene_collection);
+
+    // Load lock state per scene collection
+    QString lockStateFile = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_lock_state.txt";
+    QFile file(lockStateFile);
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QTextStream in(&file);
+        QString lockState = in.readAll().trimmed();
+        bool shouldBeLocked = (lockState == "locked");
+        setLocked(shouldBeLocked);
+        file.close();
+    } else {
+        // Default to unlocked if no saved state
+        setLocked(false);
+    }
+
+    // Load hidden scenes per scene collection
+    QString hiddenScenesFile = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_hidden_scenes.txt";
+    QFile hiddenFile(hiddenScenesFile);
+    if (hiddenFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QTextStream in(&hiddenFile);
+        QString hiddenScenesText = in.readAll().trimmed();
+        if (!hiddenScenesText.isEmpty()) {
+            QStringList hiddenScenesList = hiddenScenesText.split("\n", Qt::SkipEmptyParts);
+            m_hiddenScenes = QSet<QString>(hiddenScenesList.begin(), hiddenScenesList.end());
+
+            // Apply scene visibility after loading hidden scenes
+            // Use longer delay to ensure scene tree is fully populated
+            QTimer::singleShot(500, this, [this]() {
+                updateHiddenScenesStyling();
+                applySceneVisibility();
+            });
         }
-
-        // Load hidden scenes
-        QString hiddenScenesFile = configDir + "/" + m_configKey + "_hidden_scenes.txt";
-        QFile hiddenFile(hiddenScenesFile);
-        if (hiddenFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QTextStream in(&hiddenFile);
-            QString hiddenScenesText = in.readAll().trimmed();
-            if (!hiddenScenesText.isEmpty()) {
-                QStringList hiddenScenesList = hiddenScenesText.split("\n", Qt::SkipEmptyParts);
-                m_hiddenScenes = QSet<QString>(hiddenScenesList.begin(), hiddenScenesList.end());
-
-                // Apply scene visibility after loading hidden scenes
-                // Use longer delay to ensure scene tree is fully populated
-                QTimer::singleShot(500, this, [this]() {
-                    updateHiddenScenesStyling();
-                    applySceneVisibility();
-                });
-            }
-            hiddenFile.close();
-        }
+        hiddenFile.close();
+    } else {
+        // Clear hidden scenes if no saved state for this collection
+        m_hiddenScenes.clear();
     }
 
     // Now using the DigitOtter approach - this is handled by frontend events
     // No need to manually load configuration here
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-        QString("Configuration loading handled by frontend events (lock state: %1)")
+        QString("Configuration loaded for scene collection '%1' (lock state: %2)")
+        .arg(sceneCollectionName)
         .arg(m_isLocked ? "locked" : "unlocked").toUtf8().constData());
 
     // Apply scene visibility one more time after full initialization with even longer delay
