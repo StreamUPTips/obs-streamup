@@ -3139,6 +3139,87 @@ void SceneTreeModel::loadSceneTree()
     bfree(scene_collection);
 }
 
+bool SceneTreeModel::migrateFromOriginalPlugin(const QString &originalConfigPath)
+{
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
+        QString("Starting migration from: %1").arg(originalConfigPath).toUtf8().constData());
+
+    // Load the original plugin's config file
+    obs_data_t *original_data = obs_data_create_from_json_file(originalConfigPath.toUtf8().constData());
+    if (!original_data) {
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
+            "Failed to load original config file");
+        return false;
+    }
+
+    // Get our config path
+    char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
+    if (!configPath) {
+        obs_data_release(original_data);
+        return false;
+    }
+
+    QString configDir = QString::fromUtf8(configPath);
+    QString configFile = configDir + "/scene_tree_normal.json";
+    bfree(configPath);
+
+    // Load existing data (if any) to preserve what we have
+    obs_data_t *root_data = obs_data_create_from_json_file(configFile.toUtf8().constData());
+    if (!root_data) {
+        root_data = obs_data_create();
+    }
+
+    int migratedCollections = 0;
+
+    // Iterate through all scene collections in the original file
+    obs_data_item_t *item = obs_data_first(original_data);
+    while (item) {
+        const char *collection_name = obs_data_item_get_name(item);
+        obs_data_type type = obs_data_item_gettype(item);
+
+        if (type == OBS_DATA_ARRAY) {
+            obs_data_array_t *original_array = obs_data_item_get_array(item);
+            if (original_array) {
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
+                    QString("Migrating collection: %1").arg(collection_name).toUtf8().constData());
+
+                // Check if we already have data for this collection
+                obs_data_array_t *existing_array = obs_data_get_array(root_data, collection_name);
+                if (existing_array) {
+                    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
+                        QString("Collection '%1' already exists, skipping").arg(collection_name).toUtf8().constData());
+                    obs_data_array_release(existing_array);
+                } else {
+                    // Convert and migrate this collection
+                    obs_data_set_array(root_data, collection_name, original_array);
+                    migratedCollections++;
+                }
+
+                obs_data_array_release(original_array);
+            }
+        }
+
+        obs_data_item_next(&item);
+    }
+
+    // Save the migrated data
+    obs_data_save_json(root_data, configFile.toUtf8().constData());
+    obs_data_release(root_data);
+    obs_data_release(original_data);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
+        QString("Migration complete. Migrated %1 scene collections.").arg(migratedCollections).toUtf8().constData());
+
+    return migratedCollections > 0;
+}
+
+void SceneTreeModel::loadOriginalFolderArray(obs_data_array_t *folder_array, QStandardItem &parent)
+{
+    // This loads the original plugin's format which is already compatible
+    // The format is the same, so we can use the existing loadFolderArray
+    loadFolderArray(folder_array, parent);
+}
+
 void SceneTreeModel::removeSceneFromTracking(obs_weak_source_t *weak_source)
 {
     auto it = m_scenesInTree.find(weak_source);

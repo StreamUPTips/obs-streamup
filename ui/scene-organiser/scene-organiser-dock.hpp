@@ -281,6 +281,9 @@ public:
     // Configuration (now handled by DigitOtter approach)
     // saveToConfig and loadFromConfig removed - using saveSceneTree/loadSceneTree instead
 
+    // Migration from original obs_scene_tree_view plugin
+    bool migrateFromOriginalPlugin(const QString &originalConfigPath);
+
     // Cleanup
     void cleanupEmptyItems();
     void removeSceneFromTracking(obs_weak_source_t *weak_source);
@@ -297,6 +300,9 @@ private:
     bool isManagedScene(obs_source_t *source);
     obs_data_array_t *createFolderArray(QStandardItem &parent);
     void loadFolderArray(obs_data_array_t *folder_array, QStandardItem &parent);
+
+    // Migration helpers
+    void loadOriginalFolderArray(obs_data_array_t *folder_array, QStandardItem &parent);
 
     // DigitOtter-style scene tracking
     using source_map_t = std::map<obs_weak_source_t*, QStandardItem*>;

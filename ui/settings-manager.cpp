@@ -39,6 +39,10 @@
 #include <QListWidget>
 #include <QStackedWidget>
 #include <QDesktopServices>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QDir>
+#include <QFileInfo>
 #include <memory>
 #include <mutex>
 #include <util/platform.h>
@@ -925,7 +929,149 @@ void ShowSettingsDialog(int tabIndex)
 		switchModeLayout->addWidget(switchModeComboBox);
 		sceneOrganiserLayout->addLayout(switchModeLayout);
 
-		// Credit section
+		// Migration Section
+		QGroupBox *migrationGroup = new QGroupBox(obs_module_text("SceneOrganiser.Settings.Migration"));
+		migrationGroup->setStyleSheet(QString("QGroupBox { color: %1; font-weight: bold; font-size: %2px; border: 1px solid %3; border-radius: %4px; margin-top: %5px; padding-top: %6px; } QGroupBox::title { subcontrol-origin: margin; left: %7px; padding: 0 %8px; }")
+						.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
+						.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
+						.arg(StreamUP::UIStyles::Sizes::RADIUS_MD)
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
+						.arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
+						.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+						.arg(StreamUP::UIStyles::Sizes::PADDING_SMALL));
+
+		QVBoxLayout *migrationLayout = new QVBoxLayout(migrationGroup);
+		migrationLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+		migrationLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+							StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+							StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+							StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+
+		QLabel *migrationText = new QLabel(obs_module_text("SceneOrganiser.Settings.MigrationText"));
+		migrationText->setStyleSheet(QString("color: %1; font-size: %2px; background: %3; padding: %4px; border-radius: %5px;")
+						.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
+						.arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
+						.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+						.arg(StreamUP::UIStyles::Sizes::RADIUS_SM));
+		migrationText->setWordWrap(true);
+		migrationLayout->addWidget(migrationText);
+
+		QPushButton *migrationButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("SceneOrganiser.Settings.MigrationButton"), "primary");
+
+		QObject::connect(migrationButton, &QPushButton::clicked, [dialog]() {
+			// Search for SceneTree plugin config files
+			QStringList foundConfigs;
+
+			// Get OBS config path using the frontend API
+			char *obs_config_path = obs_module_config_path("");
+			if (obs_config_path) {
+				QDir obsDir(QString::fromUtf8(obs_config_path));
+				obsDir.cdUp(); // Go up one level from plugin config
+
+				// Check for the obs_scene_tree_view plugin folder
+				QString sceneTreePath = obsDir.filePath("plugin_config/obs_scene_tree_view");
+				QDir sceneTreeDir(sceneTreePath);
+
+				if (sceneTreeDir.exists()) {
+					// Find all JSON files in the directory
+					QStringList jsonFiles = sceneTreeDir.entryList(QStringList() << "*.json", QDir::Files);
+					for (const QString &file : jsonFiles) {
+						foundConfigs.append(sceneTreeDir.filePath(file));
+					}
+				}
+
+				bfree(obs_config_path);
+			}
+
+			// If no config files found, show error
+			if (foundConfigs.isEmpty()) {
+				QMessageBox::information(dialog,
+					"No Config Files Found",
+					"No SceneTree plugin configuration files were found. Make sure the obs_scene_tree_view plugin was previously installed and used.");
+				return;
+			}
+
+			// Show selection dialog if multiple files found
+			QString selectedFile;
+			if (foundConfigs.size() == 1) {
+				// Only one file found, use it directly
+				selectedFile = foundConfigs.first();
+			} else {
+				// Multiple files found, let user choose
+				QDialog *selectionDialog = new QDialog(dialog);
+				selectionDialog->setWindowTitle("Select SceneTree Config File");
+				selectionDialog->setMinimumWidth(500);
+
+				QVBoxLayout *layout = new QVBoxLayout(selectionDialog);
+
+				QLabel *infoLabel = new QLabel("Multiple SceneTree configuration files were found. Please select the one you want to import:");
+				infoLabel->setWordWrap(true);
+				layout->addWidget(infoLabel);
+
+				QListWidget *fileList = new QListWidget();
+				for (const QString &file : foundConfigs) {
+					QFileInfo fileInfo(file);
+					fileList->addItem(fileInfo.fileName() + " (" + fileInfo.dir().dirName() + ")");
+				}
+				fileList->setCurrentRow(0);
+				layout->addWidget(fileList);
+
+				QHBoxLayout *buttonLayout = new QHBoxLayout();
+				QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton("Import", "primary");
+				QPushButton *cancelButton = StreamUP::UIStyles::CreateStyledButton("Cancel", "neutral");
+
+				buttonLayout->addStretch();
+				buttonLayout->addWidget(okButton);
+				buttonLayout->addWidget(cancelButton);
+				layout->addLayout(buttonLayout);
+
+				QObject::connect(okButton, &QPushButton::clicked, selectionDialog, &QDialog::accept);
+				QObject::connect(cancelButton, &QPushButton::clicked, selectionDialog, &QDialog::reject);
+				QObject::connect(fileList, &QListWidget::itemDoubleClicked, selectionDialog, &QDialog::accept);
+
+				if (selectionDialog->exec() == QDialog::Accepted && fileList->currentRow() >= 0) {
+					selectedFile = foundConfigs[fileList->currentRow()];
+				}
+
+				selectionDialog->deleteLater();
+			}
+
+			if (selectedFile.isEmpty()) {
+				return; // User cancelled
+			}
+
+			// Get the scene organiser dock instance
+			bool success = false;
+			for (auto dock : StreamUP::SceneOrganiser::SceneOrganiserDock::s_dockInstances) {
+				if (dock && dock->m_model) {
+					success = dock->m_model->migrateFromOriginalPlugin(selectedFile);
+					if (success) {
+						// Reload the current collection to show migrated data
+						dock->LoadConfiguration();
+						dock->m_model->loadSceneTree();
+						dock->m_model->updateTree();
+					}
+					break; // Only need to migrate once
+				}
+			}
+
+			if (success) {
+				QMessageBox::information(dialog,
+					"Migration Successful",
+					obs_module_text("SceneOrganiser.Settings.MigrationSuccess"));
+			} else {
+				QMessageBox::warning(dialog,
+					"Migration Failed",
+					obs_module_text("SceneOrganiser.Settings.MigrationFailed"));
+			}
+		});
+
+		migrationLayout->addWidget(migrationButton);
+		sceneOrganiserLayout->addWidget(migrationGroup);
+
+		// Credit section (moved to bottom)
 		sceneOrganiserLayout->addSpacing(20);
 
 		QGroupBox *creditGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("SceneOrganiser.Settings.Credit"), "info");
