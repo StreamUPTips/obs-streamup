@@ -25,11 +25,12 @@ void PluginsUpToDateOutput(bool manuallyTriggered);
 
 /**
  * Show dialog indicating there are plugin issues
- * @param errorMsgMissing String containing missing plugin errors ("NULL" if none)
- * @param errorMsgUpdate String containing update errors
+ * @param missing_modules Map of missing plugins (name -> required version)
+ * @param version_mismatch_modules Map of outdated plugins (name -> installed version)
+ * @param failed_to_load_modules Vector of module names that failed to load
  * @param continueCallback Optional callback to execute when "Continue Anyway" is pressed
  */
-void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, std::function<void()> continueCallback = nullptr);
+void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback = nullptr);
 
 //-------------------PLUGIN UPDATE FUNCTIONS-------------------
 /**
@@ -145,6 +146,13 @@ QString GetPluginPlatformURL(const std::string &pluginName);
  * @return std::vector List of non-standard loaded module names
  */
 std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath);
+
+/**
+ * Search for modules that failed to load in OBS log files
+ * @param logPath Path to the OBS log directory
+ * @return std::vector List of module names (DLL/SO names) that failed to load
+ */
+std::vector<std::string> SearchFailedToLoadModulesInLogFile(const char *logPath);
 
 } // namespace PluginManager
 } // namespace StreamUP
