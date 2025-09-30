@@ -2566,8 +2566,20 @@ void SceneTreeModel::updateTree(const QModelIndex &selectedIndex)
         obs_weak_source_t *weak = obs_source_get_weak_source(source);
         source_map_t::iterator scene_it;
 
-        // Check if scene already in tree
-        scene_it = m_scenesInTree.find(weak);
+        // Check if scene already in tree by comparing actual sources, not weak pointers
+        // Different weak references can point to the same source
+        scene_it = m_scenesInTree.end();
+        for (auto it = m_scenesInTree.begin(); it != m_scenesInTree.end(); ++it) {
+            obs_source_t *existing_source = obs_weak_source_get_source(it->first);
+            bool same_source = (existing_source == source);
+            obs_source_release(existing_source);
+
+            if (same_source) {
+                scene_it = it;
+                break;
+            }
+        }
+
         if (scene_it != m_scenesInTree.end()) {
             // Move existing scene to new tree
             auto new_scene_it = new_scene_tree.emplace(scene_it->first, scene_it->second).first;
@@ -3069,20 +3081,26 @@ void SceneTreeModel::saveSceneTree()
 
     bfree(configPath);
 
-    // Create root data
-    obs_data_t *root_data = obs_data_create();
+    // Load existing data first to preserve other scene collections
+    obs_data_t *root_data = obs_data_create_from_json_file(configFile.toUtf8().constData());
+    if (!root_data) {
+        // File doesn't exist yet, create new data
+        root_data = obs_data_create();
+    }
+
+    // Update only the current scene collection's data
     obs_data_array_t *folder_array = createFolderArray(*invisibleRootItem());
     obs_data_set_array(root_data, scene_collection, folder_array);
     obs_data_array_release(folder_array);
 
-    // Save to file
+    // Save to file (now preserves other collections)
     obs_data_save_json(root_data, configFile.toUtf8().constData());
     obs_data_release(root_data);
 
     bfree(scene_collection);
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Save",
-        QString("Saved scene tree to: %1").arg(configFile).toUtf8().constData());
+        QString("Saved scene tree for collection '%1' to: %2").arg(scene_collection, configFile).toUtf8().constData());
 }
 
 void SceneTreeModel::loadSceneTree()
