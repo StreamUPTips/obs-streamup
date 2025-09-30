@@ -1746,21 +1746,8 @@ void SceneOrganiserDock::LoadConfiguration()
         historyFile.close();
     }
 
-    bool alreadyPrompted = promptedCollections.contains(sceneCollectionName);
-
-    blog(LOG_INFO, "[StreamUP Migration] LoadConfiguration: Checking migration for '%s': lock_file_exists=%s, already_prompted=%s",
-        sceneCollectionName.toUtf8().constData(),
-        file.exists() ? "yes" : "no",
-        alreadyPrompted ? "yes" : "no");
-
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
-        QString("Checking migration for '%1': lock_file_exists=%2, already_prompted=%3")
-        .arg(sceneCollectionName)
-        .arg(file.exists() ? "yes" : "no")
-        .arg(alreadyPrompted ? "yes" : "no").toUtf8().constData());
-
     // Check for migration availability if we haven't prompted yet for this collection
-    if (m_model && !alreadyPrompted) {
+    if (m_model && !promptedCollections.contains(sceneCollectionName)) {
         QString migrationConfigPath;
         if (SceneTreeModel::checkMigrationAvailable(sceneCollectionName, migrationConfigPath)) {
             // Mark this collection as prompted by saving to file
@@ -1771,11 +1758,7 @@ void SceneOrganiserDock::LoadConfiguration()
                     out << collection << "\n";
                 }
                 historyFile.close();
-                blog(LOG_INFO, "[StreamUP Migration] Saved migration prompt history");
             }
-
-            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
-                QString("SceneTree plugin settings found for collection '%1', showing prompt").arg(sceneCollectionName).toUtf8().constData());
 
             // Use QTimer to ensure prompt appears after UI is fully loaded
             QTimer::singleShot(500, this, [this, sceneCollectionName]() {
@@ -3306,44 +3289,29 @@ bool SceneTreeModel::checkMigrationAvailable(const QString &sceneCollectionName,
     // Get the streamup plugin config path to navigate to obs_scene_tree_view
     char *streamup_config_path = obs_module_get_config_path(obs_current_module(), "");
     if (!streamup_config_path) {
-        blog(LOG_INFO, "[StreamUP Migration] Failed to get streamup config path");
         return false;
     }
 
     QDir streamupConfigDir(QString::fromUtf8(streamup_config_path));
-    blog(LOG_INFO, "[StreamUP Migration] StreamUP config path: %s", streamup_config_path);
-
     streamupConfigDir.cdUp(); // Go to plugin_config directory
-    blog(LOG_INFO, "[StreamUP Migration] After cdUp(), directory: %s", streamupConfigDir.absolutePath().toUtf8().constData());
 
     QString sceneTreeConfigPath = streamupConfigDir.filePath("obs_scene_tree_view/scene_tree.json");
     bfree(streamup_config_path);
 
-    blog(LOG_INFO, "[StreamUP Migration] Checking for scene_tree.json at: %s", sceneTreeConfigPath.toUtf8().constData());
-
     // Check if the file exists
     if (!QFile::exists(sceneTreeConfigPath)) {
-        blog(LOG_INFO, "[StreamUP Migration] scene_tree.json does not exist at path");
         return false;
     }
-
-    blog(LOG_INFO, "[StreamUP Migration] scene_tree.json found! Checking for collection '%s'", sceneCollectionName.toUtf8().constData());
 
     // Load the file and check if this scene collection exists in it
     obs_data_t *original_data = obs_data_create_from_json_file(sceneTreeConfigPath.toUtf8().constData());
     if (!original_data) {
-        blog(LOG_INFO, "[StreamUP Migration] Failed to load scene_tree.json");
         return false;
     }
 
     // Check if this scene collection has data
     obs_data_array_t *collection_array = obs_data_get_array(original_data, sceneCollectionName.toUtf8().constData());
     bool hasData = (collection_array != nullptr && obs_data_array_count(collection_array) > 0);
-
-    blog(LOG_INFO, "[StreamUP Migration] Collection '%s' hasData: %s (array count: %zu)",
-        sceneCollectionName.toUtf8().constData(),
-        hasData ? "YES" : "NO",
-        collection_array ? obs_data_array_count(collection_array) : 0);
 
     if (collection_array) {
         obs_data_array_release(collection_array);
@@ -3352,7 +3320,6 @@ bool SceneTreeModel::checkMigrationAvailable(const QString &sceneCollectionName,
 
     if (hasData) {
         outConfigPath = sceneTreeConfigPath;
-        blog(LOG_INFO, "[StreamUP Migration] Migration is available for '%s'!", sceneCollectionName.toUtf8().constData());
     }
 
     return hasData;
@@ -3367,8 +3334,6 @@ obs_data_array_t* SceneTreeModel::convertSceneTreeViewFormat(obs_data_array_t *o
 
     obs_data_array_t *converted_array = obs_data_array_create();
     size_t count = obs_data_array_count(original_array);
-
-    blog(LOG_INFO, "[StreamUP Migration] Converting %zu items from obs_scene_tree_view format", count);
 
     for (size_t i = 0; i < count; i++) {
         obs_data_t *original_item = obs_data_array_item(original_array, i);
@@ -3386,8 +3351,6 @@ obs_data_array_t* SceneTreeModel::convertSceneTreeViewFormat(obs_data_array_t *o
             bool is_expanded = obs_data_get_bool(original_item, "is_expanded");
             obs_data_set_bool(converted_item, "expanded", is_expanded);
 
-            blog(LOG_INFO, "[StreamUP Migration]   Folder: '%s' (expanded: %s)", name, is_expanded ? "yes" : "no");
-
             // Recursively convert folder contents
             obs_data_array_t *converted_children = convertSceneTreeViewFormat(folder_contents);
             obs_data_set_array(converted_item, "children", converted_children);
@@ -3396,7 +3359,6 @@ obs_data_array_t* SceneTreeModel::convertSceneTreeViewFormat(obs_data_array_t *o
         } else {
             // This is a scene
             obs_data_set_string(converted_item, "type", "scene");
-            blog(LOG_INFO, "[StreamUP Migration]   Scene: '%s'", name);
         }
 
         obs_data_array_push_back(converted_array, converted_item);
@@ -3409,65 +3371,43 @@ obs_data_array_t* SceneTreeModel::convertSceneTreeViewFormat(obs_data_array_t *o
 
 bool SceneTreeModel::migrateCurrentCollection()
 {
-    blog(LOG_INFO, "[StreamUP Migration] migrateCurrentCollection() called");
-
     char *scene_collection = obs_frontend_get_current_scene_collection();
     if (!scene_collection) {
-        blog(LOG_INFO, "[StreamUP Migration] Failed to get current scene collection");
         return false;
     }
 
     QString collectionName = QString::fromUtf8(scene_collection);
     bfree(scene_collection);
 
-    blog(LOG_INFO, "[StreamUP Migration] Current collection: '%s'", collectionName.toUtf8().constData());
-
     QString configPath;
     if (!checkMigrationAvailable(collectionName, configPath)) {
-        blog(LOG_INFO, "[StreamUP Migration] Migration not available for '%s'", collectionName.toUtf8().constData());
         return false;
     }
-
-    blog(LOG_INFO, "[StreamUP Migration] Migrating current collection '%s' from: %s",
-        collectionName.toUtf8().constData(), configPath.toUtf8().constData());
-
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
-        QString("Migrating current collection '%1' from: %2").arg(collectionName, configPath).toUtf8().constData());
 
     // Load the original plugin's config file
     obs_data_t *original_data = obs_data_create_from_json_file(configPath.toUtf8().constData());
     if (!original_data) {
-        blog(LOG_INFO, "[StreamUP Migration] Failed to load original config file: %s", configPath.toUtf8().constData());
         return false;
     }
-
-    blog(LOG_INFO, "[StreamUP Migration] Loaded original config file successfully");
 
     // Get the data for this specific collection
     obs_data_array_t *collection_array = obs_data_get_array(original_data, collectionName.toUtf8().constData());
     if (!collection_array) {
-        blog(LOG_INFO, "[StreamUP Migration] Collection '%s' not found in original config", collectionName.toUtf8().constData());
         obs_data_release(original_data);
         return false;
     }
 
-    blog(LOG_INFO, "[StreamUP Migration] Found collection data with %zu items", obs_data_array_count(collection_array));
-
     // Convert from obs_scene_tree_view format to StreamUP format
     obs_data_array_t *converted_array = convertSceneTreeViewFormat(collection_array);
     if (!converted_array) {
-        blog(LOG_INFO, "[StreamUP Migration] Failed to convert format");
         obs_data_array_release(collection_array);
         obs_data_release(original_data);
         return false;
     }
 
-    blog(LOG_INFO, "[StreamUP Migration] Converted to StreamUP format with %zu items", obs_data_array_count(converted_array));
-
     // Get our config path
     char *our_config_path = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
     if (!our_config_path) {
-        blog(LOG_INFO, "[StreamUP Migration] Failed to get our config path");
         obs_data_array_release(converted_array);
         obs_data_array_release(collection_array);
         obs_data_release(original_data);
@@ -3478,33 +3418,22 @@ bool SceneTreeModel::migrateCurrentCollection()
     QString configFile = configDir + "/scene_tree_normal.json";
     bfree(our_config_path);
 
-    blog(LOG_INFO, "[StreamUP Migration] Saving to: %s", configFile.toUtf8().constData());
-
     // Load existing data to preserve other collections
     obs_data_t *root_data = obs_data_create_from_json_file(configFile.toUtf8().constData());
     if (!root_data) {
-        blog(LOG_INFO, "[StreamUP Migration] Creating new root data");
         root_data = obs_data_create();
-    } else {
-        blog(LOG_INFO, "[StreamUP Migration] Loaded existing root data");
     }
 
     // Set only this collection's converted data
     obs_data_set_array(root_data, collectionName.toUtf8().constData(), converted_array);
 
     // Save
-    bool saved = obs_data_save_json(root_data, configFile.toUtf8().constData());
-    blog(LOG_INFO, "[StreamUP Migration] Save result: %s", saved ? "SUCCESS" : "FAILED");
+    obs_data_save_json(root_data, configFile.toUtf8().constData());
 
     obs_data_array_release(converted_array);
     obs_data_array_release(collection_array);
     obs_data_release(root_data);
     obs_data_release(original_data);
-
-    blog(LOG_INFO, "[StreamUP Migration] Successfully migrated collection '%s'", collectionName.toUtf8().constData());
-
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
-        QString("Successfully migrated collection '%1'").arg(collectionName).toUtf8().constData());
 
     return true;
 }
