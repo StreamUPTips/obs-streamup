@@ -283,6 +283,9 @@ public:
 
     // Migration from original obs_scene_tree_view plugin
     bool migrateFromOriginalPlugin(const QString &originalConfigPath);
+    static bool checkMigrationAvailable(const QString &sceneCollectionName, QString &outConfigPath);
+    bool migrateCurrentCollection();
+    static obs_data_array_t* convertSceneTreeViewFormat(obs_data_array_t *original_array);
 
     // Cleanup
     void cleanupEmptyItems();
