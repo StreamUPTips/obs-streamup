@@ -174,15 +174,16 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_copyFiltersSource(nullptr)
     , m_currentContextItem(nullptr)
     , m_isLocked(false)
+    , m_hideSceneAction(nullptr)
+    , m_showSceneAction(nullptr)
     , m_updateBatchTimer(new QTimer(this))
     , m_updatesPending(false)
-    , themeMonitorTimer(nullptr)
     , currentThemeIsDark(false)
 {
     s_dockInstances.append(this);
 
-    // Set configuration key based on canvas type
-    m_configKey = (m_canvasType == CanvasType::Vertical) ? "scene_organiser_vertical" : "scene_organiser_normal";
+    // Set configuration key
+    m_configKey = "scene_organiser_normal";
 
     // Initialize optimized update system
     m_updateBatchTimer->setSingleShot(true);
@@ -206,14 +207,6 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     // Initialize current theme state
     currentThemeIsDark = StreamUP::UIHelpers::IsOBSThemeDark();
 
-    // Set up theme monitoring for older OBS versions that don't have theme change events
-#if LIBOBS_API_VER < MAKE_SEMANTIC_VERSION(30, 0, 0)
-    themeMonitorTimer = new QTimer(this);
-    themeMonitorTimer->setInterval(1000); // Check every second
-    connect(themeMonitorTimer, &QTimer::timeout, this, &SceneOrganiserDock::checkForThemeChange);
-    themeMonitorTimer->start();
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Theme Monitor", "Started theme monitoring for older OBS version");
-#endif
 
     // Initialize toggle icons state in context menus
     updateToggleIconsState();
@@ -225,8 +218,7 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     QTimer::singleShot(200, this, &SceneOrganiserDock::updateActiveSceneHighlight);
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Initialize",
-        QString("Scene Organiser Dock created for %1 canvas")
-        .arg(m_canvasType == CanvasType::Vertical ? "vertical" : "normal").toUtf8().constData());
+        "Scene Organiser Dock created for normal canvas");
 }
 
 SceneOrganiserDock::~SceneOrganiserDock()
@@ -242,73 +234,6 @@ SceneOrganiserDock::~SceneOrganiserDock()
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Cleanup", "Scene Organiser Dock destroyed");
 }
 
-bool SceneOrganiserDock::IsVerticalPluginDetected()
-{
-    // Primary method: Check if vertical-canvas.dll is loaded using our plugin checker
-    char *logPath = StreamUP::PathUtils::GetOBSLogPath();
-    if (logPath) {
-        std::vector<std::string> loadedModules = StreamUP::PluginManager::SearchLoadedModulesInLogFile(logPath);
-        bfree(logPath);
-
-        StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Checking for vertical-canvas module among %zu loaded modules", loadedModules.size());
-
-        for (const auto& module : loadedModules) {
-            StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Found loaded module: %s", module.c_str());
-            if (module == "vertical-canvas") {
-                StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin detected via loaded modules (vertical-canvas.dll)!");
-                return true;
-            }
-        }
-    }
-
-    // Secondary method: Check if Aitum Vertical plugin is detected in StreamUP's plugin list
-    auto installedPlugins = StreamUP::PluginManager::GetInstalledPluginsCached();
-
-    StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Checking for vertical plugin among %zu installed plugins", installedPlugins.size());
-
-    for (const auto& plugin : installedPlugins) {
-        StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Found plugin: %s", plugin.first.c_str());
-        if (plugin.first.find("aitum-vertical") != std::string::npos ||
-            plugin.first.find("Aitum Vertical") != std::string::npos ||
-            plugin.first.find("aitum_vertical") != std::string::npos) {
-            StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin detected via plugin list!");
-            return true;
-        }
-    }
-
-    // Fallback method: Check if vertical sources exist (indicates vertical plugin is active)
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "VerticalDetection", "Checking for vertical sources as fallback detection");
-
-    bool foundVerticalScene = false;
-    obs_enum_scenes([](void *param, obs_source_t *source) {
-        bool *found = static_cast<bool*>(param);
-        if (*found) return false; // Already found, stop enumeration
-
-        const char *scene_name = obs_source_get_name(source);
-        if (scene_name && (strstr(scene_name, "[Vertical]") || strstr(scene_name, "(Vertical)"))) {
-            StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "VerticalDetection", "Found vertical scene: %s", scene_name);
-            *found = true;
-            return false; // Stop enumeration
-        }
-        return true; // Continue enumeration
-    }, &foundVerticalScene);
-
-    if (foundVerticalScene) {
-        StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin detected via vertical scenes!");
-        return true;
-    }
-
-    // Also check for vertical canvas output existence (more direct approach)
-    obs_output_t *vertical_output = obs_get_output_by_name("aitum_vertical_output");
-    if (vertical_output) {
-        StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin detected via output!");
-        obs_output_release(vertical_output);
-        return true;
-    }
-
-    StreamUP::DebugLogger::LogInfo("SceneOrganiser", "Aitum Vertical plugin not found via any detection method");
-    return false;
-}
 
 void SceneOrganiserDock::NotifyAllDocksSettingsChanged()
 {
@@ -327,7 +252,7 @@ void SceneOrganiserDock::NotifySceneOrganiserIconsChanged()
 
 void SceneOrganiserDock::setupUI()
 {
-    setObjectName(QString("StreamUPSceneOrganiser%1").arg(m_canvasType == CanvasType::Vertical ? "Vertical" : "Normal"));
+    setObjectName("StreamUPSceneOrganiserNormal");
 
     // Use zero margins and spacing to match OBS dock style
     m_mainLayout = new QVBoxLayout(this);
@@ -587,6 +512,10 @@ void SceneOrganiserDock::setupContextMenu()
     m_deleteSceneAction = m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Remove"), -1), this, &SceneOrganiserDock::onDeleteSceneClicked);
     m_deleteSceneAction->setShortcut(QKeySequence(Qt::Key_Delete));
 
+    // Scene visibility actions
+    m_hideSceneAction = m_sceneContextMenu->addAction("Hide Scene", this, &SceneOrganiserDock::onHideSceneClicked);
+    m_showSceneAction = m_sceneContextMenu->addAction("Show Scene", this, &SceneOrganiserDock::onShowSceneClicked);
+
     // Order submenu
     m_sceneContextMenu->addSeparator();
     m_sceneOrderMenu = new QMenu(QString::fromUtf8(obs_frontend_get_locale_string("Basic.MainMenu.Edit.Order"), -1), this);
@@ -676,6 +605,8 @@ void SceneOrganiserDock::refreshSceneList()
 {
     m_model->updateTree();
     updateActiveSceneHighlight();
+    updateHiddenScenesStyling();
+    applySceneVisibility();
 }
 
 void SceneOrganiserDock::updateFromObsScenes()
@@ -898,6 +829,15 @@ void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelInd
         obs_data_release(privateSettings);
         obs_source_release(source);
     }
+
+    // Update hide/show scene action visibility based on current scene state
+    bool sceneIsHidden = m_hiddenScenes.contains(sceneName);
+    if (m_hideSceneAction) m_hideSceneAction->setVisible(!sceneIsHidden);
+    if (m_showSceneAction) m_showSceneAction->setVisible(sceneIsHidden);
+
+    // Only enable hide/show actions when unlocked
+    if (m_hideSceneAction) m_hideSceneAction->setEnabled(!m_isLocked);
+    if (m_showSceneAction) m_showSceneAction->setEnabled(!m_isLocked);
 
     m_sceneContextMenu->exec(pos);
 }
@@ -1349,6 +1289,9 @@ void SceneOrganiserDock::setLocked(bool locked)
     // Update UI enabled state
     updateUIEnabledState();
 
+    // Apply scene visibility based on lock state
+    applySceneVisibility();
+
     // Update lock action states in context menus
     updateLockActionStates();
 
@@ -1409,6 +1352,13 @@ void SceneOrganiserDock::updateUIEnabledState()
     }
     if (m_deleteSceneAction) {
         m_deleteSceneAction->setEnabled(unlocked);
+    }
+    // Scene visibility actions - only allowed when unlocked
+    if (m_hideSceneAction) {
+        m_hideSceneAction->setEnabled(unlocked);
+    }
+    if (m_showSceneAction) {
+        m_showSceneAction->setEnabled(unlocked);
     }
     if (m_sceneMoveUpAction) {
         m_sceneMoveUpAction->setEnabled(unlocked);
@@ -1611,34 +1561,33 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
     switch (event) {
     case OBS_FRONTEND_EVENT_FINISHED_LOADING:
         QTimer::singleShot(100, dock, [dock]() {
+            dock->LoadConfiguration();
             dock->m_model->loadSceneTree();
-            dock->m_model->updateTree();
-            dock->updateActiveSceneHighlight();
+            dock->refreshSceneList();
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Event", "Scene list changed event received");
         QTimer::singleShot(50, dock, [dock]() {
-            dock->m_model->updateTree();
-            dock->updateActiveSceneHighlight();
+            dock->refreshSceneList();
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING:
-        // Save current scene tree before switching
+        // Save current scene tree and settings before switching
         dock->m_model->saveSceneTree();
+        dock->SaveConfiguration();
         break;
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
         QTimer::singleShot(100, dock, [dock]() {
+            dock->LoadConfiguration();
             dock->m_model->loadSceneTree();
-            dock->m_model->updateTree();
-            dock->updateActiveSceneHighlight();
+            dock->refreshSceneList();
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_RENAMED:
         QTimer::singleShot(100, dock, [dock]() {
             dock->m_model->saveSceneTree();
-            dock->m_model->updateTree();
-            dock->updateActiveSceneHighlight();
+            dock->refreshSceneList();
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_CHANGED:
@@ -1659,7 +1608,6 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->updateActiveSceneHighlight();
         });
         break;
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(30, 0, 0)
     case OBS_FRONTEND_EVENT_THEME_CHANGED:
         // Handle theme changes - clear caches and update icons
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Theme", "Theme changed event received");
@@ -1667,7 +1615,6 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->onThemeChanged();
         });
         break;
-#endif
     default:
         break;
     }
@@ -1675,12 +1622,19 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
 
 void SceneOrganiserDock::SaveConfiguration()
 {
+    char *scene_collection = obs_frontend_get_current_scene_collection();
+    if (!scene_collection) return;
+
     char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
-    if (!configPath) return;
+    if (!configPath) {
+        bfree(scene_collection);
+        return;
+    }
 
     QString configDir = QString::fromUtf8(configPath);
-    QString configFile = configDir + "/" + m_configKey + ".json";
+    QString sceneCollectionName = QString::fromUtf8(scene_collection);
     bfree(configPath);
+    bfree(scene_collection);
 
     // Ensure the directory exists
     QDir dir;
@@ -1690,8 +1644,8 @@ void SceneOrganiserDock::SaveConfiguration()
         return;
     }
 
-    // Save lock state separately using simple approach
-    QString lockStateFile = configDir + "/" + m_configKey + "_lock_state.txt";
+    // Save lock state per scene collection
+    QString lockStateFile = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_lock_state.txt";
     QFile file(lockStateFile);
     if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QTextStream out(&file);
@@ -1699,39 +1653,162 @@ void SceneOrganiserDock::SaveConfiguration()
         file.close();
     }
 
+    // Save hidden scenes per scene collection
+    QString hiddenScenesFile = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_hidden_scenes.txt";
+    QFile hiddenFile(hiddenScenesFile);
+    if (hiddenFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&hiddenFile);
+        QStringList hiddenScenesList = QStringList(m_hiddenScenes.begin(), m_hiddenScenes.end());
+        out << hiddenScenesList.join("\n");
+        hiddenFile.close();
+    }
+
     // Now using DigitOtter approach - save is handled by saveSceneTree()
     // which is called automatically on OBS frontend events
     m_model->saveSceneTree();
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-        QString("Configuration saved using DigitOtter approach (lock state: %1)")
+        QString("Configuration saved for scene collection '%1' (lock state: %2)")
+        .arg(sceneCollectionName)
         .arg(m_isLocked ? "locked" : "unlocked").toUtf8().constData());
 }
 
 void SceneOrganiserDock::LoadConfiguration()
 {
-    // Load lock state
-    char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
-    if (configPath) {
-        QString configDir = QString::fromUtf8(configPath);
-        QString lockStateFile = configDir + "/" + m_configKey + "_lock_state.txt";
-        bfree(configPath);
+    char *scene_collection = obs_frontend_get_current_scene_collection();
+    if (!scene_collection) return;
 
-        QFile file(lockStateFile);
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QTextStream in(&file);
-            QString lockState = in.readAll().trimmed();
-            bool shouldBeLocked = (lockState == "locked");
-            setLocked(shouldBeLocked);
-            file.close();
+    char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
+    if (!configPath) {
+        bfree(scene_collection);
+        return;
+    }
+
+    QString configDir = QString::fromUtf8(configPath);
+    QString sceneCollectionName = QString::fromUtf8(scene_collection);
+    bfree(configPath);
+    bfree(scene_collection);
+
+    // Load lock state per scene collection
+    QString lockStateFile = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_lock_state.txt";
+    QFile file(lockStateFile);
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QTextStream in(&file);
+        QString lockState = in.readAll().trimmed();
+        bool shouldBeLocked = (lockState == "locked");
+        setLocked(shouldBeLocked);
+        file.close();
+    } else {
+        // Default to unlocked if no saved state
+        setLocked(false);
+    }
+
+    // Load hidden scenes per scene collection
+    QString hiddenScenesFile = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_hidden_scenes.txt";
+    QFile hiddenFile(hiddenScenesFile);
+    if (hiddenFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QTextStream in(&hiddenFile);
+        QString hiddenScenesText = in.readAll().trimmed();
+        if (!hiddenScenesText.isEmpty()) {
+            QStringList hiddenScenesList = hiddenScenesText.split("\n", Qt::SkipEmptyParts);
+            m_hiddenScenes = QSet<QString>(hiddenScenesList.begin(), hiddenScenesList.end());
+
+            // Apply scene visibility after loading hidden scenes
+            // Use longer delay to ensure scene tree is fully populated
+            QTimer::singleShot(500, this, [this]() {
+                updateHiddenScenesStyling();
+                applySceneVisibility();
+            });
+        }
+        hiddenFile.close();
+    } else {
+        // Clear hidden scenes if no saved state for this collection
+        m_hiddenScenes.clear();
+    }
+
+    // Check if we need to prompt for migration
+    // Check if migration is available even if lock file exists, to handle cases where
+    // user previously used the plugin but hasn't migrated from obs_scene_tree_view yet
+    // Check persistent migration history file to avoid re-prompting
+    QString migrationHistoryFile = configDir + "/migration_prompted_collections.txt";
+    QFile historyFile(migrationHistoryFile);
+    QSet<QString> promptedCollections;
+
+    // Load previously prompted collections from file
+    if (historyFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QTextStream in(&historyFile);
+        while (!in.atEnd()) {
+            QString line = in.readLine().trimmed();
+            if (!line.isEmpty()) {
+                promptedCollections.insert(line);
+            }
+        }
+        historyFile.close();
+    }
+
+    // Check for migration availability if we haven't prompted yet for this collection
+    if (m_model && !promptedCollections.contains(sceneCollectionName)) {
+        QString migrationConfigPath;
+        if (SceneTreeModel::checkMigrationAvailable(sceneCollectionName, migrationConfigPath)) {
+            // Mark this collection as prompted by saving to file
+            promptedCollections.insert(sceneCollectionName);
+            if (historyFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QTextStream out(&historyFile);
+                for (const QString &collection : promptedCollections) {
+                    out << collection << "\n";
+                }
+                historyFile.close();
+            }
+
+            // Use QTimer to ensure prompt appears after UI is fully loaded
+            QTimer::singleShot(500, this, [this, sceneCollectionName]() {
+                QMessageBox msgBox(QMessageBox::Question,
+                    "Import Scene Organization?",
+                    QString("Settings from the SceneTree plugin were found for '%1'.\n\n"
+                            "Would you like to import your scene organization?\n\n"
+                            "You can access the Scene Organizer from View → Docks → Scene Organizer.").arg(sceneCollectionName),
+                    QMessageBox::Yes | QMessageBox::No,
+                    this);
+
+                msgBox.setDefaultButton(QMessageBox::Yes);
+
+                if (msgBox.exec() == QMessageBox::Yes) {
+                    if (m_model->migrateCurrentCollection()) {
+                        // Reload configuration and tree for ALL dock instances
+                        for (auto dock : SceneOrganiserDock::s_dockInstances) {
+                            if (dock && dock->m_model) {
+                                dock->LoadConfiguration();
+                                dock->m_model->loadSceneTree();
+                                dock->m_model->updateTree();
+                            }
+                        }
+
+                        QMessageBox::information(this,
+                            "Import Successful",
+                            QString("Successfully imported scene organization for '%1'!\n\n"
+                                    "The Scene Organizer can be accessed from View → Docks → Scene Organizer.").arg(sceneCollectionName));
+                    } else {
+                        QMessageBox::warning(this,
+                            "Import Failed",
+                            "Failed to import settings. Please check the log for details.");
+                    }
+                }
+            });
         }
     }
 
     // Now using the DigitOtter approach - this is handled by frontend events
     // No need to manually load configuration here
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-        QString("Configuration loading handled by frontend events (lock state: %1)")
+        QString("Configuration loaded for scene collection '%1' (lock state: %2)")
+        .arg(sceneCollectionName)
         .arg(m_isLocked ? "locked" : "unlocked").toUtf8().constData());
+
+    // Apply scene visibility one more time after full initialization with even longer delay
+    QTimer::singleShot(1000, this, [this]() {
+        updateHiddenScenesStyling();
+        applySceneVisibility();
+    });
 }
 
 // Search functionality implementation
@@ -1911,6 +1988,126 @@ void SceneOrganiserDock::onDeleteSceneClicked()
     }
 
     obs_source_release(source);
+}
+
+void SceneOrganiserDock::onHideSceneClicked()
+{
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
+
+    QString sceneName = m_currentContextItem->text();
+
+    // Add scene to hidden list
+    m_hiddenScenes.insert(sceneName);
+
+    // Apply visual styling when unlocked (italic font to indicate it will be hidden when locked)
+    m_currentContextItem->setFont(QFont("", -1, QFont::Normal, true)); // Make text italic
+
+    // If dock is locked, immediately hide the scene from the tree
+    if (m_isLocked) {
+        applySceneVisibility();
+    }
+
+    // Save configuration immediately to persist hidden scenes
+    m_saveTimer->start(500);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Visibility",
+        QString("Hidden scene: %1").arg(sceneName).toUtf8().constData());
+}
+
+void SceneOrganiserDock::onShowSceneClicked()
+{
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
+
+    QString sceneName = m_currentContextItem->text();
+
+    // Remove scene from hidden list
+    m_hiddenScenes.remove(sceneName);
+
+    // Reset font to normal
+    m_currentContextItem->setFont(QFont());
+
+    // If dock is locked, immediately show the scene in the tree
+    if (m_isLocked) {
+        applySceneVisibility();
+    }
+
+    // Save configuration immediately to persist visible scenes
+    m_saveTimer->start(500);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Visibility",
+        QString("Shown scene: %1").arg(sceneName).toUtf8().constData());
+}
+
+void SceneOrganiserDock::applySceneVisibility()
+{
+    if (!m_model || !m_treeView) return;
+
+    // Recursively apply visibility to all scene items in the tree
+    applySceneVisibilityRecursive(m_model->invisibleRootItem());
+
+    // Force update of the proxy model to refresh the view
+    if (m_proxyModel) {
+        m_proxyModel->invalidate();
+    }
+}
+
+void SceneOrganiserDock::applySceneVisibilityRecursive(QStandardItem *parent)
+{
+    if (!parent) return;
+
+    for (int i = 0; i < parent->rowCount(); ++i) {
+        QStandardItem *child = parent->child(i);
+        if (!child) continue;
+
+        if (child->type() == SceneTreeItem::UserType + 2) { // Scene item
+            QString sceneName = child->text();
+            bool shouldHide = m_isLocked && m_hiddenScenes.contains(sceneName);
+
+            // Get the model index for this item
+            QModelIndex index = child->index();
+            if (m_treeView) {
+                // Map to proxy model index
+                QModelIndex proxyIndex = m_proxyModel->mapFromSource(index);
+                // Hide/show the row in the tree view
+                m_treeView->setRowHidden(proxyIndex.row(), proxyIndex.parent(), shouldHide);
+            }
+        } else if (child->hasChildren()) {
+            // Recursively check folder contents
+            applySceneVisibilityRecursive(child);
+        }
+    }
+}
+
+void SceneOrganiserDock::updateHiddenScenesStyling()
+{
+    if (!m_model) return;
+    updateHiddenScenesStylingRecursive(m_model->invisibleRootItem());
+}
+
+void SceneOrganiserDock::updateHiddenScenesStylingRecursive(QStandardItem *parent)
+{
+    if (!parent) return;
+
+    for (int i = 0; i < parent->rowCount(); ++i) {
+        QStandardItem *child = parent->child(i);
+        if (!child) continue;
+
+        if (child->type() == SceneTreeItem::UserType + 2) { // Scene item
+            QString sceneName = child->text();
+            bool isHidden = m_hiddenScenes.contains(sceneName);
+
+            if (isHidden) {
+                // Apply italic styling to indicate scene is hidden (when unlocked)
+                child->setFont(QFont("", -1, QFont::Normal, true));
+            } else {
+                // Reset to normal font
+                child->setFont(QFont());
+            }
+        } else if (child->hasChildren()) {
+            // Recursively check folder contents
+            updateHiddenScenesStylingRecursive(child);
+        }
+    }
 }
 
 void SceneOrganiserDock::onCopyFiltersClicked()
@@ -2440,8 +2637,20 @@ void SceneTreeModel::updateTree(const QModelIndex &selectedIndex)
         obs_weak_source_t *weak = obs_source_get_weak_source(source);
         source_map_t::iterator scene_it;
 
-        // Check if scene already in tree
-        scene_it = m_scenesInTree.find(weak);
+        // Check if scene already in tree by comparing actual sources, not weak pointers
+        // Different weak references can point to the same source
+        scene_it = m_scenesInTree.end();
+        for (auto it = m_scenesInTree.begin(); it != m_scenesInTree.end(); ++it) {
+            obs_source_t *existing_source = obs_weak_source_get_source(it->first);
+            bool same_source = (existing_source == source);
+            obs_source_release(existing_source);
+
+            if (same_source) {
+                scene_it = it;
+                break;
+            }
+        }
+
         if (scene_it != m_scenesInTree.end()) {
             // Move existing scene to new tree
             auto new_scene_it = new_scene_tree.emplace(scene_it->first, scene_it->second).first;
@@ -2524,44 +2733,8 @@ bool SceneTreeModel::isValidSceneForCanvas(obs_scene_t *scene)
     const char *scene_name = obs_source_get_name(source);
     if (!scene_name) return false;
 
-    // Check for common vertical scene naming patterns
-    bool isVerticalScene = (strstr(scene_name, "[Vertical]") != nullptr ||
-                           strstr(scene_name, "(Vertical)") != nullptr ||
-                           strstr(scene_name, "_Vertical") != nullptr ||
-                           strstr(scene_name, " Vertical") != nullptr ||
-                           strstr(scene_name, "[V]") != nullptr ||
-                           strstr(scene_name, "(V)") != nullptr);
-
-    // Additional check: examine scene resolution if available
-    // Vertical scenes typically have portrait aspect ratios (height > width)
-    bool isProbablyVertical = false;
-    uint32_t width = obs_source_get_width(source);
-    uint32_t height = obs_source_get_height(source);
-
-    if (width > 0 && height > 0) {
-        // Consider it vertical if height is significantly greater than width
-        // Using 1.3 ratio as threshold (height/width > 1.3)
-        isProbablyVertical = (height * 10 > width * 13);
-    }
-
-    // If naming pattern and resolution both suggest vertical, treat as vertical
-    if (isVerticalScene || isProbablyVertical) {
-        StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "SceneFilter",
-            "Scene '%s' detected as vertical (name: %s, resolution: %s) for %s canvas",
-            scene_name,
-            isVerticalScene ? "yes" : "no",
-            isProbablyVertical ? QString("%1x%2").arg(width).arg(height).toUtf8().constData() : "unknown",
-            (m_canvasType == CanvasType::Vertical) ? "vertical" : "normal");
-    }
-
-    // Filter based on canvas type:
-    // - Normal canvas: show non-vertical scenes
-    // - Vertical canvas: show only vertical scenes
-    if (m_canvasType == CanvasType::Vertical) {
-        return isVerticalScene || isProbablyVertical;
-    } else {
-        return !isVerticalScene && !isProbablyVertical;
-    }
+    // All scenes are valid for normal canvas
+    return true;
 }
 
 
@@ -2975,25 +3148,30 @@ void SceneTreeModel::saveSceneTree()
     }
 
     QString configDir = QString::fromUtf8(configPath);
-    QString configFile = configDir + "/scene_tree_" +
-        (m_canvasType == CanvasType::Vertical ? "vertical" : "normal") + ".json";
+    QString configFile = configDir + "/scene_tree_normal.json";
 
     bfree(configPath);
 
-    // Create root data
-    obs_data_t *root_data = obs_data_create();
+    // Load existing data first to preserve other scene collections
+    obs_data_t *root_data = obs_data_create_from_json_file(configFile.toUtf8().constData());
+    if (!root_data) {
+        // File doesn't exist yet, create new data
+        root_data = obs_data_create();
+    }
+
+    // Update only the current scene collection's data
     obs_data_array_t *folder_array = createFolderArray(*invisibleRootItem());
     obs_data_set_array(root_data, scene_collection, folder_array);
     obs_data_array_release(folder_array);
 
-    // Save to file
+    // Save to file (now preserves other collections)
     obs_data_save_json(root_data, configFile.toUtf8().constData());
     obs_data_release(root_data);
 
     bfree(scene_collection);
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Save",
-        QString("Saved scene tree to: %1").arg(configFile).toUtf8().constData());
+        QString("Saved scene tree for collection '%1' to: %2").arg(scene_collection, configFile).toUtf8().constData());
 }
 
 void SceneTreeModel::loadSceneTree()
@@ -3008,8 +3186,7 @@ void SceneTreeModel::loadSceneTree()
     }
 
     QString configDir = QString::fromUtf8(configPath);
-    QString configFile = configDir + "/scene_tree_" +
-        (m_canvasType == CanvasType::Vertical ? "vertical" : "normal") + ".json";
+    QString configFile = configDir + "/scene_tree_normal.json";
 
     bfree(configPath);
 
@@ -3031,6 +3208,241 @@ void SceneTreeModel::loadSceneTree()
     }
 
     bfree(scene_collection);
+}
+
+bool SceneTreeModel::migrateFromOriginalPlugin(const QString &originalConfigPath)
+{
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
+        QString("Starting migration from: %1").arg(originalConfigPath).toUtf8().constData());
+
+    // Load the original plugin's config file
+    obs_data_t *original_data = obs_data_create_from_json_file(originalConfigPath.toUtf8().constData());
+    if (!original_data) {
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
+            "Failed to load original config file");
+        return false;
+    }
+
+    // Get our config path
+    char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
+    if (!configPath) {
+        obs_data_release(original_data);
+        return false;
+    }
+
+    QString configDir = QString::fromUtf8(configPath);
+    QString configFile = configDir + "/scene_tree_normal.json";
+    bfree(configPath);
+
+    // Load existing data (if any) to preserve what we have
+    obs_data_t *root_data = obs_data_create_from_json_file(configFile.toUtf8().constData());
+    if (!root_data) {
+        root_data = obs_data_create();
+    }
+
+    int migratedCollections = 0;
+
+    // Iterate through all scene collections in the original file
+    obs_data_item_t *item = obs_data_first(original_data);
+    while (item) {
+        const char *collection_name = obs_data_item_get_name(item);
+        obs_data_type type = obs_data_item_gettype(item);
+
+        if (type == OBS_DATA_ARRAY) {
+            obs_data_array_t *original_array = obs_data_item_get_array(item);
+            if (original_array) {
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
+                    QString("Migrating collection: %1").arg(collection_name).toUtf8().constData());
+
+                // Check if we already have data for this collection
+                obs_data_array_t *existing_array = obs_data_get_array(root_data, collection_name);
+                if (existing_array) {
+                    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
+                        QString("Collection '%1' already exists, skipping").arg(collection_name).toUtf8().constData());
+                    obs_data_array_release(existing_array);
+                } else {
+                    // Convert and migrate this collection
+                    obs_data_set_array(root_data, collection_name, original_array);
+                    migratedCollections++;
+                }
+
+                obs_data_array_release(original_array);
+            }
+        }
+
+        obs_data_item_next(&item);
+    }
+
+    // Save the migrated data
+    obs_data_save_json(root_data, configFile.toUtf8().constData());
+    obs_data_release(root_data);
+    obs_data_release(original_data);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
+        QString("Migration complete. Migrated %1 scene collections.").arg(migratedCollections).toUtf8().constData());
+
+    return migratedCollections > 0;
+}
+
+bool SceneTreeModel::checkMigrationAvailable(const QString &sceneCollectionName, QString &outConfigPath)
+{
+    // Get the streamup plugin config path to navigate to obs_scene_tree_view
+    char *streamup_config_path = obs_module_get_config_path(obs_current_module(), "");
+    if (!streamup_config_path) {
+        return false;
+    }
+
+    QDir streamupConfigDir(QString::fromUtf8(streamup_config_path));
+    streamupConfigDir.cdUp(); // Go to plugin_config directory
+
+    QString sceneTreeConfigPath = streamupConfigDir.filePath("obs_scene_tree_view/scene_tree.json");
+    bfree(streamup_config_path);
+
+    // Check if the file exists
+    if (!QFile::exists(sceneTreeConfigPath)) {
+        return false;
+    }
+
+    // Load the file and check if this scene collection exists in it
+    obs_data_t *original_data = obs_data_create_from_json_file(sceneTreeConfigPath.toUtf8().constData());
+    if (!original_data) {
+        return false;
+    }
+
+    // Check if this scene collection has data
+    obs_data_array_t *collection_array = obs_data_get_array(original_data, sceneCollectionName.toUtf8().constData());
+    bool hasData = (collection_array != nullptr && obs_data_array_count(collection_array) > 0);
+
+    if (collection_array) {
+        obs_data_array_release(collection_array);
+    }
+    obs_data_release(original_data);
+
+    if (hasData) {
+        outConfigPath = sceneTreeConfigPath;
+    }
+
+    return hasData;
+}
+
+// Convert obs_scene_tree_view format to StreamUP format
+// obs_scene_tree_view: {"name": "X", "folder": [...], "is_expanded": bool} for folders, {"name": "X"} for scenes
+// StreamUP: {"name": "X", "type": "folder", "children": [...]} for folders, {"name": "X", "type": "scene"} for scenes
+obs_data_array_t* SceneTreeModel::convertSceneTreeViewFormat(obs_data_array_t *original_array)
+{
+    if (!original_array) return nullptr;
+
+    obs_data_array_t *converted_array = obs_data_array_create();
+    size_t count = obs_data_array_count(original_array);
+
+    for (size_t i = 0; i < count; i++) {
+        obs_data_t *original_item = obs_data_array_item(original_array, i);
+        if (!original_item) continue;
+
+        obs_data_t *converted_item = obs_data_create();
+        const char *name = obs_data_get_string(original_item, "name");
+        obs_data_set_string(converted_item, "name", name);
+
+        // Check if this is a folder (has "folder" array) or a scene
+        obs_data_array_t *folder_contents = obs_data_get_array(original_item, "folder");
+        if (folder_contents) {
+            // This is a folder
+            obs_data_set_string(converted_item, "type", "folder");
+            bool is_expanded = obs_data_get_bool(original_item, "is_expanded");
+            obs_data_set_bool(converted_item, "expanded", is_expanded);
+
+            // Recursively convert folder contents
+            obs_data_array_t *converted_children = convertSceneTreeViewFormat(folder_contents);
+            obs_data_set_array(converted_item, "children", converted_children);
+            obs_data_array_release(converted_children);
+            obs_data_array_release(folder_contents);
+        } else {
+            // This is a scene
+            obs_data_set_string(converted_item, "type", "scene");
+        }
+
+        obs_data_array_push_back(converted_array, converted_item);
+        obs_data_release(converted_item);
+        obs_data_release(original_item);
+    }
+
+    return converted_array;
+}
+
+bool SceneTreeModel::migrateCurrentCollection()
+{
+    char *scene_collection = obs_frontend_get_current_scene_collection();
+    if (!scene_collection) {
+        return false;
+    }
+
+    QString collectionName = QString::fromUtf8(scene_collection);
+    bfree(scene_collection);
+
+    QString configPath;
+    if (!checkMigrationAvailable(collectionName, configPath)) {
+        return false;
+    }
+
+    // Load the original plugin's config file
+    obs_data_t *original_data = obs_data_create_from_json_file(configPath.toUtf8().constData());
+    if (!original_data) {
+        return false;
+    }
+
+    // Get the data for this specific collection
+    obs_data_array_t *collection_array = obs_data_get_array(original_data, collectionName.toUtf8().constData());
+    if (!collection_array) {
+        obs_data_release(original_data);
+        return false;
+    }
+
+    // Convert from obs_scene_tree_view format to StreamUP format
+    obs_data_array_t *converted_array = convertSceneTreeViewFormat(collection_array);
+    if (!converted_array) {
+        obs_data_array_release(collection_array);
+        obs_data_release(original_data);
+        return false;
+    }
+
+    // Get our config path
+    char *our_config_path = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
+    if (!our_config_path) {
+        obs_data_array_release(converted_array);
+        obs_data_array_release(collection_array);
+        obs_data_release(original_data);
+        return false;
+    }
+
+    QString configDir = QString::fromUtf8(our_config_path);
+    QString configFile = configDir + "/scene_tree_normal.json";
+    bfree(our_config_path);
+
+    // Load existing data to preserve other collections
+    obs_data_t *root_data = obs_data_create_from_json_file(configFile.toUtf8().constData());
+    if (!root_data) {
+        root_data = obs_data_create();
+    }
+
+    // Set only this collection's converted data
+    obs_data_set_array(root_data, collectionName.toUtf8().constData(), converted_array);
+
+    // Save
+    obs_data_save_json(root_data, configFile.toUtf8().constData());
+
+    obs_data_array_release(converted_array);
+    obs_data_array_release(collection_array);
+    obs_data_release(root_data);
+    obs_data_release(original_data);
+
+    return true;
+}
+
+void SceneTreeModel::loadOriginalFolderArray(obs_data_array_t *folder_array, QStandardItem &parent)
+{
+    // This loads the original plugin's format which is already compatible
+    // The format is the same, so we can use the existing loadFolderArray
+    loadFolderArray(folder_array, parent);
 }
 
 void SceneTreeModel::removeSceneFromTracking(obs_weak_source_t *weak_source)
@@ -3588,17 +4000,6 @@ void StreamUP::SceneOrganiser::SceneOrganiserDock::clearIconCaches()
     ClearIconCaches();
 }
 
-void StreamUP::SceneOrganiser::SceneOrganiserDock::checkForThemeChange()
-{
-    bool newThemeIsDark = StreamUP::UIHelpers::IsOBSThemeDark();
-    if (newThemeIsDark != currentThemeIsDark) {
-        StreamUP::DebugLogger::LogDebugFormat("SceneOrganiser", "Theme Monitor", "Theme change detected: %s -> %s",
-            currentThemeIsDark ? "dark" : "light", newThemeIsDark ? "dark" : "light");
-
-        currentThemeIsDark = newThemeIsDark;
-        onThemeChanged();
-    }
-}
 
 void StreamUP::SceneOrganiser::SceneOrganiserDock::onThemeChanged()
 {

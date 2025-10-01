@@ -197,12 +197,8 @@ void IconSelectorDialog::populateOBSIcons() {
     }
     
     // Determine current theme
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
     bool isDark = obs_frontend_is_theme_dark();
     QString currentTheme = isDark ? "Dark" : "Light";
-#else
-    QString currentTheme = "Dark"; // Fallback
-#endif
     
     // Load icons from current theme only to avoid duplicates and errors
     QString themeIconPath = themesPath + "/" + currentTheme;
@@ -373,12 +369,8 @@ void IconSelectorDialog::populateCommonIcons() {
     // Add StreamUP plugin icons from Qt resources
     // StreamUP icons are embedded as Qt resources using ":images/icons/..." paths
     
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
     bool isDark = obs_frontend_is_theme_dark();
     QString themeSuffix = isDark ? "-dark" : "-light";
-#else
-    QString themeSuffix = "-dark"; // Fallback
-#endif
     
     // StreamUP UI icons (theme-aware)
     QStringList uiIconNames = {
@@ -529,12 +521,8 @@ QString IconSelectorDialog::getOBSThemeIconPath(const QString& iconName) {
     obsDir.cd("obs-studio");
     obsDir.cd("themes");
     
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
     bool isDark = obs_frontend_is_theme_dark();
     QString themeName = isDark ? "Dark" : "Light";
-#else
-    QString themeName = "Dark"; // Fallback
-#endif
     
     obsDir.cd(themeName);
     
