@@ -94,9 +94,6 @@ private:
     bool currentThemeIsDark = false;  // Track theme for cache invalidation
     mutable QTimer* iconUpdateTimer; // Debounce icon updates
 
-    // Theme monitoring for older OBS versions
-    QTimer* themeMonitorTimer;
-    void checkForThemeChange();
 
     // Stylesheet cache for performance optimization
     QString cachedStyleSheet;

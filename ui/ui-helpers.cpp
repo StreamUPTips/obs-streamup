@@ -359,27 +359,8 @@ void CopyToClipboard(const QString &text)
 
 QString GetThemedIconPath(const QString &iconName)
 {
-	bool isDarkTheme = false;
-
-	// Try modern OBS API first (29.0.0+)
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
-	isDarkTheme = obs_frontend_is_theme_dark();
+	bool isDarkTheme = obs_frontend_is_theme_dark();
 	StreamUP::DebugLogger::LogDebugFormat("UI", "Theme Detection", "obs_frontend_is_theme_dark() returned: %s", isDarkTheme ? "true" : "false");
-#else
-	// Fallback theme detection for older OBS versions
-	// Check the main window's palette for dark theme detection
-	QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
-	if (mainWindow) {
-		QPalette palette = mainWindow->palette();
-		QColor bgColor = palette.color(QPalette::Window);
-		// If the background is dark (luminance < 128), we're probably in dark theme
-		isDarkTheme = bgColor.lightness() < 128;
-		StreamUP::DebugLogger::LogDebugFormat("UI", "Theme Detection", "Fallback palette detection: background lightness=%d, isDark=%s",
-			bgColor.lightness(), isDarkTheme ? "true" : "false");
-	} else {
-		StreamUP::DebugLogger::LogDebug("UI", "Theme Detection", "Could not access main window for palette detection, defaulting to light theme");
-	}
-#endif
 
 	// Use appropriate suffix based on theme
 	QString themeSuffix = isDarkTheme ? "-dark" : "-light";
@@ -403,11 +384,7 @@ QIcon CreateThemedIcon(const QString &baseName)
 	QString darkIconPath = QString(":images/icons/ui/%1-dark.svg").arg(baseName);
 	
 	// Add the current theme's icon as the default
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
 	bool isDarkTheme = obs_frontend_is_theme_dark();
-#else
-	bool isDarkTheme = false; // Fallback to light theme for older versions
-#endif
 	QString currentIconPath = isDarkTheme ? darkIconPath : lightIconPath;
 	
 	icon.addFile(currentIconPath);
@@ -417,20 +394,7 @@ QIcon CreateThemedIcon(const QString &baseName)
 
 bool IsOBSThemeDark()
 {
-	// obs_frontend_is_theme_dark was introduced in OBS 29.0.0
-	// Check if we're running on a compatible version
-#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(29, 0, 0)
 	return obs_frontend_is_theme_dark();
-#else
-	// Fallback for older OBS versions - use palette detection
-	QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
-	if (mainWindow) {
-		QPalette palette = mainWindow->palette();
-		QColor bgColor = palette.color(QPalette::Window);
-		return bgColor.lightness() < 128;
-	}
-	return false;
-#endif
 }
 
 QStandardItem* FindItemRecursive(QStandardItem* parent, const QString& text, int itemType)
