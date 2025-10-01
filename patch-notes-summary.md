@@ -1,3 +1,19 @@
+# StreamUP v2.1.1 - Patch Update
+
+## New Features
+- **Scene Tree Importer** - Import your existing SceneTree plugin configuration into Scene Organiser
+- **Hide Scenes in Scene Organiser** - Keep your workspace tidy by hiding scenes you don't need to see
+- **Chinese Localisation** - Added zh-CN translation support (thanks to ZRdRy)
+
+## Improvements & Bug Fixes
+- Fixed scene collection save issues
+- Fixed plugin not loaded check
+- Fixed product installation process
+- Added libsimde-dev dependency for Ubuntu builds
+- Scene Organiser reset functionality improvements
+
+---
+
 # StreamUP v2.1.0 - Major Update 🚀
 
 We've listened to your feedback and completely rebuilt the StreamUP OBS plugin from scratch. This has been an enormous project that's taken months of work. The plugin remains completely free - if you find it useful, please share it with friends and consider supporting us!

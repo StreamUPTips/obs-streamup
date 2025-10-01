@@ -49,8 +49,7 @@ private:
 };
 
 enum class CanvasType {
-    Normal,
-    Vertical
+    Normal
 };
 
 class SceneOrganiserDock : public QFrame {
@@ -62,7 +61,6 @@ public:
 
     CanvasType GetCanvasType() const { return m_canvasType; }
 
-    static bool IsVerticalPluginDetected();
     static void NotifyAllDocksSettingsChanged();
     static void NotifySceneOrganiserIconsChanged();
 
@@ -99,6 +97,12 @@ private slots:
     void onSceneMoveDownClicked();
     void onSceneMoveToTopClicked();
     void onSceneMoveToBottomClicked();
+    void onHideSceneClicked();
+    void onShowSceneClicked();
+    void applySceneVisibility();
+    void applySceneVisibilityRecursive(QStandardItem *parent);
+    void updateHiddenScenesStyling();
+    void updateHiddenScenesStylingRecursive(QStandardItem *parent);
 
 public slots:
     static void onFrontendEvent(enum obs_frontend_event event, void *private_data);
@@ -201,6 +205,8 @@ public:
     QAction *m_sceneMoveDownAction;
     QAction *m_sceneMoveToTopAction;
     QAction *m_sceneMoveToBottomAction;
+    QAction *m_hideSceneAction;
+    QAction *m_showSceneAction;
 
     // Lock/unlock actions in context menus
     QAction *m_folderLockAction;
@@ -220,6 +226,9 @@ public:
     // Lock state management
     bool m_isLocked;
 
+    // Scene visibility management
+    QSet<QString> m_hiddenScenes;
+
     // Click tracking for rename functionality
     QPersistentModelIndex m_lastClickedIndex;
     // Action references removed - using direct button approach for right-side buttons
@@ -234,10 +243,7 @@ public:
     static void clearIconCaches();
     static void onThemeChanged();
 
-    // Theme monitoring for older OBS versions
-    QTimer* themeMonitorTimer;
     bool currentThemeIsDark;
-    void checkForThemeChange();
 
     // OBS integration
     static QList<SceneOrganiserDock*> s_dockInstances;
@@ -275,6 +281,12 @@ public:
     // Configuration (now handled by DigitOtter approach)
     // saveToConfig and loadFromConfig removed - using saveSceneTree/loadSceneTree instead
 
+    // Migration from original obs_scene_tree_view plugin
+    bool migrateFromOriginalPlugin(const QString &originalConfigPath);
+    static bool checkMigrationAvailable(const QString &sceneCollectionName, QString &outConfigPath);
+    bool migrateCurrentCollection();
+    static obs_data_array_t* convertSceneTreeViewFormat(obs_data_array_t *original_array);
+
     // Cleanup
     void cleanupEmptyItems();
     void removeSceneFromTracking(obs_weak_source_t *weak_source);
@@ -291,6 +303,9 @@ private:
     bool isManagedScene(obs_source_t *source);
     obs_data_array_t *createFolderArray(QStandardItem &parent);
     void loadFolderArray(obs_data_array_t *folder_array, QStandardItem &parent);
+
+    // Migration helpers
+    void loadOriginalFolderArray(obs_data_array_t *folder_array, QStandardItem &parent);
 
     // DigitOtter-style scene tracking
     using source_map_t = std::map<obs_weak_source_t*, QStandardItem*>;

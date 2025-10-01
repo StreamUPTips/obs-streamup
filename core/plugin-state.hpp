@@ -33,6 +33,7 @@ public:
         std::map<std::string, std::string> missingPlugins; // name -> required version
         std::map<std::string, std::string> outdatedPlugins; // name -> installed version
         std::vector<std::pair<std::string, std::string>> installedPlugins; // name, version pairs
+        std::vector<std::string> failedToLoadPlugins; // module names that failed to load
         std::chrono::system_clock::time_point lastChecked;
         bool isValid = false;
     };
