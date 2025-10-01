@@ -767,7 +767,7 @@ void ApplyToolbarPosition()
 
 bool obs_module_load()
 {
-	blog(LOG_INFO, "[StreamUP] Starting module load - version %s", PROJECT_VERSION);
+	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
 #ifdef _WIN32
 	blog(LOG_INFO, "[StreamUP] Platform: Windows");
 #elif defined(__APPLE__)
