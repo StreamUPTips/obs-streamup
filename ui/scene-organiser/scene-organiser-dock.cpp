@@ -297,6 +297,7 @@ void SceneOrganiserDock::setupUI()
             this, &SceneOrganiserDock::onCustomContextMenuRequested);
     connect(m_model, &SceneTreeModel::modelChanged,
             [this]() {
+                applySortingIfEnabled();
                 m_saveTimer->start();
                 // Use optimized batched update instead of immediate repaints
                 scheduleOptimizedUpdate();
@@ -607,6 +608,83 @@ void SceneOrganiserDock::refreshSceneList()
     updateActiveSceneHighlight();
     updateHiddenScenesStyling();
     applySceneVisibility();
+    applySortingIfEnabled();
+}
+
+void SceneOrganiserDock::applySortingIfEnabled()
+{
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+    if (!settings.sceneOrganiserAutoSort) {
+        return;
+    }
+
+    QStandardItem *root = m_model->invisibleRootItem();
+    if (!root) return;
+
+    bool groupFolders = settings.sceneOrganiserGroupFolders;
+
+    // Recursively sort items within each parent
+    std::function<void(QStandardItem*)> sortItemsRecursive = [&](QStandardItem *parent) {
+        if (!parent) return;
+
+        int rowCount = parent->rowCount();
+        if (rowCount <= 1) return;
+
+        // Simple bubble sort to swap rows into correct position
+        bool swapped;
+        do {
+            swapped = false;
+            for (int i = 0; i < parent->rowCount() - 1; ++i) {
+                QStandardItem *item1 = parent->child(i);
+                QStandardItem *item2 = parent->child(i + 1);
+
+                if (!item1 || !item2) continue;
+
+                bool item1IsFolder = (item1->type() == SceneFolderItem::UserType + 1);
+                bool item2IsFolder = (item2->type() == SceneFolderItem::UserType + 1);
+
+                bool shouldSwap = false;
+
+                if (groupFolders) {
+                    // Folders should come before scenes
+                    if (!item1IsFolder && item2IsFolder) {
+                        shouldSwap = true;
+                    }
+                    // Within same type, sort alphabetically (case-insensitive)
+                    else if (item1IsFolder == item2IsFolder) {
+                        if (QString::compare(item1->text(), item2->text(), Qt::CaseInsensitive) > 0) {
+                            shouldSwap = true;
+                        }
+                    }
+                } else {
+                    // Mix folders and scenes, sort everything alphabetically
+                    if (QString::compare(item1->text(), item2->text(), Qt::CaseInsensitive) > 0) {
+                        shouldSwap = true;
+                    }
+                }
+
+                if (shouldSwap) {
+                    // Swap the two rows
+                    QList<QStandardItem*> row1 = parent->takeRow(i);
+                    QList<QStandardItem*> row2 = parent->takeRow(i); // i because we just removed row i
+                    parent->insertRow(i, row2);
+                    parent->insertRow(i + 1, row1);
+                    swapped = true;
+                }
+            }
+        } while (swapped);
+
+        // Recursively sort all folders
+        for (int i = 0; i < parent->rowCount(); ++i) {
+            QStandardItem *item = parent->child(i);
+            if (item && item->type() == SceneFolderItem::UserType + 1) {
+                sortItemsRecursive(item);
+            }
+        }
+    };
+
+    sortItemsRecursive(root);
+    m_model->saveSceneTree();
 }
 
 void SceneOrganiserDock::updateFromObsScenes()
@@ -859,6 +937,7 @@ void SceneOrganiserDock::onAddFolderClicked()
         auto folderItem = m_model->createFolderItem(folderName);
         m_model->invisibleRootItem()->appendRow(folderItem);
         m_treeView->expand(folderItem->index());
+        applySortingIfEnabled();
         m_saveTimer->start();
     }
 }
@@ -1378,6 +1457,7 @@ void SceneOrganiserDock::onSettingsChanged()
 {
     // Handle settings changes if needed
     LoadConfiguration();
+    applySortingIfEnabled();
 }
 
 void SceneOrganiserDock::onIconsChanged()

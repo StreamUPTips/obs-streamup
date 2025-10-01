@@ -256,6 +256,8 @@ PluginSettings GetCurrentSettings()
 		settings.showToolbar = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "show_toolbar", true);
 		settings.debugLoggingEnabled = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "debug_logging_enabled", false);
 		settings.sceneOrganiserShowIcons = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_icons", true);
+	settings.sceneOrganiserAutoSort = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_auto_sort", false);
+	settings.sceneOrganiserGroupFolders = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_group_folders", true);
 
 		// Load scene switch mode setting (default to single-click if not set)
 		const char *switchModeStr = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "scene_organiser_switch_mode", "single_click");
@@ -313,6 +315,8 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "show_toolbar", settings.showToolbar);
 	obs_data_set_bool(data, "debug_logging_enabled", settings.debugLoggingEnabled);
 	obs_data_set_bool(data, "scene_organiser_show_icons", settings.sceneOrganiserShowIcons);
+	obs_data_set_bool(data, "scene_organiser_auto_sort", settings.sceneOrganiserAutoSort);
+	obs_data_set_bool(data, "scene_organiser_group_folders", settings.sceneOrganiserGroupFolders);
 
 	// Save scene switch mode setting
 	const char *switchModeStr;
@@ -928,6 +932,62 @@ void ShowSettingsDialog(int tabIndex)
 		switchModeLayout->addStretch();
 		switchModeLayout->addWidget(switchModeComboBox);
 		sceneOrganiserLayout->addLayout(switchModeLayout);
+
+		// Auto-sort setting
+		QHBoxLayout *autoSortLayout = new QHBoxLayout();
+		autoSortLayout->setContentsMargins(0, 0, 0, 0);
+
+		QLabel *autoSortLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.AutoSort"));
+		autoSortLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+						       .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+						       .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		autoSortLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.AutoSortDesc"));
+
+		StreamUP::UIStyles::SwitchButton *autoSortSwitch =
+			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.sceneOrganiserAutoSort);
+		autoSortSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.AutoSortDesc"));
+
+		QObject::connect(autoSortSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+			PluginSettings settings = GetCurrentSettings();
+			settings.sceneOrganiserAutoSort = checked;
+			UpdateSettings(settings);
+
+			// Notify all scene organiser docks to apply sorting if enabled
+			StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+		});
+
+		autoSortLayout->addWidget(autoSortLabel);
+		autoSortLayout->addStretch();
+		autoSortLayout->addWidget(autoSortSwitch);
+		sceneOrganiserLayout->addLayout(autoSortLayout);
+
+		// Group folders setting
+		QHBoxLayout *groupFoldersLayout = new QHBoxLayout();
+		groupFoldersLayout->setContentsMargins(0, 0, 0, 0);
+
+		QLabel *groupFoldersLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.GroupFolders"));
+		groupFoldersLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+						       .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+						       .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		groupFoldersLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.GroupFoldersDesc"));
+
+		StreamUP::UIStyles::SwitchButton *groupFoldersSwitch =
+			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.sceneOrganiserGroupFolders);
+		groupFoldersSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.GroupFoldersDesc"));
+
+		QObject::connect(groupFoldersSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+			PluginSettings settings = GetCurrentSettings();
+			settings.sceneOrganiserGroupFolders = checked;
+			UpdateSettings(settings);
+
+			// Notify all scene organiser docks to re-sort
+			StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+		});
+
+		groupFoldersLayout->addWidget(groupFoldersLabel);
+		groupFoldersLayout->addStretch();
+		groupFoldersLayout->addWidget(groupFoldersSwitch);
+		sceneOrganiserLayout->addLayout(groupFoldersLayout);
 
 		// Manual Migration Section
 		sceneOrganiserLayout->addSpacing(20);
