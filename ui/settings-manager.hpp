@@ -64,11 +64,13 @@ struct PluginSettings {
     bool showToolbar;
     bool debugLoggingEnabled;
     bool sceneOrganiserShowIcons;
+    bool sceneOrganiserAutoSort;
+    bool sceneOrganiserGroupFolders;
     SceneSwitchMode sceneOrganiserSwitchMode;
     ToolbarPosition toolbarPosition;
     DockToolSettings dockTools;
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), toolbarPosition(ToolbarPosition::Top) {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserAutoSort(false), sceneOrganiserGroupFolders(true), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), toolbarPosition(ToolbarPosition::Top) {}
 };
 
 /**

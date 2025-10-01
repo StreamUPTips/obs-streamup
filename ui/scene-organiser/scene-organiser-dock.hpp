@@ -125,6 +125,7 @@ private:
     void createBottomToolbar();
     void updateToolbarState();
     void refreshSceneList();
+    void applySortingIfEnabled();
     void updateFromObsScenes();
     void showFolderContextMenu(const QPoint &pos, const QModelIndex &index);
     void showSceneContextMenu(const QPoint &pos, const QModelIndex &index);
