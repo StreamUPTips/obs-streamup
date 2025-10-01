@@ -25,6 +25,7 @@
 #include <map>
 #include <obs.h>
 #include <obs-frontend-api.h>
+#include "../settings-manager.hpp"
 
 namespace StreamUP {
 namespace SceneOrganiser {
@@ -126,6 +127,7 @@ private:
     void updateToolbarState();
     void refreshSceneList();
     void applySortingIfEnabled();
+    void sortManually(StreamUP::SettingsManager::SceneSortMethod method, QStandardItem *parent = nullptr);
     void updateFromObsScenes();
     void showFolderContextMenu(const QPoint &pos, const QModelIndex &index);
     void showSceneContextMenu(const QPoint &pos, const QModelIndex &index);
@@ -344,6 +346,10 @@ public:
     int type() const override { return UserType + 1; }
     bool isFolder() const { return true; }
 
+    // Timestamp management
+    qint64 getCreationTimestamp() const;
+    void setCreationTimestamp(qint64 timestamp);
+
 public:
     void updateIcon();
 
@@ -361,6 +367,10 @@ public:
 
     obs_weak_source_t* getWeakSource() const { return m_weakSource; }
     void updateIcon();
+
+    // Timestamp management
+    qint64 getCreationTimestamp() const;
+    void setCreationTimestamp(qint64 timestamp);
 
 private:
     void setupSceneItem();
