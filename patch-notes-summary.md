@@ -2,7 +2,6 @@
 
 ## New Features
 - **Scene Tree Importer** - Import your existing SceneTree plugin configuration into Scene Organiser
-- **Scene Organiser Migration** - Seamlessly migrate your scene organisation settings
 - **Hide Scenes in Scene Organiser** - Keep your workspace tidy by hiding scenes you don't need to see
 - **Chinese Localisation** - Added zh-CN translation support (thanks to ZRdRy)
 
