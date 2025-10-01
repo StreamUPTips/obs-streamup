@@ -290,5 +290,5 @@ source_group("MultiDock" FILES
 if(BUILD_OUT_OF_TREE)
 	set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
 else()
-	set_target_properties_obs(${PROJECT_NAME} PROPERTIES FOLDER "plugins/exeldro" PREFIX "")
+	set_target_properties_obs(${PROJECT_NAME} PROPERTIES FOLDER "plugins/streamup" PREFIX "")
 endif()

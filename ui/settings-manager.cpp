@@ -39,6 +39,10 @@
 #include <QListWidget>
 #include <QStackedWidget>
 #include <QDesktopServices>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QDir>
+#include <QFileInfo>
 #include <memory>
 #include <mutex>
 #include <util/platform.h>
@@ -924,6 +928,120 @@ void ShowSettingsDialog(int tabIndex)
 		switchModeLayout->addStretch();
 		switchModeLayout->addWidget(switchModeComboBox);
 		sceneOrganiserLayout->addLayout(switchModeLayout);
+
+		// Manual Migration Section
+		sceneOrganiserLayout->addSpacing(20);
+
+		QGroupBox *migrationGroup = new QGroupBox(obs_module_text("SceneOrganiser.Settings.Migration"));
+		migrationGroup->setStyleSheet(QString("QGroupBox { color: %1; font-weight: bold; font-size: %2px; border: 1px solid %3; border-radius: %4px; margin-top: %5px; padding-top: %6px; } QGroupBox::title { subcontrol-origin: margin; left: %7px; padding: 0 %8px; }")
+						.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
+						.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
+						.arg(StreamUP::UIStyles::Sizes::RADIUS_MD)
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
+						.arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
+						.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+						.arg(StreamUP::UIStyles::Sizes::PADDING_SMALL));
+
+		QVBoxLayout *migrationLayout = new QVBoxLayout(migrationGroup);
+		migrationLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+		migrationLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+							StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+							StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+							StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+
+		QLabel *migrationText = new QLabel(obs_module_text("SceneOrganiser.Settings.MigrationText"));
+		migrationText->setStyleSheet(QString("color: %1; font-size: %2px; background: %3; padding: %4px; border-radius: %5px;")
+						.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
+						.arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
+						.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+						.arg(StreamUP::UIStyles::Sizes::RADIUS_SM));
+		migrationText->setWordWrap(true);
+		migrationLayout->addWidget(migrationText);
+
+		// Warning label
+		QLabel *warningLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.MigrationWarning"));
+		warningLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: rgba(255, 159, 10, 0.15); padding: %3px; border-radius: %4px; border: 1px solid %5; font-weight: bold;")
+						.arg(StreamUP::UIStyles::Colors::COLOR_WARNING)
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
+						.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+						.arg(StreamUP::UIStyles::Sizes::RADIUS_SM)
+						.arg(StreamUP::UIStyles::Colors::COLOR_WARNING));
+		warningLabel->setWordWrap(true);
+		migrationLayout->addWidget(warningLabel);
+
+		QPushButton *migrationButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("SceneOrganiser.Settings.MigrationButton"), "primary");
+
+		QObject::connect(migrationButton, &QPushButton::clicked, [dialog]() {
+			// Get current scene collection
+			char *scene_collection = obs_frontend_get_current_scene_collection();
+			if (!scene_collection) {
+				QMessageBox::warning(dialog,
+					"Migration Failed",
+					"Could not get current scene collection.");
+				return;
+			}
+
+			QString collectionName = QString::fromUtf8(scene_collection);
+			bfree(scene_collection);
+
+			// Check if migration is available
+			QString configPath;
+			if (!StreamUP::SceneOrganiser::SceneTreeModel::checkMigrationAvailable(collectionName, configPath)) {
+				QMessageBox::information(dialog,
+					"No Settings Found",
+					QString("No SceneTree plugin settings were found for the current scene collection '%1'.").arg(collectionName));
+				return;
+			}
+
+			// Show confirmation dialog with warning
+			QMessageBox confirmBox(QMessageBox::Warning,
+				"Confirm Import",
+				QString("This will import SceneTree plugin settings for '%1'.\n\n"
+						"⚠️ WARNING: This will overwrite your current scene organization settings!\n\n"
+						"Are you sure you want to continue?").arg(collectionName),
+				QMessageBox::Yes | QMessageBox::No,
+				dialog);
+
+			confirmBox.setDefaultButton(QMessageBox::No);
+
+			if (confirmBox.exec() != QMessageBox::Yes) {
+				return; // User cancelled
+			}
+
+			// Perform migration
+			bool success = false;
+			for (auto dock : StreamUP::SceneOrganiser::SceneOrganiserDock::s_dockInstances) {
+				if (dock && dock->m_model) {
+					success = dock->m_model->migrateCurrentCollection();
+					break; // Only need to migrate once
+				}
+			}
+
+			if (success) {
+				// Reload configuration and tree for ALL dock instances
+				for (auto dock : StreamUP::SceneOrganiser::SceneOrganiserDock::s_dockInstances) {
+					if (dock && dock->m_model) {
+						dock->LoadConfiguration();
+						dock->m_model->loadSceneTree();
+						dock->m_model->updateTree();
+					}
+				}
+
+				QMessageBox::information(dialog,
+					"Import Successful",
+					QString("Successfully imported scene organization for '%1'!\n\n"
+							"The Scene Organizer can be accessed from View → Docks → Scene Organizer.").arg(collectionName));
+			} else {
+				QMessageBox::warning(dialog,
+					"Import Failed",
+					"Failed to import settings. Please check the log for details.");
+			}
+		});
+
+		migrationLayout->addWidget(migrationButton);
+		sceneOrganiserLayout->addWidget(migrationGroup);
 
 		// Credit section
 		sceneOrganiserLayout->addSpacing(20);
