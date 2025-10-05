@@ -9,6 +9,7 @@
 #include <sstream>
 #include "../ui/ui-helpers.hpp"
 #include "../ui/ui-styles.hpp"
+#include "../ui/settings-manager.hpp"
 #include "obs-wrappers.hpp"
 #include "error-handler.hpp"
 #include <obs-module.h>
@@ -27,6 +28,7 @@
 #include <QGroupBox>
 #include <QScrollArea>
 #include <QPushButton>
+#include <QCheckBox>
 #include <QObject>
 #include <QTimer>
 #include <QSizePolicy>
@@ -353,9 +355,9 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 	}
 }
 
-void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback)
+void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback, bool isStartupCheck)
 {
-	StreamUP::UIHelpers::ShowDialogOnUIThread([missing_modules, version_mismatch_modules, failed_to_load_modules, continueCallback]() {
+	StreamUP::UIHelpers::ShowDialogOnUIThread([missing_modules, version_mismatch_modules, failed_to_load_modules, continueCallback, isStartupCheck]() {
 		// Create styled dialog with dynamic title
 		bool hasMissing = !missing_modules.empty();
 		bool hasUpdates = !version_mismatch_modules.empty();
@@ -616,7 +618,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		if (continueCallback) {
 			// Add spacing before warning
 			dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-			
+
 			QLabel *warningLabel = new QLabel("⚠️ " + QString(obs_module_text("Plugin.Dialog.WarningContinue")));
 			warningLabel->setWordWrap(true);
 			warningLabel->setStyleSheet(QString(
@@ -636,6 +638,45 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 				.arg(StreamUP::UIStyles::Sizes::PADDING_XL + 5)
 				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
 			dialogLayout->addWidget(warningLabel);
+		}
+
+		// Add skip checkbox for startup checks (only if there are updates/failures and no missing plugins)
+		QCheckBox* skipCheckbox = nullptr;
+		if (isStartupCheck && !hasMissing && (hasUpdates || hasFailedToLoad)) {
+			dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+			skipCheckbox = new QCheckBox(obs_module_text("Plugin.Dialog.SkipTheseUpdates"));
+			skipCheckbox->setStyleSheet(QString(
+				"QCheckBox {"
+				"color: %1;"
+				"font-size: %2px;"
+				"padding: %3px;"
+				"margin-left: %4px;"
+				"}"
+				"QCheckBox::indicator {"
+				"width: 18px;"
+				"height: 18px;"
+				"border-radius: 4px;"
+				"border: 2px solid %5;"
+				"background: %6;"
+				"}"
+				"QCheckBox::indicator:checked {"
+				"background: %7;"
+				"border-color: %7;"
+				"}"
+				"QCheckBox::indicator:checked::after {"
+				"content: '✓';"
+				"color: white;"
+				"}")
+				.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)
+				.arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
+				.arg(StreamUP::UIStyles::Sizes::PADDING_XL + 5)
+				.arg(StreamUP::UIStyles::Colors::BORDER_MEDIUM)
+				.arg(StreamUP::UIStyles::Colors::BACKGROUND_HOVER)
+				.arg(StreamUP::UIStyles::Colors::INFO));
+
+			dialogLayout->addWidget(skipCheckbox);
 		}
 
 		// Add styled buttons
@@ -658,7 +699,26 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		}
 		
 		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.OK"), "neutral", 30, 100);
-		QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
+		QObject::connect(okButton, &QPushButton::clicked, [dialog, skipCheckbox, version_mismatch_modules, failed_to_load_modules]() {
+			// Save skipped updates if checkbox is checked
+			if (skipCheckbox && skipCheckbox->isChecked()) {
+				// Convert installed versions to required versions before saving
+				std::map<std::string, std::string> requiredVersions;
+				const auto& allPlugins = StreamUP::GetAllPlugins();
+
+				for (const auto& plugin : version_mismatch_modules) {
+					const std::string& pluginName = plugin.first;
+					auto it = allPlugins.find(pluginName);
+					if (it != allPlugins.end()) {
+						// Save the required version, not the installed version
+						requiredVersions[pluginName] = it->second.version;
+					}
+				}
+
+				StreamUP::SettingsManager::SaveSkippedUpdates(requiredVersions, failed_to_load_modules);
+			}
+			dialog->close();
+		});
 		buttonLayout->addWidget(okButton);
 
 		dialogLayout->addLayout(buttonLayout);
@@ -1659,11 +1719,11 @@ void ShowCachedPluginUpdatesDialogSilent()
 	}
 
 	const auto& status = StreamUP::PluginState::Instance().GetCachedPluginStatus();
-	
+
 	// Always write outdated plugins list to file, even if silent
 	QString appDataPath = PathUtils::GetLocalAppDataPath();
 	QString filePath = appDataPath + "/StreamUP-OutdatedPluginsList.txt";
-	
+
 	std::ofstream outFile(filePath.toStdString(), std::ios::out);
 	if (outFile.is_open()) {
 		for (const auto &module : status.outdatedPlugins) {
@@ -1671,14 +1731,45 @@ void ShowCachedPluginUpdatesDialogSilent()
 		}
 		outFile.close();
 	}
-	
+
 	if (status.outdatedPlugins.empty() && status.failedToLoadPlugins.empty()) {
+		// No updates - clear any previously skipped updates
+		StreamUP::SettingsManager::ClearSkippedUpdates();
 		return; // Silent success - don't show any dialog
+	}
+
+	// Convert current outdated plugins from installed versions to required versions for comparison
+	std::map<std::string, std::string> currentRequiredVersions;
+	const auto& allPlugins = StreamUP::GetAllPlugins();
+
+	for (const auto& plugin : status.outdatedPlugins) {
+		const std::string& pluginName = plugin.first;
+		auto it = allPlugins.find(pluginName);
+		if (it != allPlugins.end()) {
+			currentRequiredVersions[pluginName] = it->second.version;
+		}
+	}
+
+	// Check if these updates were skipped by the user (comparing required versions)
+	if (StreamUP::SettingsManager::AreUpdatesSkipped(currentRequiredVersions, status.failedToLoadPlugins)) {
+		return; // User chose to skip these updates - don't show dialog
+	}
+
+	// If we're showing the dialog, it means either:
+	// 1. No updates were previously skipped, OR
+	// 2. The updates are different from what was skipped (new updates available)
+	// In case 2, clear the old skipped updates so user can skip the new ones
+	std::map<std::string, std::string> skippedOutdated;
+	std::vector<std::string> skippedFailed;
+	StreamUP::SettingsManager::GetSkippedUpdates(skippedOutdated, skippedFailed);
+	if (!skippedOutdated.empty() || !skippedFailed.empty()) {
+		// There were previously skipped updates, but they're different now - clear them
+		StreamUP::SettingsManager::ClearSkippedUpdates();
 	}
 
 	// Use modern table display for cached results
 	std::map<std::string, std::string> empty_missing_modules;
-	PluginsHaveIssue(empty_missing_modules, status.outdatedPlugins, status.failedToLoadPlugins, nullptr);
+	PluginsHaveIssue(empty_missing_modules, status.outdatedPlugins, status.failedToLoadPlugins, nullptr, true);
 }
 
 void InvalidatePluginCache()
