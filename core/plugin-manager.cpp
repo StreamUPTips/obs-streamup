@@ -983,6 +983,8 @@ std::string SearchStringInFileForVersion(const char *path, const char *search)
 	}
 	
 	char line[1024]; // Further increased buffer size
+	// Support 4-digit (x.y.z.w), 3-digit (x.y.z), 2-digit (x.y), and single (x) version formats
+	static const std::regex version_regex_quad("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_double("[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_single("[0-9]+");
@@ -1001,7 +1003,13 @@ std::string SearchStringInFileForVersion(const char *path, const char *search)
 
 		char *found_ptr = strstr(line, search);
 		if (found_ptr) {
+			// Extract only the text after search string until end of line (not entire file!)
 			std::string remaining_line(found_ptr + search_len);
+			size_t newline_pos = remaining_line.find('\n');
+			if (newline_pos != std::string::npos) {
+				remaining_line = remaining_line.substr(0, newline_pos);
+			}
+
 			std::smatch match;
 			std::string found_version;
 			int priority = 0;
@@ -1015,8 +1023,15 @@ std::string SearchStringInFileForVersion(const char *path, const char *search)
 				priority = 1; // Lowest priority for other matches
 			}
 
-			// First try to find semantic version (x.y.z format)
-			if (std::regex_search(remaining_line, match, version_regex_triple)) {
+			// Try to find version in order: 4-digit -> 3-digit -> 2-digit -> single
+			if (std::regex_search(remaining_line, match, version_regex_quad)) {
+				std::string version = match.str(0);
+				if (!IsLikelyGitHash(version)) {
+					found_version = version;
+				}
+			}
+
+			if (found_version.empty() && std::regex_search(remaining_line, match, version_regex_triple)) {
 				std::string version = match.str(0);
 				if (!IsLikelyGitHash(version)) {
 					found_version = version;
@@ -1112,6 +1127,8 @@ std::string SearchThemeFileForVersion(const char *search)
 		bfree(module_config_path);
 	}
 	
+	// Support 4-digit (x.y.z.w), 3-digit (x.y.z), 2-digit (x.y), and single (x) version formats
+	static const std::regex version_regex_quad("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_double("[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_single("[0-9]+");
@@ -1138,7 +1155,13 @@ std::string SearchThemeFileForVersion(const char *search)
 
 			char *found_ptr = strstr(line, search);
 			if (found_ptr) {
+				// Extract only the text after search string until end of line (not entire file!)
 				std::string remaining_line(found_ptr + search_len);
+				size_t newline_pos = remaining_line.find('\n');
+				if (newline_pos != std::string::npos) {
+					remaining_line = remaining_line.substr(0, newline_pos);
+				}
+
 				std::smatch match;
 				std::string found_version;
 				int priority = 0;
@@ -1152,8 +1175,15 @@ std::string SearchThemeFileForVersion(const char *search)
 					priority = 1; // Lowest priority for other matches
 				}
 
-				// First try to find semantic version (x.y.z format)
-				if (std::regex_search(remaining_line, match, version_regex_triple)) {
+				// Try to find version in order: 4-digit -> 3-digit -> 2-digit -> single
+				if (std::regex_search(remaining_line, match, version_regex_quad)) {
+					std::string version = match.str(0);
+					if (!IsLikelyGitHash(version)) {
+						found_version = version;
+					}
+				}
+
+				if (found_version.empty() && std::regex_search(remaining_line, match, version_regex_triple)) {
 					std::string version = match.str(0);
 					if (!IsLikelyGitHash(version)) {
 						found_version = version;
@@ -1225,7 +1255,9 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 
 	const auto& allPlugins = StreamUP::GetAllPlugins();
 	installedPlugins.reserve(allPlugins.size()); // Reserve capacity for performance
-	
+
+	// Support 4-digit (x.y.z.w), 3-digit (x.y.z), 2-digit (x.y), and single (x) version formats
+	static const std::regex version_regex_quad("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_double("[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_single("[0-9]+");
@@ -1291,8 +1323,15 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 						priority = 1; // Lowest priority for other matches
 					}
 
-					// First try to find semantic version (x.y.z format)
-					if (std::regex_search(remaining, match, version_regex_triple)) {
+					// Try to find version in order: 4-digit -> 3-digit -> 2-digit -> single
+					if (std::regex_search(remaining, match, version_regex_quad)) {
+						std::string version = match.str(0);
+						if (!IsLikelyGitHash(version)) {
+							found_version = version;
+						}
+					}
+
+					if (found_version.empty() && std::regex_search(remaining, match, version_regex_triple)) {
 						std::string version = match.str(0);
 						if (!IsLikelyGitHash(version)) {
 							found_version = version;
@@ -1384,6 +1423,8 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 
 	bfree(filepath);
 
+	// Support 4-digit (x.y.z.w), 3-digit (x.y.z), 2-digit (x.y), and single (x) version formats
+	static const std::regex version_regex_quad("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_double("[0-9]+\\.[0-9]+");
 	static const std::regex version_regex_single("[0-9]+");
@@ -1427,7 +1468,10 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 					continue;
 				}
 
-				std::string remaining = file_content.substr(search_pos + search_string.length());
+				// Only search within the current line, not the entire remaining file
+				size_t remaining_start = search_pos + search_string.length();
+				size_t remaining_end = line_end;
+				std::string remaining = file_content.substr(remaining_start, remaining_end - remaining_start);
 				std::smatch match;
 				std::string found_version;
 				int priority = 0;
@@ -1441,8 +1485,15 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 					priority = 1; // Lowest priority for other matches
 				}
 
-				// First try to find semantic version (x.y.z format)
-				if (std::regex_search(remaining, match, version_regex_triple)) {
+				// Try to find version in order: 4-digit -> 3-digit -> 2-digit -> single
+				if (std::regex_search(remaining, match, version_regex_quad)) {
+					std::string version = match.str(0);
+					if (!IsLikelyGitHash(version)) {
+						found_version = version;
+					}
+				}
+
+				if (found_version.empty() && std::regex_search(remaining, match, version_regex_triple)) {
 					std::string version = match.str(0);
 					if (!IsLikelyGitHash(version)) {
 						found_version = version;
