@@ -123,6 +123,8 @@ private:
     void onClearSearch();
     void saveExpansionState();
     void restoreExpansionState();
+    void saveFolderExpansionState();
+    void restoreFolderExpansionState();
     void createBottomToolbar();
     void updateToolbarState();
     void refreshSceneList();
