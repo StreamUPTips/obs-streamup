@@ -496,11 +496,21 @@ bool ActivateAllVideoCaptureDevices(bool sendNotification)
 			return true;
 		}
 		
+		// Check if device is already active by reading the "active" setting
+		obs_data_t *settings = obs_source_get_settings(source);
+		bool isActive = obs_data_get_bool(settings, "active");
+		obs_data_release(settings);
+
+		if (isActive) {
+			// Device is already active, skip it
+			return true;
+		}
+
 		// Use proper activation via procedure handler
 		calldata_t cd;
 		calldata_init(&cd);
 		calldata_set_bool(&cd, "active", true);
-		
+
 		if (proc_handler_call(ph, "activate", &cd)) {
 			activated++;
 			StreamUP::DebugLogger::LogDebugFormat("VideoCapture", "Activate Device", "Activated video capture device: %s", obs_source_get_name(source));
@@ -566,11 +576,21 @@ bool DeactivateAllVideoCaptureDevices(bool sendNotification)
 			return true;
 		}
 		
+		// Check if device is already inactive by reading the "active" setting
+		obs_data_t *settings = obs_source_get_settings(source);
+		bool isActive = obs_data_get_bool(settings, "active");
+		obs_data_release(settings);
+
+		if (!isActive) {
+			// Device is already inactive, skip it
+			return true;
+		}
+
 		// Use proper deactivation via procedure handler
 		calldata_t cd;
 		calldata_init(&cd);
 		calldata_set_bool(&cd, "active", false);
-		
+
 		if (proc_handler_call(ph, "activate", &cd)) {
 			deactivated++;
 			StreamUP::DebugLogger::LogDebugFormat("VideoCapture", "Deactivate Device", "Deactivated video capture device: %s", obs_source_get_name(source));
@@ -619,18 +639,24 @@ bool RefreshAllVideoCaptureDevices(bool sendNotification)
 		auto *context = static_cast<std::pair<std::vector<obs_source_t*>*, int*>*>(data);
 		std::vector<obs_source_t*> *activeSources = context->first;
 		int *total_count = context->second;
-		
+
 		if (!IsVideoCaptureDevice(source)) {
 			return true;
 		}
-		
+
 		(*total_count)++;
-		
-		if (obs_source_enabled(source)) {
+
+		// Check if device is active by reading the "active" setting
+		obs_data_t *settings = obs_source_get_settings(source);
+		bool isActive = obs_data_get_bool(settings, "active");
+		obs_data_release(settings);
+
+		// Only collect devices that are currently active
+		if (isActive) {
 			obs_source_get_ref(source); // Add reference since we're storing it
 			activeSources->push_back(source);
 		}
-		
+
 		return true;
 	}, &context);
 	
