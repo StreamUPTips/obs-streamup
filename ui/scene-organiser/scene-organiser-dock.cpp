@@ -1906,9 +1906,20 @@ void SceneOrganiserDock::updateActiveSceneHighlightRecursive(QStandardItem *pare
                     // Apply custom color
                     applyCustomColorToItem(item, customColor.value<QColor>());
                 } else {
-                    // Clear background and use default theme text color
+                    // Clear background
                     item->setBackground(QBrush());
-                    item->setForeground(QBrush(getDefaultThemeTextColor()));
+
+                    // Check if scene is hidden and apply appropriate text color
+                    bool isHidden = m_hiddenScenes.contains(item->text());
+                    if (isHidden) {
+                        // Apply grayed-out color for hidden scenes
+                        QColor grayColor = getDefaultThemeTextColor();
+                        grayColor.setAlpha(100);
+                        item->setForeground(QBrush(grayColor));
+                    } else {
+                        // Use default theme text color
+                        item->setForeground(QBrush(getDefaultThemeTextColor()));
+                    }
                 }
             }
 
@@ -2554,8 +2565,10 @@ void SceneOrganiserDock::onHideSceneClicked()
     // Add scene to hidden list
     m_hiddenScenes.insert(sceneName);
 
-    // Apply visual styling when unlocked (italic font to indicate it will be hidden when locked)
-    m_currentContextItem->setFont(QFont("", -1, QFont::Normal, true)); // Make text italic
+    // Apply visual styling when unlocked (grayed-out color to indicate it will be hidden when locked)
+    QColor grayColor = getDefaultThemeTextColor();
+    grayColor.setAlpha(100); // Make it semi-transparent for a grayed-out effect
+    m_currentContextItem->setForeground(QBrush(grayColor));
 
     // If dock is locked, immediately hide the scene from the tree
     if (m_isLocked) {
@@ -2578,8 +2591,8 @@ void SceneOrganiserDock::onShowSceneClicked()
     // Remove scene from hidden list
     m_hiddenScenes.remove(sceneName);
 
-    // Reset font to normal
-    m_currentContextItem->setFont(QFont());
+    // Reset to default theme text color
+    m_currentContextItem->setForeground(QBrush(getDefaultThemeTextColor()));
 
     // If dock is locked, immediately show the scene in the tree
     if (m_isLocked) {
@@ -2652,11 +2665,13 @@ void SceneOrganiserDock::updateHiddenScenesStylingRecursive(QStandardItem *paren
             bool isHidden = m_hiddenScenes.contains(sceneName);
 
             if (isHidden) {
-                // Apply italic styling to indicate scene is hidden (when unlocked)
-                child->setFont(QFont("", -1, QFont::Normal, true));
+                // Apply grayed-out color to indicate scene is hidden (when unlocked)
+                QColor grayColor = getDefaultThemeTextColor();
+                grayColor.setAlpha(100); // Make it semi-transparent for a grayed-out effect
+                child->setForeground(QBrush(grayColor));
             } else {
-                // Reset to normal font
-                child->setFont(QFont());
+                // Reset to default theme text color
+                child->setForeground(QBrush(getDefaultThemeTextColor()));
             }
         } else if (child->hasChildren()) {
             // Recursively check folder contents
