@@ -35,9 +35,4 @@ protected:
 	bool eventFilter(QObject *obj, QEvent *event) override;
 	void focusOutEvent(QFocusEvent *event) override;
 	void paintEvent(QPaintEvent *event) override;
-
-signals:
-	void activateAllVideoCaptureDevices();
-	void deactivateAllVideoCaptureDevices();
-	void refreshAllVideoCaptureDevices();
 };
