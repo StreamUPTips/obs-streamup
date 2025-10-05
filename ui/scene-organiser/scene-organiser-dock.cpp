@@ -296,6 +296,15 @@ void SceneOrganiserDock::setupUI()
             this, &SceneOrganiserDock::onItemDoubleClicked);
     connect(m_treeView, &QWidget::customContextMenuRequested,
             this, &SceneOrganiserDock::onCustomContextMenuRequested);
+
+    // Connect expansion signals to save folder state
+    connect(m_treeView, &QTreeView::expanded, this, [this](const QModelIndex &) {
+        m_saveTimer->start();
+    });
+    connect(m_treeView, &QTreeView::collapsed, this, [this](const QModelIndex &) {
+        m_saveTimer->start();
+    });
+
     connect(m_model, &SceneTreeModel::modelChanged,
             [this]() {
                 applySortingIfEnabled();
@@ -1956,6 +1965,14 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->LoadConfiguration();
             dock->m_model->loadSceneTree();
             dock->refreshSceneList();
+
+            // Restore folder expansion state after tree is fully loaded
+            QTimer::singleShot(500, dock, [dock]() {
+                StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+                if (settings.sceneOrganiserRememberFolderState) {
+                    dock->restoreFolderExpansionState();
+                }
+            });
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
@@ -1974,6 +1991,14 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->LoadConfiguration();
             dock->m_model->loadSceneTree();
             dock->refreshSceneList();
+
+            // Restore folder expansion state after tree is fully loaded
+            QTimer::singleShot(500, dock, [dock]() {
+                StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+                if (settings.sceneOrganiserRememberFolderState) {
+                    dock->restoreFolderExpansionState();
+                }
+            });
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_RENAMED:
@@ -2058,6 +2083,12 @@ void SceneOrganiserDock::SaveConfiguration()
     // Now using DigitOtter approach - save is handled by saveSceneTree()
     // which is called automatically on OBS frontend events
     m_model->saveSceneTree();
+
+    // Save folder expansion state if setting is enabled
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+    if (settings.sceneOrganiserRememberFolderState) {
+        saveFolderExpansionState();
+    }
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
         QString("Configuration saved for scene collection '%1' (lock state: %2)")
@@ -2196,7 +2227,9 @@ void SceneOrganiserDock::LoadConfiguration()
         .arg(sceneCollectionName)
         .arg(m_isLocked ? "locked" : "unlocked").toUtf8().constData());
 
-    // Apply scene visibility one more time after full initialization with even longer delay
+    // Apply scene visibility after full initialization
+    // Note: Folder expansion state is restored in the frontend event handlers
+    // (FINISHED_LOADING and SCENE_COLLECTION_CHANGED) after the tree is fully refreshed
     QTimer::singleShot(1000, this, [this]() {
         updateHiddenScenesStyling();
         applySceneVisibility();
@@ -2294,6 +2327,136 @@ void SceneOrganiserDock::restoreExpansionState()
 
     // Clear the saved state after restoring
     m_savedExpansionState.clear();
+}
+
+void SceneOrganiserDock::saveFolderExpansionState()
+{
+    if (!m_treeView || !m_model) return;
+
+    char *scene_collection = obs_frontend_get_current_scene_collection();
+    if (!scene_collection) return;
+
+    char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
+    if (!configPath) {
+        bfree(scene_collection);
+        return;
+    }
+
+    QString configDir = QString::fromUtf8(configPath);
+    QString sceneCollectionName = QString::fromUtf8(scene_collection);
+    bfree(configPath);
+    bfree(scene_collection);
+
+    // Collect expanded folder names
+    QStringList expandedFolders;
+    std::function<void(const QModelIndex&)> collectExpanded = [&](const QModelIndex& index) {
+        if (!index.isValid()) return;
+
+        // Map proxy index to source index
+        QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
+        QStandardItem *item = m_model->itemFromIndex(sourceIndex);
+
+        if (item && item->type() == SceneFolderItem::UserType + 1) {
+            if (m_treeView->isExpanded(index)) {
+                expandedFolders.append(item->text());
+            }
+        }
+
+        // Recursively check children
+        int rowCount = m_proxyModel->rowCount(index);
+        for (int i = 0; i < rowCount; ++i) {
+            QModelIndex childIndex = m_proxyModel->index(i, 0, index);
+            collectExpanded(childIndex);
+        }
+    };
+
+    // Start from root items
+    int rootRowCount = m_proxyModel->rowCount();
+    for (int i = 0; i < rootRowCount; ++i) {
+        QModelIndex rootIndex = m_proxyModel->index(i, 0);
+        collectExpanded(rootIndex);
+    }
+
+    // Save to file
+    QString expansionFile = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_expansion_state.txt";
+    QFile file(expansionFile);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&file);
+        out << expandedFolders.join("\n");
+        file.close();
+
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
+            QString("Saved expansion state for %1 folders").arg(expandedFolders.size()).toUtf8().constData());
+    }
+}
+
+void SceneOrganiserDock::restoreFolderExpansionState()
+{
+    if (!m_treeView || !m_model) return;
+
+    char *scene_collection = obs_frontend_get_current_scene_collection();
+    if (!scene_collection) return;
+
+    char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
+    if (!configPath) {
+        bfree(scene_collection);
+        return;
+    }
+
+    QString configDir = QString::fromUtf8(configPath);
+    QString sceneCollectionName = QString::fromUtf8(scene_collection);
+    bfree(configPath);
+    bfree(scene_collection);
+
+    // Load from file
+    QString expansionFile = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_expansion_state.txt";
+    QFile file(expansionFile);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return; // No saved state, nothing to restore
+    }
+
+    QTextStream in(&file);
+    QString expandedFoldersText = in.readAll().trimmed();
+    file.close();
+
+    if (expandedFoldersText.isEmpty()) {
+        return;
+    }
+
+    QStringList expandedFoldersList = expandedFoldersText.split("\n", Qt::SkipEmptyParts);
+    QSet<QString> expandedFolders = QSet<QString>(expandedFoldersList.begin(), expandedFoldersList.end());
+
+    // Restore expansion state
+    std::function<void(const QModelIndex&)> restoreExpanded = [&](const QModelIndex& index) {
+        if (!index.isValid()) return;
+
+        // Map proxy index to source index
+        QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
+        QStandardItem *item = m_model->itemFromIndex(sourceIndex);
+
+        if (item && item->type() == SceneFolderItem::UserType + 1) {
+            if (expandedFolders.contains(item->text())) {
+                m_treeView->setExpanded(index, true);
+            }
+        }
+
+        // Recursively restore children
+        int rowCount = m_proxyModel->rowCount(index);
+        for (int i = 0; i < rowCount; ++i) {
+            QModelIndex childIndex = m_proxyModel->index(i, 0, index);
+            restoreExpanded(childIndex);
+        }
+    };
+
+    // Start from root items
+    int rootRowCount = m_proxyModel->rowCount();
+    for (int i = 0; i < rootRowCount; ++i) {
+        QModelIndex rootIndex = m_proxyModel->index(i, 0);
+        restoreExpanded(rootIndex);
+    }
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
+        QString("Restored expansion state for %1 folders").arg(expandedFolders.size()).toUtf8().constData());
 }
 
 // Public methods for keyboard shortcuts
