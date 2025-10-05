@@ -1,4 +1,5 @@
 #include "video-capture-popup.hpp"
+#include "core/source-manager.hpp"
 #include "ui/ui-styles.hpp"
 #include "ui/ui-helpers.hpp"
 #include <QIcon>
@@ -134,21 +135,30 @@ void VideoCapturePopup::showNearButton(const QPoint &buttonPos, const QSize &but
 void VideoCapturePopup::onActivateClicked()
 {
 	if (isProcessing) return;
-	emit activateAllVideoCaptureDevices();
+	isProcessing = true;
+
+	StreamUP::SourceManager::ActivateAllVideoCaptureDevices();
+
 	deleteLater();
 }
 
 void VideoCapturePopup::onDeactivateClicked()
 {
 	if (isProcessing) return;
-	emit deactivateAllVideoCaptureDevices();
+	isProcessing = true;
+
+	StreamUP::SourceManager::DeactivateAllVideoCaptureDevices();
+
 	deleteLater();
 }
 
 void VideoCapturePopup::onRefreshClicked()
 {
 	if (isProcessing) return;
-	emit refreshAllVideoCaptureDevices();
+	isProcessing = true;
+
+	StreamUP::SourceManager::RefreshAllVideoCaptureDevices();
+
 	deleteLater();
 }
 

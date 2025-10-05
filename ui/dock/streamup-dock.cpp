@@ -516,15 +516,7 @@ void StreamUPDock::ButtonShowVideoCapturePopup()
 
 	// Create new popup
 	videoCapturePopup = new VideoCapturePopup(this);
-	
-	// Connect popup signals to our methods
-	connect(videoCapturePopup, &VideoCapturePopup::activateAllVideoCaptureDevices,
-		this, &StreamUPDock::ButtonActivateAllVideoCaptureDevices);
-	connect(videoCapturePopup, &VideoCapturePopup::deactivateAllVideoCaptureDevices,
-		this, &StreamUPDock::ButtonDeactivateAllVideoCaptureDevices);
-	connect(videoCapturePopup, &VideoCapturePopup::refreshAllVideoCaptureDevices,
-		this, &StreamUPDock::ButtonRefreshAllVideoCaptureDevices);
-	
+
 	// Connect to handle cleanup when popup is closed
 	connect(videoCapturePopup, &QWidget::destroyed, this, [this]() {
 		videoCapturePopup = nullptr;
