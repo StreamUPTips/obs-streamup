@@ -55,6 +55,17 @@ enum class SceneSwitchMode {
 };
 
 /**
+ * @brief Scene organizer sort method options
+ */
+enum class SceneSortMethod {
+    None,
+    AlphabeticalAZ,
+    AlphabeticalZA,
+    NewestFirst,
+    OldestFirst
+};
+
+/**
  * @brief Settings structure to hold plugin configuration
  */
 struct PluginSettings {
@@ -64,11 +75,14 @@ struct PluginSettings {
     bool showToolbar;
     bool debugLoggingEnabled;
     bool sceneOrganiserShowIcons;
+    bool sceneOrganiserGroupFolders;
+    bool sceneOrganiserRememberFolderState;
     SceneSwitchMode sceneOrganiserSwitchMode;
+    SceneSortMethod sceneOrganiserSortMethod;
     ToolbarPosition toolbarPosition;
     DockToolSettings dockTools;
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), toolbarPosition(ToolbarPosition::Top) {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top) {}
 };
 
 /**

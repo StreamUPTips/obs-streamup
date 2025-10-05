@@ -256,6 +256,26 @@ PluginSettings GetCurrentSettings()
 		settings.showToolbar = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "show_toolbar", true);
 		settings.debugLoggingEnabled = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "debug_logging_enabled", false);
 		settings.sceneOrganiserShowIcons = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_icons", true);
+	settings.sceneOrganiserGroupFolders = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_group_folders", true);
+	settings.sceneOrganiserRememberFolderState = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_remember_folder_state", true);
+
+		// Load scene sort method setting (default to none if not set)
+		const char *sortMethodStr = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "scene_organiser_sort_method", "none");
+		if (sortMethodStr && strlen(sortMethodStr) > 0) {
+			if (strcmp(sortMethodStr, "alphabetical_az") == 0) {
+				settings.sceneOrganiserSortMethod = SceneSortMethod::AlphabeticalAZ;
+			} else if (strcmp(sortMethodStr, "alphabetical_za") == 0) {
+				settings.sceneOrganiserSortMethod = SceneSortMethod::AlphabeticalZA;
+			} else if (strcmp(sortMethodStr, "newest_first") == 0) {
+				settings.sceneOrganiserSortMethod = SceneSortMethod::NewestFirst;
+			} else if (strcmp(sortMethodStr, "oldest_first") == 0) {
+				settings.sceneOrganiserSortMethod = SceneSortMethod::OldestFirst;
+			} else {
+				settings.sceneOrganiserSortMethod = SceneSortMethod::None;
+			}
+		} else {
+			settings.sceneOrganiserSortMethod = SceneSortMethod::None;
+		}
 
 		// Load scene switch mode setting (default to single-click if not set)
 		const char *switchModeStr = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "scene_organiser_switch_mode", "single_click");
@@ -313,6 +333,30 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "show_toolbar", settings.showToolbar);
 	obs_data_set_bool(data, "debug_logging_enabled", settings.debugLoggingEnabled);
 	obs_data_set_bool(data, "scene_organiser_show_icons", settings.sceneOrganiserShowIcons);
+	obs_data_set_bool(data, "scene_organiser_group_folders", settings.sceneOrganiserGroupFolders);
+	obs_data_set_bool(data, "scene_organiser_remember_folder_state", settings.sceneOrganiserRememberFolderState);
+
+	// Save scene sort method setting
+	const char *sortMethodStr;
+	switch (settings.sceneOrganiserSortMethod) {
+	case SceneSortMethod::AlphabeticalAZ:
+		sortMethodStr = "alphabetical_az";
+		break;
+	case SceneSortMethod::AlphabeticalZA:
+		sortMethodStr = "alphabetical_za";
+		break;
+	case SceneSortMethod::NewestFirst:
+		sortMethodStr = "newest_first";
+		break;
+	case SceneSortMethod::OldestFirst:
+		sortMethodStr = "oldest_first";
+		break;
+	case SceneSortMethod::None:
+	default:
+		sortMethodStr = "none";
+		break;
+	}
+	obs_data_set_string(data, "scene_organiser_sort_method", sortMethodStr);
 
 	// Save scene switch mode setting
 	const char *switchModeStr;
@@ -892,6 +936,32 @@ void ShowSettingsDialog(int tabIndex)
 		showIconsLayout->addWidget(showIconsSwitch);
 		sceneOrganiserLayout->addLayout(showIconsLayout);
 
+		// Remember Folder State setting
+		QHBoxLayout *rememberFolderStateLayout = new QHBoxLayout();
+		rememberFolderStateLayout->setContentsMargins(0, 0, 0, 0);
+		rememberFolderStateLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+
+		QLabel *rememberFolderStateLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.AutoSorting.RememberFolderState"));
+		rememberFolderStateLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		rememberFolderStateLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.AutoSorting.RememberFolderStateDesc"));
+
+		StreamUP::UIStyles::SwitchButton *rememberFolderStateSwitch =
+			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.sceneOrganiserRememberFolderState);
+		rememberFolderStateSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.AutoSorting.RememberFolderStateDesc"));
+
+		QObject::connect(rememberFolderStateSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+			PluginSettings settings = GetCurrentSettings();
+			settings.sceneOrganiserRememberFolderState = checked;
+			UpdateSettings(settings);
+		});
+
+		rememberFolderStateLayout->addWidget(rememberFolderStateLabel);
+		rememberFolderStateLayout->addStretch();
+		rememberFolderStateLayout->addWidget(rememberFolderStateSwitch);
+		sceneOrganiserLayout->addLayout(rememberFolderStateLayout);
+
 		// Scene switching mode setting
 		QHBoxLayout *switchModeLayout = new QHBoxLayout();
 		switchModeLayout->setContentsMargins(0, 0, 0, 0);
@@ -928,6 +998,103 @@ void ShowSettingsDialog(int tabIndex)
 		switchModeLayout->addStretch();
 		switchModeLayout->addWidget(switchModeComboBox);
 		sceneOrganiserLayout->addLayout(switchModeLayout);
+
+		// Sorting section
+		sceneOrganiserLayout->addSpacing(15);
+
+		QGroupBox *sortingGroup = new QGroupBox(obs_module_text("SceneOrganiser.Settings.AutoSorting.Title"));
+		sortingGroup->setStyleSheet(QString("QGroupBox { color: %1; font-weight: bold; font-size: %2px; border: 1px solid %3; border-radius: %4px; margin-top: %5px; padding-top: %6px; } QGroupBox::title { subcontrol-origin: margin; left: %7px; padding: 0 %8px; }")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
+							.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
+							.arg(StreamUP::UIStyles::Sizes::RADIUS_MD)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
+							.arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
+							.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+							.arg(StreamUP::UIStyles::Sizes::PADDING_SMALL));
+
+		QVBoxLayout *sortingLayout = new QVBoxLayout(sortingGroup);
+		sortingLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+		sortingLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+							StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+							StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+							StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+
+		// Sort method dropdown
+		QHBoxLayout *sortMethodLayout = new QHBoxLayout();
+		sortMethodLayout->setContentsMargins(0, 0, 0, 0);
+
+		QLabel *sortMethodLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.AutoSorting.Method"));
+		sortMethodLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+
+		QComboBox *sortMethodComboBox = new QComboBox();
+
+		// Add items with tooltips
+		sortMethodComboBox->addItem(obs_module_text("SceneOrganiser.Settings.AutoSorting.Method.None"), static_cast<int>(SceneSortMethod::None));
+		sortMethodComboBox->setItemData(0, obs_module_text("SceneOrganiser.Settings.AutoSorting.Method.NoneDesc"), Qt::ToolTipRole);
+
+		sortMethodComboBox->addItem(obs_module_text("SceneOrganiser.Settings.AutoSorting.Method.AlphabeticalAZ"), static_cast<int>(SceneSortMethod::AlphabeticalAZ));
+		sortMethodComboBox->setItemData(1, obs_module_text("SceneOrganiser.Settings.AutoSorting.Method.AlphabeticalAZDesc"), Qt::ToolTipRole);
+
+		sortMethodComboBox->addItem(obs_module_text("SceneOrganiser.Settings.AutoSorting.Method.AlphabeticalZA"), static_cast<int>(SceneSortMethod::AlphabeticalZA));
+		sortMethodComboBox->setItemData(2, obs_module_text("SceneOrganiser.Settings.AutoSorting.Method.AlphabeticalZADesc"), Qt::ToolTipRole);
+
+		sortMethodComboBox->addItem(obs_module_text("SceneOrganiser.Settings.AutoSorting.Method.NewestFirst"), static_cast<int>(SceneSortMethod::NewestFirst));
+		sortMethodComboBox->setItemData(3, obs_module_text("SceneOrganiser.Settings.AutoSorting.Method.NewestFirstDesc"), Qt::ToolTipRole);
+
+		sortMethodComboBox->addItem(obs_module_text("SceneOrganiser.Settings.AutoSorting.Method.OldestFirst"), static_cast<int>(SceneSortMethod::OldestFirst));
+		sortMethodComboBox->setItemData(4, obs_module_text("SceneOrganiser.Settings.AutoSorting.Method.OldestFirstDesc"), Qt::ToolTipRole);
+
+		int currentSortMethodIndex = static_cast<int>(currentSettings.sceneOrganiserSortMethod);
+		sortMethodComboBox->setCurrentIndex(sortMethodComboBox->findData(currentSortMethodIndex));
+
+		QObject::connect(sortMethodComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+				 [sortMethodComboBox](int index) {
+					 if (index >= 0) {
+						 QVariant data = sortMethodComboBox->itemData(index);
+						 if (data.isValid()) {
+							 PluginSettings settings = GetCurrentSettings();
+							 settings.sceneOrganiserSortMethod = static_cast<SceneSortMethod>(data.toInt());
+							 UpdateSettings(settings);
+							 StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+						 }
+					 }
+				 });
+
+		sortMethodLayout->addWidget(sortMethodLabel);
+		sortMethodLayout->addStretch();
+		sortMethodLayout->addWidget(sortMethodComboBox);
+		sortingLayout->addLayout(sortMethodLayout);
+
+		// Group folders toggle
+		QHBoxLayout *groupFoldersLayout = new QHBoxLayout();
+		groupFoldersLayout->setContentsMargins(0, 0, 0, 0);
+
+		QLabel *groupFoldersLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.AutoSorting.GroupFolders"));
+		groupFoldersLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		groupFoldersLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.AutoSorting.GroupFoldersDesc"));
+
+		StreamUP::UIStyles::SwitchButton *groupFoldersSwitch =
+			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.sceneOrganiserGroupFolders);
+		groupFoldersSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.AutoSorting.GroupFoldersDesc"));
+
+		QObject::connect(groupFoldersSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+			PluginSettings settings = GetCurrentSettings();
+			settings.sceneOrganiserGroupFolders = checked;
+			UpdateSettings(settings);
+			StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+		});
+
+		groupFoldersLayout->addWidget(groupFoldersLabel);
+		groupFoldersLayout->addStretch();
+		groupFoldersLayout->addWidget(groupFoldersSwitch);
+		sortingLayout->addLayout(groupFoldersLayout);
+
+		sceneOrganiserLayout->addWidget(sortingGroup);
 
 		// Manual Migration Section
 		sceneOrganiserLayout->addSpacing(20);
