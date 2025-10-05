@@ -137,7 +137,7 @@ void VideoCapturePopup::onActivateClicked()
 	if (isProcessing) return;
 	isProcessing = true;
 
-	StreamUP::SourceManager::ActivateAllVideoCaptureDevices();
+	StreamUP::SourceManager::ActivateAllVideoCaptureDevices(true);
 
 	deleteLater();
 }
@@ -147,7 +147,7 @@ void VideoCapturePopup::onDeactivateClicked()
 	if (isProcessing) return;
 	isProcessing = true;
 
-	StreamUP::SourceManager::DeactivateAllVideoCaptureDevices();
+	StreamUP::SourceManager::DeactivateAllVideoCaptureDevices(true);
 
 	deleteLater();
 }
@@ -157,7 +157,7 @@ void VideoCapturePopup::onRefreshClicked()
 	if (isProcessing) return;
 	isProcessing = true;
 
-	StreamUP::SourceManager::RefreshAllVideoCaptureDevices();
+	StreamUP::SourceManager::RefreshAllVideoCaptureDevices(true);
 
 	deleteLater();
 }
@@ -172,23 +172,26 @@ bool VideoCapturePopup::eventFilter(QObject *obj, QEvent *event)
 	if (event->type() == QEvent::MouseButtonPress) {
 		QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
 		if (mouseEvent->button() == Qt::LeftButton) {
-			// Check if click is outside this popup
-			if (!this->geometry().contains(mouseEvent->globalPosition().toPoint())) {
-				// Close the popup
+			// Check if the click is inside our popup area using global coordinates
+			QRect globalPopupRect = QRect(mapToGlobal(QPoint(0, 0)), size());
+			QPoint clickPos = mouseEvent->globalPosition().toPoint();
+
+			// If click is outside our popup, close it
+			if (!globalPopupRect.contains(clickPos)) {
 				deleteLater();
 				return false;  // Let the event continue to be processed
 			}
+			// Click is inside our popup - don't filter it, let it reach our buttons
+			return false;
 		}
 	}
-	return QWidget::eventFilter(obj, event);
+	return false;
 }
 
 void VideoCapturePopup::focusOutEvent(QFocusEvent *event)
 {
-	// Close popup when it loses focus, but only if it's not getting focus from one of its child widgets
-	if (event->reason() != Qt::PopupFocusReason) {
-		deleteLater();
-	}
+	// Don't auto-close on focus out - let the eventFilter handle outside clicks instead
+	// This prevents the popup from closing when clicking buttons
 	QWidget::focusOutEvent(event);
 }
 
