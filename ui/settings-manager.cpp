@@ -936,6 +936,32 @@ void ShowSettingsDialog(int tabIndex)
 		showIconsLayout->addWidget(showIconsSwitch);
 		sceneOrganiserLayout->addLayout(showIconsLayout);
 
+		// Remember Folder State setting
+		QHBoxLayout *rememberFolderStateLayout = new QHBoxLayout();
+		rememberFolderStateLayout->setContentsMargins(0, 0, 0, 0);
+		rememberFolderStateLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+
+		QLabel *rememberFolderStateLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.AutoSorting.RememberFolderState"));
+		rememberFolderStateLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		rememberFolderStateLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.AutoSorting.RememberFolderStateDesc"));
+
+		StreamUP::UIStyles::SwitchButton *rememberFolderStateSwitch =
+			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.sceneOrganiserRememberFolderState);
+		rememberFolderStateSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.AutoSorting.RememberFolderStateDesc"));
+
+		QObject::connect(rememberFolderStateSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+			PluginSettings settings = GetCurrentSettings();
+			settings.sceneOrganiserRememberFolderState = checked;
+			UpdateSettings(settings);
+		});
+
+		rememberFolderStateLayout->addWidget(rememberFolderStateLabel);
+		rememberFolderStateLayout->addStretch();
+		rememberFolderStateLayout->addWidget(rememberFolderStateSwitch);
+		sceneOrganiserLayout->addLayout(rememberFolderStateLayout);
+
 		// Scene switching mode setting
 		QHBoxLayout *switchModeLayout = new QHBoxLayout();
 		switchModeLayout->setContentsMargins(0, 0, 0, 0);
@@ -1067,32 +1093,6 @@ void ShowSettingsDialog(int tabIndex)
 		groupFoldersLayout->addStretch();
 		groupFoldersLayout->addWidget(groupFoldersSwitch);
 		sortingLayout->addLayout(groupFoldersLayout);
-
-		// Remember Folder State setting
-		QHBoxLayout *rememberFolderStateLayout = new QHBoxLayout();
-		rememberFolderStateLayout->setContentsMargins(0, 0, 0, 0);
-		rememberFolderStateLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
-
-		QLabel *rememberFolderStateLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.AutoSorting.RememberFolderState"));
-		rememberFolderStateLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
-							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-		rememberFolderStateLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.AutoSorting.RememberFolderStateDesc"));
-
-		StreamUP::UIStyles::SwitchButton *rememberFolderStateSwitch =
-			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.sceneOrganiserRememberFolderState);
-		rememberFolderStateSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.AutoSorting.RememberFolderStateDesc"));
-
-		QObject::connect(rememberFolderStateSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
-			PluginSettings settings = GetCurrentSettings();
-			settings.sceneOrganiserRememberFolderState = checked;
-			UpdateSettings(settings);
-		});
-
-		rememberFolderStateLayout->addWidget(rememberFolderStateLabel);
-		rememberFolderStateLayout->addStretch();
-		rememberFolderStateLayout->addWidget(rememberFolderStateSwitch);
-		sortingLayout->addLayout(rememberFolderStateLayout);
 
 		sceneOrganiserLayout->addWidget(sortingGroup);
 
