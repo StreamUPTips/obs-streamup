@@ -32,6 +32,7 @@
 #include <QScreen>
 #include <QGuiApplication>
 #include <QDir>
+#include <QDateTime>
 #include <util/platform.h>
 
 namespace StreamUP {
@@ -295,8 +296,18 @@ void SceneOrganiserDock::setupUI()
             this, &SceneOrganiserDock::onItemDoubleClicked);
     connect(m_treeView, &QWidget::customContextMenuRequested,
             this, &SceneOrganiserDock::onCustomContextMenuRequested);
+
+    // Connect expansion signals to save folder state
+    connect(m_treeView, &QTreeView::expanded, this, [this](const QModelIndex &) {
+        m_saveTimer->start();
+    });
+    connect(m_treeView, &QTreeView::collapsed, this, [this](const QModelIndex &) {
+        m_saveTimer->start();
+    });
+
     connect(m_model, &SceneTreeModel::modelChanged,
             [this]() {
+                applySortingIfEnabled();
                 m_saveTimer->start();
                 // Use optimized batched update instead of immediate repaints
                 scheduleOptimizedUpdate();
@@ -494,6 +505,51 @@ void SceneOrganiserDock::setupContextMenu()
     m_folderLockAction = m_folderContextMenu->addAction("", this, &SceneOrganiserDock::onToggleLockClicked);
     m_folderLockAction->setCheckable(true);
 
+    // Sort submenu for folders
+    m_folderContextMenu->addSeparator();
+    QMenu *folderSortMenu = new QMenu(obs_module_text("SceneOrganiser.Action.Sort"), this);
+    folderSortMenu->addAction(obs_module_text("SceneOrganiser.Action.Sort.AlphabeticalAZ"), [this]() {
+        auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
+        if (!selectedIndexes.isEmpty()) {
+            QModelIndex sourceIndex = m_proxyModel->mapToSource(selectedIndexes.first());
+            auto item = m_model->itemFromIndex(sourceIndex);
+            if (item && item->type() == SceneFolderItem::UserType + 1) {
+                sortManually(StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ, item);
+            }
+        }
+    });
+    folderSortMenu->addAction(obs_module_text("SceneOrganiser.Action.Sort.AlphabeticalZA"), [this]() {
+        auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
+        if (!selectedIndexes.isEmpty()) {
+            QModelIndex sourceIndex = m_proxyModel->mapToSource(selectedIndexes.first());
+            auto item = m_model->itemFromIndex(sourceIndex);
+            if (item && item->type() == SceneFolderItem::UserType + 1) {
+                sortManually(StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA, item);
+            }
+        }
+    });
+    folderSortMenu->addAction(obs_module_text("SceneOrganiser.Action.Sort.NewestFirst"), [this]() {
+        auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
+        if (!selectedIndexes.isEmpty()) {
+            QModelIndex sourceIndex = m_proxyModel->mapToSource(selectedIndexes.first());
+            auto item = m_model->itemFromIndex(sourceIndex);
+            if (item && item->type() == SceneFolderItem::UserType + 1) {
+                sortManually(StreamUP::SettingsManager::SceneSortMethod::NewestFirst, item);
+            }
+        }
+    });
+    folderSortMenu->addAction(obs_module_text("SceneOrganiser.Action.Sort.OldestFirst"), [this]() {
+        auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
+        if (!selectedIndexes.isEmpty()) {
+            QModelIndex sourceIndex = m_proxyModel->mapToSource(selectedIndexes.first());
+            auto item = m_model->itemFromIndex(sourceIndex);
+            if (item && item->type() == SceneFolderItem::UserType + 1) {
+                sortManually(StreamUP::SettingsManager::SceneSortMethod::OldestFirst, item);
+            }
+        }
+    });
+    m_folderContextMenu->addMenu(folderSortMenu);
+
     // Scene context menu - matching OBS standard functionality
     m_sceneContextMenu = new QMenu(this);
 
@@ -554,6 +610,56 @@ void SceneOrganiserDock::setupContextMenu()
     m_sceneLockAction = m_sceneContextMenu->addAction("", this, &SceneOrganiserDock::onToggleLockClicked);
     m_sceneLockAction->setCheckable(true);
 
+    // Sort submenu for scenes (sorts parent folder)
+    m_sceneContextMenu->addSeparator();
+    QMenu *sceneSortMenu = new QMenu(obs_module_text("SceneOrganiser.Action.Sort"), this);
+    sceneSortMenu->addAction(obs_module_text("SceneOrganiser.Action.Sort.AlphabeticalAZ"), [this]() {
+        auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
+        if (!selectedIndexes.isEmpty()) {
+            QModelIndex sourceIndex = m_proxyModel->mapToSource(selectedIndexes.first());
+            auto item = m_model->itemFromIndex(sourceIndex);
+            if (item && item->type() == SceneTreeItem::UserType + 2) {
+                // Sort the parent folder (or root if no parent)
+                QStandardItem *parent = item->parent();
+                sortManually(StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ, parent);
+            }
+        }
+    });
+    sceneSortMenu->addAction(obs_module_text("SceneOrganiser.Action.Sort.AlphabeticalZA"), [this]() {
+        auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
+        if (!selectedIndexes.isEmpty()) {
+            QModelIndex sourceIndex = m_proxyModel->mapToSource(selectedIndexes.first());
+            auto item = m_model->itemFromIndex(sourceIndex);
+            if (item && item->type() == SceneTreeItem::UserType + 2) {
+                QStandardItem *parent = item->parent();
+                sortManually(StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA, parent);
+            }
+        }
+    });
+    sceneSortMenu->addAction(obs_module_text("SceneOrganiser.Action.Sort.NewestFirst"), [this]() {
+        auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
+        if (!selectedIndexes.isEmpty()) {
+            QModelIndex sourceIndex = m_proxyModel->mapToSource(selectedIndexes.first());
+            auto item = m_model->itemFromIndex(sourceIndex);
+            if (item && item->type() == SceneTreeItem::UserType + 2) {
+                QStandardItem *parent = item->parent();
+                sortManually(StreamUP::SettingsManager::SceneSortMethod::NewestFirst, parent);
+            }
+        }
+    });
+    sceneSortMenu->addAction(obs_module_text("SceneOrganiser.Action.Sort.OldestFirst"), [this]() {
+        auto selectedIndexes = m_treeView->selectionModel()->selectedIndexes();
+        if (!selectedIndexes.isEmpty()) {
+            QModelIndex sourceIndex = m_proxyModel->mapToSource(selectedIndexes.first());
+            auto item = m_model->itemFromIndex(sourceIndex);
+            if (item && item->type() == SceneTreeItem::UserType + 2) {
+                QStandardItem *parent = item->parent();
+                sortManually(StreamUP::SettingsManager::SceneSortMethod::OldestFirst, parent);
+            }
+        }
+    });
+    m_sceneContextMenu->addMenu(sceneSortMenu);
+
     // Background context menu
     m_backgroundContextMenu = new QMenu(this);
     m_backgroundContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("AddScene"), -1), this, &SceneOrganiserDock::onCreateSceneClicked);
@@ -566,6 +672,23 @@ void SceneOrganiserDock::setupContextMenu()
     m_backgroundContextMenu->addSeparator();
     m_backgroundLockAction = m_backgroundContextMenu->addAction("", this, &SceneOrganiserDock::onToggleLockClicked);
     m_backgroundLockAction->setCheckable(true);
+
+    // Sort submenu for background (sorts entire tree)
+    m_backgroundContextMenu->addSeparator();
+    QMenu *backgroundSortMenu = new QMenu(obs_module_text("SceneOrganiser.Action.Sort"), this);
+    backgroundSortMenu->addAction(obs_module_text("SceneOrganiser.Action.Sort.AlphabeticalAZ"), [this]() {
+        sortManually(StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ);
+    });
+    backgroundSortMenu->addAction(obs_module_text("SceneOrganiser.Action.Sort.AlphabeticalZA"), [this]() {
+        sortManually(StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA);
+    });
+    backgroundSortMenu->addAction(obs_module_text("SceneOrganiser.Action.Sort.NewestFirst"), [this]() {
+        sortManually(StreamUP::SettingsManager::SceneSortMethod::NewestFirst);
+    });
+    backgroundSortMenu->addAction(obs_module_text("SceneOrganiser.Action.Sort.OldestFirst"), [this]() {
+        sortManually(StreamUP::SettingsManager::SceneSortMethod::OldestFirst);
+    });
+    m_backgroundContextMenu->addMenu(backgroundSortMenu);
 }
 
 void SceneOrganiserDock::setupObsSignals()
@@ -607,6 +730,282 @@ void SceneOrganiserDock::refreshSceneList()
     updateActiveSceneHighlight();
     updateHiddenScenesStyling();
     applySceneVisibility();
+    applySortingIfEnabled();
+}
+
+void SceneOrganiserDock::applySortingIfEnabled()
+{
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+
+    // Don't sort if method is None
+    if (settings.sceneOrganiserSortMethod == StreamUP::SettingsManager::SceneSortMethod::None) {
+        return;
+    }
+
+    QStandardItem *root = m_model->invisibleRootItem();
+    if (!root) return;
+
+    bool groupFolders = settings.sceneOrganiserGroupFolders;
+    auto sortMethod = settings.sceneOrganiserSortMethod;
+
+    // Recursively sort items within each parent
+    std::function<void(QStandardItem*)> sortItemsRecursive = [&](QStandardItem *parent) {
+        if (!parent) return;
+
+        int rowCount = parent->rowCount();
+        if (rowCount <= 1) return;
+
+        // Simple bubble sort to swap rows into correct position
+        bool swapped;
+        do {
+            swapped = false;
+            for (int i = 0; i < parent->rowCount() - 1; ++i) {
+                QStandardItem *item1 = parent->child(i);
+                QStandardItem *item2 = parent->child(i + 1);
+
+                if (!item1 || !item2) continue;
+
+                bool item1IsFolder = (item1->type() == SceneFolderItem::UserType + 1);
+                bool item2IsFolder = (item2->type() == SceneFolderItem::UserType + 1);
+
+                bool shouldSwap = false;
+
+                if (groupFolders) {
+                    // Folders should come before scenes
+                    if (!item1IsFolder && item2IsFolder) {
+                        shouldSwap = true;
+                    }
+                    // Within same type, sort by selected method
+                    else if (item1IsFolder == item2IsFolder) {
+                        if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ ||
+                            sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA) {
+                            int comparison = QString::compare(item1->text(), item2->text(), Qt::CaseInsensitive);
+                            if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ) {
+                                shouldSwap = (comparison > 0);
+                            } else {
+                                shouldSwap = (comparison < 0);
+                            }
+                        } else if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::NewestFirst ||
+                                   sortMethod == StreamUP::SettingsManager::SceneSortMethod::OldestFirst) {
+                            // Get timestamps
+                            qint64 timestamp1 = 0, timestamp2 = 0;
+                            if (item1IsFolder) {
+                                SceneFolderItem *folder1 = static_cast<SceneFolderItem*>(item1);
+                                SceneFolderItem *folder2 = static_cast<SceneFolderItem*>(item2);
+                                timestamp1 = folder1->getCreationTimestamp();
+                                timestamp2 = folder2->getCreationTimestamp();
+                            } else {
+                                SceneTreeItem *scene1 = static_cast<SceneTreeItem*>(item1);
+                                SceneTreeItem *scene2 = static_cast<SceneTreeItem*>(item2);
+                                timestamp1 = scene1->getCreationTimestamp();
+                                timestamp2 = scene2->getCreationTimestamp();
+                            }
+
+                            if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::NewestFirst) {
+                                // Newest first: higher timestamp comes first
+                                shouldSwap = (timestamp1 < timestamp2);
+                            } else {
+                                // Oldest first: lower timestamp comes first
+                                shouldSwap = (timestamp1 > timestamp2);
+                            }
+                        }
+                    }
+                } else {
+                    // Mix folders and scenes, sort by selected method
+                    if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ ||
+                        sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA) {
+                        int comparison = QString::compare(item1->text(), item2->text(), Qt::CaseInsensitive);
+                        if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ) {
+                            shouldSwap = (comparison > 0);
+                        } else {
+                            shouldSwap = (comparison < 0);
+                        }
+                    } else if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::NewestFirst ||
+                               sortMethod == StreamUP::SettingsManager::SceneSortMethod::OldestFirst) {
+                        // Get timestamps (works for both folders and scenes)
+                        qint64 timestamp1 = 0, timestamp2 = 0;
+                        if (item1->type() == SceneFolderItem::UserType + 1) {
+                            SceneFolderItem *folder1 = static_cast<SceneFolderItem*>(item1);
+                            timestamp1 = folder1->getCreationTimestamp();
+                        } else {
+                            SceneTreeItem *scene1 = static_cast<SceneTreeItem*>(item1);
+                            timestamp1 = scene1->getCreationTimestamp();
+                        }
+
+                        if (item2->type() == SceneFolderItem::UserType + 1) {
+                            SceneFolderItem *folder2 = static_cast<SceneFolderItem*>(item2);
+                            timestamp2 = folder2->getCreationTimestamp();
+                        } else {
+                            SceneTreeItem *scene2 = static_cast<SceneTreeItem*>(item2);
+                            timestamp2 = scene2->getCreationTimestamp();
+                        }
+
+                        if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::NewestFirst) {
+                            shouldSwap = (timestamp1 < timestamp2);
+                        } else {
+                            shouldSwap = (timestamp1 > timestamp2);
+                        }
+                    }
+                }
+
+                if (shouldSwap) {
+                    // Swap the two rows
+                    QList<QStandardItem*> row1 = parent->takeRow(i);
+                    QList<QStandardItem*> row2 = parent->takeRow(i); // i because we just removed row i
+                    parent->insertRow(i, row2);
+                    parent->insertRow(i + 1, row1);
+                    swapped = true;
+                }
+            }
+        } while (swapped);
+
+        // Recursively sort all folders
+        for (int i = 0; i < parent->rowCount(); ++i) {
+            QStandardItem *item = parent->child(i);
+            if (item && item->type() == SceneFolderItem::UserType + 1) {
+                sortItemsRecursive(item);
+            }
+        }
+    };
+
+    sortItemsRecursive(root);
+    m_model->saveSceneTree();
+}
+
+void SceneOrganiserDock::sortManually(StreamUP::SettingsManager::SceneSortMethod method, QStandardItem *parent)
+{
+    // If no parent specified, sort the root
+    if (!parent) {
+        parent = m_model->invisibleRootItem();
+    }
+
+    if (!parent) return;
+
+    // Get grouping setting
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+    bool groupFolders = settings.sceneOrganiserGroupFolders;
+
+    // Use the same sorting logic as applySortingIfEnabled
+    std::function<void(QStandardItem*, StreamUP::SettingsManager::SceneSortMethod)> sortItemsRecursive =
+        [&](QStandardItem *currentParent, StreamUP::SettingsManager::SceneSortMethod sortMethod) {
+        if (!currentParent) return;
+
+        int rowCount = currentParent->rowCount();
+        if (rowCount <= 1) return;
+
+        // Simple bubble sort to swap rows into correct position
+        bool swapped;
+        do {
+            swapped = false;
+            for (int i = 0; i < currentParent->rowCount() - 1; ++i) {
+                QStandardItem *item1 = currentParent->child(i);
+                QStandardItem *item2 = currentParent->child(i + 1);
+
+                if (!item1 || !item2) continue;
+
+                bool item1IsFolder = (item1->type() == SceneFolderItem::UserType + 1);
+                bool item2IsFolder = (item2->type() == SceneFolderItem::UserType + 1);
+
+                bool shouldSwap = false;
+
+                if (groupFolders) {
+                    // Folders should come before scenes
+                    if (!item1IsFolder && item2IsFolder) {
+                        shouldSwap = true;
+                    }
+                    // Within same type, sort by selected method
+                    else if (item1IsFolder == item2IsFolder) {
+                        if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ ||
+                            sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA) {
+                            int comparison = QString::compare(item1->text(), item2->text(), Qt::CaseInsensitive);
+                            if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ) {
+                                shouldSwap = (comparison > 0);
+                            } else {
+                                shouldSwap = (comparison < 0);
+                            }
+                        } else if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::NewestFirst ||
+                                   sortMethod == StreamUP::SettingsManager::SceneSortMethod::OldestFirst) {
+                            // Get timestamps
+                            qint64 timestamp1 = 0, timestamp2 = 0;
+                            if (item1IsFolder) {
+                                SceneFolderItem *folder1 = static_cast<SceneFolderItem*>(item1);
+                                SceneFolderItem *folder2 = static_cast<SceneFolderItem*>(item2);
+                                timestamp1 = folder1->getCreationTimestamp();
+                                timestamp2 = folder2->getCreationTimestamp();
+                            } else {
+                                SceneTreeItem *scene1 = static_cast<SceneTreeItem*>(item1);
+                                SceneTreeItem *scene2 = static_cast<SceneTreeItem*>(item2);
+                                timestamp1 = scene1->getCreationTimestamp();
+                                timestamp2 = scene2->getCreationTimestamp();
+                            }
+
+                            if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::NewestFirst) {
+                                shouldSwap = (timestamp1 < timestamp2);
+                            } else {
+                                shouldSwap = (timestamp1 > timestamp2);
+                            }
+                        }
+                    }
+                } else {
+                    // Mix folders and scenes, sort by selected method
+                    if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ ||
+                        sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA) {
+                        int comparison = QString::compare(item1->text(), item2->text(), Qt::CaseInsensitive);
+                        if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ) {
+                            shouldSwap = (comparison > 0);
+                        } else {
+                            shouldSwap = (comparison < 0);
+                        }
+                    } else if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::NewestFirst ||
+                               sortMethod == StreamUP::SettingsManager::SceneSortMethod::OldestFirst) {
+                        // Get timestamps (works for both folders and scenes)
+                        qint64 timestamp1 = 0, timestamp2 = 0;
+                        if (item1->type() == SceneFolderItem::UserType + 1) {
+                            SceneFolderItem *folder1 = static_cast<SceneFolderItem*>(item1);
+                            timestamp1 = folder1->getCreationTimestamp();
+                        } else {
+                            SceneTreeItem *scene1 = static_cast<SceneTreeItem*>(item1);
+                            timestamp1 = scene1->getCreationTimestamp();
+                        }
+
+                        if (item2->type() == SceneFolderItem::UserType + 1) {
+                            SceneFolderItem *folder2 = static_cast<SceneFolderItem*>(item2);
+                            timestamp2 = folder2->getCreationTimestamp();
+                        } else {
+                            SceneTreeItem *scene2 = static_cast<SceneTreeItem*>(item2);
+                            timestamp2 = scene2->getCreationTimestamp();
+                        }
+
+                        if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::NewestFirst) {
+                            shouldSwap = (timestamp1 < timestamp2);
+                        } else {
+                            shouldSwap = (timestamp1 > timestamp2);
+                        }
+                    }
+                }
+
+                if (shouldSwap) {
+                    // Swap the two rows
+                    QList<QStandardItem*> row1 = currentParent->takeRow(i);
+                    QList<QStandardItem*> row2 = currentParent->takeRow(i);
+                    currentParent->insertRow(i, row2);
+                    currentParent->insertRow(i + 1, row1);
+                    swapped = true;
+                }
+            }
+        } while (swapped);
+
+        // Recursively sort all folders
+        for (int i = 0; i < currentParent->rowCount(); ++i) {
+            QStandardItem *item = currentParent->child(i);
+            if (item && item->type() == SceneFolderItem::UserType + 1) {
+                sortItemsRecursive(item, sortMethod);
+            }
+        }
+    };
+
+    sortItemsRecursive(parent, method);
+    m_model->saveSceneTree();
 }
 
 void SceneOrganiserDock::updateFromObsScenes()
@@ -859,6 +1258,7 @@ void SceneOrganiserDock::onAddFolderClicked()
         auto folderItem = m_model->createFolderItem(folderName);
         m_model->invisibleRootItem()->appendRow(folderItem);
         m_treeView->expand(folderItem->index());
+        applySortingIfEnabled();
         m_saveTimer->start();
     }
 }
@@ -1378,6 +1778,7 @@ void SceneOrganiserDock::onSettingsChanged()
 {
     // Handle settings changes if needed
     LoadConfiguration();
+    applySortingIfEnabled();
 }
 
 void SceneOrganiserDock::onIconsChanged()
@@ -1505,9 +1906,20 @@ void SceneOrganiserDock::updateActiveSceneHighlightRecursive(QStandardItem *pare
                     // Apply custom color
                     applyCustomColorToItem(item, customColor.value<QColor>());
                 } else {
-                    // Clear background and use default theme text color
+                    // Clear background
                     item->setBackground(QBrush());
-                    item->setForeground(QBrush(getDefaultThemeTextColor()));
+
+                    // Check if scene is hidden and apply appropriate text color
+                    bool isHidden = m_hiddenScenes.contains(item->text());
+                    if (isHidden) {
+                        // Apply grayed-out color for hidden scenes
+                        QColor grayColor = getDefaultThemeTextColor();
+                        grayColor.setAlpha(100);
+                        item->setForeground(QBrush(grayColor));
+                    } else {
+                        // Use default theme text color
+                        item->setForeground(QBrush(getDefaultThemeTextColor()));
+                    }
                 }
             }
 
@@ -1564,6 +1976,14 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->LoadConfiguration();
             dock->m_model->loadSceneTree();
             dock->refreshSceneList();
+
+            // Restore folder expansion state after tree is fully loaded
+            QTimer::singleShot(500, dock, [dock]() {
+                StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+                if (settings.sceneOrganiserRememberFolderState) {
+                    dock->restoreFolderExpansionState();
+                }
+            });
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
@@ -1582,6 +2002,14 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->LoadConfiguration();
             dock->m_model->loadSceneTree();
             dock->refreshSceneList();
+
+            // Restore folder expansion state after tree is fully loaded
+            QTimer::singleShot(500, dock, [dock]() {
+                StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+                if (settings.sceneOrganiserRememberFolderState) {
+                    dock->restoreFolderExpansionState();
+                }
+            });
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_RENAMED:
@@ -1666,6 +2094,12 @@ void SceneOrganiserDock::SaveConfiguration()
     // Now using DigitOtter approach - save is handled by saveSceneTree()
     // which is called automatically on OBS frontend events
     m_model->saveSceneTree();
+
+    // Save folder expansion state if setting is enabled
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+    if (settings.sceneOrganiserRememberFolderState) {
+        saveFolderExpansionState();
+    }
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
         QString("Configuration saved for scene collection '%1' (lock state: %2)")
@@ -1804,7 +2238,9 @@ void SceneOrganiserDock::LoadConfiguration()
         .arg(sceneCollectionName)
         .arg(m_isLocked ? "locked" : "unlocked").toUtf8().constData());
 
-    // Apply scene visibility one more time after full initialization with even longer delay
+    // Apply scene visibility after full initialization
+    // Note: Folder expansion state is restored in the frontend event handlers
+    // (FINISHED_LOADING and SCENE_COLLECTION_CHANGED) after the tree is fully refreshed
     QTimer::singleShot(1000, this, [this]() {
         updateHiddenScenesStyling();
         applySceneVisibility();
@@ -1904,6 +2340,136 @@ void SceneOrganiserDock::restoreExpansionState()
     m_savedExpansionState.clear();
 }
 
+void SceneOrganiserDock::saveFolderExpansionState()
+{
+    if (!m_treeView || !m_model) return;
+
+    char *scene_collection = obs_frontend_get_current_scene_collection();
+    if (!scene_collection) return;
+
+    char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
+    if (!configPath) {
+        bfree(scene_collection);
+        return;
+    }
+
+    QString configDir = QString::fromUtf8(configPath);
+    QString sceneCollectionName = QString::fromUtf8(scene_collection);
+    bfree(configPath);
+    bfree(scene_collection);
+
+    // Collect expanded folder names
+    QStringList expandedFolders;
+    std::function<void(const QModelIndex&)> collectExpanded = [&](const QModelIndex& index) {
+        if (!index.isValid()) return;
+
+        // Map proxy index to source index
+        QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
+        QStandardItem *item = m_model->itemFromIndex(sourceIndex);
+
+        if (item && item->type() == SceneFolderItem::UserType + 1) {
+            if (m_treeView->isExpanded(index)) {
+                expandedFolders.append(item->text());
+            }
+        }
+
+        // Recursively check children
+        int rowCount = m_proxyModel->rowCount(index);
+        for (int i = 0; i < rowCount; ++i) {
+            QModelIndex childIndex = m_proxyModel->index(i, 0, index);
+            collectExpanded(childIndex);
+        }
+    };
+
+    // Start from root items
+    int rootRowCount = m_proxyModel->rowCount();
+    for (int i = 0; i < rootRowCount; ++i) {
+        QModelIndex rootIndex = m_proxyModel->index(i, 0);
+        collectExpanded(rootIndex);
+    }
+
+    // Save to file
+    QString expansionFile = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_expansion_state.txt";
+    QFile file(expansionFile);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream out(&file);
+        out << expandedFolders.join("\n");
+        file.close();
+
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
+            QString("Saved expansion state for %1 folders").arg(expandedFolders.size()).toUtf8().constData());
+    }
+}
+
+void SceneOrganiserDock::restoreFolderExpansionState()
+{
+    if (!m_treeView || !m_model) return;
+
+    char *scene_collection = obs_frontend_get_current_scene_collection();
+    if (!scene_collection) return;
+
+    char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
+    if (!configPath) {
+        bfree(scene_collection);
+        return;
+    }
+
+    QString configDir = QString::fromUtf8(configPath);
+    QString sceneCollectionName = QString::fromUtf8(scene_collection);
+    bfree(configPath);
+    bfree(scene_collection);
+
+    // Load from file
+    QString expansionFile = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_expansion_state.txt";
+    QFile file(expansionFile);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return; // No saved state, nothing to restore
+    }
+
+    QTextStream in(&file);
+    QString expandedFoldersText = in.readAll().trimmed();
+    file.close();
+
+    if (expandedFoldersText.isEmpty()) {
+        return;
+    }
+
+    QStringList expandedFoldersList = expandedFoldersText.split("\n", Qt::SkipEmptyParts);
+    QSet<QString> expandedFolders = QSet<QString>(expandedFoldersList.begin(), expandedFoldersList.end());
+
+    // Restore expansion state
+    std::function<void(const QModelIndex&)> restoreExpanded = [&](const QModelIndex& index) {
+        if (!index.isValid()) return;
+
+        // Map proxy index to source index
+        QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
+        QStandardItem *item = m_model->itemFromIndex(sourceIndex);
+
+        if (item && item->type() == SceneFolderItem::UserType + 1) {
+            if (expandedFolders.contains(item->text())) {
+                m_treeView->setExpanded(index, true);
+            }
+        }
+
+        // Recursively restore children
+        int rowCount = m_proxyModel->rowCount(index);
+        for (int i = 0; i < rowCount; ++i) {
+            QModelIndex childIndex = m_proxyModel->index(i, 0, index);
+            restoreExpanded(childIndex);
+        }
+    };
+
+    // Start from root items
+    int rootRowCount = m_proxyModel->rowCount();
+    for (int i = 0; i < rootRowCount; ++i) {
+        QModelIndex rootIndex = m_proxyModel->index(i, 0);
+        restoreExpanded(rootIndex);
+    }
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
+        QString("Restored expansion state for %1 folders").arg(expandedFolders.size()).toUtf8().constData());
+}
+
 // Public methods for keyboard shortcuts
 void SceneOrganiserDock::triggerRename()
 {
@@ -1999,8 +2565,10 @@ void SceneOrganiserDock::onHideSceneClicked()
     // Add scene to hidden list
     m_hiddenScenes.insert(sceneName);
 
-    // Apply visual styling when unlocked (italic font to indicate it will be hidden when locked)
-    m_currentContextItem->setFont(QFont("", -1, QFont::Normal, true)); // Make text italic
+    // Apply visual styling when unlocked (grayed-out color to indicate it will be hidden when locked)
+    QColor grayColor = getDefaultThemeTextColor();
+    grayColor.setAlpha(100); // Make it semi-transparent for a grayed-out effect
+    m_currentContextItem->setForeground(QBrush(grayColor));
 
     // If dock is locked, immediately hide the scene from the tree
     if (m_isLocked) {
@@ -2023,8 +2591,8 @@ void SceneOrganiserDock::onShowSceneClicked()
     // Remove scene from hidden list
     m_hiddenScenes.remove(sceneName);
 
-    // Reset font to normal
-    m_currentContextItem->setFont(QFont());
+    // Reset to default theme text color
+    m_currentContextItem->setForeground(QBrush(getDefaultThemeTextColor()));
 
     // If dock is locked, immediately show the scene in the tree
     if (m_isLocked) {
@@ -2097,11 +2665,13 @@ void SceneOrganiserDock::updateHiddenScenesStylingRecursive(QStandardItem *paren
             bool isHidden = m_hiddenScenes.contains(sceneName);
 
             if (isHidden) {
-                // Apply italic styling to indicate scene is hidden (when unlocked)
-                child->setFont(QFont("", -1, QFont::Normal, true));
+                // Apply grayed-out color to indicate scene is hidden (when unlocked)
+                QColor grayColor = getDefaultThemeTextColor();
+                grayColor.setAlpha(100); // Make it semi-transparent for a grayed-out effect
+                child->setForeground(QBrush(grayColor));
             } else {
-                // Reset to normal font
-                child->setFont(QFont());
+                // Reset to default theme text color
+                child->setForeground(QBrush(getDefaultThemeTextColor()));
             }
         } else if (child->hasChildren()) {
             // Recursively check folder contents
@@ -3676,6 +4246,8 @@ SceneFolderItem::SceneFolderItem(const QString &folderName)
     : QStandardItem(folderName)
 {
     setupFolderItem();
+    // Set creation timestamp to current time
+    setCreationTimestamp(QDateTime::currentMSecsSinceEpoch());
 }
 
 void SceneFolderItem::setupFolderItem()
@@ -3697,11 +4269,23 @@ void SceneFolderItem::updateIcon()
     }
 }
 
+qint64 SceneFolderItem::getCreationTimestamp() const
+{
+    return data(Qt::UserRole + 100).toLongLong();
+}
+
+void SceneFolderItem::setCreationTimestamp(qint64 timestamp)
+{
+    setData(timestamp, Qt::UserRole + 100);
+}
+
 SceneTreeItem::SceneTreeItem(const QString &sceneName, obs_weak_source_t *weak_source)
     : QStandardItem(sceneName), m_weakSource(weak_source)
 {
     setupSceneItem();
     updateFromObs();
+    // Set creation timestamp to current time
+    setCreationTimestamp(QDateTime::currentMSecsSinceEpoch());
 }
 
 SceneTreeItem::~SceneTreeItem()
@@ -3739,6 +4323,16 @@ void SceneTreeItem::updateIcon()
     } else {
         setIcon(QIcon());
     }
+}
+
+qint64 SceneTreeItem::getCreationTimestamp() const
+{
+    return data(Qt::UserRole + 100).toLongLong();
+}
+
+void SceneTreeItem::setCreationTimestamp(qint64 timestamp)
+{
+    setData(timestamp, Qt::UserRole + 100);
 }
 
 void SceneTreeItem::updateFromObs()

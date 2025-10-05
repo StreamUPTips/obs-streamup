@@ -1,3 +1,17 @@
+# StreamUP v2.1.2 - Patch Update
+
+## New Features
+- **Scene Organiser Sorting** - Automatically sort your scenes and folders alphabetically (A-Z or Z-A), by newest first, or oldest first
+- **Right-Click Scene Sorting** - Right-click in Scene Organiser to quickly sort your scenes without going into settings
+- **Remember Folder State** - Scene Organiser now remembers which folders were expanded when you restart OBS
+
+## Improvements & Bug Fixes
+- **Plugin Version Checker** - Fixed issues with the plugin update checker not working correctly
+- **Scene Organiser** - Various improvements to stability and performance
+- **WebSocket Commands Window** - Fixed missing command descriptions that weren't displaying properly
+
+---
+
 # StreamUP v2.1.1 - Patch Update
 
 ## New Features
