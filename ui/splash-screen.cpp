@@ -259,16 +259,16 @@ QString GenerateSupportersHTML()
     // Andi's supporters section
     if (!supportersData.andiSupporters.empty()) {
         html += R"(<h4 style="color: #fbbf24; margin: 12px 0 8px 0; font-size: 14px;">💛 Andi's Supporters</h4>)";
-        html += R"(<p style="margin: 8px 0; line-height: 1.8;">)";
-        
+        html += R"(<p style="margin: 8px 0; line-height: 2.0;">)";
+
         for (size_t i = 0; i < supportersData.andiSupporters.size(); ++i) {
             const auto& supporter = supportersData.andiSupporters[i];
-            html += QString(R"(<span style="background-color: rgba(251, 191, 36, 0.2); color: #fde68a; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">%1</span>)")
+            html += QString(R"(<span style="background-color: rgba(251, 191, 36, 0.2); color: #fde68a; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; white-space: nowrap;">%1</span>)")
                 .arg(supporter.displayName.toHtmlEscaped());
-            
-            // Add spacing between names
+
+            // Add space between badges
             if (i < supportersData.andiSupporters.size() - 1) {
-                html += "&nbsp;&nbsp;&nbsp;"; // Add some spaces between names
+                html += " &nbsp; ";
             }
         }
         html += R"(</p>)";
@@ -277,16 +277,16 @@ QString GenerateSupportersHTML()
     // StreamUP supporters section
     if (!supportersData.streamupSupporters.empty()) {
         html += R"(<h4 style="color: #a855f7; margin: 12px 0 8px 0; font-size: 14px;">💜 StreamUP Supporters</h4>)";
-        html += R"(<p style="margin: 8px 0; line-height: 1.8;">)";
-        
+        html += R"(<p style="margin: 8px 0; line-height: 2.0;">)";
+
         for (size_t i = 0; i < supportersData.streamupSupporters.size(); ++i) {
             const auto& supporter = supportersData.streamupSupporters[i];
-            html += QString(R"(<span style="background-color: rgba(168, 85, 247, 0.2); color: #e9d5ff; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">%1</span>)")
+            html += QString(R"(<span style="background-color: rgba(168, 85, 247, 0.2); color: #e9d5ff; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; white-space: nowrap;">%1</span>)")
                 .arg(supporter.displayName.toHtmlEscaped());
-                
-            // Add spacing between names
+
+            // Add space between badges
             if (i < supportersData.streamupSupporters.size() - 1) {
-                html += "&nbsp;&nbsp;&nbsp;"; // Add some spaces between names
+                html += " &nbsp; ";
             }
         }
         html += R"(</p>)";
