@@ -45,6 +45,7 @@
 #include <QFileInfo>
 #include <memory>
 #include <mutex>
+#include <algorithm>
 #include <util/platform.h>
 
 // UI settings management implementation
@@ -2695,6 +2696,148 @@ void CleanupSettingsCache()
 		cachedSettings = nullptr;
 	}
 	settingsLoadLogged = false;
+}
+
+void SaveSkippedUpdates(const std::map<std::string, std::string>& outdatedPlugins, const std::vector<std::string>& failedPlugins)
+{
+	obs_data_t* settings = LoadSettings();
+	if (!settings) {
+		return;
+	}
+
+	// Create object to store skipped updates
+	obs_data_t* skippedData = obs_data_create();
+
+	// Save outdated plugins with their REQUIRED versions (not installed versions)
+	// This allows us to notify users again if a newer version becomes available
+	obs_data_array_t* outdatedArray = obs_data_array_create();
+	for (const auto& plugin : outdatedPlugins) {
+		obs_data_t* pluginData = obs_data_create();
+		obs_data_set_string(pluginData, "name", plugin.first.c_str());
+		obs_data_set_string(pluginData, "version", plugin.second.c_str()); // Required version
+		obs_data_array_push_back(outdatedArray, pluginData);
+		obs_data_release(pluginData);
+	}
+	obs_data_set_array(skippedData, "outdated", outdatedArray);
+	obs_data_array_release(outdatedArray);
+
+	// Save failed plugins
+	obs_data_array_t* failedArray = obs_data_array_create();
+	for (const auto& moduleName : failedPlugins) {
+		obs_data_t* moduleData = obs_data_create();
+		obs_data_set_string(moduleData, "module", moduleName.c_str());
+		obs_data_array_push_back(failedArray, moduleData);
+		obs_data_release(moduleData);
+	}
+	obs_data_set_array(skippedData, "failed", failedArray);
+	obs_data_array_release(failedArray);
+
+	// Save to settings
+	obs_data_set_obj(settings, "skipped_updates", skippedData);
+	obs_data_release(skippedData);
+
+	SaveSettings(settings);
+	obs_data_release(settings);
+}
+
+void GetSkippedUpdates(std::map<std::string, std::string>& outdatedPlugins, std::vector<std::string>& failedPlugins)
+{
+	outdatedPlugins.clear();
+	failedPlugins.clear();
+
+	obs_data_t* settings = LoadSettings();
+	if (!settings) {
+		return;
+	}
+
+	obs_data_t* skippedData = obs_data_get_obj(settings, "skipped_updates");
+	if (!skippedData) {
+		obs_data_release(settings);
+		return;
+	}
+
+	// Load outdated plugins
+	obs_data_array_t* outdatedArray = obs_data_get_array(skippedData, "outdated");
+	if (outdatedArray) {
+		size_t count = obs_data_array_count(outdatedArray);
+		for (size_t i = 0; i < count; i++) {
+			obs_data_t* pluginData = obs_data_array_item(outdatedArray, i);
+			const char* name = obs_data_get_string(pluginData, "name");
+			const char* version = obs_data_get_string(pluginData, "version");
+			if (name && version) {
+				outdatedPlugins[name] = version;
+			}
+			obs_data_release(pluginData);
+		}
+		obs_data_array_release(outdatedArray);
+	}
+
+	// Load failed plugins
+	obs_data_array_t* failedArray = obs_data_get_array(skippedData, "failed");
+	if (failedArray) {
+		size_t count = obs_data_array_count(failedArray);
+		for (size_t i = 0; i < count; i++) {
+			obs_data_t* moduleData = obs_data_array_item(failedArray, i);
+			const char* module = obs_data_get_string(moduleData, "module");
+			if (module) {
+				failedPlugins.push_back(module);
+			}
+			obs_data_release(moduleData);
+		}
+		obs_data_array_release(failedArray);
+	}
+
+	obs_data_release(skippedData);
+	obs_data_release(settings);
+}
+
+void ClearSkippedUpdates()
+{
+	obs_data_t* settings = LoadSettings();
+	if (!settings) {
+		return;
+	}
+
+	obs_data_erase(settings, "skipped_updates");
+	SaveSettings(settings);
+	obs_data_release(settings);
+}
+
+bool AreUpdatesSkipped(const std::map<std::string, std::string>& currentOutdated, const std::vector<std::string>& currentFailed)
+{
+	std::map<std::string, std::string> skippedOutdated;
+	std::vector<std::string> skippedFailed;
+	GetSkippedUpdates(skippedOutdated, skippedFailed);
+
+	// If no updates were skipped, return false
+	if (skippedOutdated.empty() && skippedFailed.empty()) {
+		return false;
+	}
+
+	// Check if outdated plugins match exactly
+	if (currentOutdated.size() != skippedOutdated.size()) {
+		return false;
+	}
+
+	for (const auto& plugin : currentOutdated) {
+		auto it = skippedOutdated.find(plugin.first);
+		if (it == skippedOutdated.end() || it->second != plugin.second) {
+			return false;
+		}
+	}
+
+	// Check if failed plugins match exactly
+	if (currentFailed.size() != skippedFailed.size()) {
+		return false;
+	}
+
+	// Sort both vectors for comparison
+	std::vector<std::string> sortedCurrent = currentFailed;
+	std::vector<std::string> sortedSkipped = skippedFailed;
+	std::sort(sortedCurrent.begin(), sortedCurrent.end());
+	std::sort(sortedSkipped.begin(), sortedSkipped.end());
+
+	return sortedCurrent == sortedSkipped;
 }
 
 } // namespace SettingsManager

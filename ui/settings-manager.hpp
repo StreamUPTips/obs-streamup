@@ -2,6 +2,9 @@
 #define STREAMUP_SETTINGS_MANAGER_HPP
 
 #include <obs-data.h>
+#include <map>
+#include <string>
+#include <vector>
 
 // Forward declarations
 class QScrollArea;
@@ -201,6 +204,33 @@ void InvalidateSettingsCache();
  * Clean up cached settings on plugin shutdown
  */
 void CleanupSettingsCache();
+
+/**
+ * @brief Save skipped plugin updates to settings
+ * @param outdatedPlugins Map of outdated plugins (name -> required/available version that was skipped)
+ * @param failedPlugins Vector of failed to load plugin module names
+ */
+void SaveSkippedUpdates(const std::map<std::string, std::string>& outdatedPlugins, const std::vector<std::string>& failedPlugins);
+
+/**
+ * @brief Get skipped plugin updates from settings
+ * @param outdatedPlugins Output map of outdated plugins that were skipped (name -> required version)
+ * @param failedPlugins Output vector of failed plugins that were skipped
+ */
+void GetSkippedUpdates(std::map<std::string, std::string>& outdatedPlugins, std::vector<std::string>& failedPlugins);
+
+/**
+ * @brief Clear skipped plugin updates from settings
+ */
+void ClearSkippedUpdates();
+
+/**
+ * @brief Check if current updates match the skipped updates
+ * @param currentOutdated Current outdated plugins map (name -> required version)
+ * @param currentFailed Current failed to load plugins vector
+ * @return bool True if current updates exactly match skipped updates
+ */
+bool AreUpdatesSkipped(const std::map<std::string, std::string>& currentOutdated, const std::vector<std::string>& currentFailed);
 
 } // namespace SettingsManager
 } // namespace StreamUP
