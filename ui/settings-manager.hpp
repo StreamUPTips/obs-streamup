@@ -80,12 +80,13 @@ struct PluginSettings {
     bool sceneOrganiserShowIcons;
     bool sceneOrganiserGroupFolders;
     bool sceneOrganiserRememberFolderState;
+    int sceneOrganiserItemHeight; // Height multiplier percentage (50-200, default 100)
     SceneSwitchMode sceneOrganiserSwitchMode;
     SceneSortMethod sceneOrganiserSortMethod;
     ToolbarPosition toolbarPosition;
     DockToolSettings dockTools;
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top) {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserItemHeight(100), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top) {}
 };
 
 /**
