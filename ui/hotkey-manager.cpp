@@ -26,6 +26,49 @@ static obs_hotkey_id open_source_interact_hotkey_id = OBS_INVALID_HOTKEY_ID;
 static obs_hotkey_id activate_video_capture_devices_hotkey_id = OBS_INVALID_HOTKEY_ID;
 static obs_hotkey_id deactivate_video_capture_devices_hotkey_id = OBS_INVALID_HOTKEY_ID;
 static obs_hotkey_id refresh_video_capture_devices_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id copy_show_transition_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id copy_hide_transition_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id paste_show_transition_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id paste_hide_transition_hotkey_id = OBS_INVALID_HOTKEY_ID;
+
+//-------------------TRANSITION CLIPBOARD STORAGE-------------------
+struct TransitionData {
+	std::string transition_type;
+	obs_data_t *transition_settings = nullptr;
+	uint32_t transition_duration = 0;
+	bool has_data = false;
+
+	~TransitionData() {
+		if (transition_settings) {
+			obs_data_release(transition_settings);
+			transition_settings = nullptr;
+		}
+	}
+
+	void Clear() {
+		transition_type.clear();
+		if (transition_settings) {
+			obs_data_release(transition_settings);
+			transition_settings = nullptr;
+		}
+		transition_duration = 0;
+		has_data = false;
+	}
+
+	void Set(const char* type, obs_data_t* settings, uint32_t duration) {
+		Clear();
+		if (type) transition_type = type;
+		if (settings) {
+			transition_settings = obs_data_create();
+			obs_data_apply(transition_settings, settings);
+		}
+		transition_duration = duration;
+		has_data = true;
+	}
+};
+
+static TransitionData copiedShowTransition;
+static TransitionData copiedHideTransition;
 
 //-------------------HOTKEY HANDLERS-------------------
 void HotkeyRefreshBrowserSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
@@ -199,11 +242,235 @@ void HotkeyRefreshAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_hotke
 	UNUSED_PARAMETER(id);
 	UNUSED_PARAMETER(hotkey);
 	UNUSED_PARAMETER(data);
-	
+
 	if (!pressed)
 		return;
-		
+
 	StreamUP::SourceManager::RefreshAllVideoCaptureDevices();
+}
+
+void HotkeyCopyShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+
+	if (!pressed)
+		return;
+
+	// Get the currently selected source
+	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
+	if (!selected_source_name) {
+		StreamUP::NotificationManager::SendWarningNotification("Copy Show Transition", "No source selected");
+		return;
+	}
+
+	// Get current scene
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) {
+		StreamUP::NotificationManager::SendWarningNotification("Copy Show Transition", "No current scene");
+		return;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(current_scene);
+	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, selected_source_name);
+	if (!scene_item) {
+		obs_source_release(current_scene);
+		StreamUP::NotificationManager::SendWarningNotification("Copy Show Transition", "Source not found in scene");
+		return;
+	}
+
+	// Get the show transition
+	obs_source_t *transition = obs_sceneitem_get_transition(scene_item, true);
+	if (!transition) {
+		obs_source_release(current_scene);
+		StreamUP::NotificationManager::SendWarningNotification("Copy Show Transition", "No show transition set");
+		return;
+	}
+
+	// Get transition settings and duration
+	obs_data_t *settings = obs_source_get_settings(transition);
+	uint32_t duration = obs_sceneitem_get_transition_duration(scene_item, true);
+	const char *transition_id = obs_source_get_id(transition);
+
+	// Store in clipboard
+	copiedShowTransition.Set(transition_id, settings, duration);
+
+	obs_data_release(settings);
+	obs_source_release(current_scene);
+
+	StreamUP::NotificationManager::SendInfoNotification("Copy Show Transition", "Show transition copied");
+}
+
+void HotkeyCopyHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+
+	if (!pressed)
+		return;
+
+	// Get the currently selected source
+	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
+	if (!selected_source_name) {
+		StreamUP::NotificationManager::SendWarningNotification("Copy Hide Transition", "No source selected");
+		return;
+	}
+
+	// Get current scene
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) {
+		StreamUP::NotificationManager::SendWarningNotification("Copy Hide Transition", "No current scene");
+		return;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(current_scene);
+	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, selected_source_name);
+	if (!scene_item) {
+		obs_source_release(current_scene);
+		StreamUP::NotificationManager::SendWarningNotification("Copy Hide Transition", "Source not found in scene");
+		return;
+	}
+
+	// Get the hide transition
+	obs_source_t *transition = obs_sceneitem_get_transition(scene_item, false);
+	if (!transition) {
+		obs_source_release(current_scene);
+		StreamUP::NotificationManager::SendWarningNotification("Copy Hide Transition", "No hide transition set");
+		return;
+	}
+
+	// Get transition settings and duration
+	obs_data_t *settings = obs_source_get_settings(transition);
+	uint32_t duration = obs_sceneitem_get_transition_duration(scene_item, false);
+	const char *transition_id = obs_source_get_id(transition);
+
+	// Store in clipboard
+	copiedHideTransition.Set(transition_id, settings, duration);
+
+	obs_data_release(settings);
+	obs_source_release(current_scene);
+
+	StreamUP::NotificationManager::SendInfoNotification("Copy Hide Transition", "Hide transition copied");
+}
+
+void HotkeyPasteShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+
+	if (!pressed)
+		return;
+
+	if (!copiedShowTransition.has_data) {
+		StreamUP::NotificationManager::SendWarningNotification("Paste Show Transition", "No show transition copied");
+		return;
+	}
+
+	// Get the currently selected source
+	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
+	if (!selected_source_name) {
+		StreamUP::NotificationManager::SendWarningNotification("Paste Show Transition", "No source selected");
+		return;
+	}
+
+	// Get current scene
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) {
+		StreamUP::NotificationManager::SendWarningNotification("Paste Show Transition", "No current scene");
+		return;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(current_scene);
+	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, selected_source_name);
+	if (!scene_item) {
+		obs_source_release(current_scene);
+		StreamUP::NotificationManager::SendWarningNotification("Paste Show Transition", "Source not found in scene");
+		return;
+	}
+
+	// Create the transition
+	obs_source_t *transition = obs_source_create_private(copiedShowTransition.transition_type.c_str(), "Scene Transition", NULL);
+	if (!transition) {
+		obs_source_release(current_scene);
+		StreamUP::NotificationManager::SendWarningNotification("Paste Show Transition", "Failed to create transition");
+		return;
+	}
+
+	// Apply settings
+	if (copiedShowTransition.transition_settings) {
+		obs_source_update(transition, copiedShowTransition.transition_settings);
+	}
+
+	// Set the transition and duration
+	obs_sceneitem_set_transition(scene_item, true, transition);
+	obs_sceneitem_set_transition_duration(scene_item, true, copiedShowTransition.transition_duration);
+
+	obs_source_release(transition);
+	obs_source_release(current_scene);
+
+	StreamUP::NotificationManager::SendInfoNotification("Paste Show Transition", "Show transition pasted");
+}
+
+void HotkeyPasteHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+
+	if (!pressed)
+		return;
+
+	if (!copiedHideTransition.has_data) {
+		StreamUP::NotificationManager::SendWarningNotification("Paste Hide Transition", "No hide transition copied");
+		return;
+	}
+
+	// Get the currently selected source
+	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
+	if (!selected_source_name) {
+		StreamUP::NotificationManager::SendWarningNotification("Paste Hide Transition", "No source selected");
+		return;
+	}
+
+	// Get current scene
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) {
+		StreamUP::NotificationManager::SendWarningNotification("Paste Hide Transition", "No current scene");
+		return;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(current_scene);
+	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, selected_source_name);
+	if (!scene_item) {
+		obs_source_release(current_scene);
+		StreamUP::NotificationManager::SendWarningNotification("Paste Hide Transition", "Source not found in scene");
+		return;
+	}
+
+	// Create the transition
+	obs_source_t *transition = obs_source_create_private(copiedHideTransition.transition_type.c_str(), "Scene Transition", NULL);
+	if (!transition) {
+		obs_source_release(current_scene);
+		StreamUP::NotificationManager::SendWarningNotification("Paste Hide Transition", "Failed to create transition");
+		return;
+	}
+
+	// Apply settings
+	if (copiedHideTransition.transition_settings) {
+		obs_source_update(transition, copiedHideTransition.transition_settings);
+	}
+
+	// Set the transition and duration
+	obs_sceneitem_set_transition(scene_item, false, transition);
+	obs_sceneitem_set_transition_duration(scene_item, false, copiedHideTransition.transition_duration);
+
+	obs_source_release(transition);
+	obs_source_release(current_scene);
+
+	StreamUP::NotificationManager::SendInfoNotification("Paste Hide Transition", "Hide transition pasted");
 }
 
 //-------------------HOTKEY MANAGEMENT-------------------
@@ -224,6 +491,10 @@ void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "activate_video_capture_devices_hotkey", activate_video_capture_devices_hotkey_id);
 		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "deactivate_video_capture_devices_hotkey", deactivate_video_capture_devices_hotkey_id);
 		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "refresh_video_capture_devices_hotkey", refresh_video_capture_devices_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "copy_show_transition_hotkey", copy_show_transition_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "copy_hide_transition_hotkey", copy_hide_transition_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "paste_show_transition_hotkey", paste_show_transition_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "paste_hide_transition_hotkey", paste_hide_transition_hotkey_id);
 	} else {
 		// load hotkeys
 		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "refresh_browser_sources_hotkey", refresh_browser_sources_hotkey_id);
@@ -237,6 +508,10 @@ void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "activate_video_capture_devices_hotkey", activate_video_capture_devices_hotkey_id);
 		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "deactivate_video_capture_devices_hotkey", deactivate_video_capture_devices_hotkey_id);
 		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "refresh_video_capture_devices_hotkey", refresh_video_capture_devices_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "copy_show_transition_hotkey", copy_show_transition_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "copy_hide_transition_hotkey", copy_hide_transition_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "paste_show_transition_hotkey", paste_show_transition_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "paste_hide_transition_hotkey", paste_hide_transition_hotkey_id);
 	}
 }
 
@@ -265,6 +540,14 @@ void RegisterHotkeys()
 												  HotkeyDeactivateAllVideoCaptureDevices, nullptr);
 	refresh_video_capture_devices_hotkey_id = obs_hotkey_register_frontend("streamup_refresh_video_capture_devices", "StreamUP: Refresh All Video Capture Devices",
 											       HotkeyRefreshAllVideoCaptureDevices, nullptr);
+	copy_show_transition_hotkey_id = obs_hotkey_register_frontend("streamup_copy_show_transition", "StreamUP: Copy Show Transition",
+										       HotkeyCopyShowTransition, nullptr);
+	copy_hide_transition_hotkey_id = obs_hotkey_register_frontend("streamup_copy_hide_transition", "StreamUP: Copy Hide Transition",
+										       HotkeyCopyHideTransition, nullptr);
+	paste_show_transition_hotkey_id = obs_hotkey_register_frontend("streamup_paste_show_transition", "StreamUP: Paste Show Transition",
+											HotkeyPasteShowTransition, nullptr);
+	paste_hide_transition_hotkey_id = obs_hotkey_register_frontend("streamup_paste_hide_transition", "StreamUP: Paste Hide Transition",
+											HotkeyPasteHideTransition, nullptr);
 }
 
 void UnregisterHotkeys()
@@ -280,13 +563,17 @@ void UnregisterHotkeys()
 	obs_hotkey_unregister(activate_video_capture_devices_hotkey_id);
 	obs_hotkey_unregister(deactivate_video_capture_devices_hotkey_id);
 	obs_hotkey_unregister(refresh_video_capture_devices_hotkey_id);
+	obs_hotkey_unregister(copy_show_transition_hotkey_id);
+	obs_hotkey_unregister(copy_hide_transition_hotkey_id);
+	obs_hotkey_unregister(paste_show_transition_hotkey_id);
+	obs_hotkey_unregister(paste_hide_transition_hotkey_id);
 }
 
 void ResetAllHotkeys()
 {
 	// Create empty data arrays to clear hotkey assignments
 	obs_data_array_t *emptyArray = obs_data_array_create();
-	
+
 	// Reset all StreamUP hotkeys to empty assignments
 	obs_hotkey_load(refresh_browser_sources_hotkey_id, emptyArray);
 	obs_hotkey_load(refresh_audio_monitoring_hotkey_id, emptyArray);
@@ -299,9 +586,13 @@ void ResetAllHotkeys()
 	obs_hotkey_load(activate_video_capture_devices_hotkey_id, emptyArray);
 	obs_hotkey_load(deactivate_video_capture_devices_hotkey_id, emptyArray);
 	obs_hotkey_load(refresh_video_capture_devices_hotkey_id, emptyArray);
-	
+	obs_hotkey_load(copy_show_transition_hotkey_id, emptyArray);
+	obs_hotkey_load(copy_hide_transition_hotkey_id, emptyArray);
+	obs_hotkey_load(paste_show_transition_hotkey_id, emptyArray);
+	obs_hotkey_load(paste_hide_transition_hotkey_id, emptyArray);
+
 	obs_data_array_release(emptyArray);
-	
+
 	StreamUP::DebugLogger::LogDebug("Hotkeys", "Reset", "All hotkeys have been reset to no key assignments");
 }
 
@@ -329,7 +620,15 @@ obs_hotkey_id GetHotkeyId(const char* hotkeyName)
 		return deactivate_video_capture_devices_hotkey_id;
 	else if (strcmp(hotkeyName, "streamup_refresh_video_capture_devices") == 0)
 		return refresh_video_capture_devices_hotkey_id;
-	
+	else if (strcmp(hotkeyName, "streamup_copy_show_transition") == 0)
+		return copy_show_transition_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_copy_hide_transition") == 0)
+		return copy_hide_transition_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_paste_show_transition") == 0)
+		return paste_show_transition_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_paste_hide_transition") == 0)
+		return paste_hide_transition_hotkey_id;
+
 	return OBS_INVALID_HOTKEY_ID;
 }
 
