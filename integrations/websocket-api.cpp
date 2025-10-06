@@ -804,5 +804,46 @@ void WebsocketRefreshAllVideoCaptureDevices(obs_data_t *request_data, obs_data_t
 	}
 }
 
+//-------------------TRANSITION COPY/PASTE-------------------
+void WebsocketCopyShowTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	// Trigger the hotkey handler to copy the show transition
+	StreamUP::HotkeyManager::HotkeyCopyShowTransition(nullptr, OBS_INVALID_HOTKEY_ID, nullptr, true);
+	obs_data_set_bool(response_data, "success", true);
+}
+
+void WebsocketCopyHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	// Trigger the hotkey handler to copy the hide transition
+	StreamUP::HotkeyManager::HotkeyCopyHideTransition(nullptr, OBS_INVALID_HOTKEY_ID, nullptr, true);
+	obs_data_set_bool(response_data, "success", true);
+}
+
+void WebsocketPasteShowTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	// Trigger the hotkey handler to paste the show transition
+	StreamUP::HotkeyManager::HotkeyPasteShowTransition(nullptr, OBS_INVALID_HOTKEY_ID, nullptr, true);
+	obs_data_set_bool(response_data, "success", true);
+}
+
+void WebsocketPasteHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	// Trigger the hotkey handler to paste the hide transition
+	StreamUP::HotkeyManager::HotkeyPasteHideTransition(nullptr, OBS_INVALID_HOTKEY_ID, nullptr, true);
+	obs_data_set_bool(response_data, "success", true);
+}
+
 } // namespace WebSocketAPI
 } // namespace StreamUP

@@ -410,7 +410,13 @@ static void RegisterWebsocketRequests()
 	obs_websocket_vendor_register_request(vendor, "ActivateAllVideoCaptureDevices", StreamUP::WebSocketAPI::WebsocketActivateAllVideoCaptureDevices, nullptr);
 	obs_websocket_vendor_register_request(vendor, "DeactivateAllVideoCaptureDevices", StreamUP::WebSocketAPI::WebsocketDeactivateAllVideoCaptureDevices, nullptr);
 	obs_websocket_vendor_register_request(vendor, "RefreshAllVideoCaptureDevices", StreamUP::WebSocketAPI::WebsocketRefreshAllVideoCaptureDevices, nullptr);
-	
+
+	// Transition copy/paste
+	obs_websocket_vendor_register_request(vendor, "CopyShowTransition", StreamUP::WebSocketAPI::WebsocketCopyShowTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "CopyHideTransition", StreamUP::WebSocketAPI::WebsocketCopyHideTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "PasteShowTransition", StreamUP::WebSocketAPI::WebsocketPasteShowTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "PasteHideTransition", StreamUP::WebSocketAPI::WebsocketPasteHideTransition, nullptr);
+
 	// Backward compatibility - register old command names (deprecated)
 	obs_websocket_vendor_register_request(vendor, "getOutputFilePath", StreamUP::WebSocketAPI::WebsocketRequestGetOutputFilePath, nullptr);
 	obs_websocket_vendor_register_request(vendor, "getCurrentSource", StreamUP::WebSocketAPI::WebsocketRequestGetCurrentSelectedSource, nullptr);
