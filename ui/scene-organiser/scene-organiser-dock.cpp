@@ -1779,6 +1779,14 @@ void SceneOrganiserDock::onSettingsChanged()
     // Handle settings changes if needed
     LoadConfiguration();
     applySortingIfEnabled();
+
+    // Force update of the tree view to reflect height changes
+    if (m_treeView) {
+        // Schedule an item view layout update to recalculate sizes
+        m_treeView->scheduleDelayedItemsLayout();
+        // Also force a viewport update
+        m_treeView->viewport()->update();
+    }
 }
 
 void SceneOrganiserDock::onIconsChanged()
@@ -4554,6 +4562,29 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
     painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
 
     painter->restore();
+}
+
+QSize StreamUP::SceneOrganiser::CustomColorDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    // Get the default size hint from the parent class
+    QSize size = QStyledItemDelegate::sizeHint(option, index);
+
+    // Get the current item height setting (percentage multiplier)
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+    int heightPercentage = settings.sceneOrganiserItemHeight;
+
+    // Apply the multiplier to the height based on font metrics
+    // Use the font from the option to calculate the proper base height
+    QFontMetrics fm(option.font);
+    int baseHeight = fm.height() + 8; // Add some padding (4px top + 4px bottom)
+
+    // Apply the percentage multiplier
+    int adjustedHeight = (baseHeight * heightPercentage) / 100;
+
+    // Set the new height while keeping the width the same
+    size.setHeight(adjustedHeight);
+
+    return size;
 }
 
 void StreamUP::SceneOrganiser::SceneOrganiserDock::forceTreeViewRepaint()

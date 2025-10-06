@@ -36,6 +36,7 @@
 #include <QButtonGroup>
 #include <QAbstractButton>
 #include <QComboBox>
+#include <QSlider>
 #include <QListWidget>
 #include <QStackedWidget>
 #include <QDesktopServices>
@@ -191,6 +192,7 @@ obs_data_t *LoadSettings()
 		obs_data_set_bool(data, "show_cph_integration", true);
 		obs_data_set_bool(data, "show_toolbar", true);
 		obs_data_set_bool(data, "debug_logging_enabled", false);
+		obs_data_set_int(data, "scene_organiser_item_height", 100);
 		obs_data_set_string(data, "toolbar_position", "top");
 
 		// Set default dock tool settings
@@ -259,6 +261,7 @@ PluginSettings GetCurrentSettings()
 		settings.sceneOrganiserShowIcons = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_icons", true);
 	settings.sceneOrganiserGroupFolders = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_group_folders", true);
 	settings.sceneOrganiserRememberFolderState = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_remember_folder_state", true);
+	settings.sceneOrganiserItemHeight = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "scene_organiser_item_height", 100);
 
 		// Load scene sort method setting (default to none if not set)
 		const char *sortMethodStr = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "scene_organiser_sort_method", "none");
@@ -336,6 +339,7 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "scene_organiser_show_icons", settings.sceneOrganiserShowIcons);
 	obs_data_set_bool(data, "scene_organiser_group_folders", settings.sceneOrganiserGroupFolders);
 	obs_data_set_bool(data, "scene_organiser_remember_folder_state", settings.sceneOrganiserRememberFolderState);
+	obs_data_set_int(data, "scene_organiser_item_height", settings.sceneOrganiserItemHeight);
 
 	// Save scene sort method setting
 	const char *sortMethodStr;
@@ -962,6 +966,46 @@ void ShowSettingsDialog(int tabIndex)
 		rememberFolderStateLayout->addStretch();
 		rememberFolderStateLayout->addWidget(rememberFolderStateSwitch);
 		sceneOrganiserLayout->addLayout(rememberFolderStateLayout);
+
+		// Item Height setting
+		QHBoxLayout *itemHeightLayout = new QHBoxLayout();
+		itemHeightLayout->setContentsMargins(0, 0, 0, 0);
+		itemHeightLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+
+		QLabel *itemHeightLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.ItemHeight"));
+		itemHeightLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		itemHeightLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.ItemHeightDesc"));
+
+		QSlider *itemHeightSlider = new QSlider(Qt::Horizontal);
+		itemHeightSlider->setMinimum(50);
+		itemHeightSlider->setMaximum(200);
+		itemHeightSlider->setValue(currentSettings.sceneOrganiserItemHeight);
+		itemHeightSlider->setTickPosition(QSlider::TicksBelow);
+		itemHeightSlider->setTickInterval(25);
+		itemHeightSlider->setToolTip(obs_module_text("SceneOrganiser.Settings.ItemHeightDesc"));
+		itemHeightSlider->setMaximumWidth(200);
+
+		QLabel *itemHeightValueLabel = new QLabel(QString::number(currentSettings.sceneOrganiserItemHeight) + "%");
+		itemHeightValueLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent; min-width: 40px;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		itemHeightValueLabel->setAlignment(Qt::AlignCenter);
+
+		QObject::connect(itemHeightSlider, &QSlider::valueChanged, [itemHeightValueLabel](int value) {
+			PluginSettings settings = GetCurrentSettings();
+			settings.sceneOrganiserItemHeight = value;
+			UpdateSettings(settings);
+			itemHeightValueLabel->setText(QString::number(value) + "%");
+			StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+		});
+
+		itemHeightLayout->addWidget(itemHeightLabel);
+		itemHeightLayout->addWidget(itemHeightSlider);
+		itemHeightLayout->addWidget(itemHeightValueLabel);
+		itemHeightLayout->addStretch();
+		sceneOrganiserLayout->addLayout(itemHeightLayout);
 
 		// Scene switching mode setting
 		QHBoxLayout *switchModeLayout = new QHBoxLayout();
