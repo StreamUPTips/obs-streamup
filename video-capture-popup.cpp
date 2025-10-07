@@ -169,6 +169,7 @@ void VideoCapturePopup::applyFileIconToButton(QPushButton *button, const QString
 
 bool VideoCapturePopup::eventFilter(QObject *obj, QEvent *event)
 {
+	Q_UNUSED(obj);
 	if (event->type() == QEvent::MouseButtonPress) {
 		QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
 		if (mouseEvent->button() == Qt::LeftButton) {
