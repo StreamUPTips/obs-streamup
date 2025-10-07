@@ -81,6 +81,16 @@
 		<file>images/misc/obs-theme-2.png</file>
 		<file>images/misc/obs-theme-3.png</file>
 		<file>images/misc/obs-theme-4.png</file>
+
+		<!-- Source Explorer Preview Images -->
+		<file>images/misc/source-explorer-1.png</file>
+		<file>images/misc/source-explorer-2.png</file>
+		<file>images/misc/source-explorer-3.png</file>
+		<file>images/misc/source-explorer-4.png</file>
+		<file>images/misc/source-explorer-5.png</file>
+		<file>images/misc/source-explorer-6.png</file>
+		<file>images/misc/source-explorer-7.png</file>
+		<file>images/misc/source-explorer-8.png</file>
 		
 		<!-- Documentation -->
 		<file>patch-notes-summary.md</file>
