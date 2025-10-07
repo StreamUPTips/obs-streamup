@@ -1,3 +1,19 @@
+# StreamUP v2.1.3 - Patch Update
+
+## New Features
+- **Adjustable Scene Organiser Height** - Customise the height of your Scene Organiser dock to fit your workspace
+- **Transition Copy/Paste** - Copy and paste show/hide transitions between sources to speed up your scene setup. This can be set as a HotKey or WebSocket command
+- **"Don't Remind" Option** - Added checkbox to stop plugin update notifications if you prefer not to be reminded
+- **Early Access Showcase** - Add a banner to show the new features in Early Access and all the perks for supporters
+
+## Improvements & Bug Fixes
+- **Memory Leak Fixes** - Resolved memory leaks
+- **Video Capture Controls** - Fixed issues with video capture device control buttons not working properly in multi-device setups
+- **Hotkeys & WebSocket** - Various improvements and additions to the hotkey and WebSocket systems
+- **Supporter Names** - Fixed display of supporter names in the credits
+
+---
+
 # StreamUP v2.1.2 - Patch Update
 
 ## New Features
