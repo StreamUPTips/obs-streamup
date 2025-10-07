@@ -34,23 +34,13 @@ static obs_hotkey_id paste_hide_transition_hotkey_id = OBS_INVALID_HOTKEY_ID;
 //-------------------TRANSITION CLIPBOARD STORAGE-------------------
 struct TransitionData {
 	std::string transition_type;
-	obs_data_t *transition_settings = nullptr;
+	std::string transition_settings_json;
 	uint32_t transition_duration = 0;
 	bool has_data = false;
 
-	~TransitionData() {
-		if (transition_settings) {
-			obs_data_release(transition_settings);
-			transition_settings = nullptr;
-		}
-	}
-
 	void Clear() {
 		transition_type.clear();
-		if (transition_settings) {
-			obs_data_release(transition_settings);
-			transition_settings = nullptr;
-		}
+		transition_settings_json.clear();
 		transition_duration = 0;
 		has_data = false;
 	}
@@ -59,11 +49,20 @@ struct TransitionData {
 		Clear();
 		if (type) transition_type = type;
 		if (settings) {
-			transition_settings = obs_data_create();
-			obs_data_apply(transition_settings, settings);
+			const char* json = obs_data_get_json(settings);
+			if (json) {
+				transition_settings_json = json;
+			}
 		}
 		transition_duration = duration;
 		has_data = true;
+	}
+
+	obs_data_t* GetSettings() const {
+		if (transition_settings_json.empty()) {
+			return nullptr;
+		}
+		return obs_data_create_from_json(transition_settings_json.c_str());
 	}
 };
 
@@ -280,7 +279,7 @@ void HotkeyCopyShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 		return;
 	}
 
-	// Get the show transition
+	// Get the show transition (borrowed reference, do not release)
 	obs_source_t *transition = obs_sceneitem_get_transition(scene_item, true);
 	if (!transition) {
 		obs_source_release(current_scene);
@@ -333,7 +332,7 @@ void HotkeyCopyHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 		return;
 	}
 
-	// Get the hide transition
+	// Get the hide transition (borrowed reference, do not release)
 	obs_source_t *transition = obs_sceneitem_get_transition(scene_item, false);
 	if (!transition) {
 		obs_source_release(current_scene);
@@ -400,8 +399,10 @@ void HotkeyPasteShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 	}
 
 	// Apply settings
-	if (copiedShowTransition.transition_settings) {
-		obs_source_update(transition, copiedShowTransition.transition_settings);
+	obs_data_t *settings = copiedShowTransition.GetSettings();
+	if (settings) {
+		obs_source_update(transition, settings);
+		obs_data_release(settings);
 	}
 
 	// Set the transition and duration
@@ -459,8 +460,10 @@ void HotkeyPasteHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 	}
 
 	// Apply settings
-	if (copiedHideTransition.transition_settings) {
-		obs_source_update(transition, copiedHideTransition.transition_settings);
+	obs_data_t *settings = copiedHideTransition.GetSettings();
+	if (settings) {
+		obs_source_update(transition, settings);
+		obs_data_release(settings);
 	}
 
 	// Set the transition and duration

@@ -220,7 +220,7 @@ void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 		return;
 	}
 
-	// Get the transition for the scene item
+	// Get the transition for the scene item (borrowed reference, do not release)
 	obs_source_t *transition = obs_sceneitem_get_transition(scene_item, transition_type);
 	if (!transition) {
 		obs_data_set_string(response_data, "error", "No transition set for this item.");
