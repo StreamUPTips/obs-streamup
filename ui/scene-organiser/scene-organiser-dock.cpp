@@ -1782,9 +1782,7 @@ void SceneOrganiserDock::onSettingsChanged()
 
     // Force update of the tree view to reflect height changes
     if (m_treeView) {
-        // Schedule an item view layout update to recalculate sizes
-        m_treeView->scheduleDelayedItemsLayout();
-        // Also force a viewport update
+        // Force a viewport update to reflect height changes
         m_treeView->viewport()->update();
     }
 }
@@ -4572,6 +4570,11 @@ QSize StreamUP::SceneOrganiser::CustomColorDelegate::sizeHint(const QStyleOption
     // Get the current item height setting (percentage multiplier)
     StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
     int heightPercentage = settings.sceneOrganiserItemHeight;
+
+    // Ensure heightPercentage is valid (minimum 50%)
+    if (heightPercentage < 50) {
+        heightPercentage = 100;
+    }
 
     // Apply the multiplier to the height based on font metrics
     // Use the font from the option to calculate the proper base height

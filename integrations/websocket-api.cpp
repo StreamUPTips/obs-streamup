@@ -5,6 +5,7 @@
 #include "plugin-manager.hpp"
 #include "source-manager.hpp"
 #include "file-manager.hpp"
+#include "../ui/hotkey-manager.hpp"
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <util/platform.h>
