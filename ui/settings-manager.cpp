@@ -192,7 +192,12 @@ obs_data_t *LoadSettings()
 		obs_data_set_bool(data, "show_cph_integration", true);
 		obs_data_set_bool(data, "show_toolbar", true);
 		obs_data_set_bool(data, "debug_logging_enabled", false);
+		obs_data_set_bool(data, "scene_organiser_show_icons", true);
+		obs_data_set_bool(data, "scene_organiser_group_folders", true);
+		obs_data_set_bool(data, "scene_organiser_remember_folder_state", true);
 		obs_data_set_int(data, "scene_organiser_item_height", 100);
+		obs_data_set_string(data, "scene_organiser_switch_mode", "single_click");
+		obs_data_set_string(data, "scene_organiser_sort_method", "none");
 		obs_data_set_string(data, "toolbar_position", "top");
 
 		// Set default dock tool settings
@@ -262,6 +267,10 @@ PluginSettings GetCurrentSettings()
 	settings.sceneOrganiserGroupFolders = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_group_folders", true);
 	settings.sceneOrganiserRememberFolderState = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_remember_folder_state", true);
 	settings.sceneOrganiserItemHeight = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "scene_organiser_item_height", 100);
+	// Ensure the height is at least 50% (the minimum allowed value)
+	if (settings.sceneOrganiserItemHeight < 50) {
+		settings.sceneOrganiserItemHeight = 100;
+	}
 
 		// Load scene sort method setting (default to none if not set)
 		const char *sortMethodStr = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "scene_organiser_sort_method", "none");
@@ -1432,11 +1441,23 @@ void ShowSettingsDialog(int tabIndex)
 		QGroupBox *videoCaptureGroup = StreamUP::UIStyles::CreateStyledGroupBox("Video Capture Devices", "info");
 		QVBoxLayout *videoCaptureLayout = new QVBoxLayout(videoCaptureGroup);
 		videoCaptureLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-		
+
 		std::vector<HotkeyInfo> videoCaptureHotkeys = {
 			{obs_module_text("Hotkey.ActivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.ActivateVideoCaptureDevices.Description"), "streamup_activate_video_capture_devices"},
 			{obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Description"), "streamup_deactivate_video_capture_devices"},
 			{obs_module_text("Hotkey.RefreshVideoCaptureDevices.Name"), obs_module_text("Hotkey.RefreshVideoCaptureDevices.Description"), "streamup_refresh_video_capture_devices"}
+		};
+
+		// Transition Management Section
+		QGroupBox *transitionGroup = StreamUP::UIStyles::CreateStyledGroupBox("Transition Management", "info");
+		QVBoxLayout *transitionLayout = new QVBoxLayout(transitionGroup);
+		transitionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+		std::vector<HotkeyInfo> transitionHotkeys = {
+			{obs_module_text("Hotkey.CopyShowTransition.Name"), obs_module_text("Hotkey.CopyShowTransition.Description"), "streamup_copy_show_transition"},
+			{obs_module_text("Hotkey.CopyHideTransition.Name"), obs_module_text("Hotkey.CopyHideTransition.Description"), "streamup_copy_hide_transition"},
+			{obs_module_text("Hotkey.PasteShowTransition.Name"), obs_module_text("Hotkey.PasteShowTransition.Description"), "streamup_paste_show_transition"},
+			{obs_module_text("Hotkey.PasteHideTransition.Name"), obs_module_text("Hotkey.PasteHideTransition.Description"), "streamup_paste_hide_transition"}
 		};
 		
 		// Helper function to build hotkey rows for each section
@@ -1526,12 +1547,14 @@ void ShowSettingsDialog(int tabIndex)
 		buildHotkeySection(refreshHotkeys, refreshLayout);
 		buildHotkeySection(interactionHotkeys, interactionLayout);
 		buildHotkeySection(videoCaptureHotkeys, videoCaptureLayout);
-		
+		buildHotkeySection(transitionHotkeys, transitionLayout);
+
 		// Add all sections to main layout
 		hotkeysContentLayout->addWidget(lockingGroup);
 		hotkeysContentLayout->addWidget(refreshGroup);
 		hotkeysContentLayout->addWidget(interactionGroup);
 		hotkeysContentLayout->addWidget(videoCaptureGroup);
+		hotkeysContentLayout->addWidget(transitionGroup);
 		
 		hotkeysMainLayout->addWidget(hotkeysContentWidget);
 		hotkeysMainLayout->addStretch();
@@ -2152,7 +2175,15 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 		{obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Description"),
 		 "streamup_deactivate_video_capture_devices"},
 		{obs_module_text("Hotkey.RefreshVideoCaptureDevices.Name"), obs_module_text("Hotkey.RefreshVideoCaptureDevices.Description"),
-		 "streamup_refresh_video_capture_devices"}};
+		 "streamup_refresh_video_capture_devices"},
+		{obs_module_text("Hotkey.CopyShowTransition.Name"), obs_module_text("Hotkey.CopyShowTransition.Description"),
+		 "streamup_copy_show_transition"},
+		{obs_module_text("Hotkey.CopyHideTransition.Name"), obs_module_text("Hotkey.CopyHideTransition.Description"),
+		 "streamup_copy_hide_transition"},
+		{obs_module_text("Hotkey.PasteShowTransition.Name"), obs_module_text("Hotkey.PasteShowTransition.Description"),
+		 "streamup_paste_show_transition"},
+		{obs_module_text("Hotkey.PasteHideTransition.Name"), obs_module_text("Hotkey.PasteHideTransition.Description"),
+		 "streamup_paste_hide_transition"}};
 
 	// Create direct layout for hotkeys (no scrolling, fit to content)
 	QVBoxLayout *hotkeyContentLayout = new QVBoxLayout();
