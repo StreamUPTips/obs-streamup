@@ -2281,11 +2281,19 @@ void SceneOrganiserDock::LoadConfiguration()
         historyFile.close();
     }
 
+    // Static set to track which collections are currently being prompted (to prevent race condition)
+    // This prevents multiple dock instances from showing the import prompt simultaneously
+    static QSet<QString> currentlyPrompting;
+
     // Check for migration availability if we haven't prompted yet for this collection
-    if (m_model && !promptedCollections.contains(sceneCollectionName)) {
+    // Also check if we're not already prompting for this collection (prevents duplicate prompts)
+    if (m_model && !promptedCollections.contains(sceneCollectionName) && !currentlyPrompting.contains(sceneCollectionName)) {
         QString migrationConfigPath;
         if (SceneTreeModel::checkMigrationAvailable(sceneCollectionName, migrationConfigPath)) {
-            // Mark this collection as prompted by saving to file
+            // Mark this collection as currently being prompted (prevents other dock instances from showing the prompt)
+            currentlyPrompting.insert(sceneCollectionName);
+
+            // Mark this collection as prompted by saving to file immediately
             promptedCollections.insert(sceneCollectionName);
             if (historyFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
                 QTextStream out(&historyFile);
@@ -2328,6 +2336,9 @@ void SceneOrganiserDock::LoadConfiguration()
                             "Failed to import settings. Please check the log for details.");
                     }
                 }
+
+                // Remove from currently prompting set after dialog is dismissed
+                currentlyPrompting.remove(sceneCollectionName);
             });
         }
     }
