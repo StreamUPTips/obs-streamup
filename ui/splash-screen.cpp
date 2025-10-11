@@ -25,6 +25,15 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QTimer>
+#include <QFrame>
+#include <QPropertyAnimation>
+#include <QEasingCurve>
+#include <QResizeEvent>
+#include <QStackedWidget>
+#include <QEnterEvent>
+#include <QDialog>
+#include <QKeyEvent>
+#include <QScreen>
 #include <util/platform.h>
 #include <sstream>
 #include <algorithm>
@@ -33,6 +42,336 @@ namespace StreamUP {
 namespace SplashScreen {
 
 // Splash dialog is now managed by DialogManager in ui-helpers
+
+// Base carousel widget for images
+class ImageCarousel : public QWidget
+{
+    Q_OBJECT
+
+public:
+    explicit ImageCarousel(QWidget* parent = nullptr) : QWidget(parent), currentIndex(0)
+    {
+        setFixedHeight(300);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        setupUI();
+    }
+
+public slots:
+    void nextImage()
+    {
+        if (images.isEmpty()) return;
+
+        currentIndex = (currentIndex + 1) % images.size();
+        updateImage();
+        updateDots();
+    }
+
+    void previousImage()
+    {
+        if (images.isEmpty()) return;
+
+        currentIndex = (currentIndex - 1 + images.size()) % images.size();
+        updateImage();
+        updateDots();
+    }
+
+private slots:
+    void goToImage(int index)
+    {
+        if (index >= 0 && index < images.size()) {
+            currentIndex = index;
+            updateImage();
+            updateDots();
+        }
+    }
+
+protected:
+    // Pure virtual function - subclasses must implement
+    virtual void loadImages() = 0;
+
+    void setupUI()
+    {
+        QVBoxLayout* layout = new QVBoxLayout(this);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+        // Image container
+        imageContainer = new QFrame();
+        imageContainer->setFixedHeight(250);
+        imageContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        imageContainer->setStyleSheet("QFrame { background: transparent; border: none; }");
+
+        QHBoxLayout* containerLayout = new QHBoxLayout(imageContainer);
+        containerLayout->setContentsMargins(0, 0, 0, 0);
+        containerLayout->setSpacing(0);
+
+        // Image label centered
+        imageLabel = new QLabel();
+        imageLabel->setAlignment(Qt::AlignCenter);
+        imageLabel->setScaledContents(false);
+        imageLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        imageLabel->setCursor(Qt::PointingHandCursor);
+
+        // Connect click event for zooming
+        imageLabel->installEventFilter(this);
+
+        containerLayout->addWidget(imageLabel, 1, Qt::AlignCenter);
+
+        // Dots indicator - centered
+        dotsContainer = new QHBoxLayout();
+        dotsContainer->setContentsMargins(0, 0, 0, 0);
+        dotsContainer->setSpacing(8);
+        dotsContainer->addStretch();
+
+        layout->addWidget(imageContainer);
+        layout->addLayout(dotsContainer);
+        layout->addStretch();
+    }
+
+    void createDotsForImages()
+    {
+        // Create dots for each image
+        for (int i = 0; i < images.size(); ++i) {
+            QPushButton* dot = new QPushButton();
+            dot->setText("");
+            dot->setFixedSize(10, 10);
+            dot->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+            dot->setFlat(true);
+            dot->setStyleSheet(QString(
+                "QPushButton {"
+                "    background-color: %1;"
+                "    border: none;"
+                "    border-radius: 5px;"
+                "}"
+                "QPushButton:hover {"
+                "    background-color: %2;"
+                "}"
+            ).arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
+             .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY));
+
+            connect(dot, &QPushButton::clicked, this, [this, i]() {
+                goToImage(i);
+            });
+
+            dots.append(dot);
+            dotsContainer->addWidget(dot);
+        }
+
+        dotsContainer->addStretch();
+
+        if (!images.isEmpty()) {
+            updateImage();
+            updateDots();
+        }
+    }
+
+    void updateImage()
+    {
+        if (currentIndex < images.size()) {
+            int availableWidth = imageContainer->width();
+            int availableHeight = imageContainer->height();
+
+            QPixmap scaledPixmap = images[currentIndex].scaled(
+                QSize(availableWidth, availableHeight),
+                Qt::KeepAspectRatio,
+                Qt::SmoothTransformation
+            );
+            imageLabel->setPixmap(scaledPixmap);
+        }
+    }
+
+    void updateDots()
+    {
+        for (int i = 0; i < dots.size(); ++i) {
+            QString style = QString(
+                "QPushButton {"
+                "    background-color: %1;"
+                "    border: none;"
+                "    border-radius: 5px;"
+                "}"
+                "QPushButton:hover {"
+                "    background-color: %2;"
+                "}"
+            ).arg(i == currentIndex ? StreamUP::UIStyles::Colors::PRIMARY_COLOR : StreamUP::UIStyles::Colors::TEXT_MUTED)
+             .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY);
+
+            dots[i]->setStyleSheet(style);
+        }
+    }
+
+    void resizeEvent(QResizeEvent* event) override
+    {
+        QWidget::resizeEvent(event);
+        if (!images.isEmpty()) {
+            updateImage();
+        }
+    }
+
+    bool eventFilter(QObject* obj, QEvent* event) override
+    {
+        // Handle zoom dialog events
+        if (currentZoomDialog && (obj == currentZoomDialog || obj->parent() == currentZoomDialog)) {
+            if (event->type() == QEvent::MouseButtonPress ||
+                (event->type() == QEvent::KeyPress &&
+                 static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape)) {
+                currentZoomDialog->accept();
+                return true;
+            }
+        }
+
+        // Handle image label click for zoom
+        if (obj == imageLabel && event->type() == QEvent::MouseButtonPress) {
+            QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (mouseEvent->button() == Qt::LeftButton) {
+                showZoomedImage();
+                return true;
+            }
+        }
+        return QWidget::eventFilter(obj, event);
+    }
+
+    void showZoomedImage()
+    {
+        if (currentIndex >= images.size()) return;
+
+        // Create modal zoom dialog
+        QDialog* zoomDialog = new QDialog(this->window());
+        zoomDialog->setWindowTitle("Image Preview - Full Size");
+        zoomDialog->setModal(true);
+        zoomDialog->setStyleSheet(QString(
+            "QDialog {"
+            "    background: %1;"
+            "    color: white;"
+            "}"
+        ).arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+
+        QVBoxLayout* layout = new QVBoxLayout(zoomDialog);
+        layout->setContentsMargins(20, 20, 20, 20);
+
+        // Full-size image label with fixed container size
+        QLabel* fullImageLabel = new QLabel();
+        fullImageLabel->setAlignment(Qt::AlignCenter);
+        fullImageLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+        // Scale image to fit in fixed dialog size while maintaining aspect ratio
+        QPixmap scaledPixmap = images[currentIndex].scaled(
+            QSize(800, 600),
+            Qt::KeepAspectRatio,
+            Qt::SmoothTransformation
+        );
+        fullImageLabel->setPixmap(scaledPixmap);
+
+        // Close instruction
+        QLabel* instructionLabel = StreamUP::UIStyles::CreateStyledContent("Click anywhere or press ESC to close");
+        instructionLabel->setAlignment(Qt::AlignCenter);
+
+        layout->addWidget(fullImageLabel, 1);
+        layout->addSpacing(10);
+        layout->addWidget(instructionLabel);
+
+        // Fixed dialog size
+        zoomDialog->setFixedSize(860, 720);
+
+        // Center on screen
+        zoomDialog->move(
+            (QApplication::primaryScreen()->geometry().width() - 860) / 2,
+            (QApplication::primaryScreen()->geometry().height() - 720) / 2
+        );
+
+        // Install event filter for closing on click
+        zoomDialog->installEventFilter(this);
+        fullImageLabel->installEventFilter(this);
+
+        // Store reference for event handling
+        currentZoomDialog = zoomDialog;
+
+        zoomDialog->exec();
+        delete zoomDialog;
+        currentZoomDialog = nullptr;
+    }
+
+    // Member variables
+    QList<QPixmap> images;
+    QList<QPushButton*> dots;
+    QLabel* imageLabel;
+    QFrame* imageContainer;
+    QHBoxLayout* dotsContainer;
+    QDialog* currentZoomDialog = nullptr;
+    int currentIndex;
+};
+
+// Theme carousel - loads specific theme images
+class ThemeImageCarousel : public ImageCarousel
+{
+    Q_OBJECT
+
+public:
+    explicit ThemeImageCarousel(QWidget* parent = nullptr) : ImageCarousel(parent)
+    {
+        loadImages();
+    }
+
+protected:
+    void loadImages() override
+    {
+        // Load theme images
+        QStringList imageFiles = {"obs-theme-1.png", "obs-theme-2.png", "obs-theme-3.png", "obs-theme-4.png"};
+
+        for (const QString& fileName : imageFiles) {
+            QString imagePath = QString(":/images/misc/%1").arg(fileName);
+            QPixmap pixmap(imagePath);
+
+            if (!pixmap.isNull()) {
+                images.append(pixmap);
+            }
+        }
+
+        createDotsForImages();
+    }
+};
+
+// Source Explorer carousel - dynamically loads numbered images
+class SourceExplorerCarousel : public ImageCarousel
+{
+    Q_OBJECT
+
+public:
+    explicit SourceExplorerCarousel(QWidget* parent = nullptr) : ImageCarousel(parent)
+    {
+        loadImages();
+    }
+
+protected:
+    void loadImages() override
+    {
+        // Dynamically load source-explorer-1.png, source-explorer-2.png, etc.
+        // Keep loading until we don't find the next numbered image
+        int imageNumber = 1;
+        bool foundImage = true;
+
+        while (foundImage) {
+            QString imagePath = QString(":/images/misc/source-explorer-%1.png").arg(imageNumber);
+            QPixmap pixmap(imagePath);
+
+            if (!pixmap.isNull()) {
+                images.append(pixmap);
+                imageNumber++;
+            } else {
+                foundImage = false;
+            }
+        }
+
+        // If no images found, show placeholder
+        if (images.isEmpty()) {
+            // Create a placeholder image
+            QPixmap placeholder(700, 250);
+            placeholder.fill(QColor(StreamUP::UIStyles::Colors::BG_SECONDARY));
+            images.append(placeholder);
+        }
+
+        createDotsForImages();
+    }
+};
 
 // Supporter data structures
 struct Supporter {
@@ -259,16 +598,16 @@ QString GenerateSupportersHTML()
     // Andi's supporters section
     if (!supportersData.andiSupporters.empty()) {
         html += R"(<h4 style="color: #fbbf24; margin: 12px 0 8px 0; font-size: 14px;">💛 Andi's Supporters</h4>)";
-        html += R"(<p style="margin: 8px 0; line-height: 1.8;">)";
-        
+        html += R"(<p style="margin: 8px 0; line-height: 2.0;">)";
+
         for (size_t i = 0; i < supportersData.andiSupporters.size(); ++i) {
             const auto& supporter = supportersData.andiSupporters[i];
-            html += QString(R"(<span style="background-color: rgba(251, 191, 36, 0.2); color: #fde68a; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">%1</span>)")
+            html += QString(R"(<span style="background-color: rgba(251, 191, 36, 0.2); color: #fde68a; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; white-space: nowrap;">%1</span>)")
                 .arg(supporter.displayName.toHtmlEscaped());
-            
-            // Add spacing between names
+
+            // Add space between badges
             if (i < supportersData.andiSupporters.size() - 1) {
-                html += "&nbsp;&nbsp;&nbsp;"; // Add some spaces between names
+                html += " &nbsp; ";
             }
         }
         html += R"(</p>)";
@@ -277,16 +616,16 @@ QString GenerateSupportersHTML()
     // StreamUP supporters section
     if (!supportersData.streamupSupporters.empty()) {
         html += R"(<h4 style="color: #a855f7; margin: 12px 0 8px 0; font-size: 14px;">💜 StreamUP Supporters</h4>)";
-        html += R"(<p style="margin: 8px 0; line-height: 1.8;">)";
-        
+        html += R"(<p style="margin: 8px 0; line-height: 2.0;">)";
+
         for (size_t i = 0; i < supportersData.streamupSupporters.size(); ++i) {
             const auto& supporter = supportersData.streamupSupporters[i];
-            html += QString(R"(<span style="background-color: rgba(168, 85, 247, 0.2); color: #e9d5ff; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">%1</span>)")
+            html += QString(R"(<span style="background-color: rgba(168, 85, 247, 0.2); color: #e9d5ff; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; white-space: nowrap;">%1</span>)")
                 .arg(supporter.displayName.toHtmlEscaped());
-                
-            // Add spacing between names
+
+            // Add space between badges
             if (i < supportersData.streamupSupporters.size() - 1) {
-                html += "&nbsp;&nbsp;&nbsp;"; // Add some spaces between names
+                html += " &nbsp; ";
             }
         }
         html += R"(</p>)";
@@ -528,16 +867,16 @@ std::string GetWelcomeMessage()
     return std::string(R"(
 <div style="color: #d1d5db; line-height: 1.4; font-size: 14px;">
     <h2 style="color: #3b82f6; margin: 18px 0 12px 0; font-size: 20px; font-weight: 600;">🎉 Welcome to StreamUP!</h2>
-    
+
     <p style="margin: 12px 0; color: #f9fafb; font-size: 15px;">
         <strong>Thank you for installing StreamUP!</strong> You've just unlocked a powerful toolkit designed to supercharge your OBS Studio experience.
     </p>
-    
+
     <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;">✨ What is StreamUP?</h3>
     <p style="margin: 8px 0;">
         StreamUP is an advanced plugin that provides essential tools for content creators, streamers, and anyone using OBS Studio. From source management and plugin updates to WebSocket API control and automated workflows - StreamUP streamlines your creative process.
     </p>
-    
+
     <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;">📚 Getting Started</h3>
     <p style="margin: 8px 0;">
         Ready to dive in? Check out our comprehensive documentation to learn about all the amazing features at your fingertips:
@@ -545,7 +884,7 @@ std::string GetWelcomeMessage()
     <p style="margin: 8px 0;">
         <a href="https://streamup.doras.click/docs" style="color: #60a5fa; text-decoration: underline; font-weight: 500;">📖 Read the Documentation</a>
     </p>
-    
+
     <h3 style="color: #fbbf24; margin: 16px 0 8px 0; font-size: 16px;">💖 Support Our Development</h3>
     <p style="margin: 8px 0;">
         StreamUP is a passion project created with love for the OBS community. If you find it useful, please consider supporting our development efforts. Your support helps us continue adding new features and maintaining compatibility with the latest OBS versions.
@@ -553,8 +892,8 @@ std::string GetWelcomeMessage()
     <p style="margin: 8px 0;">
         Every contribution, no matter how small, makes a real difference and keeps this project thriving!
     </p>
-    
-    <div style="margin: 16px 0; padding: 12px; background: rgba(139, 92, 246, 0.1); border-left: 4px solid #a855f7; border-radius: 4px;">
+
+    <div style="margin: 16px 0; padding: 12px; border-left: 4px solid #a855f7; border-radius: 4px;">
         <p style="margin: 0; color: #e9d5ff; font-style: italic;">
             💜 Love from <strong>Andi (Andilippi)</strong><br>
             <a href="https://doras.to/andi" style="color: #c4b5fd; text-decoration: underline;">https://doras.to/andi</a>
@@ -750,6 +1089,288 @@ void CreateSplashDialog(ShowCondition condition)
         QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
         mainLayout->setContentsMargins(0, 0, 0, 0);
         mainLayout->setSpacing(0);
+
+        // Early Access Banner - Clickable banner at the very top
+        // Define the clickable banner class first
+        class ClickableBanner : public QWidget {
+        public:
+            ClickableBanner(QWidget* parent = nullptr) : QWidget(parent) {}
+        protected:
+            void mousePressEvent(QMouseEvent* event) override {
+                if (event->button() == Qt::LeftButton) {
+                    // Show early access features dialog
+                    ShowEarlyAccessDialog();
+                }
+                QWidget::mousePressEvent(event);
+            }
+
+            static void ShowEarlyAccessDialog() {
+                StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
+                    QDialog* earlyAccessDialog = StreamUP::UIStyles::CreateStyledDialog("Early Access Features");
+                    earlyAccessDialog->setModal(true);
+                    earlyAccessDialog->setFixedSize(800, 600);
+
+                    QVBoxLayout* dialogLayout = new QVBoxLayout(earlyAccessDialog);
+                    dialogLayout->setContentsMargins(0, 0, 0, 0);
+                    dialogLayout->setSpacing(0);
+
+                    // Create scroll area that fills the whole dialog
+                    QScrollArea* scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+                    QWidget* scrollContent = new QWidget();
+                    scrollContent->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+                    QVBoxLayout* contentLayout = new QVBoxLayout(scrollContent);
+                    contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_LARGE,
+                                                     StreamUP::UIStyles::Sizes::SPACING_MEDIUM,
+                                                     StreamUP::UIStyles::Sizes::PADDING_LARGE,
+                                                     StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+                    contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+
+                    // Header - using HTML like the about window
+                    QString headerHTML = R"(
+<div style="color: #d1d5db; line-height: 1.4; font-size: 14px;">
+    <h2 style="color: #fbbf24; margin: 18px 0 12px 0; font-size: 20px; font-weight: 600; text-align: center;">🌟 Get Exclusive Early Access to New Features!</h2>
+    <p style="margin: 12px 0; color: #f9fafb; font-size: 15px; text-align: center;">
+        Support StreamUP development and unlock cutting-edge features before they're released to the public:
+    </p>
+</div>
+                    )";
+                    QLabel* headerLabel = UIHelpers::CreateRichTextLabel(headerHTML, false, true, Qt::Alignment(), true);
+                    contentLayout->addWidget(headerLabel);
+
+                    // Source Explorer Section
+                    QGroupBox* sourceExplorerGroup = StreamUP::UIStyles::CreateStyledGroupBox("✨ Source Explorer (Early Access)", "warning");
+                    QVBoxLayout* sourceExplorerLayout = new QVBoxLayout(sourceExplorerGroup);
+                    sourceExplorerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+                    // Source Explorer carousel with navigation buttons
+                    QHBoxLayout* explorerCarouselControlLayout = new QHBoxLayout();
+                    explorerCarouselControlLayout->setContentsMargins(0, 0, 0, 0);
+                    explorerCarouselControlLayout->setSpacing(0);
+
+                    // Create carousel
+                    SourceExplorerCarousel* explorerCarousel = new SourceExplorerCarousel();
+
+                    // Create external navigation buttons
+                    QPushButton* explorerPrevButton = StreamUP::UIStyles::CreateStyledButton("❮", "neutral", 40);
+                    explorerPrevButton->setFixedSize(40, 40);
+                    QPushButton* explorerNextButton = StreamUP::UIStyles::CreateStyledButton("❯", "neutral", 40);
+                    explorerNextButton->setFixedSize(40, 40);
+
+                    // Connect buttons to carousel
+                    QObject::connect(explorerPrevButton, &QPushButton::clicked, explorerCarousel, &SourceExplorerCarousel::previousImage);
+                    QObject::connect(explorerNextButton, &QPushButton::clicked, explorerCarousel, &SourceExplorerCarousel::nextImage);
+
+                    // Layout: button - carousel - button
+                    explorerCarouselControlLayout->addWidget(explorerPrevButton);
+                    explorerCarouselControlLayout->addWidget(explorerCarousel, 1);
+                    explorerCarouselControlLayout->addWidget(explorerNextButton);
+
+                    sourceExplorerLayout->addLayout(explorerCarouselControlLayout);
+
+                    QString sourceExplorerFeatures = R"(
+<div style="color: #d1d5db; line-height: 1.4; font-size: 14px;">
+    <p style="margin: 8px 0;">
+        A powerful new tool for advanced source management and exploration:
+    </p>
+    <ul style="margin: 8px 0; padding-left: 20px;">
+        <li style="margin: 4px 0;">All source controls in one easy to use dock. Access and edit Source information, transform, properties, filters and more, no more need to open sub menus etc.</li>
+        <li style="margin: 4px 0;">Open and edit multiple filters at the same time!</li>
+        <li style="margin: 4px 0;">Edit sources on a different scene without having to use Studio mode.</li>
+        <li style="margin: 4px 0;">Easily copy settings as websocket or CPH (Streamer.Bot) commands.</li>
+        <li style="margin: 4px 0;">Easy access to buttons for flipping, rotating and more transform for sources.</li>
+        <li style="margin: 4px 0;">Split each tab into its own dock if needed.</li>
+        <li style="margin: 4px 0;">Easy button to screenshot selected source.</li>
+    </ul>
+</div>
+                    )";
+                    QLabel* sourceExplorerFeaturesLabel = StreamUP::UIHelpers::CreateRichTextLabel(sourceExplorerFeatures, false, true, Qt::Alignment(), true);
+                    sourceExplorerLayout->addWidget(sourceExplorerFeaturesLabel);
+                    contentLayout->addWidget(sourceExplorerGroup);
+
+                    // Theme Section
+                    QGroupBox* themeGroup = StreamUP::UIStyles::CreateStyledGroupBox("🎨 Exclusive Supporter Theme", "info");
+                    QVBoxLayout* themeLayout = new QVBoxLayout(themeGroup);
+                    themeLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+                    // Theme carousel with navigation buttons
+                    QHBoxLayout* carouselControlLayout = new QHBoxLayout();
+                    carouselControlLayout->setContentsMargins(0, 0, 0, 0);
+                    carouselControlLayout->setSpacing(0);
+
+                    // Create carousel
+                    ThemeImageCarousel* carousel = new ThemeImageCarousel();
+
+                    // Create external navigation buttons
+                    QPushButton* prevButton = StreamUP::UIStyles::CreateStyledButton("❮", "neutral", 40);
+                    prevButton->setFixedSize(40, 40);
+                    QPushButton* nextButton = StreamUP::UIStyles::CreateStyledButton("❯", "neutral", 40);
+                    nextButton->setFixedSize(40, 40);
+
+                    // Connect buttons to carousel
+                    QObject::connect(prevButton, &QPushButton::clicked, carousel, &ThemeImageCarousel::previousImage);
+                    QObject::connect(nextButton, &QPushButton::clicked, carousel, &ThemeImageCarousel::nextImage);
+
+                    // Layout: button - carousel - button
+                    carouselControlLayout->addWidget(prevButton);
+                    carouselControlLayout->addWidget(carousel, 1);
+                    carouselControlLayout->addWidget(nextButton);
+
+                    themeLayout->addLayout(carouselControlLayout);
+
+                    QString themeDescription = R"(
+<div style="color: #d1d5db; line-height: 1.4; font-size: 14px;">
+    <p style="margin: 8px 0;">
+        Customize your OBS experience with our exclusive supporter theme. A more modern feel featuring refined colors, enhanced contrast, and beautiful styling designed to make your workflow even more enjoyable.
+    </p>
+</div>
+                    )";
+                    QLabel* themeDescLabel = StreamUP::UIHelpers::CreateRichTextLabel(themeDescription, false, true, Qt::Alignment(), true);
+                    themeLayout->addWidget(themeDescLabel);
+                    contentLayout->addWidget(themeGroup);
+
+                    // StreamUP.tips Widgets Section
+                    QGroupBox* widgetsGroup = StreamUP::UIStyles::CreateStyledGroupBox("🎮 Access to StreamUP.tips Premium Content", "success");
+                    QVBoxLayout* widgetsLayout = new QVBoxLayout(widgetsGroup);
+
+                    QString widgetsHTML = R"(
+<div style="color: #d1d5db; line-height: 1.4; font-size: 14px;">
+    <p style="margin: 8px 0;">
+        Get full access to all our paid widgets, tools, alerts, effects and more on <a href="https://streamup.tips" style="color: #60a5fa; text-decoration: underline;">StreamUP.tips</a>
+    </p>
+    <p style="margin: 8px 0;">
+        Premium stream widgets, professional alerts, custom effects, and powerful tools to enhance your streaming experience.
+    </p>
+</div>
+                    )";
+                    QLabel* widgetsLabel = StreamUP::UIHelpers::CreateRichTextLabel(widgetsHTML, false, true, Qt::Alignment(), true);
+                    widgetsLayout->addWidget(widgetsLabel);
+                    contentLayout->addWidget(widgetsGroup);
+
+                    // Community message
+                    QGroupBox* communityGroup = StreamUP::UIStyles::CreateStyledGroupBox("💜 Your Support Makes a Difference", "warning");
+                    QVBoxLayout* communityLayout = new QVBoxLayout(communityGroup);
+
+                    QString communityHTML = R"(
+<div style="color: #d1d5db; line-height: 1.4; font-size: 14px;">
+    <p style="margin: 8px 0;">
+        Every contribution helps us continue developing amazing features for the entire OBS community. You're not just getting early access—you're investing in the future of StreamUP!
+    </p>
+</div>
+                    )";
+                    QLabel* communityLabel = StreamUP::UIHelpers::CreateRichTextLabel(communityHTML, false, true, Qt::Alignment(), true);
+                    communityLayout->addWidget(communityLabel);
+                    contentLayout->addWidget(communityGroup);
+
+                    scrollArea->setWidget(scrollContent);
+                    dialogLayout->addWidget(scrollArea);
+
+                    // Bottom button area - fixed at bottom
+                    QWidget* buttonWidget = new QWidget();
+                    buttonWidget->setStyleSheet(QString("background: %1; padding: %2px;")
+                        .arg(StreamUP::UIStyles::Colors::BG_DARKEST)
+                        .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
+                    QVBoxLayout* buttonAreaLayout = new QVBoxLayout(buttonWidget);
+                    buttonAreaLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::SPACING_SMALL, 0, 0);
+                    buttonAreaLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+
+                    // Support Buttons
+                    QHBoxLayout* supportButtonLayout = new QHBoxLayout();
+                    supportButtonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+
+                    QPushButton* kofiBtn = StreamUP::UIStyles::CreateStyledButton("Ko-Fi", "warning");
+                    kofiBtn->setIcon(QIcon(":images/icons/social/kofi.svg"));
+                    kofiBtn->setIconSize(QSize(16, 16));
+                    kofiBtn->setToolTip("Support us on Ko-Fi");
+                    QObject::connect(kofiBtn, &QPushButton::clicked, []() {
+                        QDesktopServices::openUrl(QUrl("https://ko-fi.com/streamup"));
+                    });
+
+                    QPushButton* patreonBtn = StreamUP::UIStyles::CreateStyledButton("Patreon", "warning");
+                    patreonBtn->setIcon(QIcon(":images/icons/social/patreon.svg"));
+                    patreonBtn->setIconSize(QSize(16, 16));
+                    patreonBtn->setToolTip("Support us on Patreon");
+                    QObject::connect(patreonBtn, &QPushButton::clicked, []() {
+                        QDesktopServices::openUrl(QUrl("https://www.patreon.com/streamup"));
+                    });
+
+                    QPushButton* andiBtn = StreamUP::UIStyles::CreateStyledButton("Support Andi", "info");
+                    andiBtn->setIcon(QIcon(":images/icons/social/doras.svg"));
+                    andiBtn->setIconSize(QSize(16, 16));
+                    andiBtn->setToolTip("Support Andi Personally");
+                    QObject::connect(andiBtn, &QPushButton::clicked, []() {
+                        QDesktopServices::openUrl(QUrl("https://andilippi.co.uk/en-gbp"));
+                    });
+
+                    supportButtonLayout->addStretch();
+                    supportButtonLayout->addWidget(kofiBtn);
+                    supportButtonLayout->addWidget(patreonBtn);
+                    supportButtonLayout->addWidget(andiBtn);
+                    supportButtonLayout->addStretch();
+
+                    buttonAreaLayout->addLayout(supportButtonLayout);
+
+                    // Close button
+                    QHBoxLayout* closeButtonLayout = new QHBoxLayout();
+                    QPushButton* closeBtn = StreamUP::UIStyles::CreateStyledButton("Close", "neutral");
+                    QObject::connect(closeBtn, &QPushButton::clicked, [earlyAccessDialog]() {
+                        earlyAccessDialog->close();
+                    });
+                    closeButtonLayout->addStretch();
+                    closeButtonLayout->addWidget(closeBtn);
+                    closeButtonLayout->addStretch();
+
+                    buttonAreaLayout->addLayout(closeButtonLayout);
+
+                    dialogLayout->addWidget(buttonWidget);
+
+                    earlyAccessDialog->setLayout(dialogLayout);
+                    earlyAccessDialog->show();
+                    StreamUP::UIHelpers::CenterDialog(earlyAccessDialog);
+                });
+            }
+        };
+
+        // Create the clickable banner
+        ClickableBanner* earlyAccessBanner = new ClickableBanner();
+        earlyAccessBanner->setObjectName("earlyAccessBanner");
+        earlyAccessBanner->setCursor(Qt::PointingHandCursor);
+        earlyAccessBanner->setStyleSheet(QString(
+            "QWidget#earlyAccessBanner {"
+            "    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+            "        stop:0 #f59e0b, stop:0.5 #fbbf24, stop:1 #f59e0b);"
+            "    padding: %1px %2px;"
+            "    border-bottom: 2px solid #d97706;"
+            "}"
+            "QWidget#earlyAccessBanner:hover {"
+            "    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+            "        stop:0 #d97706, stop:0.5 #f59e0b, stop:1 #d97706);"
+            "}"
+        ).arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+         .arg(StreamUP::UIStyles::Sizes::PADDING_LARGE));
+
+        QHBoxLayout* bannerLayout = new QHBoxLayout(earlyAccessBanner);
+        bannerLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+                                         StreamUP::UIStyles::Sizes::PADDING_SMALL,
+                                         StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+                                         StreamUP::UIStyles::Sizes::PADDING_SMALL);
+        bannerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+        // Text content - two lines centered
+        QLabel* bannerText = new QLabel(
+            "<div style='text-align: center;'>"
+            "<b>🌟 Early Access Features Available! 🌟</b><br>"
+            "Unlock Source Explorer, exclusive OBS theme, Stream widgets and more. Click to find out more."
+            "</div>",
+            earlyAccessBanner);
+        bannerText->setStyleSheet(QString(
+            "color: #78350f; font-size: %1px; font-weight: 400; background: transparent;"
+        ).arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+        bannerText->setWordWrap(true);
+        bannerText->setAlignment(Qt::AlignCenter);
+
+        bannerLayout->addWidget(bannerText, 1);
+
+        mainLayout->addWidget(earlyAccessBanner);
 
         // Header section in scrollable area
         QWidget* headerWidget = new QWidget();
@@ -1142,3 +1763,6 @@ bool IsSplashScreenOpen()
 
 } // namespace SplashScreen
 } // namespace StreamUP
+
+// Include moc file for Q_OBJECT class defined in this cpp file
+#include "splash-screen.moc"

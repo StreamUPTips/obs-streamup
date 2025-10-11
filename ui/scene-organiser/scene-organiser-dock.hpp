@@ -44,6 +44,7 @@ public:
 
 protected:
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
 
 private:
     SceneOrganiserDock *m_dock;
@@ -79,6 +80,8 @@ private slots:
     void onMoveUpClicked();
     void onMoveDownClicked();
     void onToggleIconsClicked();
+    void onExpandCollapseAllClicked();
+    void updateExpandCollapseButtonState();
     void onSettingsChanged();
     void onIconsChanged();
     void onSettingsClicked();
@@ -188,6 +191,7 @@ public:
     QToolButton *m_filtersButton;
     QToolButton *m_moveUpButton;
     QToolButton *m_moveDownButton;
+    QCheckBox *m_expandCollapseButton;
     QCheckBox *m_lockButton;
     QToolButton *m_settingsButton;
 
@@ -230,6 +234,9 @@ public:
 
     // Lock state management
     bool m_isLocked;
+
+    // Expand/collapse state management
+    bool m_allExpanded;
 
     // Scene visibility management
     QSet<QString> m_hiddenScenes;

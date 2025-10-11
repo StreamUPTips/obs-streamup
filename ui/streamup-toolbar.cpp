@@ -1536,15 +1536,7 @@ void StreamUPToolbar::executeDockActionWithButton(const QString& actionType, QTo
 		
 		// Create new popup
 		videoCapturePopup = new VideoCapturePopup(this);
-		
-		// Connect popup signals to dock methods
-		connect(videoCapturePopup, &VideoCapturePopup::activateAllVideoCaptureDevices,
-			dock, &StreamUPDock::ButtonActivateAllVideoCaptureDevices);
-		connect(videoCapturePopup, &VideoCapturePopup::deactivateAllVideoCaptureDevices,
-			dock, &StreamUPDock::ButtonDeactivateAllVideoCaptureDevices);
-		connect(videoCapturePopup, &VideoCapturePopup::refreshAllVideoCaptureDevices,
-			dock, &StreamUPDock::ButtonRefreshAllVideoCaptureDevices);
-		
+
 		// Connect to handle cleanup when popup is closed
 		connect(videoCapturePopup, &QWidget::destroyed, [&]() {
 			videoCapturePopup = nullptr;

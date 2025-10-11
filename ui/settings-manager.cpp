@@ -36,6 +36,7 @@
 #include <QButtonGroup>
 #include <QAbstractButton>
 #include <QComboBox>
+#include <QSlider>
 #include <QListWidget>
 #include <QStackedWidget>
 #include <QDesktopServices>
@@ -45,6 +46,7 @@
 #include <QFileInfo>
 #include <memory>
 #include <mutex>
+#include <algorithm>
 #include <util/platform.h>
 
 // UI settings management implementation
@@ -190,6 +192,12 @@ obs_data_t *LoadSettings()
 		obs_data_set_bool(data, "show_cph_integration", true);
 		obs_data_set_bool(data, "show_toolbar", true);
 		obs_data_set_bool(data, "debug_logging_enabled", false);
+		obs_data_set_bool(data, "scene_organiser_show_icons", true);
+		obs_data_set_bool(data, "scene_organiser_group_folders", true);
+		obs_data_set_bool(data, "scene_organiser_remember_folder_state", true);
+		obs_data_set_int(data, "scene_organiser_item_height", 100);
+		obs_data_set_string(data, "scene_organiser_switch_mode", "single_click");
+		obs_data_set_string(data, "scene_organiser_sort_method", "none");
 		obs_data_set_string(data, "toolbar_position", "top");
 
 		// Set default dock tool settings
@@ -258,6 +266,11 @@ PluginSettings GetCurrentSettings()
 		settings.sceneOrganiserShowIcons = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_icons", true);
 	settings.sceneOrganiserGroupFolders = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_group_folders", true);
 	settings.sceneOrganiserRememberFolderState = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_remember_folder_state", true);
+	settings.sceneOrganiserItemHeight = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "scene_organiser_item_height", 100);
+	// Ensure the height is at least 50% (the minimum allowed value)
+	if (settings.sceneOrganiserItemHeight < 50) {
+		settings.sceneOrganiserItemHeight = 100;
+	}
 
 		// Load scene sort method setting (default to none if not set)
 		const char *sortMethodStr = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "scene_organiser_sort_method", "none");
@@ -335,6 +348,7 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "scene_organiser_show_icons", settings.sceneOrganiserShowIcons);
 	obs_data_set_bool(data, "scene_organiser_group_folders", settings.sceneOrganiserGroupFolders);
 	obs_data_set_bool(data, "scene_organiser_remember_folder_state", settings.sceneOrganiserRememberFolderState);
+	obs_data_set_int(data, "scene_organiser_item_height", settings.sceneOrganiserItemHeight);
 
 	// Save scene sort method setting
 	const char *sortMethodStr;
@@ -962,6 +976,46 @@ void ShowSettingsDialog(int tabIndex)
 		rememberFolderStateLayout->addWidget(rememberFolderStateSwitch);
 		sceneOrganiserLayout->addLayout(rememberFolderStateLayout);
 
+		// Item Height setting
+		QHBoxLayout *itemHeightLayout = new QHBoxLayout();
+		itemHeightLayout->setContentsMargins(0, 0, 0, 0);
+		itemHeightLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+
+		QLabel *itemHeightLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.ItemHeight"));
+		itemHeightLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		itemHeightLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.ItemHeightDesc"));
+
+		QSlider *itemHeightSlider = new QSlider(Qt::Horizontal);
+		itemHeightSlider->setMinimum(50);
+		itemHeightSlider->setMaximum(200);
+		itemHeightSlider->setValue(currentSettings.sceneOrganiserItemHeight);
+		itemHeightSlider->setTickPosition(QSlider::TicksBelow);
+		itemHeightSlider->setTickInterval(25);
+		itemHeightSlider->setToolTip(obs_module_text("SceneOrganiser.Settings.ItemHeightDesc"));
+		itemHeightSlider->setMaximumWidth(200);
+
+		QLabel *itemHeightValueLabel = new QLabel(QString::number(currentSettings.sceneOrganiserItemHeight) + "%");
+		itemHeightValueLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent; min-width: 40px;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		itemHeightValueLabel->setAlignment(Qt::AlignCenter);
+
+		QObject::connect(itemHeightSlider, &QSlider::valueChanged, [itemHeightValueLabel](int value) {
+			PluginSettings settings = GetCurrentSettings();
+			settings.sceneOrganiserItemHeight = value;
+			UpdateSettings(settings);
+			itemHeightValueLabel->setText(QString::number(value) + "%");
+			StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+		});
+
+		itemHeightLayout->addWidget(itemHeightLabel);
+		itemHeightLayout->addWidget(itemHeightSlider);
+		itemHeightLayout->addWidget(itemHeightValueLabel);
+		itemHeightLayout->addStretch();
+		sceneOrganiserLayout->addLayout(itemHeightLayout);
+
 		// Scene switching mode setting
 		QHBoxLayout *switchModeLayout = new QHBoxLayout();
 		switchModeLayout->setContentsMargins(0, 0, 0, 0);
@@ -1387,11 +1441,23 @@ void ShowSettingsDialog(int tabIndex)
 		QGroupBox *videoCaptureGroup = StreamUP::UIStyles::CreateStyledGroupBox("Video Capture Devices", "info");
 		QVBoxLayout *videoCaptureLayout = new QVBoxLayout(videoCaptureGroup);
 		videoCaptureLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-		
+
 		std::vector<HotkeyInfo> videoCaptureHotkeys = {
 			{obs_module_text("Hotkey.ActivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.ActivateVideoCaptureDevices.Description"), "streamup_activate_video_capture_devices"},
 			{obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Description"), "streamup_deactivate_video_capture_devices"},
 			{obs_module_text("Hotkey.RefreshVideoCaptureDevices.Name"), obs_module_text("Hotkey.RefreshVideoCaptureDevices.Description"), "streamup_refresh_video_capture_devices"}
+		};
+
+		// Transition Management Section
+		QGroupBox *transitionGroup = StreamUP::UIStyles::CreateStyledGroupBox("Transition Management", "info");
+		QVBoxLayout *transitionLayout = new QVBoxLayout(transitionGroup);
+		transitionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+		std::vector<HotkeyInfo> transitionHotkeys = {
+			{obs_module_text("Hotkey.CopyShowTransition.Name"), obs_module_text("Hotkey.CopyShowTransition.Description"), "streamup_copy_show_transition"},
+			{obs_module_text("Hotkey.CopyHideTransition.Name"), obs_module_text("Hotkey.CopyHideTransition.Description"), "streamup_copy_hide_transition"},
+			{obs_module_text("Hotkey.PasteShowTransition.Name"), obs_module_text("Hotkey.PasteShowTransition.Description"), "streamup_paste_show_transition"},
+			{obs_module_text("Hotkey.PasteHideTransition.Name"), obs_module_text("Hotkey.PasteHideTransition.Description"), "streamup_paste_hide_transition"}
 		};
 		
 		// Helper function to build hotkey rows for each section
@@ -1481,12 +1547,14 @@ void ShowSettingsDialog(int tabIndex)
 		buildHotkeySection(refreshHotkeys, refreshLayout);
 		buildHotkeySection(interactionHotkeys, interactionLayout);
 		buildHotkeySection(videoCaptureHotkeys, videoCaptureLayout);
-		
+		buildHotkeySection(transitionHotkeys, transitionLayout);
+
 		// Add all sections to main layout
 		hotkeysContentLayout->addWidget(lockingGroup);
 		hotkeysContentLayout->addWidget(refreshGroup);
 		hotkeysContentLayout->addWidget(interactionGroup);
 		hotkeysContentLayout->addWidget(videoCaptureGroup);
+		hotkeysContentLayout->addWidget(transitionGroup);
 		
 		hotkeysMainLayout->addWidget(hotkeysContentWidget);
 		hotkeysMainLayout->addStretch();
@@ -2107,7 +2175,15 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 		{obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Description"),
 		 "streamup_deactivate_video_capture_devices"},
 		{obs_module_text("Hotkey.RefreshVideoCaptureDevices.Name"), obs_module_text("Hotkey.RefreshVideoCaptureDevices.Description"),
-		 "streamup_refresh_video_capture_devices"}};
+		 "streamup_refresh_video_capture_devices"},
+		{obs_module_text("Hotkey.CopyShowTransition.Name"), obs_module_text("Hotkey.CopyShowTransition.Description"),
+		 "streamup_copy_show_transition"},
+		{obs_module_text("Hotkey.CopyHideTransition.Name"), obs_module_text("Hotkey.CopyHideTransition.Description"),
+		 "streamup_copy_hide_transition"},
+		{obs_module_text("Hotkey.PasteShowTransition.Name"), obs_module_text("Hotkey.PasteShowTransition.Description"),
+		 "streamup_paste_show_transition"},
+		{obs_module_text("Hotkey.PasteHideTransition.Name"), obs_module_text("Hotkey.PasteHideTransition.Description"),
+		 "streamup_paste_hide_transition"}};
 
 	// Create direct layout for hotkeys (no scrolling, fit to content)
 	QVBoxLayout *hotkeyContentLayout = new QVBoxLayout();
@@ -2695,6 +2771,148 @@ void CleanupSettingsCache()
 		cachedSettings = nullptr;
 	}
 	settingsLoadLogged = false;
+}
+
+void SaveSkippedUpdates(const std::map<std::string, std::string>& outdatedPlugins, const std::vector<std::string>& failedPlugins)
+{
+	obs_data_t* settings = LoadSettings();
+	if (!settings) {
+		return;
+	}
+
+	// Create object to store skipped updates
+	obs_data_t* skippedData = obs_data_create();
+
+	// Save outdated plugins with their REQUIRED versions (not installed versions)
+	// This allows us to notify users again if a newer version becomes available
+	obs_data_array_t* outdatedArray = obs_data_array_create();
+	for (const auto& plugin : outdatedPlugins) {
+		obs_data_t* pluginData = obs_data_create();
+		obs_data_set_string(pluginData, "name", plugin.first.c_str());
+		obs_data_set_string(pluginData, "version", plugin.second.c_str()); // Required version
+		obs_data_array_push_back(outdatedArray, pluginData);
+		obs_data_release(pluginData);
+	}
+	obs_data_set_array(skippedData, "outdated", outdatedArray);
+	obs_data_array_release(outdatedArray);
+
+	// Save failed plugins
+	obs_data_array_t* failedArray = obs_data_array_create();
+	for (const auto& moduleName : failedPlugins) {
+		obs_data_t* moduleData = obs_data_create();
+		obs_data_set_string(moduleData, "module", moduleName.c_str());
+		obs_data_array_push_back(failedArray, moduleData);
+		obs_data_release(moduleData);
+	}
+	obs_data_set_array(skippedData, "failed", failedArray);
+	obs_data_array_release(failedArray);
+
+	// Save to settings
+	obs_data_set_obj(settings, "skipped_updates", skippedData);
+	obs_data_release(skippedData);
+
+	SaveSettings(settings);
+	obs_data_release(settings);
+}
+
+void GetSkippedUpdates(std::map<std::string, std::string>& outdatedPlugins, std::vector<std::string>& failedPlugins)
+{
+	outdatedPlugins.clear();
+	failedPlugins.clear();
+
+	obs_data_t* settings = LoadSettings();
+	if (!settings) {
+		return;
+	}
+
+	obs_data_t* skippedData = obs_data_get_obj(settings, "skipped_updates");
+	if (!skippedData) {
+		obs_data_release(settings);
+		return;
+	}
+
+	// Load outdated plugins
+	obs_data_array_t* outdatedArray = obs_data_get_array(skippedData, "outdated");
+	if (outdatedArray) {
+		size_t count = obs_data_array_count(outdatedArray);
+		for (size_t i = 0; i < count; i++) {
+			obs_data_t* pluginData = obs_data_array_item(outdatedArray, i);
+			const char* name = obs_data_get_string(pluginData, "name");
+			const char* version = obs_data_get_string(pluginData, "version");
+			if (name && version) {
+				outdatedPlugins[name] = version;
+			}
+			obs_data_release(pluginData);
+		}
+		obs_data_array_release(outdatedArray);
+	}
+
+	// Load failed plugins
+	obs_data_array_t* failedArray = obs_data_get_array(skippedData, "failed");
+	if (failedArray) {
+		size_t count = obs_data_array_count(failedArray);
+		for (size_t i = 0; i < count; i++) {
+			obs_data_t* moduleData = obs_data_array_item(failedArray, i);
+			const char* module = obs_data_get_string(moduleData, "module");
+			if (module) {
+				failedPlugins.push_back(module);
+			}
+			obs_data_release(moduleData);
+		}
+		obs_data_array_release(failedArray);
+	}
+
+	obs_data_release(skippedData);
+	obs_data_release(settings);
+}
+
+void ClearSkippedUpdates()
+{
+	obs_data_t* settings = LoadSettings();
+	if (!settings) {
+		return;
+	}
+
+	obs_data_erase(settings, "skipped_updates");
+	SaveSettings(settings);
+	obs_data_release(settings);
+}
+
+bool AreUpdatesSkipped(const std::map<std::string, std::string>& currentOutdated, const std::vector<std::string>& currentFailed)
+{
+	std::map<std::string, std::string> skippedOutdated;
+	std::vector<std::string> skippedFailed;
+	GetSkippedUpdates(skippedOutdated, skippedFailed);
+
+	// If no updates were skipped, return false
+	if (skippedOutdated.empty() && skippedFailed.empty()) {
+		return false;
+	}
+
+	// Check if outdated plugins match exactly
+	if (currentOutdated.size() != skippedOutdated.size()) {
+		return false;
+	}
+
+	for (const auto& plugin : currentOutdated) {
+		auto it = skippedOutdated.find(plugin.first);
+		if (it == skippedOutdated.end() || it->second != plugin.second) {
+			return false;
+		}
+	}
+
+	// Check if failed plugins match exactly
+	if (currentFailed.size() != skippedFailed.size()) {
+		return false;
+	}
+
+	// Sort both vectors for comparison
+	std::vector<std::string> sortedCurrent = currentFailed;
+	std::vector<std::string> sortedSkipped = skippedFailed;
+	std::sort(sortedCurrent.begin(), sortedCurrent.end());
+	std::sort(sortedSkipped.begin(), sortedSkipped.end());
+
+	return sortedCurrent == sortedSkipped;
 }
 
 } // namespace SettingsManager

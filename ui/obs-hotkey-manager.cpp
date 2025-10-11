@@ -125,7 +125,11 @@ QString OBSHotkeyManager::getDefaultHotkeyIcon(const QString& hotkeyName) {
         {"streamup_lock_current_sources", "current-scene-source-locked"},
         {"streamup_activate_all_video_capture_devices", "video-capture-device-activate"},
         {"streamup_deactivate_all_video_capture_devices", "video-capture-device-deactivate"},
-        {"streamup_refresh_all_video_capture_devices", "video-capture-device-refresh"}
+        {"streamup_refresh_all_video_capture_devices", "video-capture-device-refresh"},
+        {"streamup_copy_show_transition", "copy"},
+        {"streamup_copy_hide_transition", "copy"},
+        {"streamup_paste_show_transition", "paste"},
+        {"streamup_paste_hide_transition", "paste"}
     };
     
     // Check exact match first

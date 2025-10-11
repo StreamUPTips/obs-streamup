@@ -220,7 +220,7 @@ void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 		return;
 	}
 
-	// Get the transition for the scene item
+	// Get the transition for the scene item (borrowed reference, do not release)
 	obs_source_t *transition = obs_sceneitem_get_transition(scene_item, transition_type);
 	if (!transition) {
 		obs_data_set_string(response_data, "error", "No transition set for this item.");
@@ -410,7 +410,13 @@ static void RegisterWebsocketRequests()
 	obs_websocket_vendor_register_request(vendor, "ActivateAllVideoCaptureDevices", StreamUP::WebSocketAPI::WebsocketActivateAllVideoCaptureDevices, nullptr);
 	obs_websocket_vendor_register_request(vendor, "DeactivateAllVideoCaptureDevices", StreamUP::WebSocketAPI::WebsocketDeactivateAllVideoCaptureDevices, nullptr);
 	obs_websocket_vendor_register_request(vendor, "RefreshAllVideoCaptureDevices", StreamUP::WebSocketAPI::WebsocketRefreshAllVideoCaptureDevices, nullptr);
-	
+
+	// Transition copy/paste
+	obs_websocket_vendor_register_request(vendor, "CopyShowTransition", StreamUP::WebSocketAPI::WebsocketCopyShowTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "CopyHideTransition", StreamUP::WebSocketAPI::WebsocketCopyHideTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "PasteShowTransition", StreamUP::WebSocketAPI::WebsocketPasteShowTransition, nullptr);
+	obs_websocket_vendor_register_request(vendor, "PasteHideTransition", StreamUP::WebSocketAPI::WebsocketPasteHideTransition, nullptr);
+
 	// Backward compatibility - register old command names (deprecated)
 	obs_websocket_vendor_register_request(vendor, "getOutputFilePath", StreamUP::WebSocketAPI::WebsocketRequestGetOutputFilePath, nullptr);
 	obs_websocket_vendor_register_request(vendor, "getCurrentSource", StreamUP::WebSocketAPI::WebsocketRequestGetCurrentSelectedSource, nullptr);
