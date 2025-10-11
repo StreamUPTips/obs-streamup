@@ -107,6 +107,42 @@ void HotkeyDeactivateAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_ho
  */
 void HotkeyRefreshAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
 
+/**
+ * Hotkey handler for copying show transition from selected source
+ * @param data User data (unused)
+ * @param id Hotkey ID
+ * @param hotkey Hotkey object
+ * @param pressed Whether the key was pressed (true) or released (false)
+ */
+void HotkeyCopyShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
+
+/**
+ * Hotkey handler for copying hide transition from selected source
+ * @param data User data (unused)
+ * @param id Hotkey ID
+ * @param hotkey Hotkey object
+ * @param pressed Whether the key was pressed (true) or released (false)
+ */
+void HotkeyCopyHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
+
+/**
+ * Hotkey handler for pasting show transition to selected source
+ * @param data User data (unused)
+ * @param id Hotkey ID
+ * @param hotkey Hotkey object
+ * @param pressed Whether the key was pressed (true) or released (false)
+ */
+void HotkeyPasteShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
+
+/**
+ * Hotkey handler for pasting hide transition to selected source
+ * @param data User data (unused)
+ * @param id Hotkey ID
+ * @param hotkey Hotkey object
+ * @param pressed Whether the key was pressed (true) or released (false)
+ */
+void HotkeyPasteHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
+
 //-------------------HOTKEY MANAGEMENT-------------------
 /**
  * Save and load hotkey settings

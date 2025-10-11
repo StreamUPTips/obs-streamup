@@ -254,6 +254,39 @@ void WebsocketDeactivateAllVideoCaptureDevices(obs_data_t *request_data, obs_dat
  */
 void WebsocketRefreshAllVideoCaptureDevices(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 
+//-------------------TRANSITION COPY/PASTE-------------------
+/**
+ * Copy show transition from selected source
+ * @param request_data Request data from WebSocket
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketCopyShowTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Copy hide transition from selected source
+ * @param request_data Request data from WebSocket
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketCopyHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Paste show transition to selected source
+ * @param request_data Request data from WebSocket
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketPasteShowTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Paste hide transition to selected source
+ * @param request_data Request data from WebSocket
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketPasteHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
 } // namespace WebSocketAPI
 } // namespace StreamUP
 

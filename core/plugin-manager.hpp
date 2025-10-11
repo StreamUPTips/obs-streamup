@@ -29,8 +29,9 @@ void PluginsUpToDateOutput(bool manuallyTriggered);
  * @param version_mismatch_modules Map of outdated plugins (name -> installed version)
  * @param failed_to_load_modules Vector of module names that failed to load
  * @param continueCallback Optional callback to execute when "Continue Anyway" is pressed
+ * @param isStartupCheck Whether this is being shown during startup check (shows skip checkbox)
  */
-void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback = nullptr);
+void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback = nullptr, bool isStartupCheck = false);
 
 //-------------------PLUGIN UPDATE FUNCTIONS-------------------
 /**

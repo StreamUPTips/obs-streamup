@@ -58,6 +58,10 @@ static const QList<WebSocketCommand> websocketCommands = {
 	{"GetHideTransition", "WebSocket.Command.GetHideTransition.Description", "WebSocket.Category.TransitionManagement", false},
 	{"SetShowTransition", "WebSocket.Command.SetShowTransition.Description", "WebSocket.Category.TransitionManagement", false},
 	{"SetHideTransition", "WebSocket.Command.SetHideTransition.Description", "WebSocket.Category.TransitionManagement", false},
+	{"CopyShowTransition", "WebSocket.Command.CopyShowTransition.Description", "WebSocket.Category.TransitionManagement", false},
+	{"CopyHideTransition", "WebSocket.Command.CopyHideTransition.Description", "WebSocket.Category.TransitionManagement", false},
+	{"PasteShowTransition", "WebSocket.Command.PasteShowTransition.Description", "WebSocket.Category.TransitionManagement", false},
+	{"PasteHideTransition", "WebSocket.Command.PasteHideTransition.Description", "WebSocket.Category.TransitionManagement", false},
 
 	// Source Properties
 	{"GetBlendingMethod", "WebSocket.Command.GetBlendingMethod.Description", "WebSocket.Category.SourceProperties", false},

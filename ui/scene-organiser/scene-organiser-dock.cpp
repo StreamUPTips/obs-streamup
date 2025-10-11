@@ -161,6 +161,7 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_filtersButton(nullptr)
     , m_moveUpButton(nullptr)
     , m_moveDownButton(nullptr)
+    , m_expandCollapseButton(nullptr)
     , m_lockButton(nullptr)
     , m_settingsButton(nullptr)
     , m_folderContextMenu(nullptr)
@@ -175,6 +176,7 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_copyFiltersSource(nullptr)
     , m_currentContextItem(nullptr)
     , m_isLocked(false)
+    , m_allExpanded(false)
     , m_hideSceneAction(nullptr)
     , m_showSceneAction(nullptr)
     , m_updateBatchTimer(new QTimer(this))
@@ -297,12 +299,14 @@ void SceneOrganiserDock::setupUI()
     connect(m_treeView, &QWidget::customContextMenuRequested,
             this, &SceneOrganiserDock::onCustomContextMenuRequested);
 
-    // Connect expansion signals to save folder state
+    // Connect expansion signals to save folder state and update button
     connect(m_treeView, &QTreeView::expanded, this, [this](const QModelIndex &) {
         m_saveTimer->start();
+        updateExpandCollapseButtonState();
     });
     connect(m_treeView, &QTreeView::collapsed, this, [this](const QModelIndex &) {
         m_saveTimer->start();
+        updateExpandCollapseButtonState();
     });
 
     connect(m_model, &SceneTreeModel::modelChanged,
@@ -442,6 +446,15 @@ void SceneOrganiserDock::createBottomToolbar()
 
     m_toolbar->addWidget(lockCheckbox);
 
+    // Expand/Collapse All button - using QCheckBox like OBS does for expand indicators
+    QCheckBox *expandCollapseButton = new QCheckBox(this);
+    expandCollapseButton->setProperty("class", "checkbox-icon indicator-expand");
+    expandCollapseButton->setChecked(false); // Unchecked = expanded, checked = collapsed
+    expandCollapseButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.ExpandAll"));
+    connect(expandCollapseButton, &QCheckBox::toggled, this, &SceneOrganiserDock::onExpandCollapseAllClicked);
+
+    m_toolbar->addWidget(expandCollapseButton);
+
     // Settings button - using OBS theming but addWidget approach for right-side buttons
     QToolButton *settingsButton = new QToolButton(this);
     settingsButton->setProperty("themeID", "configIconSmall");
@@ -457,6 +470,7 @@ void SceneOrganiserDock::createBottomToolbar()
     m_filtersButton = filtersButton;
     m_moveUpButton = moveUpButton;
     m_moveDownButton = moveDownButton;
+    m_expandCollapseButton = expandCollapseButton;
     m_settingsButton = settingsButton;
     m_lockButton = lockCheckbox;
 
@@ -731,6 +745,7 @@ void SceneOrganiserDock::refreshSceneList()
     updateHiddenScenesStyling();
     applySceneVisibility();
     applySortingIfEnabled();
+    updateExpandCollapseButtonState();
 }
 
 void SceneOrganiserDock::applySortingIfEnabled()
@@ -1062,6 +1077,9 @@ void SceneOrganiserDock::updateToolbarState()
     if (!m_toolbar) {
         return;
     }
+
+    // Update expand/collapse button state to reflect current folder states
+    updateExpandCollapseButtonState();
 
     // This method can be used for additional toolbar state updates if needed
     // Currently, the selection-based state updates are handled in onSceneSelectionChanged
@@ -1427,6 +1445,83 @@ void SceneOrganiserDock::onMoveDownClicked()
     }
 }
 
+void SceneOrganiserDock::onExpandCollapseAllClicked()
+{
+    if (!m_treeView || !m_expandCollapseButton) return;
+
+    // Note: In OBS convention, checked = collapsed, unchecked = expanded
+    // The checkbox state has already been toggled by Qt, so we read the current state
+    bool isCollapsed = m_expandCollapseButton->isChecked();
+
+    if (isCollapsed) {
+        // Collapse all folders
+        m_treeView->collapseAll();
+        m_allExpanded = false;
+        m_expandCollapseButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.ExpandAll"));
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "ExpandCollapse", "Collapsed all folders");
+    } else {
+        // Expand all folders
+        m_treeView->expandAll();
+        m_allExpanded = true;
+        m_expandCollapseButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.CollapseAll"));
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "ExpandCollapse", "Expanded all folders");
+    }
+}
+
+void SceneOrganiserDock::updateExpandCollapseButtonState()
+{
+    if (!m_treeView || !m_expandCollapseButton || !m_proxyModel) return;
+
+    // Count expanded and collapsed folders
+    int totalFolders = 0;
+    int expandedFolders = 0;
+
+    std::function<void(const QModelIndex&)> countRecursive = [&](const QModelIndex& proxyIndex) {
+        if (!proxyIndex.isValid()) return;
+
+        // Convert to source index to check if it's a folder
+        QModelIndex sourceIndex = m_proxyModel->mapToSource(proxyIndex);
+        QStandardItem *item = m_model->itemFromIndex(sourceIndex);
+
+        if (item && item->type() == QStandardItem::UserType + 1) { // Folder item
+            totalFolders++;
+            if (m_treeView->isExpanded(proxyIndex)) {
+                expandedFolders++;
+            }
+        }
+
+        // Check children
+        int rowCount = m_proxyModel->rowCount(proxyIndex);
+        for (int i = 0; i < rowCount; ++i) {
+            QModelIndex childIndex = m_proxyModel->index(i, 0, proxyIndex);
+            countRecursive(childIndex);
+        }
+    };
+
+    // Start from root items
+    int rootRowCount = m_proxyModel->rowCount();
+    for (int i = 0; i < rootRowCount; ++i) {
+        QModelIndex rootIndex = m_proxyModel->index(i, 0);
+        countRecursive(rootIndex);
+    }
+
+    // Block signals to prevent triggering the clicked handler
+    m_expandCollapseButton->blockSignals(true);
+
+    if (totalFolders == 0 || expandedFolders == 0) {
+        // No folders or all folders collapsed - show collapsed state (expand icon)
+        m_expandCollapseButton->setChecked(true);
+        m_expandCollapseButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.ExpandAll"));
+        m_allExpanded = false;
+    } else {
+        // At least one folder is expanded - show expanded state (collapse icon)
+        m_expandCollapseButton->setChecked(false);
+        m_expandCollapseButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.CollapseAll"));
+        m_allExpanded = true;
+    }
+
+    m_expandCollapseButton->blockSignals(false);
+}
 
 void SceneOrganiserDock::onToggleIconsClicked()
 {
@@ -1779,6 +1874,12 @@ void SceneOrganiserDock::onSettingsChanged()
     // Handle settings changes if needed
     LoadConfiguration();
     applySortingIfEnabled();
+
+    // Force update of the tree view to reflect height changes
+    if (m_treeView) {
+        // Force a viewport update to reflect height changes
+        m_treeView->viewport()->update();
+    }
 }
 
 void SceneOrganiserDock::onIconsChanged()
@@ -2180,11 +2281,19 @@ void SceneOrganiserDock::LoadConfiguration()
         historyFile.close();
     }
 
+    // Static set to track which collections are currently being prompted (to prevent race condition)
+    // This prevents multiple dock instances from showing the import prompt simultaneously
+    static QSet<QString> currentlyPrompting;
+
     // Check for migration availability if we haven't prompted yet for this collection
-    if (m_model && !promptedCollections.contains(sceneCollectionName)) {
+    // Also check if we're not already prompting for this collection (prevents duplicate prompts)
+    if (m_model && !promptedCollections.contains(sceneCollectionName) && !currentlyPrompting.contains(sceneCollectionName)) {
         QString migrationConfigPath;
         if (SceneTreeModel::checkMigrationAvailable(sceneCollectionName, migrationConfigPath)) {
-            // Mark this collection as prompted by saving to file
+            // Mark this collection as currently being prompted (prevents other dock instances from showing the prompt)
+            currentlyPrompting.insert(sceneCollectionName);
+
+            // Mark this collection as prompted by saving to file immediately
             promptedCollections.insert(sceneCollectionName);
             if (historyFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
                 QTextStream out(&historyFile);
@@ -2227,6 +2336,9 @@ void SceneOrganiserDock::LoadConfiguration()
                             "Failed to import settings. Please check the log for details.");
                     }
                 }
+
+                // Remove from currently prompting set after dialog is dismissed
+                currentlyPrompting.remove(sceneCollectionName);
             });
         }
     }
@@ -2293,17 +2405,21 @@ void SceneOrganiserDock::saveExpansionState()
     m_savedExpansionState.clear();
 
     // Recursively save expansion state for all items
-    std::function<void(const QModelIndex&)> saveRecursive = [&](const QModelIndex& index) {
-        if (!index.isValid()) return;
+    std::function<void(const QModelIndex&)> saveRecursive = [&](const QModelIndex& proxyIndex) {
+        if (!proxyIndex.isValid()) return;
 
-        // Save expansion state for this index
-        bool isExpanded = m_treeView->isExpanded(index);
-        m_savedExpansionState[QPersistentModelIndex(index)] = isExpanded;
+        // Convert proxy index to source index for stable storage
+        QModelIndex sourceIndex = m_proxyModel->mapToSource(proxyIndex);
+        if (!sourceIndex.isValid()) return;
+
+        // Save expansion state using source model index
+        bool isExpanded = m_treeView->isExpanded(proxyIndex);
+        m_savedExpansionState[QPersistentModelIndex(sourceIndex)] = isExpanded;
 
         // Recursively save children
-        int rowCount = m_proxyModel->rowCount(index);
+        int rowCount = m_proxyModel->rowCount(proxyIndex);
         for (int i = 0; i < rowCount; ++i) {
-            QModelIndex childIndex = m_proxyModel->index(i, 0, index);
+            QModelIndex childIndex = m_proxyModel->index(i, 0, proxyIndex);
             saveRecursive(childIndex);
         }
     };
@@ -2321,15 +2437,19 @@ void SceneOrganiserDock::saveExpansionState()
 
 void SceneOrganiserDock::restoreExpansionState()
 {
-    if (!m_treeView || m_savedExpansionState.isEmpty()) return;
+    if (!m_treeView || !m_proxyModel || m_savedExpansionState.isEmpty()) return;
 
     // Restore expansion state for all saved items
     for (auto it = m_savedExpansionState.begin(); it != m_savedExpansionState.end(); ++it) {
-        QPersistentModelIndex index = it.key();
+        QPersistentModelIndex sourceIndex = it.key();
         bool wasExpanded = it.value();
 
-        if (index.isValid()) {
-            m_treeView->setExpanded(index, wasExpanded);
+        if (sourceIndex.isValid()) {
+            // Convert source index back to proxy index for tree view
+            QModelIndex proxyIndex = m_proxyModel->mapFromSource(sourceIndex);
+            if (proxyIndex.isValid()) {
+                m_treeView->setExpanded(proxyIndex, wasExpanded);
+            }
         }
     }
 
@@ -2468,6 +2588,9 @@ void SceneOrganiserDock::restoreFolderExpansionState()
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
         QString("Restored expansion state for %1 folders").arg(expandedFolders.size()).toUtf8().constData());
+
+    // Update button state to reflect the restored expansion state
+    updateExpandCollapseButtonState();
 }
 
 // Public methods for keyboard shortcuts
@@ -4554,6 +4677,34 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
     painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
 
     painter->restore();
+}
+
+QSize StreamUP::SceneOrganiser::CustomColorDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    // Get the default size hint from the parent class
+    QSize size = QStyledItemDelegate::sizeHint(option, index);
+
+    // Get the current item height setting (percentage multiplier)
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+    int heightPercentage = settings.sceneOrganiserItemHeight;
+
+    // Ensure heightPercentage is valid (minimum 50%)
+    if (heightPercentage < 50) {
+        heightPercentage = 100;
+    }
+
+    // Apply the multiplier to the height based on font metrics
+    // Use the font from the option to calculate the proper base height
+    QFontMetrics fm(option.font);
+    int baseHeight = fm.height() + 8; // Add some padding (4px top + 4px bottom)
+
+    // Apply the percentage multiplier
+    int adjustedHeight = (baseHeight * heightPercentage) / 100;
+
+    // Set the new height while keeping the width the same
+    size.setHeight(adjustedHeight);
+
+    return size;
 }
 
 void StreamUP::SceneOrganiser::SceneOrganiserDock::forceTreeViewRepaint()
