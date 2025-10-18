@@ -473,30 +473,17 @@ void MultiDockManager::RegisterWithObs(MultiDockDock* multiDock)
     if (!multiDock) {
         return;
     }
-    
+
     QString id = multiDock->GetId();
     QString title = multiDock->GetName();
-    QMainWindow* mainWindow = GetObsMainWindow();
-    
-    // Modern API - wrap in QDockWidget and use custom dock registration (no menu entry)
-    auto dock = new QDockWidget(mainWindow);
-    dock->setObjectName(id);
-    dock->setWindowTitle(title);
-    dock->setWidget(multiDock);
-    dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    dock->setFloating(true);
-    dock->hide();
+    QString displayTitle = QString("MultiDock - %1").arg(title);
 
-    // Use custom dock registration to avoid appearing in OBS View > Docks menu
-    bool success = obs_frontend_add_custom_qdock(id.toUtf8().constData(), dock);
+    // Register directly with OBS (no wrapper) - same pattern as StreamUP Dock and Scene Organiser
+    // OBS will handle the QDockWidget wrapping automatically
+    obs_frontend_add_dock_by_id(id.toUtf8().constData(), displayTitle.toUtf8().constData(), multiDock);
 
-    if (success) {
-        StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Registration", "Registered MultiDock '%s' with OBS as custom dock (hidden from menu, ID: %s)",
-             title.toUtf8().constData(), id.toUtf8().constData());
-    } else {
-        StreamUP::DebugLogger::LogErrorFormat("MultiDock", "Failed to register MultiDock '%s' with OBS",
-             title.toUtf8().constData());
-    }
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Registration", "Registered MultiDock '%s' with OBS as '%s' (ID: %s)",
+         title.toUtf8().constData(), displayTitle.toUtf8().constData(), id.toUtf8().constData());
 }
 
 void MultiDockManager::UnregisterFromObs(MultiDockDock* multiDock)
