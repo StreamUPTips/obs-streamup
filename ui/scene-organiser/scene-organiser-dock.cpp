@@ -346,45 +346,31 @@ void SceneOrganiserDock::createBottomToolbar()
     // Match native OBS scenes dock styling exactly
     m_toolbar->setIconSize(QSize(16, 16));  // Standard OBS toolbar icon size
 
-    // Minimal styling - let OBS theme handle appearance like standard toolbars
-    m_toolbar->setStyleSheet(
-        "QToolBar {"
-        "    border: none;"
-        "    spacing: 3px;"  // Standard OBS toolbar spacing
-        "}"
-        "QToolButton::menu-indicator {"
-        "    image: none;"
-        "    width: 0px;"
-        "    height: 0px;"
-        "}"
-        "QToolButton::menu-button {"
-        "    border: none;"
-        "    background: transparent;"
-        "    width: 0px;"
-        "}"
-    );
+    // Let OBS theme handle all toolbar styling - no custom stylesheets
+    // The toolbar will inherit appearance from the active OBS theme
 
     // Create QToolButtons and add them to toolbar (to properly support themeID)
     // This approach allows themeID properties to work while maintaining proper toolbar styling
 
-    // Add button with dropdown menu
+    // Add button - appears as normal button without dropdown arrow
     QToolButton *addButton = new QToolButton(this);
     addButton->setProperty("themeID", "addIconSmall");
     addButton->setProperty("class", "icon-plus");
     addButton->setToolTip("Add folder or create scene");
-    addButton->setPopupMode(QToolButton::InstantPopup);
 
-    // Create a menu for the add button
+    // Create a menu for the add button (shown on click, no arrow indicator)
     QMenu *addMenu = new QMenu(this);
     addMenu->addAction(obs_module_text("SceneOrganiser.Action.AddFolder"), this, &SceneOrganiserDock::onAddFolderClicked);
     addMenu->addAction(obs_module_text("SceneOrganiser.Action.CreateScene"), this, &SceneOrganiserDock::onCreateSceneClicked);
-    addButton->setMenu(addMenu);
 
-    // Don't set a default action to avoid icon overlap - just connect the clicked signal
-    connect(addButton, &QToolButton::clicked, this, &SceneOrganiserDock::onAddFolderClicked);
+    // Show menu on click without dropdown arrow
+    connect(addButton, &QToolButton::clicked, [this, addButton, addMenu]() {
+        QPoint pos = addButton->mapToGlobal(QPoint(0, addButton->height()));
+        addMenu->exec(pos);
+    });
 
     m_toolbar->addWidget(addButton);
-    m_addFolderAction = nullptr; // No separate action needed for dropdown button
+    m_addFolderAction = nullptr; // No separate action needed
 
     // Remove button
     QToolButton *removeButton = new QToolButton(this);
@@ -407,7 +393,7 @@ void SceneOrganiserDock::createBottomToolbar()
     m_toolbar->addWidget(filtersButton);
     m_filtersAction = nullptr; // Direct button connection
 
-    // Add separator
+    // Separator after add/remove/filters group (matching OBS scenes dock)
     m_toolbar->addSeparator();
 
     // Move up button
@@ -432,37 +418,46 @@ void SceneOrganiserDock::createBottomToolbar()
     m_toolbar->addWidget(moveDownButton);
     m_moveDownAction = nullptr; // Direct button connection
 
+    // Separator after move up/down group (matching OBS scenes dock)
+    m_toolbar->addSeparator();
+
     // Add spacer to push remaining buttons to the right
     QWidget *spacer = new QWidget(this);
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     m_toolbar->addWidget(spacer);
 
+    // Create container for right-aligned buttons with consistent spacing
+    QWidget *rightButtonsContainer = new QWidget(this);
+    QHBoxLayout *rightButtonsLayout = new QHBoxLayout(rightButtonsContainer);
+    rightButtonsLayout->setContentsMargins(0, 0, 0, 0);
+    rightButtonsLayout->setSpacing(2); // Match toolbar button spacing
+
     // Lock checkbox - using exact same approach as OBS source dock
-    QCheckBox *lockCheckbox = new QCheckBox(this);
+    QCheckBox *lockCheckbox = new QCheckBox(rightButtonsContainer);
     lockCheckbox->setProperty("class", "checkbox-icon indicator-lock");
     lockCheckbox->setChecked(false); // Start unlocked
     lockCheckbox->setToolTip("Scene organizer is unlocked (click to lock)");
     connect(lockCheckbox, &QCheckBox::toggled, this, &SceneOrganiserDock::onToggleLockClicked);
-
-    m_toolbar->addWidget(lockCheckbox);
+    rightButtonsLayout->addWidget(lockCheckbox);
 
     // Expand/Collapse All button - using QCheckBox like OBS does for expand indicators
-    QCheckBox *expandCollapseButton = new QCheckBox(this);
+    QCheckBox *expandCollapseButton = new QCheckBox(rightButtonsContainer);
     expandCollapseButton->setProperty("class", "checkbox-icon indicator-expand");
     expandCollapseButton->setChecked(false); // Unchecked = expanded, checked = collapsed
     expandCollapseButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.ExpandAll"));
     connect(expandCollapseButton, &QCheckBox::toggled, this, &SceneOrganiserDock::onExpandCollapseAllClicked);
+    rightButtonsLayout->addWidget(expandCollapseButton);
 
-    m_toolbar->addWidget(expandCollapseButton);
-
-    // Settings button - using OBS theming but addWidget approach for right-side buttons
-    QToolButton *settingsButton = new QToolButton(this);
+    // Settings button - using OBS theming
+    QToolButton *settingsButton = new QToolButton(rightButtonsContainer);
     settingsButton->setProperty("themeID", "configIconSmall");
     settingsButton->setProperty("class", "icon-gear");
     settingsButton->setToolTip("Open StreamUP settings for Scene Organiser");
     connect(settingsButton, &QToolButton::clicked, this, &SceneOrganiserDock::onSettingsClicked);
+    rightButtonsLayout->addWidget(settingsButton);
 
-    m_toolbar->addWidget(settingsButton);
+    // Add the container to the toolbar
+    m_toolbar->addWidget(rightButtonsContainer);
 
     // Store button references for additional state management if needed
     m_addButton = addButton;
