@@ -71,4 +71,6 @@ public slots:
 
 protected:
 	void contextMenuEvent(QContextMenuEvent* event) override;
+	void showEvent(QShowEvent* event) override;
+	void resizeEvent(QResizeEvent* event) override;
 };

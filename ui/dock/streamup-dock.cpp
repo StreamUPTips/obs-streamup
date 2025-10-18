@@ -21,6 +21,8 @@
 #include <QMenu>
 #include <QAction>
 #include <QContextMenuEvent>
+#include <QShowEvent>
+#include <QResizeEvent>
 #include <QList>
 #include <QMetaObject>
 #include <QDialog>
@@ -342,12 +344,12 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 {
 	ui->setupUi(this);
 
-	// Create buttons with more appropriate dock size
-	button1 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
-	button2 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
-	button3 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
-	button4 = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
-	videoCaptureButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
+	// Create buttons with standard QPushButton to allow theme customization
+	button1 = new QPushButton("", this);
+	button2 = new QPushButton("", this);
+	button3 = new QPushButton("", this);
+	button4 = new QPushButton("", this);
+	videoCaptureButton = new QPushButton("", this);
 
 	// Apply initial icons to buttons
 	applyFileIconToButton(button1, StreamUP::UIHelpers::GetThemedIconPath("all-scene-source-locked"));
@@ -365,6 +367,21 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 		button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 		// Remove any padding/margins that might stretch the button
 		button->setContentsMargins(0, 0, 0, 0);
+
+		// Apply minimal structural styling - only size and spacing properties, no colors
+		// This ensures the FlowLayout calculates positions correctly
+		button->setStyleSheet(
+			"QPushButton {"
+			"    min-width: 28px;"
+			"    max-width: 28px;"
+			"    min-height: 28px;"
+			"    max-height: 28px;"
+			"    width: 28px;"
+			"    height: 28px;"
+			"    padding: 0px;"
+			"    margin: 2px;"
+			"}"
+		);
 	};
 
 	// Set properties for each button
@@ -405,6 +422,16 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 
 	updateButtonIcons();
 	updateToolVisibility();
+
+	// Force layout recalculation after everything is set up
+	QTimer::singleShot(0, this, [this]() {
+		if (mainDockLayout) {
+			mainDockLayout->invalidate();
+			mainDockLayout->activate();
+		}
+		this->updateGeometry();
+		this->update();
+	});
 	
 	// Add this dock to the static list for notifications
 	dockInstances.append(this);
@@ -703,6 +730,31 @@ void StreamUPDock::showContextMenu(const QPoint& position)
 void StreamUPDock::contextMenuEvent(QContextMenuEvent* event)
 {
 	showContextMenu(event->pos());
+}
+
+void StreamUPDock::showEvent(QShowEvent* event)
+{
+	QFrame::showEvent(event);
+
+	// Force layout recalculation when dock is first shown
+	if (mainDockLayout) {
+		mainDockLayout->invalidate();
+		mainDockLayout->activate();
+		mainDockLayout->update();
+	}
+	updateGeometry();
+	update();
+}
+
+void StreamUPDock::resizeEvent(QResizeEvent* event)
+{
+	QFrame::resizeEvent(event);
+
+	// Force layout recalculation when dock is resized
+	if (mainDockLayout) {
+		mainDockLayout->invalidate();
+		mainDockLayout->activate();
+	}
 }
 
 void StreamUPDock::onSettingsChanged()
