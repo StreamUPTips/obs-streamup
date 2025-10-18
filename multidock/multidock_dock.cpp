@@ -19,33 +19,9 @@
 #include <QStyle>
 #include <QDockWidget>
 #include <QMainWindow>
-#include <QPainter>
-#include <QPixmap>
-#include <QtSvg/QSvgRenderer>
 
 namespace StreamUP {
 namespace MultiDock {
-
-// Helper function to create colored icons from SVG resources
-static QIcon CreateColoredIcon(const QString& svgPath, const QColor& color, const QSize& size = QSize(16, 16))
-{
-    QPixmap pixmap(size);
-    pixmap.fill(Qt::transparent);
-    
-    QPainter painter(&pixmap);
-    painter.setRenderHint(QPainter::Antialiasing);
-    
-    QSvgRenderer renderer(svgPath);
-    if (renderer.isValid()) {
-        renderer.render(&painter);
-        
-        // Apply color overlay
-        painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
-        painter.fillRect(pixmap.rect(), color);
-    }
-    
-    return QIcon(pixmap);
-}
 
 MultiDockDock::MultiDockDock(const QString& id, const QString& name, QWidget* parent)
     : QFrame(parent)
@@ -84,7 +60,7 @@ void MultiDockDock::SetupUi()
     // Create a container widget for the inner host with padding
     QWidget* innerContainer = new QWidget();
     innerContainer->setObjectName("MultiDockInnerContainer");
-    innerContainer->setStyleSheet("QWidget#MultiDockInnerContainer { background-color: #0d0d0d; }");
+    // Let OBS theme handle background color
     QVBoxLayout* innerLayout = new QVBoxLayout(innerContainer);
     innerLayout->setContentsMargins(12, 12, 12, 12); // 12px padding on all sides
     innerLayout->setSpacing(0);
@@ -108,9 +84,8 @@ void MultiDockDock::SetupUi()
     
     // Set minimum size to ensure usability
     setMinimumSize(400, 300);
-    
-    // Set the background color to #0d0d0d
-    setStyleSheet("MultiDockDock { background-color: #0d0d0d; }");
+
+    // Let OBS theme handle all styling
     setFrameStyle(QFrame::NoFrame);
 }
 
@@ -250,16 +225,10 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
     toolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     toolBar->setOrientation(Qt::Horizontal);
     
-    // Make it look more like a standard OBS toolbar
+    // Match standard OBS toolbar icon size
     toolBar->setIconSize(QSize(16, 16));
-    
-    // Minimal styling - let OBS theme handle appearance like standard toolbars
-    toolBar->setStyleSheet(
-        "QToolBar {"
-        "    border: none;"
-        "    spacing: 3px;"  // Standard OBS toolbar spacing
-        "}"
-    );
+
+    // Let OBS theme handle all toolbar styling - no custom stylesheets
     
     // Add Dock action with OBS theme plus icon
     QAction* addDockAction = toolBar->addAction(QIcon(), "");

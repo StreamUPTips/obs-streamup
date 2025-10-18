@@ -47,29 +47,20 @@ void InnerDockHost::SetupDockOptions()
 {
     setDockOptions(AllowTabbedDocks | AllowNestedDocks | AnimatedDocks);
     setTabPosition(Qt::AllDockWidgetAreas, QTabWidget::South);
-    
+
     // Don't create a central widget - let docks fill the entire space
     // This allows dock widgets to use all available space
-    
+
     // Set window flags to prevent overlap with parent title
     setWindowFlags(Qt::Widget);
-    
-    // Set darker background only for the main window background (empty areas)
-    // Style dock separators and margins to use the same color with 12px spacing
-    QString bgColor = "#0d0d0d";
-    setStyleSheet(QString(
-        "InnerDockHost { background-color: %1; }"
-        "QMainWindow { background-color: %1; }"
-        "QMainWindow::separator { background-color: %1; width: 12px; height: 12px; }"
-        "QSplitter::handle { background-color: %1; width: 12px; height: 12px; }"
-        "QTabWidget::pane { border: none; margin: 6px; }"
-        "QDockWidget { background-color: transparent; }"
-        "QDockWidget::title { background-color: #161617; text-align: left; padding-left: 8px; }"
-        "QDockWidget::close-button { subcontrol-position: top right; right: 10px; top: 4px; }"
-        "QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
-        "InnerDockHost QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
-        "InnerDockHost > QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
-    ).arg(bgColor));
+
+    // Set auto-fill background to use the palette properly (like QFrame does)
+    setAutoFillBackground(true);
+
+    // Absolute minimum styling - only hide float buttons, let OBS theme handle everything else
+    setStyleSheet(
+        "QDockWidget::float-button { width: 0px; height: 0px; }"
+    );
 }
 
 
@@ -104,7 +95,10 @@ void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)
     
     // Store original context menu policy
     original.contextMenuPolicy = dock->contextMenuPolicy();
-    
+
+    // Store original class property for theme styling
+    original.classProperty = dock->property("class");
+
     // Store captured dock info
     CapturedDock captured;
     captured.widget = dock;
@@ -114,7 +108,10 @@ void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)
     // Move dock to this host - let it behave naturally
     addDockWidget(area, dock);
     ConnectDockSignals(dock);
-    
+
+    // Set object name for theme styling
+    dock->setProperty("class", "MultiDockContainedDock");
+
     // Keep dock completely original - no custom modifications
     
     // Don't hide toolbars - users expect to see them
@@ -171,9 +168,17 @@ void InnerDockHost::RemoveDock(QDockWidget* dock)
     
     // Remove from this host
     removeDockWidget(dock);
-    
+
     // Restore original settings
     dock->setContextMenuPolicy(captured.original.contextMenuPolicy);
+
+    // Restore original class property for theme styling
+    if (captured.original.classProperty.isValid()) {
+        dock->setProperty("class", captured.original.classProperty);
+    } else {
+        // Clear the property if there wasn't one originally
+        dock->setProperty("class", QVariant());
+    }
     
     // Return to original parent if possible
     if (captured.original.main) {
@@ -417,32 +422,13 @@ void InnerDockHost::RestoreDockToolBars(QDockWidget* dock)
 
 void InnerDockHost::ReapplyDockFeatures()
 {
-    // Reapply stylesheet first to ensure close buttons show/hide correctly but keep 12px padding
-    QString bgColor = "#0d0d0d";
-    QString closeButtonStyle = m_docksLocked ? "width: 0px; height: 0px; subcontrol-position: top right; right: -20px;" : "";
-    // When locked, disable separator interaction but keep visual spacing
-    QString separatorStyle = m_docksLocked ? 
-        "background-color: %1; width: 12px; height: 12px; border: none;" :
-        "background-color: %1; width: 12px; height: 12px;";
-    QString splitterStyle = m_docksLocked ? 
-        "background-color: %1; width: 12px; height: 12px; border: none;" :
-        "background-color: %1; width: 12px; height: 12px;";
-    
-    setStyleSheet(QString(
-        "InnerDockHost { background-color: %1; }"
-        "QMainWindow { background-color: %1; }"
-        "QMainWindow::separator { " + separatorStyle + " }"
-        "QSplitter::handle { " + splitterStyle + " }"
-        "QTabWidget::pane { border: none; margin: 6px; }"
-        "QDockWidget { background-color: transparent; }"
-        "QDockWidget::title { background-color: #161617; text-align: left; padding-left: 8px; }"
-        "QDockWidget::close-button { subcontrol-position: top right; right: 10px; top: 4px; %2 }"
-        "QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
-        "InnerDockHost QDockWidget::close-button { %2 }"
-        "InnerDockHost > QDockWidget::close-button { %2 }"
-        "InnerDockHost QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
-        "InnerDockHost > QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
-    ).arg(bgColor).arg(closeButtonStyle));
+    // Only hide close buttons when locked, hide float buttons always
+    QString closeButtonStyle = m_docksLocked ? "width: 0px; height: 0px;" : "";
+
+    setStyleSheet(
+        "QDockWidget::close-button { " + closeButtonStyle + " }"
+        "QDockWidget::float-button { width: 0px; height: 0px; }"
+    );
     
     // Reapply dock options based on lock state
     if (m_docksLocked) {
@@ -480,33 +466,14 @@ void InnerDockHost::ReapplyDockFeatures()
 void InnerDockHost::SetDocksLocked(bool locked)
 {
     m_docksLocked = locked;
-    
-    // Update stylesheet to show/hide close buttons but keep 12px padding when locked
-    QString bgColor = "#0d0d0d";
-    QString closeButtonStyle = m_docksLocked ? "width: 0px; height: 0px; subcontrol-position: top right; right: -20px;" : "";
-    // When locked, disable separator interaction but keep visual spacing
-    QString separatorStyle = m_docksLocked ? 
-        "background-color: %1; width: 12px; height: 12px; border: none;" :
-        "background-color: %1; width: 12px; height: 12px;";
-    QString splitterStyle = m_docksLocked ? 
-        "background-color: %1; width: 12px; height: 12px; border: none;" :
-        "background-color: %1; width: 12px; height: 12px;";
-    
-    setStyleSheet(QString(
-        "InnerDockHost { background-color: %1; }"
-        "QMainWindow { background-color: %1; }"
-        "QMainWindow::separator { " + separatorStyle + " }"
-        "QSplitter::handle { " + splitterStyle + " }"
-        "QTabWidget::pane { border: none; margin: 6px; }"
-        "QDockWidget { background-color: transparent; border: none; }"
-        "QDockWidget::title { background-color: #161617; text-align: left; padding-left: 8px; }"
-        "QDockWidget::close-button { subcontrol-position: top right; right: 10px; top: 4px; %2 }"
-        "QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
-        "InnerDockHost QDockWidget::close-button { %2 }"
-        "InnerDockHost > QDockWidget::close-button { %2 }"
-        "InnerDockHost QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
-        "InnerDockHost > QDockWidget::float-button { width: 0px; height: 0px; subcontrol-position: top right; right: -20px; }"
-    ).arg(bgColor).arg(closeButtonStyle));
+
+    // Only hide close buttons when locked, hide float buttons always
+    QString closeButtonStyle = m_docksLocked ? "width: 0px; height: 0px;" : "";
+
+    setStyleSheet(
+        "QDockWidget::close-button { " + closeButtonStyle + " }"
+        "QDockWidget::float-button { width: 0px; height: 0px; }"
+    );
     
     // Disable/enable dock resizing by setting dock options
     if (m_docksLocked) {
