@@ -102,53 +102,9 @@ QFrame* StreamUPToolbar::createHorizontalSeparator()
 
 void StreamUPToolbar::updateToolbarStyling()
 {
-	// Check if cached stylesheet is valid (prevents redundant generation)
-	if (styleSheetCacheValid && !cachedStyleSheet.isEmpty()) {
-		setStyleSheet(cachedStyleSheet);
-		return;
-	}
-	
-	// Generate new stylesheet with minimal styling for StreamUP toolbar buttons
-	cachedStyleSheet = QString(R"(
-		/* Minimal styling for all StreamUP toolbar buttons - no backgrounds */
-		QToolButton[class="streamup-toolbar-button"] {
-			background: transparent;
-			border: none;
-			border-radius: %1px;
-			padding: %2px;
-		}
-		QToolButton[class="streamup-toolbar-button"]:hover {
-			background-color: %3;
-		}
-		QToolButton[class="streamup-toolbar-button"]:pressed {
-			background-color: %4;
-		}
-		QToolButton[class="streamup-toolbar-button"]:checked {
-			background: transparent;
-			border: none;
-		}
-		QToolButton[class="streamup-toolbar-button"]:checked:hover {
-			background-color: %3;
-		}
-		/* No special styling for virtual camera and studio mode buttons */
-		/* Base styling for all StreamUP toolbar separators */
-		QFrame[separatorType="streamup-separator"] {
-			background-color: %5;
-			border: none;
-		}
-		/* Spacer widgets styling */
-		QWidget[objectName*="spacer"] {
-			background: transparent;
-		}
-	)").arg(StreamUP::UIStyles::Sizes::SPACE_4)                    // border-radius
-	   .arg(StreamUP::UIStyles::Sizes::SPACE_2)                    // padding
-	   .arg(StreamUP::UIStyles::Colors::HOVER_OVERLAY)             // hover background
-	   .arg(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30)          // pressed background
-	   .arg(StreamUP::UIStyles::Colors::BORDER_MEDIUM);            // separator background (more visible)
-	
-	// Mark cache as valid and apply stylesheet
-	styleSheetCacheValid = true;
-	setStyleSheet(cachedStyleSheet);
+	// Let OBS theme handle all toolbar styling - no custom stylesheets
+	// Buttons and separators will inherit styling from the active OBS theme
+	setStyleSheet("");
 }
 
 bool StreamUPToolbar::isReplayBufferAvailable()
@@ -503,9 +459,8 @@ void StreamUPToolbar::OnFrontendEvent(enum obs_frontend_event event, void *data)
 		break;
 
 	case OBS_FRONTEND_EVENT_THEME_CHANGED:
-		// Theme changed, update icons and styling for new theme
+		// Theme changed, update icons for new theme
 		toolbar->updateIconsForTheme();
-		toolbar->updateToolbarStyling();
 		break;
 		
 	default:
@@ -539,8 +494,7 @@ void StreamUPToolbar::clearIconCache()
 
 void StreamUPToolbar::clearStyleSheetCache()
 {
-	cachedStyleSheet.clear();
-	styleSheetCacheValid = false;
+	// No stylesheet cache anymore - OBS theme handles all styling
 }
 
 void StreamUPToolbar::preloadCommonIcons()
@@ -983,10 +937,7 @@ void StreamUPToolbar::setupDynamicUI()
 {
 	// Set flag to prevent updates during reconstruction
 	isReconstructingUI = true;
-	
-	// Clear stylesheet cache since UI is being reconstructed
-	clearStyleSheetCache();
-	
+
 	// Set basic toolbar properties like obs-toolbar
 	setMovable(false);
 	setFloatable(false);
@@ -1214,10 +1165,7 @@ void StreamUPToolbar::setupDynamicUI()
 			mainLayout->addWidget(button);
 		}
 	}
-	
-	// Apply CSS styling
-	updateToolbarStyling();
-	
+
 	// Add the central widget to toolbar
 	addWidget(centralWidget);
 	
@@ -1371,11 +1319,10 @@ void StreamUPToolbar::refreshFromConfiguration()
 	// Clear the current toolbar state
 	clear();
 	dynamicButtons.clear();
-	
-	// Clear caches since UI is being reconstructed
+
+	// Clear icon cache since UI is being reconstructed
 	clearIconCache();
-	clearStyleSheetCache();
-	
+
 	// Reset button pointers
 	streamButton = nullptr;
 	recordButton = nullptr;
