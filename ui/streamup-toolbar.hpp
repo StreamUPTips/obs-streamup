@@ -23,6 +23,7 @@ public:
     // Public methods for external access
     void updatePositionAwareTheme();
     void refreshFromConfiguration();
+    void updateButtonSizes();  // Update button and icon sizes without rebuilding
 
 private slots:
     void onStreamButtonClicked();

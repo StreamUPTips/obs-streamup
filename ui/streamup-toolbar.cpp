@@ -811,14 +811,18 @@ void StreamUPToolbar::updateLayoutOrientation()
 			setOrientation(Qt::Vertical);
 			mainLayout->setContentsMargins(4, 8, 4, 8);
 			mainLayout->setAlignment(Qt::AlignHCenter); // Center widgets horizontally
-			
+
 			// Set size policies for vertical layout to maintain button sizes
-			centralWidget->setMinimumWidth(36); // Ensure minimum width for buttons (28px + padding)
-			centralWidget->setMaximumWidth(48); // Prevent excessive width
+			// Get current button size from settings
+			StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+			int iconSize = settings.toolbarIconSize;
+			int buttonSize = iconSize + 6;
+			centralWidget->setMinimumWidth(buttonSize + 8); // Button size + padding
+			centralWidget->setMaximumWidth(buttonSize + 16); // Allow some extra space
 		} else {
 			mainLayout = new QHBoxLayout(centralWidget);
 			setOrientation(Qt::Horizontal);
-			mainLayout->setContentsMargins(8, 0, 8, 0);
+			mainLayout->setContentsMargins(8, 4, 8, 4);  // Added vertical padding (top, bottom)
 			// No alignment needed for horizontal layout (default is fine)
 			
 			// Reset size constraints for horizontal layout
@@ -894,17 +898,22 @@ void StreamUPToolbar::updateLayoutOrientation()
 					// Was vertical, spacer size was the height
 					spacerSize = oldSize.height();
 				} else {
-					// Was horizontal, spacer size was the width  
+					// Was horizontal, spacer size was the width
 					spacerSize = oldSize.width();
 				}
-				
+
+				// Get current button size from settings
+				StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+				int iconSize = settings.toolbarIconSize;
+				int buttonSize = iconSize + 6;
+
 				// Apply new dimensions based on new orientation
 				if (shouldBeVertical) {
-					// Now vertical, spacer size becomes the height
-					widget->setFixedSize(28, spacerSize);
+					// Now vertical, spacer size becomes the height, width matches buttons
+					widget->setFixedSize(buttonSize, spacerSize);
 				} else {
-					// Now horizontal, spacer size becomes the width
-					widget->setFixedSize(spacerSize, 28);
+					// Now horizontal, spacer size becomes the width, height matches buttons
+					widget->setFixedSize(spacerSize, buttonSize);
 				}
 				
 				// Re-add the spacer widget
@@ -963,7 +972,7 @@ void StreamUPToolbar::setupDynamicUI()
 	centralWidget = new QWidget(this);
 	centralWidget->setObjectName("StreamUPToolbarCentralWidget");
 	mainLayout = new QHBoxLayout(centralWidget);
-	mainLayout->setContentsMargins(8, 0, 8, 0);
+	mainLayout->setContentsMargins(8, 4, 8, 4);  // Added vertical padding (top, bottom)
 	mainLayout->setSpacing(4);
 	
 	// Clear existing buttons and properly clean up old references
@@ -1052,23 +1061,28 @@ void StreamUPToolbar::setupDynamicUI()
 			QWidget* spacerWidget = new QWidget(centralWidget);
 			// Ensure objectName contains "spacer" for CSS selector matching
 			spacerWidget->setObjectName(QString("spacer_%1").arg(item->id));
-			
+
+			// Get current button size from settings
+			StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+			int iconSize = settings.toolbarIconSize;
+			int buttonSize = iconSize + 6;
+
 			// Set dimensions based on current toolbar orientation
 			QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
 			if (mainWindow) {
 				Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
 				bool isVertical = (currentArea == Qt::LeftToolBarArea || currentArea == Qt::RightToolBarArea);
-				
+
 				if (isVertical) {
-					// For vertical toolbar, spacer height should be the configured size
-					spacerWidget->setFixedSize(28, spacerItem->size); // Match button width, use configured size for height
+					// For vertical toolbar, spacer height should be the configured size, width matches buttons
+					spacerWidget->setFixedSize(buttonSize, spacerItem->size);
 				} else {
-					// For horizontal toolbar, spacer width should be the configured size
-					spacerWidget->setFixedSize(spacerItem->size, 28); // Use configured size for width, match button height
+					// For horizontal toolbar, spacer width should be the configured size, height matches buttons
+					spacerWidget->setFixedSize(spacerItem->size, buttonSize);
 				}
 			} else {
 				// Fallback to horizontal orientation if can't determine position
-				spacerWidget->setFixedSize(spacerItem->size, 28);
+				spacerWidget->setFixedSize(spacerItem->size, buttonSize);
 			}
 			
 			spacerWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -1087,22 +1101,32 @@ void StreamUPToolbar::setupDynamicUI()
 					if (buttonItem) {
 						// Add pause button immediately after record button
 						if (buttonItem->buttonType == "record") {
-							
+							// Get current settings for dynamic sizing
+							StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+							int iconSize = settings.toolbarIconSize;
+							int buttonSize = iconSize + 6;
+
 							// Create new pause button for this position
 							QToolButton* newPauseButton = new QToolButton(centralWidget);
 							newPauseButton->setObjectName("pauseButton");
 							newPauseButton->setProperty("class", "streamup-toolbar-button");
 							newPauseButton->setProperty("buttonType", "streamup-button");
-							newPauseButton->setFixedSize(QSize(22, 22));
-							newPauseButton->setIconSize(QSize(16, 16));
+							newPauseButton->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds);
+							newPauseButton->setFixedSize(QSize(buttonSize, buttonSize));
+							newPauseButton->setIconSize(QSize(iconSize, iconSize));
 							newPauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newPauseButton->setIcon(getCachedIcon("pause"));
 							newPauseButton->setToolTip("Pause Recording");
 							newPauseButton->setCheckable(true);
+							// Apply styling based on button backgrounds setting
+							if (!settings.toolbarButtonBackgrounds) {
+								newPauseButton->setAutoRaise(true);
+								newPauseButton->setStyleSheet("QToolButton { background: transparent; border: none; }");
+							}
 							// Start hidden - will be shown when recording is active and pausable
 							newPauseButton->setVisible(false);
 							connect(newPauseButton, &QToolButton::clicked, this, &StreamUPToolbar::onPauseButtonClicked);
-							
+
 							// Replace the old pause button reference
 							pauseButton = newPauseButton;
 							recordButton = button;
@@ -1110,26 +1134,37 @@ void StreamUPToolbar::setupDynamicUI()
 						}
 						// Add save_replay button immediately after replay_buffer button
 						else if (buttonItem->buttonType == "replay_buffer") {
+							// Get current settings for dynamic sizing
+							StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+							int iconSize = settings.toolbarIconSize;
+							int buttonSize = iconSize + 6;
+
 							// Create new save_replay button for this position
 							QToolButton* newSaveReplayButton = new QToolButton(centralWidget);
 							newSaveReplayButton->setObjectName("saveReplayButton");
 							newSaveReplayButton->setProperty("class", "streamup-toolbar-button");
 							newSaveReplayButton->setProperty("buttonType", "streamup-button");
-							newSaveReplayButton->setFixedSize(QSize(22, 22));
-							newSaveReplayButton->setIconSize(QSize(16, 16));
+							newSaveReplayButton->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds);
+							newSaveReplayButton->setFixedSize(QSize(buttonSize, buttonSize));
+							newSaveReplayButton->setIconSize(QSize(iconSize, iconSize));
 							newSaveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newSaveReplayButton->setIcon(getCachedIcon("save-replay"));
 							newSaveReplayButton->setToolTip("Save Replay");
 							newSaveReplayButton->setCheckable(false);
+							// Apply styling based on button backgrounds setting
+							if (!settings.toolbarButtonBackgrounds) {
+								newSaveReplayButton->setAutoRaise(true);
+								newSaveReplayButton->setStyleSheet("QToolButton { background: transparent; border: none; }");
+							}
 							// Start hidden - will be shown when replay buffer is active
 							newSaveReplayButton->setVisible(false);
 							connect(newSaveReplayButton, &QToolButton::clicked, this, &StreamUPToolbar::onSaveReplayButtonClicked);
-							
+
 							// Replace the old save replay button reference
-											saveReplayButton = newSaveReplayButton;
+							saveReplayButton = newSaveReplayButton;
 							replayBufferButton = button;
 							mainLayout->addWidget(saveReplayButton);
-										}
+						}
 					}
 				}
 			}
@@ -1189,17 +1224,30 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 {
 	QToolButton* button = new QToolButton(centralWidget);
 
-	// Standardize button appearance for consistent custom icon rendering
-	button->setIconSize(QSize(16, 16));  // Standard icon size
+	// Get current settings for dynamic sizing
+	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+	int iconSize = settings.toolbarIconSize;
+	int buttonSize = iconSize + 6;  // Button is icon size + 6px padding
+
+	// Set dynamic icon and button sizes based on settings
+	button->setIconSize(QSize(iconSize, iconSize));
 	button->setToolButtonStyle(Qt::ToolButtonIconOnly);
 
 	// Add consistent styling properties for custom StreamUP icons
 	button->setProperty("class", "streamup-toolbar-button");
 	button->setProperty("buttonType", "streamup-button");
+	button->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds);
 
-	// Ensure consistent button sizing
-	button->setFixedSize(QSize(22, 22));  // Consistent button size
-	
+	// Set dynamic button sizing
+	button->setFixedSize(QSize(buttonSize, buttonSize));
+
+	// Apply styling based on button backgrounds setting
+	if (!settings.toolbarButtonBackgrounds) {
+		// Disable button backgrounds by making it flat
+		button->setAutoRaise(true);
+		button->setStyleSheet("QToolButton { background: transparent; border: none; }");
+	}
+
 	if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
 		auto buttonItem = std::static_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item);
 		
@@ -1325,6 +1373,70 @@ QFrame* StreamUPToolbar::createSeparatorFromConfig(bool isVertical)
 	return separator;
 }
 
+void StreamUPToolbar::updateButtonSizes()
+{
+	// Get current settings for dynamic sizing
+	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+	int iconSize = settings.toolbarIconSize;
+	int buttonSize = iconSize + 6;
+
+	// Update all toolbar buttons
+	QList<QToolButton*> allButtons = centralWidget->findChildren<QToolButton*>();
+	for (QToolButton* button : allButtons) {
+		button->setIconSize(QSize(iconSize, iconSize));
+		button->setFixedSize(QSize(buttonSize, buttonSize));
+
+		// Update background styling
+		button->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds);
+		if (!settings.toolbarButtonBackgrounds) {
+			button->setAutoRaise(true);
+			button->setStyleSheet("QToolButton { background: transparent; border: none; }");
+		} else {
+			button->setAutoRaise(false);
+			button->setStyleSheet("");  // Clear custom stylesheet to use theme default
+		}
+	}
+
+	// Update spacer widgets to match new button size
+	QList<QWidget*> allWidgets = centralWidget->findChildren<QWidget*>();
+	for (QWidget* widget : allWidgets) {
+		if (widget->objectName().contains("spacer")) {
+			// Determine if toolbar is vertical or horizontal
+			QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
+			if (mainWindow) {
+				Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
+				bool isVertical = (currentArea == Qt::LeftToolBarArea || currentArea == Qt::RightToolBarArea);
+
+				QSize currentSize = widget->size();
+				if (isVertical) {
+					// For vertical, width should match button size, keep height
+					widget->setFixedSize(buttonSize, currentSize.height());
+				} else {
+					// For horizontal, height should match button size, keep width
+					widget->setFixedSize(currentSize.width(), buttonSize);
+				}
+			}
+		}
+	}
+
+	// Update vertical layout constraints if toolbar is vertical
+	QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
+	if (mainWindow && centralWidget) {
+		Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
+		if (currentArea == Qt::LeftToolBarArea || currentArea == Qt::RightToolBarArea) {
+			centralWidget->setMinimumWidth(buttonSize + 8);
+			centralWidget->setMaximumWidth(buttonSize + 16);
+		}
+	}
+
+	// Force layout update
+	if (mainLayout) {
+		mainLayout->update();
+	}
+	centralWidget->updateGeometry();
+	updateGeometry();
+}
+
 void StreamUPToolbar::refreshFromConfiguration()
 {
 	// Clear the current toolbar state
@@ -1347,7 +1459,7 @@ void StreamUPToolbar::refreshFromConfiguration()
 	streamUPSettingsButton = nullptr;
 	centralWidget = nullptr;
 	mainLayout = nullptr;
-	
+
 	// Reload configuration and rebuild UI
 	toolbarConfig.loadFromSettings();
 	setupDynamicUI();

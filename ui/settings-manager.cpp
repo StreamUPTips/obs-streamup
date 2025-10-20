@@ -199,6 +199,8 @@ obs_data_t *LoadSettings()
 		obs_data_set_string(data, "scene_organiser_switch_mode", "single_click");
 		obs_data_set_string(data, "scene_organiser_sort_method", "none");
 		obs_data_set_string(data, "toolbar_position", "top");
+		obs_data_set_bool(data, "toolbar_button_backgrounds", true);
+		obs_data_set_int(data, "toolbar_icon_size", 16);
 
 		// Set default dock tool settings
 		obs_data_t *dockData = obs_data_create();
@@ -318,6 +320,18 @@ PluginSettings GetCurrentSettings()
 			settings.toolbarPosition = ToolbarPosition::Top;
 		}
 
+		// Load toolbar button backgrounds setting (default to true if not set)
+		settings.toolbarButtonBackgrounds = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "toolbar_button_backgrounds", true);
+
+		// Load toolbar icon size setting (default to 16 if not set)
+		settings.toolbarIconSize = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "toolbar_icon_size", 16);
+		// Clamp to valid range (10-24 pixels)
+		if (settings.toolbarIconSize < 10) {
+			settings.toolbarIconSize = 10;
+		} else if (settings.toolbarIconSize > 24) {
+			settings.toolbarIconSize = 24;
+		}
+
 		// Load dock tool settings
 		obs_data_t *dockData = obs_data_get_obj(data, "dock_tools");
 		if (dockData) {
@@ -403,6 +417,12 @@ void UpdateSettings(const PluginSettings &settings)
 		break;
 	}
 	obs_data_set_string(data, "toolbar_position", positionStr);
+
+	// Save toolbar button backgrounds setting
+	obs_data_set_bool(data, "toolbar_button_backgrounds", settings.toolbarButtonBackgrounds);
+
+	// Save toolbar icon size setting
+	obs_data_set_int(data, "toolbar_icon_size", settings.toolbarIconSize);
 
 	// Save dock tool settings
 	obs_data_t *dockData = obs_data_create();
@@ -832,6 +852,94 @@ void ShowSettingsDialog(int tabIndex)
 		toolbarPositionLayout->addStretch();
 		toolbarPositionLayout->addWidget(positionComboBox);
 		toolbarLayout->addLayout(toolbarPositionLayout);
+
+		// Add spacing between sections
+		toolbarLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+
+		// Button Backgrounds Toggle
+		QHBoxLayout *buttonBackgroundsLayout = new QHBoxLayout();
+		buttonBackgroundsLayout->setContentsMargins(0, 0, 0, 0);
+		buttonBackgroundsLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+
+		QLabel *buttonBackgroundsLabel = new QLabel("Button Backgrounds");
+		buttonBackgroundsLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							    .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							    .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		buttonBackgroundsLabel->setToolTip("Toggle button backgrounds on or off");
+
+		StreamUP::UIStyles::SwitchButton *buttonBackgroundsSwitch =
+			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.toolbarButtonBackgrounds);
+		buttonBackgroundsSwitch->setToolTip("Enable or disable button backgrounds");
+
+		QObject::connect(buttonBackgroundsSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+			PluginSettings settings = GetCurrentSettings();
+			settings.toolbarButtonBackgrounds = checked;
+			UpdateSettings(settings);
+
+			// Update toolbar button styles without rebuilding
+			QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
+			if (mainWindow) {
+				StreamUPToolbar* toolbar = mainWindow->findChild<StreamUPToolbar*>();
+				if (toolbar) {
+					toolbar->updateButtonSizes();
+				}
+			}
+		});
+
+		buttonBackgroundsLayout->addWidget(buttonBackgroundsLabel);
+		buttonBackgroundsLayout->addStretch();
+		buttonBackgroundsLayout->addWidget(buttonBackgroundsSwitch);
+		toolbarLayout->addLayout(buttonBackgroundsLayout);
+
+		// Icon Size Slider
+		QHBoxLayout *iconSizeLayout = new QHBoxLayout();
+		iconSizeLayout->setContentsMargins(0, 0, 0, 0);
+		iconSizeLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+
+		QLabel *iconSizeLabel = new QLabel("Icon Size");
+		iconSizeLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		iconSizeLabel->setToolTip("Adjust the size of toolbar icons and buttons");
+
+		QSlider *iconSizeSlider = new QSlider(Qt::Horizontal);
+		iconSizeSlider->setMinimum(10);
+		iconSizeSlider->setMaximum(24);
+		iconSizeSlider->setValue(currentSettings.toolbarIconSize);
+		iconSizeSlider->setTickPosition(QSlider::TicksBelow);
+		iconSizeSlider->setTickInterval(2);
+		iconSizeSlider->setToolTip("Adjust icon size between 10px and 24px");
+		iconSizeSlider->setMaximumWidth(200);
+
+		QLabel *iconSizeValueLabel = new QLabel(QString::number(currentSettings.toolbarIconSize) + "px");
+		iconSizeValueLabel->setStyleSheet(QString("color: %1; font-size: %2px; min-width: 45px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		iconSizeValueLabel->setAlignment(Qt::AlignCenter);
+
+		// Update label and toolbar as slider moves (real-time updates)
+		QObject::connect(iconSizeSlider, &QSlider::valueChanged, [iconSizeValueLabel](int value) {
+			iconSizeValueLabel->setText(QString::number(value) + "px");
+
+			PluginSettings settings = GetCurrentSettings();
+			settings.toolbarIconSize = value;
+			UpdateSettings(settings);
+
+			// Update toolbar button sizes without rebuilding (preserves customizations)
+			QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
+			if (mainWindow) {
+				StreamUPToolbar* toolbar = mainWindow->findChild<StreamUPToolbar*>();
+				if (toolbar) {
+					toolbar->updateButtonSizes();
+				}
+			}
+		});
+
+		iconSizeLayout->addWidget(iconSizeLabel);
+		iconSizeLayout->addStretch();
+		iconSizeLayout->addWidget(iconSizeSlider);
+		iconSizeLayout->addWidget(iconSizeValueLabel);
+		toolbarLayout->addLayout(iconSizeLayout);
 
 		// Add spacing between sections
 		toolbarLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
