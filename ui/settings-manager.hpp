@@ -80,6 +80,7 @@ struct PluginSettings {
     bool sceneOrganiserShowIcons;
     bool sceneOrganiserGroupFolders;
     bool sceneOrganiserRememberFolderState;
+    bool sceneOrganiserDisableSwitchingInStudioMode; // Disable scene switching when in studio mode
     int sceneOrganiserItemHeight; // Height multiplier percentage (50-200, default 100)
     SceneSwitchMode sceneOrganiserSwitchMode;
     SceneSortMethod sceneOrganiserSortMethod;
@@ -88,7 +89,7 @@ struct PluginSettings {
     bool toolbarButtonBackgrounds;  // Toggle for button backgrounds on/off
     int toolbarIconSize;            // Icon size (10-24 pixels, default 16)
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserItemHeight(100), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarButtonBackgrounds(true), toolbarIconSize(16) {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisableSwitchingInStudioMode(false), sceneOrganiserItemHeight(100), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarButtonBackgrounds(true), toolbarIconSize(16) {}
 };
 
 /**

@@ -195,6 +195,7 @@ obs_data_t *LoadSettings()
 		obs_data_set_bool(data, "scene_organiser_show_icons", true);
 		obs_data_set_bool(data, "scene_organiser_group_folders", true);
 		obs_data_set_bool(data, "scene_organiser_remember_folder_state", true);
+		obs_data_set_bool(data, "scene_organiser_disable_switching_in_studio_mode", false);
 		obs_data_set_int(data, "scene_organiser_item_height", 100);
 		obs_data_set_string(data, "scene_organiser_switch_mode", "single_click");
 		obs_data_set_string(data, "scene_organiser_sort_method", "none");
@@ -268,6 +269,7 @@ PluginSettings GetCurrentSettings()
 		settings.sceneOrganiserShowIcons = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_icons", true);
 	settings.sceneOrganiserGroupFolders = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_group_folders", true);
 	settings.sceneOrganiserRememberFolderState = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_remember_folder_state", true);
+	settings.sceneOrganiserDisableSwitchingInStudioMode = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_disable_switching_in_studio_mode", false);
 	settings.sceneOrganiserItemHeight = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "scene_organiser_item_height", 100);
 	// Ensure the height is at least 50% (the minimum allowed value)
 	if (settings.sceneOrganiserItemHeight < 50) {
@@ -368,6 +370,7 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "scene_organiser_show_icons", settings.sceneOrganiserShowIcons);
 	obs_data_set_bool(data, "scene_organiser_group_folders", settings.sceneOrganiserGroupFolders);
 	obs_data_set_bool(data, "scene_organiser_remember_folder_state", settings.sceneOrganiserRememberFolderState);
+	obs_data_set_bool(data, "scene_organiser_disable_switching_in_studio_mode", settings.sceneOrganiserDisableSwitchingInStudioMode);
 	obs_data_set_int(data, "scene_organiser_item_height", settings.sceneOrganiserItemHeight);
 
 	// Save scene sort method setting
@@ -1089,6 +1092,33 @@ void ShowSettingsDialog(int tabIndex)
 		rememberFolderStateLayout->addStretch();
 		rememberFolderStateLayout->addWidget(rememberFolderStateSwitch);
 		sceneOrganiserLayout->addLayout(rememberFolderStateLayout);
+
+		// Disable Switching in Studio Mode setting
+		QHBoxLayout *disableSwitchingLayout = new QHBoxLayout();
+		disableSwitchingLayout->setContentsMargins(0, 0, 0, 0);
+		disableSwitchingLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+
+		QLabel *disableSwitchingLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.DisableSwitchingInStudioMode"));
+		disableSwitchingLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		disableSwitchingLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.DisableSwitchingInStudioModeDesc"));
+
+		StreamUP::UIStyles::SwitchButton *disableSwitchingSwitch =
+			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.sceneOrganiserDisableSwitchingInStudioMode);
+		disableSwitchingSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.DisableSwitchingInStudioModeDesc"));
+
+		QObject::connect(disableSwitchingSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+			PluginSettings settings = GetCurrentSettings();
+			settings.sceneOrganiserDisableSwitchingInStudioMode = checked;
+			UpdateSettings(settings);
+			StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+		});
+
+		disableSwitchingLayout->addWidget(disableSwitchingLabel);
+		disableSwitchingLayout->addStretch();
+		disableSwitchingLayout->addWidget(disableSwitchingSwitch);
+		sceneOrganiserLayout->addLayout(disableSwitchingLayout);
 
 		// Item Height setting
 		QHBoxLayout *itemHeightLayout = new QHBoxLayout();

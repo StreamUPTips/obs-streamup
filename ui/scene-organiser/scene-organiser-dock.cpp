@@ -1139,13 +1139,20 @@ void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
 
     // Check if studio mode is active - it overrides normal click behavior
     if (obs_frontend_preview_program_mode_active() && item->type() == SceneTreeItem::UserType + 2) {
-        // Studio mode: single-click always sets preview scene
-        obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
-        if (source) {
-            obs_frontend_set_current_preview_scene(source);
+        // Check if scene switching is disabled in studio mode
+        if (settings.sceneOrganiserDisableSwitchingInStudioMode) {
+            // Scene switching is disabled in studio mode, do nothing
             StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
-                QString("Single-click: Set preview scene to '%1'").arg(item->text()).toUtf8().constData());
-            obs_source_release(source);
+                QString("Single-click: Scene switching disabled in studio mode").toUtf8().constData());
+        } else {
+            // Studio mode: single-click always sets preview scene
+            obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
+            if (source) {
+                obs_frontend_set_current_preview_scene(source);
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
+                    QString("Single-click: Set preview scene to '%1'").arg(item->text()).toUtf8().constData());
+                obs_source_release(source);
+            }
         }
     } else {
         // Normal mode: use settings to determine behavior
@@ -1188,15 +1195,23 @@ void SceneOrganiserDock::onItemDoubleClicked(const QModelIndex &index)
 
     // Check if studio mode is active - it overrides normal double-click behavior
     if (obs_frontend_preview_program_mode_active() && item->type() == SceneTreeItem::UserType + 2) {
-        // Studio mode: double-click transitions preview to program (goes live)
-        obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
-        if (source) {
-            // First set as preview, then trigger transition
-            obs_frontend_set_current_preview_scene(source);
-            obs_frontend_preview_program_trigger_transition();
+        // Check if scene switching is disabled in studio mode
+        StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+        if (settings.sceneOrganiserDisableSwitchingInStudioMode) {
+            // Scene switching is disabled in studio mode, do nothing
             StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
-                QString("Double-click: Transitioned scene '%1' to program").arg(item->text()).toUtf8().constData());
-            obs_source_release(source);
+                QString("Double-click: Scene switching disabled in studio mode").toUtf8().constData());
+        } else {
+            // Studio mode: double-click transitions preview to program (goes live)
+            obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
+            if (source) {
+                // First set as preview, then trigger transition
+                obs_frontend_set_current_preview_scene(source);
+                obs_frontend_preview_program_trigger_transition();
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
+                    QString("Double-click: Transitioned scene '%1' to program").arg(item->text()).toUtf8().constData());
+                obs_source_release(source);
+            }
         }
     } else {
         // Normal mode: use settings to determine behavior
