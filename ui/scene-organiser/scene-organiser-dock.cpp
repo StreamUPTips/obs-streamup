@@ -306,6 +306,17 @@ void SceneOrganiserDock::setupUI()
     m_treeView->setRootIsDecorated(true);
     m_treeView->setExpandsOnDoubleClick(false);
 
+    // Apply initial item height setting
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+    int iconSize = (32 * settings.sceneOrganiserItemHeight) / 100;
+    m_treeView->setIconSize(QSize(iconSize, iconSize));
+
+    // Apply initial font size based on height setting
+    int fontSize = std::max(8, (11 * settings.sceneOrganiserItemHeight) / 100);
+    QFont font = m_treeView->font();
+    font.setPointSize(fontSize);
+    m_treeView->setFont(font);
+
     // Connect signals
     connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged,
             this, &SceneOrganiserDock::onSceneSelectionChanged);
@@ -1835,8 +1846,22 @@ void SceneOrganiserDock::onSettingsChanged()
     LoadConfiguration();
     applySortingIfEnabled();
 
-    // Force update of the tree view to reflect height changes
+    // Apply the item height setting to the tree view
     if (m_treeView) {
+        StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+
+        // Calculate icon size based on height percentage (50-200% range)
+        // Base icon size is 32px at 100%
+        int iconSize = (32 * settings.sceneOrganiserItemHeight) / 100;
+        m_treeView->setIconSize(QSize(iconSize, iconSize));
+
+        // Calculate and apply font size based on height percentage
+        // Base font size is 11px at 100%, with a minimum of 8px
+        int fontSize = std::max(8, (11 * settings.sceneOrganiserItemHeight) / 100);
+        QFont font = m_treeView->font();
+        font.setPointSize(fontSize);
+        m_treeView->setFont(font);
+
         // Force a viewport update to reflect height changes
         m_treeView->viewport()->update();
     }

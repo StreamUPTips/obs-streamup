@@ -1119,9 +1119,9 @@ void ShowSettingsDialog(int tabIndex)
 		});
 
 		itemHeightLayout->addWidget(itemHeightLabel);
+		itemHeightLayout->addStretch();
 		itemHeightLayout->addWidget(itemHeightSlider);
 		itemHeightLayout->addWidget(itemHeightValueLabel);
-		itemHeightLayout->addStretch();
 		sceneOrganiserLayout->addLayout(itemHeightLayout);
 
 		// Scene switching mode setting
