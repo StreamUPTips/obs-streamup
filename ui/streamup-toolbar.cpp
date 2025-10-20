@@ -84,22 +84,30 @@ StreamUPToolbar::~StreamUPToolbar()
 QFrame* StreamUPToolbar::createSeparator()
 {
 	QFrame* separator = new QFrame();
-	separator->setObjectName("StreamUPToolbarSeparator");
-	separator->setFrameShape(QFrame::VLine);
-	separator->setFrameShadow(QFrame::Plain);
-	separator->setFixedSize(1, 16);
-	separator->setLineWidth(1);
+	separator->setProperty("class", "toolbar-separator");
+	separator->setFrameShape(QFrame::NoFrame);
+	separator->setFixedWidth(1);
+
+	// Set height based on current icon size
+	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+	int separatorHeight = settings.toolbarIconSize;
+	separator->setFixedHeight(separatorHeight);
+
 	return separator;
 }
 
 QFrame* StreamUPToolbar::createHorizontalSeparator()
 {
 	QFrame* separator = new QFrame();
-	separator->setObjectName("StreamUPToolbarSeparator");
-	separator->setFrameShape(QFrame::HLine);
-	separator->setFrameShadow(QFrame::Plain);
-	separator->setFixedSize(16, 1);
-	separator->setLineWidth(1);
+	separator->setProperty("class", "toolbar-separator");
+	separator->setFrameShape(QFrame::NoFrame);
+	separator->setFixedHeight(1);
+
+	// Set width based on current icon size
+	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+	int separatorWidth = settings.toolbarIconSize;
+	separator->setFixedWidth(separatorWidth);
+
 	return separator;
 } 
 
@@ -734,20 +742,7 @@ void StreamUPToolbar::updatePositionAwareTheme()
 		streamUPSettingsButton->setProperty("toolbarPosition", positionProperty);
 		streamUPSettingsButton->setProperty("buttonType", "streamup-button");
 	}
-	
-	// Update separator object names with position suffix
-	QList<QFrame*> separators = centralWidget->findChildren<QFrame*>();
-	for (QFrame* separator : separators) {
-		QString currentName = separator->objectName();
-		if (currentName.contains("Separator")) {
-			// Remove any existing position suffix first
-			currentName = currentName.split("-").first();
-			separator->setObjectName(currentName + positionSuffix);
-			separator->setProperty("toolbarPosition", positionProperty);
-			separator->setProperty("separatorType", "streamup-separator"); // Ensure common property is maintained
-		}
-	}
-	
+
 	// Update layout orientation before applying theme
 	updateLayoutOrientation();
 	
@@ -811,23 +806,11 @@ void StreamUPToolbar::updateLayoutOrientation()
 			setOrientation(Qt::Vertical);
 			mainLayout->setContentsMargins(4, 8, 4, 8);
 			mainLayout->setAlignment(Qt::AlignHCenter); // Center widgets horizontally
-
-			// Set size policies for vertical layout to maintain button sizes
-			// Get current button size from settings
-			StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-			int iconSize = settings.toolbarIconSize;
-			int buttonSize = iconSize + 6;
-			centralWidget->setMinimumWidth(buttonSize + 8); // Button size + padding
-			centralWidget->setMaximumWidth(buttonSize + 16); // Allow some extra space
 		} else {
 			mainLayout = new QHBoxLayout(centralWidget);
 			setOrientation(Qt::Horizontal);
 			mainLayout->setContentsMargins(8, 4, 8, 4);  // Added vertical padding (top, bottom)
 			// No alignment needed for horizontal layout (default is fine)
-			
-			// Reset size constraints for horizontal layout
-			centralWidget->setMinimumWidth(0);
-			centralWidget->setMaximumWidth(16777215); // QWIDGETSIZE_MAX equivalent
 		}
 		mainLayout->setSpacing(4);
 		
@@ -856,10 +839,9 @@ void StreamUPToolbar::updateLayoutOrientation()
 			
 			if (widgetType == "separator") {
 				// Replace separator with correct orientation
-				QString separatorName = widget->objectName(); // Preserve the separator name
 				widget->deleteLater(); // Delete the old separator
-				
-				// Add new separator with correct orientation and restore object name
+
+				// Add new separator with correct orientation
 				QFrame* separator;
 				if (shouldBeVertical) {
 					separator = createHorizontalSeparator();
@@ -867,27 +849,6 @@ void StreamUPToolbar::updateLayoutOrientation()
 				} else {
 					separator = createSeparator();
 					mainLayout->addWidget(separator);
-				}
-				separator->setObjectName(separatorName); // Restore the name
-				separator->setProperty("separatorType", "streamup-separator"); // Restore common property
-				
-				// Set the toolbarPosition property based on current position
-				QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
-				if (mainWindow) {
-					Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
-					QString positionProperty;
-					if (currentArea == Qt::TopToolBarArea) {
-						positionProperty = "top";
-					} else if (currentArea == Qt::BottomToolBarArea) {
-						positionProperty = "bottom";
-					} else if (currentArea == Qt::LeftToolBarArea) {
-						positionProperty = "left";
-					} else if (currentArea == Qt::RightToolBarArea) {
-						positionProperty = "right";
-					} else {
-						positionProperty = "floating";
-					}
-					separator->setProperty("toolbarPosition", positionProperty);
 				}
 			} else if (widgetType == "spacer") {
 				// Update spacer dimensions for new orientation
@@ -902,20 +863,19 @@ void StreamUPToolbar::updateLayoutOrientation()
 					spacerSize = oldSize.width();
 				}
 
-				// Get current button size from settings
-				StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-				int iconSize = settings.toolbarIconSize;
-				int buttonSize = iconSize + 6;
-
 				// Apply new dimensions based on new orientation
+				// Clear old fixed dimensions
+				widget->setMinimumSize(0, 0);
+				widget->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+
 				if (shouldBeVertical) {
-					// Now vertical, spacer size becomes the height, width matches buttons
-					widget->setFixedSize(buttonSize, spacerSize);
+					// Now vertical, spacer size becomes the height
+					widget->setFixedHeight(spacerSize);
 				} else {
-					// Now horizontal, spacer size becomes the width, height matches buttons
-					widget->setFixedSize(spacerSize, buttonSize);
+					// Now horizontal, spacer size becomes the width
+					widget->setFixedWidth(spacerSize);
 				}
-				
+
 				// Re-add the spacer widget
 				if (shouldBeVertical) {
 					mainLayout->addWidget(widget, 0, Qt::AlignHCenter);
@@ -1052,20 +1012,12 @@ void StreamUPToolbar::setupDynamicUI()
 		
 		if (item->type == StreamUP::ToolbarConfig::ItemType::Separator) {
 			QFrame* separator = createSeparatorFromConfig(false);
-			separator->setObjectName(item->id);
-			separator->setProperty("separatorType", "streamup-separator");
 			mainLayout->addWidget(separator);
 		} else if (item->type == StreamUP::ToolbarConfig::ItemType::CustomSpacer) {
 			auto spacerItem = std::static_pointer_cast<StreamUP::ToolbarConfig::CustomSpacerItem>(item);
 			// Create a fixed-size spacer widget with orientation-aware dimensions
 			QWidget* spacerWidget = new QWidget(centralWidget);
-			// Ensure objectName contains "spacer" for CSS selector matching
-			spacerWidget->setObjectName(QString("spacer_%1").arg(item->id));
-
-			// Get current button size from settings
-			StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-			int iconSize = settings.toolbarIconSize;
-			int buttonSize = iconSize + 6;
+			spacerWidget->setProperty("class", "toolbar-spacer");
 
 			// Set dimensions based on current toolbar orientation
 			QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
@@ -1074,19 +1026,18 @@ void StreamUPToolbar::setupDynamicUI()
 				bool isVertical = (currentArea == Qt::LeftToolBarArea || currentArea == Qt::RightToolBarArea);
 
 				if (isVertical) {
-					// For vertical toolbar, spacer height should be the configured size, width matches buttons
-					spacerWidget->setFixedSize(buttonSize, spacerItem->size);
+					// For vertical toolbar, spacer height should be the configured size
+					spacerWidget->setFixedHeight(spacerItem->size);
 				} else {
-					// For horizontal toolbar, spacer width should be the configured size, height matches buttons
-					spacerWidget->setFixedSize(spacerItem->size, buttonSize);
+					// For horizontal toolbar, spacer width should be the configured size
+					spacerWidget->setFixedWidth(spacerItem->size);
 				}
 			} else {
 				// Fallback to horizontal orientation if can't determine position
-				spacerWidget->setFixedSize(spacerItem->size, buttonSize);
+				spacerWidget->setFixedWidth(spacerItem->size);
 			}
-			
+
 			spacerWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
-			// Styling handled by parent container CSS (eliminates individual setStyleSheet call)
 			mainLayout->addWidget(spacerWidget);
 		} else {
 			QToolButton* button = createButtonFromConfig(item);
@@ -1104,25 +1055,18 @@ void StreamUPToolbar::setupDynamicUI()
 							// Get current settings for dynamic sizing
 							StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 							int iconSize = settings.toolbarIconSize;
-							int buttonSize = iconSize + 6;
 
 							// Create new pause button for this position
 							QToolButton* newPauseButton = new QToolButton(centralWidget);
 							newPauseButton->setObjectName("pauseButton");
 							newPauseButton->setProperty("class", "streamup-toolbar-button");
 							newPauseButton->setProperty("buttonType", "streamup-button");
-							newPauseButton->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds);
-							newPauseButton->setFixedSize(QSize(buttonSize, buttonSize));
+							newPauseButton->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds ? "true" : "false");
 							newPauseButton->setIconSize(QSize(iconSize, iconSize));
 							newPauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newPauseButton->setIcon(getCachedIcon("pause"));
 							newPauseButton->setToolTip("Pause Recording");
 							newPauseButton->setCheckable(true);
-							// Apply styling based on button backgrounds setting
-							if (!settings.toolbarButtonBackgrounds) {
-								newPauseButton->setAutoRaise(true);
-								newPauseButton->setStyleSheet("QToolButton { background: transparent; border: none; }");
-							}
 							// Start hidden - will be shown when recording is active and pausable
 							newPauseButton->setVisible(false);
 							connect(newPauseButton, &QToolButton::clicked, this, &StreamUPToolbar::onPauseButtonClicked);
@@ -1137,25 +1081,18 @@ void StreamUPToolbar::setupDynamicUI()
 							// Get current settings for dynamic sizing
 							StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 							int iconSize = settings.toolbarIconSize;
-							int buttonSize = iconSize + 6;
 
 							// Create new save_replay button for this position
 							QToolButton* newSaveReplayButton = new QToolButton(centralWidget);
 							newSaveReplayButton->setObjectName("saveReplayButton");
 							newSaveReplayButton->setProperty("class", "streamup-toolbar-button");
 							newSaveReplayButton->setProperty("buttonType", "streamup-button");
-							newSaveReplayButton->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds);
-							newSaveReplayButton->setFixedSize(QSize(buttonSize, buttonSize));
+							newSaveReplayButton->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds ? "true" : "false");
 							newSaveReplayButton->setIconSize(QSize(iconSize, iconSize));
 							newSaveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newSaveReplayButton->setIcon(getCachedIcon("save-replay"));
 							newSaveReplayButton->setToolTip("Save Replay");
 							newSaveReplayButton->setCheckable(false);
-							// Apply styling based on button backgrounds setting
-							if (!settings.toolbarButtonBackgrounds) {
-								newSaveReplayButton->setAutoRaise(true);
-								newSaveReplayButton->setStyleSheet("QToolButton { background: transparent; border: none; }");
-							}
 							// Start hidden - will be shown when replay buffer is active
 							newSaveReplayButton->setVisible(false);
 							connect(newSaveReplayButton, &QToolButton::clicked, this, &StreamUPToolbar::onSaveReplayButtonClicked);
@@ -1227,26 +1164,18 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 	// Get current settings for dynamic sizing
 	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 	int iconSize = settings.toolbarIconSize;
-	int buttonSize = iconSize + 6;  // Button is icon size + 6px padding
 
-	// Set dynamic icon and button sizes based on settings
+	// Set dynamic icon size based on settings - let CSS handle button size
 	button->setIconSize(QSize(iconSize, iconSize));
 	button->setToolButtonStyle(Qt::ToolButtonIconOnly);
 
 	// Add consistent styling properties for custom StreamUP icons
 	button->setProperty("class", "streamup-toolbar-button");
 	button->setProperty("buttonType", "streamup-button");
-	button->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds);
+	button->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds ? "true" : "false");
 
-	// Set dynamic button sizing
-	button->setFixedSize(QSize(buttonSize, buttonSize));
-
-	// Apply styling based on button backgrounds setting
-	if (!settings.toolbarButtonBackgrounds) {
-		// Disable button backgrounds by making it flat
-		button->setAutoRaise(true);
-		button->setStyleSheet("QToolButton { background: transparent; border: none; }");
-	}
+	// Let OBS theme handle button sizing with proper padding and border-radius
+	// No fixed size - CSS will scale padding and radius with icon size
 
 	if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
 		auto buttonItem = std::static_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item);
@@ -1359,17 +1288,20 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 QFrame* StreamUPToolbar::createSeparatorFromConfig(bool isVertical)
 {
 	QFrame* separator = new QFrame();
-	separator->setObjectName("StreamUPToolbarSeparator");
-	separator->setProperty("separatorType", "streamup-separator");
+	separator->setProperty("class", "toolbar-separator");
+	separator->setFrameShape(QFrame::NoFrame);
+
+	// Set size based on current icon size
+	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+	int separatorSize = settings.toolbarIconSize;
+
 	if (isVertical) {
-		separator->setFrameShape(QFrame::HLine);
-		separator->setFixedSize(16, 1);
+		separator->setFixedHeight(1);
+		separator->setFixedWidth(separatorSize);
 	} else {
-		separator->setFrameShape(QFrame::VLine);
-		separator->setFixedSize(1, 16);
+		separator->setFixedWidth(1);
+		separator->setFixedHeight(separatorSize);
 	}
-	separator->setFrameShadow(QFrame::Plain);
-	separator->setLineWidth(1);
 	return separator;
 }
 
@@ -1378,63 +1310,65 @@ void StreamUPToolbar::updateButtonSizes()
 	// Get current settings for dynamic sizing
 	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 	int iconSize = settings.toolbarIconSize;
-	int buttonSize = iconSize + 6;
+
+	StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Button Sizes", "Updating button sizes with icon size: %d px", iconSize);
 
 	// Update all toolbar buttons
 	QList<QToolButton*> allButtons = centralWidget->findChildren<QToolButton*>();
 	for (QToolButton* button : allButtons) {
+		// Set icon size
 		button->setIconSize(QSize(iconSize, iconSize));
-		button->setFixedSize(QSize(buttonSize, buttonSize));
 
-		// Update background styling
-		button->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds);
-		if (!settings.toolbarButtonBackgrounds) {
-			button->setAutoRaise(true);
-			button->setStyleSheet("QToolButton { background: transparent; border: none; }");
-		} else {
-			button->setAutoRaise(false);
-			button->setStyleSheet("");  // Clear custom stylesheet to use theme default
-		}
+		// Update background styling property for CSS
+		button->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds ? "true" : "false");
+
+		// Clear any size constraints that might limit growth
+		button->setMinimumSize(0, 0);
+		button->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+
+		// Force button style refresh for property change
+		style()->unpolish(button);
+		style()->polish(button);
+
+		// Force button to recalculate its size hint
+		button->updateGeometry();
 	}
 
-	// Update spacer widgets to match new button size
-	QList<QWidget*> allWidgets = centralWidget->findChildren<QWidget*>();
-	for (QWidget* widget : allWidgets) {
-		if (widget->objectName().contains("spacer")) {
-			// Determine if toolbar is vertical or horizontal
+	// Update all separators to match new icon size
+	QList<QFrame*> allSeparators = centralWidget->findChildren<QFrame*>();
+	for (QFrame* separator : allSeparators) {
+		// Only update separators, not other frames
+		if (separator->property("class").toString() == "toolbar-separator") {
+			// Check if vertical or horizontal based on current toolbar orientation
 			QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
 			if (mainWindow) {
 				Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
 				bool isVertical = (currentArea == Qt::LeftToolBarArea || currentArea == Qt::RightToolBarArea);
 
-				QSize currentSize = widget->size();
 				if (isVertical) {
-					// For vertical, width should match button size, keep height
-					widget->setFixedSize(buttonSize, currentSize.height());
+					// Horizontal separator in vertical toolbar
+					separator->setFixedWidth(iconSize);
 				} else {
-					// For horizontal, height should match button size, keep width
-					widget->setFixedSize(currentSize.width(), buttonSize);
+					// Vertical separator in horizontal toolbar
+					separator->setFixedHeight(iconSize);
 				}
 			}
 		}
 	}
 
-	// Update vertical layout constraints if toolbar is vertical
-	QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
-	if (mainWindow && centralWidget) {
-		Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
-		if (currentArea == Qt::LeftToolBarArea || currentArea == Qt::RightToolBarArea) {
-			centralWidget->setMinimumWidth(buttonSize + 8);
-			centralWidget->setMaximumWidth(buttonSize + 16);
-		}
-	}
-
-	// Force layout update
+	// Force style refresh to apply new icon sizes with theme-scaled padding and borders
 	if (mainLayout) {
 		mainLayout->update();
 	}
 	centralWidget->updateGeometry();
 	updateGeometry();
+
+	// Refresh styling to apply theme-based sizing
+	style()->unpolish(this);
+	style()->polish(this);
+
+	// Force repaint
+	update();
 }
 
 void StreamUPToolbar::refreshFromConfiguration()
