@@ -972,26 +972,14 @@ void ToolbarConfigurator::populateDockButtonsList()
     toolsCategory->setText(0, "StreamUP Tools");
     toolsCategory->setExpanded(true);
     toolsCategory->setFlags(Qt::ItemIsEnabled); // Make category non-selectable
-    
-    // Create StreamUP Settings category
-    QTreeWidgetItem* settingsCategory = new QTreeWidgetItem(dockButtonsList);
-    settingsCategory->setText(0, "StreamUP Settings");
-    settingsCategory->setExpanded(true);
-    settingsCategory->setFlags(Qt::ItemIsEnabled); // Make category non-selectable
-    
-    // Create expand/collapse indicators for both categories
+
+    // Create expand/collapse indicator
     createExpandIndicator(dockButtonsList, toolsCategory);
-    createExpandIndicator(dockButtonsList, settingsCategory);
-    
+
     auto buttons = ToolbarConfig::ToolbarConfiguration::getAvailableDockButtons();
     for (const auto& button : buttons) {
-        // Determine which category this button belongs to
-        QTreeWidgetItem* parentCategory = toolsCategory;
-        if (button.dockButtonType.contains("settings") || button.dockButtonType.contains("config")) {
-            parentCategory = settingsCategory;
-        }
-        
-        QTreeWidgetItem* item = new QTreeWidgetItem(parentCategory);
+        // All buttons go under StreamUP Tools category
+        QTreeWidgetItem* item = new QTreeWidgetItem(toolsCategory);
         item->setText(0, "    " + button.name); // Add manual indentation
         item->setData(0, Qt::UserRole, button.dockButtonType);
         item->setToolTip(0, button.tooltip);
@@ -1091,12 +1079,7 @@ QListWidgetItem* ToolbarConfigurator::createConfigurationItem(std::shared_ptr<To
     }
     case ToolbarConfig::ItemType::DockButton: {
         auto dockItem = std::static_pointer_cast<ToolbarConfig::DockButtonItem>(item);
-        // Special handling for StreamUP Settings - show without "(Dock)" suffix
-        if (dockItem->dockButtonType == "streamup_settings") {
-            displayText = QString("%1%2 %3").arg(indent).arg(enabledDot).arg(dockItem->name);
-        } else {
-            displayText = QString("%1%2 %3 (Dock)").arg(indent).arg(enabledDot).arg(dockItem->name);
-        }
+        displayText = QString("%1%2 %3 (Dock)").arg(indent).arg(enabledDot).arg(dockItem->name);
         break;
     }
     case ToolbarConfig::ItemType::Group: {
