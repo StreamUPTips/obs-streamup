@@ -353,7 +353,13 @@ PluginSettings GetCurrentSettings()
 
 void UpdateSettings(const PluginSettings &settings)
 {
-	obs_data_t *data = obs_data_create();
+	// Load existing settings to preserve fields not in PluginSettings struct (like toolbar_configuration)
+	obs_data_t *data = LoadSettings();
+	if (!data) {
+		data = obs_data_create();
+	}
+
+	// Update only the PluginSettings fields, preserving everything else
 	obs_data_set_bool(data, "run_at_startup", settings.runAtStartup);
 	obs_data_set_bool(data, "notifications_mute", settings.notificationsMute);
 	obs_data_set_bool(data, "show_cph_integration", settings.showCPHIntegration);
@@ -1866,6 +1872,10 @@ void ShowSettingsDialog(int tabIndex)
 		mainLayout->addWidget(buttonWidget);
 
 		QObject::connect(dialog, &QDialog::finished, [=](int) {
+			// Ensure all settings are saved when dialog closes
+			PluginSettings currentSettings = GetCurrentSettings();
+			UpdateSettings(currentSettings);
+
 			obs_data_release(settings);
 			obs_properties_destroy(props);
 		});
