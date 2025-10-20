@@ -54,13 +54,16 @@ void InnerDockHost::SetupDockOptions()
     // Set window flags to prevent overlap with parent title
     setWindowFlags(Qt::Widget);
 
-    // Set auto-fill background to use the palette properly (like QFrame does)
-    setAutoFillBackground(true);
+    // Make the QMainWindow background inherit from parent QFrame
+    setAttribute(Qt::WA_StyledBackground, false);
 
-    // Absolute minimum styling - only hide float buttons, let OBS theme handle everything else
+    // Set transparent background so it inherits from parent
     setStyleSheet(
+        "QMainWindow#InnerDockHost { background-color: transparent; }"
         "QDockWidget::float-button { width: 0px; height: 0px; }"
     );
+
+    setObjectName("InnerDockHost");
 }
 
 
@@ -426,10 +429,11 @@ void InnerDockHost::ReapplyDockFeatures()
     QString closeButtonStyle = m_docksLocked ? "width: 0px; height: 0px;" : "";
 
     setStyleSheet(
+        "QMainWindow#InnerDockHost { background-color: transparent; }"
         "QDockWidget::close-button { " + closeButtonStyle + " }"
         "QDockWidget::float-button { width: 0px; height: 0px; }"
     );
-    
+
     // Reapply dock options based on lock state
     if (m_docksLocked) {
         setDockOptions(AllowTabbedDocks | ForceTabbedDocks);
@@ -471,10 +475,11 @@ void InnerDockHost::SetDocksLocked(bool locked)
     QString closeButtonStyle = m_docksLocked ? "width: 0px; height: 0px;" : "";
 
     setStyleSheet(
+        "QMainWindow#InnerDockHost { background-color: transparent; }"
         "QDockWidget::close-button { " + closeButtonStyle + " }"
         "QDockWidget::float-button { width: 0px; height: 0px; }"
     );
-    
+
     // Disable/enable dock resizing by setting dock options
     if (m_docksLocked) {
         setDockOptions(AllowTabbedDocks | ForceTabbedDocks);

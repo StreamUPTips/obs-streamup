@@ -61,7 +61,7 @@ void MultiDockDock::SetupUi()
     QFrame* innerContainer = new QFrame();
     innerContainer->setObjectName("MultiDockInnerContainer");
     innerContainer->setFrameStyle(QFrame::NoFrame);
-    // Let OBS theme handle background color
+    // No custom styling - let OBS theme handle everything
     QVBoxLayout* innerLayout = new QVBoxLayout(innerContainer);
     innerLayout->setContentsMargins(12, 12, 12, 12); // 12px padding on all sides
     innerLayout->setSpacing(0);
