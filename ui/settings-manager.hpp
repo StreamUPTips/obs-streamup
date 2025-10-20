@@ -85,8 +85,10 @@ struct PluginSettings {
     SceneSortMethod sceneOrganiserSortMethod;
     ToolbarPosition toolbarPosition;
     DockToolSettings dockTools;
+    bool toolbarButtonBackgrounds;  // Toggle for button backgrounds on/off
+    int toolbarIconSize;            // Icon size (10-24 pixels, default 16)
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserItemHeight(100), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top) {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserItemHeight(100), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarButtonBackgrounds(true), toolbarIconSize(16) {}
 };
 
 /**
