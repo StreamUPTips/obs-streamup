@@ -1566,9 +1566,6 @@ void StreamUPToolbar::executeDockAction(const QString& actionType)
 		dock->ButtonDeactivateAllVideoCaptureDevices();
 	} else if (actionType == "refresh_video_devices") {
 		dock->ButtonRefreshAllVideoCaptureDevices();
-	} else if (actionType == "streamup_settings") {
-		// Open StreamUP settings dialog
-		ShowDockConfigDialog();
 	} else {
 		QMessageBox::warning(this, QString::fromUtf8(obs_module_text("StreamUP.Toolbar.UnknownAction")),
 			QString("Unknown dock action: %1").arg(actionType));

@@ -566,13 +566,10 @@ QList<DockButtonItem> ToolbarConfiguration::getAvailableDockButtons() {
     refreshVideoButton.iconPath = "video-capture-device-refresh";
     refreshVideoButton.tooltip = "Refresh All Video Capture Devices";
     buttons.append(refreshVideoButton);
-    
-    // StreamUP Settings - use StreamUP logo icon
-    auto streamupSettingsButton = DockButtonItem("dock_streamup_settings", "streamup_settings", "Open StreamUP Settings");
-    streamupSettingsButton.iconPath = "streamup-logo-button";
-    streamupSettingsButton.tooltip = "Open StreamUP Settings";
-    buttons.append(streamupSettingsButton);
-    
+
+    // Note: StreamUP Settings button removed from available dock buttons
+    // It's always present on the toolbar by default and doesn't need to be added as a custom button
+
     return buttons;
 }
 
