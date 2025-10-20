@@ -371,12 +371,14 @@ void SceneOrganiserDock::createBottomToolbar()
 
     // Add button - appears as normal button without dropdown arrow
     QToolButton *addButton = new QToolButton(this);
+    addButton->setObjectName("SceneOrganiserAddButton");
     addButton->setProperty("themeID", "addIconSmall");
     addButton->setProperty("class", "icon-plus");
     addButton->setToolTip("Add folder or create scene");
 
     // Create a menu for the add button (shown on click, no arrow indicator)
     QMenu *addMenu = new QMenu(this);
+    addMenu->setObjectName("SceneOrganiserAddMenu");
     addMenu->addAction(obs_module_text("SceneOrganiser.Action.AddFolder"), this, &SceneOrganiserDock::onAddFolderClicked);
     addMenu->addAction(obs_module_text("SceneOrganiser.Action.CreateScene"), this, &SceneOrganiserDock::onCreateSceneClicked);
 
@@ -391,6 +393,7 @@ void SceneOrganiserDock::createBottomToolbar()
 
     // Remove button
     QToolButton *removeButton = new QToolButton(this);
+    removeButton->setObjectName("SceneOrganiserRemoveButton");
     removeButton->setProperty("themeID", "removeIconSmall");
     removeButton->setProperty("class", "icon-trash");
     removeButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.Remove"));
@@ -400,8 +403,12 @@ void SceneOrganiserDock::createBottomToolbar()
     m_toolbar->addWidget(removeButton);
     m_removeAction = nullptr; // Direct button connection
 
+    // Separator after remove button
+    m_toolbar->addSeparator();
+
     // Filters button (using theme info: .icon-filter uses url(theme:Dark/filter.svg))
     QToolButton *filtersButton = new QToolButton(this);
+    filtersButton->setObjectName("SceneOrganiserFiltersButton");
     filtersButton->setProperty("class", "icon-filter");
     filtersButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.Filters"));
     filtersButton->setEnabled(false);
@@ -410,11 +417,12 @@ void SceneOrganiserDock::createBottomToolbar()
     m_toolbar->addWidget(filtersButton);
     m_filtersAction = nullptr; // Direct button connection
 
-    // Separator after add/remove/filters group (matching OBS scenes dock)
+    // Separator after filters button
     m_toolbar->addSeparator();
 
     // Move up button
     QToolButton *moveUpButton = new QToolButton(this);
+    moveUpButton->setObjectName("SceneOrganiserMoveUpButton");
     moveUpButton->setProperty("themeID", "upArrowIconSmall");
     moveUpButton->setProperty("class", "icon-up");
     moveUpButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.MoveUp"));
@@ -426,6 +434,7 @@ void SceneOrganiserDock::createBottomToolbar()
 
     // Move down button
     QToolButton *moveDownButton = new QToolButton(this);
+    moveDownButton->setObjectName("SceneOrganiserMoveDownButton");
     moveDownButton->setProperty("themeID", "downArrowIconSmall");
     moveDownButton->setProperty("class", "icon-down");
     moveDownButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.MoveDown"));
@@ -435,46 +444,54 @@ void SceneOrganiserDock::createBottomToolbar()
     m_toolbar->addWidget(moveDownButton);
     m_moveDownAction = nullptr; // Direct button connection
 
-    // Separator after move up/down group (matching OBS scenes dock)
-    m_toolbar->addSeparator();
-
     // Add spacer to push remaining buttons to the right
     QWidget *spacer = new QWidget(this);
+    spacer->setObjectName("SceneOrganiserToolbarSpacer");
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     m_toolbar->addWidget(spacer);
 
     // Create container for right-aligned buttons with consistent spacing
     QWidget *rightButtonsContainer = new QWidget(this);
+    rightButtonsContainer->setObjectName("SceneOrganiserRightButtonsContainer");
+    rightButtonsContainer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
     QHBoxLayout *rightButtonsLayout = new QHBoxLayout(rightButtonsContainer);
     rightButtonsLayout->setContentsMargins(0, 0, 0, 0);
     rightButtonsLayout->setSpacing(2); // Match toolbar button spacing
 
     // Lock checkbox - using exact same approach as OBS source dock
     QCheckBox *lockCheckbox = new QCheckBox(rightButtonsContainer);
+    lockCheckbox->setObjectName("SceneOrganiserLockCheckbox");
     lockCheckbox->setProperty("class", "checkbox-icon indicator-lock");
     lockCheckbox->setChecked(false); // Start unlocked
     lockCheckbox->setToolTip("Scene organizer is unlocked (click to lock)");
+    lockCheckbox->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(lockCheckbox, &QCheckBox::toggled, this, &SceneOrganiserDock::onToggleLockClicked);
     rightButtonsLayout->addWidget(lockCheckbox);
 
     // Expand/Collapse All button - using QCheckBox like OBS does for expand indicators
     QCheckBox *expandCollapseButton = new QCheckBox(rightButtonsContainer);
+    expandCollapseButton->setObjectName("SceneOrganiserExpandCollapseButton");
     expandCollapseButton->setProperty("class", "checkbox-icon indicator-expand");
     expandCollapseButton->setChecked(false); // Unchecked = expanded, checked = collapsed
     expandCollapseButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.ExpandAll"));
+    expandCollapseButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(expandCollapseButton, &QCheckBox::toggled, this, &SceneOrganiserDock::onExpandCollapseAllClicked);
     rightButtonsLayout->addWidget(expandCollapseButton);
 
-    // Settings button - using OBS theming
-    QToolButton *settingsButton = new QToolButton(rightButtonsContainer);
+    // Add the container to the toolbar
+    m_toolbar->addWidget(rightButtonsContainer);
+
+    // Add separator before settings button (using proper toolbar separator)
+    m_toolbar->addSeparator();
+
+    // Settings button - using OBS theming (added directly to toolbar, not in container)
+    QToolButton *settingsButton = new QToolButton(this);
+    settingsButton->setObjectName("SceneOrganiserSettingsButton");
     settingsButton->setProperty("themeID", "configIconSmall");
     settingsButton->setProperty("class", "icon-gear");
     settingsButton->setToolTip("Open StreamUP settings for Scene Organiser");
     connect(settingsButton, &QToolButton::clicked, this, &SceneOrganiserDock::onSettingsClicked);
-    rightButtonsLayout->addWidget(settingsButton);
-
-    // Add the container to the toolbar
-    m_toolbar->addWidget(rightButtonsContainer);
+    m_toolbar->addWidget(settingsButton);
 
     // Store button references for additional state management if needed
     m_addButton = addButton;

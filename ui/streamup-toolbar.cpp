@@ -41,10 +41,13 @@ StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent),
 
 	// Setup context menu
 	contextMenu = new QMenu(this);
+	contextMenu->setObjectName("StreamUPToolbarContextMenu");
 	configureAction = contextMenu->addAction(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.Title")));
+	configureAction->setObjectName("StreamUPToolbarConfigureAction");
 	connect(configureAction, &QAction::triggered, this, &StreamUPToolbar::onConfigureToolbarClicked);
 
 	toolbarSettingsAction = contextMenu->addAction(QString::fromUtf8(obs_module_text("StreamUP.Settings.ToolbarSettings")));
+	toolbarSettingsAction->setObjectName("StreamUPToolbarSettingsAction");
 	connect(toolbarSettingsAction, &QAction::triggered, this, &StreamUPToolbar::onToolbarSettingsClicked);
 
 	// Load configuration and setup UI
@@ -81,6 +84,7 @@ StreamUPToolbar::~StreamUPToolbar()
 QFrame* StreamUPToolbar::createSeparator()
 {
 	QFrame* separator = new QFrame();
+	separator->setObjectName("StreamUPToolbarSeparator");
 	separator->setFrameShape(QFrame::VLine);
 	separator->setFrameShadow(QFrame::Plain);
 	separator->setFixedSize(1, 16);
@@ -91,6 +95,7 @@ QFrame* StreamUPToolbar::createSeparator()
 QFrame* StreamUPToolbar::createHorizontalSeparator()
 {
 	QFrame* separator = new QFrame();
+	separator->setObjectName("StreamUPToolbarSeparator");
 	separator->setFrameShape(QFrame::HLine);
 	separator->setFrameShadow(QFrame::Plain);
 	separator->setFixedSize(16, 1);
@@ -956,6 +961,7 @@ void StreamUPToolbar::setupDynamicUI()
 	
 	// Create a new central widget with horizontal layout (will be changed to vertical if needed)
 	centralWidget = new QWidget(this);
+	centralWidget->setObjectName("StreamUPToolbarCentralWidget");
 	mainLayout = new QHBoxLayout(centralWidget);
 	mainLayout->setContentsMargins(8, 0, 8, 0);
 	mainLayout->setSpacing(4);
@@ -1084,14 +1090,15 @@ void StreamUPToolbar::setupDynamicUI()
 							
 							// Create new pause button for this position
 							QToolButton* newPauseButton = new QToolButton(centralWidget);
+							newPauseButton->setObjectName("pauseButton");
 							newPauseButton->setProperty("class", "streamup-toolbar-button");
+							newPauseButton->setProperty("buttonType", "streamup-button");
 							newPauseButton->setFixedSize(QSize(22, 22));
 							newPauseButton->setIconSize(QSize(16, 16));
 							newPauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newPauseButton->setIcon(getCachedIcon("pause"));
-											newPauseButton->setToolTip("Pause Recording");
+							newPauseButton->setToolTip("Pause Recording");
 							newPauseButton->setCheckable(true);
-							newPauseButton->setObjectName("pause_dynamic");
 							// Start hidden - will be shown when recording is active and pausable
 							newPauseButton->setVisible(false);
 							connect(newPauseButton, &QToolButton::clicked, this, &StreamUPToolbar::onPauseButtonClicked);
@@ -1105,14 +1112,15 @@ void StreamUPToolbar::setupDynamicUI()
 						else if (buttonItem->buttonType == "replay_buffer") {
 							// Create new save_replay button for this position
 							QToolButton* newSaveReplayButton = new QToolButton(centralWidget);
+							newSaveReplayButton->setObjectName("saveReplayButton");
 							newSaveReplayButton->setProperty("class", "streamup-toolbar-button");
+							newSaveReplayButton->setProperty("buttonType", "streamup-button");
 							newSaveReplayButton->setFixedSize(QSize(22, 22));
 							newSaveReplayButton->setIconSize(QSize(16, 16));
 							newSaveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newSaveReplayButton->setIcon(getCachedIcon("save-replay"));
-											newSaveReplayButton->setToolTip("Save Replay");
+							newSaveReplayButton->setToolTip("Save Replay");
 							newSaveReplayButton->setCheckable(false);
-							newSaveReplayButton->setObjectName("save_replay_dynamic");
 							// Start hidden - will be shown when replay buffer is active
 							newSaveReplayButton->setVisible(false);
 							connect(newSaveReplayButton, &QToolButton::clicked, this, &StreamUPToolbar::onSaveReplayButtonClicked);
@@ -1187,6 +1195,7 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 
 	// Add consistent styling properties for custom StreamUP icons
 	button->setProperty("class", "streamup-toolbar-button");
+	button->setProperty("buttonType", "streamup-button");
 
 	// Ensure consistent button sizing
 	button->setFixedSize(QSize(22, 22));  // Consistent button size
@@ -1302,6 +1311,8 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 QFrame* StreamUPToolbar::createSeparatorFromConfig(bool isVertical)
 {
 	QFrame* separator = new QFrame();
+	separator->setObjectName("StreamUPToolbarSeparator");
+	separator->setProperty("separatorType", "streamup-separator");
 	if (isVertical) {
 		separator->setFrameShape(QFrame::HLine);
 		separator->setFixedSize(16, 1);
