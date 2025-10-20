@@ -58,8 +58,9 @@ void MultiDockDock::SetupUi()
     mainLayout->setSpacing(0);
     
     // Create a container widget for the inner host with padding
-    QWidget* innerContainer = new QWidget();
+    QFrame* innerContainer = new QFrame();
     innerContainer->setObjectName("MultiDockInnerContainer");
+    innerContainer->setFrameStyle(QFrame::NoFrame);
     // Let OBS theme handle background color
     QVBoxLayout* innerLayout = new QVBoxLayout(innerContainer);
     innerLayout->setContentsMargins(12, 12, 12, 12); // 12px padding on all sides
@@ -244,9 +245,6 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
         }
     });
 
-    // Add separator between add and lock actions (OBS standard pattern)
-    toolBar->addSeparator();
-
     // Lock Docks checkbox - using exact same approach as OBS source dock
     QCheckBox* lockCheckbox = new QCheckBox(this);
     lockCheckbox->setProperty("class", "checkbox-icon indicator-lock");
@@ -265,7 +263,7 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
     });
 
     toolBar->addWidget(lockCheckbox);
-    
+
     // Store references for later access
     m_statusLabel = nullptr; // No status label anymore
     m_addDockAction = addDockAction;
