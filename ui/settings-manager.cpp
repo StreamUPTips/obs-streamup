@@ -867,15 +867,15 @@ void ShowSettingsDialog(int tabIndex)
 		buttonBackgroundsLayout->setContentsMargins(0, 0, 0, 0);
 		buttonBackgroundsLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
 
-		QLabel *buttonBackgroundsLabel = new QLabel("Button Backgrounds");
+		QLabel *buttonBackgroundsLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarButtonBackgrounds"));
 		buttonBackgroundsLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
 							    .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							    .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-		buttonBackgroundsLabel->setToolTip("Toggle button backgrounds on or off");
+		buttonBackgroundsLabel->setToolTip(obs_module_text("StreamUP.Settings.ToolbarButtonBackgroundsDesc"));
 
 		StreamUP::UIStyles::SwitchButton *buttonBackgroundsSwitch =
 			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.toolbarButtonBackgrounds);
-		buttonBackgroundsSwitch->setToolTip("Enable or disable button backgrounds");
+		buttonBackgroundsSwitch->setToolTip(obs_module_text("StreamUP.Settings.ToolbarButtonBackgroundsTooltip"));
 
 		QObject::connect(buttonBackgroundsSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
 			PluginSettings settings = GetCurrentSettings();
@@ -902,11 +902,11 @@ void ShowSettingsDialog(int tabIndex)
 		iconSizeLayout->setContentsMargins(0, 0, 0, 0);
 		iconSizeLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
 
-		QLabel *iconSizeLabel = new QLabel("Icon Size");
+		QLabel *iconSizeLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarIconSize"));
 		iconSizeLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-		iconSizeLabel->setToolTip("Adjust the size of toolbar icons and buttons");
+		iconSizeLabel->setToolTip(obs_module_text("StreamUP.Settings.ToolbarIconSizeDesc"));
 
 		QSlider *iconSizeSlider = new QSlider(Qt::Horizontal);
 		iconSizeSlider->setMinimum(10);
@@ -914,7 +914,7 @@ void ShowSettingsDialog(int tabIndex)
 		iconSizeSlider->setValue(currentSettings.toolbarIconSize);
 		iconSizeSlider->setTickPosition(QSlider::TicksBelow);
 		iconSizeSlider->setTickInterval(2);
-		iconSizeSlider->setToolTip("Adjust icon size between 10px and 24px");
+		iconSizeSlider->setToolTip(obs_module_text("StreamUP.Settings.ToolbarIconSizeTooltip"));
 		iconSizeSlider->setMaximumWidth(200);
 
 		QLabel *iconSizeValueLabel = new QLabel(QString::number(currentSettings.toolbarIconSize) + "px");
