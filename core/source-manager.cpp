@@ -807,20 +807,7 @@ bool GroupSelectedSources(bool sendNotification)
 		groupName = QString("%1 %2").arg(baseName).arg(counter++);
 	}
 
-	// Create the group
-	obs_scene_t *group = obs_scene_create_private(groupName.toUtf8().constData());
-	if (!group) {
-		obs_source_release(current_scene);
-		if (sendNotification) {
-			StreamUP::NotificationManager::SendWarningNotification("Group Sources", "Failed to create group");
-		}
-		return false;
-	}
-
-	obs_source_t *group_source = obs_scene_get_source(group);
-
 	// Add the group to the scene at the position of the first selected item
-	obs_sceneitem_t *first_item = data.sceneItems[0];
 	obs_sceneitem_t *group_item = obs_scene_insert_group(scene, groupName.toUtf8().constData(), &data.sceneItems[0], data.sceneItems.size());
 
 	if (!group_item) {
