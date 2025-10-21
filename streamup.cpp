@@ -23,6 +23,7 @@
 #include "ui/hotkey-manager.hpp"
 #include "ui/splash-screen.hpp"
 #include "ui/patch-notes-window.hpp"
+#include "ui/studio-mode-enhancements.hpp"
 #include "multidock/multidock_manager.hpp"
 #include "multidock/multidock_utils.hpp"
 
@@ -890,6 +891,9 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 
 		// Apply style overrides to OBS native docks
 		ApplyOBSDockStyleOverrides();
+
+		// Apply studio mode enhancements (midpoint marker on transition slider)
+		StreamUP::StudioModeEnhancements::ApplyStudioModeEnhancements();
 
 		// Remove the event callback since we only need this to run once
 		StreamUP::DebugLogger::LogDebug("Plugin", "OBS Finished Loading", "Removing event callback");
