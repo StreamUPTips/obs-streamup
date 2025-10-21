@@ -429,8 +429,8 @@ void StreamUPToolbar::updateDockButtonIcons()
 			// Update icon for group selected sources button
 			button->setIcon(getCachedIcon("add-sources-to-group"));
 		} else if (actionType == "toggle_visibility_selected_sources") {
-			// Update icon for toggle visibility button
-			button->setIcon(getCachedIcon("visible"));
+			// Update icon for toggle visibility button using OBS themed helper
+			StreamUP::UIHelpers::ApplyThemedIcon(button, "icon-visible", "visibility");
 		} else if (actionType == "refresh_browser") {
 			// Update icon for refresh browser sources button
 			button->setIcon(getCachedIcon("refresh-browser-sources"));
@@ -1257,7 +1257,10 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 		auto dockItem = std::static_pointer_cast<StreamUP::ToolbarConfig::DockButtonItem>(item);
 		
 		// Set up dock button
-		if (!dockItem->iconPath.isEmpty()) {
+		if (dockItem->dockButtonType == "toggle_visibility_selected_sources") {
+			// Use OBS themed visibility helper to match dock styling
+			StreamUP::UIHelpers::ApplyThemedIcon(button, "icon-visible", "visibility");
+		} else if (!dockItem->iconPath.isEmpty()) {
 			// Use themed icon system for dock button icons
 			button->setIcon(getCachedIcon(dockItem->iconPath));
 		} else {

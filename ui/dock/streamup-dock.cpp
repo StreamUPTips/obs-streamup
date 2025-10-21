@@ -366,7 +366,7 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	applyFileIconToButton(button4, StreamUP::UIHelpers::GetThemedIconPath("refresh-audio-monitoring"));
 	applyFileIconToButton(videoCaptureButton, StreamUP::UIHelpers::GetThemedIconPath("camera"));
 	applyFileIconToButton(groupSelectedSourcesButton, StreamUP::UIHelpers::GetThemedIconPath("add-sources-to-group"));
-	applyFileIconToButton(toggleVisibilityButton, StreamUP::UIHelpers::GetThemedIconPath("visible"));
+	StreamUP::UIHelpers::ApplyThemedIcon(toggleVisibilityButton, "icon-visible", "visibility");
 
 	auto setButtonProperties = [](QPushButton *button) {
 		button->setIconSize(QSize(16, 16));  // Smaller icon for smaller button
@@ -604,6 +604,7 @@ void StreamUPDock::ButtonToggleVisibilitySelectedSources()
 	isProcessing = true;
 
 	StreamUP::SourceManager::ToggleVisibilitySelectedSources(true);
+	updateButtonIcons();
 
 	isProcessing = false;
 }
@@ -629,7 +630,7 @@ void StreamUPDock::updateButtonIcons()
 	applyFileIconToButton(button4, StreamUP::UIHelpers::GetThemedIconPath("refresh-audio-monitoring"));
 	applyFileIconToButton(videoCaptureButton, StreamUP::UIHelpers::GetThemedIconPath("camera"));
 	applyFileIconToButton(groupSelectedSourcesButton, StreamUP::UIHelpers::GetThemedIconPath("add-sources-to-group"));
-	applyFileIconToButton(toggleVisibilityButton, StreamUP::UIHelpers::GetThemedIconPath("visible"));
+	StreamUP::UIHelpers::ApplyThemedIcon(toggleVisibilityButton, "icon-visible", "visibility");
 
 }
 
