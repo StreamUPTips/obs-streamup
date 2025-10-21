@@ -269,8 +269,8 @@ PluginSettings GetCurrentSettings()
 		settings.sceneOrganiserShowIcons = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_icons", true);
 	settings.sceneOrganiserGroupFolders = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_group_folders", true);
 	settings.sceneOrganiserRememberFolderState = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_remember_folder_state", true);
-	settings.sceneOrganiserDisableSwitchingInStudioMode = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_disable_switching_in_studio_mode", false);
-	settings.sceneOrganiserItemHeight = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "scene_organiser_item_height", 100);
+	settings.sceneOrganiserDisableSwitchingInStudioMode = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_disable_switching_in_studio_mode", true);
+	settings.sceneOrganiserItemHeight = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "scene_organiser_item_height", 50);
 	// Ensure the height is at least 50% (the minimum allowed value)
 	if (settings.sceneOrganiserItemHeight < 50) {
 		settings.sceneOrganiserItemHeight = 100;
