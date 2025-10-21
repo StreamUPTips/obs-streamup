@@ -31,6 +31,8 @@ bool SliderMidpointFilter::eventFilter(QObject* watched, QEvent* event)
 
 void SliderMidpointFilter::drawMidpointMarker(QSlider* slider, QPaintEvent* paintEvent)
 {
+    UNUSED_PARAMETER(paintEvent);
+
     // Let the slider paint itself first
     QSlider temp(slider->orientation());
     temp.setMinimum(slider->minimum());
@@ -99,7 +101,7 @@ void EnhanceTransitionSlider()
     // Try to find the transition slider by searching for QSlider widgets
     QList<QSlider*> sliders = mainWindow->findChildren<QSlider*>();
 
-    blog(LOG_INFO, "[StreamUP] Studio Mode Enhancement: Found %d sliders in main window", sliders.size());
+    blog(LOG_INFO, "[StreamUP] Studio Mode Enhancement: Found %d sliders in main window", (int)sliders.size());
 
     for (QSlider* slider : sliders) {
         if (!slider) continue;
