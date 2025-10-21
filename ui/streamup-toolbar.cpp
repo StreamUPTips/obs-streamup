@@ -425,6 +425,21 @@ void StreamUPToolbar::updateDockButtonIcons()
 				QString iconName = currentLocked ? "current-scene-source-locked" : "current-scene-source-unlocked";
 				button->setIcon(getCachedIcon(iconName));
 			}
+		} else if (actionType == "group_selected_sources") {
+			// Update icon for group selected sources button
+			button->setIcon(getCachedIcon("add-sources-to-group"));
+		} else if (actionType == "toggle_visibility_selected_sources") {
+			// Update icon for toggle visibility button
+			button->setIcon(getCachedIcon("visible"));
+		} else if (actionType == "refresh_browser") {
+			// Update icon for refresh browser sources button
+			button->setIcon(getCachedIcon("refresh-browser-sources"));
+		} else if (actionType == "refresh_audio") {
+			// Update icon for refresh audio monitoring button
+			button->setIcon(getCachedIcon("refresh-audio-monitoring"));
+		} else if (actionType == "video_capture") {
+			// Update icon for video capture button
+			button->setIcon(getCachedIcon("camera"));
 		}
 	}
 }
@@ -650,6 +665,9 @@ void StreamUPToolbar::updateIconsForTheme()
 	}
 
 	// StreamUP settings button keeps its original icon (social icon, not cached)
+
+	// Update dock button icons for theme change
+	updateDockButtonIcons();
 }
 
 void StreamUPToolbar::updatePositionAwareTheme()
@@ -1500,6 +1518,10 @@ void StreamUPToolbar::executeDockAction(const QString& actionType)
 		dock->ButtonDeactivateAllVideoCaptureDevices();
 	} else if (actionType == "refresh_video_devices") {
 		dock->ButtonRefreshAllVideoCaptureDevices();
+	} else if (actionType == "group_selected_sources") {
+		dock->ButtonGroupSelectedSources();
+	} else if (actionType == "toggle_visibility_selected_sources") {
+		dock->ButtonToggleVisibilitySelectedSources();
 	} else {
 		QMessageBox::warning(this, QString::fromUtf8(obs_module_text("StreamUP.Toolbar.UnknownAction")),
 			QString("Unknown dock action: %1").arg(actionType));

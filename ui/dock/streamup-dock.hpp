@@ -36,7 +36,9 @@ public:
 	void ButtonActivateAllVideoCaptureDevices();
 	void ButtonDeactivateAllVideoCaptureDevices();
 	void ButtonRefreshAllVideoCaptureDevices();
-	
+	void ButtonGroupSelectedSources();
+	void ButtonToggleVisibilitySelectedSources();
+
 	// Helper methods for toolbar access
 	bool AreAllSourcesLockedInAllScenes();
 	bool AreAllSourcesLockedInCurrentScene();
@@ -48,6 +50,8 @@ private:
 	QPushButton *button3;
 	QPushButton *button4;
 	QPushButton *videoCaptureButton;
+	QPushButton *groupSelectedSourcesButton;
+	QPushButton *toggleVisibilityButton;
 	FlowLayout *mainDockLayout;
 	VideoCapturePopup *videoCapturePopup;
 	bool isProcessing;

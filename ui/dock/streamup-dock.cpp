@@ -125,7 +125,9 @@ void ShowDockConfigDialog()
 			{obs_module_text("Dock.Tool.LockCurrentSources.Title"), obs_module_text("Dock.Tool.LockCurrentSources.Description"), 1},
 			{obs_module_text("Dock.Tool.RefreshBrowserSources.Title"), obs_module_text("Dock.Tool.RefreshBrowserSources.Description"), 2},
 			{obs_module_text("Dock.Tool.RefreshAudioMonitoring.Title"), obs_module_text("Dock.Tool.RefreshAudioMonitoring.Description"), 3},
-			{obs_module_text("Dock.Tool.VideoCaptureOptions.Title"), obs_module_text("Dock.Tool.VideoCaptureOptions.Description"), 4}
+			{obs_module_text("Dock.Tool.VideoCaptureOptions.Title"), obs_module_text("Dock.Tool.VideoCaptureOptions.Description"), 4},
+			{obs_module_text("Dock.Tool.GroupSelectedSources.Title"), obs_module_text("Dock.Tool.GroupSelectedSources.Description"), 5},
+			{obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Title"), obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Description"), 6}
 		};
 		
 		// Create tool rows and collect switches
@@ -198,6 +200,8 @@ void ShowDockConfigDialog()
 				case 2: currentValue = freshSettings.showRefreshBrowserSources; break;
 				case 3: currentValue = freshSettings.showRefreshAudioMonitoring; break;
 				case 4: currentValue = freshSettings.showVideoCaptureOptions; break;
+				case 5: currentValue = freshSettings.showGroupSelectedSources; break;
+				case 6: currentValue = freshSettings.showToggleVisibilitySelectedSources; break;
 			}
 			
 			StreamUP::UIStyles::SwitchButton* toolSwitch = StreamUP::UIStyles::CreateStyledSwitch("", currentValue);
@@ -208,15 +212,17 @@ void ShowDockConfigDialog()
 			
 			QObject::connect(toolSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [tool](bool checked) {
 				StreamUP::SettingsManager::DockToolSettings settings = StreamUP::SettingsManager::GetDockToolSettings();
-				
+
 				switch (tool.toolIndex) {
 					case 0: settings.showLockAllSources = checked; break;
 					case 1: settings.showLockCurrentSources = checked; break;
 					case 2: settings.showRefreshBrowserSources = checked; break;
 					case 3: settings.showRefreshAudioMonitoring = checked; break;
 					case 4: settings.showVideoCaptureOptions = checked; break;
+					case 5: settings.showGroupSelectedSources = checked; break;
+					case 6: settings.showToggleVisibilitySelectedSources = checked; break;
 				}
-				
+
 				StreamUP::SettingsManager::UpdateDockToolSettings(settings);
 			});
 			
@@ -350,6 +356,8 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	button3 = new QPushButton("", this);
 	button4 = new QPushButton("", this);
 	videoCaptureButton = new QPushButton("", this);
+	groupSelectedSourcesButton = new QPushButton("", this);
+	toggleVisibilityButton = new QPushButton("", this);
 
 	// Apply initial icons to buttons
 	applyFileIconToButton(button1, StreamUP::UIHelpers::GetThemedIconPath("all-scene-source-locked"));
@@ -357,6 +365,8 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	applyFileIconToButton(button3, StreamUP::UIHelpers::GetThemedIconPath("refresh-browser-sources"));
 	applyFileIconToButton(button4, StreamUP::UIHelpers::GetThemedIconPath("refresh-audio-monitoring"));
 	applyFileIconToButton(videoCaptureButton, StreamUP::UIHelpers::GetThemedIconPath("camera"));
+	applyFileIconToButton(groupSelectedSourcesButton, StreamUP::UIHelpers::GetThemedIconPath("add-sources-to-group"));
+	applyFileIconToButton(toggleVisibilityButton, StreamUP::UIHelpers::GetThemedIconPath("visible"));
 
 	auto setButtonProperties = [](QPushButton *button) {
 		button->setIconSize(QSize(16, 16));  // Smaller icon for smaller button
@@ -390,6 +400,8 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	setButtonProperties(button3);
 	setButtonProperties(button4);
 	setButtonProperties(videoCaptureButton);
+	setButtonProperties(groupSelectedSourcesButton);
+	setButtonProperties(toggleVisibilityButton);
 
 	// Set tooltips for buttons
 	button1->setToolTip(obs_module_text("Feature.SourceLock.All.Title"));
@@ -397,6 +409,8 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	button3->setToolTip(obs_module_text("Feature.BrowserSources.Title"));
 	button4->setToolTip(obs_module_text("Feature.AudioMonitoring.Title"));
 	videoCaptureButton->setToolTip(obs_module_text("Feature.VideoCapture.Title"));
+	groupSelectedSourcesButton->setToolTip(obs_module_text("Dock.Tool.GroupSelectedSources.Title"));
+	toggleVisibilityButton->setToolTip(obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Title"));
 
 	// Create a flow layout to hold the buttons
 	mainDockLayout = new FlowLayout(this, 5, 5, 5);
@@ -406,6 +420,8 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	mainDockLayout->addWidget(button3);
 	mainDockLayout->addWidget(button4);
 	mainDockLayout->addWidget(videoCaptureButton);
+	mainDockLayout->addWidget(groupSelectedSourcesButton);
+	mainDockLayout->addWidget(toggleVisibilityButton);
 
 	// Set the layout to the StreamupDock
 	this->setLayout(mainDockLayout);
@@ -416,6 +432,8 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	connect(button3, &QPushButton::clicked, this, &StreamUPDock::ButtonRefreshBrowserSources);
 	connect(button4, &QPushButton::clicked, this, &StreamUPDock::ButtonRefreshAudioMonitoring);
 	connect(videoCaptureButton, &QPushButton::clicked, this, &StreamUPDock::ButtonShowVideoCapturePopup);
+	connect(groupSelectedSourcesButton, &QPushButton::clicked, this, &StreamUPDock::ButtonGroupSelectedSources);
+	connect(toggleVisibilityButton, &QPushButton::clicked, this, &StreamUPDock::ButtonToggleVisibilitySelectedSources);
 
 	// Setup OBS signals
 	setupObsSignals();
@@ -568,6 +586,28 @@ void StreamUPDock::ButtonRefreshAllVideoCaptureDevices()
 	isProcessing = false;
 }
 
+void StreamUPDock::ButtonGroupSelectedSources()
+{
+	if (isProcessing)
+		return;
+	isProcessing = true;
+
+	StreamUP::SourceManager::GroupSelectedSources(true);
+
+	isProcessing = false;
+}
+
+void StreamUPDock::ButtonToggleVisibilitySelectedSources()
+{
+	if (isProcessing)
+		return;
+	isProcessing = true;
+
+	StreamUP::SourceManager::ToggleVisibilitySelectedSources(true);
+
+	isProcessing = false;
+}
+
 void StreamUPDock::updateButtonIcons()
 {
 	// Update button1 icon based on whether all sources are locked in all scenes
@@ -588,6 +628,8 @@ void StreamUPDock::updateButtonIcons()
 	applyFileIconToButton(button3, StreamUP::UIHelpers::GetThemedIconPath("refresh-browser-sources"));
 	applyFileIconToButton(button4, StreamUP::UIHelpers::GetThemedIconPath("refresh-audio-monitoring"));
 	applyFileIconToButton(videoCaptureButton, StreamUP::UIHelpers::GetThemedIconPath("camera"));
+	applyFileIconToButton(groupSelectedSourcesButton, StreamUP::UIHelpers::GetThemedIconPath("add-sources-to-group"));
+	applyFileIconToButton(toggleVisibilityButton, StreamUP::UIHelpers::GetThemedIconPath("visible"));
 
 }
 
@@ -700,13 +742,15 @@ void StreamUPDock::onItemLockChanged(void *param, calldata_t *data)
 void StreamUPDock::updateToolVisibility()
 {
 	StreamUP::SettingsManager::DockToolSettings settings = StreamUP::SettingsManager::GetDockToolSettings();
-	
+
 	button1->setVisible(settings.showLockAllSources);
 	button2->setVisible(settings.showLockCurrentSources);
 	button3->setVisible(settings.showRefreshBrowserSources);
 	button4->setVisible(settings.showRefreshAudioMonitoring);
 	videoCaptureButton->setVisible(settings.showVideoCaptureOptions);
-	
+	groupSelectedSourcesButton->setVisible(settings.showGroupSelectedSources);
+	toggleVisibilityButton->setVisible(settings.showToggleVisibilitySelectedSources);
+
 	// Force layout update and repaint
 	if (mainDockLayout) {
 		mainDockLayout->update();
@@ -718,12 +762,13 @@ void StreamUPDock::updateToolVisibility()
 void StreamUPDock::showContextMenu(const QPoint& position)
 {
 	QMenu contextMenu(this);
-	
+
 	QAction* configureAction = contextMenu.addAction(obs_module_text("Dock.ContextMenu.Configure"));
 	connect(configureAction, &QAction::triggered, []() {
-		ShowDockConfigDialog();
+		// Open Settings window on Dock Configuration tab (index 5)
+		StreamUP::SettingsManager::ShowSettingsDialog(5);
 	});
-	
+
 	contextMenu.exec(mapToGlobal(position));
 }
 

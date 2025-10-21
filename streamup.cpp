@@ -419,6 +419,10 @@ static void RegisterWebsocketRequests()
 	obs_websocket_vendor_register_request(vendor, "PasteShowTransition", StreamUP::WebSocketAPI::WebsocketPasteShowTransition, nullptr);
 	obs_websocket_vendor_register_request(vendor, "PasteHideTransition", StreamUP::WebSocketAPI::WebsocketPasteHideTransition, nullptr);
 
+	// Group and visibility management
+	obs_websocket_vendor_register_request(vendor, "GroupSelectedSources", StreamUP::WebSocketAPI::WebsocketGroupSelectedSources, nullptr);
+	obs_websocket_vendor_register_request(vendor, "ToggleVisibilitySelectedSources", StreamUP::WebSocketAPI::WebsocketToggleVisibilitySelectedSources, nullptr);
+
 	// Backward compatibility - register old command names (deprecated)
 	obs_websocket_vendor_register_request(vendor, "getOutputFilePath", StreamUP::WebSocketAPI::WebsocketRequestGetOutputFilePath, nullptr);
 	obs_websocket_vendor_register_request(vendor, "getCurrentSource", StreamUP::WebSocketAPI::WebsocketRequestGetCurrentSelectedSource, nullptr);

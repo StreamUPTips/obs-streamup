@@ -342,6 +342,8 @@ PluginSettings GetCurrentSettings()
 			settings.dockTools.showRefreshBrowserSources = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_refresh_browser_sources", true);
 			settings.dockTools.showRefreshAudioMonitoring = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_refresh_audio_monitoring", true);
 			settings.dockTools.showVideoCaptureOptions = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_video_capture_options", true);
+			settings.dockTools.showGroupSelectedSources = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_group_selected_sources", true);
+			settings.dockTools.showToggleVisibilitySelectedSources = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_toggle_visibility_selected_sources", true);
 
 			obs_data_release(dockData);
 		} else {
@@ -440,6 +442,8 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(dockData, "show_refresh_browser_sources", settings.dockTools.showRefreshBrowserSources);
 	obs_data_set_bool(dockData, "show_refresh_audio_monitoring", settings.dockTools.showRefreshAudioMonitoring);
 	obs_data_set_bool(dockData, "show_video_capture_options", settings.dockTools.showVideoCaptureOptions);
+	obs_data_set_bool(dockData, "show_group_selected_sources", settings.dockTools.showGroupSelectedSources);
+	obs_data_set_bool(dockData, "show_toggle_visibility_selected_sources", settings.dockTools.showToggleVisibilitySelectedSources);
 
 	obs_data_set_obj(data, "dock_tools", dockData);
 	obs_data_release(dockData);
@@ -1603,6 +1607,11 @@ void ShowSettingsDialog(int tabIndex)
 			{obs_module_text("Hotkey.PasteShowTransition.Name"), obs_module_text("Hotkey.PasteShowTransition.Description"), "streamup_paste_show_transition"},
 			{obs_module_text("Hotkey.PasteHideTransition.Name"), obs_module_text("Hotkey.PasteHideTransition.Description"), "streamup_paste_hide_transition"}
 		};
+
+		std::vector<HotkeyInfo> groupVisibilityHotkeys = {
+			{obs_module_text("Hotkey.GroupSelectedSources.Name"), obs_module_text("Hotkey.GroupSelectedSources.Description"), "streamup_group_selected_sources"},
+			{obs_module_text("Hotkey.ToggleVisibilitySelectedSources.Name"), obs_module_text("Hotkey.ToggleVisibilitySelectedSources.Description"), "streamup_toggle_visibility_selected_sources"}
+		};
 		
 		// Helper function to build hotkey rows for each section
 		auto buildHotkeySection = [](const std::vector<HotkeyInfo>& hotkeys, QVBoxLayout* parentLayout) {
@@ -1687,11 +1696,16 @@ void ShowSettingsDialog(int tabIndex)
 		};
 		
 		// Build each hotkey section
+		QGroupBox *groupVisibilityGroup = StreamUP::UIStyles::CreateStyledGroupBox("Group and Visibility Management", "info");
+		QVBoxLayout *groupVisibilityLayout = new QVBoxLayout(groupVisibilityGroup);
+		groupVisibilityLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
 		buildHotkeySection(lockingHotkeys, lockingLayout);
 		buildHotkeySection(refreshHotkeys, refreshLayout);
 		buildHotkeySection(interactionHotkeys, interactionLayout);
 		buildHotkeySection(videoCaptureHotkeys, videoCaptureLayout);
 		buildHotkeySection(transitionHotkeys, transitionLayout);
+		buildHotkeySection(groupVisibilityHotkeys, groupVisibilityLayout);
 
 		// Add all sections to main layout
 		hotkeysContentLayout->addWidget(lockingGroup);
@@ -1699,6 +1713,7 @@ void ShowSettingsDialog(int tabIndex)
 		hotkeysContentLayout->addWidget(interactionGroup);
 		hotkeysContentLayout->addWidget(videoCaptureGroup);
 		hotkeysContentLayout->addWidget(transitionGroup);
+		hotkeysContentLayout->addWidget(groupVisibilityGroup);
 		
 		hotkeysMainLayout->addWidget(hotkeysContentWidget);
 		hotkeysMainLayout->addStretch();
@@ -1771,7 +1786,9 @@ void ShowSettingsDialog(int tabIndex)
 			{obs_module_text("Dock.Tool.LockCurrentSources.Title"), obs_module_text("Dock.Tool.LockCurrentSources.Description"), &dockSettings.showLockCurrentSources, 1},
 			{obs_module_text("Dock.Tool.RefreshBrowserSources.Title"), obs_module_text("Dock.Tool.RefreshBrowserSources.Description"), &dockSettings.showRefreshBrowserSources, 2},
 			{obs_module_text("Dock.Tool.RefreshAudioMonitoring.Title"), obs_module_text("Dock.Tool.RefreshAudioMonitoring.Description"), &dockSettings.showRefreshAudioMonitoring, 3},
-			{obs_module_text("Dock.Tool.VideoCaptureOptions.Title"), obs_module_text("Dock.Tool.VideoCaptureOptions.Description"), &dockSettings.showVideoCaptureOptions, 4}
+			{obs_module_text("Dock.Tool.VideoCaptureOptions.Title"), obs_module_text("Dock.Tool.VideoCaptureOptions.Description"), &dockSettings.showVideoCaptureOptions, 4},
+			{obs_module_text("Dock.Tool.GroupSelectedSources.Title"), obs_module_text("Dock.Tool.GroupSelectedSources.Description"), &dockSettings.showGroupSelectedSources, 5},
+			{obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Title"), obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Description"), &dockSettings.showToggleVisibilitySelectedSources, 6}
 		};
 		
 		// Create tool rows
@@ -1824,6 +1841,8 @@ void ShowSettingsDialog(int tabIndex)
 				case 2: currentValue = freshSettings.showRefreshBrowserSources; break;
 				case 3: currentValue = freshSettings.showRefreshAudioMonitoring; break;
 				case 4: currentValue = freshSettings.showVideoCaptureOptions; break;
+				case 5: currentValue = freshSettings.showGroupSelectedSources; break;
+				case 6: currentValue = freshSettings.showToggleVisibilitySelectedSources; break;
 			}
 			
 			StreamUP::UIStyles::SwitchButton *toolSwitch = StreamUP::UIStyles::CreateStyledSwitch("", currentValue);
@@ -1831,15 +1850,17 @@ void ShowSettingsDialog(int tabIndex)
 			// Update settings when switch changes
 			QObject::connect(toolSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [toolIndex = tool.toolIndex](bool checked) {
 				DockToolSettings settings = GetDockToolSettings();
-				
+
 				switch (toolIndex) {
 					case 0: settings.showLockAllSources = checked; break;
 					case 1: settings.showLockCurrentSources = checked; break;
 					case 2: settings.showRefreshBrowserSources = checked; break;
 					case 3: settings.showRefreshAudioMonitoring = checked; break;
 					case 4: settings.showVideoCaptureOptions = checked; break;
+					case 5: settings.showGroupSelectedSources = checked; break;
+					case 6: settings.showToggleVisibilitySelectedSources = checked; break;
 				}
-				
+
 				UpdateDockToolSettings(settings);
 			});
 			
@@ -2649,7 +2670,11 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 		{obs_module_text("Dock.Tool.RefreshAudioMonitoring.Title"), obs_module_text("Dock.Tool.RefreshAudioMonitoring.Description"),
 		 &currentDockSettings.showRefreshAudioMonitoring, 3},
 		{obs_module_text("Dock.Tool.VideoCaptureOptions.Title"), obs_module_text("Dock.Tool.VideoCaptureOptions.Description"),
-		 &currentDockSettings.showVideoCaptureOptions, 4}};
+		 &currentDockSettings.showVideoCaptureOptions, 4},
+		{obs_module_text("Dock.Tool.GroupSelectedSources.Title"), obs_module_text("Dock.Tool.GroupSelectedSources.Description"),
+		 &currentDockSettings.showGroupSelectedSources, 5},
+		{obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Title"), obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Description"),
+		 &currentDockSettings.showToggleVisibilitySelectedSources, 6}};
 
 	// Create tool rows matching WebSocket/hotkeys UI pattern
 	for (size_t i = 0; i < dockTools.size(); ++i) {
@@ -2739,6 +2764,12 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 		case 4:
 			currentValue = freshSettings.showVideoCaptureOptions;
 			break;
+		case 5:
+			currentValue = freshSettings.showGroupSelectedSources;
+			break;
+		case 6:
+			currentValue = freshSettings.showToggleVisibilitySelectedSources;
+			break;
 		}
 
 		// Create switch with explicit initial state
@@ -2768,6 +2799,12 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 				break;
 			case 4:
 				settings.showVideoCaptureOptions = checked;
+				break;
+			case 5:
+				settings.showGroupSelectedSources = checked;
+				break;
+			case 6:
+				settings.showToggleVisibilitySelectedSources = checked;
 				break;
 			}
 

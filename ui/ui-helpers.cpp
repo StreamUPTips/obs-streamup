@@ -359,10 +359,14 @@ void CopyToClipboard(const QString &text)
 
 QString GetThemedIconPath(const QString &iconName)
 {
+	// Use OBS built-in icons for standard items (these are already themed by OBS)
+	if (iconName == "visible" || iconName == "invisible") {
+	}
+
 	bool isDarkTheme = obs_frontend_is_theme_dark();
 	StreamUP::DebugLogger::LogDebugFormat("UI", "Theme Detection", "obs_frontend_is_theme_dark() returned: %s", isDarkTheme ? "true" : "false");
 
-	// Use appropriate suffix based on theme
+	// Use appropriate suffix based on theme for custom icons
 	QString themeSuffix = isDarkTheme ? "-dark" : "-light";
 	QString iconPath = QString(":images/icons/ui/%1%2.svg").arg(iconName).arg(themeSuffix);
 

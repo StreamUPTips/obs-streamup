@@ -567,6 +567,18 @@ QList<DockButtonItem> ToolbarConfiguration::getAvailableDockButtons() {
     refreshVideoButton.tooltip = "Refresh All Video Capture Devices";
     buttons.append(refreshVideoButton);
 
+    // Group Selected Sources
+    auto groupSelectedButton = DockButtonItem("dock_group_selected_sources", "group_selected_sources", "Group Selected Sources");
+    groupSelectedButton.iconPath = "add-sources-to-group";
+    groupSelectedButton.tooltip = "Group Selected Sources in Current Scene";
+    buttons.append(groupSelectedButton);
+
+    // Toggle Visibility of Selected Sources
+    auto toggleVisibilityButton = DockButtonItem("dock_toggle_visibility_selected_sources", "toggle_visibility_selected_sources", "Toggle Visibility of Selected Sources");
+    toggleVisibilityButton.iconPath = "visible";
+    toggleVisibilityButton.tooltip = "Toggle Visibility of Selected Sources";
+    buttons.append(toggleVisibilityButton);
+
     // Note: StreamUP Settings button removed from available dock buttons
     // It's always present on the toolbar by default and doesn't need to be added as a custom button
 
