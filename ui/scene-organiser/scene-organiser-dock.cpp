@@ -4271,7 +4271,12 @@ void StreamUP::SceneOrganiser::SceneOrganiserDock::onThemeChanged()
 
     // Update all dock instances efficiently
     for (auto* dock : s_dockInstances) {
-        if (dock) {
+        if (dock && dock->m_model) {
+            // Update theme state
+            dock->currentThemeIsDark = StreamUP::UIHelpers::IsOBSThemeDark();
+            // Update all icons with the new theme
+            dock->updateAllItemIcons(dock->m_model->invisibleRootItem());
+            // Schedule viewport repaint
             dock->scheduleOptimizedUpdate();
         }
     }
