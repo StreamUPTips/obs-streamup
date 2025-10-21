@@ -54,16 +54,20 @@ void InnerDockHost::SetupDockOptions()
     // Set window flags to prevent overlap with parent title
     setWindowFlags(Qt::Widget);
 
-    // Make the QMainWindow background inherit from parent QFrame
-    setAttribute(Qt::WA_StyledBackground, false);
+    // Set auto-fill background to use the palette properly (like QFrame does)
+    setAutoFillBackground(true);
 
-    // Set transparent background so it inherits from parent
+    // Set object name for styling
+    setObjectName("InnerDockHost");
+
+    // Set content margins to create gap between docks and edges
+    setContentsMargins(8, 8, 8, 8);
+
+    // Add rounded corners and hide float buttons
     setStyleSheet(
-        "QMainWindow#InnerDockHost { background-color: transparent; }"
+        "QMainWindow#InnerDockHost { border-radius: 14px; }"
         "QDockWidget::float-button { width: 0px; height: 0px; }"
     );
-
-    setObjectName("InnerDockHost");
 }
 
 
@@ -429,7 +433,7 @@ void InnerDockHost::ReapplyDockFeatures()
     QString closeButtonStyle = m_docksLocked ? "width: 0px; height: 0px;" : "";
 
     setStyleSheet(
-        "QMainWindow#InnerDockHost { background-color: transparent; }"
+        "QMainWindow#InnerDockHost { border-radius: 14px; }"
         "QDockWidget::close-button { " + closeButtonStyle + " }"
         "QDockWidget::float-button { width: 0px; height: 0px; }"
     );
@@ -475,7 +479,7 @@ void InnerDockHost::SetDocksLocked(bool locked)
     QString closeButtonStyle = m_docksLocked ? "width: 0px; height: 0px;" : "";
 
     setStyleSheet(
-        "QMainWindow#InnerDockHost { background-color: transparent; }"
+        "QMainWindow#InnerDockHost { border-radius: 14px; }"
         "QDockWidget::close-button { " + closeButtonStyle + " }"
         "QDockWidget::float-button { width: 0px; height: 0px; }"
     );
