@@ -24,6 +24,7 @@
 #include "ui/splash-screen.hpp"
 #include "ui/patch-notes-window.hpp"
 #include "multidock/multidock_manager.hpp"
+#include "multidock/multidock_utils.hpp"
 
 // Standard library
 #include <filesystem>
@@ -842,12 +843,53 @@ static void OnOBSShutdown(enum obs_frontend_event event, void *private_data)
 	}
 }
 
+static void ApplyOBSDockStyleOverrides()
+{
+	// Override OBS native dock margins to match StreamUP style
+	QMainWindow* mainWindow = static_cast<QMainWindow*>(obs_frontend_get_main_window());
+	if (!mainWindow) {
+		blog(LOG_WARNING, "[StreamUP] Failed to get main window for dock style overrides");
+		return;
+	}
+
+	// Find all OBS native docks
+	QList<QDockWidget*> allDocks = StreamUP::MultiDock::FindAllObsDocks(mainWindow);
+
+	int overrideCount = 0;
+	for (QDockWidget* dock : allDocks) {
+		if (!dock) continue;
+
+		// Skip StreamUP's own docks (they already have correct styling)
+		QString objectName = dock->objectName();
+		if (objectName.contains("StreamUP", Qt::CaseInsensitive) ||
+		    objectName.contains("SceneOrganiser", Qt::CaseInsensitive) ||
+		    StreamUP::MultiDock::IsMultiDockContainer(dock)) {
+			continue;
+		}
+
+		// Get the widget inside the dock
+		QWidget* dockWidget = dock->widget();
+		if (dockWidget) {
+			// Override the layout margins to 0
+			if (dockWidget->layout()) {
+				dockWidget->layout()->setContentsMargins(0, 0, 0, 0);
+				overrideCount++;
+			}
+		}
+	}
+
+	blog(LOG_INFO, "[StreamUP] Applied margin overrides to %d OBS native docks", overrideCount);
+}
+
 static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_data)
 {
 	UNUSED_PARAMETER(private_data);
 
 	if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
 		StreamUP::DebugLogger::LogInfo("Plugin", "OBS finished loading, initializing plugin data...");
+
+		// Apply style overrides to OBS native docks
+		ApplyOBSDockStyleOverrides();
 
 		// Remove the event callback since we only need this to run once
 		StreamUP::DebugLogger::LogDebug("Plugin", "OBS Finished Loading", "Removing event callback");
