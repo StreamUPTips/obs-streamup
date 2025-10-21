@@ -136,6 +136,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/theme-window.cpp
   ui/websocket-window.hpp
   ui/websocket-window.cpp
+  ui/studio-mode-enhancements.hpp
+  ui/studio-mode-enhancements.cpp
   ui/dock/streamup-dock.hpp
   ui/dock/streamup-dock.cpp
   ui/scene-organiser/scene-organiser-dock.hpp
@@ -241,7 +243,9 @@ source_group("UI" FILES
   ui/patch-notes-window.hpp
   ui/patch-notes-window.cpp
   ui/websocket-window.hpp
-  ui/websocket-window.cpp)
+  ui/websocket-window.cpp
+  ui/studio-mode-enhancements.hpp
+  ui/studio-mode-enhancements.cpp)
 
 source_group("UI\\Dock" FILES
   ui/dock/streamup-dock.hpp
