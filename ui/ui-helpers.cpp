@@ -361,6 +361,10 @@ QString GetThemedIconPath(const QString &iconName)
 {
 	// Use OBS built-in icons for standard items (these are already themed by OBS)
 	if (iconName == "visible" || iconName == "invisible") {
+		QString obsIconPath = QString(":/res/images/%1.svg").arg(iconName);
+		StreamUP::DebugLogger::LogDebugFormat("UI", "Icon Path", "Using OBS built-in icon '%s' -> %s",
+			iconName.toUtf8().constData(), obsIconPath.toUtf8().constData());
+		return obsIconPath;
 	}
 
 	bool isDarkTheme = obs_frontend_is_theme_dark();
