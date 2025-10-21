@@ -646,35 +646,6 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
 			skipCheckbox = new QCheckBox(obs_module_text("Plugin.Dialog.SkipTheseUpdates"));
-			skipCheckbox->setStyleSheet(QString(
-				"QCheckBox {"
-				"color: %1;"
-				"font-size: %2px;"
-				"padding: %3px;"
-				"margin-left: %4px;"
-				"}"
-				"QCheckBox::indicator {"
-				"width: 18px;"
-				"height: 18px;"
-				"border-radius: 4px;"
-				"border: 2px solid %5;"
-				"background: %6;"
-				"}"
-				"QCheckBox::indicator:checked {"
-				"background: %7;"
-				"border-color: %7;"
-				"}"
-				"QCheckBox::indicator:checked::after {"
-				"content: '✓';"
-				"color: white;"
-				"}")
-				.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)
-				.arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
-				.arg(StreamUP::UIStyles::Sizes::PADDING_XL + 5)
-				.arg(StreamUP::UIStyles::Colors::BORDER_MEDIUM)
-				.arg(StreamUP::UIStyles::Colors::BACKGROUND_HOVER)
-				.arg(StreamUP::UIStyles::Colors::INFO));
 
 			dialogLayout->addWidget(skipCheckbox);
 		}
