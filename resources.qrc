@@ -60,6 +60,8 @@
 		<file>images/icons/ui/refresh-audio-monitoring-dark.svg</file>
 		<file>images/icons/ui/add-sources-to-group-light.svg</file>
 		<file>images/icons/ui/add-sources-to-group-dark.svg</file>
+		<file>images/icons/ui/visible-light.svg</file>
+		<file>images/icons/ui/visible-dark.svg</file>
 
 		<!-- Social Media Icons -->
 		<file>images/icons/social/patreon.svg</file>
