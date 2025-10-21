@@ -846,5 +846,30 @@ void WebsocketPasteHideTransition(obs_data_t *request_data, obs_data_t *response
 	obs_data_set_bool(response_data, "success", true);
 }
 
+//-------------------GROUP AND VISIBILITY MANAGEMENT-------------------
+void WebsocketGroupSelectedSources(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	bool success = StreamUP::SourceManager::GroupSelectedSources(false);
+	obs_data_set_bool(response_data, "success", success);
+	if (!success) {
+		obs_data_set_string(response_data, "error", "Failed to group selected sources. Ensure at least 2 sources are selected.");
+	}
+}
+
+void WebsocketToggleVisibilitySelectedSources(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	bool success = StreamUP::SourceManager::ToggleVisibilitySelectedSources(false);
+	obs_data_set_bool(response_data, "success", success);
+	if (!success) {
+		obs_data_set_string(response_data, "error", "Failed to toggle visibility. Ensure sources are selected.");
+	}
+}
+
 } // namespace WebSocketAPI
 } // namespace StreamUP

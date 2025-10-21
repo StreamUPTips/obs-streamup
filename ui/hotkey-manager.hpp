@@ -143,6 +143,24 @@ void HotkeyPasteShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
  */
 void HotkeyPasteHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
 
+/**
+ * Hotkey handler for grouping selected sources
+ * @param data User data (unused)
+ * @param id Hotkey ID
+ * @param hotkey Hotkey object
+ * @param pressed Whether the key was pressed (true) or released (false)
+ */
+void HotkeyGroupSelectedSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
+
+/**
+ * Hotkey handler for toggling visibility of selected sources
+ * @param data User data (unused)
+ * @param id Hotkey ID
+ * @param hotkey Hotkey object
+ * @param pressed Whether the key was pressed (true) or released (false)
+ */
+void HotkeyToggleVisibilitySelectedSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
+
 //-------------------HOTKEY MANAGEMENT-------------------
 /**
  * Save and load hotkey settings

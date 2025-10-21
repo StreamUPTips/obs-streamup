@@ -92,7 +92,13 @@ static const QList<WebSocketCommand> websocketCommands = {
 	{"DeactivateAllVideoCaptureDevices", "WebSocket.Command.DeactivateAllVideoCaptureDevices.Description",
 	 "WebSocket.Category.VideoDeviceManagement", false},
 	{"RefreshAllVideoCaptureDevices", "WebSocket.Command.RefreshAllVideoCaptureDevices.Description",
-	 "WebSocket.Category.VideoDeviceManagement", false}};
+	 "WebSocket.Category.VideoDeviceManagement", false},
+
+	// Group and Visibility Management
+	{"GroupSelectedSources", "WebSocket.Command.GroupSelectedSources.Description",
+	 "WebSocket.Category.GroupManagement", false},
+	{"ToggleVisibilitySelectedSources", "WebSocket.Command.ToggleVisibilitySelectedSources.Description",
+	 "WebSocket.Category.GroupManagement", false}};
 
 void ShowWebSocketWindow(bool showInternalTools)
 {

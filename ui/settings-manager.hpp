@@ -30,13 +30,17 @@ struct DockToolSettings {
     bool showRefreshBrowserSources;
     bool showRefreshAudioMonitoring;
     bool showVideoCaptureOptions;
-    
-    DockToolSettings() : 
+    bool showGroupSelectedSources;
+    bool showToggleVisibilitySelectedSources;
+
+    DockToolSettings() :
         showLockAllSources(true),
-        showLockCurrentSources(true), 
+        showLockCurrentSources(true),
         showRefreshBrowserSources(true),
         showRefreshAudioMonitoring(true),
-        showVideoCaptureOptions(true) {}
+        showVideoCaptureOptions(true),
+        showGroupSelectedSources(true),
+        showToggleVisibilitySelectedSources(true) {}
 };
 
 /**

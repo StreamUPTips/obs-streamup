@@ -6,7 +6,7 @@
 		<file>images/icons/ui/streaming-inactive-dark.svg</file>
 		<file>images/icons/ui/streaming-light.svg</file>
 		<file>images/icons/ui/streaming-dark.svg</file>
-		
+
 		<!-- Recording Icons -->
 		<file>images/icons/ui/record-off-light.svg</file>
 		<file>images/icons/ui/record-off-dark.svg</file>
@@ -14,7 +14,7 @@
 		<file>images/icons/ui/record-on-dark.svg</file>
 		<file>images/icons/ui/pause-light.svg</file>
 		<file>images/icons/ui/pause-dark.svg</file>
-		
+
 		<!-- Replay Buffer Icons -->
 		<file>images/icons/ui/replay-buffer-off-light.svg</file>
 		<file>images/icons/ui/replay-buffer-off-dark.svg</file>
@@ -22,19 +22,19 @@
 		<file>images/icons/ui/replay-buffer-on-dark.svg</file>
 		<file>images/icons/ui/save-replay-light.svg</file>
 		<file>images/icons/ui/save-replay-dark.svg</file>
-		
+
 		<!-- Virtual Camera Icons -->
 		<file>images/icons/ui/virtual-camera-light.svg</file>
 		<file>images/icons/ui/virtual-camera-dark.svg</file>
 		<file>images/icons/ui/virtual-camera-settings-light.svg</file>
 		<file>images/icons/ui/virtual-camera-settings-dark.svg</file>
-		
+
 		<!-- Studio Mode & Settings Icons -->
 		<file>images/icons/ui/studio-mode-light.svg</file>
 		<file>images/icons/ui/studio-mode-dark.svg</file>
 		<file>images/icons/ui/settings-light.svg</file>
 		<file>images/icons/ui/settings-dark.svg</file>
-		
+
 		<!-- Source Management Icons -->
 		<file>images/icons/ui/all-scene-source-locked-light.svg</file>
 		<file>images/icons/ui/all-scene-source-locked-dark.svg</file>
@@ -44,7 +44,7 @@
 		<file>images/icons/ui/current-scene-source-locked-dark.svg</file>
 		<file>images/icons/ui/current-scene-source-unlocked-light.svg</file>
 		<file>images/icons/ui/current-scene-source-unlocked-dark.svg</file>
-		
+
 		<!-- Device & Refresh Icons -->
 		<file>images/icons/ui/camera-light.svg</file>
 		<file>images/icons/ui/camera-dark.svg</file>
@@ -58,7 +58,9 @@
 		<file>images/icons/ui/refresh-browser-sources-dark.svg</file>
 		<file>images/icons/ui/refresh-audio-monitoring-light.svg</file>
 		<file>images/icons/ui/refresh-audio-monitoring-dark.svg</file>
-		
+		<file>images/icons/ui/add-sources-to-group-light.svg</file>
+		<file>images/icons/ui/add-sources-to-group-dark.svg</file>
+
 		<!-- Social Media Icons -->
 		<file>images/icons/social/patreon.svg</file>
 		<file>images/icons/social/kofi.svg</file>
@@ -71,11 +73,11 @@
 		<file>images/icons/social/streamup-logo-button.svg</file>
 		<file>images/icons/social/streamup-logo-stacked.svg</file>
 		<file>images/icons/social/streamup-logo-text.svg</file>
-		
+
 		<!-- Media Assets -->
 		<file>media/logo.png</file>
 		<file>media/icon.ico</file>
-		
+
 		<!-- Theme Preview Images -->
 		<file>images/misc/obs-theme-1.png</file>
 		<file>images/misc/obs-theme-2.png</file>
@@ -91,7 +93,7 @@
 		<file>images/misc/source-explorer-6.png</file>
 		<file>images/misc/source-explorer-7.png</file>
 		<file>images/misc/source-explorer-8.png</file>
-		
+
 		<!-- Documentation -->
 		<file>patch-notes-summary.md</file>
 		<file>plugin-info.md</file>

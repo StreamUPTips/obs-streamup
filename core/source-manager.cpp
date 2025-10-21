@@ -752,9 +752,184 @@ void RefreshAllVideoCaptureDevicesDialog()
 			 QString(obs_module_text("VideoCaptureRefreshTitle")),
 			 []() { RefreshAllVideoCaptureDevices(true); },
 			 QString(), // No JSON needed for this action
-			 "VideoCaptureRefreshHow1", "VideoCaptureRefreshHow2", 
+			 "VideoCaptureRefreshHow1", "VideoCaptureRefreshHow2",
 			 "VideoCaptureRefreshHow3", "VideoCaptureRefreshHow4",
 			 "VideoCaptureRefreshNotification");
+}
+
+//-------------------GROUP MANAGEMENT FUNCTIONS-------------------
+bool GroupSelectedSources(bool sendNotification)
+{
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) {
+		if (sendNotification) {
+			StreamUP::NotificationManager::SendWarningNotification("Group Sources", "No current scene found");
+		}
+		return false;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(current_scene);
+	if (!scene) {
+		obs_source_release(current_scene);
+		if (sendNotification) {
+			StreamUP::NotificationManager::SendWarningNotification("Group Sources", "Invalid scene source");
+		}
+		return false;
+	}
+
+	// Find all selected items
+	SceneFindBoxData data;
+	obs_scene_enum_items(scene, FindSelected, &data);
+
+	if (data.sceneItems.empty()) {
+		obs_source_release(current_scene);
+		if (sendNotification) {
+			StreamUP::NotificationManager::SendWarningNotification("Group Sources", "No sources selected");
+		}
+		return false;
+	}
+
+	if (data.sceneItems.size() < 2) {
+		obs_source_release(current_scene);
+		if (sendNotification) {
+			StreamUP::NotificationManager::SendWarningNotification("Group Sources", "At least 2 sources must be selected");
+		}
+		return false;
+	}
+
+	// Create a unique group name
+	QString baseName = "Group";
+	QString groupName = baseName;
+	int counter = 1;
+	obs_source_t *existing = nullptr;
+	while ((existing = obs_get_source_by_name(groupName.toUtf8().constData())) != nullptr) {
+		obs_source_release(existing);
+		groupName = QString("%1 %2").arg(baseName).arg(counter++);
+	}
+
+	// Create the group
+	obs_scene_t *group = obs_scene_create_private(groupName.toUtf8().constData());
+	if (!group) {
+		obs_source_release(current_scene);
+		if (sendNotification) {
+			StreamUP::NotificationManager::SendWarningNotification("Group Sources", "Failed to create group");
+		}
+		return false;
+	}
+
+	obs_source_t *group_source = obs_scene_get_source(group);
+
+	// Add the group to the scene at the position of the first selected item
+	obs_sceneitem_t *first_item = data.sceneItems[0];
+	obs_sceneitem_t *group_item = obs_scene_insert_group(scene, groupName.toUtf8().constData(), &data.sceneItems[0], data.sceneItems.size());
+
+	if (!group_item) {
+		obs_source_release(current_scene);
+		if (sendNotification) {
+			StreamUP::NotificationManager::SendWarningNotification("Group Sources", "Failed to group sources");
+		}
+		return false;
+	}
+
+	obs_source_release(current_scene);
+
+	if (sendNotification) {
+		QString message = QString("Grouped %1 sources").arg(data.sceneItems.size());
+		StreamUP::NotificationManager::SendInfoNotification("Group Sources", message);
+	}
+
+	StreamUP::DebugLogger::LogInfoFormat("GroupSources", "Grouped %d sources into '%s'",
+		static_cast<int>(data.sceneItems.size()), groupName.toUtf8().constData());
+
+	return true;
+}
+
+//-------------------VISIBILITY MANAGEMENT FUNCTIONS-------------------
+bool CheckIfAnySelectedVisible()
+{
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) return false;
+
+	obs_scene_t *scene = obs_scene_from_source(current_scene);
+	if (!scene) {
+		obs_source_release(current_scene);
+		return false;
+	}
+
+	SceneFindBoxData data;
+	obs_scene_enum_items(scene, FindSelected, &data);
+
+	bool any_visible = false;
+	for (obs_sceneitem_t *item : data.sceneItems) {
+		if (obs_sceneitem_visible(item)) {
+			any_visible = true;
+			break;
+		}
+	}
+
+	obs_source_release(current_scene);
+	return any_visible;
+}
+
+bool ToggleVisibilitySelectedSources(bool sendNotification)
+{
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) {
+		if (sendNotification) {
+			StreamUP::NotificationManager::SendWarningNotification("Toggle Visibility", "No current scene found");
+		}
+		return false;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(current_scene);
+	if (!scene) {
+		obs_source_release(current_scene);
+		if (sendNotification) {
+			StreamUP::NotificationManager::SendWarningNotification("Toggle Visibility", "Invalid scene source");
+		}
+		return false;
+	}
+
+	// Find all selected items
+	SceneFindBoxData data;
+	obs_scene_enum_items(scene, FindSelected, &data);
+
+	if (data.sceneItems.empty()) {
+		obs_source_release(current_scene);
+		if (sendNotification) {
+			StreamUP::NotificationManager::SendWarningNotification("Toggle Visibility", "No sources selected");
+		}
+		return false;
+	}
+
+	// Check if any selected items are visible
+	bool any_visible = false;
+	for (obs_sceneitem_t *item : data.sceneItems) {
+		if (obs_sceneitem_visible(item)) {
+			any_visible = true;
+			break;
+		}
+	}
+
+	// Toggle visibility: if any are visible, hide all; if all are hidden, show all
+	bool new_visibility = !any_visible;
+	for (obs_sceneitem_t *item : data.sceneItems) {
+		obs_sceneitem_set_visible(item, new_visibility);
+	}
+
+	obs_source_release(current_scene);
+
+	if (sendNotification) {
+		QString message = QString("%1 %2 selected source(s)")
+			.arg(new_visibility ? "Shown" : "Hidden")
+			.arg(data.sceneItems.size());
+		StreamUP::NotificationManager::SendInfoNotification("Toggle Visibility", message);
+	}
+
+	StreamUP::DebugLogger::LogInfoFormat("ToggleVisibility", "%s %d selected sources",
+		new_visibility ? "Shown" : "Hidden", static_cast<int>(data.sceneItems.size()));
+
+	return true;
 }
 
 } // namespace SourceManager
