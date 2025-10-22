@@ -12,6 +12,7 @@
 - **Settings Persistence** - Fixed critical issue where settings (especially toolbar configuration) weren't saving properly on OBS close
 - **Scene Organiser Height Slider** - Slider now properly right-aligned in settings
 - **MultiDock Theming** - Improved theme consistency across docks
+- **Toolbar Active States** - Added active backgrounds to toolbar buttons for better visual feedback
 - **UI Polish** - Various interface improvements and cleanup, including removed borders from native OBS docks for a cleaner look
 - **Dock Loading** - Fixed glitches that could occur when loading docks
 - **Image and Group Sources** - Fixed issues with image and group source handling
