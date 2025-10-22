@@ -894,7 +894,8 @@ void ShowSettingsDialog(int tabIndex)
 			if (mainWindow) {
 				StreamUPToolbar* toolbar = mainWindow->findChild<StreamUPToolbar*>();
 				if (toolbar) {
-					toolbar->updateButtonSizes();
+					toolbar->updateButtonSizes(); // Updates button properties
+					toolbar->updatePositionAwareTheme(); // Refreshes styling including active backgrounds
 				}
 			}
 		});

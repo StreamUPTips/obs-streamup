@@ -63,6 +63,9 @@ StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent),
 	// Set initial position-aware theming (will be updated when actually added to main window)
 	updatePositionAwareTheme();
 
+	// Apply toolbar styling (including active button backgrounds if enabled)
+	updateToolbarStyling();
+
 	// Initialize current theme state
 	currentThemeIsDark = StreamUP::UIHelpers::IsOBSThemeDark();
 
@@ -115,9 +118,39 @@ QFrame* StreamUPToolbar::createHorizontalSeparator()
 
 void StreamUPToolbar::updateToolbarStyling()
 {
-	// Let OBS theme handle all toolbar styling - no custom stylesheets
-	// Buttons and separators will inherit styling from the active OBS theme
-	setStyleSheet("");
+	try {
+		// Get current settings to check if button backgrounds should be shown
+		StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+
+		if (settings.toolbarButtonBackgrounds) {
+			// Apply OBS theme's complete button styling to checked toolbar buttons
+			// This uses all the standard button properties from the active theme
+			QString activeButtonStyle = QString(
+				"QToolButton[buttonType='streamup-button']:checked {"
+				"    background: palette(button);"
+				"    border: 1px solid palette(mid);"
+				"    padding: 2px;"
+				"}"
+				"QToolButton[buttonType='streamup-button']:checked:hover {"
+				"    background: palette(light);"
+				"    border: 1px solid palette(mid);"
+				"}"
+				"QToolButton[buttonType='streamup-button']:checked:pressed {"
+				"    background: palette(dark);"
+				"    border: 1px solid palette(mid);"
+				"}"
+			);
+			setStyleSheet(activeButtonStyle);
+		} else {
+			// Let OBS theme handle all toolbar styling - no custom stylesheets
+			// Buttons and separators will inherit styling from the active OBS theme
+			setStyleSheet("");
+		}
+	} catch (...) {
+		// If settings aren't initialized yet, just use empty stylesheet
+		StreamUP::DebugLogger::LogWarning("Toolbar", "Failed to apply toolbar styling - settings may not be initialized");
+		setStyleSheet("");
+	}
 }
 
 bool StreamUPToolbar::isReplayBufferAvailable()
@@ -179,6 +212,8 @@ void StreamUPToolbar::onStreamButtonClicked()
 
 void StreamUPToolbar::onRecordButtonClicked()
 {
+	StreamUP::DebugLogger::LogDebug("Toolbar", "Record Button Clicked", "Button click handler triggered");
+
 	if (obs_frontend_recording_active()) {
 		obs_frontend_recording_stop();
 	} else {
@@ -284,6 +319,13 @@ void StreamUPToolbar::updateStreamButton()
 		QString iconName = streaming ? "streaming" : "streaming-inactive";
 		streamButton->setIcon(getCachedIcon(iconName));
 		streamButton->setToolTip(streaming ? "Stop Streaming" : "Start Streaming");
+
+		// Debug: Log the checked state
+		StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Stream Button",
+			"Streaming: %s, Checked: %s, Checkable: %s",
+			streaming ? "true" : "false",
+			streamButton->isChecked() ? "true" : "false",
+			streamButton->isCheckable() ? "true" : "false");
 	}
 }
 
@@ -295,7 +337,14 @@ void StreamUPToolbar::updateRecordButton()
 		QString iconName = recording ? "record-on" : "record-off";
 		recordButton->setIcon(getCachedIcon(iconName));
 		recordButton->setToolTip(recording ? "Stop Recording" : "Start Recording");
-		
+
+		// Debug: Log the checked state
+		StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Record Button",
+			"Recording: %s, Checked: %s, Checkable: %s",
+			recording ? "true" : "false",
+			recordButton->isChecked() ? "true" : "false",
+			recordButton->isCheckable() ? "true" : "false");
+
 		// Control pause button visibility based on recording state and compatibility
 		if (pauseButton) {
 			bool canPause = recording && isRecordingPausable();
@@ -329,7 +378,7 @@ void StreamUPToolbar::updateReplayBufferButton()
 		QString iconName = active ? "replay-buffer-on" : "replay-buffer-off";
 		replayBufferButton->setIcon(getCachedIcon(iconName));
 		replayBufferButton->setToolTip(active ? "Stop Replay Buffer" : "Start Replay Buffer");
-		
+
 		// Control save replay button visibility based on replay buffer state
 		if (saveReplayButton) {
 			// Show save replay button only when replay buffer is active
@@ -370,7 +419,7 @@ void StreamUPToolbar::updateStudioModeButton()
 	if (studioModeButton) {
 		bool active = obs_frontend_preview_program_mode_active();
 		studioModeButton->setChecked(active);
-		studioModeButton->setToolTip(active ? "Exit Studio Mode" : "Enter Studio Mode");
+		studioModeButton->setToolTip(active ? "Disable Studio Mode" : "Enable Studio Mode");
 	}
 }
 
@@ -489,6 +538,8 @@ void StreamUPToolbar::OnFrontendEvent(enum obs_frontend_event event, void *data)
 	case OBS_FRONTEND_EVENT_THEME_CHANGED:
 		// Theme changed, update icons for new theme
 		toolbar->updateIconsForTheme();
+		// Also refresh toolbar styling for the new theme
+		toolbar->updateToolbarStyling();
 		break;
 		
 	default:
@@ -763,11 +814,14 @@ void StreamUPToolbar::updatePositionAwareTheme()
 
 	// Update layout orientation before applying theme
 	updateLayoutOrientation();
-	
+
+	// Apply toolbar styling (including active button backgrounds if enabled)
+	updateToolbarStyling();
+
 	// Force style sheet refresh to apply position-based styling
 	style()->unpolish(this);
 	style()->polish(this);
-	
+
 }
 
 void StreamUPToolbar::updateLayoutOrientation()
@@ -1079,7 +1133,6 @@ void StreamUPToolbar::setupDynamicUI()
 							newPauseButton->setObjectName("pauseButton");
 							newPauseButton->setProperty("class", "streamup-toolbar-button");
 							newPauseButton->setProperty("buttonType", "streamup-button");
-							newPauseButton->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds ? "true" : "false");
 							newPauseButton->setIconSize(QSize(iconSize, iconSize));
 							newPauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newPauseButton->setIcon(getCachedIcon("pause"));
@@ -1105,7 +1158,6 @@ void StreamUPToolbar::setupDynamicUI()
 							newSaveReplayButton->setObjectName("saveReplayButton");
 							newSaveReplayButton->setProperty("class", "streamup-toolbar-button");
 							newSaveReplayButton->setProperty("buttonType", "streamup-button");
-							newSaveReplayButton->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds ? "true" : "false");
 							newSaveReplayButton->setIconSize(QSize(iconSize, iconSize));
 							newSaveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newSaveReplayButton->setIcon(getCachedIcon("save-replay"));
@@ -1190,7 +1242,6 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 	// Add consistent styling properties for custom StreamUP icons
 	button->setProperty("class", "streamup-toolbar-button");
 	button->setProperty("buttonType", "streamup-button");
-	button->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds ? "true" : "false");
 
 	// Let OBS theme handle button sizing with proper padding and border-radius
 	// No fixed size - CSS will scale padding and radius with icon size
@@ -1221,29 +1272,36 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 		}
 		
 		// Connect to appropriate slot based on button type
+		// Force stateful buttons to be checkable so :checked CSS works for backgrounds
 		if (buttonItem->buttonType == "stream") {
 			streamButton = button;
+			button->setCheckable(true);
 			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onStreamButtonClicked);
 		} else if (buttonItem->buttonType == "record") {
 			recordButton = button;
+			button->setCheckable(true);
 			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onRecordButtonClicked);
 		} else if (buttonItem->buttonType == "pause") {
 			pauseButton = button;
+			button->setCheckable(true);
 			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onPauseButtonClicked);
 		} else if (buttonItem->buttonType == "replay_buffer") {
 			replayBufferButton = button;
+			button->setCheckable(true);
 			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onReplayBufferButtonClicked);
 		} else if (buttonItem->buttonType == "save_replay") {
 			saveReplayButton = button;
 			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onSaveReplayButtonClicked);
 		} else if (buttonItem->buttonType == "virtual_camera") {
 			virtualCameraButton = button;
+			button->setCheckable(true);
 			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onVirtualCameraButtonClicked);
 		} else if (buttonItem->buttonType == "virtual_camera_config") {
 			virtualCameraConfigButton = button;
 			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onVirtualCameraConfigButtonClicked);
 		} else if (buttonItem->buttonType == "studio_mode") {
 			studioModeButton = button;
+			button->setCheckable(true);
 			connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onStudioModeButtonClicked);
 		} else if (buttonItem->buttonType == "settings") {
 			settingsButton = button;
@@ -1340,16 +1398,9 @@ void StreamUPToolbar::updateButtonSizes()
 		// Set icon size
 		button->setIconSize(QSize(iconSize, iconSize));
 
-		// Update background styling property for CSS
-		button->setProperty("toolbarButtonBackgrounds", settings.toolbarButtonBackgrounds ? "true" : "false");
-
 		// Clear any size constraints that might limit growth
 		button->setMinimumSize(0, 0);
 		button->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
-
-		// Force button style refresh for property change
-		style()->unpolish(button);
-		style()->polish(button);
 
 		// Force button to recalculate its size hint
 		button->updateGeometry();
