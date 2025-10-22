@@ -86,7 +86,10 @@ private:
     
     // Apply theme-aware styling
     void updateToolbarStyling();
-    
+
+    // Update toolbar size constraints based on icon size and orientation
+    void updateToolbarSizeConstraints();
+
     // Flag to prevent updates during UI reconstruction
     bool isReconstructingUI = false;
     
