@@ -23,7 +23,9 @@
 #include "ui/hotkey-manager.hpp"
 #include "ui/splash-screen.hpp"
 #include "ui/patch-notes-window.hpp"
+#include "ui/studio-mode-enhancements.hpp"
 #include "multidock/multidock_manager.hpp"
+#include "multidock/multidock_utils.hpp"
 
 // Standard library
 #include <filesystem>
@@ -416,6 +418,10 @@ static void RegisterWebsocketRequests()
 	obs_websocket_vendor_register_request(vendor, "CopyHideTransition", StreamUP::WebSocketAPI::WebsocketCopyHideTransition, nullptr);
 	obs_websocket_vendor_register_request(vendor, "PasteShowTransition", StreamUP::WebSocketAPI::WebsocketPasteShowTransition, nullptr);
 	obs_websocket_vendor_register_request(vendor, "PasteHideTransition", StreamUP::WebSocketAPI::WebsocketPasteHideTransition, nullptr);
+
+	// Group and visibility management
+	obs_websocket_vendor_register_request(vendor, "GroupSelectedSources", StreamUP::WebSocketAPI::WebsocketGroupSelectedSources, nullptr);
+	obs_websocket_vendor_register_request(vendor, "ToggleVisibilitySelectedSources", StreamUP::WebSocketAPI::WebsocketToggleVisibilitySelectedSources, nullptr);
 
 	// Backward compatibility - register old command names (deprecated)
 	obs_websocket_vendor_register_request(vendor, "getOutputFilePath", StreamUP::WebSocketAPI::WebsocketRequestGetOutputFilePath, nullptr);
@@ -827,12 +833,71 @@ bool obs_module_load()
 	}
 }
 
+static void OnOBSShutdown(enum obs_frontend_event event, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+
+	if (event == OBS_FRONTEND_EVENT_EXIT) {
+		StreamUP::DebugLogger::LogInfo("Plugin", "OBS shutting down, saving settings...");
+
+		// Save all current settings before OBS closes
+		StreamUP::SettingsManager::PluginSettings currentSettings = StreamUP::SettingsManager::GetCurrentSettings();
+		StreamUP::SettingsManager::UpdateSettings(currentSettings);
+
+		StreamUP::DebugLogger::LogInfo("Plugin", "Settings saved successfully on shutdown");
+	}
+}
+
+static void ApplyOBSDockStyleOverrides()
+{
+	// Override OBS native dock margins to match StreamUP style
+	QMainWindow* mainWindow = static_cast<QMainWindow*>(obs_frontend_get_main_window());
+	if (!mainWindow) {
+		blog(LOG_WARNING, "[StreamUP] Failed to get main window for dock style overrides");
+		return;
+	}
+
+	// Find all OBS native docks
+	QList<QDockWidget*> allDocks = StreamUP::MultiDock::FindAllObsDocks(mainWindow);
+
+	int overrideCount = 0;
+	for (QDockWidget* dock : allDocks) {
+		if (!dock) continue;
+
+		// Skip StreamUP's own docks (they already have correct styling)
+		QString objectName = dock->objectName();
+		if (objectName.contains("StreamUP", Qt::CaseInsensitive) ||
+		    objectName.contains("SceneOrganiser", Qt::CaseInsensitive) ||
+		    StreamUP::MultiDock::IsMultiDockContainer(dock)) {
+			continue;
+		}
+
+		// Get the widget inside the dock
+		QWidget* dockWidget = dock->widget();
+		if (dockWidget) {
+			// Override the layout margins to 0
+			if (dockWidget->layout()) {
+				dockWidget->layout()->setContentsMargins(0, 0, 0, 0);
+				overrideCount++;
+			}
+		}
+	}
+
+	blog(LOG_INFO, "[StreamUP] Applied margin overrides to %d OBS native docks", overrideCount);
+}
+
 static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_data)
 {
 	UNUSED_PARAMETER(private_data);
-	
+
 	if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
 		StreamUP::DebugLogger::LogInfo("Plugin", "OBS finished loading, initializing plugin data...");
+
+		// Apply style overrides to OBS native docks
+		ApplyOBSDockStyleOverrides();
+
+		// Apply studio mode enhancements (midpoint marker on transition slider)
+		StreamUP::StudioModeEnhancements::ApplyStudioModeEnhancements();
 
 		// Remove the event callback since we only need this to run once
 		StreamUP::DebugLogger::LogDebug("Plugin", "OBS Finished Loading", "Removing event callback");
@@ -895,16 +960,22 @@ void obs_module_post_load(void)
 
 	try {
 		// Initialize settings system immediately (this is lightweight)
-		blog(LOG_INFO, "[StreamUP] Post-load step 1/2: Initializing settings system");
+		blog(LOG_INFO, "[StreamUP] Post-load step 1/3: Initializing settings system");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Initializing settings system");
 		StreamUP::SettingsManager::InitializeSettingsSystem();
-		blog(LOG_INFO, "[StreamUP] Post-load step 1/2: Settings system initialized");
+		blog(LOG_INFO, "[StreamUP] Post-load step 1/3: Settings system initialized");
 
 		// Register callback to defer heavy initialization until OBS has finished loading
-		blog(LOG_INFO, "[StreamUP] Post-load step 2/2: Registering OBS finished loading callback");
+		blog(LOG_INFO, "[StreamUP] Post-load step 2/3: Registering OBS finished loading callback");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Registering OBS finished loading callback");
 		obs_frontend_add_event_callback(OnOBSFinishedLoading, nullptr);
-		blog(LOG_INFO, "[StreamUP] Post-load step 2/2: OBS finished loading callback registered");
+		blog(LOG_INFO, "[StreamUP] Post-load step 2/3: OBS finished loading callback registered");
+
+		// Register callback for OBS shutdown to save settings
+		blog(LOG_INFO, "[StreamUP] Post-load step 3/3: Registering OBS shutdown callback");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Registering OBS shutdown callback");
+		obs_frontend_add_event_callback(OnOBSShutdown, nullptr);
+		blog(LOG_INFO, "[StreamUP] Post-load step 3/3: OBS shutdown callback registered");
 
 		blog(LOG_INFO, "[StreamUP] Post-load initialization completed successfully");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Post-load initialization completed");
@@ -925,26 +996,36 @@ void obs_module_unload()
 	StreamUP::DebugLogger::SetInitializationComplete(false);
 
 	try {
-		blog(LOG_INFO, "[StreamUP] Unload step 1/5: Removing save callback for hotkeys");
+		blog(LOG_INFO, "[StreamUP] Unload step 1/6: Removing shutdown event callback");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Removing shutdown event callback");
+		obs_frontend_remove_event_callback(OnOBSShutdown, nullptr);
+
+		blog(LOG_INFO, "[StreamUP] Unload step 2/6: Removing save callback for hotkeys");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Removing save callback for hotkeys");
 		obs_frontend_remove_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
 
-		blog(LOG_INFO, "[StreamUP] Unload step 2/5: Unregistering hotkeys");
+		blog(LOG_INFO, "[StreamUP] Unload step 3/6: Unregistering hotkeys");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Unregistering hotkeys");
 		StreamUP::HotkeyManager::UnregisterHotkeys();
 
 		// Clean up toolbar - just nullify the pointer, let Qt/OBS handle destruction
-		blog(LOG_INFO, "[StreamUP] Unload step 3/5: Cleaning up toolbar reference");
+		blog(LOG_INFO, "[StreamUP] Unload step 4/7: Cleaning up toolbar reference");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up toolbar reference");
 		globalToolbar = nullptr;
 
 		// Shutdown MultiDock system
-		blog(LOG_INFO, "[StreamUP] Unload step 4/5: Shutting down MultiDock system");
+		blog(LOG_INFO, "[StreamUP] Unload step 5/7: Shutting down MultiDock system");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Shutting down MultiDock system");
 		StreamUP::MultiDock::MultiDockManager::Shutdown();
 
+		// Save all current settings before cleanup
+		blog(LOG_INFO, "[StreamUP] Unload step 6/7: Saving current settings");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Saving current settings");
+		StreamUP::SettingsManager::PluginSettings currentSettings = StreamUP::SettingsManager::GetCurrentSettings();
+		StreamUP::SettingsManager::UpdateSettings(currentSettings);
+
 		// Clean up settings cache
-		blog(LOG_INFO, "[StreamUP] Unload step 5/5: Cleaning up settings cache");
+		blog(LOG_INFO, "[StreamUP] Unload step 7/7: Cleaning up settings cache");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up settings cache");
 		StreamUP::SettingsManager::CleanupSettingsCache();
 

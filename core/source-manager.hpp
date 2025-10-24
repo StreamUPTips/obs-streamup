@@ -185,6 +185,28 @@ bool IsVideoCaptureDevice(obs_source_t *source);
  */
 bool VideoCaptureDeviceCallback(void *data, obs_source_t *source);
 
+// Group management functions
+/**
+ * Group all selected sources in the current scene into a new group
+ * @param sendNotification Whether to send a notification
+ * @return bool True if operation was successful
+ */
+bool GroupSelectedSources(bool sendNotification = true);
+
+// Visibility management functions
+/**
+ * Toggle visibility of all selected sources in the current scene
+ * @param sendNotification Whether to send a notification
+ * @return bool True if operation was successful
+ */
+bool ToggleVisibilitySelectedSources(bool sendNotification = true);
+
+/**
+ * Check if any selected sources are visible
+ * @return bool True if any selected sources are visible
+ */
+bool CheckIfAnySelectedVisible();
+
 } // namespace SourceManager
 } // namespace StreamUP
 

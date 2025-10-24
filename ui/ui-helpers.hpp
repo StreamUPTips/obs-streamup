@@ -11,6 +11,7 @@
 #include <QWidget>
 #include <QPointer>
 #include <QStandardItem>
+#include <QAbstractButton>
 #include <functional>
 #include <unordered_map>
 
@@ -162,6 +163,30 @@ void CreateButton(QLayout *layout, const QString &text, const std::function<void
  * @param text The text to copy
  */
 void CopyToClipboard(const QString &text);
+
+/**
+ * Apply OBS theme metadata so a button renders a standard themed icon (e.g., lock or visibility).
+ * Typical usage: ApplyThemedIcon(button, "icon-button", "addIconSmall");
+ */
+void ApplyThemedIcon(QAbstractButton *btn, const char *klass, const char *themeId, bool checkable = false, bool checked = false);
+
+/**
+ * Remove theme metadata so file-based icons are not overridden by QSS.
+ * Typical usage: ClearThemeIconProps(button);
+ */
+void ClearThemeIconProps(QAbstractButton *btn);
+
+/**
+ * Apply a file-based icon path after clearing theme metadata.
+ * Typical usage: ApplyFileIcon(button, GetThemedIconPath("refresh"));
+ */
+void ApplyFileIcon(QAbstractButton *btn, const QString &filePath);
+
+/**
+ * Convenience helper for visibility toggles that rely on OBS theme eye icons.
+ * Typical usage: ApplyVisibilityTheme(toggleVisibilityButton, true);
+ */
+void ApplyVisibilityTheme(QAbstractButton *btn, bool visible);
 
 /**
  * Get theme-aware icon path for UI icons

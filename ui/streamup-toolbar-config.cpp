@@ -355,8 +355,25 @@ void ToolbarConfiguration::fromJson(const QJsonObject& json) {
             QString name = itemObj["name"].toString();
             auto groupItem = std::make_shared<GroupItem>(id, name);
             groupItem->fromJson(itemObj);
-            item = groupItem;
-            break;
+
+            // Flatten legacy group contents into the top-level item list while preserving order
+            QList<std::shared_ptr<ToolbarItem>> pending = groupItem->childItems;
+            while (!pending.isEmpty()) {
+                auto current = pending.takeFirst();
+                if (!current) {
+                    continue;
+                }
+
+                if (current->type == ItemType::Group) {
+                    auto nestedGroup = std::static_pointer_cast<GroupItem>(current);
+                    for (int i = 0; i < nestedGroup->childItems.size(); ++i) {
+                        pending.insert(i, nestedGroup->childItems[i]);
+                    }
+                } else {
+                    items.append(current);
+                }
+            }
+            continue; // Skip adding the group wrapper itself
         }
         case ItemType::HotkeyButton: {
             QString hotkeyName = itemObj["hotkeyName"].toString();
@@ -566,13 +583,22 @@ QList<DockButtonItem> ToolbarConfiguration::getAvailableDockButtons() {
     refreshVideoButton.iconPath = "video-capture-device-refresh";
     refreshVideoButton.tooltip = "Refresh All Video Capture Devices";
     buttons.append(refreshVideoButton);
-    
-    // StreamUP Settings - use StreamUP logo icon
-    auto streamupSettingsButton = DockButtonItem("dock_streamup_settings", "streamup_settings", "Open StreamUP Settings");
-    streamupSettingsButton.iconPath = "streamup-logo-button";
-    streamupSettingsButton.tooltip = "Open StreamUP Settings";
-    buttons.append(streamupSettingsButton);
-    
+
+    // Group Selected Sources
+    auto groupSelectedButton = DockButtonItem("dock_group_selected_sources", "group_selected_sources", "Group Selected Sources");
+    groupSelectedButton.iconPath = "add-sources-to-group";
+    groupSelectedButton.tooltip = "Group Selected Sources in Current Scene";
+    buttons.append(groupSelectedButton);
+
+    // Toggle Visibility of Selected Sources
+    auto toggleVisibilityButton = DockButtonItem("dock_toggle_visibility_selected_sources", "toggle_visibility_selected_sources", "Toggle Visibility of Selected Sources");
+    toggleVisibilityButton.iconPath = "visible";
+    toggleVisibilityButton.tooltip = "Toggle Visibility of Selected Sources";
+    buttons.append(toggleVisibilityButton);
+
+    // Note: StreamUP Settings button removed from available dock buttons
+    // It's always present on the toolbar by default and doesn't need to be added as a custom button
+
     return buttons;
 }
 

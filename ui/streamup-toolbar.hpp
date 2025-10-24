@@ -23,6 +23,7 @@ public:
     // Public methods for external access
     void updatePositionAwareTheme();
     void refreshFromConfiguration();
+    void updateButtonSizes();  // Update button and icon sizes without rebuilding
 
 private slots:
     void onStreamButtonClicked();
@@ -85,7 +86,10 @@ private:
     
     // Apply theme-aware styling
     void updateToolbarStyling();
-    
+
+    // Update toolbar size constraints based on icon size and orientation
+    void updateToolbarSizeConstraints();
+
     // Flag to prevent updates during UI reconstruction
     bool isReconstructingUI = false;
     

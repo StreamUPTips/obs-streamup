@@ -17,6 +17,7 @@ This document provides comprehensive documentation for all WebSocket commands av
   - [UI Interaction](#ui-interaction)
   - [Video Capture Device Management](#video-capture-device-management)
   - [Transition Copy/Paste](#transition-copypaste)
+  - [Group and Visibility Management](#group-and-visibility-management)
 - [Deprecated Commands](#deprecated-commands)
 
 ---
@@ -870,6 +871,82 @@ Paste the previously copied hide transition to the currently selected source.
 
 ---
 
+### Group and Visibility Management
+
+#### GroupSelectedSources
+
+Group all currently selected sources in the current scene into a new group.
+
+**Request Parameters**: None
+
+**Response Data**:
+```json
+{
+  "success": true
+}
+```
+
+**Response Fields**:
+- `success` (boolean): True if grouping was successful
+- `error` (string, optional): Error message if failed
+
+**Possible Errors**:
+- "Failed to group selected sources. Ensure at least 2 sources are selected."
+- "No current scene found"
+- "Invalid scene source"
+- "No sources selected"
+- "At least 2 sources must be selected"
+
+**Notes**:
+- Requires at least 2 sources to be selected in the current scene
+- Creates a new group with an automatically generated unique name (e.g., "Group", "Group 1", etc.)
+- The group is created at the position of the first selected item
+- All selected sources will be moved into the new group
+- Sources maintain their relative order within the group
+
+**Example Use Cases**:
+- Quickly organize multiple sources into a logical grouping
+- Create groups via automation scripts
+- Batch organize sources during scene setup
+
+---
+
+#### ToggleVisibilitySelectedSources
+
+Toggle the visibility of all currently selected sources in the current scene.
+
+**Request Parameters**: None
+
+**Response Data**:
+```json
+{
+  "success": true
+}
+```
+
+**Response Fields**:
+- `success` (boolean): True if toggle was successful
+- `error` (string, optional): Error message if failed
+
+**Possible Errors**:
+- "Failed to toggle visibility. Ensure sources are selected."
+- "No current scene found"
+- "Invalid scene source"
+- "No sources selected"
+
+**Notes**:
+- Smart toggle behavior: If any selected sources are visible, all will be hidden. If all are hidden, all will be shown.
+- Only affects sources that are currently selected in the sources list
+- Does not affect the selection state of the sources
+- Works with multiple sources simultaneously
+
+**Example Use Cases**:
+- Toggle visibility of multiple related sources at once
+- Show/hide entire groups of elements with a single command
+- Quick visibility management during streaming
+
+---
+
 ## Deprecated Commands
 
 The following command names are deprecated but still supported for backward compatibility. Use the PascalCase versions instead.
@@ -934,10 +1011,10 @@ All commands follow consistent error handling patterns:
 
 ## Version Information
 
-- **Document Version**: 1.0
-- **Plugin Version**: 2.1.3+
+- **Document Version**: 1.1
+- **Plugin Version**: 2.1.4+
 - **OBS WebSocket Version**: 5.x
-- **Last Updated**: 2025
+- **Last Updated**: 2025-10-21
 
 ---
 
