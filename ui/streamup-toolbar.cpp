@@ -119,45 +119,35 @@ QFrame* StreamUPToolbar::createHorizontalSeparator()
 void StreamUPToolbar::updateToolbarStyling()
 {
 	try {
-		// Get current settings to check if button backgrounds should be shown
-		StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-
-		if (settings.toolbarButtonBackgrounds) {
-			// Apply visible button styling to checked toolbar buttons
-			// Use !important to override theme styles
-			QString activeButtonStyle = QString(
-				"QToolBar#StreamUPToolbar-Top QToolButton[buttonType='streamup-button']:checked,"
-				"QToolBar#StreamUPToolbar-Bottom QToolButton[buttonType='streamup-button']:checked,"
-				"QToolBar#StreamUPToolbar-Left QToolButton[buttonType='streamup-button']:checked,"
-				"QToolBar#StreamUPToolbar-Right QToolButton[buttonType='streamup-button']:checked {"
-				"    background: rgba(255, 255, 255, 0.15) !important;"
-				"    border: 1px solid rgba(255, 255, 255, 0.2) !important;"
-				"    border-radius: 8px !important;"
-				"}"
-				"QToolBar#StreamUPToolbar-Top QToolButton[buttonType='streamup-button']:checked:hover,"
-				"QToolBar#StreamUPToolbar-Bottom QToolButton[buttonType='streamup-button']:checked:hover,"
-				"QToolBar#StreamUPToolbar-Left QToolButton[buttonType='streamup-button']:checked:hover,"
-				"QToolBar#StreamUPToolbar-Right QToolButton[buttonType='streamup-button']:checked:hover {"
-				"    background: rgba(255, 255, 255, 0.25) !important;"
-				"    border: 1px solid rgba(255, 255, 255, 0.3) !important;"
-				"}"
-				"QToolBar#StreamUPToolbar-Top QToolButton[buttonType='streamup-button']:checked:pressed,"
-				"QToolBar#StreamUPToolbar-Bottom QToolButton[buttonType='streamup-button']:checked:pressed,"
-				"QToolBar#StreamUPToolbar-Left QToolButton[buttonType='streamup-button']:checked:pressed,"
-				"QToolBar#StreamUPToolbar-Right QToolButton[buttonType='streamup-button']:checked:pressed {"
-				"    background: rgba(255, 255, 255, 0.1) !important;"
-				"    border: 1px solid rgba(255, 255, 255, 0.2) !important;"
-				"}"
-			);
-			setStyleSheet(activeButtonStyle);
-		} else {
-			// Let OBS theme handle all toolbar styling - no custom stylesheets
-			// Buttons and separators will inherit styling from the active OBS theme
-			setStyleSheet("");
-		}
+		// Always apply visible styling to checked toolbar buttons now that backgrounds are mandatory
+		QString activeButtonStyle = QString(
+			"QToolBar#StreamUPToolbar-Top QToolButton[buttonType='streamup-button']:checked,"
+			"QToolBar#StreamUPToolbar-Bottom QToolButton[buttonType='streamup-button']:checked,"
+			"QToolBar#StreamUPToolbar-Left QToolButton[buttonType='streamup-button']:checked,"
+			"QToolBar#StreamUPToolbar-Right QToolButton[buttonType='streamup-button']:checked {"
+			"    background: rgba(255, 255, 255, 0.15) !important;"
+			"    border: 1px solid rgba(255, 255, 255, 0.2) !important;"
+			"    border-radius: 8px !important;"
+			"}"
+			"QToolBar#StreamUPToolbar-Top QToolButton[buttonType='streamup-button']:checked:hover,"
+			"QToolBar#StreamUPToolbar-Bottom QToolButton[buttonType='streamup-button']:checked:hover,"
+			"QToolBar#StreamUPToolbar-Left QToolButton[buttonType='streamup-button']:checked:hover,"
+			"QToolBar#StreamUPToolbar-Right QToolButton[buttonType='streamup-button']:checked:hover {"
+			"    background: rgba(255, 255, 255, 0.25) !important;"
+			"    border: 1px solid rgba(255, 255, 255, 0.3) !important;"
+			"}"
+			"QToolBar#StreamUPToolbar-Top QToolButton[buttonType='streamup-button']:checked:pressed,"
+			"QToolBar#StreamUPToolbar-Bottom QToolButton[buttonType='streamup-button']:checked:pressed,"
+			"QToolBar#StreamUPToolbar-Left QToolButton[buttonType='streamup-button']:checked:pressed,"
+			"QToolBar#StreamUPToolbar-Right QToolButton[buttonType='streamup-button']:checked:pressed {"
+			"    background: rgba(255, 255, 255, 0.1) !important;"
+			"    border: 1px solid rgba(255, 255, 255, 0.2) !important;"
+			"}"
+		);
+		setStyleSheet(activeButtonStyle);
 	} catch (...) {
-		// If settings aren't initialized yet, just use empty stylesheet
-		StreamUP::DebugLogger::LogWarning("Toolbar", "Failed to apply toolbar styling - settings may not be initialized");
+		// If styling fails, fall back to clearing the sheet so the OBS theme applies
+		StreamUP::DebugLogger::LogWarning("Toolbar", "Failed to apply toolbar styling");
 		setStyleSheet("");
 	}
 }

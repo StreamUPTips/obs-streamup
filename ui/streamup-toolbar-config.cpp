@@ -355,8 +355,25 @@ void ToolbarConfiguration::fromJson(const QJsonObject& json) {
             QString name = itemObj["name"].toString();
             auto groupItem = std::make_shared<GroupItem>(id, name);
             groupItem->fromJson(itemObj);
-            item = groupItem;
-            break;
+
+            // Flatten legacy group contents into the top-level item list while preserving order
+            QList<std::shared_ptr<ToolbarItem>> pending = groupItem->childItems;
+            while (!pending.isEmpty()) {
+                auto current = pending.takeFirst();
+                if (!current) {
+                    continue;
+                }
+
+                if (current->type == ItemType::Group) {
+                    auto nestedGroup = std::static_pointer_cast<GroupItem>(current);
+                    for (int i = 0; i < nestedGroup->childItems.size(); ++i) {
+                        pending.insert(i, nestedGroup->childItems[i]);
+                    }
+                } else {
+                    items.append(current);
+                }
+            }
+            continue; // Skip adding the group wrapper itself
         }
         case ItemType::HotkeyButton: {
             QString hotkeyName = itemObj["hotkeyName"].toString();

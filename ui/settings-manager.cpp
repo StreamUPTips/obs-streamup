@@ -200,7 +200,6 @@ obs_data_t *LoadSettings()
 		obs_data_set_string(data, "scene_organiser_switch_mode", "single_click");
 		obs_data_set_string(data, "scene_organiser_sort_method", "none");
 		obs_data_set_string(data, "toolbar_position", "top");
-		obs_data_set_bool(data, "toolbar_button_backgrounds", true);
 		obs_data_set_int(data, "toolbar_icon_size", 16);
 
 		// Set default dock tool settings
@@ -322,9 +321,6 @@ PluginSettings GetCurrentSettings()
 			settings.toolbarPosition = ToolbarPosition::Top;
 		}
 
-		// Load toolbar button backgrounds setting (default to true if not set)
-		settings.toolbarButtonBackgrounds = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "toolbar_button_backgrounds", true);
-
 		// Load toolbar icon size setting (default to 16 if not set)
 		settings.toolbarIconSize = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "toolbar_icon_size", 16);
 		// Clamp to valid range (10-24 pixels)
@@ -428,9 +424,6 @@ void UpdateSettings(const PluginSettings &settings)
 		break;
 	}
 	obs_data_set_string(data, "toolbar_position", positionStr);
-
-	// Save toolbar button backgrounds setting
-	obs_data_set_bool(data, "toolbar_button_backgrounds", settings.toolbarButtonBackgrounds);
 
 	// Save toolbar icon size setting
 	obs_data_set_int(data, "toolbar_icon_size", settings.toolbarIconSize);
@@ -866,46 +859,10 @@ void ShowSettingsDialog(int tabIndex)
 		toolbarPositionLayout->addWidget(positionComboBox);
 		toolbarLayout->addLayout(toolbarPositionLayout);
 
-		// Add spacing between sections
-		toolbarLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+	// Add spacing between sections
+	toolbarLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
 
-		// Button Backgrounds Toggle
-		QHBoxLayout *buttonBackgroundsLayout = new QHBoxLayout();
-		buttonBackgroundsLayout->setContentsMargins(0, 0, 0, 0);
-		buttonBackgroundsLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
-
-		QLabel *buttonBackgroundsLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarButtonBackgrounds"));
-		buttonBackgroundsLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
-							    .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-							    .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-		buttonBackgroundsLabel->setToolTip(obs_module_text("StreamUP.Settings.ToolbarButtonBackgroundsDesc"));
-
-		StreamUP::UIStyles::SwitchButton *buttonBackgroundsSwitch =
-			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.toolbarButtonBackgrounds);
-		buttonBackgroundsSwitch->setToolTip(obs_module_text("StreamUP.Settings.ToolbarButtonBackgroundsTooltip"));
-
-		QObject::connect(buttonBackgroundsSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
-			PluginSettings settings = GetCurrentSettings();
-			settings.toolbarButtonBackgrounds = checked;
-			UpdateSettings(settings);
-
-			// Update toolbar button styles without rebuilding
-			QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
-			if (mainWindow) {
-				StreamUPToolbar* toolbar = mainWindow->findChild<StreamUPToolbar*>();
-				if (toolbar) {
-					toolbar->updateButtonSizes(); // Updates button properties
-					toolbar->updatePositionAwareTheme(); // Refreshes styling including active backgrounds
-				}
-			}
-		});
-
-		buttonBackgroundsLayout->addWidget(buttonBackgroundsLabel);
-		buttonBackgroundsLayout->addStretch();
-		buttonBackgroundsLayout->addWidget(buttonBackgroundsSwitch);
-		toolbarLayout->addLayout(buttonBackgroundsLayout);
-
-		// Icon Size Slider
+	// Icon Size Slider
 		QHBoxLayout *iconSizeLayout = new QHBoxLayout();
 		iconSizeLayout->setContentsMargins(0, 0, 0, 0);
 		iconSizeLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
