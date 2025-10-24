@@ -3,7 +3,6 @@
 ## New Features
 - **Scene Organiser Item Height Adjustment** - Control the size of scene items in Scene Organiser with a slider (50-200%). Both icons and text scale automatically
 - **Toolbar Icon Size Control** - Adjust toolbar icon size between 10-24px to fit your workspace
-- **Toolbar Button Backgrounds** - Toggle button backgrounds on or off for a cleaner look
 - **Disable Scene Switching in Studio Mode** - Optional setting to prevent accidental scene changes when clicking in Scene Organiser during Studio Mode
 - **Add Sources to Group Shortcuts** - New hotkey and WebSocket commands to quickly add selected sources to groups, streamlining your workflow
 - **Studio Mode Mid-Point Transition UI** - Enhanced studio mode interface for better transition control
