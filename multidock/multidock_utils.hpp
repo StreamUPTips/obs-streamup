@@ -21,6 +21,7 @@ struct OriginalPlacement {
     QSize maximumSize;
     QSize sizeHint;
     Qt::ContextMenuPolicy contextMenuPolicy;
+    QVariant classProperty; // Store original "class" property for theme styling
 };
 
 struct CapturedDock {

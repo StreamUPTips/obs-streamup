@@ -34,22 +34,6 @@ class SceneTreeModel;
 class SceneTreeView;
 class SceneOrganiserDock;
 
-// Custom delegate for handling selection and hover states with custom colors
-class CustomColorDelegate : public QStyledItemDelegate
-{
-    Q_OBJECT
-
-public:
-    explicit CustomColorDelegate(SceneOrganiserDock *dock, QObject *parent = nullptr);
-
-protected:
-    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
-    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
-
-private:
-    SceneOrganiserDock *m_dock;
-};
-
 enum class CanvasType {
     Normal
 };
@@ -169,7 +153,6 @@ public:
     SceneTreeView *m_treeView;
     SceneTreeModel *m_model;
     QSortFilterProxyModel *m_proxyModel;
-    CustomColorDelegate *m_colorDelegate;
 
     // Search functionality
     QWidget *m_searchWidget;

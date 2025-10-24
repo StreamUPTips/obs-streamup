@@ -9,6 +9,7 @@
 #include <QClipboard>
 #include <QMetaObject>
 #include <QPushButton>
+#include <QAbstractButton>
 #include <QDesktopServices>
 #include <QUrl>
 #include <QGroupBox>
@@ -17,8 +18,10 @@
 #include <QScreen>
 #include <QTimer>
 #include <QIcon>
+#include <QStyle>
 #include <QPalette>
 #include <QColor>
+#include <QVariant>
 
 
 // Forward declarations for functions from main streamup.cpp
@@ -357,12 +360,90 @@ void CopyToClipboard(const QString &text)
 	clipboard->setText(text);
 }
 
+// Applies OBS theme metadata to a button so it uses standard themed icons (e.g. lock, add).
+// Typical usage: ApplyThemedIcon(button, "icon-button", "addIconSmall");
+void ApplyThemedIcon(QAbstractButton *btn, const char *klass, const char *themeId, bool checkable, bool checked)
+{
+	if (!btn) {
+		return;
+	}
+
+	btn->setIcon(QIcon());
+
+	if (klass && *klass) {
+		btn->setProperty("class", QString::fromUtf8(klass));
+	} else {
+		btn->setProperty("class", QVariant());
+	}
+
+	if (themeId && *themeId) {
+		btn->setProperty("themeID", QString::fromUtf8(themeId));
+	} else {
+		btn->setProperty("themeID", QVariant());
+	}
+
+	btn->setCheckable(checkable);
+	if (checkable) {
+		btn->setChecked(checked);
+	} else if (btn->isChecked()) {
+		btn->setChecked(false);
+	}
+
+	if (QStyle *style = btn->style()) {
+		style->unpolish(btn);
+		style->polish(btn);
+	}
+	btn->update();
+}
+
+// Removes OBS theme metadata from a button so a file-based icon can be shown reliably.
+// Typical usage: ClearThemeIconProps(button);
+void ClearThemeIconProps(QAbstractButton *btn)
+{
+	if (!btn) {
+		return;
+	}
+
+	btn->setProperty("class", QVariant());
+	btn->setProperty("themeID", QVariant());
+	btn->setCheckable(false);
+	if (btn->isChecked()) {
+		btn->setChecked(false);
+	}
+
+	if (QStyle *style = btn->style()) {
+		style->unpolish(btn);
+		style->polish(btn);
+	}
+	btn->update();
+}
+
+// Applies a file-based icon to a button after clearing theme metadata.
+// Typical usage: ApplyFileIcon(button, GetThemedIconPath("refresh"));
+void ApplyFileIcon(QAbstractButton *btn, const QString &filePath)
+{
+	if (!btn) {
+		return;
+	}
+
+	ClearThemeIconProps(btn);
+	btn->setIcon(QIcon(filePath));
+	btn->update();
+}
+
+// Convenience helper for OBS-style visibility buttons with eye icons toggled by :checked.
+// Typical usage: ApplyVisibilityTheme(toggleVisibilityButton, true);
+void ApplyVisibilityTheme(QAbstractButton *btn, bool visible)
+{
+	ApplyThemedIcon(btn, "icon-button", "visibility", true, visible);
+}
+
 QString GetThemedIconPath(const QString &iconName)
 {
 	bool isDarkTheme = obs_frontend_is_theme_dark();
 	StreamUP::DebugLogger::LogDebugFormat("UI", "Theme Detection", "obs_frontend_is_theme_dark() returned: %s", isDarkTheme ? "true" : "false");
 
-	// Use appropriate suffix based on theme
+	// Use appropriate suffix based on theme for custom icons
 	QString themeSuffix = isDarkTheme ? "-dark" : "-light";
 	QString iconPath = QString(":images/icons/ui/%1%2.svg").arg(iconName).arg(themeSuffix);
 

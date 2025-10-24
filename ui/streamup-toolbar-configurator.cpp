@@ -11,7 +11,6 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QMessageBox>
-#include <QInputDialog>
 #include <QStandardPaths>
 #include <QFileInfo>
 #include <QPixmap>
@@ -383,23 +382,6 @@ void ToolbarConfigurator::setupUI()
     addSeparatorButton->setStyleSheet(UIStyles::GetButtonStyle());
     spacerContainerLayout->addWidget(addSeparatorButton);
     
-    // Group section
-    QLabel* groupLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.Group")));
-    groupLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
-    spacerContainerLayout->addWidget(groupLabel);
-    
-    QHBoxLayout* groupLayout = new QHBoxLayout();
-    groupLayout->addWidget(new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.GroupName"))));
-    groupNameLineEdit = new QLineEdit();
-    groupNameLineEdit->setPlaceholderText("Enter group name");
-    groupNameLineEdit->setStyleSheet(UIStyles::GetLineEditStyle());
-    groupLayout->addWidget(groupNameLineEdit);
-    spacerContainerLayout->addLayout(groupLayout);
-    
-    addGroupButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddGroup")));
-    addGroupButton->setStyleSheet(UIStyles::GetButtonStyle());
-    spacerContainerLayout->addWidget(addGroupButton);
-    
     spacerTabLayout->addWidget(spacerContainer);
     spacerTabLayout->addStretch(); // Push content to top
     itemTabWidget->addTab(spacerTab, "Spacing");
@@ -519,10 +501,6 @@ void ToolbarConfigurator::setupUI()
     connect(currentConfigList, &QListWidget::itemSelectionChanged, this, &ToolbarConfigurator::onItemSelectionChanged);
     connect(currentConfigList, &QListWidget::itemDoubleClicked, this, &ToolbarConfigurator::onItemDoubleClicked);
     connect(currentConfigList, &QListWidget::itemClicked, this, &ToolbarConfigurator::onItemClicked);
-    
-    // Set up context menu for the configuration list
-    currentConfigList->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(currentConfigList, &QWidget::customContextMenuRequested, this, &ToolbarConfigurator::onItemContextMenu);
     
     // Connect drag-and-drop with proper ID-based indexing
     connect(currentConfigList, &DraggableListWidget::itemMoved, [this](int fromUIIndex, int toUIIndex) {
@@ -793,79 +771,11 @@ void ToolbarConfigurator::setupUI()
             }
         }
     });
-
-    // Handle dropping items INTO groups
-    connect(currentConfigList, &DraggableListWidget::itemMovedToGroup, [this](int fromUIIndex, int groupUIIndex) {
-        StreamUP::DebugLogger::LogDebug("Toolbar", "GroupDrop", "=== GROUP DROP START ===");
-        StreamUP::DebugLogger::LogDebugFormat("Toolbar", "GroupDrop", "From UI Index: %d, Group UI Index: %d", fromUIIndex, groupUIIndex);
-
-        // Get the item being moved
-        if (fromUIIndex < 0 || fromUIIndex >= currentConfigList->count()) {
-            StreamUP::DebugLogger::LogWarning("Toolbar", "GroupDrop: Invalid fromUIIndex, aborting");
-            return;
-        }
-
-        QListWidgetItem* draggedUIItem = currentConfigList->item(fromUIIndex);
-        if (!draggedUIItem) {
-            StreamUP::DebugLogger::LogWarning("Toolbar", "GroupDrop: No dragged UI item found, aborting");
-            return;
-        }
-
-        auto draggedItem = draggedUIItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
-        if (!draggedItem) {
-            StreamUP::DebugLogger::LogWarning("Toolbar", "GroupDrop: No dragged item data found, aborting");
-            return;
-        }
-
-        // Get the target group
-        if (groupUIIndex < 0 || groupUIIndex >= currentConfigList->count()) {
-            StreamUP::DebugLogger::LogWarning("Toolbar", "GroupDrop: Invalid groupUIIndex, aborting");
-            return;
-        }
-
-        QListWidgetItem* groupUIItem = currentConfigList->item(groupUIIndex);
-        if (!groupUIItem) {
-            StreamUP::DebugLogger::LogWarning("Toolbar", "GroupDrop: No group UI item found, aborting");
-            return;
-        }
-
-        auto groupItem = groupUIItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
-        if (!groupItem || groupItem->type != ToolbarConfig::ItemType::Group) {
-            StreamUP::DebugLogger::LogWarning("Toolbar", "GroupDrop: Target is not a group, aborting");
-            return;
-        }
-
-        auto group = std::static_pointer_cast<ToolbarConfig::GroupItem>(groupItem);
-
-        StreamUP::DebugLogger::LogDebugFormat("Toolbar", "GroupDrop", "Moving item '%s' into group '%s'",
-            draggedItem->id.toUtf8().constData(), group->name.toUtf8().constData());
-
-        // Prevent groups from being placed within other groups (would cause crash)
-        if (draggedItem->type == ToolbarConfig::ItemType::Group) {
-            StreamUP::DebugLogger::LogDebug("Toolbar", "GroupDrop", "Cannot place group within another group - operation blocked");
-            return;
-        }
-
-        // Remove item from its current location
-        QString draggedItemId = draggedItem->id;
-        config.removeItem(draggedItemId);
-
-        // Add item to the group
-        group->addChild(draggedItem);
-        group->expanded = true; // Expand group to show the new item
-
-        // Refresh the display
-        populateCurrentConfiguration();
-
-        StreamUP::DebugLogger::LogDebug("Toolbar", "GroupDrop", "=== GROUP DROP COMPLETE ===");
-    });
-
     connect(addBuiltinButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddBuiltinButton);
     connect(addDockButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddDockButton);
     connect(addHotkeyButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddHotkeyButton);
     connect(addSeparatorButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddSeparator);
     connect(addCustomSpacerButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddCustomSpacer);
-    connect(addGroupButton, &QPushButton::clicked, this, &ToolbarConfigurator::onAddGroup);
     
     connect(removeButton, &QPushButton::clicked, this, &ToolbarConfigurator::onRemoveItem);
     connect(moveUpButton, &QPushButton::clicked, this, &ToolbarConfigurator::onMoveUp);
@@ -972,26 +882,14 @@ void ToolbarConfigurator::populateDockButtonsList()
     toolsCategory->setText(0, "StreamUP Tools");
     toolsCategory->setExpanded(true);
     toolsCategory->setFlags(Qt::ItemIsEnabled); // Make category non-selectable
-    
-    // Create StreamUP Settings category
-    QTreeWidgetItem* settingsCategory = new QTreeWidgetItem(dockButtonsList);
-    settingsCategory->setText(0, "StreamUP Settings");
-    settingsCategory->setExpanded(true);
-    settingsCategory->setFlags(Qt::ItemIsEnabled); // Make category non-selectable
-    
-    // Create expand/collapse indicators for both categories
+
+    // Create expand/collapse indicator
     createExpandIndicator(dockButtonsList, toolsCategory);
-    createExpandIndicator(dockButtonsList, settingsCategory);
-    
+
     auto buttons = ToolbarConfig::ToolbarConfiguration::getAvailableDockButtons();
     for (const auto& button : buttons) {
-        // Determine which category this button belongs to
-        QTreeWidgetItem* parentCategory = toolsCategory;
-        if (button.dockButtonType.contains("settings") || button.dockButtonType.contains("config")) {
-            parentCategory = settingsCategory;
-        }
-        
-        QTreeWidgetItem* item = new QTreeWidgetItem(parentCategory);
+        // All buttons go under StreamUP Tools category
+        QTreeWidgetItem* item = new QTreeWidgetItem(toolsCategory);
         item->setText(0, "    " + button.name); // Add manual indentation
         item->setData(0, Qt::UserRole, button.dockButtonType);
         item->setToolTip(0, button.tooltip);
@@ -1091,12 +989,7 @@ QListWidgetItem* ToolbarConfigurator::createConfigurationItem(std::shared_ptr<To
     }
     case ToolbarConfig::ItemType::DockButton: {
         auto dockItem = std::static_pointer_cast<ToolbarConfig::DockButtonItem>(item);
-        // Special handling for StreamUP Settings - show without "(Dock)" suffix
-        if (dockItem->dockButtonType == "streamup_settings") {
-            displayText = QString("%1%2 %3").arg(indent).arg(enabledDot).arg(dockItem->name);
-        } else {
-            displayText = QString("%1%2 %3 (Dock)").arg(indent).arg(enabledDot).arg(dockItem->name);
-        }
+        displayText = QString("%1%2 %3 (Dock)").arg(indent).arg(enabledDot).arg(dockItem->name);
         break;
     }
     case ToolbarConfig::ItemType::Group: {
@@ -1230,39 +1123,6 @@ void ToolbarConfigurator::onAddCustomSpacer()
     
     // Reset form to defaults
     clearSpacerForm();
-}
-
-void ToolbarConfigurator::onAddGroup()
-{
-    QString groupName = groupNameLineEdit->text().trimmed();
-
-    // If the line edit is empty (likely called from context menu), show input dialog
-    if (groupName.isEmpty()) {
-        bool ok;
-        groupName = QInputDialog::getText(this,
-                                          QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddGroup")),
-                                          QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.GroupName")),
-                                          QLineEdit::Normal,
-                                          "",
-                                          &ok);
-
-        if (!ok || groupName.trimmed().isEmpty()) {
-            return; // User cancelled or entered empty name
-        }
-
-        groupName = groupName.trimmed();
-    }
-
-    QString id = QString("group_%1").arg(QDateTime::currentMSecsSinceEpoch());
-    auto groupItem = std::make_shared<ToolbarConfig::GroupItem>(id, groupName);
-
-    config.addItem(groupItem);
-    populateCurrentConfiguration();
-
-    // Clear the form if it was used
-    if (!groupNameLineEdit->text().isEmpty()) {
-        groupNameLineEdit->clear();
-    }
 }
 
 void ToolbarConfigurator::onRemoveItem()
@@ -1432,97 +1292,6 @@ void ToolbarConfigurator::onSpacerSettingsChanged()
     // No validation needed for spacer settings - all values are valid
 }
 
-void ToolbarConfigurator::onItemContextMenu(const QPoint& pos)
-{
-    QMenu contextMenu(this);
-
-    QListWidgetItem* item = currentConfigList->itemAt(pos);
-    std::shared_ptr<ToolbarConfig::ToolbarItem> configItem = nullptr;
-
-    if (item) {
-        configItem = item->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
-    }
-
-    // Always add "Add Group" option
-    QAction* addGroupAction = contextMenu.addAction(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddGroup")));
-    connect(addGroupAction, &QAction::triggered, this, &ToolbarConfigurator::onAddGroup);
-
-    // Only add item-specific options if we have a valid item
-    if (configItem && configItem->type != ToolbarConfig::ItemType::Group) {
-        // Check if there are any groups to move to
-        QList<std::shared_ptr<ToolbarConfig::ToolbarItem>> availableGroups;
-        for (const auto& item : config.items) {
-            if (item->type == ToolbarConfig::ItemType::Group) {
-                availableGroups.append(item);
-            }
-        }
-
-        // Add separator before item-specific options
-        if (!availableGroups.isEmpty()) {
-            contextMenu.addSeparator();
-
-            // Add "Move to Group" submenu
-            QMenu* moveToGroupMenu = contextMenu.addMenu(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.MoveToGroup")));
-            for (const auto& group : availableGroups) {
-                auto groupItem = std::static_pointer_cast<ToolbarConfig::GroupItem>(group);
-                QAction* action = moveToGroupMenu->addAction(groupItem->name);
-                action->setData(groupItem->id);
-                connect(action, &QAction::triggered, [this, configItem, groupItem]() {
-            // Find and remove item from current location (could be in main list or another group)
-            bool foundInMain = false;
-            for (int i = 0; i < config.items.size(); ++i) {
-                if (config.items[i]->id == configItem->id) {
-                    config.items.removeAt(i);
-                    foundInMain = true;
-                    break;
-                }
-            }
-            
-            if (!foundInMain) {
-                // Item must be in a group, find and remove it
-                for (const auto& item : config.items) {
-                    if (item->type == ToolbarConfig::ItemType::Group) {
-                        auto group = std::static_pointer_cast<ToolbarConfig::GroupItem>(item);
-                        if (group->findChild(configItem->id)) {
-                            group->removeChild(configItem->id);
-                            break;
-                        }
-                    }
-                }
-            }
-            
-            // Add to the target group
-            groupItem->addChild(configItem);
-            // Refresh the display
-            populateCurrentConfiguration();
-        });
-            }
-        }
-
-        // Add "Move out of Group" if item is currently in a group
-        bool itemInGroup = false;
-        for (const auto& item : config.items) {
-            if (item->type == ToolbarConfig::ItemType::Group) {
-                auto group = std::static_pointer_cast<ToolbarConfig::GroupItem>(item);
-                if (group->findChild(configItem->id)) {
-                    itemInGroup = true;
-                    break;
-                }
-            }
-        }
-
-        if (itemInGroup) {
-            QAction* moveOutAction = contextMenu.addAction(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.MoveOutOfGroup")));
-            connect(moveOutAction, &QAction::triggered, [this, configItem]() {
-                config.moveItemOutOfGroup(configItem->id);
-                populateCurrentConfiguration();
-            });
-        }
-    }
-
-    contextMenu.exec(currentConfigList->mapToGlobal(pos));
-}
-
 void ToolbarConfigurator::onAddHotkeyButton()
 {
     // Open the hotkey button configuration dialog
@@ -1536,15 +1305,10 @@ void ToolbarConfigurator::onAddHotkeyButton()
     }
 }
 
-void ToolbarConfigurator::onMoveToGroup()
-{
-    // This method is called by context menu actions - implementation is inline above
-}
-
 // DraggableListWidget implementation
 
 DraggableListWidget::DraggableListWidget(QWidget* parent)
-    : QListWidget(parent), dragStartIndex(-1), dropIndicatorIndex(-1), groupDropIndex(-1), isGroupDrop(false)
+    : QListWidget(parent), dragStartIndex(-1), dropIndicatorIndex(-1)
 {
     setDragDropMode(QAbstractItemView::InternalMove);
     setDefaultDropAction(Qt::MoveAction);
@@ -1568,48 +1332,20 @@ void DraggableListWidget::dragMoveEvent(QDragMoveEvent* event)
         QPoint pos = event->position().toPoint();
         QModelIndex index = indexAt(pos);
         
-        // Reset group drop state
-        groupDropIndex = -1;
-        isGroupDrop = false;
-        
+        dropIndicatorIndex = count();
+
         if (index.isValid()) {
             QRect rect = visualRect(index);
             QListWidgetItem* targetItem = item(index.row());
             
             if (targetItem) {
-                auto itemData = targetItem->data(Qt::UserRole).value<std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem>>();
-                
-                // Check if we're hovering over a group
-                if (itemData && itemData->type == StreamUP::ToolbarConfig::ItemType::Group) {
-                    // Check if we're in the middle area of the group (not top/bottom edges)
-                    int topEdge = rect.y() + 8;  // 8px from top
-                    int bottomEdge = rect.y() + rect.height() - 8;  // 8px from bottom
-                    
-                    if (pos.y() > topEdge && pos.y() < bottomEdge) {
-                        // We're dropping INTO the group
-                        groupDropIndex = index.row();
-                        isGroupDrop = true;
-                        dropIndicatorIndex = -1; // Don't show line indicator
-                    } else {
-                        // We're dropping above/below the group
-                        if (pos.y() > rect.center().y()) {
-                            dropIndicatorIndex = index.row() + 1;
-                        } else {
-                            dropIndicatorIndex = index.row();
-                        }
-                    }
+                // Use standard line indicator above/below the hovered item
+                if (pos.y() > rect.center().y()) {
+                    dropIndicatorIndex = index.row() + 1;
                 } else {
-                    // Normal item - use standard line indicator
-                    if (pos.y() > rect.center().y()) {
-                        dropIndicatorIndex = index.row() + 1;
-                    } else {
-                        dropIndicatorIndex = index.row();
-                    }
+                    dropIndicatorIndex = index.row();
                 }
             }
-        } else {
-            // Dropping at the end
-            dropIndicatorIndex = count();
         }
         
         // Trigger repaint to show drop indicator
@@ -1624,8 +1360,6 @@ void DraggableListWidget::dragMoveEvent(QDragMoveEvent* event)
 void DraggableListWidget::dragLeaveEvent(QDragLeaveEvent* event)
 {
     dropIndicatorIndex = -1;
-    groupDropIndex = -1;
-    isGroupDrop = false;
     viewport()->update(); // Clear drop indicator
     QListWidget::dragLeaveEvent(event);
 }
@@ -1638,39 +1372,27 @@ void DraggableListWidget::dropEvent(QDropEvent* event)
     }
 
     if (dragStartIndex >= 0) {
-        if (isGroupDrop && groupDropIndex >= 0) {
-            // Dropping INTO a group
+        int dropIndex = dropIndicatorIndex;
+        if (dropIndex < 0) {
+            dropIndex = count();
+        }
+
+        if (dragStartIndex != dropIndex) {
+            // Adjust drop index if dropping below the dragged item
+            if (dropIndex > dragStartIndex) {
+                dropIndex--;
+            }
+
             StreamUP::DebugLogger::LogDebug("Toolbar", "DragDrop",
-                QString("Dropping item %1 INTO group at index %2")
-                .arg(dragStartIndex).arg(groupDropIndex).toUtf8().constData());
+                QString("Standard drop: moving item %1 to position %2")
+                .arg(dragStartIndex).arg(dropIndex).toUtf8().constData());
 
-            emit itemMovedToGroup(dragStartIndex, groupDropIndex);
-        } else {
-            // Standard drop (not into a group)
-            int dropIndex = dropIndicatorIndex;
-            if (dropIndex < 0) {
-                dropIndex = count();
-            }
-
-            if (dragStartIndex != dropIndex) {
-                // Adjust drop index if dropping below the dragged item
-                if (dropIndex > dragStartIndex) {
-                    dropIndex--;
-                }
-
-                StreamUP::DebugLogger::LogDebug("Toolbar", "DragDrop",
-                    QString("Standard drop: moving item %1 to position %2")
-                    .arg(dragStartIndex).arg(dropIndex).toUtf8().constData());
-
-                emit itemMoved(dragStartIndex, dropIndex);
-            }
+            emit itemMoved(dragStartIndex, dropIndex);
         }
     }
 
     dragStartIndex = -1;
     dropIndicatorIndex = -1;
-    groupDropIndex = -1;
-    isGroupDrop = false;
     viewport()->update(); // Clear drop indicator
     event->acceptProposedAction();
 }
@@ -1733,29 +1455,7 @@ void DraggableListWidget::paintEvent(QPaintEvent* event)
 {
     QListWidget::paintEvent(event);
     
-    // Draw group drop indicator if we're dropping into a group
-    if (isGroupDrop && groupDropIndex >= 0 && dragStartIndex >= 0) {
-        QPainter painter(viewport());
-        painter.setRenderHint(QPainter::Antialiasing);
-        
-        QRect groupRect = visualRect(model()->index(groupDropIndex, 0));
-        
-        // Draw a highlight box around the group
-        painter.setPen(QPen(QColor("#0076df"), 3));
-        painter.setBrush(QBrush(QColor("#0076df"), Qt::Dense6Pattern)); // Semi-transparent fill
-        
-        // Draw rounded rectangle around the group
-        QRectF highlightRect = groupRect.adjusted(2, 2, -2, -2);
-        painter.drawRoundedRect(highlightRect, 4, 4);
-        
-        // Draw "DROP INTO GROUP" text
-        painter.setPen(QPen(QColor("#0076df"), 2));
-        painter.setFont(QFont(font().family(), 8, QFont::Bold));
-        QRect textRect = groupRect.adjusted(10, 0, -10, 0);
-        painter.drawText(textRect, Qt::AlignCenter, "DROP INTO GROUP");
-    }
-    // Draw normal line drop indicator if we're not doing a group drop
-    else if (dropIndicatorIndex >= 0 && dragStartIndex >= 0) {
+    if (dropIndicatorIndex >= 0 && dragStartIndex >= 0) {
         QPainter painter(viewport());
         painter.setRenderHint(QPainter::Antialiasing);
         

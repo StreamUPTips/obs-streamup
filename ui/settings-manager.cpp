@@ -195,10 +195,12 @@ obs_data_t *LoadSettings()
 		obs_data_set_bool(data, "scene_organiser_show_icons", true);
 		obs_data_set_bool(data, "scene_organiser_group_folders", true);
 		obs_data_set_bool(data, "scene_organiser_remember_folder_state", true);
+		obs_data_set_bool(data, "scene_organiser_disable_switching_in_studio_mode", false);
 		obs_data_set_int(data, "scene_organiser_item_height", 100);
 		obs_data_set_string(data, "scene_organiser_switch_mode", "single_click");
 		obs_data_set_string(data, "scene_organiser_sort_method", "none");
 		obs_data_set_string(data, "toolbar_position", "top");
+		obs_data_set_int(data, "toolbar_icon_size", 16);
 
 		// Set default dock tool settings
 		obs_data_t *dockData = obs_data_create();
@@ -266,7 +268,8 @@ PluginSettings GetCurrentSettings()
 		settings.sceneOrganiserShowIcons = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_icons", true);
 	settings.sceneOrganiserGroupFolders = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_group_folders", true);
 	settings.sceneOrganiserRememberFolderState = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_remember_folder_state", true);
-	settings.sceneOrganiserItemHeight = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "scene_organiser_item_height", 100);
+	settings.sceneOrganiserDisableSwitchingInStudioMode = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_disable_switching_in_studio_mode", true);
+	settings.sceneOrganiserItemHeight = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "scene_organiser_item_height", 50);
 	// Ensure the height is at least 50% (the minimum allowed value)
 	if (settings.sceneOrganiserItemHeight < 50) {
 		settings.sceneOrganiserItemHeight = 100;
@@ -318,6 +321,15 @@ PluginSettings GetCurrentSettings()
 			settings.toolbarPosition = ToolbarPosition::Top;
 		}
 
+		// Load toolbar icon size setting (default to 16 if not set)
+		settings.toolbarIconSize = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "toolbar_icon_size", 16);
+		// Clamp to valid range (10-24 pixels)
+		if (settings.toolbarIconSize < 10) {
+			settings.toolbarIconSize = 10;
+		} else if (settings.toolbarIconSize > 24) {
+			settings.toolbarIconSize = 24;
+		}
+
 		// Load dock tool settings
 		obs_data_t *dockData = obs_data_get_obj(data, "dock_tools");
 		if (dockData) {
@@ -326,6 +338,8 @@ PluginSettings GetCurrentSettings()
 			settings.dockTools.showRefreshBrowserSources = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_refresh_browser_sources", true);
 			settings.dockTools.showRefreshAudioMonitoring = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_refresh_audio_monitoring", true);
 			settings.dockTools.showVideoCaptureOptions = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_video_capture_options", true);
+			settings.dockTools.showGroupSelectedSources = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_group_selected_sources", true);
+			settings.dockTools.showToggleVisibilitySelectedSources = StreamUP::OBSDataHelpers::GetBoolWithDefault(dockData, "show_toggle_visibility_selected_sources", true);
 
 			obs_data_release(dockData);
 		} else {
@@ -339,7 +353,13 @@ PluginSettings GetCurrentSettings()
 
 void UpdateSettings(const PluginSettings &settings)
 {
-	obs_data_t *data = obs_data_create();
+	// Load existing settings to preserve fields not in PluginSettings struct (like toolbar_configuration)
+	obs_data_t *data = LoadSettings();
+	if (!data) {
+		data = obs_data_create();
+	}
+
+	// Update only the PluginSettings fields, preserving everything else
 	obs_data_set_bool(data, "run_at_startup", settings.runAtStartup);
 	obs_data_set_bool(data, "notifications_mute", settings.notificationsMute);
 	obs_data_set_bool(data, "show_cph_integration", settings.showCPHIntegration);
@@ -348,6 +368,7 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "scene_organiser_show_icons", settings.sceneOrganiserShowIcons);
 	obs_data_set_bool(data, "scene_organiser_group_folders", settings.sceneOrganiserGroupFolders);
 	obs_data_set_bool(data, "scene_organiser_remember_folder_state", settings.sceneOrganiserRememberFolderState);
+	obs_data_set_bool(data, "scene_organiser_disable_switching_in_studio_mode", settings.sceneOrganiserDisableSwitchingInStudioMode);
 	obs_data_set_int(data, "scene_organiser_item_height", settings.sceneOrganiserItemHeight);
 
 	// Save scene sort method setting
@@ -404,6 +425,9 @@ void UpdateSettings(const PluginSettings &settings)
 	}
 	obs_data_set_string(data, "toolbar_position", positionStr);
 
+	// Save toolbar icon size setting
+	obs_data_set_int(data, "toolbar_icon_size", settings.toolbarIconSize);
+
 	// Save dock tool settings
 	obs_data_t *dockData = obs_data_create();
 	obs_data_set_bool(dockData, "show_lock_all_sources", settings.dockTools.showLockAllSources);
@@ -411,6 +435,8 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(dockData, "show_refresh_browser_sources", settings.dockTools.showRefreshBrowserSources);
 	obs_data_set_bool(dockData, "show_refresh_audio_monitoring", settings.dockTools.showRefreshAudioMonitoring);
 	obs_data_set_bool(dockData, "show_video_capture_options", settings.dockTools.showVideoCaptureOptions);
+	obs_data_set_bool(dockData, "show_group_selected_sources", settings.dockTools.showGroupSelectedSources);
+	obs_data_set_bool(dockData, "show_toggle_visibility_selected_sources", settings.dockTools.showToggleVisibilitySelectedSources);
 
 	obs_data_set_obj(data, "dock_tools", dockData);
 	obs_data_release(dockData);
@@ -833,6 +859,59 @@ void ShowSettingsDialog(int tabIndex)
 		toolbarPositionLayout->addWidget(positionComboBox);
 		toolbarLayout->addLayout(toolbarPositionLayout);
 
+	// Add spacing between sections
+	toolbarLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+
+	// Icon Size Slider
+		QHBoxLayout *iconSizeLayout = new QHBoxLayout();
+		iconSizeLayout->setContentsMargins(0, 0, 0, 0);
+		iconSizeLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+
+		QLabel *iconSizeLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarIconSize"));
+		iconSizeLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		iconSizeLabel->setToolTip(obs_module_text("StreamUP.Settings.ToolbarIconSizeDesc"));
+
+		QSlider *iconSizeSlider = new QSlider(Qt::Horizontal);
+		iconSizeSlider->setMinimum(10);
+		iconSizeSlider->setMaximum(24);
+		iconSizeSlider->setValue(currentSettings.toolbarIconSize);
+		iconSizeSlider->setTickPosition(QSlider::TicksBelow);
+		iconSizeSlider->setTickInterval(2);
+		iconSizeSlider->setToolTip(obs_module_text("StreamUP.Settings.ToolbarIconSizeTooltip"));
+		iconSizeSlider->setMaximumWidth(200);
+
+		QLabel *iconSizeValueLabel = new QLabel(QString::number(currentSettings.toolbarIconSize) + "px");
+		iconSizeValueLabel->setStyleSheet(QString("color: %1; font-size: %2px; min-width: 45px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		iconSizeValueLabel->setAlignment(Qt::AlignCenter);
+
+		// Update label and toolbar as slider moves (real-time updates)
+		QObject::connect(iconSizeSlider, &QSlider::valueChanged, [iconSizeValueLabel](int value) {
+			iconSizeValueLabel->setText(QString::number(value) + "px");
+
+			PluginSettings settings = GetCurrentSettings();
+			settings.toolbarIconSize = value;
+			UpdateSettings(settings);
+
+			// Update toolbar button sizes without rebuilding (preserves customizations)
+			QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
+			if (mainWindow) {
+				StreamUPToolbar* toolbar = mainWindow->findChild<StreamUPToolbar*>();
+				if (toolbar) {
+					toolbar->updateButtonSizes();
+				}
+			}
+		});
+
+		iconSizeLayout->addWidget(iconSizeLabel);
+		iconSizeLayout->addStretch();
+		iconSizeLayout->addWidget(iconSizeSlider);
+		iconSizeLayout->addWidget(iconSizeValueLabel);
+		toolbarLayout->addLayout(iconSizeLayout);
+
 		// Add spacing between sections
 		toolbarLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
 
@@ -976,6 +1055,33 @@ void ShowSettingsDialog(int tabIndex)
 		rememberFolderStateLayout->addWidget(rememberFolderStateSwitch);
 		sceneOrganiserLayout->addLayout(rememberFolderStateLayout);
 
+		// Disable Switching in Studio Mode setting
+		QHBoxLayout *disableSwitchingLayout = new QHBoxLayout();
+		disableSwitchingLayout->setContentsMargins(0, 0, 0, 0);
+		disableSwitchingLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+
+		QLabel *disableSwitchingLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.DisableSwitchingInStudioMode"));
+		disableSwitchingLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		disableSwitchingLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.DisableSwitchingInStudioModeDesc"));
+
+		StreamUP::UIStyles::SwitchButton *disableSwitchingSwitch =
+			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.sceneOrganiserDisableSwitchingInStudioMode);
+		disableSwitchingSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.DisableSwitchingInStudioModeDesc"));
+
+		QObject::connect(disableSwitchingSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+			PluginSettings settings = GetCurrentSettings();
+			settings.sceneOrganiserDisableSwitchingInStudioMode = checked;
+			UpdateSettings(settings);
+			StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+		});
+
+		disableSwitchingLayout->addWidget(disableSwitchingLabel);
+		disableSwitchingLayout->addStretch();
+		disableSwitchingLayout->addWidget(disableSwitchingSwitch);
+		sceneOrganiserLayout->addLayout(disableSwitchingLayout);
+
 		// Item Height setting
 		QHBoxLayout *itemHeightLayout = new QHBoxLayout();
 		itemHeightLayout->setContentsMargins(0, 0, 0, 0);
@@ -1011,9 +1117,9 @@ void ShowSettingsDialog(int tabIndex)
 		});
 
 		itemHeightLayout->addWidget(itemHeightLabel);
+		itemHeightLayout->addStretch();
 		itemHeightLayout->addWidget(itemHeightSlider);
 		itemHeightLayout->addWidget(itemHeightValueLabel);
-		itemHeightLayout->addStretch();
 		sceneOrganiserLayout->addLayout(itemHeightLayout);
 
 		// Scene switching mode setting
@@ -1459,6 +1565,11 @@ void ShowSettingsDialog(int tabIndex)
 			{obs_module_text("Hotkey.PasteShowTransition.Name"), obs_module_text("Hotkey.PasteShowTransition.Description"), "streamup_paste_show_transition"},
 			{obs_module_text("Hotkey.PasteHideTransition.Name"), obs_module_text("Hotkey.PasteHideTransition.Description"), "streamup_paste_hide_transition"}
 		};
+
+		std::vector<HotkeyInfo> groupVisibilityHotkeys = {
+			{obs_module_text("Hotkey.GroupSelectedSources.Name"), obs_module_text("Hotkey.GroupSelectedSources.Description"), "streamup_group_selected_sources"},
+			{obs_module_text("Hotkey.ToggleVisibilitySelectedSources.Name"), obs_module_text("Hotkey.ToggleVisibilitySelectedSources.Description"), "streamup_toggle_visibility_selected_sources"}
+		};
 		
 		// Helper function to build hotkey rows for each section
 		auto buildHotkeySection = [](const std::vector<HotkeyInfo>& hotkeys, QVBoxLayout* parentLayout) {
@@ -1543,11 +1654,16 @@ void ShowSettingsDialog(int tabIndex)
 		};
 		
 		// Build each hotkey section
+		QGroupBox *groupVisibilityGroup = StreamUP::UIStyles::CreateStyledGroupBox("Group and Visibility Management", "info");
+		QVBoxLayout *groupVisibilityLayout = new QVBoxLayout(groupVisibilityGroup);
+		groupVisibilityLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
 		buildHotkeySection(lockingHotkeys, lockingLayout);
 		buildHotkeySection(refreshHotkeys, refreshLayout);
 		buildHotkeySection(interactionHotkeys, interactionLayout);
 		buildHotkeySection(videoCaptureHotkeys, videoCaptureLayout);
 		buildHotkeySection(transitionHotkeys, transitionLayout);
+		buildHotkeySection(groupVisibilityHotkeys, groupVisibilityLayout);
 
 		// Add all sections to main layout
 		hotkeysContentLayout->addWidget(lockingGroup);
@@ -1555,6 +1671,7 @@ void ShowSettingsDialog(int tabIndex)
 		hotkeysContentLayout->addWidget(interactionGroup);
 		hotkeysContentLayout->addWidget(videoCaptureGroup);
 		hotkeysContentLayout->addWidget(transitionGroup);
+		hotkeysContentLayout->addWidget(groupVisibilityGroup);
 		
 		hotkeysMainLayout->addWidget(hotkeysContentWidget);
 		hotkeysMainLayout->addStretch();
@@ -1627,7 +1744,9 @@ void ShowSettingsDialog(int tabIndex)
 			{obs_module_text("Dock.Tool.LockCurrentSources.Title"), obs_module_text("Dock.Tool.LockCurrentSources.Description"), &dockSettings.showLockCurrentSources, 1},
 			{obs_module_text("Dock.Tool.RefreshBrowserSources.Title"), obs_module_text("Dock.Tool.RefreshBrowserSources.Description"), &dockSettings.showRefreshBrowserSources, 2},
 			{obs_module_text("Dock.Tool.RefreshAudioMonitoring.Title"), obs_module_text("Dock.Tool.RefreshAudioMonitoring.Description"), &dockSettings.showRefreshAudioMonitoring, 3},
-			{obs_module_text("Dock.Tool.VideoCaptureOptions.Title"), obs_module_text("Dock.Tool.VideoCaptureOptions.Description"), &dockSettings.showVideoCaptureOptions, 4}
+			{obs_module_text("Dock.Tool.VideoCaptureOptions.Title"), obs_module_text("Dock.Tool.VideoCaptureOptions.Description"), &dockSettings.showVideoCaptureOptions, 4},
+			{obs_module_text("Dock.Tool.GroupSelectedSources.Title"), obs_module_text("Dock.Tool.GroupSelectedSources.Description"), &dockSettings.showGroupSelectedSources, 5},
+			{obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Title"), obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Description"), &dockSettings.showToggleVisibilitySelectedSources, 6}
 		};
 		
 		// Create tool rows
@@ -1680,6 +1799,8 @@ void ShowSettingsDialog(int tabIndex)
 				case 2: currentValue = freshSettings.showRefreshBrowserSources; break;
 				case 3: currentValue = freshSettings.showRefreshAudioMonitoring; break;
 				case 4: currentValue = freshSettings.showVideoCaptureOptions; break;
+				case 5: currentValue = freshSettings.showGroupSelectedSources; break;
+				case 6: currentValue = freshSettings.showToggleVisibilitySelectedSources; break;
 			}
 			
 			StreamUP::UIStyles::SwitchButton *toolSwitch = StreamUP::UIStyles::CreateStyledSwitch("", currentValue);
@@ -1687,15 +1808,17 @@ void ShowSettingsDialog(int tabIndex)
 			// Update settings when switch changes
 			QObject::connect(toolSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [toolIndex = tool.toolIndex](bool checked) {
 				DockToolSettings settings = GetDockToolSettings();
-				
+
 				switch (toolIndex) {
 					case 0: settings.showLockAllSources = checked; break;
 					case 1: settings.showLockCurrentSources = checked; break;
 					case 2: settings.showRefreshBrowserSources = checked; break;
 					case 3: settings.showRefreshAudioMonitoring = checked; break;
 					case 4: settings.showVideoCaptureOptions = checked; break;
+					case 5: settings.showGroupSelectedSources = checked; break;
+					case 6: settings.showToggleVisibilitySelectedSources = checked; break;
 				}
-				
+
 				UpdateDockToolSettings(settings);
 			});
 			
@@ -1758,6 +1881,10 @@ void ShowSettingsDialog(int tabIndex)
 		mainLayout->addWidget(buttonWidget);
 
 		QObject::connect(dialog, &QDialog::finished, [=](int) {
+			// Ensure all settings are saved when dialog closes
+			PluginSettings currentSettings = GetCurrentSettings();
+			UpdateSettings(currentSettings);
+
 			obs_data_release(settings);
 			obs_properties_destroy(props);
 		});
@@ -2501,7 +2628,11 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 		{obs_module_text("Dock.Tool.RefreshAudioMonitoring.Title"), obs_module_text("Dock.Tool.RefreshAudioMonitoring.Description"),
 		 &currentDockSettings.showRefreshAudioMonitoring, 3},
 		{obs_module_text("Dock.Tool.VideoCaptureOptions.Title"), obs_module_text("Dock.Tool.VideoCaptureOptions.Description"),
-		 &currentDockSettings.showVideoCaptureOptions, 4}};
+		 &currentDockSettings.showVideoCaptureOptions, 4},
+		{obs_module_text("Dock.Tool.GroupSelectedSources.Title"), obs_module_text("Dock.Tool.GroupSelectedSources.Description"),
+		 &currentDockSettings.showGroupSelectedSources, 5},
+		{obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Title"), obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Description"),
+		 &currentDockSettings.showToggleVisibilitySelectedSources, 6}};
 
 	// Create tool rows matching WebSocket/hotkeys UI pattern
 	for (size_t i = 0; i < dockTools.size(); ++i) {
@@ -2591,6 +2722,12 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 		case 4:
 			currentValue = freshSettings.showVideoCaptureOptions;
 			break;
+		case 5:
+			currentValue = freshSettings.showGroupSelectedSources;
+			break;
+		case 6:
+			currentValue = freshSettings.showToggleVisibilitySelectedSources;
+			break;
 		}
 
 		// Create switch with explicit initial state
@@ -2620,6 +2757,12 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 				break;
 			case 4:
 				settings.showVideoCaptureOptions = checked;
+				break;
+			case 5:
+				settings.showGroupSelectedSources = checked;
+				break;
+			case 6:
+				settings.showToggleVisibilitySelectedSources = checked;
 				break;
 			}
 

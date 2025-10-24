@@ -287,6 +287,23 @@ void WebsocketPasteShowTransition(obs_data_t *request_data, obs_data_t *response
  */
 void WebsocketPasteHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 
+//-------------------GROUP AND VISIBILITY MANAGEMENT-------------------
+/**
+ * Group selected sources in the current scene
+ * @param request_data Request data from WebSocket
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketGroupSelectedSources(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Toggle visibility of selected sources
+ * @param request_data Request data from WebSocket
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketToggleVisibilitySelectedSources(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
 } // namespace WebSocketAPI
 } // namespace StreamUP
 

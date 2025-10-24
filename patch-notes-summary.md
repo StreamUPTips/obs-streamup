@@ -1,3 +1,25 @@
+# StreamUP v2.1.4 - Patch Update
+
+## New Features
+- **Scene Organiser Item Height Adjustment** - Control the size of scene items in Scene Organiser with a slider (50-200%). Both icons and text scale automatically
+- **Toolbar Icon Size Control** - Adjust toolbar icon size between 10-24px to fit your workspace
+- **Disable Scene Switching in Studio Mode** - Optional setting to prevent accidental scene changes when clicking in Scene Organiser during Studio Mode
+- **Add Sources to Group Shortcuts** - New hotkey and WebSocket commands to quickly add selected sources to groups, streamlining your workflow
+- **Studio Mode Mid-Point Transition UI** - Enhanced studio mode interface for better transition control
+
+## Improvements & Bug Fixes
+- **Settings Persistence** - Fixed critical issue where settings (especially toolbar configuration) weren't saving properly on OBS close
+- **Scene Organiser Height Slider** - Slider now properly right-aligned in settings
+- **MultiDock Theming** - Improved theme consistency across docks
+- **Toolbar Active States** - Added active backgrounds to toolbar buttons for better visual feedback
+- **UI Polish** - Various interface improvements and cleanup, including removed borders from native OBS docks for a cleaner look
+- **Dock Loading** - Fixed glitches that could occur when loading docks
+- **Image and Group Sources** - Fixed issues with image and group source handling
+- **Plugin Manager Updates** - Improved plugin manager functionality
+- **Dock Host Improvements** - Enhanced inner dock host stability
+
+---
+
 # StreamUP v2.1.3 - Patch Update
 
 ## New Features

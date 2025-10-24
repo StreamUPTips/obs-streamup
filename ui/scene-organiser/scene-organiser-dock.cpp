@@ -146,7 +146,6 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_treeView(nullptr)
     , m_model(nullptr)
     , m_proxyModel(nullptr)
-    , m_colorDelegate(nullptr)
     , m_searchWidget(nullptr)
     , m_searchLayout(nullptr)
     , m_searchEdit(nullptr)
@@ -271,23 +270,52 @@ void SceneOrganiserDock::setupUI()
     m_proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
     m_proxyModel->setRecursiveFilteringEnabled(true);
 
+    // Create tree view - SceneTreeView only for event handling, no custom styling
     m_treeView = new SceneTreeView(this);
     m_treeView->setModel(m_proxyModel);
 
-    // Configure tree view to match OBS scenes dock exactly
+    // Set object name to match OBS scenes list for proper theme styling
+    // NOTE: Using "scenes" will apply OBS theme styling for the native scenes dock
+    // Try changing this to see if it affects the double-selection issue
+    m_treeView->setObjectName("streamupSceneOrganiser");  // Try: "sceneorganiser", "streamupScenes", or ""
+
+    // DEBUG: Log the current stylesheet to see what's being applied
+    QString currentStyleSheet = m_treeView->styleSheet();
+    if (!currentStyleSheet.isEmpty()) {
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "TreeViewStyle",
+            QString("TreeView has custom stylesheet: %1").arg(currentStyleSheet).toUtf8().constData());
+    }
+
+    // DEBUG: Log the palette to see selection colors
+    QPalette pal = m_treeView->palette();
+    QColor highlight = pal.color(QPalette::Highlight);
+    QColor highlightText = pal.color(QPalette::HighlightedText);
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "TreeViewPalette",
+        QString("Highlight color: %1, HighlightedText: %2")
+        .arg(highlight.name()).arg(highlightText.name()).toUtf8().constData());
+
+    // Configure tree view with minimal settings - match OBS scenes dock
     m_treeView->setHeaderHidden(true);
-    m_treeView->setRootIsDecorated(true);
+    m_treeView->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_treeView->setDragDropMode(QAbstractItemView::InternalMove);
     m_treeView->setDefaultDropAction(Qt::MoveAction);
     m_treeView->setDropIndicatorShown(true);
-    m_treeView->setSelectionMode(QAbstractItemView::SingleSelection);
-    m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_treeView->setIndentation(20); // Match OBS indentation
-    m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers); // We'll trigger editing manually
+    m_treeView->setIndentation(20);
+    m_treeView->setRootIsDecorated(true);
+    m_treeView->setExpandsOnDoubleClick(false);
 
-    // Install custom delegate for smooth color transitions
-    m_colorDelegate = new CustomColorDelegate(this, this);
-    m_treeView->setItemDelegate(m_colorDelegate);
+    // Apply initial item height setting
+    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+    int iconSize = (32 * settings.sceneOrganiserItemHeight) / 100;
+    m_treeView->setIconSize(QSize(iconSize, iconSize));
+
+    // Apply initial font size based on height setting
+    int fontSize = std::max(8, (11 * settings.sceneOrganiserItemHeight) / 100);
+    QFont font = m_treeView->font();
+    font.setPointSize(fontSize);
+    m_treeView->setFont(font);
 
     // Connect signals
     connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged,
@@ -346,48 +374,37 @@ void SceneOrganiserDock::createBottomToolbar()
     // Match native OBS scenes dock styling exactly
     m_toolbar->setIconSize(QSize(16, 16));  // Standard OBS toolbar icon size
 
-    // Minimal styling - let OBS theme handle appearance like standard toolbars
-    m_toolbar->setStyleSheet(
-        "QToolBar {"
-        "    border: none;"
-        "    spacing: 3px;"  // Standard OBS toolbar spacing
-        "}"
-        "QToolButton::menu-indicator {"
-        "    image: none;"
-        "    width: 0px;"
-        "    height: 0px;"
-        "}"
-        "QToolButton::menu-button {"
-        "    border: none;"
-        "    background: transparent;"
-        "    width: 0px;"
-        "}"
-    );
+    // Let OBS theme handle all toolbar styling - no custom stylesheets
+    // The toolbar will inherit appearance from the active OBS theme
 
     // Create QToolButtons and add them to toolbar (to properly support themeID)
     // This approach allows themeID properties to work while maintaining proper toolbar styling
 
-    // Add button with dropdown menu
+    // Add button - appears as normal button without dropdown arrow
     QToolButton *addButton = new QToolButton(this);
+    addButton->setObjectName("SceneOrganiserAddButton");
     addButton->setProperty("themeID", "addIconSmall");
     addButton->setProperty("class", "icon-plus");
     addButton->setToolTip("Add folder or create scene");
-    addButton->setPopupMode(QToolButton::InstantPopup);
 
-    // Create a menu for the add button
+    // Create a menu for the add button (shown on click, no arrow indicator)
     QMenu *addMenu = new QMenu(this);
+    addMenu->setObjectName("SceneOrganiserAddMenu");
     addMenu->addAction(obs_module_text("SceneOrganiser.Action.AddFolder"), this, &SceneOrganiserDock::onAddFolderClicked);
     addMenu->addAction(obs_module_text("SceneOrganiser.Action.CreateScene"), this, &SceneOrganiserDock::onCreateSceneClicked);
-    addButton->setMenu(addMenu);
 
-    // Don't set a default action to avoid icon overlap - just connect the clicked signal
-    connect(addButton, &QToolButton::clicked, this, &SceneOrganiserDock::onAddFolderClicked);
+    // Show menu on click without dropdown arrow
+    connect(addButton, &QToolButton::clicked, [this, addButton, addMenu]() {
+        QPoint pos = addButton->mapToGlobal(QPoint(0, addButton->height()));
+        addMenu->exec(pos);
+    });
 
     m_toolbar->addWidget(addButton);
-    m_addFolderAction = nullptr; // No separate action needed for dropdown button
+    m_addFolderAction = nullptr; // No separate action needed
 
     // Remove button
     QToolButton *removeButton = new QToolButton(this);
+    removeButton->setObjectName("SceneOrganiserRemoveButton");
     removeButton->setProperty("themeID", "removeIconSmall");
     removeButton->setProperty("class", "icon-trash");
     removeButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.Remove"));
@@ -397,8 +414,12 @@ void SceneOrganiserDock::createBottomToolbar()
     m_toolbar->addWidget(removeButton);
     m_removeAction = nullptr; // Direct button connection
 
+    // Separator after remove button
+    m_toolbar->addSeparator();
+
     // Filters button (using theme info: .icon-filter uses url(theme:Dark/filter.svg))
     QToolButton *filtersButton = new QToolButton(this);
+    filtersButton->setObjectName("SceneOrganiserFiltersButton");
     filtersButton->setProperty("class", "icon-filter");
     filtersButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.Filters"));
     filtersButton->setEnabled(false);
@@ -407,11 +428,12 @@ void SceneOrganiserDock::createBottomToolbar()
     m_toolbar->addWidget(filtersButton);
     m_filtersAction = nullptr; // Direct button connection
 
-    // Add separator
+    // Separator after filters button
     m_toolbar->addSeparator();
 
     // Move up button
     QToolButton *moveUpButton = new QToolButton(this);
+    moveUpButton->setObjectName("SceneOrganiserMoveUpButton");
     moveUpButton->setProperty("themeID", "upArrowIconSmall");
     moveUpButton->setProperty("class", "icon-up");
     moveUpButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.MoveUp"));
@@ -423,6 +445,7 @@ void SceneOrganiserDock::createBottomToolbar()
 
     // Move down button
     QToolButton *moveDownButton = new QToolButton(this);
+    moveDownButton->setObjectName("SceneOrganiserMoveDownButton");
     moveDownButton->setProperty("themeID", "downArrowIconSmall");
     moveDownButton->setProperty("class", "icon-down");
     moveDownButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.MoveDown"));
@@ -434,34 +457,51 @@ void SceneOrganiserDock::createBottomToolbar()
 
     // Add spacer to push remaining buttons to the right
     QWidget *spacer = new QWidget(this);
+    spacer->setObjectName("SceneOrganiserToolbarSpacer");
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     m_toolbar->addWidget(spacer);
 
+    // Create container for right-aligned buttons with consistent spacing
+    QWidget *rightButtonsContainer = new QWidget(this);
+    rightButtonsContainer->setObjectName("SceneOrganiserRightButtonsContainer");
+    rightButtonsContainer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+    QHBoxLayout *rightButtonsLayout = new QHBoxLayout(rightButtonsContainer);
+    rightButtonsLayout->setContentsMargins(0, 0, 0, 0);
+    rightButtonsLayout->setSpacing(2); // Match toolbar button spacing
+
     // Lock checkbox - using exact same approach as OBS source dock
-    QCheckBox *lockCheckbox = new QCheckBox(this);
+    QCheckBox *lockCheckbox = new QCheckBox(rightButtonsContainer);
+    lockCheckbox->setObjectName("SceneOrganiserLockCheckbox");
     lockCheckbox->setProperty("class", "checkbox-icon indicator-lock");
     lockCheckbox->setChecked(false); // Start unlocked
     lockCheckbox->setToolTip("Scene organizer is unlocked (click to lock)");
+    lockCheckbox->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(lockCheckbox, &QCheckBox::toggled, this, &SceneOrganiserDock::onToggleLockClicked);
-
-    m_toolbar->addWidget(lockCheckbox);
+    rightButtonsLayout->addWidget(lockCheckbox);
 
     // Expand/Collapse All button - using QCheckBox like OBS does for expand indicators
-    QCheckBox *expandCollapseButton = new QCheckBox(this);
+    QCheckBox *expandCollapseButton = new QCheckBox(rightButtonsContainer);
+    expandCollapseButton->setObjectName("SceneOrganiserExpandCollapseButton");
     expandCollapseButton->setProperty("class", "checkbox-icon indicator-expand");
     expandCollapseButton->setChecked(false); // Unchecked = expanded, checked = collapsed
     expandCollapseButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.ExpandAll"));
+    expandCollapseButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(expandCollapseButton, &QCheckBox::toggled, this, &SceneOrganiserDock::onExpandCollapseAllClicked);
+    rightButtonsLayout->addWidget(expandCollapseButton);
 
-    m_toolbar->addWidget(expandCollapseButton);
+    // Add the container to the toolbar
+    m_toolbar->addWidget(rightButtonsContainer);
 
-    // Settings button - using OBS theming but addWidget approach for right-side buttons
+    // Add separator before settings button (using proper toolbar separator)
+    m_toolbar->addSeparator();
+
+    // Settings button - using OBS theming (added directly to toolbar, not in container)
     QToolButton *settingsButton = new QToolButton(this);
+    settingsButton->setObjectName("SceneOrganiserSettingsButton");
     settingsButton->setProperty("themeID", "configIconSmall");
     settingsButton->setProperty("class", "icon-gear");
     settingsButton->setToolTip("Open StreamUP settings for Scene Organiser");
     connect(settingsButton, &QToolButton::clicked, this, &SceneOrganiserDock::onSettingsClicked);
-
     m_toolbar->addWidget(settingsButton);
 
     // Store button references for additional state management if needed
@@ -1099,13 +1139,20 @@ void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
 
     // Check if studio mode is active - it overrides normal click behavior
     if (obs_frontend_preview_program_mode_active() && item->type() == SceneTreeItem::UserType + 2) {
-        // Studio mode: single-click always sets preview scene
-        obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
-        if (source) {
-            obs_frontend_set_current_preview_scene(source);
+        // Check if scene switching is disabled in studio mode
+        if (settings.sceneOrganiserDisableSwitchingInStudioMode) {
+            // Scene switching is disabled in studio mode, do nothing
             StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
-                QString("Single-click: Set preview scene to '%1'").arg(item->text()).toUtf8().constData());
-            obs_source_release(source);
+                QString("Single-click: Scene switching disabled in studio mode").toUtf8().constData());
+        } else {
+            // Studio mode: single-click always sets preview scene
+            obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
+            if (source) {
+                obs_frontend_set_current_preview_scene(source);
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
+                    QString("Single-click: Set preview scene to '%1'").arg(item->text()).toUtf8().constData());
+                obs_source_release(source);
+            }
         }
     } else {
         // Normal mode: use settings to determine behavior
@@ -1148,15 +1195,23 @@ void SceneOrganiserDock::onItemDoubleClicked(const QModelIndex &index)
 
     // Check if studio mode is active - it overrides normal double-click behavior
     if (obs_frontend_preview_program_mode_active() && item->type() == SceneTreeItem::UserType + 2) {
-        // Studio mode: double-click transitions preview to program (goes live)
-        obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
-        if (source) {
-            // First set as preview, then trigger transition
-            obs_frontend_set_current_preview_scene(source);
-            obs_frontend_preview_program_trigger_transition();
+        // Check if scene switching is disabled in studio mode
+        StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+        if (settings.sceneOrganiserDisableSwitchingInStudioMode) {
+            // Scene switching is disabled in studio mode, do nothing
             StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
-                QString("Double-click: Transitioned scene '%1' to program").arg(item->text()).toUtf8().constData());
-            obs_source_release(source);
+                QString("Double-click: Scene switching disabled in studio mode").toUtf8().constData());
+        } else {
+            // Studio mode: double-click transitions preview to program (goes live)
+            obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
+            if (source) {
+                // First set as preview, then trigger transition
+                obs_frontend_set_current_preview_scene(source);
+                obs_frontend_preview_program_trigger_transition();
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
+                    QString("Double-click: Transitioned scene '%1' to program").arg(item->text()).toUtf8().constData());
+                obs_source_release(source);
+            }
         }
     } else {
         // Normal mode: use settings to determine behavior
@@ -1584,84 +1639,15 @@ void SceneOrganiserDock::onClearCustomColorClicked()
 
 void SceneOrganiserDock::applyCustomColorToItem(QStandardItem *item, const QColor &color)
 {
-    if (!item || !color.isValid()) {
-        return;
-    }
-
-    // Don't override program/preview scene highlighting
-    bool isProgramScene = false;
-    bool isPreviewScene = false;
-    if (item->type() == SceneTreeItem::UserType + 2) {
-        obs_source_t *current_scene = obs_frontend_get_current_scene();
-        if (current_scene) {
-            QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
-            isProgramScene = (item->text() == current_scene_name);
-            obs_source_release(current_scene);
-        }
-
-        // Check preview scene in studio mode
-        if (obs_frontend_preview_program_mode_active()) {
-            obs_source_t *preview_scene = obs_frontend_get_current_preview_scene();
-            if (preview_scene) {
-                QString preview_scene_name = QString::fromUtf8(obs_source_get_name(preview_scene));
-                isPreviewScene = (item->text() == preview_scene_name);
-                obs_source_release(preview_scene);
-            }
-        }
-    }
-
-    if (isProgramScene || isPreviewScene) {
-        // For program/preview scenes, store the color but don't apply it (special highlighting takes precedence)
-        return;
-    }
-
-    // Store the original custom color in a separate data role for reference
-    item->setData(color, Qt::UserRole + 2); // UserRole + 2 for original color
-
-    // Apply the background color
-    item->setBackground(QBrush(color));
-
-    // Set contrasting text color
-    QColor textColor = getContrastTextColor(color);
-    item->setForeground(QBrush(textColor));
+    // DISABLED - No custom styling
+    Q_UNUSED(item);
+    Q_UNUSED(color);
 }
 
 void SceneOrganiserDock::clearCustomColorFromItem(QStandardItem *item)
 {
-    if (!item) {
-        return;
-    }
-
-    // Check if this is a program or preview scene
-    bool isProgramScene = false;
-    bool isPreviewScene = false;
-    if (item->type() == SceneTreeItem::UserType + 2) {
-        obs_source_t *current_scene = obs_frontend_get_current_scene();
-        if (current_scene) {
-            QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
-            isProgramScene = (item->text() == current_scene_name);
-            obs_source_release(current_scene);
-        }
-
-        // Check preview scene in studio mode
-        if (obs_frontend_preview_program_mode_active()) {
-            obs_source_t *preview_scene = obs_frontend_get_current_preview_scene();
-            if (preview_scene) {
-                QString preview_scene_name = QString::fromUtf8(obs_source_get_name(preview_scene));
-                isPreviewScene = (item->text() == preview_scene_name);
-                obs_source_release(preview_scene);
-            }
-        }
-    }
-
-    if (isProgramScene || isPreviewScene) {
-        // For program/preview scenes, don't clear custom colors - let special highlighting remain
-        return;
-    } else {
-        // Clear custom styling and set default theme text color
-        item->setBackground(QBrush());
-        item->setForeground(QBrush(getDefaultThemeTextColor()));
-    }
+    // DISABLED - No custom styling
+    Q_UNUSED(item);
 }
 
 QColor SceneOrganiserDock::getContrastTextColor(const QColor &backgroundColor)
@@ -1875,8 +1861,22 @@ void SceneOrganiserDock::onSettingsChanged()
     LoadConfiguration();
     applySortingIfEnabled();
 
-    // Force update of the tree view to reflect height changes
+    // Apply the item height setting to the tree view
     if (m_treeView) {
+        StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+
+        // Calculate icon size based on height percentage (50-200% range)
+        // Base icon size is 32px at 100%
+        int iconSize = (32 * settings.sceneOrganiserItemHeight) / 100;
+        m_treeView->setIconSize(QSize(iconSize, iconSize));
+
+        // Calculate and apply font size based on height percentage
+        // Base font size is 11px at 100%, with a minimum of 8px
+        int fontSize = std::max(8, (11 * settings.sceneOrganiserItemHeight) / 100);
+        QFont font = m_treeView->font();
+        font.setPointSize(fontSize);
+        m_treeView->setFont(font);
+
         // Force a viewport update to reflect height changes
         m_treeView->viewport()->update();
     }
@@ -1964,83 +1964,11 @@ void SceneOrganiserDock::updateActiveSceneHighlight()
 
 void SceneOrganiserDock::updateActiveSceneHighlightRecursive(QStandardItem *parent, const QString &activeSceneName, const QString &previewSceneName)
 {
-    if (!parent) return;
-
-    for (int i = 0; i < parent->rowCount(); ++i) {
-        QStandardItem *item = parent->child(i);
-        if (!item) continue;
-
-        if (item->type() == SceneTreeItem::UserType + 2) {
-            // This is a scene item
-            SceneTreeItem *sceneItem = static_cast<SceneTreeItem*>(item);
-            bool isProgramScene = (item->text() == activeSceneName);
-            bool isPreviewScene = (!previewSceneName.isEmpty() && item->text() == previewSceneName);
-
-            // Apply styling based on scene role
-            if (isProgramScene) {
-                // Program scene - use OBS active blue color scheme (live/on-air)
-                QFont font = item->font();
-                font.setBold(true);
-                item->setFont(font);
-
-                // Set background color to match OBS active scene color
-                item->setBackground(QBrush(QColor(26, 127, 207))); // OBS active blue
-                item->setForeground(QBrush(QColor(255, 255, 255))); // White text
-            } else if (isPreviewScene) {
-                // Preview scene in studio mode - use distinct styling
-                QFont font = item->font();
-                font.setBold(true);
-                item->setFont(font);
-
-                // Use green background for preview (common studio mode convention)
-                item->setBackground(QBrush(QColor(100, 180, 100))); // Green for preview
-                item->setForeground(QBrush(QColor(255, 255, 255))); // White text
-            } else {
-                // Reset to normal styling
-                QFont font = item->font();
-                font.setBold(false);
-                item->setFont(font);
-
-                // Check if item has custom color
-                QVariant customColor = item->data(Qt::UserRole + 1);
-                if (customColor.isValid()) {
-                    // Apply custom color
-                    applyCustomColorToItem(item, customColor.value<QColor>());
-                } else {
-                    // Clear background
-                    item->setBackground(QBrush());
-
-                    // Check if scene is hidden and apply appropriate text color
-                    bool isHidden = m_hiddenScenes.contains(item->text());
-                    if (isHidden) {
-                        // Apply grayed-out color for hidden scenes
-                        QColor grayColor = getDefaultThemeTextColor();
-                        grayColor.setAlpha(100);
-                        item->setForeground(QBrush(grayColor));
-                    } else {
-                        // Use default theme text color
-                        item->setForeground(QBrush(getDefaultThemeTextColor()));
-                    }
-                }
-            }
-
-            // Update the scene item's visual state
-            sceneItem->updateIcon();
-        } else if (item->type() == SceneFolderItem::UserType + 1) {
-            // Apply custom colors to folders too
-            QVariant customColor = item->data(Qt::UserRole + 1);
-            if (customColor.isValid()) {
-                applyCustomColorToItem(item, customColor.value<QColor>());
-            } else {
-                // Clear styling to use defaults
-                item->setBackground(QBrush());
-                item->setForeground(QBrush(getDefaultThemeTextColor()));
-            }
-
-            // Recursively update folder children
-            updateActiveSceneHighlightRecursive(item, activeSceneName, previewSceneName);
-        }
-    }
+    // DISABLED - No custom styling at all
+    // Just let OBS theme handle everything
+    Q_UNUSED(parent);
+    Q_UNUSED(activeSceneName);
+    Q_UNUSED(previewSceneName);
 }
 
 void SceneOrganiserDock::updateAllItemIcons(QStandardItem *parent)
@@ -2777,30 +2705,8 @@ void SceneOrganiserDock::updateHiddenScenesStyling()
 
 void SceneOrganiserDock::updateHiddenScenesStylingRecursive(QStandardItem *parent)
 {
-    if (!parent) return;
-
-    for (int i = 0; i < parent->rowCount(); ++i) {
-        QStandardItem *child = parent->child(i);
-        if (!child) continue;
-
-        if (child->type() == SceneTreeItem::UserType + 2) { // Scene item
-            QString sceneName = child->text();
-            bool isHidden = m_hiddenScenes.contains(sceneName);
-
-            if (isHidden) {
-                // Apply grayed-out color to indicate scene is hidden (when unlocked)
-                QColor grayColor = getDefaultThemeTextColor();
-                grayColor.setAlpha(100); // Make it semi-transparent for a grayed-out effect
-                child->setForeground(QBrush(grayColor));
-            } else {
-                // Reset to default theme text color
-                child->setForeground(QBrush(getDefaultThemeTextColor()));
-            }
-        } else if (child->hasChildren()) {
-            // Recursively check folder contents
-            updateHiddenScenesStylingRecursive(child);
-        }
-    }
+    // DISABLED - No custom styling
+    Q_UNUSED(parent);
 }
 
 void SceneOrganiserDock::onCopyFiltersClicked()
@@ -3477,157 +3383,6 @@ void SceneTreeModel::moveSceneToFolder(obs_weak_source_t *weak_source, QStandard
     }
 }
 
-// OLD CONFIG METHODS - REPLACED BY DIGITOTTER APPROACH
-/*
-void SceneTreeModel::saveToConfig(obs_data_t *config)
-{
-    obs_data_array_t *rootArray = obs_data_array_create();
-
-    // Save root level items
-    for (int i = 0; i < invisibleRootItem()->rowCount(); ++i) {
-        QStandardItem *item = invisibleRootItem()->child(i);
-        if (item) {
-            obs_data_t *itemData = obs_data_create();
-            obs_data_set_string(itemData, "name", item->text().toUtf8().constData());
-            obs_data_set_int(itemData, "type", item->type());
-
-            if (item->type() == SceneFolderItem::UserType + 1) {
-                // Save folder children
-                obs_data_array_t *childrenArray = obs_data_array_create();
-                for (int j = 0; j < item->rowCount(); ++j) {
-                    QStandardItem *child = item->child(j);
-                    if (child) {
-                        obs_data_t *childData = obs_data_create();
-                        obs_data_set_string(childData, "name", child->text().toUtf8().constData());
-                        obs_data_set_int(childData, "type", child->type());
-                        obs_data_array_push_back(childrenArray, childData);
-                        obs_data_release(childData);
-                    }
-                }
-                obs_data_set_array(itemData, "children", childrenArray);
-                obs_data_array_release(childrenArray);
-            }
-
-            obs_data_array_push_back(rootArray, itemData);
-            obs_data_release(itemData);
-        }
-    }
-
-    obs_data_set_array(config, "tree_structure", rootArray);
-    obs_data_array_release(rootArray);
-}
-
-void SceneTreeModel::loadFromConfig(obs_data_t *config)
-{
-    obs_data_array_t *rootArray = obs_data_get_array(config, "tree_structure");
-    if (!rootArray) return;
-
-    // First pass: create all folders
-    QMap<QString, QStandardItem*> folderMap;
-
-    size_t count = obs_data_array_count(rootArray);
-    for (size_t i = 0; i < count; i++) {
-        obs_data_t *itemData = obs_data_array_item(rootArray, i);
-        if (!itemData) continue;
-
-        const char *name = obs_data_get_string(itemData, "name");
-        int type = (int)obs_data_get_int(itemData, "type");
-
-        // Validate folder name is not empty
-        if (!name || strlen(name) == 0) {
-            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-                "Skipping item with empty name in config");
-            continue;
-        }
-
-        QString itemName = QString::fromUtf8(name);
-        if (itemName.isEmpty() || itemName.trimmed().isEmpty()) {
-            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-                QString("Skipping item with invalid name: '%1'").arg(itemName).toUtf8().constData());
-            continue;
-        }
-
-        if (type == SceneFolderItem::UserType + 1) {
-            QStandardItem *folderItem = createFolderItem(itemName);
-            if (folderItem && !folderItem->text().isEmpty()) {
-                invisibleRootItem()->appendRow(folderItem);
-                folderMap[itemName] = folderItem;
-                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-                    QString("Created folder: '%1'").arg(itemName).toUtf8().constData());
-            }
-        }
-
-        obs_data_release(itemData);
-    }
-
-    // Second pass: organize scenes
-    for (size_t i = 0; i < count; i++) {
-        obs_data_t *itemData = obs_data_array_item(rootArray, i);
-        if (!itemData) continue;
-
-        const char *name = obs_data_get_string(itemData, "name");
-        int type = (int)obs_data_get_int(itemData, "type");
-
-        if (type == SceneFolderItem::UserType + 1) {
-            // Handle folder children
-            QStandardItem *folderItem = folderMap[QString::fromUtf8(name)];
-            obs_data_array_t *childrenArray = obs_data_get_array(itemData, "children");
-            if (childrenArray && folderItem) {
-                size_t childCount = obs_data_array_count(childrenArray);
-                for (size_t j = 0; j < childCount; j++) {
-                    obs_data_t *childData = obs_data_array_item(childrenArray, j);
-                    if (childData) {
-                        const char *childName = obs_data_get_string(childData, "name");
-                        int childType = (int)obs_data_get_int(childData, "type");
-
-                        // Validate child name is not empty
-                        if (!childName || strlen(childName) == 0) {
-                            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-                                "Skipping child with empty name in config");
-                            continue;
-                        }
-
-                        QString childSceneName = QString::fromUtf8(childName);
-                        if (childSceneName.isEmpty() || childSceneName.trimmed().isEmpty()) {
-                            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-                                QString("Skipping child with invalid name: '%1'").arg(childSceneName).toUtf8().constData());
-                            continue;
-                        }
-
-                        if (childType == SceneTreeItem::UserType + 2) {
-                            // Scene handling is now done by updateTree - skip here
-                            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-                                QString("Scene '%1' handling delegated to updateTree").arg(childSceneName).toUtf8().constData());
-                            if (sceneItem && !sceneItem->text().isEmpty()) {
-                                QStandardItem *oldParent = sceneItem->parent();
-                                if (!oldParent) oldParent = invisibleRootItem();
-
-                                QStandardItem *movedItem = oldParent->takeChild(sceneItem->row());
-                                if (movedItem && !movedItem->text().isEmpty()) {
-                                    folderItem->appendRow(movedItem);
-                                    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-                                        QString("Moved scene '%1' to folder '%2'").arg(childSceneName, folderItem->text()).toUtf8().constData());
-                                }
-                            }
-                        } else if (childType == SceneTreeItem::UserType + 2) {
-                            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Config",
-                                QString("Scene '%1' no longer exists in OBS, skipping").arg(childSceneName).toUtf8().constData());
-                        }
-                        obs_data_release(childData);
-                    }
-                }
-                obs_data_array_release(childrenArray);
-            }
-        }
-
-        obs_data_release(itemData);
-    }
-
-    obs_data_array_release(rootArray);
-}
-*/
-// END OLD CONFIG METHODS
-
 void SceneTreeModel::cleanupEmptyItems()
 {
     cleanupEmptyItemsRecursive(invisibleRootItem());
@@ -4286,18 +4041,8 @@ SceneTreeView::SceneTreeView(QWidget *parent)
 
 void SceneTreeView::setupView()
 {
-    setHeaderHidden(true);
-    setRootIsDecorated(true);
-    setDragDropMode(QAbstractItemView::InternalMove);
-    setDefaultDropAction(Qt::MoveAction);
-    setSelectionMode(QAbstractItemView::SingleSelection);
-    setExpandsOnDoubleClick(false);
-
-    // Enable better drop indicators for easier targeting
-    setDropIndicatorShown(true);
-
-    // Remove custom styling - let it inherit from OBS theme
-    // This ensures it matches the native OBS scenes dock exactly
+    // Do nothing - let the parent dock configure all settings
+    // This ensures we don't interfere with OBS theme styling
 }
 
 void SceneTreeView::dragEnterEvent(QDragEnterEvent *event)
@@ -4375,6 +4120,7 @@ SceneFolderItem::SceneFolderItem(const QString &folderName)
 
 void SceneFolderItem::setupFolderItem()
 {
+    // NO custom styling - pure OBS theme
     updateIcon();
     setDropEnabled(true);
     setDragEnabled(true);
@@ -4422,6 +4168,7 @@ SceneTreeItem::~SceneTreeItem()
 
 void SceneTreeItem::setupSceneItem()
 {
+    // NO custom styling - pure OBS theme
     updateIcon();
     setDropEnabled(false);
     setDragEnabled(true);
@@ -4475,237 +4222,8 @@ void SceneTreeItem::updateFromObs()
 } // namespace StreamUP
 
 //==============================================================================
-// CustomColorDelegate Implementation
+// Tree View Helper Methods
 //==============================================================================
-
-StreamUP::SceneOrganiser::CustomColorDelegate::CustomColorDelegate(SceneOrganiserDock *dock, QObject *parent)
-    : QStyledItemDelegate(parent), m_dock(dock)
-{
-}
-
-void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
-{
-    if (!m_dock || !index.isValid()) {
-        QStyledItemDelegate::paint(painter, option, index);
-        return;
-    }
-
-    // Get the item from the model - handle proxy model
-    QStandardItemModel *sourceModel = nullptr;
-    QModelIndex sourceIndex = index;
-
-    // Check if we're dealing with a proxy model
-    const QSortFilterProxyModel *proxyModel = qobject_cast<const QSortFilterProxyModel*>(index.model());
-    if (proxyModel) {
-        sourceModel = qobject_cast<QStandardItemModel*>(proxyModel->sourceModel());
-        sourceIndex = proxyModel->mapToSource(index);
-    } else {
-        sourceModel = qobject_cast<QStandardItemModel*>(const_cast<QAbstractItemModel*>(index.model()));
-    }
-
-    if (!sourceModel) {
-        QStyledItemDelegate::paint(painter, option, index);
-        return;
-    }
-
-    QStandardItem *item = sourceModel->itemFromIndex(sourceIndex);
-    if (!item) {
-        QStyledItemDelegate::paint(painter, option, index);
-        return;
-    }
-
-    // FIRST: Check if this is the active scene or preview scene (special highlighting takes precedence)
-    bool isProgramScene = false;
-    bool isPreviewScene = false;
-    if (item->type() == SceneTreeItem::UserType + 2) {
-        obs_source_t *current_scene = obs_frontend_get_current_scene();
-        if (current_scene) {
-            QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
-            isProgramScene = (item->text() == current_scene_name);
-
-            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Paint",
-                QString("Checking scene '%1' vs current scene '%2' - isProgramScene: %3")
-                .arg(item->text()).arg(current_scene_name).arg(isProgramScene ? "true" : "false").toUtf8().constData());
-
-            obs_source_release(current_scene);
-        }
-
-        // Check preview scene in studio mode
-        if (obs_frontend_preview_program_mode_active()) {
-            obs_source_t *preview_scene = obs_frontend_get_current_preview_scene();
-            if (preview_scene) {
-                QString preview_scene_name = QString::fromUtf8(obs_source_get_name(preview_scene));
-                isPreviewScene = (item->text() == preview_scene_name);
-                obs_source_release(preview_scene);
-            }
-        }
-    }
-
-    if (isProgramScene || isPreviewScene) {
-        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Paint",
-            QString("Painting %1 scene '%2' with custom active highlighting")
-            .arg(isProgramScene ? "program" : "preview")
-            .arg(item->text()).toUtf8().constData());
-
-        // Custom active/preview scene highlighting - paint it ourselves
-        QColor activeColor;
-        if (isProgramScene) {
-            activeColor = QColor(26, 127, 207); // OBS active blue
-        } else if (isPreviewScene) {
-            activeColor = QColor(76, 175, 80); // OBS preview green
-        }
-
-        // Paint the active scene with custom background (similar to custom color logic)
-        painter->save();
-
-        // Fill background with active color
-        painter->fillRect(option.rect, activeColor);
-
-        // Create option for text painting
-        QStyleOptionViewItem textOption = option;
-        textOption.palette.setColor(QPalette::Text, Qt::white);
-        textOption.palette.setColor(QPalette::HighlightedText, Qt::white);
-
-        // Remove background brush to avoid double-drawing
-        textOption.backgroundBrush = QBrush();
-
-        // Remove selection and hover states to prevent Qt from overriding our colors
-        textOption.state &= ~QStyle::State_Selected;
-        textOption.state &= ~QStyle::State_MouseOver;
-
-        // Use the default delegate to paint the text/icon with our custom background
-        painter->restore();
-        QStyledItemDelegate::paint(painter, textOption, index);
-        return;
-    }
-
-    // SECOND: Check if item has a custom color (only for non-active scenes)
-    QVariant customColorData = item->data(Qt::UserRole + 1);
-    if (!customColorData.isValid()) {
-        // No custom color and not active scene, use default painting
-        QStyledItemDelegate::paint(painter, option, index);
-        return;
-    }
-
-    QColor customColor = customColorData.value<QColor>();
-    if (!customColor.isValid()) {
-        QStyledItemDelegate::paint(painter, option, index);
-        return;
-    }
-
-    // Dim the custom color to make it less bright (reduce saturation and increase darkness)
-    QColor dimmedColor = customColor;
-    if (dimmedColor.isValid()) {
-        // Convert to HSV to modify saturation and value
-        int h, s, v;
-        dimmedColor.getHsv(&h, &s, &v);
-
-        // Reduce saturation by 40% and reduce value (brightness) by 25%
-        s = qMax(0, static_cast<int>(s * 0.6));  // 40% less saturated
-        v = qMax(0, static_cast<int>(v * 0.75)); // 25% darker
-
-        dimmedColor.setHsv(h, s, v);
-    }
-
-    // Determine the background color based on state
-    QColor backgroundColor = dimmedColor;
-
-    if (option.state & QStyle::State_Selected) {
-        // Item is selected - brighten the dimmed custom color
-        backgroundColor = m_dock->getSelectionColor(dimmedColor);
-    } else if (option.state & QStyle::State_MouseOver) {
-        // Item is hovered - slightly brighten the dimmed custom color
-        backgroundColor = m_dock->getHoverColor(dimmedColor);
-    }
-
-    // Create a copy of the style option to modify
-    QStyleOptionViewItem customOption = option;
-
-    // Draw the background with our custom color
-    painter->save();
-    painter->fillRect(option.rect, backgroundColor);
-
-    // Get contrasting text color
-    QColor textColor = m_dock->getContrastTextColor(backgroundColor);
-
-    // Set up the palette for text rendering
-    customOption.palette.setColor(QPalette::Text, textColor);
-    customOption.palette.setColor(QPalette::HighlightedText, textColor);
-
-    // Clear the background drawing to avoid double-drawing
-    customOption.backgroundBrush = QBrush();
-
-    painter->restore();
-
-    // Draw the icon and text
-    painter->save();
-    painter->setPen(textColor);
-
-    // Get icon and text data
-    QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
-    QString text = index.data(Qt::DisplayRole).toString();
-
-    // Calculate layout
-    QRect contentRect = option.rect;
-    contentRect.setLeft(contentRect.left() + 4); // Add some padding
-
-    QRect iconRect;
-    QRect textRect = contentRect;
-
-    // Draw icon if it exists
-    if (!icon.isNull()) {
-        int iconSize = qMin(contentRect.height() - 4, 16); // Standard icon size with padding
-        iconRect = QRect(contentRect.left(),
-                        contentRect.top() + (contentRect.height() - iconSize) / 2,
-                        iconSize, iconSize);
-
-        // Adjust text rect to make room for icon
-        textRect.setLeft(iconRect.right() + 4);
-
-        // Draw the icon
-        icon.paint(painter, iconRect, Qt::AlignCenter);
-    }
-
-    // Apply font styling if needed
-    QFont font = option.font;
-    if (option.state & QStyle::State_Selected) {
-        font.setBold(true);
-    }
-    painter->setFont(font);
-
-    // Draw the text
-    painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
-
-    painter->restore();
-}
-
-QSize StreamUP::SceneOrganiser::CustomColorDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
-{
-    // Get the default size hint from the parent class
-    QSize size = QStyledItemDelegate::sizeHint(option, index);
-
-    // Get the current item height setting (percentage multiplier)
-    StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-    int heightPercentage = settings.sceneOrganiserItemHeight;
-
-    // Ensure heightPercentage is valid (minimum 50%)
-    if (heightPercentage < 50) {
-        heightPercentage = 100;
-    }
-
-    // Apply the multiplier to the height based on font metrics
-    // Use the font from the option to calculate the proper base height
-    QFontMetrics fm(option.font);
-    int baseHeight = fm.height() + 8; // Add some padding (4px top + 4px bottom)
-
-    // Apply the percentage multiplier
-    int adjustedHeight = (baseHeight * heightPercentage) / 100;
-
-    // Set the new height while keeping the width the same
-    size.setHeight(adjustedHeight);
-
-    return size;
-}
 
 void StreamUP::SceneOrganiser::SceneOrganiserDock::forceTreeViewRepaint()
 {
@@ -4753,7 +4271,12 @@ void StreamUP::SceneOrganiser::SceneOrganiserDock::onThemeChanged()
 
     // Update all dock instances efficiently
     for (auto* dock : s_dockInstances) {
-        if (dock) {
+        if (dock && dock->m_model) {
+            // Update theme state
+            dock->currentThemeIsDark = StreamUP::UIHelpers::IsOBSThemeDark();
+            // Update all icons with the new theme
+            dock->updateAllItemIcons(dock->m_model->invisibleRootItem());
+            // Schedule viewport repaint
             dock->scheduleOptimizedUpdate();
         }
     }

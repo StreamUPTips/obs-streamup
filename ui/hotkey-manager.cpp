@@ -30,6 +30,8 @@ static obs_hotkey_id copy_show_transition_hotkey_id = OBS_INVALID_HOTKEY_ID;
 static obs_hotkey_id copy_hide_transition_hotkey_id = OBS_INVALID_HOTKEY_ID;
 static obs_hotkey_id paste_show_transition_hotkey_id = OBS_INVALID_HOTKEY_ID;
 static obs_hotkey_id paste_hide_transition_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id group_selected_sources_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id toggle_visibility_selected_sources_hotkey_id = OBS_INVALID_HOTKEY_ID;
 
 //-------------------TRANSITION CLIPBOARD STORAGE-------------------
 struct TransitionData {
@@ -476,6 +478,30 @@ void HotkeyPasteHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 	StreamUP::NotificationManager::SendInfoNotification("Paste Hide Transition", "Hide transition pasted");
 }
 
+void HotkeyGroupSelectedSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+
+	if (!pressed)
+		return;
+
+	StreamUP::SourceManager::GroupSelectedSources();
+}
+
+void HotkeyToggleVisibilitySelectedSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	UNUSED_PARAMETER(id);
+	UNUSED_PARAMETER(hotkey);
+	UNUSED_PARAMETER(data);
+
+	if (!pressed)
+		return;
+
+	StreamUP::SourceManager::ToggleVisibilitySelectedSources();
+}
+
 //-------------------HOTKEY MANAGEMENT-------------------
 void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 {
@@ -498,6 +524,8 @@ void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "copy_hide_transition_hotkey", copy_hide_transition_hotkey_id);
 		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "paste_show_transition_hotkey", paste_show_transition_hotkey_id);
 		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "paste_hide_transition_hotkey", paste_hide_transition_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "group_selected_sources_hotkey", group_selected_sources_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "toggle_visibility_selected_sources_hotkey", toggle_visibility_selected_sources_hotkey_id);
 	} else {
 		// load hotkeys
 		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "refresh_browser_sources_hotkey", refresh_browser_sources_hotkey_id);
@@ -515,6 +543,8 @@ void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "copy_hide_transition_hotkey", copy_hide_transition_hotkey_id);
 		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "paste_show_transition_hotkey", paste_show_transition_hotkey_id);
 		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "paste_hide_transition_hotkey", paste_hide_transition_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "group_selected_sources_hotkey", group_selected_sources_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "toggle_visibility_selected_sources_hotkey", toggle_visibility_selected_sources_hotkey_id);
 	}
 }
 
@@ -551,6 +581,10 @@ void RegisterHotkeys()
 											HotkeyPasteShowTransition, nullptr);
 	paste_hide_transition_hotkey_id = obs_hotkey_register_frontend("streamup_paste_hide_transition", "StreamUP: Paste Hide Transition",
 											HotkeyPasteHideTransition, nullptr);
+	group_selected_sources_hotkey_id = obs_hotkey_register_frontend("streamup_group_selected_sources", "StreamUP: Group Selected Sources",
+											HotkeyGroupSelectedSources, nullptr);
+	toggle_visibility_selected_sources_hotkey_id = obs_hotkey_register_frontend("streamup_toggle_visibility_selected_sources", "StreamUP: Toggle Visibility of Selected Sources",
+											HotkeyToggleVisibilitySelectedSources, nullptr);
 }
 
 void UnregisterHotkeys()
@@ -570,6 +604,8 @@ void UnregisterHotkeys()
 	obs_hotkey_unregister(copy_hide_transition_hotkey_id);
 	obs_hotkey_unregister(paste_show_transition_hotkey_id);
 	obs_hotkey_unregister(paste_hide_transition_hotkey_id);
+	obs_hotkey_unregister(group_selected_sources_hotkey_id);
+	obs_hotkey_unregister(toggle_visibility_selected_sources_hotkey_id);
 }
 
 void ResetAllHotkeys()
@@ -593,6 +629,8 @@ void ResetAllHotkeys()
 	obs_hotkey_load(copy_hide_transition_hotkey_id, emptyArray);
 	obs_hotkey_load(paste_show_transition_hotkey_id, emptyArray);
 	obs_hotkey_load(paste_hide_transition_hotkey_id, emptyArray);
+	obs_hotkey_load(group_selected_sources_hotkey_id, emptyArray);
+	obs_hotkey_load(toggle_visibility_selected_sources_hotkey_id, emptyArray);
 
 	obs_data_array_release(emptyArray);
 
@@ -631,6 +669,10 @@ obs_hotkey_id GetHotkeyId(const char* hotkeyName)
 		return paste_show_transition_hotkey_id;
 	else if (strcmp(hotkeyName, "streamup_paste_hide_transition") == 0)
 		return paste_hide_transition_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_group_selected_sources") == 0)
+		return group_selected_sources_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_toggle_visibility_selected_sources") == 0)
+		return toggle_visibility_selected_sources_hotkey_id;
 
 	return OBS_INVALID_HOTKEY_ID;
 }
