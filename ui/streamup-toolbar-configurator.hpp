@@ -10,7 +10,6 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QGroupBox>
-#include <QLineEdit>
 #include <QFileDialog>
 #include <QComboBox>
 #include <QCheckBox>
@@ -18,8 +17,6 @@
 #include <QSplitter>
 #include <QTabWidget>
 #include <QMetaType>
-#include <QMenu>
-#include <QAction>
 #include "streamup-toolbar-config.hpp"
 
 QT_BEGIN_NAMESPACE
@@ -50,7 +47,6 @@ private slots:
     void onAddHotkeyButton();
     void onAddSeparator();
     void onAddCustomSpacer();
-    void onAddGroup();
     void onRemoveItem();
     void onMoveUp();
     void onMoveDown();
@@ -61,8 +57,6 @@ private slots:
     void onSave();
     void onCancel();
     void onSpacerSettingsChanged();
-    void onItemContextMenu(const QPoint& pos);
-    void onMoveToGroup();
 
 private:
     void setupUI();
@@ -98,9 +92,6 @@ private:
     
     QPushButton* addSeparatorButton;
     
-    QLineEdit* groupNameLineEdit;
-    QPushButton* addGroupButton;
-    
     // Right panel - Current configuration
     QWidget* rightPanel;
     QVBoxLayout* rightLayout;
@@ -132,7 +123,6 @@ public:
 
 signals:
     void itemMoved(int from, int to);
-    void itemMovedToGroup(int from, int groupIndex);
 
 protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
@@ -145,8 +135,6 @@ protected:
 private:
     int dragStartIndex;
     int dropIndicatorIndex;
-    int groupDropIndex; // Index of group being hovered over (-1 if none)
-    bool isGroupDrop; // True if we're dropping INTO a group
 };
 
 } // namespace StreamUP
