@@ -25,6 +25,7 @@
 #include <QPixmap>
 #include <QIcon>
 #include <QColor>
+#include <QStyle>
 #include <QFile>
 #include <QTextStream>
 #include <QtSvg/QSvgRenderer>
@@ -199,7 +200,7 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
 
     // Setup auto-save timer
     m_saveTimer->setSingleShot(true);
-    m_saveTimer->setInterval(1000); // Save 1 second after last change
+    m_saveTimer->setInterval(300); // Save 300ms after last change for responsive saving
     connect(m_saveTimer, &QTimer::timeout, this, &SceneOrganiserDock::SaveConfiguration);
 
 
@@ -273,6 +274,10 @@ void SceneOrganiserDock::setupUI()
     // Create tree view - SceneTreeView only for event handling, no custom styling
     m_treeView = new SceneTreeView(this);
     m_treeView->setModel(m_proxyModel);
+
+    // Install custom delegate to handle color painting (overrides theme stylesheet)
+    CustomColorDelegate *colorDelegate = new CustomColorDelegate(this, m_treeView);
+    m_treeView->setItemDelegate(colorDelegate);
 
     // Set object name to match OBS scenes list for proper theme styling
     // NOTE: Using "scenes" will apply OBS theme styling for the native scenes dock
@@ -541,7 +546,7 @@ void SceneOrganiserDock::setupContextMenu()
                     m_model->invisibleRootItem()->appendRow(child);
                 }
                 m_model->removeRow(item->row(), item->parent() ? item->parent()->index() : QModelIndex());
-                m_saveTimer->start();
+                SaveConfiguration(); // Immediate save on folder deletion
             }
         }
     });
@@ -1413,9 +1418,9 @@ void SceneOrganiserDock::onRemoveClicked()
                 StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Removal",
                     QString("Deleted scene from OBS and removed from dock: %1").arg(itemName).toUtf8().constData());
 
-                // Clean up any empty folders and save
+                // Clean up any empty folders and save immediately
                 m_model->cleanupEmptyItems();
-                m_saveTimer->start();
+                SaveConfiguration(); // Immediate save on deletion
             }
         }
 
@@ -1424,7 +1429,7 @@ void SceneOrganiserDock::onRemoveClicked()
             QStandardItem *parent = item->parent();
             if (!parent) parent = m_model->invisibleRootItem();
             parent->removeRow(item->row());
-            m_saveTimer->start();
+            SaveConfiguration(); // Immediate save on folder deletion
         }
         // For scenes, the tree will be updated automatically by OBS events
     }
@@ -1639,15 +1644,59 @@ void SceneOrganiserDock::onClearCustomColorClicked()
 
 void SceneOrganiserDock::applyCustomColorToItem(QStandardItem *item, const QColor &color)
 {
-    // DISABLED - No custom styling
-    Q_UNUSED(item);
-    Q_UNUSED(color);
+    if (!item || !color.isValid()) {
+        return;
+    }
+
+    // Set background color
+    item->setData(QBrush(color), Qt::BackgroundRole);
+
+    // Calculate and set contrasting text color
+    QColor textColor = getContrastTextColor(color);
+    item->setData(QBrush(textColor), Qt::ForegroundRole);
 }
 
 void SceneOrganiserDock::clearCustomColorFromItem(QStandardItem *item)
 {
-    // DISABLED - No custom styling
-    Q_UNUSED(item);
+    if (!item) {
+        return;
+    }
+
+    // Clear background and foreground colors to use default theme colors
+    item->setData(QVariant(), Qt::BackgroundRole);
+    item->setData(QVariant(), Qt::ForegroundRole);
+}
+
+void SceneOrganiserDock::applyAllCustomColors(QStandardItem *parent)
+{
+    // If no parent provided, start from root
+    if (!parent) {
+        parent = m_model->invisibleRootItem();
+    }
+
+    if (!parent) {
+        return;
+    }
+
+    // Apply colors recursively to all items in the tree
+    for (int i = 0; i < parent->rowCount(); ++i) {
+        QStandardItem *item = parent->child(i);
+        if (!item) continue;
+
+        // Check if this item has a custom color stored
+        QVariant colorData = item->data(Qt::UserRole + 1);
+        if (colorData.isValid()) {
+            QColor color = colorData.value<QColor>();
+            if (color.isValid()) {
+                applyCustomColorToItem(item, color);
+            }
+        }
+
+        // Recursively apply to children
+        if (item->hasChildren()) {
+            applyAllCustomColors(item);
+        }
+    }
 }
 
 QColor SceneOrganiserDock::getContrastTextColor(const QColor &backgroundColor)
@@ -2005,6 +2054,7 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->LoadConfiguration();
             dock->m_model->loadSceneTree();
             dock->refreshSceneList();
+            dock->applyAllCustomColors();
 
             // Restore folder expansion state after tree is fully loaded
             QTimer::singleShot(500, dock, [dock]() {
@@ -2031,6 +2081,7 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->LoadConfiguration();
             dock->m_model->loadSceneTree();
             dock->refreshSceneList();
+            dock->applyAllCustomColors();
 
             // Restore folder expansion state after tree is fully loaded
             QTimer::singleShot(500, dock, [dock]() {
@@ -2251,6 +2302,7 @@ void SceneOrganiserDock::LoadConfiguration()
                                 dock->LoadConfiguration();
                                 dock->m_model->loadSceneTree();
                                 dock->m_model->updateTree();
+                                dock->applyAllCustomColors();
                             }
                         }
 
@@ -3047,6 +3099,10 @@ bool SceneTreeModel::setData(const QModelIndex &index, const QVariant &value, in
                 QString("Renamed scene from '%1' to '%2'").arg(oldName, newName).toUtf8().constData());
 
             emit modelChanged();
+
+            // Immediately save after rename to ensure changes persist
+            saveSceneTree();
+
             return true;
         }
     } else if (item->type() == SceneFolderItem::UserType + 1) {
@@ -3057,6 +3113,10 @@ bool SceneTreeModel::setData(const QModelIndex &index, const QVariant &value, in
             QString("Renamed folder from '%1' to '%2'").arg(oldName, newName).toUtf8().constData());
 
         emit modelChanged();
+
+        // Immediately save after rename to ensure changes persist
+        saveSceneTree();
+
         return true;
     }
 
@@ -3165,6 +3225,17 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
             QVariant customColor = originalItem->data(Qt::UserRole + 1);
             if (customColor.isValid()) {
                 newItem->setData(customColor, Qt::UserRole + 1);
+                // Apply the color visually
+                QColor color = customColor.value<QColor>();
+                if (color.isValid()) {
+                    // Get the dock instance to use its color helper methods
+                    for (auto dock : SceneOrganiserDock::s_dockInstances) {
+                        if (dock && dock->m_model == this) {
+                            dock->applyCustomColorToItem(newItem, color);
+                            break;
+                        }
+                    }
+                }
             }
 
             StreamUP::DebugLogger::LogDebug("SceneOrganiser", "DragDrop",
@@ -3210,6 +3281,10 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
     }
 
     emit modelChanged();
+
+    // Immediately save after drag & drop to ensure changes persist
+    saveSceneTree();
+
     return true;
 }
 
@@ -3515,6 +3590,17 @@ void SceneTreeModel::moveSceneFolder(QStandardItem *item, int row, QStandardItem
     QVariant customColor = item->data(Qt::UserRole + 1);
     if (customColor.isValid()) {
         newFolder->setData(customColor, Qt::UserRole + 1);
+        // Apply the color visually
+        QColor color = customColor.value<QColor>();
+        if (color.isValid()) {
+            // Get the dock instance to use its color helper methods
+            for (auto dock : SceneOrganiserDock::s_dockInstances) {
+                if (dock && dock->m_model == this) {
+                    dock->applyCustomColorToItem(newFolder, color);
+                    break;
+                }
+            }
+        }
     }
 
     parentItem->insertRow(row, newFolder);
@@ -4280,6 +4366,97 @@ void StreamUP::SceneOrganiser::SceneOrganiserDock::onThemeChanged()
             dock->scheduleOptimizedUpdate();
         }
     }
+}
+
+//==============================================================================
+// CustomColorDelegate Implementation
+//==============================================================================
+
+StreamUP::SceneOrganiser::CustomColorDelegate::CustomColorDelegate(SceneOrganiserDock *dock, QObject *parent)
+    : QStyledItemDelegate(parent), m_dock(dock)
+{
+}
+
+void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    if (!index.isValid() || !m_dock) {
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+
+    // Get the item to check for custom color
+    QStandardItemModel *model = qobject_cast<QStandardItemModel*>(m_dock->m_model);
+    if (!model) {
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+
+    // Map from proxy model to source model if needed
+    QModelIndex sourceIndex = index;
+    if (m_dock->m_proxyModel) {
+        sourceIndex = m_dock->m_proxyModel->mapToSource(index);
+    }
+
+    QStandardItem *item = model->itemFromIndex(sourceIndex);
+    if (!item) {
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+
+    // Check if this item has a custom color
+    QVariant colorData = item->data(Qt::UserRole + 1);
+    if (!colorData.isValid()) {
+        // No custom color, use default painting
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+
+    QColor customColor = colorData.value<QColor>();
+    if (!customColor.isValid()) {
+        // Invalid color, use default painting
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+
+    // Calculate the appropriate background color based on state
+    QColor bgColor = customColor;
+    if (option.state & QStyle::State_Selected) {
+        bgColor = m_dock->getSelectionColor(customColor);
+    } else if (option.state & QStyle::State_MouseOver) {
+        bgColor = m_dock->getHoverColor(customColor);
+    }
+
+    // Calculate contrasting text color
+    QColor textColor = m_dock->getContrastTextColor(bgColor);
+
+    // Save painter state
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing, true);
+
+    // Draw rounded rectangle background with custom color
+    QRect rect = option.rect;
+    // Add some padding to match theme styling
+    rect.adjust(2, 1, -2, -1);
+
+    // Draw rounded rectangle (radius 4 matches most OBS themes)
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(bgColor);
+    painter->drawRoundedRect(rect, 4, 4);
+
+    painter->restore();
+
+    // Now let the base class paint the content (icon, text) with custom text color
+    QStyleOptionViewItem modifiedOption = option;
+    modifiedOption.palette.setColor(QPalette::Text, textColor);
+    modifiedOption.palette.setColor(QPalette::HighlightedText, textColor);
+
+    // Tell the style not to draw the background (we already did it)
+    modifiedOption.backgroundBrush = QBrush(Qt::NoBrush);
+
+    // Draw without focus rect to avoid visual artifacts
+    modifiedOption.state &= ~QStyle::State_HasFocus;
+
+    QStyledItemDelegate::paint(painter, modifiedOption, index);
 }
 
 #include "scene-organiser-dock.moc"
