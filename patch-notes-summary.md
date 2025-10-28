@@ -1,3 +1,12 @@
+# StreamUP v2.1.5 - Patch Update
+
+## Improvements & Bug Fixes
+- **Scene Organiser** - Fixed saving and colour issues in Scene Organiser
+- **Toolbar** - Removed temporary Group Toolbar functionality
+- **UI** - Fixed separator bug
+
+---
+
 # StreamUP v2.1.4 - Patch Update
 
 ## New Features
