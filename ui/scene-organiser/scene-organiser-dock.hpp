@@ -33,6 +33,7 @@ namespace SceneOrganiser {
 class SceneTreeModel;
 class SceneTreeView;
 class SceneOrganiserDock;
+class CustomColorDelegate;
 
 enum class CanvasType {
     Normal
@@ -128,8 +129,6 @@ private:
     void updateActiveSceneHighlightRecursive(QStandardItem *parent, const QString &activeSceneName, const QString &previewSceneName = QString());
     void onSetCustomColorClicked();
     void onClearCustomColorClicked();
-    void applyCustomColorToItem(QStandardItem *item, const QColor &color);
-    void clearCustomColorFromItem(QStandardItem *item);
     void updateTreeViewStylesheet();
     void onToggleLockClicked();
     void setLocked(bool locked);
@@ -143,6 +142,11 @@ public:
     QColor adjustColorBrightness(const QColor &color, float factor);
     QColor getSelectionColor(const QColor &baseColor);
     QColor getHoverColor(const QColor &baseColor);
+
+    // Color application methods (public for SceneTreeModel access during drag & drop)
+    void applyCustomColorToItem(QStandardItem *item, const QColor &color);
+    void clearCustomColorFromItem(QStandardItem *item);
+    void applyAllCustomColors(QStandardItem *parent = nullptr);
 
     // Force tree view repaint (used after drag and drop)
     void forceTreeViewRepaint();
@@ -369,6 +373,19 @@ private:
     void updateFromObs();
 
     obs_weak_source_t* m_weakSource;
+};
+
+// Custom delegate to paint background colors (overrides theme stylesheet)
+class CustomColorDelegate : public QStyledItemDelegate {
+    Q_OBJECT
+
+public:
+    explicit CustomColorDelegate(SceneOrganiserDock *dock, QObject *parent = nullptr);
+
+    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+
+private:
+    SceneOrganiserDock *m_dock;
 };
 
 } // namespace SceneOrganiser
