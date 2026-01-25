@@ -335,6 +335,39 @@ static QString GetFullSourceName(const QString& elidedText)
 }
 
 /**
+ * @brief Style the VolumeName button with rounded corners and better hover
+ */
+static void StyleVolumeNameButton(QAbstractButton* button)
+{
+    // Apply rounded corners, remove border on hover, add top margin
+    // Use more padding to center text vertically
+    QString style = R"(
+        VolumeName {
+            border-radius: 8px;
+            margin-top: 4px;
+            border: none;
+            padding: 4px 6px;
+        }
+        VolumeName:hover {
+            border: none;
+            outline: none;
+        }
+        VolumeName:focus {
+            border: none;
+            outline: none;
+        }
+    )";
+
+    button->setStyleSheet(style);
+
+    // Also center the internal label vertically
+    QLabel* label = button->findChild<QLabel*>();
+    if (label) {
+        label->setAlignment(Qt::AlignCenter);
+    }
+}
+
+/**
  * @brief Enable multi-line source names in a VolumeControl
  */
 static void EnableMultiLineName(QWidget* volumeControl)
@@ -355,6 +388,9 @@ static void EnableMultiLineName(QWidget* volumeControl)
             if (button->property("streamup_multiline").toBool()) {
                 return;
             }
+
+            // Apply styling (rounded corners, no border on hover, margin)
+            StyleVolumeNameButton(button);
 
             // Find the internal QLabel
             QLabel* nameLabel = button->findChild<QLabel*>();
