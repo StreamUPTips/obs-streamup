@@ -453,6 +453,11 @@ void ApplyStatsWindowEnhancements(QWidget* statsWidget)
 {
     if (!statsWidget) return;
 
+    // Only apply if StreamUP theme is active
+    if (!IsUsingStreamUPTheme()) {
+        return;
+    }
+
     // Skip if already processed
     if (statsWidget->property("streamup_stats_enhanced").toBool()) {
         return;
@@ -538,6 +543,11 @@ void ApplyStatsWindowEnhancements(QWidget* statsWidget)
 void ApplyMainWindowPadding(QMainWindow* mainWindow)
 {
     if (!mainWindow) return;
+
+    // Only apply if StreamUP theme is active
+    if (!IsUsingStreamUPTheme()) {
+        return;
+    }
 
     // Skip if already processed
     if (mainWindow->property("streamup_padding_applied").toBool()) {
