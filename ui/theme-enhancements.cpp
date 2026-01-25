@@ -45,8 +45,8 @@ protected:
             QWidget* statusBar = qobject_cast<QWidget*>(watched);
             if (statusBar && m_mainWindow) {
                 bool visible = (event->type() == QEvent::Show);
-                int bottomPadding = visible ? 0 : 8;
-                m_mainWindow->setContentsMargins(8, 0, 8, bottomPadding);
+                int bottomPadding = visible ? 0 : 9;
+                m_mainWindow->setContentsMargins(9, 0, 9, bottomPadding);
                 blog(LOG_INFO, "[StreamUP] Theme Enhancement: Status bar %s, updated bottom padding to %d",
                      visible ? "shown" : "hidden", bottomPadding);
             }
@@ -428,17 +428,82 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
     // Find the status bar
     QStatusBar* statusBar = mainWindow->statusBar();
     bool statusBarVisible = statusBar && statusBar->isVisible();
-    int bottomPadding = statusBarVisible ? 0 : 8;
+    int bottomPadding = statusBarVisible ? 0 : 9;
 
-    // Set content margins on the main window's central widget area
-    // Use 8px to match gap between docks
-    mainWindow->setContentsMargins(8, 0, 8, bottomPadding);
+    // Set content margins on the main window edges (9px to match dock gaps)
+    mainWindow->setContentsMargins(9, 0, 9, bottomPadding);
 
     // Install event filter on status bar to watch for visibility changes
     if (statusBar && !g_statusBarFilter) {
         g_statusBarFilter = new StatusBarFilter(mainWindow);
         statusBar->installEventFilter(g_statusBarFilter);
         blog(LOG_INFO, "[StreamUP] Theme Enhancement: Installed status bar visibility filter");
+    }
+
+    // Adjust central widget layout spacing to match dock spacing
+    QWidget* centralWidget = mainWindow->centralWidget();
+    if (centralWidget) {
+        QLayout* layout = centralWidget->layout();
+        if (layout) {
+            layout->setSpacing(7); // Gap between preview area and context bar
+            layout->setContentsMargins(0, 0, 0, 0);
+            blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted central widget layout spacing");
+        }
+
+        // Find canvasEditor and adjust its layout (previewLayout)
+        QWidget* canvasEditor = centralWidget->findChild<QWidget*>("canvasEditor");
+        if (canvasEditor) {
+            QLayout* canvasLayout = canvasEditor->layout();
+            if (canvasLayout) {
+                canvasLayout->setSpacing(0);
+                canvasLayout->setContentsMargins(0, 0, 0, 0);
+                blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted canvas editor layout");
+            }
+        }
+
+        // Find previewContainer and adjust its layout
+        QWidget* previewContainer = centralWidget->findChild<QWidget*>("previewContainer");
+        if (previewContainer) {
+            previewContainer->setContentsMargins(0, 0, 0, 0);
+            QLayout* previewLayout = previewContainer->layout();
+            if (previewLayout) {
+                previewLayout->setSpacing(0);
+                previewLayout->setContentsMargins(0, 0, 0, 0);
+                blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted preview container layout");
+            }
+
+            // Find and adjust gridLayout inside previewContainer
+            QGridLayout* gridLayout = previewContainer->findChild<QGridLayout*>("gridLayout");
+            if (gridLayout) {
+                gridLayout->setSpacing(0);
+                gridLayout->setContentsMargins(0, 0, 0, 0);
+                blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted preview grid layout");
+            }
+
+            // Find previewXContainer (zoom controls bar) and minimize its spacing
+            QWidget* previewXContainer = previewContainer->findChild<QWidget*>("previewXContainer");
+            if (previewXContainer) {
+                previewXContainer->setContentsMargins(0, 0, 0, 0);
+                QLayout* xLayout = previewXContainer->layout();
+                if (xLayout) {
+                    xLayout->setSpacing(0);
+                    xLayout->setContentsMargins(0, 0, 0, 0);
+                }
+                blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted previewXContainer layout");
+            }
+        }
+
+        // Find contextContainer and adjust its margins
+        QWidget* contextContainer = centralWidget->findChild<QWidget*>("contextContainer");
+        if (contextContainer) {
+            contextContainer->setContentsMargins(0, 0, 0, 0);
+            QLayout* contextLayout = contextContainer->layout();
+            if (contextLayout) {
+                // Keep left/right padding for content, remove top/bottom
+                contextLayout->setContentsMargins(10, 0, 10, 0);
+            }
+            blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted context container margins");
+        }
     }
 
     mainWindow->setProperty("streamup_padding_applied", true);
