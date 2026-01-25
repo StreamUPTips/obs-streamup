@@ -4,6 +4,8 @@
 #include <QWidget>
 #include <QEvent>
 
+class QMainWindow;
+
 namespace StreamUP {
 namespace ThemeEnhancements {
 
@@ -73,6 +75,13 @@ void ApplyStatsDockObjectNames();
  * Centers the top stats grid horizontally and applies other styling.
  */
 void ApplyStatsWindowEnhancements(QWidget* statsWidget);
+
+/**
+ * @brief Add padding around the main window edges
+ *
+ * Creates space between docks and window edges for visible rounded corners.
+ */
+void ApplyMainWindowPadding(QMainWindow* mainWindow);
 
 /**
  * @brief Refresh theme enhancements
