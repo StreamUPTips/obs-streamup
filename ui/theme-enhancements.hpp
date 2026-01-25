@@ -95,5 +95,29 @@ void RefreshThemeEnhancements();
  */
 bool IsUsingStreamUPTheme();
 
+/**
+ * @brief Apply enhancements to Advanced Audio Properties dialog
+ *
+ * Sets monitoring type property on comboboxes so CSS can show different icons
+ * based on the monitoring mode (None, Monitor Only, Monitor and Output).
+ */
+void ApplyAdvAudioEnhancements(QWidget* advAudioDialog);
+
+/**
+ * @brief Event filter for monitoring combobox changes in Advanced Audio dialog
+ *
+ * Updates the monitoring type property when user changes the combobox,
+ * allowing CSS to display the appropriate icon.
+ */
+class AdvAudioMonitoringFilter : public QObject {
+    Q_OBJECT
+
+public:
+    explicit AdvAudioMonitoringFilter(QObject* parent = nullptr);
+
+public slots:
+    void onMonitoringTypeChanged(int index);
+};
+
 } // namespace ThemeEnhancements
 } // namespace StreamUP

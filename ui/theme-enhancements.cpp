@@ -14,6 +14,7 @@
 #include <QScrollArea>
 #include <QStatusBar>
 #include <QApplication>
+#include <QComboBox>
 #include <QPainter>
 #include <QPainterPath>
 #include <QRegion>
@@ -338,6 +339,10 @@ bool AppWidgetFilter::eventFilter(QObject* watched, QEvent* event)
     QString className = QString::fromUtf8(widget->metaObject()->className());
     if (className == "OBSBasicStats") {
         ApplyStatsWindowEnhancements(widget);
+    }
+    // Check if this is the Advanced Audio Properties dialog
+    else if (widget->objectName() == "OBSAdvAudio" || className == "OBSBasicAdvAudio") {
+        ApplyAdvAudioEnhancements(widget);
     }
     // Also scan top-level windows when they're shown
     else if (widget->isWindow()) {
@@ -670,6 +675,109 @@ void RefreshThemeEnhancements()
             ApplyColorPreviewStyling(widget);
         }
     }
+}
+
+// ============================================================================
+// Advanced Audio Properties Enhancements
+// ============================================================================
+
+// Global filter instance for monitoring comboboxes
+static AdvAudioMonitoringFilter* g_advAudioFilter = nullptr;
+
+/**
+ * @brief Helper to update the monitoring type property on a combobox
+ *
+ * Sets a Qt property that CSS can target with selectors like:
+ * QComboBox[monitoringType="0"] - Monitor Off
+ * QComboBox[monitoringType="1"] - Monitor Only
+ * QComboBox[monitoringType="2"] - Monitor and Output
+ */
+static void updateMonitoringTypeProperty(QComboBox* combo)
+{
+    if (!combo) return;
+
+    int currentIndex = combo->currentIndex();
+    QVariant data = combo->currentData();
+
+    // Use the data value (monitoring type enum) as the property
+    int monitoringType = data.isValid() ? data.toInt() : currentIndex;
+    combo->setProperty("monitoringType", monitoringType);
+
+    // Force style recalculation
+    QString qss = combo->styleSheet();
+    combo->setStyleSheet("/* */");
+    combo->setStyleSheet(qss);
+}
+
+AdvAudioMonitoringFilter::AdvAudioMonitoringFilter(QObject* parent)
+    : QObject(parent)
+{
+}
+
+void AdvAudioMonitoringFilter::onMonitoringTypeChanged(int index)
+{
+    Q_UNUSED(index);
+
+    // Get the combobox that sent the signal
+    QComboBox* combo = qobject_cast<QComboBox*>(sender());
+    if (combo) {
+        updateMonitoringTypeProperty(combo);
+    }
+}
+
+void ApplyAdvAudioEnhancements(QWidget* advAudioDialog)
+{
+    if (!advAudioDialog) return;
+
+    // Only apply if StreamUP theme is active
+    if (!IsUsingStreamUPTheme()) {
+        return;
+    }
+
+    // Skip if already processed
+    if (advAudioDialog->property("streamup_advadio_enhanced").toBool()) {
+        return;
+    }
+
+    // Create filter if needed
+    if (!g_advAudioFilter) {
+        g_advAudioFilter = new AdvAudioMonitoringFilter();
+    }
+
+    // Find all QComboBox widgets in the dialog
+    // The monitoring type comboboxes have 3 items (None, Monitor Only, Monitor and Output)
+    QList<QComboBox*> combos = advAudioDialog->findChildren<QComboBox*>();
+
+    for (QComboBox* combo : combos) {
+        if (!combo) continue;
+
+        // Check if this looks like a monitoring type combobox (3 items with specific data values)
+        if (combo->count() == 3) {
+            // Verify the data values match monitoring types (0, 1, 2)
+            bool isMonitoringCombo = true;
+            for (int i = 0; i < 3; i++) {
+                QVariant data = combo->itemData(i);
+                if (!data.isValid() || data.toInt() != i) {
+                    isMonitoringCombo = false;
+                    break;
+                }
+            }
+
+            if (isMonitoringCombo) {
+                // Set initial property value
+                updateMonitoringTypeProperty(combo);
+
+                // Connect to changes if not already connected
+                if (!combo->property("streamup_monitoring_connected").toBool()) {
+                    combo->setProperty("streamup_monitoring_connected", true);
+                    QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                                   g_advAudioFilter, &AdvAudioMonitoringFilter::onMonitoringTypeChanged);
+                }
+            }
+        }
+    }
+
+    advAudioDialog->setProperty("streamup_advadio_enhanced", true);
 }
 
 } // namespace ThemeEnhancements
