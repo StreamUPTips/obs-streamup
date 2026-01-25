@@ -13,6 +13,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QScrollArea>
+#include <QStatusBar>
 #include <QApplication>
 
 #include "moc_theme-enhancements.cpp"
@@ -29,6 +30,35 @@ static const int COLOR_PREVIEW_RADIUS = 10;
 // Global filter instances
 static ColorPreviewFilter* g_colorFilter = nullptr;
 static AppWidgetFilter* g_appFilter = nullptr;
+
+// Status bar visibility filter
+class StatusBarFilter : public QObject {
+public:
+    explicit StatusBarFilter(QMainWindow* mainWin, QObject* parent = nullptr)
+        : QObject(parent), m_mainWindow(mainWin) {}
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() == QEvent::Show || event->type() == QEvent::Hide) {
+            // Status bar visibility changed - update padding
+            QWidget* statusBar = qobject_cast<QWidget*>(watched);
+            if (statusBar && m_mainWindow) {
+                bool visible = (event->type() == QEvent::Show);
+                int bottomPadding = visible ? 0 : 8;
+                m_mainWindow->setContentsMargins(8, 0, 8, bottomPadding);
+                blog(LOG_INFO, "[StreamUP] Theme Enhancement: Status bar %s, updated bottom padding to %d",
+                     visible ? "shown" : "hidden", bottomPadding);
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    QMainWindow* m_mainWindow;
+};
+
+static StatusBarFilter* g_statusBarFilter = nullptr;
 
 // Cached theme check result (checked once at startup)
 static bool g_isStreamUPTheme = false;
@@ -380,6 +410,41 @@ void ApplyStatsWindowEnhancements(QWidget* statsWidget)
     statsWidget->setProperty("streamup_stats_enhanced", true);
 }
 
+/**
+ * @brief Add padding around the main window edges
+ *
+ * This creates space between the docks and the window edges so
+ * the rounded corners of the docks are fully visible.
+ */
+void ApplyMainWindowPadding(QMainWindow* mainWindow)
+{
+    if (!mainWindow) return;
+
+    // Skip if already processed
+    if (mainWindow->property("streamup_padding_applied").toBool()) {
+        return;
+    }
+
+    // Find the status bar
+    QStatusBar* statusBar = mainWindow->statusBar();
+    bool statusBarVisible = statusBar && statusBar->isVisible();
+    int bottomPadding = statusBarVisible ? 0 : 8;
+
+    // Set content margins on the main window's central widget area
+    // Use 8px to match gap between docks
+    mainWindow->setContentsMargins(8, 0, 8, bottomPadding);
+
+    // Install event filter on status bar to watch for visibility changes
+    if (statusBar && !g_statusBarFilter) {
+        g_statusBarFilter = new StatusBarFilter(mainWindow);
+        statusBar->installEventFilter(g_statusBarFilter);
+        blog(LOG_INFO, "[StreamUP] Theme Enhancement: Installed status bar visibility filter");
+    }
+
+    mainWindow->setProperty("streamup_padding_applied", true);
+    blog(LOG_INFO, "[StreamUP] Theme Enhancement: Applied main window padding (bottom: %d)", bottomPadding);
+}
+
 void ApplyThemeEnhancements()
 {
     // Only apply if StreamUP theme is active
@@ -419,6 +484,9 @@ void ApplyThemeEnhancements()
                 ApplyStatsWindowEnhancements(widget);
             }
         }
+
+        // Add padding around the main window edges
+        ApplyMainWindowPadding(mainWindow);
     }
 
     blog(LOG_INFO, "[StreamUP] Theme Enhancement: Registered theme enhancements");
