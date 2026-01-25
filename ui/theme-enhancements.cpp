@@ -15,6 +15,10 @@
 #include <QScrollArea>
 #include <QStatusBar>
 #include <QApplication>
+#include <QPainter>
+#include <QPainterPath>
+#include <QRegion>
+#include <QPainterPath>
 
 #include "moc_theme-enhancements.cpp"
 
@@ -59,6 +63,122 @@ private:
 };
 
 static StatusBarFilter* g_statusBarFilter = nullptr;
+
+/**
+ * @brief Corner overlay widget that creates the illusion of rounded corners
+ *
+ * This widget paints a quarter-circle cutout in the background color,
+ * creating the appearance of rounded corners on the underlying widget.
+ */
+class CornerOverlay : public QWidget {
+public:
+    enum Corner { TopLeft, TopRight, BottomLeft, BottomRight };
+
+    CornerOverlay(Corner corner, int radius, const QColor& bgColor, QWidget* parent = nullptr)
+        : QWidget(parent), m_corner(corner), m_radius(radius), m_bgColor(bgColor)
+    {
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        setFixedSize(radius, radius);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing);
+
+        // Fill entire widget with background color
+        painter.fillRect(rect(), m_bgColor);
+
+        // Create path for the quarter-circle cutout
+        QPainterPath path;
+        path.addRect(rect());
+
+        QPainterPath circlePath;
+        QRectF circleRect;
+
+        switch (m_corner) {
+        case TopLeft:
+            circleRect = QRectF(0, 0, m_radius * 2, m_radius * 2);
+            break;
+        case TopRight:
+            circleRect = QRectF(-m_radius, 0, m_radius * 2, m_radius * 2);
+            break;
+        case BottomLeft:
+            circleRect = QRectF(0, -m_radius, m_radius * 2, m_radius * 2);
+            break;
+        case BottomRight:
+            circleRect = QRectF(-m_radius, -m_radius, m_radius * 2, m_radius * 2);
+            break;
+        }
+
+        circlePath.addEllipse(circleRect);
+
+        // Subtract the circle from the rectangle to create the cutout
+        QPainterPath cutout = path.subtracted(circlePath);
+
+        // Clear the area first, then draw the cutout shape
+        painter.setCompositionMode(QPainter::CompositionMode_Source);
+        painter.fillRect(rect(), Qt::transparent);
+        painter.fillPath(cutout, m_bgColor);
+    }
+
+private:
+    Corner m_corner;
+    int m_radius;
+    QColor m_bgColor;
+};
+
+/**
+ * @brief Event filter to reposition corner overlays on preview resize
+ */
+class PreviewCornerFilter : public QObject {
+public:
+    explicit PreviewCornerFilter(int radius, QObject* parent = nullptr)
+        : QObject(parent), m_radius(radius) {}
+
+    void repositionCorners(QWidget* preview)
+    {
+        if (!preview) return;
+
+        // Corners are on the parent container, not the preview itself
+        QWidget* container = preview->parentWidget();
+        if (!container) return;
+
+        QPoint previewPos = preview->pos();
+
+        // Find corners by object name on the parent container
+        for (QObject* child : container->children()) {
+            QWidget* w = qobject_cast<QWidget*>(child);
+            if (!w) continue;
+
+            if (w->objectName() == "streamup_corner_tl") {
+                w->move(previewPos.x(), previewPos.y());
+                w->raise();
+            } else if (w->objectName() == "streamup_corner_tr") {
+                w->move(previewPos.x() + preview->width() - m_radius, previewPos.y());
+                w->raise();
+            }
+        }
+    }
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() == QEvent::Resize || event->type() == QEvent::Show) {
+            QWidget* widget = qobject_cast<QWidget*>(watched);
+            if (widget) {
+                repositionCorners(widget);
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    int m_radius;
+};
+
+static PreviewCornerFilter* g_previewCornerFilter = nullptr;
 
 // Cached theme check result (checked once at startup)
 static bool g_isStreamUPTheme = false;
@@ -128,6 +248,16 @@ void ColorPreviewFilter::applyPillStyle(QWidget* widget)
 {
     QLabel* label = qobject_cast<QLabel*>(widget);
     if (!label) return;
+
+    // Skip widgets in the context container (they should stay small)
+    QWidget* parent = label->parentWidget();
+    while (parent) {
+        if (parent->objectName() == "contextContainer" ||
+            parent->objectName() == "contextSubContainer") {
+            return; // Don't apply pill styling to context bar widgets
+        }
+        parent = parent->parentWidget();
+    }
 
     // Check if this is a color preview label (has Panel|Sunken frame style)
     int frameStyle = label->frameStyle();
@@ -468,16 +598,21 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
             QLayout* previewLayout = previewContainer->layout();
             if (previewLayout) {
                 previewLayout->setSpacing(0);
-                previewLayout->setContentsMargins(0, 0, 0, 0);
+                // Add padding for border visibility (left, top, right - no bottom)
+                // Use 6px to make rounded corners more prominent
+                previewLayout->setContentsMargins(6, 6, 6, 0);
                 blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted preview container layout");
             }
 
             // Find and adjust gridLayout inside previewContainer
+            // Add padding to create a visible border effect with rounded corners
             QGridLayout* gridLayout = previewContainer->findChild<QGridLayout*>("gridLayout");
             if (gridLayout) {
                 gridLayout->setSpacing(0);
-                gridLayout->setContentsMargins(0, 0, 0, 0);
-                blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted preview grid layout");
+                // Add padding around the preview to create border effect
+                // Top: 6px to match outer 6px = 12px total (same as sides)
+                gridLayout->setContentsMargins(6, 6, 6, 0);
+                blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted preview grid layout with border padding");
             }
 
             // Find previewXContainer (zoom controls bar) and minimize its spacing
@@ -491,19 +626,13 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
                 }
                 blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted previewXContainer layout");
             }
+
+            // Note: Corner overlays removed - they painted black on top of preview content.
+            // Instead, relying on CSS border-radius on previewContainer with sufficient padding
+            // to create the rounded corner appearance. The preview content has sharp corners
+            // but the surrounding padding area shows the rounded container edges.
         }
 
-        // Find contextContainer and adjust its margins
-        QWidget* contextContainer = centralWidget->findChild<QWidget*>("contextContainer");
-        if (contextContainer) {
-            contextContainer->setContentsMargins(0, 0, 0, 0);
-            QLayout* contextLayout = contextContainer->layout();
-            if (contextLayout) {
-                // Keep left/right padding for content, remove top/bottom
-                contextLayout->setContentsMargins(10, 0, 10, 0);
-            }
-            blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted context container margins");
-        }
     }
 
     mainWindow->setProperty("streamup_padding_applied", true);
