@@ -1,3 +1,19 @@
+# StreamUP v2.1.6 - Patch Update
+
+## New Features
+- **OBS 32.1 Support** - Full compatibility with OBS Studio 32.1
+- **Dynamic Audio Monitoring Icons** - Advanced Audio Properties now displays dynamic icons showing the current monitoring state for each source
+- **Mixer Enhancements** - Added rounded hover styling for source name labels in the audio mixer when using StreamUP themes
+- **Color Preview Pills** - New color preview pill styling for StreamUP themes
+
+## Improvements & Bug Fixes
+- **Theme Enhancements** - Improved preview and context bar layout with better main window padding and spacing
+- **Advanced Audio Properties** - Fixed centering of status dots in the grid layout
+- **Theme Detection** - Added proper StreamUP theme checks to all UI enhancement functions to prevent styling issues with other themes
+- **Performance** - Removed excessive logging from mixer and theme enhancements
+
+---
+
 # StreamUP v2.1.5 - Patch Update
 
 ## Improvements & Bug Fixes
