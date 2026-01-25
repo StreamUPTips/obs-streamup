@@ -229,6 +229,11 @@ bool ColorPreviewFilter::eventFilter(QObject* watched, QEvent* event)
     if (event->type() == QEvent::StyleChange) {
         QWidget* widget = qobject_cast<QWidget*>(watched);
         if (widget) {
+            // Prevent recursion: setStyleSheet() triggers StyleChange, so we need a guard
+            // Check if we're already in the process of styling this widget
+            if (widget->property("streamup_pill_styling").toBool()) {
+                return QObject::eventFilter(watched, event);
+            }
             // Reset the styled flag so we can re-apply with new color
             widget->setProperty("streamup_pill_styled", false);
             applyPillStyle(widget);
@@ -261,6 +266,8 @@ void ColorPreviewFilter::applyPillStyle(QWidget* widget)
     if (hasPanel && hasSunken) {
         // Only apply if not already styled by us
         if (!label->property("streamup_pill_styled").toBool()) {
+            // Set recursion guard before making any changes that trigger StyleChange events
+            label->setProperty("streamup_pill_styling", true);
             label->setProperty("streamup_pill_styled", true);
 
             // Set minimum width to fit hex color codes (#RRGGBB = 7 chars + padding)
@@ -286,6 +293,9 @@ void ColorPreviewFilter::applyPillStyle(QWidget* widget)
             } else {
                 label->setStyleSheet(pillStyle);
             }
+
+            // Clear recursion guard
+            label->setProperty("streamup_pill_styling", false);
         }
     }
 }
