@@ -24,6 +24,7 @@
 #include "ui/splash-screen.hpp"
 #include "ui/patch-notes-window.hpp"
 #include "ui/studio-mode-enhancements.hpp"
+#include "ui/mixer-enhancements.hpp"
 #include "ui/theme-enhancements.hpp"
 #include "multidock/multidock_manager.hpp"
 #include "multidock/multidock_utils.hpp"
@@ -899,6 +900,9 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 
 		// Apply studio mode enhancements (midpoint marker on transition slider)
 		StreamUP::StudioModeEnhancements::ApplyStudioModeEnhancements();
+
+		// Apply mixer enhancements (centered labels, multi-line names)
+		StreamUP::MixerEnhancements::ApplyMixerEnhancements();
 
 		// Apply theme enhancements (color preview pills, stats dock naming)
 		StreamUP::ThemeEnhancements::ApplyThemeEnhancements();
