@@ -19,6 +19,8 @@
 #include <QPointer>
 #include <QToolTip>
 #include <QSizePolicy>
+#include <QToolBar>
+#include <QPushButton>
 
 #include <utility>
 
@@ -212,41 +214,78 @@ static void CenterVolumeControlContent(QWidget* volumeControl)
         }
     }
 
+    // Find and center the volMeterFrame specifically
+    QFrame* meterFrame = volumeControl->findChild<QFrame*>("volMeterFrame");
+    if (meterFrame) {
+        QLayout* meterLayout = meterFrame->layout();
+        if (meterLayout) {
+            // Add left margin to shift meter+slider to the right (center them)
+            QMargins margins = meterLayout->contentsMargins();
+            meterLayout->setContentsMargins(14, margins.top(), margins.right(), margins.bottom());
+
+            QBoxLayout* meterBox = qobject_cast<QBoxLayout*>(meterLayout);
+            if (meterBox) {
+                meterBox->setAlignment(Qt::AlignHCenter);
+            }
+        }
+        blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Centered volMeterFrame");
+    }
+
     volumeControl->setProperty("streamup_content_centered", true);
     blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Centered VolumeControl content");
 }
+
+// Forward declaration
+static QString GetFullSourceName(const QString& elidedText);
 
 /**
  * @brief Event filter for VolumeName buttons to maintain full text and word wrap
  *
  * OBS's VolumeName::updateLabelText() re-applies eliding on resize.
- * This filter watches for those events and restores our full text.
+ * This filter watches for those events and restores the full source name.
+ * Caches the name to avoid expensive source enumeration on every event.
  */
 class VolumeNameFilter : public QObject {
 public:
-    explicit VolumeNameFilter(QLabel* label, const QString& fullName, QObject* parent = nullptr)
-        : QObject(parent), m_label(label), m_fullName(fullName) {}
-
-    void setFullName(const QString& name) { m_fullName = name; }
+    explicit VolumeNameFilter(QLabel* label, const QString& initialName, QObject* parent = nullptr)
+        : QObject(parent), m_label(label), m_cachedName(initialName), m_pendingUpdate(false) {}
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override
     {
-        // After resize or paint, OBS may have re-elided the text
-        // We catch multiple event types to ensure we restore our text
-        if (event->type() == QEvent::Resize ||
-            event->type() == QEvent::LayoutRequest ||
-            event->type() == QEvent::FontChange) {
+        // Only respond to resize events, not every layout request
+        if (event->type() == QEvent::Resize) {
 
-            if (m_label && !m_fullName.isEmpty()) {
+            if (m_label && !m_pendingUpdate) {
+                m_pendingUpdate = true;
                 // Schedule restoration after OBS finishes its updates
-                QTimer::singleShot(0, this, [this]() {
+                QTimer::singleShot(50, this, [this]() {
+                    m_pendingUpdate = false;
                     if (m_label) {
+                        QString currentText = m_label->text();
+
+                        // Only re-lookup if text changed significantly (possible rename)
+                        // If it's just elided version of our cached name, use cache
+                        bool needsLookup = false;
+                        if (!m_cachedName.isEmpty() && !currentText.startsWith(m_cachedName.left(5))) {
+                            // Text prefix changed - might be a rename
+                            needsLookup = true;
+                        }
+
+                        QString fullName = m_cachedName;
+                        if (needsLookup || m_cachedName.isEmpty()) {
+                            fullName = GetFullSourceName(currentText);
+                            if (!fullName.isEmpty()) {
+                                m_cachedName = fullName;
+                            }
+                        }
+
                         m_label->setWordWrap(true);
                         m_label->setAlignment(Qt::AlignCenter);
                         m_label->setMaximumWidth(QWIDGETSIZE_MAX);
-                        if (m_label->text() != m_fullName) {
-                            m_label->setText(m_fullName);
+
+                        if (!fullName.isEmpty() && fullName != currentText) {
+                            m_label->setText(fullName);
                         }
                     }
                 });
@@ -257,7 +296,8 @@ protected:
 
 private:
     QPointer<QLabel> m_label;
-    QString m_fullName;
+    QString m_cachedName;
+    bool m_pendingUpdate;
 };
 
 /**
@@ -335,32 +375,12 @@ static QString GetFullSourceName(const QString& elidedText)
 }
 
 /**
- * @brief Style the VolumeName button with rounded corners and better hover
+ * @brief Style the VolumeName button - ensure label is centered
+ * Note: Visual styling (rounded corners, hover) is handled by theme CSS
  */
 static void StyleVolumeNameButton(QAbstractButton* button)
 {
-    // Apply rounded corners, remove border on hover, add top margin
-    // Use more padding to center text vertically
-    QString style = R"(
-        VolumeName {
-            border-radius: 8px;
-            margin-top: 4px;
-            border: none;
-            padding: 4px 6px;
-        }
-        VolumeName:hover {
-            border: none;
-            outline: none;
-        }
-        VolumeName:focus {
-            border: none;
-            outline: none;
-        }
-    )";
-
-    button->setStyleSheet(style);
-
-    // Also center the internal label vertically
+    // Center the internal label vertically
     QLabel* label = button->findChild<QLabel*>();
     if (label) {
         label->setAlignment(Qt::AlignCenter);
@@ -397,7 +417,7 @@ static void EnableMultiLineName(QWidget* volumeControl)
             if (nameLabel) {
                 QString currentText = nameLabel->text();
 
-                // Get the full source name from OBS
+                // Get the full source name by looking it up from OBS
                 QString fullName = GetFullSourceName(currentText);
 
                 // Enable word wrap
@@ -405,7 +425,7 @@ static void EnableMultiLineName(QWidget* volumeControl)
                 nameLabel->setAlignment(Qt::AlignCenter);
 
                 // Set the full text (not elided)
-                if (fullName != currentText) {
+                if (!fullName.isEmpty() && fullName != currentText) {
                     nameLabel->setText(fullName);
                 }
 
@@ -418,6 +438,7 @@ static void EnableMultiLineName(QWidget* volumeControl)
                 button->setMinimumHeight(32);
 
                 // Install event filter to maintain our changes after OBS re-elides
+                // Filter caches the name to avoid expensive lookups
                 VolumeNameFilter* filter = new VolumeNameFilter(nameLabel, fullName, button);
                 button->installEventFilter(filter);
 
@@ -441,6 +462,34 @@ void EnhanceVolumeControl(QWidget* volumeControl)
 {
     if (!volumeControl) {
         return;
+    }
+
+    // Reduce internal margins to make channel background tighter
+    if (!volumeControl->property("streamup_margins_set").toBool()) {
+        // Adjust the VolumeControl's own layout margins
+        QLayout* layout = volumeControl->layout();
+        if (layout) {
+            layout->setContentsMargins(2, 4, 2, 4);
+        }
+
+        // Also adjust any child widget layouts
+        QList<QWidget*> children = volumeControl->findChildren<QWidget*>();
+        for (QWidget* child : children) {
+            QLayout* childLayout = child->layout();
+            if (childLayout) {
+                QMargins margins = childLayout->contentsMargins();
+                // Reduce horizontal margins
+                childLayout->setContentsMargins(
+                    qMin(margins.left(), 2),
+                    margins.top(),
+                    qMin(margins.right(), 2),
+                    margins.bottom()
+                );
+            }
+        }
+
+        volumeControl->setProperty("streamup_margins_set", true);
+        blog(LOG_INFO, "[StreamUP] Mixer Enhancement: Reduced VolumeControl margins");
     }
 
     // Center the dB label
@@ -475,6 +524,49 @@ void RefreshMixerEnhancements()
     }
 }
 
+/**
+ * @brief Adjust the mixer toolbar to add padding on left and right edges
+ */
+static void AdjustMixerToolbar(QWidget* mixerWidget)
+{
+    if (!mixerWidget) return;
+
+    // Find the toolbar
+    QToolBar* toolbar = mixerWidget->findChild<QToolBar*>();
+    if (!toolbar) {
+        blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Toolbar not found");
+        return;
+    }
+
+    // Skip if already processed
+    if (toolbar->property("streamup_toolbar_adjusted").toBool()) {
+        return;
+    }
+
+    // Add margins to toolbar contents
+    toolbar->setContentsMargins(8, 0, 8, 0);
+
+    // Find buttons and adjust their margins via stylesheet
+    QList<QPushButton*> buttons = toolbar->findChildren<QPushButton*>();
+    for (QPushButton* btn : buttons) {
+        QString text = btn->text();
+        if (text.contains("hidden", Qt::CaseInsensitive)) {
+            // Add left margin to the hidden button via stylesheet
+            QString currentStyle = btn->styleSheet();
+            btn->setStyleSheet(currentStyle + " QPushButton { margin-left: 8px; }");
+            blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Adjusted hidden button margins");
+        } else if (text.contains("Options", Qt::CaseInsensitive)) {
+            // Add left margin to push Options button away from the icons
+            QString currentStyle = btn->styleSheet();
+            btn->setStyleSheet(currentStyle + " QPushButton { margin-left: 16px; }");
+            blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Adjusted options button margins");
+        }
+    }
+
+    toolbar->setProperty("streamup_toolbar_adjusted", true);
+    blog(LOG_INFO, "[StreamUP] Mixer Enhancement: Adjusted toolbar margins");
+}
+
 void ApplyMixerEnhancements()
 {
     if (!IsUsingStreamUPTheme()) {
@@ -506,6 +598,11 @@ void ApplyMixerEnhancements()
 
         g_mixerWatcherInstalled = true;
         blog(LOG_INFO, "[StreamUP] Mixer Enhancement: Installed mixer event filter");
+    }
+
+    // Adjust toolbar margins
+    if (mixerWidget) {
+        AdjustMixerToolbar(mixerWidget);
     }
 
     // Apply enhancements to existing volume controls

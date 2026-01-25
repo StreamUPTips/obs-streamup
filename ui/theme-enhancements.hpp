@@ -68,6 +68,13 @@ void ApplyColorPreviewStyling(QWidget* dialog);
 void ApplyStatsDockObjectNames();
 
 /**
+ * @brief Apply enhancements to the Stats window
+ *
+ * Centers the top stats grid horizontally and applies other styling.
+ */
+void ApplyStatsWindowEnhancements(QWidget* statsWidget);
+
+/**
  * @brief Refresh theme enhancements
  *
  * Call when dialogs are opened or theme changes to reapply enhancements.
