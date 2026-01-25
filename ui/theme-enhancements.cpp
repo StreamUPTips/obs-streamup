@@ -1,5 +1,4 @@
 #include "theme-enhancements.hpp"
-#include "../utilities/debug-logger.hpp"
 
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
@@ -51,8 +50,6 @@ protected:
                 bool visible = (event->type() == QEvent::Show);
                 int bottomPadding = visible ? 0 : 9;
                 m_mainWindow->setContentsMargins(9, 0, 9, bottomPadding);
-                blog(LOG_INFO, "[StreamUP] Theme Enhancement: Status bar %s, updated bottom padding to %d",
-                     visible ? "shown" : "hidden", bottomPadding);
             }
         }
         return QObject::eventFilter(watched, event);
@@ -206,16 +203,12 @@ bool IsUsingStreamUPTheme()
 
     const char* themeId = config_get_string(config, "Appearance", "Theme");
     if (!themeId || !*themeId) {
-        blog(LOG_DEBUG, "[StreamUP] Theme Enhancement: No theme ID found in config");
         return false;
     }
 
     QString theme = QString::fromUtf8(themeId);
     g_isStreamUPTheme = theme.startsWith(STREAMUP_THEME_PREFIX);
     g_themeChecked = true;
-
-    blog(LOG_INFO, "[StreamUP] Theme Enhancement: Current theme: %s, IsStreamUP: %s",
-         themeId, g_isStreamUPTheme ? "yes" : "no");
 
     return g_isStreamUPTheme;
 }
@@ -292,8 +285,6 @@ void ColorPreviewFilter::applyPillStyle(QWidget* widget)
             } else {
                 label->setStyleSheet(pillStyle);
             }
-
-            blog(LOG_DEBUG, "[StreamUP] Theme Enhancement: Applied pill style to color preview");
         }
     }
 }
@@ -407,7 +398,6 @@ void ApplyStatsDockObjectNames()
 
     QMainWindow* mainWindow = static_cast<QMainWindow*>(obs_frontend_get_main_window());
     if (!mainWindow) {
-        blog(LOG_WARNING, "[StreamUP] Theme Enhancement: Failed to get main window");
         return;
     }
 
@@ -424,7 +414,6 @@ void ApplyStatsDockObjectNames()
             // Set object name if not already set
             if (widget->objectName().isEmpty()) {
                 widget->setObjectName("OBSBasicStats");
-                blog(LOG_INFO, "[StreamUP] Theme Enhancement: Set object name on OBSBasicStats widget");
             }
 
             // Find child QGridLayout for output section and style its frames
@@ -467,7 +456,6 @@ void ApplyStatsWindowEnhancements(QWidget* statsWidget)
     // Get the main layout of the stats widget
     QVBoxLayout* mainLayout = qobject_cast<QVBoxLayout*>(statsWidget->layout());
     if (!mainLayout) {
-        blog(LOG_DEBUG, "[StreamUP] Theme Enhancement: Stats widget has no VBoxLayout");
         return;
     }
 
@@ -503,8 +491,6 @@ void ApplyStatsWindowEnhancements(QWidget* statsWidget)
                 "padding: 8px;"
             );
         }
-
-        blog(LOG_INFO, "[StreamUP] Theme Enhancement: Styled stats output section");
     }
 
     // Center the top stats grid
@@ -532,8 +518,6 @@ void ApplyStatsWindowEnhancements(QWidget* statsWidget)
 
             // Insert the container at the beginning of main layout
             mainLayout->insertWidget(0, gridContainer);
-
-            blog(LOG_INFO, "[StreamUP] Theme Enhancement: Centered stats grid layout");
         }
     }
 
@@ -567,7 +551,6 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
     if (statusBar && !g_statusBarFilter) {
         g_statusBarFilter = new StatusBarFilter(mainWindow);
         statusBar->installEventFilter(g_statusBarFilter);
-        blog(LOG_INFO, "[StreamUP] Theme Enhancement: Installed status bar visibility filter");
     }
 
     // Adjust central widget layout spacing to match dock spacing
@@ -577,7 +560,6 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
         if (layout) {
             layout->setSpacing(7); // Gap between preview area and context bar
             layout->setContentsMargins(0, 0, 0, 0);
-            blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted central widget layout spacing");
         }
 
         // Find canvasEditor and adjust its layout (previewLayout)
@@ -587,7 +569,6 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
             if (canvasLayout) {
                 canvasLayout->setSpacing(0);
                 canvasLayout->setContentsMargins(0, 0, 0, 0);
-                blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted canvas editor layout");
             }
         }
 
@@ -601,7 +582,6 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
                 // Add padding for border visibility (left, top, right - no bottom)
                 // Use 6px to make rounded corners more prominent
                 previewLayout->setContentsMargins(6, 6, 6, 0);
-                blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted preview container layout");
             }
 
             // Find and adjust gridLayout inside previewContainer
@@ -612,7 +592,6 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
                 // Add padding around the preview to create border effect
                 // Top: 6px to match outer 6px = 12px total (same as sides)
                 gridLayout->setContentsMargins(6, 6, 6, 0);
-                blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted preview grid layout with border padding");
             }
 
             // Find previewXContainer (zoom controls bar) and minimize its spacing
@@ -624,7 +603,6 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
                     xLayout->setSpacing(0);
                     xLayout->setContentsMargins(0, 0, 0, 0);
                 }
-                blog(LOG_INFO, "[StreamUP] Theme Enhancement: Adjusted previewXContainer layout");
             }
 
             // Note: Corner overlays removed - they painted black on top of preview content.
@@ -636,18 +614,14 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
     }
 
     mainWindow->setProperty("streamup_padding_applied", true);
-    blog(LOG_INFO, "[StreamUP] Theme Enhancement: Applied main window padding (bottom: %d)", bottomPadding);
 }
 
 void ApplyThemeEnhancements()
 {
     // Only apply if StreamUP theme is active
     if (!IsUsingStreamUPTheme()) {
-        blog(LOG_INFO, "[StreamUP] Theme Enhancement: Skipping - StreamUP theme not active");
         return;
     }
-
-    blog(LOG_INFO, "[StreamUP] Applying theme enhancements...");
 
     // Apply stats dock object names immediately
     ApplyStatsDockObjectNames();
@@ -657,7 +631,6 @@ void ApplyThemeEnhancements()
     if (!g_appFilter) {
         g_appFilter = new AppWidgetFilter();
         QApplication::instance()->installEventFilter(g_appFilter);
-        blog(LOG_INFO, "[StreamUP] Theme Enhancement: Installed application event filter");
     }
 
     // Apply to any currently open windows
@@ -682,8 +655,6 @@ void ApplyThemeEnhancements()
         // Add padding around the main window edges
         ApplyMainWindowPadding(mainWindow);
     }
-
-    blog(LOG_INFO, "[StreamUP] Theme Enhancement: Registered theme enhancements");
 }
 
 void RefreshThemeEnhancements()
