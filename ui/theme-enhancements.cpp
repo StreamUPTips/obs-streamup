@@ -10,6 +10,9 @@
 #include <QLabel>
 #include <QFrame>
 #include <QGridLayout>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QScrollArea>
 #include <QApplication>
 
 #include "moc_theme-enhancements.cpp"
@@ -106,9 +109,19 @@ void ColorPreviewFilter::applyPillStyle(QWidget* widget)
         if (!label->property("streamup_pill_styled").toBool()) {
             label->setProperty("streamup_pill_styled", true);
 
-            // Get current stylesheet and append border-radius
+            // Set minimum width to fit hex color codes (#RRGGBB = 7 chars + padding)
+            // Also remove max width constraint and ensure it can expand
+            label->setMinimumWidth(100);
+            label->setMaximumWidth(QWIDGETSIZE_MAX);
+
+            // Ensure the size policy allows horizontal expansion
+            QSizePolicy policy = label->sizePolicy();
+            policy.setHorizontalPolicy(QSizePolicy::MinimumExpanding);
+            label->setSizePolicy(policy);
+
+            // Get current stylesheet and append border-radius and padding
             QString currentStyle = label->styleSheet();
-            QString pillStyle = QString("border-radius: %1px;").arg(COLOR_PREVIEW_RADIUS);
+            QString pillStyle = QString("border-radius: %1px; padding: 2px 10px; min-width: 80px;").arg(COLOR_PREVIEW_RADIUS);
 
             if (!currentStyle.isEmpty()) {
                 // Append to existing style
@@ -169,6 +182,11 @@ bool AppWidgetFilter::eventFilter(QObject* watched, QEvent* event)
                 label->installEventFilter(g_colorFilter);
             }
         }
+    }
+    // Check if this is OBSBasicStats (dock or window)
+    QString className = QString::fromUtf8(widget->metaObject()->className());
+    if (className == "OBSBasicStats") {
+        ApplyStatsWindowEnhancements(widget);
     }
     // Also scan top-level windows when they're shown
     else if (widget->isWindow()) {
@@ -271,6 +289,97 @@ void ApplyStatsDockObjectNames()
     }
 }
 
+/**
+ * @brief Apply enhancements to the OBSBasicStats window
+ *
+ * - Centers the top stats grid horizontally
+ * - Styles the output section with background color and rounded corners
+ */
+void ApplyStatsWindowEnhancements(QWidget* statsWidget)
+{
+    if (!statsWidget) return;
+
+    // Skip if already processed
+    if (statsWidget->property("streamup_stats_enhanced").toBool()) {
+        return;
+    }
+
+    // Get the main layout of the stats widget
+    QVBoxLayout* mainLayout = qobject_cast<QVBoxLayout*>(statsWidget->layout());
+    if (!mainLayout) {
+        blog(LOG_DEBUG, "[StreamUP] Theme Enhancement: Stats widget has no VBoxLayout");
+        return;
+    }
+
+    // Find and style the QScrollArea (output section)
+    QList<QScrollArea*> scrollAreas = statsWidget->findChildren<QScrollArea*>();
+    for (QScrollArea* scrollArea : scrollAreas) {
+        // Add margins around the scroll area for spacing from edges
+        scrollArea->setContentsMargins(12, 8, 12, 8);
+
+        // Style the scroll area itself - use bg_primary (#161617)
+        scrollArea->setStyleSheet(
+            "QScrollArea {"
+            "    background: #161617;"  // --bg_primary
+            "    border: none;"
+            "    border-radius: 12px;"  // more rounded
+            "    margin: 0 8px;"        // horizontal margin
+            "}"
+        );
+
+        // Style the viewport (inner widget container)
+        if (scrollArea->viewport()) {
+            scrollArea->viewport()->setStyleSheet(
+                "background: #161617;"
+                "border-radius: 12px;"
+            );
+        }
+
+        // Style the content widget inside the scroll area
+        if (scrollArea->widget()) {
+            scrollArea->widget()->setStyleSheet(
+                "background: #161617;"
+                "border-radius: 12px;"
+                "padding: 8px;"
+            );
+        }
+
+        blog(LOG_INFO, "[StreamUP] Theme Enhancement: Styled stats output section");
+    }
+
+    // Center the top stats grid
+    // The first item should be the top stats QGridLayout
+    QLayoutItem* firstItem = mainLayout->itemAt(0);
+    if (firstItem) {
+        QGridLayout* topLayout = qobject_cast<QGridLayout*>(firstItem->layout());
+        if (topLayout) {
+            // Wrap the grid layout in a widget with horizontal centering
+            mainLayout->removeItem(firstItem);
+
+            // Create a container widget for the grid
+            QWidget* gridContainer = new QWidget(statsWidget);
+            QHBoxLayout* hLayout = new QHBoxLayout(gridContainer);
+            hLayout->setContentsMargins(0, 0, 0, 0);
+
+            // Create a widget to hold the grid
+            QWidget* gridWidget = new QWidget(gridContainer);
+            gridWidget->setLayout(topLayout);
+
+            // Add spacers on both sides to center the grid
+            hLayout->addStretch(1);
+            hLayout->addWidget(gridWidget);
+            hLayout->addStretch(1);
+
+            // Insert the container at the beginning of main layout
+            mainLayout->insertWidget(0, gridContainer);
+
+            blog(LOG_INFO, "[StreamUP] Theme Enhancement: Centered stats grid layout");
+        }
+    }
+
+    statsWidget->setProperty("streamup_stats_enhanced", true);
+}
+
 void ApplyThemeEnhancements()
 {
     // Only apply if StreamUP theme is active
@@ -297,6 +406,18 @@ void ApplyThemeEnhancements()
     for (QWidget* widget : topLevelWidgets) {
         if (widget && widget->isVisible()) {
             ApplyColorPreviewStyling(widget);
+        }
+    }
+
+    // Find and style any OBSBasicStats widgets (both dock and window versions)
+    QMainWindow* mainWindow = static_cast<QMainWindow*>(obs_frontend_get_main_window());
+    if (mainWindow) {
+        QList<QWidget*> allWidgets = mainWindow->findChildren<QWidget*>();
+        for (QWidget* widget : allWidgets) {
+            QString className = QString::fromUtf8(widget->metaObject()->className());
+            if (className == "OBSBasicStats") {
+                ApplyStatsWindowEnhancements(widget);
+            }
         }
     }
 
