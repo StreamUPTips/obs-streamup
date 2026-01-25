@@ -744,6 +744,16 @@ void ApplyAdvAudioEnhancements(QWidget* advAudioDialog)
         g_advAudioFilter = new AdvAudioMonitoringFilter();
     }
 
+    // Find the main grid layout
+    QGridLayout* mainLayout = nullptr;
+    QList<QGridLayout*> grids = advAudioDialog->findChildren<QGridLayout*>();
+    for (QGridLayout* grid : grids) {
+        if (grid->objectName() == "mainLayout") {
+            mainLayout = grid;
+            break;
+        }
+    }
+
     // Find all QComboBox widgets in the dialog
     // The monitoring type comboboxes have 3 items (None, Monitor Only, Monitor and Output)
     QList<QComboBox*> combos = advAudioDialog->findChildren<QComboBox*>();
@@ -773,6 +783,38 @@ void ApplyAdvAudioEnhancements(QWidget* advAudioDialog)
                     QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
                                    g_advAudioFilter, &AdvAudioMonitoringFilter::onMonitoringTypeChanged);
                 }
+            }
+        }
+    }
+
+    // Find and center status labels (they show "Active" or "Inactive" text)
+    // These are QLabels with the text-danger class or specific text
+    QList<QLabel*> labels = advAudioDialog->findChildren<QLabel*>();
+    for (QLabel* label : labels) {
+        if (!label) continue;
+
+        QString text = label->text();
+        QString classProperty = label->property("class").toString();
+
+        // Check if this is a status label (has text-danger class or shows Active/Inactive)
+        if (classProperty == "text-danger" || text == "Active" || text == "Inactive" ||
+            text == QObject::tr("Active") || text == QObject::tr("Inactive")) {
+
+            // Find parent layout and center the label
+            QWidget* parent = label->parentWidget();
+            while (parent) {
+                QGridLayout* grid = qobject_cast<QGridLayout*>(parent->layout());
+                if (grid) {
+                    // Find the label in this layout and set alignment
+                    int index = grid->indexOf(label);
+                    if (index >= 0) {
+                        int row, col, rowSpan, colSpan;
+                        grid->getItemPosition(index, &row, &col, &rowSpan, &colSpan);
+                        grid->setAlignment(label, Qt::AlignCenter);
+                        break;
+                    }
+                }
+                parent = parent->parentWidget();
             }
         }
     }
