@@ -1,5 +1,4 @@
 #include "mixer-enhancements.hpp"
-#include "../utilities/debug-logger.hpp"
 
 #include <obs.h>
 #include <obs-frontend-api.h>
@@ -64,9 +63,6 @@ bool IsUsingStreamUPTheme()
     QString theme = QString::fromUtf8(themeId);
     g_isStreamUPTheme = theme.startsWith(STREAMUP_THEME_PREFIX);
     g_themeChecked = true;
-
-    blog(LOG_INFO, "[StreamUP] Mixer Enhancement: Theme check - %s, IsStreamUP: %s",
-         themeId, g_isStreamUPTheme ? "yes" : "no");
 
     return g_isStreamUPTheme;
 }
@@ -147,7 +143,6 @@ static void CenterVolumeLabel(QWidget* volumeControl)
 {
     QLabel* volLabel = volumeControl->findChild<QLabel*>("volLabel");
     if (!volLabel) {
-        blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: volLabel not found in control");
         return;
     }
 
@@ -170,9 +165,6 @@ static void CenterVolumeLabel(QWidget* volumeControl)
     volLabel->setMaximumWidth(QWIDGETSIZE_MAX);
 
     volLabel->setProperty("streamup_centered", true);
-
-    blog(LOG_INFO, "[StreamUP] Mixer Enhancement: Centered volume label '%s'",
-         volLabel->text().toUtf8().constData());
 }
 
 /**
@@ -228,11 +220,9 @@ static void CenterVolumeControlContent(QWidget* volumeControl)
                 meterBox->setAlignment(Qt::AlignHCenter);
             }
         }
-        blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Centered volMeterFrame");
     }
 
     volumeControl->setProperty("streamup_content_centered", true);
-    blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Centered VolumeControl content");
 }
 
 // Forward declaration
@@ -329,9 +319,6 @@ static QString GetFullSourceName(const QString& elidedText)
         return elidedText;
     }
 
-    blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Looking for source with prefix='%s' suffix='%s'",
-         prefix.toUtf8().constData(), suffix.toUtf8().constData());
-
     // Enumerate all sources
     auto enumSources = [](void* param, obs_source_t* source) -> bool {
         if (!source) return true;
@@ -363,13 +350,8 @@ static QString GetFullSourceName(const QString& elidedText)
     }
 
     if (fullName.isEmpty()) {
-        blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Could not find full name for '%s'",
-             elidedText.toUtf8().constData());
         return elidedText;
     }
-
-    blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Found full name '%s' for elided '%s'",
-         fullName.toUtf8().constData(), elidedText.toUtf8().constData());
 
     return fullName;
 }
@@ -395,13 +377,8 @@ static void EnableMultiLineName(QWidget* volumeControl)
     // Find the VolumeName button (it's a QAbstractButton with class "VolumeName")
     QList<QAbstractButton*> buttons = volumeControl->findChildren<QAbstractButton*>();
 
-    blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Found %d buttons in control",
-         (int)buttons.size());
-
     for (QAbstractButton* button : buttons) {
         QString className = QString::fromUtf8(button->metaObject()->className());
-        blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Button class: %s",
-             className.toUtf8().constData());
 
         if (className == "VolumeName") {
             // Skip if already processed
@@ -443,11 +420,6 @@ static void EnableMultiLineName(QWidget* volumeControl)
                 button->installEventFilter(filter);
 
                 button->setProperty("streamup_multiline", true);
-
-                blog(LOG_INFO, "[StreamUP] Mixer Enhancement: Enabled multi-line for '%s' (was '%s')",
-                     fullName.toUtf8().constData(), currentText.toUtf8().constData());
-            } else {
-                blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: No QLabel found in VolumeName");
             }
             break;
         }
@@ -489,7 +461,6 @@ void EnhanceVolumeControl(QWidget* volumeControl)
         }
 
         volumeControl->setProperty("streamup_margins_set", true);
-        blog(LOG_INFO, "[StreamUP] Mixer Enhancement: Reduced VolumeControl margins");
     }
 
     // Center the dB label
@@ -510,14 +481,10 @@ void RefreshMixerEnhancements()
 
     QWidget* mixerWidget = FindMixerDock();
     if (!mixerWidget) {
-        blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Mixer dock not found");
         return;
     }
 
     QList<QWidget*> volumeControls = FindVolumeControls(mixerWidget);
-
-    blog(LOG_INFO, "[StreamUP] Mixer Enhancement: Found %d volume controls",
-         (int)volumeControls.size());
 
     for (QWidget* control : volumeControls) {
         EnhanceVolumeControl(control);
@@ -534,7 +501,6 @@ static void AdjustMixerToolbar(QWidget* mixerWidget)
     // Find the toolbar
     QToolBar* toolbar = mixerWidget->findChild<QToolBar*>();
     if (!toolbar) {
-        blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Toolbar not found");
         return;
     }
 
@@ -554,27 +520,21 @@ static void AdjustMixerToolbar(QWidget* mixerWidget)
             // Add left margin to the hidden button via stylesheet
             QString currentStyle = btn->styleSheet();
             btn->setStyleSheet(currentStyle + " QPushButton { margin-left: 8px; }");
-            blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Adjusted hidden button margins");
         } else if (text.contains("Options", Qt::CaseInsensitive)) {
             // Add left margin to push Options button away from the icons
             QString currentStyle = btn->styleSheet();
             btn->setStyleSheet(currentStyle + " QPushButton { margin-left: 16px; }");
-            blog(LOG_DEBUG, "[StreamUP] Mixer Enhancement: Adjusted options button margins");
         }
     }
 
     toolbar->setProperty("streamup_toolbar_adjusted", true);
-    blog(LOG_INFO, "[StreamUP] Mixer Enhancement: Adjusted toolbar margins");
 }
 
 void ApplyMixerEnhancements()
 {
     if (!IsUsingStreamUPTheme()) {
-        blog(LOG_INFO, "[StreamUP] Mixer Enhancement: Skipping - StreamUP theme not active");
         return;
     }
-
-    blog(LOG_INFO, "[StreamUP] Applying mixer enhancements...");
 
     // Create event filter if needed
     if (!g_mixerFilter) {
@@ -597,7 +557,6 @@ void ApplyMixerEnhancements()
         }
 
         g_mixerWatcherInstalled = true;
-        blog(LOG_INFO, "[StreamUP] Mixer Enhancement: Installed mixer event filter");
     }
 
     // Adjust toolbar margins
@@ -616,8 +575,6 @@ void ApplyMixerEnhancements()
     QTimer::singleShot(2000, []() {
         RefreshMixerEnhancements();
     });
-
-    blog(LOG_INFO, "[StreamUP] Mixer Enhancement: Setup complete");
 }
 
 } // namespace MixerEnhancements
