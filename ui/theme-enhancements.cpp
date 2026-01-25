@@ -480,36 +480,25 @@ void ApplyStatsWindowEnhancements(QWidget* statsWidget)
     }
 
     // Find and style the QScrollArea (output section)
+    // Set object names so the theme QSS can target them properly
+    // Colors are controlled by the theme, we only handle layout here
     QList<QScrollArea*> scrollAreas = statsWidget->findChildren<QScrollArea*>();
     for (QScrollArea* scrollArea : scrollAreas) {
         // Add margins around the scroll area for spacing from edges
         scrollArea->setContentsMargins(12, 8, 12, 8);
 
-        // Style the scroll area itself - use bg_primary (#161617)
-        scrollArea->setStyleSheet(
-            "QScrollArea {"
-            "    background: #161617;"  // --bg_primary
-            "    border: none;"
-            "    border-radius: 12px;"  // more rounded
-            "    margin: 0 8px;"        // horizontal margin
-            "}"
-        );
-
-        // Style the viewport (inner widget container)
-        if (scrollArea->viewport()) {
-            scrollArea->viewport()->setStyleSheet(
-                "background: #161617;"
-                "border-radius: 12px;"
-            );
+        // Set object name so theme QSS can target it
+        if (scrollArea->objectName().isEmpty()) {
+            scrollArea->setObjectName("statsScrollArea");
         }
 
-        // Style the content widget inside the scroll area
+        // Set object names on viewport and content widget for theme targeting
+        if (scrollArea->viewport()) {
+            scrollArea->viewport()->setObjectName("statsScrollViewport");
+        }
+
         if (scrollArea->widget()) {
-            scrollArea->widget()->setStyleSheet(
-                "background: #161617;"
-                "border-radius: 12px;"
-                "padding: 8px;"
-            );
+            scrollArea->widget()->setObjectName("statsScrollContent");
         }
     }
 
