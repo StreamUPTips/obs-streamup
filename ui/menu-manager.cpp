@@ -170,8 +170,16 @@ void LoadMenuItems(QMenu* menu)
     });
     
     action = videoDeviceMenu->addAction(obs_module_text("Menu.VideoCapture.RefreshAll"));
-    QObject::connect(action, &QAction::triggered, []() { 
-        StreamUP::SourceManager::RefreshAllVideoCaptureDevices(); 
+    QObject::connect(action, &QAction::triggered, []() {
+        StreamUP::SourceManager::RefreshAllVideoCaptureDevices();
+    });
+
+    toolsMenu->addSeparator();
+
+    // Font URL Manager (dev tool)
+    action = toolsMenu->addAction(obs_module_text("FontUrlManager.Title"));
+    QObject::connect(action, &QAction::triggered, []() {
+        StreamUP::FileManager::ShowFontUrlManagerDialog();
     });
 
     // MultiDock submenu
