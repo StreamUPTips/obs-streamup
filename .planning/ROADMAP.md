@@ -30,10 +30,10 @@ Plans:
 
 **Depends on:** Phase 01
 
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 2 to break down)
+- [ ] 02-01-PLAN.md - Implement CheckFontAvailability function with Qt 6 QFontDatabase API
 
 **Details:**
 - Use `QFontDatabase::families()` to get installed fonts
