@@ -12,11 +12,102 @@
 #include <QFileInfo>
 #include <QFileDialog>
 #include <QApplication>
+#include <QString>
 #include <list>
 #include <map>
 
 namespace StreamUP {
 namespace FileManager {
+
+namespace {
+// Case-insensitive check if font already exists in vector
+bool FontExistsInVector(const std::vector<std::string>& fonts, const std::string& font_name) {
+    QString target = QString::fromStdString(font_name);
+    for (const auto& existing : fonts) {
+        if (QString::compare(target, QString::fromStdString(existing), Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+} // anonymous namespace
+
+//-------------------FONT EXTRACTION FUNCTIONS-------------------
+std::vector<std::string> ExtractFontsFromStreamupData(obs_data_t *data)
+{
+	std::vector<std::string> fonts;
+
+	if (!data) {
+		StreamUP::ErrorHandler::LogWarning("Null data passed to ExtractFontsFromStreamupData",
+			StreamUP::ErrorHandler::Category::FileSystem);
+		return fonts;
+	}
+
+	// Get sources array
+	obs_data_array_t *sources = obs_data_get_array(data, "sources");
+	if (!sources) {
+		return fonts;
+	}
+
+	const size_t count = obs_data_array_count(sources);
+	for (size_t i = 0; i < count; i++) {
+		obs_data_t *source_data = obs_data_array_item(sources, i);
+		if (!source_data) {
+			continue;
+		}
+
+		// Check if this is a text source
+		const char *source_id = obs_data_get_string(source_data, "id");
+		bool is_text_source = (source_id &&
+			(strcmp(source_id, "text_gdiplus") == 0 || strcmp(source_id, "text_ft2_source") == 0));
+
+		if (is_text_source) {
+			// Get settings object
+			obs_data_t *settings = obs_data_get_obj(source_data, "settings");
+			if (settings) {
+				// Get font object
+				obs_data_t *font = obs_data_get_obj(settings, "font");
+				if (font) {
+					// Get face string
+					const char *face = obs_data_get_string(font, "face");
+					if (face && strlen(face) > 0) {
+						std::string font_name(face);
+						// Add if not already present (case-insensitive)
+						if (!FontExistsInVector(fonts, font_name)) {
+							fonts.push_back(font_name);
+						}
+					}
+					obs_data_release(font);
+				}
+				obs_data_release(settings);
+			}
+		}
+
+		obs_data_release(source_data);
+	}
+
+	obs_data_array_release(sources);
+	return fonts;
+}
+
+std::vector<std::string> ExtractFontsFromStreamupFile(const QString &file_path)
+{
+	// Validate file exists
+	if (!StreamUP::ErrorHandler::ValidateFile(file_path)) {
+		return {};
+	}
+
+	// Load the .streamup file
+	auto data = OBSWrappers::MakeOBSDataFromJsonFile(QT_TO_UTF8(file_path));
+	if (!data) {
+		StreamUP::ErrorHandler::LogWarning(
+			"Failed to parse StreamUP file for font extraction: " + file_path.toStdString(),
+			StreamUP::ErrorHandler::Category::FileSystem);
+		return {};
+	}
+
+	return ExtractFontsFromStreamupData(data.get());
+}
 
 //-------------------RESIZE AND SCALING FUNCTIONS-------------------
 void ResizeAdvancedMaskFilter(obs_source_t *filter, float factor)
