@@ -623,6 +623,10 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
             // Instead, relying on CSS border-radius on previewContainer with sufficient padding
             // to create the rounded corner appearance. The preview content has sharp corners
             // but the surrounding padding area shows the rounded container edges.
+
+            // Note: Studio Mode's programWidget (programContainer) is handled separately
+            // in studio-mode-enhancements.cpp via the OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED
+            // event, since programWidget is created dynamically when Studio Mode is enabled.
         }
 
     }
