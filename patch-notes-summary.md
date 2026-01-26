@@ -8,10 +8,10 @@
 - **Color Preview Pills** - New color preview pill styling for StreamUP themes
 
 ## Improvements & Bug Fixes
+- **Studio Mode Program Display** - Fixed rounded corners on the program display in Studio Mode to match the preview display styling
 - **Theme Enhancements** - Improved preview and context bar layout with better main window padding and spacing
 - **Advanced Audio Properties** - Fixed centering of status dots in the grid layout
 - **Theme Detection** - Added proper StreamUP theme checks to all UI enhancement functions to prevent styling issues with other themes
-- **Performance** - Removed excessive logging from mixer and theme enhancements
 
 ---
 
