@@ -8,6 +8,7 @@
 #include <QString>
 #include <vector>
 #include <string>
+#include <functional>
 
 namespace StreamUP {
 namespace FileManager {
@@ -139,6 +140,14 @@ std::vector<FontInfo> ExtractFontsFromStreamupFile(const QString &file_path);
  * @return std::vector<FontInfo> Fonts that are not installed (preserves url field)
  */
 std::vector<FontInfo> CheckFontAvailability(const std::vector<FontInfo>& fonts);
+
+/**
+ * Show a warning dialog listing missing fonts with download links
+ * @param missingFonts Vector of FontInfo for fonts not installed on system
+ * @param continueCallback Function called when user clicks "Continue Anyway"
+ */
+void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
+                            std::function<void()> continueCallback);
 
 //-------------------MAIN LOADING FUNCTIONS-------------------
 /**
