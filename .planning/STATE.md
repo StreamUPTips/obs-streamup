@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v1.0 Font Validation
-**Phase:** 03 of 04 (Warning Dialog UI)
-**Plan:** 02 of 02 complete
-**Status:** Phase 03 complete
-**Last activity:** 2026-01-26 - Completed 03-02-PLAN.md (Font Localization Keys)
+**Phase:** 04 of 04 (Font URL Manager)
+**Plan:** 01 of 02 complete
+**Status:** In progress
+**Last activity:** 2026-01-26 - Completed 04-01-PLAN.md (Font URL Manager Backend)
 
-**Progress:** ████████░░ 75% (3/4 phases complete)
+**Progress:** █████████░ 87.5% (Plan 1 of Phase 4 complete)
 
 ## Research Findings
 
@@ -51,6 +51,11 @@
 | Follow PluginsHaveIssue dialog pattern | 03-01 | Consistent UI/UX with existing plugin warning | Familiar user experience |
 | Thread-safe dialog with ShowDialogOnUIThread | 03-01 | Qt widgets must be created on main thread | Prevents race conditions |
 | Place FONT SYSTEM after PLUGIN MANAGEMENT | 03-02 | Consistent with existing section ordering | Clean separation of concerns |
+| Repurpose Phase 04 for Font URL Manager | 04 | Original goals delivered by Phase 03; need dev tooling to add URLs to sources | Dev tool for content creation workflow |
+| Store URLs on source settings, not database | 04 | URLs travel with source, auto-export to .streamup | No sync issues, single source of truth |
+| Use Shift-activated menu pattern | 04 | Matches existing hidden dev features pattern | Consistent with WebSocket internal tools |
+| Source pointer NOT addref'd in TextSourceFontInfo | 04-01 | Simplicity - valid only during dialog lifetime | Caller must use results immediately |
+| Create font object if missing in SetFontUrlOnSource | 04-01 | Handle edge case gracefully | Robust against malformed sources |
 
 ### Font URL Format
 Font download URLs embedded directly in .streamup files:
@@ -82,9 +87,10 @@ Font.* keys added in 03-02:
 - Phase 02 Plan 01 complete: 2026-01-26
 - Phase 03 Plan 01 complete: 2026-01-26
 - Phase 03 Plan 02 complete: 2026-01-26 (gap closure)
+- Phase 04 Plan 01 complete: 2026-01-26 (Font URL Manager backend)
 
 ## Session Continuity
 
-**Last session:** 2026-01-26 09:53:46 UTC
-**Stopped at:** Completed 03-02-PLAN.md
+**Last session:** 2026-01-26 10:25:00 UTC
+**Stopped at:** Completed 04-01-PLAN.md
 **Resume file:** None
