@@ -402,6 +402,39 @@ std::vector<TextSourceFontInfo> ScanCurrentSceneForTextSources()
 	return results;
 }
 
+void SetFontUrlOnSource(obs_source_t *source, const std::string &url)
+{
+	if (!source) {
+		StreamUP::ErrorHandler::LogWarning("Null source passed to SetFontUrlOnSource",
+			StreamUP::ErrorHandler::Category::Source);
+		return;
+	}
+
+	obs_data_t *settings = obs_source_get_settings(source);
+	if (!settings) {
+		StreamUP::ErrorHandler::LogWarning("Failed to get settings for source in SetFontUrlOnSource",
+			StreamUP::ErrorHandler::Category::Source);
+		return;
+	}
+
+	obs_data_t *font = obs_data_get_obj(settings, "font");
+	if (font) {
+		obs_data_set_string(font, "url", url.c_str());
+		obs_data_release(font);
+	} else {
+		// Font object doesn't exist - create one with just the URL
+		// This shouldn't happen for text sources, but handle gracefully
+		obs_data_t *new_font = obs_data_create();
+		obs_data_set_string(new_font, "url", url.c_str());
+		obs_data_set_obj(settings, "font", new_font);
+		obs_data_release(new_font);
+	}
+
+	// Apply the updated settings to the source
+	obs_source_update(source, settings);
+	obs_data_release(settings);
+}
+
 //-------------------RESIZE AND SCALING FUNCTIONS-------------------
 void ResizeAdvancedMaskFilter(obs_source_t *filter, float factor)
 {
