@@ -1145,11 +1145,11 @@ void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
 
     // Check if studio mode is active - it overrides normal click behavior
     if (obs_frontend_preview_program_mode_active() && item->type() == SceneTreeItem::UserType + 2) {
-        // Check if scene switching is disabled in studio mode
-        if (settings.sceneOrganiserDisableSwitchingInStudioMode) {
-            // Scene switching is disabled in studio mode, do nothing
+        // Check if preview switching is disabled in studio mode
+        if (settings.sceneOrganiserDisablePreviewSwitchingInStudioMode) {
+            // Preview switching is disabled in studio mode, do nothing
             StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
-                QString("Single-click: Scene switching disabled in studio mode").toUtf8().constData());
+                QString("Single-click: Preview switching disabled in studio mode").toUtf8().constData());
         } else {
             // Studio mode: single-click always sets preview scene
             obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
@@ -1203,10 +1203,10 @@ void SceneOrganiserDock::onItemDoubleClicked(const QModelIndex &index)
     if (obs_frontend_preview_program_mode_active() && item->type() == SceneTreeItem::UserType + 2) {
         // Check if scene switching is disabled in studio mode
         StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-        if (settings.sceneOrganiserDisableSwitchingInStudioMode) {
-            // Scene switching is disabled in studio mode, do nothing
+        if (settings.sceneOrganiserDisableTransitionInStudioMode) {
+            // Transition is disabled in studio mode, do nothing
             StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
-                QString("Double-click: Scene switching disabled in studio mode").toUtf8().constData());
+                QString("Double-click: Transition disabled in studio mode").toUtf8().constData());
         } else {
             // Studio mode: double-click transitions preview to program (goes live)
             obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());

@@ -195,7 +195,8 @@ obs_data_t *LoadSettings()
 		obs_data_set_bool(data, "scene_organiser_show_icons", true);
 		obs_data_set_bool(data, "scene_organiser_group_folders", true);
 		obs_data_set_bool(data, "scene_organiser_remember_folder_state", true);
-		obs_data_set_bool(data, "scene_organiser_disable_switching_in_studio_mode", false);
+		obs_data_set_bool(data, "scene_organiser_disable_preview_switching_in_studio_mode", false);
+		obs_data_set_bool(data, "scene_organiser_disable_transition_in_studio_mode", false);
 		obs_data_set_int(data, "scene_organiser_item_height", 100);
 		obs_data_set_string(data, "scene_organiser_switch_mode", "single_click");
 		obs_data_set_string(data, "scene_organiser_sort_method", "none");
@@ -268,7 +269,25 @@ PluginSettings GetCurrentSettings()
 		settings.sceneOrganiserShowIcons = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_icons", true);
 	settings.sceneOrganiserGroupFolders = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_group_folders", true);
 	settings.sceneOrganiserRememberFolderState = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_remember_folder_state", true);
-	settings.sceneOrganiserDisableSwitchingInStudioMode = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_disable_switching_in_studio_mode", true);
+	// Load new split studio mode settings, with migration from old combined setting
+	bool hasOldSetting = obs_data_has_user_value(data, "scene_organiser_disable_switching_in_studio_mode");
+	bool hasNewPreviewSetting = obs_data_has_user_value(data, "scene_organiser_disable_preview_switching_in_studio_mode");
+	bool hasNewTransitionSetting = obs_data_has_user_value(data, "scene_organiser_disable_transition_in_studio_mode");
+
+	if (hasNewPreviewSetting || hasNewTransitionSetting) {
+		// Use new settings if they exist
+		settings.sceneOrganiserDisablePreviewSwitchingInStudioMode = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_disable_preview_switching_in_studio_mode", false);
+		settings.sceneOrganiserDisableTransitionInStudioMode = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_disable_transition_in_studio_mode", false);
+	} else if (hasOldSetting) {
+		// Migrate from old combined setting - if it was enabled, enable both new settings
+		bool oldValue = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_disable_switching_in_studio_mode", false);
+		settings.sceneOrganiserDisablePreviewSwitchingInStudioMode = oldValue;
+		settings.sceneOrganiserDisableTransitionInStudioMode = oldValue;
+	} else {
+		// No settings exist, use defaults (both disabled)
+		settings.sceneOrganiserDisablePreviewSwitchingInStudioMode = false;
+		settings.sceneOrganiserDisableTransitionInStudioMode = false;
+	}
 	settings.sceneOrganiserItemHeight = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "scene_organiser_item_height", 50);
 	// Ensure the height is at least 50% (the minimum allowed value)
 	if (settings.sceneOrganiserItemHeight < 50) {
@@ -368,7 +387,8 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "scene_organiser_show_icons", settings.sceneOrganiserShowIcons);
 	obs_data_set_bool(data, "scene_organiser_group_folders", settings.sceneOrganiserGroupFolders);
 	obs_data_set_bool(data, "scene_organiser_remember_folder_state", settings.sceneOrganiserRememberFolderState);
-	obs_data_set_bool(data, "scene_organiser_disable_switching_in_studio_mode", settings.sceneOrganiserDisableSwitchingInStudioMode);
+	obs_data_set_bool(data, "scene_organiser_disable_preview_switching_in_studio_mode", settings.sceneOrganiserDisablePreviewSwitchingInStudioMode);
+	obs_data_set_bool(data, "scene_organiser_disable_transition_in_studio_mode", settings.sceneOrganiserDisableTransitionInStudioMode);
 	obs_data_set_int(data, "scene_organiser_item_height", settings.sceneOrganiserItemHeight);
 
 	// Save scene sort method setting
@@ -1055,32 +1075,59 @@ void ShowSettingsDialog(int tabIndex)
 		rememberFolderStateLayout->addWidget(rememberFolderStateSwitch);
 		sceneOrganiserLayout->addLayout(rememberFolderStateLayout);
 
-		// Disable Switching in Studio Mode setting
-		QHBoxLayout *disableSwitchingLayout = new QHBoxLayout();
-		disableSwitchingLayout->setContentsMargins(0, 0, 0, 0);
-		disableSwitchingLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+		// Disable Preview Switching in Studio Mode setting (single-click)
+		QHBoxLayout *disablePreviewSwitchingLayout = new QHBoxLayout();
+		disablePreviewSwitchingLayout->setContentsMargins(0, 0, 0, 0);
+		disablePreviewSwitchingLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
 
-		QLabel *disableSwitchingLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.DisableSwitchingInStudioMode"));
-		disableSwitchingLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+		QLabel *disablePreviewSwitchingLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.DisablePreviewSwitchingInStudioMode"));
+		disablePreviewSwitchingLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-		disableSwitchingLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.DisableSwitchingInStudioModeDesc"));
+		disablePreviewSwitchingLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.DisablePreviewSwitchingInStudioModeDesc"));
 
-		StreamUP::UIStyles::SwitchButton *disableSwitchingSwitch =
-			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.sceneOrganiserDisableSwitchingInStudioMode);
-		disableSwitchingSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.DisableSwitchingInStudioModeDesc"));
+		StreamUP::UIStyles::SwitchButton *disablePreviewSwitchingSwitch =
+			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.sceneOrganiserDisablePreviewSwitchingInStudioMode);
+		disablePreviewSwitchingSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.DisablePreviewSwitchingInStudioModeDesc"));
 
-		QObject::connect(disableSwitchingSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+		QObject::connect(disablePreviewSwitchingSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
 			PluginSettings settings = GetCurrentSettings();
-			settings.sceneOrganiserDisableSwitchingInStudioMode = checked;
+			settings.sceneOrganiserDisablePreviewSwitchingInStudioMode = checked;
 			UpdateSettings(settings);
 			StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
 		});
 
-		disableSwitchingLayout->addWidget(disableSwitchingLabel);
-		disableSwitchingLayout->addStretch();
-		disableSwitchingLayout->addWidget(disableSwitchingSwitch);
-		sceneOrganiserLayout->addLayout(disableSwitchingLayout);
+		disablePreviewSwitchingLayout->addWidget(disablePreviewSwitchingLabel);
+		disablePreviewSwitchingLayout->addStretch();
+		disablePreviewSwitchingLayout->addWidget(disablePreviewSwitchingSwitch);
+		sceneOrganiserLayout->addLayout(disablePreviewSwitchingLayout);
+
+		// Disable Transition in Studio Mode setting (double-click)
+		QHBoxLayout *disableTransitionLayout = new QHBoxLayout();
+		disableTransitionLayout->setContentsMargins(0, 0, 0, 0);
+		disableTransitionLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+
+		QLabel *disableTransitionLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.DisableTransitionInStudioMode"));
+		disableTransitionLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		disableTransitionLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.DisableTransitionInStudioModeDesc"));
+
+		StreamUP::UIStyles::SwitchButton *disableTransitionSwitch =
+			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.sceneOrganiserDisableTransitionInStudioMode);
+		disableTransitionSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.DisableTransitionInStudioModeDesc"));
+
+		QObject::connect(disableTransitionSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+			PluginSettings settings = GetCurrentSettings();
+			settings.sceneOrganiserDisableTransitionInStudioMode = checked;
+			UpdateSettings(settings);
+			StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+		});
+
+		disableTransitionLayout->addWidget(disableTransitionLabel);
+		disableTransitionLayout->addStretch();
+		disableTransitionLayout->addWidget(disableTransitionSwitch);
+		sceneOrganiserLayout->addLayout(disableTransitionLayout);
 
 		// Item Height setting
 		QHBoxLayout *itemHeightLayout = new QHBoxLayout();
