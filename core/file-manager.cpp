@@ -372,9 +372,10 @@ std::vector<TextSourceFontInfo> ScanCurrentSceneForTextSources()
 	obs_scene_enum_items(scene, [](obs_scene_t*, obs_sceneitem_t *item, void *data) {
 		auto *results = static_cast<std::vector<TextSourceFontInfo>*>(data);
 		obs_source_t *source = obs_sceneitem_get_source(item);
-		const char *id = obs_source_get_id(source);
+		const char *id = obs_source_get_unversioned_id(source);
 
 		// Check for text source types (Windows and Linux/macOS)
+		// Use unversioned ID to handle text_gdiplus_v3, etc.
 		if (id && (strcmp(id, "text_gdiplus") == 0 || strcmp(id, "text_ft2_source") == 0)) {
 			TextSourceFontInfo info;
 			info.source = source;  // Not addref'd - valid only during enumeration
