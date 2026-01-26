@@ -4,6 +4,7 @@
 #include <obs.h>
 #include <obs-data.h>
 #include <obs-frontend-api.h>
+#include <QFontDatabase>
 #include <QString>
 #include <vector>
 #include <string>
@@ -131,6 +132,13 @@ std::vector<FontInfo> ExtractFontsFromStreamupData(obs_data_t *data);
  *         Returns empty vector if file cannot be loaded
  */
 std::vector<FontInfo> ExtractFontsFromStreamupFile(const QString &file_path);
+
+/**
+ * Check which fonts are missing from the system
+ * @param fonts Vector of FontInfo extracted from a .streamup file
+ * @return std::vector<FontInfo> Fonts that are not installed (preserves url field)
+ */
+std::vector<FontInfo> CheckFontAvailability(const std::vector<FontInfo>& fonts);
 
 //-------------------MAIN LOADING FUNCTIONS-------------------
 /**
