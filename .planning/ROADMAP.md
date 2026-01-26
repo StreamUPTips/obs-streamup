@@ -69,28 +69,27 @@ Plans:
 
 ---
 
-### Phase 04: Font URL Manager (Dev Tool)
+### Phase 04: Font URL Manager (Dev Tool) ✓
 
 **Goal:** Provide a dev tool to add font download URLs directly to text sources in OBS scenes.
 
-**Status:** Planned
+**Status:** Complete (2026-01-26)
 
 **Depends on:** Phase 03
 
 **Plans:** 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Backend logic (TextSourceFontInfo struct, ScanCurrentSceneForTextSources, SetFontUrlOnSource)
-- [ ] 04-02-PLAN.md — Dialog UI, menu integration, and localization keys
+- [x] 04-01-PLAN.md — Backend logic (TextSourceFontInfo struct, ScanCurrentSceneForTextSources, SetFontUrlOnSource)
+- [x] 04-02-PLAN.md — Dialog UI, menu integration, and localization keys
 
-**Details:**
-- Menu item in Tools submenu (always visible dev tool)
-- Dialog scans current scene for text sources (`text_gdiplus`, `text_ft2_source`)
-- Table displays: [Source Name] | [Font Name] | [URL (editable)]
-- Writes URLs directly to `source.settings.font.url` via OBS API
-- URLs persist on source and export automatically with `.streamup` files
-
-**Note:** Original Phase 04 goals (display URLs in dialog) were delivered by Phase 03.
+**Delivered:**
+- `TextSourceFontInfo` struct for holding source/font/URL data
+- `ScanCurrentSceneForTextSources()` — enumerates text sources in current scene
+- `SetFontUrlOnSource()` — writes URL to source settings via OBS API
+- `ShowFontUrlManagerDialog()` — styled dialog with editable URL column
+- Menu entry in Tools submenu (always visible)
+- All FontUrlManager.* localization keys (en-US, en-GB, zh-CN)
 
 ---
 
