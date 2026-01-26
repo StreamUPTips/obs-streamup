@@ -20,11 +20,11 @@ namespace StreamUP {
 namespace FileManager {
 
 namespace {
-// Case-insensitive check if font already exists in vector
-bool FontExistsInVector(const std::vector<std::string>& fonts, const std::string& font_name) {
+// Case-insensitive check if font already exists in vector (by face name)
+bool FontExistsInVector(const std::vector<FontInfo>& fonts, const std::string& font_name) {
     QString target = QString::fromStdString(font_name);
     for (const auto& existing : fonts) {
-        if (QString::compare(target, QString::fromStdString(existing), Qt::CaseInsensitive) == 0) {
+        if (QString::compare(target, QString::fromStdString(existing.face), Qt::CaseInsensitive) == 0) {
             return true;
         }
     }
@@ -33,9 +33,9 @@ bool FontExistsInVector(const std::vector<std::string>& fonts, const std::string
 } // anonymous namespace
 
 //-------------------FONT EXTRACTION FUNCTIONS-------------------
-std::vector<std::string> ExtractFontsFromStreamupData(obs_data_t *data)
+std::vector<FontInfo> ExtractFontsFromStreamupData(obs_data_t *data)
 {
-	std::vector<std::string> fonts;
+	std::vector<FontInfo> fonts;
 
 	if (!data) {
 		StreamUP::ErrorHandler::LogWarning("Null data passed to ExtractFontsFromStreamupData",
@@ -66,18 +66,24 @@ std::vector<std::string> ExtractFontsFromStreamupData(obs_data_t *data)
 			obs_data_t *settings = obs_data_get_obj(source_data, "settings");
 			if (settings) {
 				// Get font object
-				obs_data_t *font = obs_data_get_obj(settings, "font");
-				if (font) {
+				obs_data_t *font_obj = obs_data_get_obj(settings, "font");
+				if (font_obj) {
 					// Get face string
-					const char *face = obs_data_get_string(font, "face");
+					const char *face = obs_data_get_string(font_obj, "face");
 					if (face && strlen(face) > 0) {
-						std::string font_name(face);
 						// Add if not already present (case-insensitive)
-						if (!FontExistsInVector(fonts, font_name)) {
-							fonts.push_back(font_name);
+						if (!FontExistsInVector(fonts, face)) {
+							FontInfo info;
+							info.face = face;
+							// Get optional url field
+							const char *url = obs_data_get_string(font_obj, "url");
+							if (url && strlen(url) > 0) {
+								info.url = url;
+							}
+							fonts.push_back(info);
 						}
 					}
-					obs_data_release(font);
+					obs_data_release(font_obj);
 				}
 				obs_data_release(settings);
 			}
@@ -90,7 +96,7 @@ std::vector<std::string> ExtractFontsFromStreamupData(obs_data_t *data)
 	return fonts;
 }
 
-std::vector<std::string> ExtractFontsFromStreamupFile(const QString &file_path)
+std::vector<FontInfo> ExtractFontsFromStreamupFile(const QString &file_path)
 {
 	// Validate file exists
 	if (!StreamUP::ErrorHandler::ValidateFile(file_path)) {

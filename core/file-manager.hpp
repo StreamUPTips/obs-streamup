@@ -110,19 +110,27 @@ void LoadScene(obs_data_t *data, const QString &path);
 
 //-------------------FONT EXTRACTION FUNCTIONS-------------------
 /**
- * Extract unique font family names from StreamUP file data
- * @param data The parsed .streamup obs_data_t object
- * @return std::vector<std::string> Deduplicated list of font face names (case-insensitive)
+ * Font information extracted from StreamUP files
  */
-std::vector<std::string> ExtractFontsFromStreamupData(obs_data_t *data);
+struct FontInfo {
+	std::string face;  // Font family name
+	std::string url;   // Download URL (empty if not provided)
+};
 
 /**
- * Extract unique font family names from a .streamup file path
+ * Extract unique font info from StreamUP file data
+ * @param data The parsed .streamup obs_data_t object
+ * @return std::vector<FontInfo> Deduplicated list of fonts (case-insensitive by face)
+ */
+std::vector<FontInfo> ExtractFontsFromStreamupData(obs_data_t *data);
+
+/**
+ * Extract unique font info from a .streamup file path
  * @param file_path Path to the .streamup file
- * @return std::vector<std::string> Deduplicated list of font face names (case-insensitive)
+ * @return std::vector<FontInfo> Deduplicated list of fonts (case-insensitive by face)
  *         Returns empty vector if file cannot be loaded
  */
-std::vector<std::string> ExtractFontsFromStreamupFile(const QString &file_path);
+std::vector<FontInfo> ExtractFontsFromStreamupFile(const QString &file_path);
 
 //-------------------MAIN LOADING FUNCTIONS-------------------
 /**
