@@ -353,6 +353,55 @@ void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
     });
 }
 
+//-------------------FONT URL MANAGER FUNCTIONS-------------------
+std::vector<TextSourceFontInfo> ScanCurrentSceneForTextSources()
+{
+	std::vector<TextSourceFontInfo> results;
+
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) {
+		return results;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(current_scene);
+	if (!scene) {
+		obs_source_release(current_scene);
+		return results;
+	}
+
+	obs_scene_enum_items(scene, [](obs_scene_t*, obs_sceneitem_t *item, void *data) {
+		auto *results = static_cast<std::vector<TextSourceFontInfo>*>(data);
+		obs_source_t *source = obs_sceneitem_get_source(item);
+		const char *id = obs_source_get_id(source);
+
+		// Check for text source types (Windows and Linux/macOS)
+		if (id && (strcmp(id, "text_gdiplus") == 0 || strcmp(id, "text_ft2_source") == 0)) {
+			TextSourceFontInfo info;
+			info.source = source;  // Not addref'd - valid only during enumeration
+			info.sourceName = obs_source_get_name(source);
+
+			obs_data_t *settings = obs_source_get_settings(source);
+			if (settings) {
+				obs_data_t *font = obs_data_get_obj(settings, "font");
+				if (font) {
+					const char *face = obs_data_get_string(font, "face");
+					const char *url = obs_data_get_string(font, "url");
+					info.fontFace = face ? face : "";
+					info.currentUrl = url ? url : "";
+					obs_data_release(font);
+				}
+				obs_data_release(settings);
+			}
+
+			results->push_back(info);
+		}
+		return true; // continue enumeration
+	}, &results);
+
+	obs_source_release(current_scene);
+	return results;
+}
+
 //-------------------RESIZE AND SCALING FUNCTIONS-------------------
 void ResizeAdvancedMaskFilter(obs_source_t *filter, float factor)
 {
