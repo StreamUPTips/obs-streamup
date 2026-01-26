@@ -1,4 +1,5 @@
 #include "studio-mode-enhancements.hpp"
+#include "theme-enhancements.hpp"
 #include "../utilities/debug-logger.hpp"
 #include <obs-frontend-api.h>
 #include <QMainWindow>
@@ -6,6 +7,9 @@
 #include <QStyleOptionSlider>
 #include <QApplication>
 #include <QWidget>
+#include <QVBoxLayout>
+#include <QFrame>
+#include <QTimer>
 
 namespace StreamUP {
 namespace StudioModeEnhancements {
@@ -135,13 +139,118 @@ void EnhanceTransitionSlider()
     }
 }
 
+void StyleProgramContainer()
+{
+    // Only apply if StreamUP theme is active
+    if (!ThemeEnhancements::IsUsingStreamUPTheme()) {
+        return;
+    }
+
+    QMainWindow* mainWindow = static_cast<QMainWindow*>(obs_frontend_get_main_window());
+    if (!mainWindow) {
+        return;
+    }
+
+    QWidget* centralWidget = mainWindow->centralWidget();
+    if (!centralWidget) {
+        return;
+    }
+
+    // Find canvasEditor which contains the previewLayout
+    QWidget* canvasEditor = centralWidget->findChild<QWidget*>("canvasEditor");
+    if (!canvasEditor) {
+        return;
+    }
+
+    QLayout* previewLayout = canvasEditor->layout();
+    if (!previewLayout) {
+        return;
+    }
+
+    // Find previewContainer to get the previewXContainer height for reference
+    QWidget* previewContainer = centralWidget->findChild<QWidget*>("previewContainer");
+    int bottomBarHeight = 28; // Default height matching zoom controls bar
+
+    if (previewContainer) {
+        QWidget* previewXContainer = previewContainer->findChild<QWidget*>("previewXContainer");
+        if (previewXContainer && previewXContainer->height() > 0) {
+            bottomBarHeight = previewXContainer->height();
+        }
+    }
+
+    // Iterate through previewLayout children to find programWidget
+    // programWidget is dynamically created when Studio Mode is enabled
+    for (int i = 0; i < previewLayout->count(); ++i) {
+        QLayoutItem* item = previewLayout->itemAt(i);
+        QWidget* widget = item ? item->widget() : nullptr;
+        if (!widget) continue;
+
+        // Skip known OBS widgets
+        QString name = widget->objectName();
+        if (name == "previewDisabledWidget" || name == "previewContainer") {
+            continue;
+        }
+
+        // Skip if already processed
+        if (name == "programContainer") {
+            continue;
+        }
+
+        // Check if this is an unnamed widget with OBSQTDisplay child
+        QString className = QString::fromUtf8(widget->metaObject()->className());
+        if (className == "QWidget" && name.isEmpty()) {
+            QList<QWidget*> children = widget->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly);
+            bool hasProgramDisplay = false;
+            for (QWidget* child : children) {
+                QString childClass = QString::fromUtf8(child->metaObject()->className());
+                if (childClass == "OBSQTDisplay") {
+                    hasProgramDisplay = true;
+                    break;
+                }
+            }
+
+            if (hasProgramDisplay) {
+                // Set object name for theme CSS styling
+                widget->setObjectName("programContainer");
+
+                QVBoxLayout* programLayout = qobject_cast<QVBoxLayout*>(widget->layout());
+                if (programLayout) {
+                    // Create the bottom bar widget
+                    // Styling is handled by the StreamUP theme CSS rules for #programBottomBar
+                    QFrame* bottomBar = new QFrame(widget);
+                    bottomBar->setObjectName("programBottomBar");
+                    bottomBar->setFixedHeight(bottomBarHeight);
+                    bottomBar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+                    bottomBar->setFrameShape(QFrame::NoFrame);
+
+                    programLayout->addWidget(bottomBar);
+
+                    // Apply layout settings
+                    programLayout->setSpacing(0);
+                    programLayout->setContentsMargins(0, 0, 0, 0);
+
+                    blog(LOG_INFO, "[StreamUP] Studio Mode: Added programBottomBar (height=%d)", bottomBarHeight);
+                }
+
+                blog(LOG_INFO, "[StreamUP] Studio Mode: Styled programContainer");
+                break;
+            }
+        }
+    }
+}
+
 static void OnStudioModeEvent(enum obs_frontend_event event, void *data)
 {
     UNUSED_PARAMETER(data);
 
     if (event == OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED) {
-        blog(LOG_INFO, "[StreamUP] Studio Mode enabled - applying transition slider enhancements");
-        EnhanceTransitionSlider();
+        blog(LOG_INFO, "[StreamUP] Studio Mode enabled - applying enhancements with delay");
+        // Use a timer to delay applying enhancements, giving OBS time to create the programWidget
+        QTimer::singleShot(100, []() {
+            blog(LOG_INFO, "[StreamUP] Studio Mode: Applying delayed enhancements");
+            EnhanceTransitionSlider();
+            StyleProgramContainer();
+        });
     }
 }
 
@@ -153,6 +262,7 @@ void ApplyStudioModeEnhancements()
     if (obs_frontend_preview_program_mode_active()) {
         blog(LOG_INFO, "[StreamUP] Studio Mode already active - applying enhancements immediately");
         EnhanceTransitionSlider();
+        StyleProgramContainer();
     }
 
     // Register event callback to apply enhancements when studio mode is enabled

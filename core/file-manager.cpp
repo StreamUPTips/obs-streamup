@@ -7,16 +7,619 @@
 #include "string-utils.hpp"
 #include "version-utils.hpp"
 #include "path-utils.hpp"
+#include "../ui/ui-styles.hpp"
+#include "../ui/ui-helpers.hpp"
 #include <obs-module.h>
 #include <QFile>
 #include <QFileInfo>
 #include <QFileDialog>
 #include <QApplication>
+#include <QString>
+#include <QTableWidget>
+#include <QTableWidgetItem>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QPushButton>
+#include <QGroupBox>
 #include <list>
 #include <map>
 
 namespace StreamUP {
 namespace FileManager {
+
+namespace {
+// Case-insensitive check if font already exists in vector (by face name)
+bool FontExistsInVector(const std::vector<FontInfo>& fonts, const std::string& font_name) {
+    QString target = QString::fromStdString(font_name);
+    for (const auto& existing : fonts) {
+        if (QString::compare(target, QString::fromStdString(existing.face), Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Create styled table for missing fonts display
+QTableWidget* CreateMissingFontsTable(const std::vector<FontInfo>& missingFonts) {
+    QStringList headers = {
+        obs_module_text("Font.Label.FontName"),
+        obs_module_text("Font.Label.DownloadLink")
+    };
+
+    QTableWidget* table = StreamUP::UIStyles::CreateStyledTable(headers);
+    table->setRowCount(static_cast<int>(missingFonts.size()));
+
+    int row = 0;
+    for (const auto& fontInfo : missingFonts) {
+        // Font Name column
+        QTableWidgetItem* nameItem = new QTableWidgetItem(
+            QString::fromStdString(fontInfo.face));
+        table->setItem(row, 0, nameItem);
+
+        // Download Link column
+        if (!fontInfo.url.empty()) {
+            QTableWidgetItem* downloadItem = new QTableWidgetItem(
+                obs_module_text("UI.Button.Download"));
+            downloadItem->setForeground(QColor("#3b82f6"));
+            downloadItem->setData(Qt::UserRole, QString::fromStdString(fontInfo.url));
+            table->setItem(row, 1, downloadItem);
+        } else {
+            QTableWidgetItem* noLinkItem = new QTableWidgetItem(
+                obs_module_text("Font.Message.NoDownloadAvailable"));
+            noLinkItem->setForeground(QColor("#9ca3af")); // Gray for unavailable
+            table->setItem(row, 1, noLinkItem);
+        }
+
+        row++;
+    }
+
+    // Connect click handler for download links
+    QObject::connect(table, &QTableWidget::cellClicked,
+        [table](int r, int c) {
+            StreamUP::UIStyles::HandleTableCellClick(table, r, c);
+        });
+
+    StreamUP::UIStyles::AutoResizeTableColumns(table);
+    return table;
+}
+} // anonymous namespace
+
+//-------------------FONT EXTRACTION FUNCTIONS-------------------
+std::vector<FontInfo> ExtractFontsFromStreamupData(obs_data_t *data)
+{
+	std::vector<FontInfo> fonts;
+
+	if (!data) {
+		StreamUP::ErrorHandler::LogWarning("Null data passed to ExtractFontsFromStreamupData",
+			StreamUP::ErrorHandler::Category::FileSystem);
+		return fonts;
+	}
+
+	// Get sources array
+	obs_data_array_t *sources = obs_data_get_array(data, "sources");
+	if (!sources) {
+		return fonts;
+	}
+
+	const size_t count = obs_data_array_count(sources);
+	for (size_t i = 0; i < count; i++) {
+		obs_data_t *source_data = obs_data_array_item(sources, i);
+		if (!source_data) {
+			continue;
+		}
+
+		// Check if this is a text source
+		const char *source_id = obs_data_get_string(source_data, "id");
+		bool is_text_source = (source_id &&
+			(strcmp(source_id, "text_gdiplus") == 0 || strcmp(source_id, "text_ft2_source") == 0));
+
+		if (is_text_source) {
+			// Get settings object
+			obs_data_t *settings = obs_data_get_obj(source_data, "settings");
+			if (settings) {
+				// Get font object
+				obs_data_t *font_obj = obs_data_get_obj(settings, "font");
+				if (font_obj) {
+					// Get face string
+					const char *face = obs_data_get_string(font_obj, "face");
+					if (face && strlen(face) > 0) {
+						// Add if not already present (case-insensitive)
+						if (!FontExistsInVector(fonts, face)) {
+							FontInfo info;
+							info.face = face;
+							// Get optional url field
+							const char *url = obs_data_get_string(font_obj, "url");
+							if (url && strlen(url) > 0) {
+								info.url = url;
+							}
+							fonts.push_back(info);
+						}
+					}
+					obs_data_release(font_obj);
+				}
+				obs_data_release(settings);
+			}
+		}
+
+		obs_data_release(source_data);
+	}
+
+	obs_data_array_release(sources);
+	return fonts;
+}
+
+std::vector<FontInfo> ExtractFontsFromStreamupFile(const QString &file_path)
+{
+	// Validate file exists
+	if (!StreamUP::ErrorHandler::ValidateFile(file_path)) {
+		return {};
+	}
+
+	// Load the .streamup file
+	auto data = OBSWrappers::MakeOBSDataFromJsonFile(QT_TO_UTF8(file_path));
+	if (!data) {
+		StreamUP::ErrorHandler::LogWarning(
+			"Failed to parse StreamUP file for font extraction: " + file_path.toStdString(),
+			StreamUP::ErrorHandler::Category::FileSystem);
+		return {};
+	}
+
+	return ExtractFontsFromStreamupData(data.get());
+}
+
+std::vector<FontInfo> CheckFontAvailability(const std::vector<FontInfo>& fonts)
+{
+	std::vector<FontInfo> missingFonts;
+
+	// Get all installed fonts from system (Qt 6 static API)
+	QStringList installedFonts = QFontDatabase::families();
+
+	for (const FontInfo& fontInfo : fonts) {
+		// Skip empty font names
+		if (fontInfo.face.empty()) {
+			continue;
+		}
+
+		QString qFontName = QString::fromStdString(fontInfo.face);
+		bool found = false;
+
+		// Case-insensitive comparison against installed fonts
+		for (const QString& installed : installedFonts) {
+			if (QString::compare(qFontName, installed, Qt::CaseInsensitive) == 0) {
+				found = true;
+				break;
+			}
+		}
+
+		if (!found) {
+			// Return full FontInfo to preserve url for Phase 04
+			missingFonts.push_back(fontInfo);
+		}
+	}
+
+	return missingFonts;
+}
+
+void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
+                            std::function<void()> continueCallback)
+{
+    StreamUP::UIHelpers::ShowDialogOnUIThread([missingFonts, continueCallback]() {
+        QString titleText = obs_module_text("Font.Status.MissingFonts");
+        QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
+
+        QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
+        dialogLayout->setContentsMargins(0, 0, 0, 0);
+        dialogLayout->setSpacing(0);
+
+        // Header section (same pattern as PluginsHaveIssue)
+        QWidget* headerWidget = new QWidget();
+        headerWidget->setObjectName("headerWidget");
+        headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
+            .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_XL)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
+
+        QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
+        headerLayout->setContentsMargins(0, 0, 0, 0);
+
+        QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(titleText);
+        titleLabel->setAlignment(Qt::AlignCenter);
+        headerLayout->addWidget(titleLabel);
+
+        headerLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
+
+        QString descText = obs_module_text("Font.Message.RequiredNotInstalled");
+        QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(descText);
+        headerLayout->addWidget(subtitleLabel);
+
+        dialogLayout->addWidget(headerWidget);
+
+        // Content area with fonts table
+        QVBoxLayout *contentLayout = new QVBoxLayout();
+        contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+            StreamUP::UIStyles::Sizes::PADDING_XL,
+            StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+            StreamUP::UIStyles::Sizes::PADDING_XL);
+        contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+
+        dialogLayout->addLayout(contentLayout);
+
+        // Create styled GroupBox with table
+        QGroupBox *fontGroup = StreamUP::UIStyles::CreateStyledGroupBox(
+            obs_module_text("Font.Dialog.MissingGroup"), "error");
+        fontGroup->setMinimumWidth(400);
+        fontGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+
+        QVBoxLayout *fontLayout = new QVBoxLayout(fontGroup);
+        fontLayout->setContentsMargins(8, 8, 8, 8);
+        fontLayout->setSpacing(0);
+
+        QTableWidget *fontTable = CreateMissingFontsTable(missingFonts);
+
+        // Dynamic height calculation: max 10 rows
+        int rowCount = fontTable->rowCount();
+        int maxVisibleRows = std::min(rowCount, 10);
+        int headerHeight = 35;
+        int rowHeight = 30;
+        int tableHeight = headerHeight + (rowHeight * maxVisibleRows) + 6;
+
+        fontTable->setFixedHeight(tableHeight);
+        if (rowCount > 10) {
+            fontTable->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        } else {
+            fontTable->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        }
+
+        // Remove table border to blend with group box (same as PluginsHaveIssue)
+        fontTable->setStyleSheet(
+            fontTable->styleSheet() +
+            "QTableWidget { "
+            "border: none; "
+            "background: transparent; "
+            "border-radius: 8px; "
+            "} "
+            "QTableWidget::item { "
+            "border-bottom: 1px solid #374151; "
+            "} "
+            "QTableWidget::item:last { "
+            "border-bottom: none; "
+            "} "
+            "QHeaderView::section:first { "
+            "border-top-left-radius: 8px; "
+            "} "
+            "QHeaderView::section:last { "
+            "border-top-right-radius: 8px; "
+            "}"
+        );
+
+        fontLayout->addWidget(fontTable);
+        contentLayout->addWidget(fontGroup);
+
+        // Warning message (same pattern as PluginsHaveIssue)
+        dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+        QLabel *warningLabel = new QLabel(QString::fromUtf8("\xe2\x9a\xa0\xef\xb8\x8f ") +
+            QString(obs_module_text("Font.Dialog.WarningContinue")));
+        warningLabel->setWordWrap(true);
+        warningLabel->setStyleSheet(QString(
+            "QLabel {"
+            "background: rgba(45, 55, 72, 0.8);"
+            "color: #fbbf24;"
+            "border: 1px solid #f59e0b;"
+            "border-radius: %1px;"
+            "padding: %2px;"
+            "margin: %3px %4px;"
+            "font-size: %5px;"
+            "line-height: 1.4;"
+            "}")
+            .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+            .arg(StreamUP::UIStyles::Sizes::SPACING_SMALL)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_XL + 5)
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+        dialogLayout->addWidget(warningLabel);
+
+        // Buttons
+        QHBoxLayout *buttonLayout = new QHBoxLayout();
+        buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+            StreamUP::UIStyles::Sizes::SPACING_MEDIUM,
+            StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+            StreamUP::UIStyles::Sizes::PADDING_XL);
+        buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        buttonLayout->addStretch();
+
+        // Continue Anyway button
+        QPushButton *continueButton = StreamUP::UIStyles::CreateStyledButton(
+            obs_module_text("UI.Message.ContinueAnyway"), "warning");
+        QObject::connect(continueButton, &QPushButton::clicked, [dialog, continueCallback]() {
+            dialog->close();
+            continueCallback();
+        });
+        buttonLayout->addWidget(continueButton);
+
+        // Cancel button
+        QPushButton *cancelButton = StreamUP::UIStyles::CreateStyledButton(
+            obs_module_text("UI.Button.Cancel"), "neutral", 30, 100);
+        QObject::connect(cancelButton, &QPushButton::clicked, dialog, &QDialog::close);
+        buttonLayout->addWidget(cancelButton);
+
+        dialogLayout->addLayout(buttonLayout);
+        dialog->setLayout(dialogLayout);
+
+        // Apply auto-sizing
+        StreamUP::UIStyles::ApplyAutoSizing(dialog, 500, 800, 200, 600);
+    });
+}
+
+//-------------------FONT URL MANAGER FUNCTIONS-------------------
+std::vector<TextSourceFontInfo> ScanCurrentSceneForTextSources()
+{
+	std::vector<TextSourceFontInfo> results;
+
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) {
+		return results;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(current_scene);
+	if (!scene) {
+		obs_source_release(current_scene);
+		return results;
+	}
+
+	obs_scene_enum_items(scene, [](obs_scene_t*, obs_sceneitem_t *item, void *data) {
+		auto *results = static_cast<std::vector<TextSourceFontInfo>*>(data);
+		obs_source_t *source = obs_sceneitem_get_source(item);
+		const char *id = obs_source_get_unversioned_id(source);
+
+		// Check for text source types (Windows and Linux/macOS)
+		// Use unversioned ID to handle text_gdiplus_v3, etc.
+		if (id && (strcmp(id, "text_gdiplus") == 0 || strcmp(id, "text_ft2_source") == 0)) {
+			TextSourceFontInfo info;
+			info.source = source;  // Not addref'd - valid only during enumeration
+			info.sourceName = obs_source_get_name(source);
+
+			obs_data_t *settings = obs_source_get_settings(source);
+			if (settings) {
+				obs_data_t *font = obs_data_get_obj(settings, "font");
+				if (font) {
+					const char *face = obs_data_get_string(font, "face");
+					const char *url = obs_data_get_string(font, "url");
+					info.fontFace = face ? face : "";
+					info.currentUrl = url ? url : "";
+					obs_data_release(font);
+				}
+				obs_data_release(settings);
+			}
+
+			results->push_back(info);
+		}
+		return true; // continue enumeration
+	}, &results);
+
+	obs_source_release(current_scene);
+	return results;
+}
+
+void SetFontUrlOnSource(obs_source_t *source, const std::string &url)
+{
+	if (!source) {
+		StreamUP::ErrorHandler::LogWarning("Null source passed to SetFontUrlOnSource",
+			StreamUP::ErrorHandler::Category::Source);
+		return;
+	}
+
+	obs_data_t *settings = obs_source_get_settings(source);
+	if (!settings) {
+		StreamUP::ErrorHandler::LogWarning("Failed to get settings for source in SetFontUrlOnSource",
+			StreamUP::ErrorHandler::Category::Source);
+		return;
+	}
+
+	obs_data_t *font = obs_data_get_obj(settings, "font");
+	if (font) {
+		obs_data_set_string(font, "url", url.c_str());
+		obs_data_release(font);
+	} else {
+		// Font object doesn't exist - create one with just the URL
+		// This shouldn't happen for text sources, but handle gracefully
+		obs_data_t *new_font = obs_data_create();
+		obs_data_set_string(new_font, "url", url.c_str());
+		obs_data_set_obj(settings, "font", new_font);
+		obs_data_release(new_font);
+	}
+
+	// Apply the updated settings to the source
+	obs_source_update(source, settings);
+	obs_data_release(settings);
+}
+
+void ShowFontUrlManagerDialog()
+{
+	StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
+		QString titleText = obs_module_text("FontUrlManager.Title");
+		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
+
+		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
+		dialogLayout->setContentsMargins(0, 0, 0, 0);
+		dialogLayout->setSpacing(0);
+
+		// Header section
+		QWidget* headerWidget = new QWidget();
+		headerWidget->setObjectName("headerWidget");
+		headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
+			.arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
+			.arg(StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+			.arg(StreamUP::UIStyles::Sizes::PADDING_XL)
+			.arg(StreamUP::UIStyles::Sizes::PADDING_XL));
+
+		QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
+		headerLayout->setContentsMargins(0, 0, 0, 0);
+
+		QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(titleText);
+		titleLabel->setAlignment(Qt::AlignCenter);
+		headerLayout->addWidget(titleLabel);
+
+		headerLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
+
+		QString descText = obs_module_text("FontUrlManager.Description");
+		QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(descText);
+		headerLayout->addWidget(subtitleLabel);
+
+		dialogLayout->addWidget(headerWidget);
+
+		// Content area
+		QVBoxLayout *contentLayout = new QVBoxLayout();
+		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+			StreamUP::UIStyles::Sizes::PADDING_XL,
+			StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+			StreamUP::UIStyles::Sizes::PADDING_XL);
+		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+
+		dialogLayout->addLayout(contentLayout);
+
+		// Scan current scene for text sources
+		std::vector<TextSourceFontInfo> textSources = ScanCurrentSceneForTextSources();
+
+		if (textSources.empty()) {
+			// No text sources found - show message
+			QLabel *emptyLabel = new QLabel(obs_module_text("FontUrlManager.Status.NoTextSources"));
+			emptyLabel->setAlignment(Qt::AlignCenter);
+			emptyLabel->setStyleSheet(QString("color: %1; padding: 20px;")
+				.arg(StreamUP::UIStyles::Colors::TEXT_MUTED));
+			contentLayout->addWidget(emptyLabel);
+		} else {
+			// Create table with text sources
+			QStringList headers = {
+				obs_module_text("FontUrlManager.Label.SourceName"),
+				obs_module_text("FontUrlManager.Label.FontName"),
+				obs_module_text("FontUrlManager.Label.Url")
+			};
+
+			QTableWidget* table = StreamUP::UIStyles::CreateStyledTable(headers);
+			table->setRowCount(static_cast<int>(textSources.size()));
+
+			// Enable editing for URL column (double-click or select and click)
+			table->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::SelectedClicked);
+
+			int row = 0;
+			for (const auto& info : textSources) {
+				// Source Name (read-only) - also store source pointer in UserRole
+				QTableWidgetItem* sourceItem = new QTableWidgetItem(
+					QString::fromStdString(info.sourceName));
+				sourceItem->setFlags(sourceItem->flags() & ~Qt::ItemIsEditable);
+				sourceItem->setData(Qt::UserRole, QVariant::fromValue(static_cast<void*>(info.source)));
+				table->setItem(row, 0, sourceItem);
+
+				// Font Name (read-only)
+				QTableWidgetItem* fontItem = new QTableWidgetItem(
+					QString::fromStdString(info.fontFace));
+				fontItem->setFlags(fontItem->flags() & ~Qt::ItemIsEditable);
+				table->setItem(row, 1, fontItem);
+
+				// URL (editable)
+				QTableWidgetItem* urlItem = new QTableWidgetItem(
+					QString::fromStdString(info.currentUrl));
+				// Keep default flags (editable)
+				table->setItem(row, 2, urlItem);
+
+				row++;
+			}
+
+			// Dynamic height calculation: max 10 rows
+			int rowCount = table->rowCount();
+			int maxVisibleRows = std::min(rowCount, 10);
+			int headerHeight = 35;
+			int rowHeight = 30;
+			int tableHeight = headerHeight + (rowHeight * maxVisibleRows) + 6;
+
+			table->setFixedHeight(tableHeight);
+			if (rowCount > 10) {
+				table->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+			} else {
+				table->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+			}
+
+			// Style table to match dialog
+			table->setStyleSheet(
+				table->styleSheet() +
+				"QTableWidget { "
+				"border: none; "
+				"background: transparent; "
+				"border-radius: 8px; "
+				"} "
+				"QTableWidget::item { "
+				"border-bottom: 1px solid #374151; "
+				"} "
+				"QHeaderView::section:first { "
+				"border-top-left-radius: 8px; "
+				"} "
+				"QHeaderView::section:last { "
+				"border-top-right-radius: 8px; "
+				"}"
+			);
+
+			StreamUP::UIStyles::AutoResizeTableColumns(table);
+			contentLayout->addWidget(table);
+
+			// Store table for button handlers (sources stored in row data)
+			dialog->setProperty("table", QVariant::fromValue(static_cast<void*>(table)));
+		}
+
+		// Buttons
+		QHBoxLayout *buttonLayout = new QHBoxLayout();
+		buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+			StreamUP::UIStyles::Sizes::SPACING_MEDIUM,
+			StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+			StreamUP::UIStyles::Sizes::PADDING_XL);
+		buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+		buttonLayout->addStretch();
+
+		if (!textSources.empty()) {
+			// Save button
+			QPushButton *saveButton = StreamUP::UIStyles::CreateStyledButton(
+				obs_module_text("FontUrlManager.Button.Save"), "success");
+			QObject::connect(saveButton, &QPushButton::clicked, [dialog]() {
+				QTableWidget *table = static_cast<QTableWidget*>(
+					dialog->property("table").value<void*>());
+
+				if (table) {
+					for (int row = 0; row < table->rowCount(); row++) {
+						QTableWidgetItem *sourceItem = table->item(row, 0);
+						QTableWidgetItem *urlItem = table->item(row, 2);
+						if (sourceItem && urlItem) {
+							obs_source_t* source = static_cast<obs_source_t*>(
+								sourceItem->data(Qt::UserRole).value<void*>());
+							if (source) {
+								QString url = urlItem->text().trimmed();
+								SetFontUrlOnSource(source, url.toStdString());
+							}
+						}
+					}
+				}
+				dialog->close();
+			});
+			buttonLayout->addWidget(saveButton);
+		}
+
+		// Cancel/Close button
+		QString closeText = textSources.empty()
+			? obs_module_text("UI.Button.Close")
+			: obs_module_text("FontUrlManager.Button.Cancel");
+		QPushButton *cancelButton = StreamUP::UIStyles::CreateStyledButton(
+			closeText, "neutral", 30, 100);
+		QObject::connect(cancelButton, &QPushButton::clicked, dialog, &QDialog::close);
+		buttonLayout->addWidget(cancelButton);
+
+		dialogLayout->addLayout(buttonLayout);
+		dialog->setLayout(dialogLayout);
+
+		// Apply auto-sizing
+		StreamUP::UIStyles::ApplyAutoSizing(dialog, 550, 850, 200, 500);
+	});
+}
 
 //-------------------RESIZE AND SCALING FUNCTIONS-------------------
 void ResizeAdvancedMaskFilter(obs_source_t *filter, float factor)
@@ -431,19 +1034,49 @@ void LoadStreamupFileWithWarning()
 {
 	// Use cached plugin status for instant response
 	if (StreamUP::PluginManager::IsAllPluginsUpToDateCached()) {
-		// Plugins are OK, directly open the Install Product dialog (file selector)
-		QString fileName =
-			QFileDialog::getOpenFileName(nullptr, QT_UTF8(obs_module_text("UI.Button.Load")), QString(), "StreamUP File (*.streamup)");
+		// Plugins are OK, show file selector
+		QString fileName = QFileDialog::getOpenFileName(
+			nullptr, QT_UTF8(obs_module_text("UI.Button.Load")),
+			QString(), "StreamUP File (*.streamup)");
+
 		if (!fileName.isEmpty()) {
-			LoadStreamupFileFromPath(fileName, false);
+			// Check fonts in selected file
+			std::vector<FontInfo> fonts = ExtractFontsFromStreamupFile(fileName);
+			std::vector<FontInfo> missingFonts = CheckFontAvailability(fonts);
+
+			if (missingFonts.empty()) {
+				// All fonts available, load directly
+				LoadStreamupFileFromPath(fileName, false);
+			} else {
+				// Fonts missing, show warning with continue callback
+				ShowMissingFontsDialog(missingFonts, [fileName]() {
+					LoadStreamupFileFromPath(fileName, true);
+				});
+			}
 		}
 		return;
 	}
 
-	// Plugins have issues, show cached plugin issues dialog with continue callback
+	// Plugins have issues, show cached plugin issues dialog first
+	// On continue, allow loading with font check
 	StreamUP::PluginManager::ShowCachedPluginIssuesDialog([]() {
-		// Continue anyway callback - load with force
-		LoadStreamupFile(true);
+		// After user clicks Continue Anyway for plugins, show file selector with font check
+		QString fileName = QFileDialog::getOpenFileName(
+			nullptr, QT_UTF8(obs_module_text("UI.Button.Load")),
+			QString(), "StreamUP File (*.streamup)");
+
+		if (!fileName.isEmpty()) {
+			std::vector<FontInfo> fonts = ExtractFontsFromStreamupFile(fileName);
+			std::vector<FontInfo> missingFonts = CheckFontAvailability(fonts);
+
+			if (missingFonts.empty()) {
+				LoadStreamupFileFromPath(fileName, true);
+			} else {
+				ShowMissingFontsDialog(missingFonts, [fileName]() {
+					LoadStreamupFileFromPath(fileName, true);
+				});
+			}
+		}
 	});
 }
 

@@ -222,6 +222,9 @@ public:
     // Lock state management
     bool m_isLocked;
 
+    // Initial load state - prevents saving until first load completes
+    bool m_initialLoadComplete;
+
     // Expand/collapse state management
     bool m_allExpanded;
 
