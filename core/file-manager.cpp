@@ -201,6 +201,158 @@ std::vector<FontInfo> CheckFontAvailability(const std::vector<FontInfo>& fonts)
 	return missingFonts;
 }
 
+void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
+                            std::function<void()> continueCallback)
+{
+    StreamUP::UIHelpers::ShowDialogOnUIThread([missingFonts, continueCallback]() {
+        QString titleText = obs_module_text("Font.Status.MissingFonts");
+        QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
+
+        QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
+        dialogLayout->setContentsMargins(0, 0, 0, 0);
+        dialogLayout->setSpacing(0);
+
+        // Header section (same pattern as PluginsHaveIssue)
+        QWidget* headerWidget = new QWidget();
+        headerWidget->setObjectName("headerWidget");
+        headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
+            .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_XL)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
+
+        QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
+        headerLayout->setContentsMargins(0, 0, 0, 0);
+
+        QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(titleText);
+        titleLabel->setAlignment(Qt::AlignCenter);
+        headerLayout->addWidget(titleLabel);
+
+        headerLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
+
+        QString descText = obs_module_text("Font.Message.RequiredNotInstalled");
+        QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(descText);
+        headerLayout->addWidget(subtitleLabel);
+
+        dialogLayout->addWidget(headerWidget);
+
+        // Content area with fonts table
+        QVBoxLayout *contentLayout = new QVBoxLayout();
+        contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+            StreamUP::UIStyles::Sizes::PADDING_XL,
+            StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+            StreamUP::UIStyles::Sizes::PADDING_XL);
+        contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+
+        dialogLayout->addLayout(contentLayout);
+
+        // Create styled GroupBox with table
+        QGroupBox *fontGroup = StreamUP::UIStyles::CreateStyledGroupBox(
+            obs_module_text("Font.Dialog.MissingGroup"), "error");
+        fontGroup->setMinimumWidth(400);
+        fontGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+
+        QVBoxLayout *fontLayout = new QVBoxLayout(fontGroup);
+        fontLayout->setContentsMargins(8, 8, 8, 8);
+        fontLayout->setSpacing(0);
+
+        QTableWidget *fontTable = CreateMissingFontsTable(missingFonts);
+
+        // Dynamic height calculation: max 10 rows
+        int rowCount = fontTable->rowCount();
+        int maxVisibleRows = std::min(rowCount, 10);
+        int headerHeight = 35;
+        int rowHeight = 30;
+        int tableHeight = headerHeight + (rowHeight * maxVisibleRows) + 6;
+
+        fontTable->setFixedHeight(tableHeight);
+        if (rowCount > 10) {
+            fontTable->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        } else {
+            fontTable->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        }
+
+        // Remove table border to blend with group box (same as PluginsHaveIssue)
+        fontTable->setStyleSheet(
+            fontTable->styleSheet() +
+            "QTableWidget { "
+            "border: none; "
+            "background: transparent; "
+            "border-radius: 8px; "
+            "} "
+            "QTableWidget::item { "
+            "border-bottom: 1px solid #374151; "
+            "} "
+            "QTableWidget::item:last { "
+            "border-bottom: none; "
+            "} "
+            "QHeaderView::section:first { "
+            "border-top-left-radius: 8px; "
+            "} "
+            "QHeaderView::section:last { "
+            "border-top-right-radius: 8px; "
+            "}"
+        );
+
+        fontLayout->addWidget(fontTable);
+        contentLayout->addWidget(fontGroup);
+
+        // Warning message (same pattern as PluginsHaveIssue)
+        dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+        QLabel *warningLabel = new QLabel(QString::fromUtf8("\xe2\x9a\xa0\xef\xb8\x8f ") +
+            QString(obs_module_text("Font.Dialog.WarningContinue")));
+        warningLabel->setWordWrap(true);
+        warningLabel->setStyleSheet(QString(
+            "QLabel {"
+            "background: rgba(45, 55, 72, 0.8);"
+            "color: #fbbf24;"
+            "border: 1px solid #f59e0b;"
+            "border-radius: %1px;"
+            "padding: %2px;"
+            "margin: %3px %4px;"
+            "font-size: %5px;"
+            "line-height: 1.4;"
+            "}")
+            .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+            .arg(StreamUP::UIStyles::Sizes::SPACING_SMALL)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_XL + 5)
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+        dialogLayout->addWidget(warningLabel);
+
+        // Buttons
+        QHBoxLayout *buttonLayout = new QHBoxLayout();
+        buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+            StreamUP::UIStyles::Sizes::SPACING_MEDIUM,
+            StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+            StreamUP::UIStyles::Sizes::PADDING_XL);
+        buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        buttonLayout->addStretch();
+
+        // Continue Anyway button
+        QPushButton *continueButton = StreamUP::UIStyles::CreateStyledButton(
+            obs_module_text("UI.Message.ContinueAnyway"), "warning");
+        QObject::connect(continueButton, &QPushButton::clicked, [dialog, continueCallback]() {
+            dialog->close();
+            continueCallback();
+        });
+        buttonLayout->addWidget(continueButton);
+
+        // Cancel button
+        QPushButton *cancelButton = StreamUP::UIStyles::CreateStyledButton(
+            obs_module_text("UI.Button.Cancel"), "neutral", 30, 100);
+        QObject::connect(cancelButton, &QPushButton::clicked, dialog, &QDialog::close);
+        buttonLayout->addWidget(cancelButton);
+
+        dialogLayout->addLayout(buttonLayout);
+        dialog->setLayout(dialogLayout);
+
+        // Apply auto-sizing
+        StreamUP::UIStyles::ApplyAutoSizing(dialog, 500, 800, 200, 600);
+    });
+}
+
 //-------------------RESIZE AND SCALING FUNCTIONS-------------------
 void ResizeAdvancedMaskFilter(obs_source_t *filter, float factor)
 {
