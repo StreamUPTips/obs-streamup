@@ -149,6 +149,31 @@ std::vector<FontInfo> CheckFontAvailability(const std::vector<FontInfo>& fonts);
 void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
                             std::function<void()> continueCallback);
 
+//-------------------FONT URL MANAGER FUNCTIONS-------------------
+/**
+ * Font information for a text source in a scene
+ * Used by Font URL Manager to display and edit font URLs
+ */
+struct TextSourceFontInfo {
+	obs_source_t *source;       // The source reference (not addref'd - valid only during dialog lifetime)
+	std::string sourceName;     // Display name of the source
+	std::string fontFace;       // Font family name
+	std::string currentUrl;     // Existing URL (may be empty)
+};
+
+/**
+ * Scan current scene for text sources with font information
+ * @return std::vector<TextSourceFontInfo> List of text sources with font info
+ */
+std::vector<TextSourceFontInfo> ScanCurrentSceneForTextSources();
+
+/**
+ * Set font download URL on a text source
+ * @param source The text source to update
+ * @param url The download URL to set (can be empty to clear)
+ */
+void SetFontUrlOnSource(obs_source_t *source, const std::string &url);
+
 //-------------------MAIN LOADING FUNCTIONS-------------------
 /**
  * Load a .StreamUP file from a specific path
