@@ -504,17 +504,13 @@ void ShowFontUrlManagerDialog()
 			// Enable editing for URL column (double-click or select and click)
 			table->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::SelectedClicked);
 
-			// Store source pointers for save operation
-			QList<obs_source_t*> sourceList;
-
 			int row = 0;
 			for (const auto& info : textSources) {
-				sourceList.append(info.source);
-
-				// Source Name (read-only)
+				// Source Name (read-only) - also store source pointer in UserRole
 				QTableWidgetItem* sourceItem = new QTableWidgetItem(
 					QString::fromStdString(info.sourceName));
 				sourceItem->setFlags(sourceItem->flags() & ~Qt::ItemIsEditable);
+				sourceItem->setData(Qt::UserRole, QVariant::fromValue(static_cast<void*>(info.source)));
 				table->setItem(row, 0, sourceItem);
 
 				// Font Name (read-only)
@@ -568,9 +564,8 @@ void ShowFontUrlManagerDialog()
 			StreamUP::UIStyles::AutoResizeTableColumns(table);
 			contentLayout->addWidget(table);
 
-			// Store table and sources for button handlers
+			// Store table for button handlers (sources stored in row data)
 			dialog->setProperty("table", QVariant::fromValue(static_cast<void*>(table)));
-			dialog->setProperty("sources", QVariant::fromValue(sourceList));
 		}
 
 		// Buttons
@@ -589,14 +584,18 @@ void ShowFontUrlManagerDialog()
 			QObject::connect(saveButton, &QPushButton::clicked, [dialog]() {
 				QTableWidget *table = static_cast<QTableWidget*>(
 					dialog->property("table").value<void*>());
-				QList<obs_source_t*> sources = dialog->property("sources").value<QList<obs_source_t*>>();
 
-				if (table && !sources.isEmpty()) {
+				if (table) {
 					for (int row = 0; row < table->rowCount(); row++) {
+						QTableWidgetItem *sourceItem = table->item(row, 0);
 						QTableWidgetItem *urlItem = table->item(row, 2);
-						if (urlItem && row < sources.size()) {
-							QString url = urlItem->text().trimmed();
-							SetFontUrlOnSource(sources[row], url.toStdString());
+						if (sourceItem && urlItem) {
+							obs_source_t* source = static_cast<obs_source_t*>(
+								sourceItem->data(Qt::UserRole).value<void*>());
+							if (source) {
+								QString url = urlItem->text().trimmed();
+								SetFontUrlOnSource(source, url.toStdString());
+							}
 						}
 					}
 				}

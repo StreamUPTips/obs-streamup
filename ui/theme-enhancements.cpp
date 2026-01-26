@@ -176,7 +176,7 @@ private:
     int m_radius;
 };
 
-static PreviewCornerFilter* g_previewCornerFilter = nullptr;
+[[maybe_unused]] static PreviewCornerFilter* g_previewCornerFilter = nullptr;
 
 // Cached theme check result (checked once at startup)
 static bool g_isStreamUPTheme = false;
