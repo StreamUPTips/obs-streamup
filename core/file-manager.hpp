@@ -5,6 +5,8 @@
 #include <obs-data.h>
 #include <obs-frontend-api.h>
 #include <QString>
+#include <vector>
+#include <string>
 
 namespace StreamUP {
 namespace FileManager {
@@ -105,6 +107,22 @@ void LoadSources(obs_data_array_t *data, const QString &path);
  * @param path The base path of the .StreamUP file
  */
 void LoadScene(obs_data_t *data, const QString &path);
+
+//-------------------FONT EXTRACTION FUNCTIONS-------------------
+/**
+ * Extract unique font family names from StreamUP file data
+ * @param data The parsed .streamup obs_data_t object
+ * @return std::vector<std::string> Deduplicated list of font face names (case-insensitive)
+ */
+std::vector<std::string> ExtractFontsFromStreamupData(obs_data_t *data);
+
+/**
+ * Extract unique font family names from a .streamup file path
+ * @param file_path Path to the .streamup file
+ * @return std::vector<std::string> Deduplicated list of font face names (case-insensitive)
+ *         Returns empty vector if file cannot be loaded
+ */
+std::vector<std::string> ExtractFontsFromStreamupFile(const QString &file_path);
 
 //-------------------MAIN LOADING FUNCTIONS-------------------
 /**
