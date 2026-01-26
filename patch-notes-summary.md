@@ -8,6 +8,7 @@
 - **Color Preview Pills** - New color preview pill styling for StreamUP themes
 
 ## Improvements & Bug Fixes
+- **Scene Organiser Persistence** - Fixed issue where Scene Organiser folders and order would be lost on OBS restart, particularly affecting scene collections with special characters
 - **Studio Mode Program Display** - Fixed rounded corners on the program display in Studio Mode to match the preview display styling
 - **Theme Enhancements** - Improved preview and context bar layout with better main window padding and spacing
 - **Advanced Audio Properties** - Fixed centering of status dots in the grid layout
