@@ -170,8 +170,8 @@ void LoadMenuItems(QMenu* menu)
     });
     
     action = videoDeviceMenu->addAction(obs_module_text("Menu.VideoCapture.RefreshAll"));
-    QObject::connect(action, &QAction::triggered, []() { 
-        StreamUP::SourceManager::RefreshAllVideoCaptureDevices(); 
+    QObject::connect(action, &QAction::triggered, []() {
+        StreamUP::SourceManager::RefreshAllVideoCaptureDevices();
     });
 
     // MultiDock submenu
@@ -234,6 +234,17 @@ void LoadMenuItems(QMenu* menu)
 
     action = menu->addAction(obs_module_text("Menu.About"));
     QObject::connect(action, &QAction::triggered, []() { StreamUP::SplashScreen::ShowSplashScreen(); });
+
+    // Dev Tools submenu (only visible when Shift is held)
+    if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
+        menu->addSeparator();
+        QMenu* devToolsMenu = menu->addMenu(obs_module_text("Menu.DevTools"));
+
+        action = devToolsMenu->addAction(obs_module_text("FontUrlManager.Title"));
+        QObject::connect(action, &QAction::triggered, []() {
+            StreamUP::FileManager::ShowFontUrlManagerDialog();
+        });
+    }
 }
 
 

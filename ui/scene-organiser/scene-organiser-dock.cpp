@@ -176,6 +176,7 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
     , m_copyFiltersSource(nullptr)
     , m_currentContextItem(nullptr)
     , m_isLocked(false)
+    , m_initialLoadComplete(false)
     , m_allExpanded(false)
     , m_hideSceneAction(nullptr)
     , m_showSceneAction(nullptr)
@@ -1144,11 +1145,11 @@ void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
 
     // Check if studio mode is active - it overrides normal click behavior
     if (obs_frontend_preview_program_mode_active() && item->type() == SceneTreeItem::UserType + 2) {
-        // Check if scene switching is disabled in studio mode
-        if (settings.sceneOrganiserDisableSwitchingInStudioMode) {
-            // Scene switching is disabled in studio mode, do nothing
+        // Check if preview switching is disabled in studio mode
+        if (settings.sceneOrganiserDisablePreviewSwitchingInStudioMode) {
+            // Preview switching is disabled in studio mode, do nothing
             StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
-                QString("Single-click: Scene switching disabled in studio mode").toUtf8().constData());
+                QString("Single-click: Preview switching disabled in studio mode").toUtf8().constData());
         } else {
             // Studio mode: single-click always sets preview scene
             obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
@@ -1202,10 +1203,10 @@ void SceneOrganiserDock::onItemDoubleClicked(const QModelIndex &index)
     if (obs_frontend_preview_program_mode_active() && item->type() == SceneTreeItem::UserType + 2) {
         // Check if scene switching is disabled in studio mode
         StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-        if (settings.sceneOrganiserDisableSwitchingInStudioMode) {
-            // Scene switching is disabled in studio mode, do nothing
+        if (settings.sceneOrganiserDisableTransitionInStudioMode) {
+            // Transition is disabled in studio mode, do nothing
             StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
-                QString("Double-click: Scene switching disabled in studio mode").toUtf8().constData());
+                QString("Double-click: Transition disabled in studio mode").toUtf8().constData());
         } else {
             // Studio mode: double-click transitions preview to program (goes live)
             obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
@@ -2057,11 +2058,16 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->applyAllCustomColors();
 
             // Restore folder expansion state after tree is fully loaded
+            // and mark initial load as complete to allow saves
             QTimer::singleShot(500, dock, [dock]() {
                 StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
                 if (settings.sceneOrganiserRememberFolderState) {
                     dock->restoreFolderExpansionState();
                 }
+                // Mark initial load as complete - saves are now allowed
+                dock->m_initialLoadComplete = true;
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Init",
+                    "Initial load complete - saves now enabled");
             });
         });
         break;
@@ -2072,9 +2078,13 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING:
-        // Save current scene tree and settings before switching
-        dock->m_model->saveSceneTree();
-        dock->SaveConfiguration();
+        // Save current scene tree and settings before switching (only if initial load completed)
+        if (dock->m_initialLoadComplete) {
+            dock->m_model->saveSceneTree();
+            dock->SaveConfiguration();
+        }
+        // Disable saves during collection switch to prevent race conditions
+        dock->m_initialLoadComplete = false;
         break;
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
         QTimer::singleShot(100, dock, [dock]() {
@@ -2084,11 +2094,16 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->applyAllCustomColors();
 
             // Restore folder expansion state after tree is fully loaded
+            // and re-enable saves after load completes
             QTimer::singleShot(500, dock, [dock]() {
                 StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
                 if (settings.sceneOrganiserRememberFolderState) {
                     dock->restoreFolderExpansionState();
                 }
+                // Re-enable saves after collection load completes
+                dock->m_initialLoadComplete = true;
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "CollectionChange",
+                    "Scene collection load complete - saves now enabled");
             });
         });
         break;
@@ -2123,6 +2138,15 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->onThemeChanged();
         });
         break;
+    case OBS_FRONTEND_EVENT_EXIT:
+        // Save configuration before OBS exits
+        if (dock->m_initialLoadComplete) {
+            dock->m_model->saveSceneTree();
+            dock->SaveConfiguration();
+            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Exit",
+                "Saved scene tree on OBS exit");
+        }
+        break;
     default:
         break;
     }
@@ -2130,6 +2154,13 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
 
 void SceneOrganiserDock::SaveConfiguration()
 {
+    // Prevent saving before initial load completes to avoid overwriting valid data
+    if (!m_initialLoadComplete) {
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Save",
+            "Skipping save - initial load not yet complete");
+        return;
+    }
+
     char *scene_collection = obs_frontend_get_current_scene_collection();
     if (!scene_collection) return;
 
@@ -3683,6 +3714,7 @@ void SceneTreeModel::saveSceneTree()
 
     QString configDir = QString::fromUtf8(configPath);
     QString configFile = configDir + "/scene_tree_normal.json";
+    QString sceneCollectionName = QString::fromUtf8(scene_collection);
 
     bfree(configPath);
 
@@ -3705,7 +3737,7 @@ void SceneTreeModel::saveSceneTree()
     bfree(scene_collection);
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Save",
-        QString("Saved scene tree for collection '%1' to: %2").arg(scene_collection, configFile).toUtf8().constData());
+        QString("Saved scene tree for collection '%1' to: %2").arg(sceneCollectionName, configFile).toUtf8().constData());
 }
 
 void SceneTreeModel::loadSceneTree()
@@ -3721,8 +3753,12 @@ void SceneTreeModel::loadSceneTree()
 
     QString configDir = QString::fromUtf8(configPath);
     QString configFile = configDir + "/scene_tree_normal.json";
+    QString sceneCollectionName = QString::fromUtf8(scene_collection);
 
     bfree(configPath);
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Load",
+        QString("Loading scene tree for collection: '%1'").arg(sceneCollectionName).toUtf8().constData());
 
     // Clean up previous tree
     cleanupSceneTree();
@@ -3732,13 +3768,22 @@ void SceneTreeModel::loadSceneTree()
     if (root_data) {
         obs_data_array_t *folder_array = obs_data_get_array(root_data, scene_collection);
         if (folder_array) {
+            size_t itemCount = obs_data_array_count(folder_array);
             loadFolderArray(folder_array, *invisibleRootItem());
             obs_data_array_release(folder_array);
+
+            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Load",
+                QString("Loaded %1 items from scene tree for collection '%2' from: %3")
+                .arg(itemCount).arg(sceneCollectionName, configFile).toUtf8().constData());
+        } else {
+            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Load",
+                QString("No saved scene tree found for collection '%1' (key not in JSON)")
+                .arg(sceneCollectionName).toUtf8().constData());
         }
         obs_data_release(root_data);
-
+    } else {
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Load",
-            QString("Loaded scene tree from: %1").arg(configFile).toUtf8().constData());
+            QString("Config file does not exist or is invalid: %1").arg(configFile).toUtf8().constData());
     }
 
     bfree(scene_collection);

@@ -116,14 +116,14 @@ void MultiDockDock::SaveState()
     if (!m_innerHost) {
         return;
     }
-    
+
     QStringList capturedDockIds = m_innerHost->GetCapturedDockIds();
     QByteArray layout = m_innerHost->SaveLayout();
-    
-    SaveMultiDockState(m_id, capturedDockIds, layout);
-    
-    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "State", "Saved state for MultiDock '%s': %d captured docks",
-         m_id.toUtf8().constData(), capturedDockIds.size());
+
+    SaveMultiDockState(m_id, capturedDockIds, layout, m_docksLocked);
+
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "State", "Saved state for MultiDock '%s': %d captured docks, locked=%s",
+         m_id.toUtf8().constData(), capturedDockIds.size(), m_docksLocked ? "true" : "false");
 }
 
 void MultiDockDock::LoadState()
@@ -131,15 +131,24 @@ void MultiDockDock::LoadState()
     if (!m_innerHost) {
         return;
     }
-    
+
     QStringList capturedDockIds;
     QByteArray layout;
-    
-    if (!LoadMultiDockState(m_id, capturedDockIds, layout)) {
+    bool locked = false;
+
+    if (!LoadMultiDockState(m_id, capturedDockIds, layout, locked)) {
         StreamUP::DebugLogger::LogDebugFormat("MultiDock", "State", "No saved state found for MultiDock '%s'",
              m_id.toUtf8().constData());
         return;
     }
+
+    // Restore lock state
+    m_docksLocked = locked;
+    if (m_lockCheckbox) {
+        m_lockCheckbox->setChecked(locked);
+        m_lockCheckbox->setToolTip(locked ? "Docks are locked (click to unlock)" : "Docks are unlocked (click to lock)");
+    }
+    m_innerHost->SetDocksLocked(locked);
     
     // Try to restore captured docks
     QMainWindow* mainWindow = GetObsMainWindow();

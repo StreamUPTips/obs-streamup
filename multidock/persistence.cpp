@@ -121,56 +121,62 @@ void SaveMultiDockList(const QList<MultiDockInfo>& multiDocks)
     StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Persistence", "Saved %d MultiDocks to config", multiDocks.size());
 }
 
-bool LoadMultiDockState(const QString& id, QStringList& capturedDocks, QByteArray& layout)
+bool LoadMultiDockState(const QString& id, QStringList& capturedDocks, QByteArray& layout, bool& locked)
 {
     QJsonObject config = LoadConfig();
     QJsonObject states = config["states"].toObject();
     QJsonObject state = states[id].toObject();
-    
+
     if (state.isEmpty()) {
         return false;
     }
-    
+
     // Load captured docks
     QJsonArray docksArray = state["captured"].toArray();
     capturedDocks.clear();
     for (const QJsonValue value : docksArray) {
         capturedDocks.append(value.toString());
     }
-    
+
     // Load layout
     QString layoutBase64 = state["layout"].toString();
     layout = QByteArray::fromBase64(layoutBase64.toUtf8());
-    
-    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Persistence", "Loaded state for MultiDock '%s': %d captured docks",
-         id.toUtf8().constData(), capturedDocks.size());
-    
+
+    // Load lock state (default to false for backwards compatibility)
+    locked = state["locked"].toBool(false);
+
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Persistence", "Loaded state for MultiDock '%s': %d captured docks, locked=%s",
+         id.toUtf8().constData(), capturedDocks.size(), locked ? "true" : "false");
+
     return true;
 }
 
-void SaveMultiDockState(const QString& id, const QStringList& capturedDocks, const QByteArray& layout)
+void SaveMultiDockState(const QString& id, const QStringList& capturedDocks, const QByteArray& layout, bool locked)
 {
     QJsonObject config = LoadConfig();
     QJsonObject states = config["states"].toObject();
     QJsonObject state;
-    
+
     // Save captured docks
     QJsonArray docksArray;
     for (const QString& dockId : capturedDocks) {
         docksArray.append(dockId);
     }
     state["captured"] = docksArray;
-    
+
     // Save layout
     QString layoutBase64 = layout.toBase64();
     state["layout"] = layoutBase64;
-    
+
+    // Save lock state
+    state["locked"] = locked;
+
     states[id] = state;
     config["states"] = states;
     SaveConfig(config);
-    
-    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Persistence", "Saved state for MultiDock '%s': %d captured docks",
-         id.toUtf8().constData(), capturedDocks.size());
+
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Persistence", "Saved state for MultiDock '%s': %d captured docks, locked=%s",
+         id.toUtf8().constData(), capturedDocks.size(), locked ? "true" : "false");
 }
 
 void RemoveMultiDockState(const QString& id)

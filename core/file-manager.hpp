@@ -4,7 +4,11 @@
 #include <obs.h>
 #include <obs-data.h>
 #include <obs-frontend-api.h>
+#include <QFontDatabase>
 #include <QString>
+#include <vector>
+#include <string>
+#include <functional>
 
 namespace StreamUP {
 namespace FileManager {
@@ -105,6 +109,76 @@ void LoadSources(obs_data_array_t *data, const QString &path);
  * @param path The base path of the .StreamUP file
  */
 void LoadScene(obs_data_t *data, const QString &path);
+
+//-------------------FONT EXTRACTION FUNCTIONS-------------------
+/**
+ * Font information extracted from StreamUP files
+ */
+struct FontInfo {
+	std::string face;  // Font family name
+	std::string url;   // Download URL (empty if not provided)
+};
+
+/**
+ * Extract unique font info from StreamUP file data
+ * @param data The parsed .streamup obs_data_t object
+ * @return std::vector<FontInfo> Deduplicated list of fonts (case-insensitive by face)
+ */
+std::vector<FontInfo> ExtractFontsFromStreamupData(obs_data_t *data);
+
+/**
+ * Extract unique font info from a .streamup file path
+ * @param file_path Path to the .streamup file
+ * @return std::vector<FontInfo> Deduplicated list of fonts (case-insensitive by face)
+ *         Returns empty vector if file cannot be loaded
+ */
+std::vector<FontInfo> ExtractFontsFromStreamupFile(const QString &file_path);
+
+/**
+ * Check which fonts are missing from the system
+ * @param fonts Vector of FontInfo extracted from a .streamup file
+ * @return std::vector<FontInfo> Fonts that are not installed (preserves url field)
+ */
+std::vector<FontInfo> CheckFontAvailability(const std::vector<FontInfo>& fonts);
+
+/**
+ * Show a warning dialog listing missing fonts with download links
+ * @param missingFonts Vector of FontInfo for fonts not installed on system
+ * @param continueCallback Function called when user clicks "Continue Anyway"
+ */
+void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
+                            std::function<void()> continueCallback);
+
+//-------------------FONT URL MANAGER FUNCTIONS-------------------
+/**
+ * Font information for a text source in a scene
+ * Used by Font URL Manager to display and edit font URLs
+ */
+struct TextSourceFontInfo {
+	obs_source_t *source;       // The source reference (not addref'd - valid only during dialog lifetime)
+	std::string sourceName;     // Display name of the source
+	std::string fontFace;       // Font family name
+	std::string currentUrl;     // Existing URL (may be empty)
+};
+
+/**
+ * Scan current scene for text sources with font information
+ * @return std::vector<TextSourceFontInfo> List of text sources with font info
+ */
+std::vector<TextSourceFontInfo> ScanCurrentSceneForTextSources();
+
+/**
+ * Set font download URL on a text source
+ * @param source The text source to update
+ * @param url The download URL to set (can be empty to clear)
+ */
+void SetFontUrlOnSource(obs_source_t *source, const std::string &url);
+
+/**
+ * Show the Font URL Manager dialog
+ * Scans current scene for text sources and allows editing font URLs
+ */
+void ShowFontUrlManagerDialog();
 
 //-------------------MAIN LOADING FUNCTIONS-------------------
 /**

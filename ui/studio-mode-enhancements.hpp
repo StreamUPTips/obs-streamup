@@ -35,5 +35,14 @@ void ApplyStudioModeEnhancements();
  */
 void EnhanceTransitionSlider();
 
+/**
+ * @brief Apply padding and styling to the program display container in Studio Mode
+ *
+ * The programWidget is dynamically created when Studio Mode is enabled. This function
+ * sets an object name and applies padding so the StreamUP theme's rounded corners
+ * are visible on all four corners of the program display.
+ */
+void StyleProgramContainer();
+
 } // namespace StudioModeEnhancements
 } // namespace StreamUP
