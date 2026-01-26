@@ -289,9 +289,11 @@ PluginSettings GetCurrentSettings()
 		settings.sceneOrganiserDisableTransitionInStudioMode = false;
 	}
 	settings.sceneOrganiserItemHeight = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "scene_organiser_item_height", 50);
-	// Ensure the height is at least 50% (the minimum allowed value)
-	if (settings.sceneOrganiserItemHeight < 50) {
-		settings.sceneOrganiserItemHeight = 100;
+	// Ensure the height is within valid range (10-200%)
+	if (settings.sceneOrganiserItemHeight < 10) {
+		settings.sceneOrganiserItemHeight = 50;
+	} else if (settings.sceneOrganiserItemHeight > 200) {
+		settings.sceneOrganiserItemHeight = 200;
 	}
 
 		// Load scene sort method setting (default to none if not set)
@@ -1141,11 +1143,11 @@ void ShowSettingsDialog(int tabIndex)
 		itemHeightLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.ItemHeightDesc"));
 
 		QSlider *itemHeightSlider = new QSlider(Qt::Horizontal);
-		itemHeightSlider->setMinimum(50);
+		itemHeightSlider->setMinimum(10);
 		itemHeightSlider->setMaximum(200);
 		itemHeightSlider->setValue(currentSettings.sceneOrganiserItemHeight);
 		itemHeightSlider->setTickPosition(QSlider::TicksBelow);
-		itemHeightSlider->setTickInterval(25);
+		itemHeightSlider->setTickInterval(10);
 		itemHeightSlider->setToolTip(obs_module_text("SceneOrganiser.Settings.ItemHeightDesc"));
 		itemHeightSlider->setMaximumWidth(200);
 
@@ -1187,6 +1189,11 @@ void ShowSettingsDialog(int tabIndex)
 		// Set current selection
 		int currentSwitchModeIndex = static_cast<int>(currentSettings.sceneOrganiserSwitchMode);
 		switchModeComboBox->setCurrentIndex(switchModeComboBox->findData(currentSwitchModeIndex));
+
+		// Set combobox styling to match other dropdowns
+		switchModeComboBox->setStyleSheet(StreamUP::UIStyles::GetComboBoxStyle());
+		switchModeComboBox->setMinimumWidth(100);
+		switchModeComboBox->setMaximumWidth(150);
 
 		// Connect change handler
 		QObject::connect(switchModeComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -1256,6 +1263,11 @@ void ShowSettingsDialog(int tabIndex)
 
 		int currentSortMethodIndex = static_cast<int>(currentSettings.sceneOrganiserSortMethod);
 		sortMethodComboBox->setCurrentIndex(sortMethodComboBox->findData(currentSortMethodIndex));
+
+		// Set combobox styling to match other dropdowns
+		sortMethodComboBox->setStyleSheet(StreamUP::UIStyles::GetComboBoxStyle());
+		sortMethodComboBox->setMinimumWidth(100);
+		sortMethodComboBox->setMaximumWidth(150);
 
 		QObject::connect(sortMethodComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
 				 [sortMethodComboBox](int index) {
