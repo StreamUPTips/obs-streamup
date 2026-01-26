@@ -45,22 +45,27 @@ Plans:
 
 ---
 
-### Phase 03: Warning Dialog UI
+### Phase 03: Warning Dialog UI ✓
 
 **Goal:** Display a dialog listing missing fonts before installation proceeds.
 
+**Status:** Complete (2026-01-26)
+
 **Depends on:** Phase 02
 
-**Plans:** 1 plan
+**Plans:** 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Implement ShowMissingFontsDialog with styled table and Continue Anyway/Cancel flow
+- [x] 03-01-PLAN.md — Implement ShowMissingFontsDialog with styled table and Continue Anyway/Cancel flow
+- [x] 03-02-PLAN.md — Add Font.* localization keys to all locale files (gap closure)
 
-**Details:**
-- Follow existing plugin warning dialog pattern (PluginsHaveIssue)
-- Show font name and download link in styled table
-- "Continue Anyway" and "Cancel" buttons
-- Integrate into `LoadStreamupFileWithWarning()` flow
+**Delivered:**
+- `ShowMissingFontsDialog(vector<FontInfo>, callback)` - displays warning dialog
+- Styled table showing font names and clickable download links
+- Thread-safe dialog creation via `ShowDialogOnUIThread`
+- Continue Anyway and Cancel buttons with proper callbacks
+- Integration into `LoadStreamupFileWithWarning()` flow
+- Localized strings for en-US, en-GB, zh-CN
 
 ---
 
