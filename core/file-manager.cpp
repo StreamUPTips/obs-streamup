@@ -501,6 +501,9 @@ void ShowFontUrlManagerDialog()
 			QTableWidget* table = StreamUP::UIStyles::CreateStyledTable(headers);
 			table->setRowCount(static_cast<int>(textSources.size()));
 
+			// Enable editing for URL column (double-click or select and click)
+			table->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::SelectedClicked);
+
 			// Store source pointers for save operation
 			QList<obs_source_t*> sourceList;
 
