@@ -766,19 +766,49 @@ void LoadStreamupFileWithWarning()
 {
 	// Use cached plugin status for instant response
 	if (StreamUP::PluginManager::IsAllPluginsUpToDateCached()) {
-		// Plugins are OK, directly open the Install Product dialog (file selector)
-		QString fileName =
-			QFileDialog::getOpenFileName(nullptr, QT_UTF8(obs_module_text("UI.Button.Load")), QString(), "StreamUP File (*.streamup)");
+		// Plugins are OK, show file selector
+		QString fileName = QFileDialog::getOpenFileName(
+			nullptr, QT_UTF8(obs_module_text("UI.Button.Load")),
+			QString(), "StreamUP File (*.streamup)");
+
 		if (!fileName.isEmpty()) {
-			LoadStreamupFileFromPath(fileName, false);
+			// Check fonts in selected file
+			std::vector<FontInfo> fonts = ExtractFontsFromStreamupFile(fileName);
+			std::vector<FontInfo> missingFonts = CheckFontAvailability(fonts);
+
+			if (missingFonts.empty()) {
+				// All fonts available, load directly
+				LoadStreamupFileFromPath(fileName, false);
+			} else {
+				// Fonts missing, show warning with continue callback
+				ShowMissingFontsDialog(missingFonts, [fileName]() {
+					LoadStreamupFileFromPath(fileName, true);
+				});
+			}
 		}
 		return;
 	}
 
-	// Plugins have issues, show cached plugin issues dialog with continue callback
+	// Plugins have issues, show cached plugin issues dialog first
+	// On continue, allow loading with font check
 	StreamUP::PluginManager::ShowCachedPluginIssuesDialog([]() {
-		// Continue anyway callback - load with force
-		LoadStreamupFile(true);
+		// After user clicks Continue Anyway for plugins, show file selector with font check
+		QString fileName = QFileDialog::getOpenFileName(
+			nullptr, QT_UTF8(obs_module_text("UI.Button.Load")),
+			QString(), "StreamUP File (*.streamup)");
+
+		if (!fileName.isEmpty()) {
+			std::vector<FontInfo> fonts = ExtractFontsFromStreamupFile(fileName);
+			std::vector<FontInfo> missingFonts = CheckFontAvailability(fonts);
+
+			if (missingFonts.empty()) {
+				LoadStreamupFileFromPath(fileName, true);
+			} else {
+				ShowMissingFontsDialog(missingFonts, [fileName]() {
+					LoadStreamupFileFromPath(fileName, true);
+				});
+			}
+		}
 	});
 }
 
