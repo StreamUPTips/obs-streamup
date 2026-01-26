@@ -7,12 +7,21 @@
 #include "string-utils.hpp"
 #include "version-utils.hpp"
 #include "path-utils.hpp"
+#include "../ui/ui-styles.hpp"
+#include "../ui/ui-helpers.hpp"
 #include <obs-module.h>
 #include <QFile>
 #include <QFileInfo>
 #include <QFileDialog>
 #include <QApplication>
 #include <QString>
+#include <QTableWidget>
+#include <QTableWidgetItem>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QPushButton>
+#include <QGroupBox>
 #include <list>
 #include <map>
 
@@ -29,6 +38,50 @@ bool FontExistsInVector(const std::vector<FontInfo>& fonts, const std::string& f
         }
     }
     return false;
+}
+
+// Create styled table for missing fonts display
+QTableWidget* CreateMissingFontsTable(const std::vector<FontInfo>& missingFonts) {
+    QStringList headers = {
+        obs_module_text("Font.Label.FontName"),
+        obs_module_text("Font.Label.DownloadLink")
+    };
+
+    QTableWidget* table = StreamUP::UIStyles::CreateStyledTable(headers);
+    table->setRowCount(static_cast<int>(missingFonts.size()));
+
+    int row = 0;
+    for (const auto& fontInfo : missingFonts) {
+        // Font Name column
+        QTableWidgetItem* nameItem = new QTableWidgetItem(
+            QString::fromStdString(fontInfo.face));
+        table->setItem(row, 0, nameItem);
+
+        // Download Link column
+        if (!fontInfo.url.empty()) {
+            QTableWidgetItem* downloadItem = new QTableWidgetItem(
+                obs_module_text("UI.Button.Download"));
+            downloadItem->setForeground(QColor("#3b82f6"));
+            downloadItem->setData(Qt::UserRole, QString::fromStdString(fontInfo.url));
+            table->setItem(row, 1, downloadItem);
+        } else {
+            QTableWidgetItem* noLinkItem = new QTableWidgetItem(
+                obs_module_text("Font.Message.NoDownloadAvailable"));
+            noLinkItem->setForeground(QColor("#9ca3af")); // Gray for unavailable
+            table->setItem(row, 1, noLinkItem);
+        }
+
+        row++;
+    }
+
+    // Connect click handler for download links
+    QObject::connect(table, &QTableWidget::cellClicked,
+        [table](int r, int c) {
+            StreamUP::UIStyles::HandleTableCellClick(table, r, c);
+        });
+
+    StreamUP::UIStyles::AutoResizeTableColumns(table);
+    return table;
 }
 } // anonymous namespace
 
