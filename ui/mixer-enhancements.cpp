@@ -41,6 +41,28 @@ static bool g_themeChecked = false;
 // Track if we've set up the mixer dock watcher
 static bool g_mixerWatcherInstalled = false;
 
+// Minimum OBS version required for mixer enhancements (32.1.0)
+// Version format: (major << 24) | (minor << 16) | patch
+static constexpr uint32_t MIN_OBS_VERSION_FOR_MIXER = (32 << 24) | (1 << 16) | 0;
+
+/**
+ * @brief Check if OBS version is 32.1 or newer
+ * Mixer enhancements require OBS 32.1+ due to mixer layout changes
+ */
+bool IsOBS32_1OrNewer()
+{
+    static bool checked = false;
+    static bool result = false;
+
+    if (!checked) {
+        uint32_t obs_ver = obs_get_version();
+        result = obs_ver >= MIN_OBS_VERSION_FOR_MIXER;
+        checked = true;
+    }
+
+    return result;
+}
+
 /**
  * @brief Check if the current OBS theme is a StreamUP theme
  */
@@ -475,7 +497,7 @@ void EnhanceVolumeControl(QWidget* volumeControl)
 
 void RefreshMixerEnhancements()
 {
-    if (!IsUsingStreamUPTheme()) {
+    if (!IsOBS32_1OrNewer() || !IsUsingStreamUPTheme()) {
         return;
     }
 
@@ -532,7 +554,8 @@ static void AdjustMixerToolbar(QWidget* mixerWidget)
 
 void ApplyMixerEnhancements()
 {
-    if (!IsUsingStreamUPTheme()) {
+    // Mixer enhancements require OBS 32.1+ due to mixer layout changes
+    if (!IsOBS32_1OrNewer() || !IsUsingStreamUPTheme()) {
         return;
     }
 
