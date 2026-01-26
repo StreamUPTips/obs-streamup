@@ -301,7 +301,8 @@ void MultiDockManager::LoadAllMultiDocks()
         // Only add to retry list if there are missing docks to restore
         QStringList capturedDockIds;
         QByteArray layout;
-        if (LoadMultiDockState(info.id, capturedDockIds, layout) && !capturedDockIds.isEmpty()) {
+        bool locked;
+        if (LoadMultiDockState(info.id, capturedDockIds, layout, locked) && !capturedDockIds.isEmpty()) {
             int currentDockCount = multiDock->GetInnerHost()->GetAllDocks().size();
             if (currentDockCount < capturedDockIds.size()) {
                 m_pendingRetryIds.append(info.id);
@@ -382,7 +383,8 @@ void MultiDockManager::RetryFailedRestorations()
         // Load saved state to see how many docks should be restored
         QStringList capturedDockIds;
         QByteArray layout;
-        if (!LoadMultiDockState(multiDockId, capturedDockIds, layout)) {
+        bool locked;
+        if (!LoadMultiDockState(multiDockId, capturedDockIds, layout, locked)) {
             continue; // No saved state
         }
         
