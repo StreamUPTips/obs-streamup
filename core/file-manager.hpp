@@ -174,6 +174,12 @@ std::vector<TextSourceFontInfo> ScanCurrentSceneForTextSources();
  */
 void SetFontUrlOnSource(obs_source_t *source, const std::string &url);
 
+/**
+ * Show the Font URL Manager dialog
+ * Scans current scene for text sources and allows editing font URLs
+ */
+void ShowFontUrlManagerDialog();
+
 //-------------------MAIN LOADING FUNCTIONS-------------------
 /**
  * Load a .StreamUP file from a specific path

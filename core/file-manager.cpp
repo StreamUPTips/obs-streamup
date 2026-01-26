@@ -435,6 +435,189 @@ void SetFontUrlOnSource(obs_source_t *source, const std::string &url)
 	obs_data_release(settings);
 }
 
+void ShowFontUrlManagerDialog()
+{
+	StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
+		QString titleText = obs_module_text("FontUrlManager.Title");
+		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
+
+		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
+		dialogLayout->setContentsMargins(0, 0, 0, 0);
+		dialogLayout->setSpacing(0);
+
+		// Header section
+		QWidget* headerWidget = new QWidget();
+		headerWidget->setObjectName("headerWidget");
+		headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
+			.arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
+			.arg(StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
+			.arg(StreamUP::UIStyles::Sizes::PADDING_XL)
+			.arg(StreamUP::UIStyles::Sizes::PADDING_XL));
+
+		QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
+		headerLayout->setContentsMargins(0, 0, 0, 0);
+
+		QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(titleText);
+		titleLabel->setAlignment(Qt::AlignCenter);
+		headerLayout->addWidget(titleLabel);
+
+		headerLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
+
+		QString descText = obs_module_text("FontUrlManager.Description");
+		QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(descText);
+		headerLayout->addWidget(subtitleLabel);
+
+		dialogLayout->addWidget(headerWidget);
+
+		// Content area
+		QVBoxLayout *contentLayout = new QVBoxLayout();
+		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+			StreamUP::UIStyles::Sizes::PADDING_XL,
+			StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+			StreamUP::UIStyles::Sizes::PADDING_XL);
+		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+
+		dialogLayout->addLayout(contentLayout);
+
+		// Scan current scene for text sources
+		std::vector<TextSourceFontInfo> textSources = ScanCurrentSceneForTextSources();
+
+		if (textSources.empty()) {
+			// No text sources found - show message
+			QLabel *emptyLabel = new QLabel(obs_module_text("FontUrlManager.Status.NoTextSources"));
+			emptyLabel->setAlignment(Qt::AlignCenter);
+			emptyLabel->setStyleSheet(QString("color: %1; padding: 20px;")
+				.arg(StreamUP::UIStyles::Colors::TEXT_MUTED));
+			contentLayout->addWidget(emptyLabel);
+		} else {
+			// Create table with text sources
+			QStringList headers = {
+				obs_module_text("FontUrlManager.Label.SourceName"),
+				obs_module_text("FontUrlManager.Label.FontName"),
+				obs_module_text("FontUrlManager.Label.Url")
+			};
+
+			QTableWidget* table = StreamUP::UIStyles::CreateStyledTable(headers);
+			table->setRowCount(static_cast<int>(textSources.size()));
+
+			// Store source pointers for save operation
+			QList<obs_source_t*> sourceList;
+
+			int row = 0;
+			for (const auto& info : textSources) {
+				sourceList.append(info.source);
+
+				// Source Name (read-only)
+				QTableWidgetItem* sourceItem = new QTableWidgetItem(
+					QString::fromStdString(info.sourceName));
+				sourceItem->setFlags(sourceItem->flags() & ~Qt::ItemIsEditable);
+				table->setItem(row, 0, sourceItem);
+
+				// Font Name (read-only)
+				QTableWidgetItem* fontItem = new QTableWidgetItem(
+					QString::fromStdString(info.fontFace));
+				fontItem->setFlags(fontItem->flags() & ~Qt::ItemIsEditable);
+				table->setItem(row, 1, fontItem);
+
+				// URL (editable)
+				QTableWidgetItem* urlItem = new QTableWidgetItem(
+					QString::fromStdString(info.currentUrl));
+				// Keep default flags (editable)
+				table->setItem(row, 2, urlItem);
+
+				row++;
+			}
+
+			// Dynamic height calculation: max 10 rows
+			int rowCount = table->rowCount();
+			int maxVisibleRows = std::min(rowCount, 10);
+			int headerHeight = 35;
+			int rowHeight = 30;
+			int tableHeight = headerHeight + (rowHeight * maxVisibleRows) + 6;
+
+			table->setFixedHeight(tableHeight);
+			if (rowCount > 10) {
+				table->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+			} else {
+				table->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+			}
+
+			// Style table to match dialog
+			table->setStyleSheet(
+				table->styleSheet() +
+				"QTableWidget { "
+				"border: none; "
+				"background: transparent; "
+				"border-radius: 8px; "
+				"} "
+				"QTableWidget::item { "
+				"border-bottom: 1px solid #374151; "
+				"} "
+				"QHeaderView::section:first { "
+				"border-top-left-radius: 8px; "
+				"} "
+				"QHeaderView::section:last { "
+				"border-top-right-radius: 8px; "
+				"}"
+			);
+
+			StreamUP::UIStyles::AutoResizeTableColumns(table);
+			contentLayout->addWidget(table);
+
+			// Store table and sources for button handlers
+			dialog->setProperty("table", QVariant::fromValue(static_cast<void*>(table)));
+			dialog->setProperty("sources", QVariant::fromValue(sourceList));
+		}
+
+		// Buttons
+		QHBoxLayout *buttonLayout = new QHBoxLayout();
+		buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+			StreamUP::UIStyles::Sizes::SPACING_MEDIUM,
+			StreamUP::UIStyles::Sizes::PADDING_XL + 5,
+			StreamUP::UIStyles::Sizes::PADDING_XL);
+		buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+		buttonLayout->addStretch();
+
+		if (!textSources.empty()) {
+			// Save button
+			QPushButton *saveButton = StreamUP::UIStyles::CreateStyledButton(
+				obs_module_text("FontUrlManager.Button.Save"), "success");
+			QObject::connect(saveButton, &QPushButton::clicked, [dialog]() {
+				QTableWidget *table = static_cast<QTableWidget*>(
+					dialog->property("table").value<void*>());
+				QList<obs_source_t*> sources = dialog->property("sources").value<QList<obs_source_t*>>();
+
+				if (table && !sources.isEmpty()) {
+					for (int row = 0; row < table->rowCount(); row++) {
+						QTableWidgetItem *urlItem = table->item(row, 2);
+						if (urlItem && row < sources.size()) {
+							QString url = urlItem->text().trimmed();
+							SetFontUrlOnSource(sources[row], url.toStdString());
+						}
+					}
+				}
+				dialog->close();
+			});
+			buttonLayout->addWidget(saveButton);
+		}
+
+		// Cancel/Close button
+		QString closeText = textSources.empty()
+			? obs_module_text("UI.Button.Close")
+			: obs_module_text("FontUrlManager.Button.Cancel");
+		QPushButton *cancelButton = StreamUP::UIStyles::CreateStyledButton(
+			closeText, "neutral", 30, 100);
+		QObject::connect(cancelButton, &QPushButton::clicked, dialog, &QDialog::close);
+		buttonLayout->addWidget(cancelButton);
+
+		dialogLayout->addLayout(buttonLayout);
+		dialog->setLayout(dialogLayout);
+
+		// Apply auto-sizing
+		StreamUP::UIStyles::ApplyAutoSizing(dialog, 550, 850, 200, 500);
+	});
+}
+
 //-------------------RESIZE AND SCALING FUNCTIONS-------------------
 void ResizeAdvancedMaskFilter(obs_source_t *filter, float factor)
 {
