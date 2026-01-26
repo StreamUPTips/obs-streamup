@@ -174,13 +174,14 @@ void LoadMenuItems(QMenu* menu)
         StreamUP::SourceManager::RefreshAllVideoCaptureDevices();
     });
 
-    toolsMenu->addSeparator();
-
-    // Font URL Manager (dev tool)
-    action = toolsMenu->addAction(obs_module_text("FontUrlManager.Title"));
-    QObject::connect(action, &QAction::triggered, []() {
-        StreamUP::FileManager::ShowFontUrlManagerDialog();
-    });
+    // Font URL Manager (dev tool - only visible when Shift is held)
+    if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
+        toolsMenu->addSeparator();
+        action = toolsMenu->addAction(obs_module_text("FontUrlManager.Title"));
+        QObject::connect(action, &QAction::triggered, []() {
+            StreamUP::FileManager::ShowFontUrlManagerDialog();
+        });
+    }
 
     // MultiDock submenu
     QMenu* multiDockMenu = menu->addMenu("MultiDock");
