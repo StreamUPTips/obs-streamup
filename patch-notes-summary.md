@@ -2,6 +2,7 @@
 
 ## New Features
 - **OBS 32.1 Support** - Full compatibility with OBS Studio 32.1
+- **Font Checker** - StreamUP now checks for missing fonts when installing products and shows a warning dialog with download links if any fonts are not installed on your system
 - **Dynamic Audio Monitoring Icons** - Advanced Audio Properties now displays dynamic icons showing the current monitoring state for each source
 - **Mixer Enhancements** - Added rounded hover styling for source name labels in the audio mixer when using StreamUP themes
 - **Color Preview Pills** - New color preview pill styling for StreamUP themes
