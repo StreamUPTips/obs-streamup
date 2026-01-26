@@ -115,6 +115,39 @@ std::vector<FontInfo> ExtractFontsFromStreamupFile(const QString &file_path)
 	return ExtractFontsFromStreamupData(data.get());
 }
 
+std::vector<FontInfo> CheckFontAvailability(const std::vector<FontInfo>& fonts)
+{
+	std::vector<FontInfo> missingFonts;
+
+	// Get all installed fonts from system (Qt 6 static API)
+	QStringList installedFonts = QFontDatabase::families();
+
+	for (const FontInfo& fontInfo : fonts) {
+		// Skip empty font names
+		if (fontInfo.face.empty()) {
+			continue;
+		}
+
+		QString qFontName = QString::fromStdString(fontInfo.face);
+		bool found = false;
+
+		// Case-insensitive comparison against installed fonts
+		for (const QString& installed : installedFonts) {
+			if (QString::compare(qFontName, installed, Qt::CaseInsensitive) == 0) {
+				found = true;
+				break;
+			}
+		}
+
+		if (!found) {
+			// Return full FontInfo to preserve url for Phase 04
+			missingFonts.push_back(fontInfo);
+		}
+	}
+
+	return missingFonts;
+}
+
 //-------------------RESIZE AND SCALING FUNCTIONS-------------------
 void ResizeAdvancedMaskFilter(obs_source_t *filter, float factor)
 {
