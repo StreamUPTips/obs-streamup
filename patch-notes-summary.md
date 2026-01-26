@@ -8,6 +8,7 @@
 - **Color Preview Pills** - New color preview pill styling for StreamUP themes
 
 ## Improvements & Bug Fixes
+- **Multi-Dock Lock Persistence** - Fixed issue where the Multi-Dock lock state would reset to unlocked after restarting OBS
 - **Scene Organiser Studio Mode Controls** - Split "Disable Scene Switching in Studio Mode" into two separate settings: one for preview switching (single-click) and one for transitions (double-click), allowing users to disable accidental transitions while keeping preview selection functional
 - **Scene Organiser Persistence** - Fixed issue where Scene Organiser folders and order would be lost on OBS restart, particularly affecting scene collections with special characters
 - **Studio Mode Program Display** - Fixed rounded corners on the program display in Studio Mode to match the preview display styling

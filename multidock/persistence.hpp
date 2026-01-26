@@ -30,17 +30,19 @@ void SaveMultiDockList(const QList<MultiDockInfo>& multiDocks);
  * @param id The MultiDock ID
  * @param capturedDocks Output list of captured dock IDs
  * @param layout Output layout data as Base64 encoded QByteArray
+ * @param locked Output lock state (true if docks were locked)
  * @return True if state was loaded successfully
  */
-bool LoadMultiDockState(const QString& id, QStringList& capturedDocks, QByteArray& layout);
+bool LoadMultiDockState(const QString& id, QStringList& capturedDocks, QByteArray& layout, bool& locked);
 
 /**
  * @brief Save the state of a specific MultiDock
  * @param id The MultiDock ID
  * @param capturedDocks List of captured dock IDs
  * @param layout Layout data as QByteArray
+ * @param locked Whether the docks are locked
  */
-void SaveMultiDockState(const QString& id, const QStringList& capturedDocks, const QByteArray& layout);
+void SaveMultiDockState(const QString& id, const QStringList& capturedDocks, const QByteArray& layout, bool locked);
 
 /**
  * @brief Remove a MultiDock from persistent storage
