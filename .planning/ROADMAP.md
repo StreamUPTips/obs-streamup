@@ -24,21 +24,24 @@ Plans:
 
 ---
 
-### Phase 02: Font Availability Check
+### Phase 02: Font Availability Check ✓
 
 **Goal:** Check if extracted fonts are installed on the user's system.
+
+**Status:** Complete (2026-01-26)
 
 **Depends on:** Phase 01
 
 **Plans:** 1 plan
 
 Plans:
-- [ ] 02-01-PLAN.md - Implement CheckFontAvailability function with Qt 6 QFontDatabase API
+- [x] 02-01-PLAN.md - Implement CheckFontAvailability function with Qt 6 QFontDatabase API
 
-**Details:**
-- Use `QFontDatabase::families()` to get installed fonts
-- Case-insensitive comparison
-- Return list of missing fonts
+**Delivered:**
+- `CheckFontAvailability(const std::vector<FontInfo>&)` - returns missing fonts
+- Uses Qt 6 static API (`QFontDatabase::families()`)
+- Case-insensitive font matching with `Qt::CaseInsensitive`
+- Preserves `url` field in returned FontInfo for Phase 04
 
 ---
 
