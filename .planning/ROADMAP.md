@@ -51,14 +51,14 @@ Plans:
 
 **Depends on:** Phase 02
 
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 3 to break down)
+- [ ] 03-01-PLAN.md — Implement ShowMissingFontsDialog with styled table and Continue Anyway/Cancel flow
 
 **Details:**
-- Follow existing plugin warning dialog pattern
-- Show font name and placeholder for download link
+- Follow existing plugin warning dialog pattern (PluginsHaveIssue)
+- Show font name and download link in styled table
 - "Continue Anyway" and "Cancel" buttons
 - Integrate into `LoadStreamupFileWithWarning()` flow
 
