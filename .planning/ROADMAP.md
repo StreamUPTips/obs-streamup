@@ -69,21 +69,28 @@ Plans:
 
 ---
 
-### Phase 04: Font URL Display in Dialog
+### Phase 04: Font URL Manager (Dev Tool)
 
-**Goal:** Display font download URLs from embedded `font.url` field in warning dialog.
+**Goal:** Provide a dev tool to add font download URLs directly to text sources in OBS scenes.
+
+**Status:** Planned
 
 **Depends on:** Phase 03
 
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 4 to break down)
+- [ ] 04-01-PLAN.md — Backend logic (TextSourceFontInfo struct, ScanCurrentSceneForTextSources, SetFontUrlOnSource)
+- [ ] 04-02-PLAN.md — Dialog UI, menu integration, and localization keys
 
 **Details:**
-- Read `url` field from `FontInfo` (already extracted in Phase 01)
-- Display clickable links in warning dialog for missing fonts
-- Graceful handling when URL not provided (just show font name)
+- Menu item in Tools submenu (always visible dev tool)
+- Dialog scans current scene for text sources (`text_gdiplus`, `text_ft2_source`)
+- Table displays: [Source Name] | [Font Name] | [URL (editable)]
+- Writes URLs directly to `source.settings.font.url` via OBS API
+- URLs persist on source and export automatically with `.streamup` files
+
+**Note:** Original Phase 04 goals (display URLs in dialog) were delivered by Phase 03.
 
 ---
 
