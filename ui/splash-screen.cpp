@@ -1745,10 +1745,20 @@ void ShowSplashScreenIfNeeded()
     }
     if (settings) obs_data_release(settings);
 
-    CreateSplashDialog(condition);
-    
-    ErrorHandler::LogInfo("Splash screen shown for version " + std::string(PROJECT_VERSION), 
-                         ErrorHandler::Category::UI);
+    if (condition == ShowCondition::VersionUpdate) {
+        // For version updates, show patch notes directly instead of the welcome splash
+        UpdateVersionTracking();
+        PatchNotesWindow::ShowPatchNotesWindow();
+
+        ErrorHandler::LogInfo("Patch notes shown for version update to " + std::string(PROJECT_VERSION),
+                             ErrorHandler::Category::UI);
+    } else {
+        // For first install, show the full welcome splash screen
+        CreateSplashDialog(condition);
+
+        ErrorHandler::LogInfo("Welcome splash shown for first install of version " + std::string(PROJECT_VERSION),
+                             ErrorHandler::Category::UI);
+    }
 }
 
 void ShowSplashScreen()
