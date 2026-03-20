@@ -28,10 +28,7 @@ MultiDockDock::MultiDockDock(const QString& id, const QString& name, QWidget* pa
     , m_id(id)
     , m_name(name)
     , m_innerHost(nullptr)
-    , m_statusLabel(nullptr)
     , m_addDockAction(nullptr)
-    , m_returnDockAction(nullptr)
-    , m_closeDockAction(nullptr)
     , m_lockCheckbox(nullptr)
     , m_docksLocked(false)
 {
@@ -63,7 +60,7 @@ void MultiDockDock::SetupUi()
     innerContainer->setFrameStyle(QFrame::NoFrame);
     // No custom styling - let OBS theme handle everything
     QVBoxLayout* innerLayout = new QVBoxLayout(innerContainer);
-    innerLayout->setContentsMargins(4, 4, 4, 4); // 8px padding on all sides
+    innerLayout->setContentsMargins(4, 4, 4, 4); // 4px margins on all sides
     innerLayout->setSpacing(0);
     
     // Create inner host as a direct child
@@ -274,10 +271,7 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
     toolBar->addWidget(lockCheckbox);
 
     // Store references for later access
-    m_statusLabel = nullptr; // No status label anymore
     m_addDockAction = addDockAction;
-    m_returnDockAction = nullptr; // No separate return action
-    m_closeDockAction = nullptr; // No close dock action anymore
     m_lockCheckbox = lockCheckbox;
     
     // Add toolbar widget to the bottom of the layout

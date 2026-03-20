@@ -44,5 +44,12 @@ void EnhanceTransitionSlider();
  */
 void StyleProgramContainer();
 
+/**
+ * @brief Clean up studio mode enhancement resources
+ *
+ * Removes the frontend event callback. Call during plugin shutdown.
+ */
+void CleanupStudioModeEnhancements();
+
 } // namespace StudioModeEnhancements
 } // namespace StreamUP

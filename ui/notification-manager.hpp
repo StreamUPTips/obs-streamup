@@ -1,5 +1,4 @@
-#ifndef STREAMUP_NOTIFICATION_MANAGER_HPP
-#define STREAMUP_NOTIFICATION_MANAGER_HPP
+#pragma once
 
 #include <QSystemTrayIcon>
 #include <QString>
@@ -56,5 +55,3 @@ void SendCriticalNotification(const QString& title, const QString& body);
 
 } // namespace NotificationManager
 } // namespace StreamUP
-
-#endif // STREAMUP_NOTIFICATION_MANAGER_HPP

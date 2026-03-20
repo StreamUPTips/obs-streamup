@@ -9,14 +9,14 @@ PluginState& PluginState::Instance() {
     return instance;
 }
 
-const std::map<std::string, PluginInfo>& PluginState::GetAllPlugins() const {
+std::map<std::string, PluginInfo> PluginState::GetAllPlugins() const {
     std::lock_guard<std::mutex> lock(m_mutex);
-    return m_allPlugins;
+    return m_allPlugins;  // returns copy - safe across threads
 }
 
-const std::map<std::string, PluginInfo>& PluginState::GetRequiredPlugins() const {
+std::map<std::string, PluginInfo> PluginState::GetRequiredPlugins() const {
     std::lock_guard<std::mutex> lock(m_mutex);
-    return m_requiredPlugins;
+    return m_requiredPlugins;  // returns copy - safe across threads
 }
 
 void PluginState::SetAllPlugins(const std::map<std::string, PluginInfo>& plugins) {
@@ -50,9 +50,9 @@ void PluginState::Reset() {
     StreamUP::DebugLogger::LogInfo("PluginState", "Plugin state reset");
 }
 
-const PluginState::PluginCheckResults& PluginState::GetCachedPluginStatus() const {
+PluginState::PluginCheckResults PluginState::GetCachedPluginStatus() const {
     std::lock_guard<std::mutex> lock(m_mutex);
-    return m_cachedStatus;
+    return m_cachedStatus;  // returns copy - safe across threads
 }
 
 void PluginState::SetPluginStatus(const PluginCheckResults& results) {

@@ -13,6 +13,7 @@
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QHBoxLayout>
+#include <QToolBar>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -20,11 +21,6 @@ namespace MultiDock {
 InnerDockHost::InnerDockHost(const QString& multiDockId, QWidget* parent)
     : QMainWindow(parent)
     , m_multiDockId(multiDockId)
-    , m_toolBar(nullptr)
-    , m_addDockAction(nullptr)
-    , m_returnDockAction(nullptr)
-    , m_closeDockAction(nullptr)
-    , m_statusLabel(nullptr)
     , m_docksLocked(false)
 {
     SetupDockOptions();
@@ -230,8 +226,9 @@ void InnerDockHost::RestoreLayout(const QByteArray& layout)
                 tb->hide();
                 tb->setVisible(false);
                 removeToolBar(tb);
-                // Don't delete immediately - just hide and remove from layout
+                // Safely remove and schedule for deletion
                 tb->setParent(nullptr);
+                tb->deleteLater();
             }
         }
         
@@ -245,8 +242,12 @@ void InnerDockHost::RestoreLayout(const QByteArray& layout)
                 // Reset any size constraints that might cause overlap
                 dock->setFloating(false);
                 
-                // Reapply dock features to prevent popout buttons from reappearing
-                dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
+                // Reapply dock features based on current lock state
+                if (m_docksLocked) {
+                    dock->setFeatures(QDockWidget::NoDockWidgetFeatures);
+                } else {
+                    dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
+                }
                 dock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
                 if (dock->widget()) {
                     dock->widget()->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -343,13 +344,14 @@ void InnerDockHost::ConnectDockSignals(QDockWidget* dock)
     }
     
     // Connect to dock widget's visibility changes to update toolbar
-    connect(dock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+    m_visibilityConnections[dock] = connect(dock, &QDockWidget::visibilityChanged, this, [this](bool visible) {
         (void)visible;
         UpdateToolBarState(); // Update toolbar when visibility changes
     });
     
     // Override dock's close behavior to return dock to main window instead of just hiding
     // We need to install an event filter to catch close events
+    dock->removeEventFilter(this); // Guard against duplicate installation
     dock->installEventFilter(this);
     
     // Disable context menu to prevent show/hide options
@@ -361,11 +363,16 @@ void InnerDockHost::DisconnectDockSignals(QDockWidget* dock)
     if (!dock) {
         return;
     }
-    
+
+    // Disconnect the stored visibility signal connection
+    auto it = m_visibilityConnections.find(dock);
+    if (it != m_visibilityConnections.end()) {
+        disconnect(it.value());
+        m_visibilityConnections.erase(it);
+    }
+
     // Remove event filter
     dock->removeEventFilter(this);
-    
-    // Qt handles signal disconnections automatically when objects are destroyed
 }
 
 void InnerDockHost::UpdateToolBarState()
@@ -385,52 +392,11 @@ void InnerDockHost::UpdateToolBarState()
     // Legacy toolbar no longer used - MultiDockDock handles toolbar now
 }
 
-void InnerDockHost::HideDockToolBars(QDockWidget* dock)
-{
-    if (!dock) {
-        return;
-    }
-    
-    // Find any QToolBar widgets inside the captured dock and hide them
-    // This prevents duplicate toolbars (e.g., mixer controls) from appearing
-    QWidget* dockWidget = dock->widget();
-    if (dockWidget) {
-        QList<QToolBar*> toolBars = dockWidget->findChildren<QToolBar*>();
-        for (QToolBar* toolBar : toolBars) {
-            if (toolBar) {
-                toolBar->hide();
-                StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Toolbar Management", "Hidden toolbar in captured dock: %s", 
-                     toolBar->objectName().toUtf8().constData());
-            }
-        }
-    }
-}
 
-void InnerDockHost::RestoreDockToolBars(QDockWidget* dock)
-{
-    if (!dock) {
-        return;
-    }
-    
-    // Find any QToolBar widgets inside the dock and show them again
-    QWidget* dockWidget = dock->widget();
-    if (dockWidget) {
-        QList<QToolBar*> toolBars = dockWidget->findChildren<QToolBar*>();
-        for (QToolBar* toolBar : toolBars) {
-            if (toolBar) {
-                toolBar->show();
-                StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Toolbar Management", "Restored toolbar in returned dock: %s", 
-                     toolBar->objectName().toUtf8().constData());
-            }
-        }
-    }
-}
-
-
-void InnerDockHost::ReapplyDockFeatures()
+void InnerDockHost::applyDockFeatures(bool locked)
 {
     // Only hide close buttons when locked, hide float buttons always
-    QString closeButtonStyle = m_docksLocked ? "width: 0px; height: 0px;" : "";
+    QString closeButtonStyle = locked ? "width: 0px; height: 0px;" : "";
 
     setStyleSheet(
         "QMainWindow#InnerDockHost { border-radius: 14px; }"
@@ -438,22 +404,22 @@ void InnerDockHost::ReapplyDockFeatures()
         "QDockWidget::float-button { width: 0px; height: 0px; }"
     );
 
-    // Reapply dock options based on lock state
-    if (m_docksLocked) {
+    // Set dock options based on lock state
+    if (locked) {
         setDockOptions(AllowTabbedDocks | ForceTabbedDocks);
-        // Install event filter to block resize events when locked
+        // Guard against duplicate event filter installation
+        removeEventFilter(this);
         installEventFilter(this);
     } else {
         setDockOptions(AllowTabbedDocks | AllowNestedDocks | AnimatedDocks);
-        // Remove event filter when unlocked
         removeEventFilter(this);
     }
-    
+
+    // Apply lock state to all current docks
     QList<QDockWidget*> docks = GetAllDocks();
     for (QDockWidget* dock : docks) {
         if (dock) {
-            // Reapply dock features based on lock state
-            if (m_docksLocked) {
+            if (locked) {
                 dock->setFeatures(QDockWidget::NoDockWidgetFeatures);
             } else {
                 dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
@@ -464,56 +430,24 @@ void InnerDockHost::ReapplyDockFeatures()
             if (dock->widget()) {
                 dock->widget()->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
             }
-            
-            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Feature Management", "Reapplied features to dock '%s' (locked: %s)", 
-                 dock->windowTitle().toUtf8().constData(), m_docksLocked ? "yes" : "no");
+
+            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Feature Management", "Applied features to dock '%s' (locked: %s)",
+                 dock->windowTitle().toUtf8().constData(), locked ? "yes" : "no");
         }
     }
+}
+
+void InnerDockHost::ReapplyDockFeatures()
+{
+    applyDockFeatures(m_docksLocked);
 }
 
 void InnerDockHost::SetDocksLocked(bool locked)
 {
     m_docksLocked = locked;
+    applyDockFeatures(locked);
 
-    // Only hide close buttons when locked, hide float buttons always
-    QString closeButtonStyle = m_docksLocked ? "width: 0px; height: 0px;" : "";
-
-    setStyleSheet(
-        "QMainWindow#InnerDockHost { border-radius: 14px; }"
-        "QDockWidget::close-button { " + closeButtonStyle + " }"
-        "QDockWidget::float-button { width: 0px; height: 0px; }"
-    );
-
-    // Disable/enable dock resizing by setting dock options
-    if (m_docksLocked) {
-        setDockOptions(AllowTabbedDocks | ForceTabbedDocks);
-        // Install event filter to block resize events when locked
-        installEventFilter(this);
-    } else {
-        setDockOptions(AllowTabbedDocks | AllowNestedDocks | AnimatedDocks);
-        // Remove event filter when unlocked
-        removeEventFilter(this);
-    }
-    
-    // Apply lock state to all current docks
-    QList<QDockWidget*> docks = GetAllDocks();
-    for (QDockWidget* dock : docks) {
-        if (dock) {
-            if (m_docksLocked) {
-                // When locked: remove all features except title bar
-                dock->setFeatures(QDockWidget::NoDockWidgetFeatures);
-            } else {
-                // When unlocked: allow moving and closing
-                dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
-            }
-            
-            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Lock Management", "%s dock '%s'", 
-                 m_docksLocked ? "Locked" : "Unlocked", 
-                 dock->windowTitle().toUtf8().constData());
-        }
-    }
-    
-    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Lock Management", "Set docks locked state to: %s", 
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Lock Management", "Set docks locked state to: %s",
          m_docksLocked ? "locked" : "unlocked");
 }
 

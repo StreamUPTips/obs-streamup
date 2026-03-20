@@ -835,5 +835,39 @@ void ApplyAdvAudioEnhancements(QWidget* advAudioDialog)
     advAudioDialog->setProperty("streamup_advadio_enhanced", true);
 }
 
+void ResetThemeCache()
+{
+    g_themeChecked = false;
+}
+
+void CleanupThemeEnhancements()
+{
+    // Remove all event filters BEFORE deleting the filter objects to avoid
+    // use-after-free if Qt dispatches events during shutdown (issue #10).
+    if (g_appFilter && QApplication::instance()) {
+        QApplication::instance()->removeEventFilter(g_appFilter);
+    }
+    if (g_statusBarFilter) {
+        // StatusBarFilter is installed on the status bar; find and remove it
+        QMainWindow* mainWindow = static_cast<QMainWindow*>(obs_frontend_get_main_window());
+        if (mainWindow) {
+            QStatusBar* statusBar = mainWindow->statusBar();
+            if (statusBar) {
+                statusBar->removeEventFilter(g_statusBarFilter);
+            }
+        }
+    }
+
+    delete g_colorFilter;
+    g_colorFilter = nullptr;
+    delete g_appFilter;
+    g_appFilter = nullptr;
+    delete g_statusBarFilter;
+    g_statusBarFilter = nullptr;
+    delete g_advAudioFilter;
+    g_advAudioFilter = nullptr;
+    g_themeChecked = false;
+}
+
 } // namespace ThemeEnhancements
 } // namespace StreamUP

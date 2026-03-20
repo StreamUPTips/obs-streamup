@@ -56,8 +56,6 @@ bool RefreshAudioMonitoring(void *data, obs_source_t *source)
 		return false;
 	}
 
-	UNUSED_PARAMETER(obs_source_get_name(source));
-
 	obs_monitoring_type original_monitoring_type = obs_source_get_monitoring_type(source);
 
 	if (original_monitoring_type != OBS_MONITORING_TYPE_NONE) {
@@ -92,7 +90,6 @@ bool RefreshBrowserSources(void *data, obs_source_t *source)
 	UNUSED_PARAMETER(data);
 
 	const char *source_id = obs_source_get_id(source);
-	UNUSED_PARAMETER(obs_source_get_name(source));
 
 	if (strcmp(source_id, "browser_source") == 0) {
 		obs_data_t *settings = obs_source_get_settings(source);
@@ -470,8 +467,6 @@ bool IsVideoCaptureDevice(obs_source_t *source)
 
 bool ActivateAllVideoCaptureDevices(bool sendNotification)
 {
-	int activated_count = 0;
-	int total_count = 0;
 	int counts[2] = {0, 0}; // [activated_count, total_count]
 	
 	obs_enum_sources([](void *data, obs_source_t *source) -> bool {
@@ -526,9 +521,9 @@ bool ActivateAllVideoCaptureDevices(bool sendNotification)
 		return true;
 	}, (void*)counts);
 	
-	activated_count = counts[0];
-	total_count = counts[1];
-	
+	int activated_count = counts[0];
+	int total_count = counts[1];
+
 	if (sendNotification) {
 		QString message;
 		if (activated_count > 0) {
@@ -542,7 +537,7 @@ bool ActivateAllVideoCaptureDevices(bool sendNotification)
 			StreamUP::NotificationManager::SendWarningNotification("Video Capture Devices", message);
 		}
 	}
-	
+
 	StreamUP::DebugLogger::LogInfoFormat("VideoCapture", "Activated %d video capture devices (total found: %d)",
 		 activated_count, total_count);
 	return true;
@@ -550,21 +545,19 @@ bool ActivateAllVideoCaptureDevices(bool sendNotification)
 
 bool DeactivateAllVideoCaptureDevices(bool sendNotification)
 {
-	int deactivated_count = 0;
-	int total_count = 0;
 	int counts[2] = {0, 0}; // [deactivated_count, total_count]
-	
+
 	obs_enum_sources([](void *data, obs_source_t *source) -> bool {
 		int *counts = static_cast<int*>(data);
 		int &deactivated = counts[0];
 		int &total = counts[1];
-		
+
 		if (!IsVideoCaptureDevice(source)) {
 			return true;
 		}
-		
+
 		total++;
-		
+
 		// Get the source's procedure handler
 		proc_handler_t *ph = obs_source_get_proc_handler(source);
 		if (!ph) {
@@ -575,7 +568,7 @@ bool DeactivateAllVideoCaptureDevices(bool sendNotification)
 			}
 			return true;
 		}
-		
+
 		// Check if device is already inactive by reading the "active" setting
 		obs_data_t *settings = obs_source_get_settings(source);
 		bool isActive = obs_data_get_bool(settings, "active");
@@ -601,13 +594,13 @@ bool DeactivateAllVideoCaptureDevices(bool sendNotification)
 				deactivated++;
 			}
 		}
-		
+
 		calldata_free(&cd);
 		return true;
 	}, (void*)counts);
-	
-	deactivated_count = counts[0];
-	total_count = counts[1];
+
+	int deactivated_count = counts[0];
+	int total_count = counts[1];
 	
 	if (sendNotification) {
 		QString message;

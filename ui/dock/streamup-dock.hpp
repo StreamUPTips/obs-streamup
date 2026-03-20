@@ -6,6 +6,7 @@
 #include <QMenu>
 #include <obs.h>
 #include <obs-frontend-api.h>
+#include <atomic>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -45,19 +46,20 @@ public:
 
 private:
 	Ui::StreamUPDock *ui;
-	QPushButton *button1;
-	QPushButton *button2;
-	QPushButton *button3;
-	QPushButton *button4;
+	QPushButton *lockAllSourcesButton;
+	QPushButton *lockCurrentSourcesButton;
+	QPushButton *refreshBrowserButton;
+	QPushButton *refreshAudioButton;
 	QPushButton *videoCaptureButton;
 	QPushButton *groupSelectedSourcesButton;
 	QPushButton *toggleVisibilityButton;
 	FlowLayout *mainDockLayout;
 	VideoCapturePopup *videoCapturePopup;
-	bool isProcessing;
+	std::atomic<bool> isProcessing;
+	obs_source_t *m_connectedScene = nullptr;
 
 	void applyFileIconToButton(QPushButton *button, const QString &filePath);
-	void updateButtonIcons();
+	Q_INVOKABLE void updateButtonIcons();
 
 	void setupObsSignals();
 	void connectSceneSignals();

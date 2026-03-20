@@ -1,5 +1,4 @@
-#ifndef STREAMUP_HOTKEY_MANAGER_HPP
-#define STREAMUP_HOTKEY_MANAGER_HPP
+#pragma once
 
 #include <obs.h>
 #include <obs-data.h>
@@ -209,5 +208,3 @@ obs_hotkey_id GetHotkeyId(const char* hotkeyName);
 
 } // namespace HotkeyManager
 } // namespace StreamUP
-
-#endif // STREAMUP_HOTKEY_MANAGER_HPP

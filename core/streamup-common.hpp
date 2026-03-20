@@ -33,11 +33,6 @@ struct PluginInfo {
 
 // SystemTrayNotification struct moved to StreamUP::NotificationManager module
 
-struct SceneItemEnumData {
-	bool isAnySourceSelected = false;
-	const char *selectedSourceName = nullptr;
-};
-
 // Global plugin state moved to StreamUP::PluginState class
 
 // Platform detection

@@ -146,7 +146,11 @@ void HotkeyWidget::StartRecording()
     m_recordedModifiers = Qt::NoModifier;
     
     m_recordButton->setText(obs_module_text("Hotkey.Widget.Cancel"));
-    m_recordButton->setStyleSheet(StreamUP::UIStyles::CreateStyledButton("", "error")->styleSheet());
+    {
+        auto *temp = StreamUP::UIStyles::CreateStyledButton("", "error");
+        m_recordButton->setStyleSheet(temp->styleSheet());
+        delete temp;
+    }
     m_displayLabel->setText(obs_module_text("Hotkey.Widget.PressKeys"));
     m_displayLabel->setStyleSheet(m_displayLabel->styleSheet() + 
         QString("background: %1; border-color: %2;")
@@ -165,7 +169,11 @@ void HotkeyWidget::StopRecording()
     releaseKeyboard();
     
     m_recordButton->setText(obs_module_text("Hotkey.Widget.Set"));
-    m_recordButton->setStyleSheet(StreamUP::UIStyles::CreateStyledButton("", "info")->styleSheet());
+    {
+        auto *temp = StreamUP::UIStyles::CreateStyledButton("", "info");
+        m_recordButton->setStyleSheet(temp->styleSheet());
+        delete temp;
+    }
     
     // Create hotkey data from recorded key combination
     if (m_recordedKey != 0) {

@@ -51,5 +51,26 @@ void EnhanceVolumeControl(QWidget* volumeControl);
  */
 bool IsUsingStreamUPTheme();
 
+/**
+ * @brief Reset the cached theme check so it is re-evaluated on next call
+ *
+ * Call this when the OBS theme changes.
+ */
+void ResetThemeCache();
+
+/**
+ * @brief Clean up mixer enhancement resources
+ *
+ * Deletes the global event filter and resets state.
+ * Call during plugin shutdown.
+ */
+void CleanupMixerEnhancements();
+
+/**
+ * @brief Check if OBS version is 32.1 or newer
+ * Mixer enhancements require OBS 32.1+ due to mixer layout changes
+ */
+bool IsOBS32_1OrNewer();
+
 } // namespace MixerEnhancements
 } // namespace StreamUP

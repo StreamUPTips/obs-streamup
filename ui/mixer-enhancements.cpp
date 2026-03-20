@@ -41,6 +41,28 @@ static bool g_themeChecked = false;
 // Track if we've set up the mixer dock watcher
 static bool g_mixerWatcherInstalled = false;
 
+// Minimum OBS version required for mixer enhancements (32.1.0)
+// Version format: (major << 24) | (minor << 16) | patch
+static constexpr uint32_t MIN_OBS_VERSION_FOR_MIXER = (32 << 24) | (1 << 16) | 0;
+
+/**
+ * @brief Check if OBS version is 32.1 or newer
+ * Mixer enhancements require OBS 32.1+ due to mixer layout changes
+ */
+bool IsOBS32_1OrNewer()
+{
+    static bool checked = false;
+    static bool result = false;
+
+    if (!checked) {
+        uint32_t obs_ver = obs_get_version();
+        result = obs_ver >= MIN_OBS_VERSION_FOR_MIXER;
+        checked = true;
+    }
+
+    return result;
+}
+
 /**
  * @brief Check if the current OBS theme is a StreamUP theme
  */
@@ -475,7 +497,7 @@ void EnhanceVolumeControl(QWidget* volumeControl)
 
 void RefreshMixerEnhancements()
 {
-    if (!IsUsingStreamUPTheme()) {
+    if (!IsOBS32_1OrNewer() || !IsUsingStreamUPTheme()) {
         return;
     }
 
@@ -532,7 +554,8 @@ static void AdjustMixerToolbar(QWidget* mixerWidget)
 
 void ApplyMixerEnhancements()
 {
-    if (!IsUsingStreamUPTheme()) {
+    // Mixer enhancements require OBS 32.1+ due to mixer layout changes
+    if (!IsOBS32_1OrNewer() || !IsUsingStreamUPTheme()) {
         return;
     }
 
@@ -567,14 +590,45 @@ void ApplyMixerEnhancements()
     // Apply enhancements to existing volume controls
     RefreshMixerEnhancements();
 
-    // Re-apply after a delay to catch late-loaded sources
+    // Re-apply after a delay to catch late-loaded sources.
+    // Guard against the filter being cleaned up before the timer fires (issue #10).
     QTimer::singleShot(500, []() {
-        RefreshMixerEnhancements();
+        if (g_mixerFilter)
+            RefreshMixerEnhancements();
     });
 
     QTimer::singleShot(2000, []() {
-        RefreshMixerEnhancements();
+        if (g_mixerFilter)
+            RefreshMixerEnhancements();
     });
+}
+
+void ResetThemeCache()
+{
+    g_themeChecked = false;
+}
+
+void CleanupMixerEnhancements()
+{
+    // Remove event filters from mixer widgets BEFORE deleting the filter
+    // to avoid use-after-free if Qt dispatches events during shutdown (issue #10).
+    if (g_mixerFilter && g_mixerWatcherInstalled) {
+        QWidget* mixerWidget = FindMixerDock();
+        if (mixerWidget) {
+            mixerWidget->removeEventFilter(g_mixerFilter);
+            QList<QScrollArea*> scrollAreas = mixerWidget->findChildren<QScrollArea*>();
+            for (QScrollArea* area : scrollAreas) {
+                area->removeEventFilter(g_mixerFilter);
+                if (area->widget()) {
+                    area->widget()->removeEventFilter(g_mixerFilter);
+                }
+            }
+        }
+    }
+    delete g_mixerFilter;
+    g_mixerFilter = nullptr;
+    g_mixerWatcherInstalled = false;
+    g_themeChecked = false;
 }
 
 } // namespace MixerEnhancements

@@ -1,3 +1,15 @@
+# StreamUP v2.1.7 - Patch Update
+
+## Improvements & Bug Fixes
+- **Memory & Stability Fixes** - Fixed several memory leaks throughout the plugin, including when loading StreamUP products and using WebSocket bitrate requests. This should noticeably reduce memory usage over long sessions
+- **Multi-Dock Improvements** - Improved dock restoration reliability and fixed issues where docks could lose their layout after restarting OBS
+- **Show/Hide Transitions** - Fixed an issue where setting show/hide transitions via WebSocket could fail on certain error paths
+- **Theme Enhancements** - Theme changes are now detected automatically without needing to restart OBS
+- **Thread Safety** - Improved plugin state handling to prevent potential issues when multiple parts of the plugin access shared data at the same time
+- **General Cleanup** - Removed unused code, consolidated duplicate styling, and improved the shutdown sequence to properly clean up all UI enhancements
+
+---
+
 # StreamUP v2.1.6 - Patch Update
 
 ## New Features
@@ -8,6 +20,8 @@
 - **Color Preview Pills** - New color preview pill styling for StreamUP themes
 
 ## Improvements & Bug Fixes
+- **Scene Organiser Item Height Range** - Expanded height adjustment range from 50-200% to 10-200% with a new default of 50%, allowing for more compact scene lists
+- **Mixer Enhancements Compatibility** - Mixer styling enhancements now only apply on OBS 32.1+ to prevent issues on older versions
 - **Multi-Dock Lock Persistence** - Fixed issue where the Multi-Dock lock state would reset to unlocked after restarting OBS
 - **Scene Organiser Studio Mode Controls** - Split "Disable Scene Switching in Studio Mode" into two separate settings: one for preview switching (single-click) and one for transitions (double-click), allowing users to disable accidental transitions while keeping preview selection functional
 - **Scene Organiser Persistence** - Fixed issue where Scene Organiser folders and order would be lost on OBS restart, particularly affecting scene collections with special characters

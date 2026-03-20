@@ -1,5 +1,4 @@
-#ifndef STREAMUP_HOTKEY_WIDGET_HPP
-#define STREAMUP_HOTKEY_WIDGET_HPP
+#pragma once
 
 #include <QWidget>
 #include <QPushButton>
@@ -79,5 +78,3 @@ private:
 
 } // namespace UI
 } // namespace StreamUP
-
-#endif // STREAMUP_HOTKEY_WIDGET_HPP

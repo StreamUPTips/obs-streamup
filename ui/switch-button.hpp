@@ -1,5 +1,4 @@
-#ifndef STREAMUP_SWITCH_BUTTON_HPP
-#define STREAMUP_SWITCH_BUTTON_HPP
+#pragma once
 
 #include <QWidget>
 #include <QPropertyAnimation>
@@ -62,5 +61,3 @@ SwitchButton* CreateStyledSwitch(const QString& text = "", bool checked = false)
 
 } // namespace UIStyles
 } // namespace StreamUP
-
-#endif // STREAMUP_SWITCH_BUTTON_HPP

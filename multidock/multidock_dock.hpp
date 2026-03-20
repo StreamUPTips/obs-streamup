@@ -4,9 +4,7 @@
 #include <QFrame>
 
 class QVBoxLayout;
-class QToolBar;
 class QAction;
-class QLabel;
 class QCheckBox;
 
 namespace StreamUP {
@@ -79,10 +77,7 @@ private:
     InnerDockHost* m_innerHost;
     
     // Toolbar references for status updates
-    QLabel* m_statusLabel;
     QAction* m_addDockAction;
-    QAction* m_returnDockAction;
-    QAction* m_closeDockAction;
     QCheckBox* m_lockCheckbox;
     bool m_docksLocked;
 };
