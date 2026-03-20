@@ -464,25 +464,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			
 			// Remove table border and background to blend with group box
 			missingTable->setStyleSheet(
-				missingTable->styleSheet() +
-				"QTableWidget { "
-				"border: none; "
-				"background: transparent; "
-				"border-radius: 8px; "
-				"} "
-				"QTableWidget::item { "
-				"border-bottom: 1px solid #374151; "
-				"} "
-				"QTableWidget::item:last { "
-				"border-bottom: none; "
-				"} "
-				"QHeaderView::section:first { "
-				"border-top-left-radius: 8px; "
-				"} "
-				"QHeaderView::section:last { "
-				"border-top-right-radius: 8px; "
-				"}"
-			);
+				missingTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET);
 			
 			// Connect click handler for website/download links
 			QObject::connect(missingTable, &QTableWidget::cellClicked, 
@@ -523,25 +505,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			
 			// Remove table border and background to blend with group box
 			updateTable->setStyleSheet(
-				updateTable->styleSheet() +
-				"QTableWidget { "
-				"border: none; "
-				"background: transparent; "
-				"border-radius: 8px; "
-				"} "
-				"QTableWidget::item { "
-				"border-bottom: 1px solid #374151; "
-				"} "
-				"QTableWidget::item:last { "
-				"border-bottom: none; "
-				"} "
-				"QHeaderView::section:first { "
-				"border-top-left-radius: 8px; "
-				"} "
-				"QHeaderView::section:last { "
-				"border-top-right-radius: 8px; "
-				"}"
-			);
+				updateTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET);
 			
 			// Connect click handler for website/download links
 			QObject::connect(updateTable, &QTableWidget::cellClicked, 
@@ -582,25 +546,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 
 			// Remove table border and background to blend with group box
 			failedTable->setStyleSheet(
-				failedTable->styleSheet() +
-				"QTableWidget { "
-				"border: none; "
-				"background: transparent; "
-				"border-radius: 8px; "
-				"} "
-				"QTableWidget::item { "
-				"border-bottom: 1px solid #374151; "
-				"} "
-				"QTableWidget::item:last { "
-				"border-bottom: none; "
-				"} "
-				"QHeaderView::section:first { "
-				"border-top-left-radius: 8px; "
-				"} "
-				"QHeaderView::section:last { "
-				"border-top-right-radius: 8px; "
-				"}"
-			);
+				failedTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET);
 
 			// Connect click handler for website/download links
 			QObject::connect(failedTable, &QTableWidget::cellClicked,
@@ -711,7 +657,6 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 	}
 
 	std::map<std::string, std::string> version_mismatch_modules;
-	std::string errorMsgUpdate = "";
 	std::vector<std::pair<std::string, std::string>> installedPlugins = GetInstalledPlugins();
 
 	for (const auto &plugin : installedPlugins) {
@@ -862,8 +807,6 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 
 	std::map<std::string, std::string> missing_modules;
 	std::map<std::string, std::string> version_mismatch_modules;
-	std::string errorMsgMissing = "";
-	std::string errorMsgUpdate = "";
 	char *filepath = StreamUP::PathUtils::GetOBSLogPath();
 	if (filepath == nullptr) {
 		return false;
@@ -994,21 +937,15 @@ static bool IsLikelyGitHash(const std::string &version) {
 
 std::string SearchStringInFileForVersion(const char *path, const char *search)
 {
-	static QString cached_filepath;
-	static QString cached_path;
-	
-	// Cache the filepath lookup to avoid repeated filesystem operations
+	// Look up the most recent file each time (no static caching - avoids thread safety issues)
 	QString current_path = QString::fromLocal8Bit(path);
-	if (current_path != cached_path) {
-		cached_path = current_path;
-		cached_filepath = PathUtils::GetMostRecentFile(current_path);
-	}
-	
-	if (cached_filepath.isEmpty()) {
+	QString filepath = PathUtils::GetMostRecentFile(current_path);
+
+	if (filepath.isEmpty()) {
 		return "";
 	}
-	
-	FILE *file = fopen(cached_filepath.toLocal8Bit().constData(), "r");
+
+	FILE *file = fopen(filepath.toLocal8Bit().constData(), "r");
 	if (!file) {
 		return "";
 	}

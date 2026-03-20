@@ -1,5 +1,4 @@
-#ifndef STREAMUP_UI_HELPERS_HPP
-#define STREAMUP_UI_HELPERS_HPP
+#pragma once
 
 #include <QDialog>
 #include <QLabel>
@@ -219,5 +218,3 @@ QStandardItem* FindItemRecursive(QStandardItem* parent, const QString& text, int
 
 } // namespace UIHelpers
 } // namespace StreamUP
-
-#endif // STREAMUP_UI_HELPERS_HPP

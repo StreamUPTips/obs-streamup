@@ -1,4 +1,5 @@
 #include "add_dock_dialog.hpp"
+#include "inner_dock_host.hpp"
 #include "../utilities/debug-logger.hpp"
 #include "multidock_utils.hpp"
 #include "../ui/ui-styles.hpp"
@@ -64,12 +65,13 @@ QDockWidget* AddDockDialog::GetSelectedDock() const
     if (!current) {
         return nullptr;
     }
-    
+
     int index = m_dockList->row(current);
-    if (index >= 0 && index < m_availableDocks.size()) {
-        return m_availableDocks[index];
+    if (index >= 0 && static_cast<size_t>(index) < static_cast<size_t>(m_availableDocks.size())) {
+        QDockWidget *dock = m_availableDocks[index];
+        if (dock) return dock; // QPointer auto-nulls if deleted
     }
-    
+
     return nullptr;
 }
 
@@ -156,13 +158,9 @@ bool AddDockDialog::IsDockAvailable(QDockWidget* dock) const
     // If the dock's parent is not the main window, it's likely captured elsewhere
     QWidget* dockParent = dock->parentWidget();
     while (dockParent && dockParent != mainWindow) {
-        // Check if parent is a MultiDock InnerDockHost by checking for the class name
-        if (qobject_cast<QMainWindow*>(dockParent) && dockParent != mainWindow) {
-            // If it's a QMainWindow that's not the main OBS window, likely a MultiDock host
-            QString className = dockParent->metaObject()->className();
-            if (className.contains("InnerDockHost")) {
-                return false; // Captured by a MultiDock
-            }
+        // Check if parent is a MultiDock InnerDockHost using type-safe cast
+        if (qobject_cast<InnerDockHost*>(dockParent)) {
+            return false; // Already captured in a MultiDock
         }
         dockParent = dockParent->parentWidget();
     }

@@ -41,7 +41,7 @@ void RefreshBrowserSourcesDialog();
  * Find if any source is selected in a scene
  * @param scene The scene to search
  * @param item The scene item to check
- * @param param Pointer to SceneItemEnumData struct
+ * @param param Pointer to SceneFindBoxData struct
  * @return bool True to continue enumeration
  */
 bool FindSelected(obs_scene_t *scene, obs_sceneitem_t *item, void *param);
@@ -176,14 +176,6 @@ void RefreshAllVideoCaptureDevicesDialog();
  * @return bool True if the source is a video capture device
  */
 bool IsVideoCaptureDevice(obs_source_t *source);
-
-/**
- * Callback function for video capture device operations
- * @param data Pointer to operation parameters
- * @param source The source to process
- * @return bool True to continue enumeration
- */
-bool VideoCaptureDeviceCallback(void *data, obs_source_t *source);
 
 // Group management functions
 /**

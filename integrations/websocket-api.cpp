@@ -30,6 +30,8 @@ void WebsocketRequestBitrate(obs_data_t *request_data, obs_data_t *response_data
 	if (!streamOutput || !obs_frontend_streaming_active()) {
 		StreamUP::DebugLogger::LogDebug("WebSocket", "GetBitrate", "Streaming is not active, returning error");
 		obs_data_set_string(response_data, "error", "Streaming is not active.");
+		if (streamOutput)
+			obs_output_release(streamOutput);
 		return;
 	}
 
@@ -44,6 +46,7 @@ void WebsocketRequestBitrate(obs_data_t *request_data, obs_data_t *response_data
 		lastTime = currentTime;
 		initialized = true;
 		obs_data_set_int(response_data, "kbits-per-sec", 0);
+		obs_output_release(streamOutput);
 		return;
 	}
 
@@ -65,6 +68,7 @@ void WebsocketRequestBitrate(obs_data_t *request_data, obs_data_t *response_data
 	lastTime = currentTime;
 
 	obs_data_set_int(response_data, "kbits-per-sec", kbitsPerSec);
+	obs_output_release(streamOutput);
 }
 
 void WebsocketRequestVersion(obs_data_t *request_data, obs_data_t *response_data, void *private_data)

@@ -88,7 +88,7 @@ void MultiDockManager::Shutdown()
     for (MultiDockDock* multiDock : multiDocks) {
         if (multiDock) {
             s_instance->UnregisterFromObs(multiDock);
-            multiDock->deleteLater();
+            // Don't deleteLater - obs_frontend_remove_dock handles widget cleanup
         }
     }
     
@@ -127,14 +127,11 @@ QString MultiDockManager::CreateMultiDock(const QString& name)
     
     RegisterWithObs(multiDock);
     
-    // Auto-open the multidock after creation
-    if (mainWindow) {
-        // Find the dock widget that was just registered and show it
-        QDockWidget* obsDocWidget = mainWindow->findChild<QDockWidget*>(id);
-        if (obsDocWidget) {
-            obsDocWidget->show();
-            obsDocWidget->raise();
-        }
+    // Auto-open the multidock after creation (mainWindow already verified above)
+    QDockWidget* obsDocWidget = mainWindow->findChild<QDockWidget*>(id);
+    if (obsDocWidget) {
+        obsDocWidget->show();
+        obsDocWidget->raise();
     }
     
     // Save the updated list
@@ -369,9 +366,10 @@ void MultiDockManager::RetryFailedRestorations()
          availableDockMap.size());
     
     int totalRetryAttempts = 0;
-    int successfulRetries = 0;
-    
+    int totalSuccessfulRetries = 0;
+
     for (const QString& multiDockId : m_pendingRetryIds) {
+        int successfulRetries = 0; // Reset per multidock
         MultiDockDock* multiDock = GetMultiDock(multiDockId);
         if (!multiDock || !multiDock->GetInnerHost()) {
             continue;
@@ -430,10 +428,11 @@ void MultiDockManager::RetryFailedRestorations()
         if (successfulRetries > 0 && !layout.isEmpty()) {
             multiDock->GetInnerHost()->RestoreLayout(layout);
         }
+        totalSuccessfulRetries += successfulRetries;
     }
-    
+
     StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Retry restoration completed: %d/%d dock restorations successful",
-         successfulRetries, totalRetryAttempts);
+         totalSuccessfulRetries, totalRetryAttempts);
     
     // Clear the retry list
     m_pendingRetryIds.clear();
@@ -444,16 +443,18 @@ void MultiDockManager::OnMultiDockDestroyed(QObject* obj)
     if (!obj) {
         return;
     }
-    
-    // Find the destroyed MultiDock - with QPointer, it automatically becomes null
-    // The persistent info is maintained separately
+
+    // Find and remove the destroyed MultiDock from tracking maps
     for (auto it = m_multiDocks.begin(); it != m_multiDocks.end(); ++it) {
         if (it.value().data() == static_cast<MultiDockDock*>(obj)) {
             QString id = it.key();
-            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Management", "Widget destroyed for MultiDock ID '%s', QPointer automatically set to null",
+            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Management", "Widget destroyed for MultiDock ID '%s', removing from tracking maps",
                  id.toUtf8().constData());
-            
-            // QPointer automatically becomes null when object is destroyed
+
+            // Remove from multidock map
+            m_multiDocks.erase(it);
+            // Remove from pending retry list if present
+            m_pendingRetryIds.removeAll(id);
             // Persistent info is maintained in m_persistentInfo, so this MultiDock will be restored on next load
             break;
         }

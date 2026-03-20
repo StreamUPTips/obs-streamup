@@ -15,7 +15,7 @@ QMainWindow* GetObsMainWindow()
         StreamUP::DebugLogger::LogError("MultiDock", "Could not get main OBS window");
         return nullptr;
     }
-    return reinterpret_cast<QMainWindow*>(main_window_ptr);
+    return static_cast<QMainWindow*>(main_window_ptr);
 }
 
 QList<QDockWidget*> FindAllObsDocks(QMainWindow* mainWindow)
@@ -27,16 +27,6 @@ QList<QDockWidget*> FindAllObsDocks(QMainWindow* mainWindow)
     QList<QDockWidget*> docks = mainWindow->findChildren<QDockWidget*>();
     
     StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Utils", "Found %d dock widgets in main window", docks.size());
-    
-    // Log dock names for debugging
-    for (const auto* dock : docks) {
-        if (dock) {
-            QString name = dock->windowTitle();
-            QString objectName = dock->objectName();
-            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Utils", "Dock: '%s' (objectName: '%s')",
-                 name.toUtf8().constData(), objectName.toUtf8().constData());
-        }
-    }
     
     return docks;
 }
@@ -99,7 +89,7 @@ bool IsStableObjectName(const QString& objectName)
     }
     
     // Names ending with UUIDs are not stable (plugin-name_UUID pattern)
-    if (objectName.contains("_") && objectName.length() > 30) {
+    if (objectName.contains("_")) {
         QStringList parts = objectName.split("_");
         if (parts.size() >= 2 && uuidPattern.match(parts.last()).hasMatch()) {
             return false;

@@ -29,16 +29,11 @@ namespace MenuManager {
 
 void InitializeMenu()
 {
-    blog(LOG_INFO, "[StreamUP] InitializeMenu: Starting menu initialization");
+    blog(LOG_DEBUG, "[StreamUP] InitializeMenu: Starting menu initialization");
 
-    blog(LOG_INFO, "[StreamUP] InitializeMenu: Creating QMenu");
-    QMenu* menu = new QMenu();
-    if (!menu) {
-        blog(LOG_ERROR, "[StreamUP] InitializeMenu: Failed to create QMenu");
-        return;
-    }
-    blog(LOG_INFO, "[StreamUP] InitializeMenu: QMenu created successfully");
-    
+    blog(LOG_DEBUG, "[StreamUP] InitializeMenu: Creating QMenu");
+    QMenu* menu = nullptr;
+
 #if defined(_WIN32)
     // Windows: Add to main menu bar
     void* main_window_ptr = obs_frontend_get_main_window();
@@ -54,35 +49,30 @@ void InitializeMenu()
         return;
     }
 
-    QMenu* topLevelMenu = new QMenu(obs_module_text("StreamUP"), menuBar);
-    menuBar->addMenu(topLevelMenu);
-    menu = topLevelMenu;
+    menu = new QMenu(obs_module_text("StreamUP"), menuBar);
+    menuBar->addMenu(menu);
 #else
     // macOS and Linux: Add to Tools menu
-    blog(LOG_INFO, "[StreamUP] InitializeMenu: Mac/Linux platform - adding to Tools menu");
+    blog(LOG_DEBUG, "[StreamUP] InitializeMenu: Mac/Linux platform - adding to Tools menu");
 
-    blog(LOG_INFO, "[StreamUP] InitializeMenu: Getting menu text");
     const char* menu_text = obs_module_text("StreamUP");
-    blog(LOG_INFO, "[StreamUP] InitializeMenu: Menu text: %s", menu_text ? menu_text : "NULL");
+    blog(LOG_DEBUG, "[StreamUP] InitializeMenu: Menu text: %s", menu_text ? menu_text : "NULL");
 
-    blog(LOG_INFO, "[StreamUP] InitializeMenu: Calling obs_frontend_add_tools_menu_qaction");
     QAction* action = static_cast<QAction*>(obs_frontend_add_tools_menu_qaction(menu_text));
     if (!action) {
         blog(LOG_ERROR, "[StreamUP] InitializeMenu: obs_frontend_add_tools_menu_qaction returned NULL");
         return;
     }
-    blog(LOG_INFO, "[StreamUP] InitializeMenu: obs_frontend_add_tools_menu_qaction succeeded");
 
-    blog(LOG_INFO, "[StreamUP] InitializeMenu: Setting menu on action");
+    menu = new QMenu(obs_module_text("StreamUP"));
     action->setMenu(menu);
-    blog(LOG_INFO, "[StreamUP] InitializeMenu: Menu set on action successfully");
 #endif
 
     // Connect dynamic loader
-    blog(LOG_INFO, "[StreamUP] InitializeMenu: Connecting dynamic loader");
+    blog(LOG_DEBUG, "[StreamUP] InitializeMenu: Connecting dynamic loader");
     QObject::connect(menu, &QMenu::aboutToShow, [menu] { LoadMenuItems(menu); });
 
-    blog(LOG_INFO, "[StreamUP] InitializeMenu: Menu initialization completed successfully");
+    blog(LOG_DEBUG, "[StreamUP] InitializeMenu: Menu initialization completed successfully");
 }
 
 void LoadMenuItems(QMenu* menu)
@@ -175,16 +165,16 @@ void LoadMenuItems(QMenu* menu)
     });
 
     // MultiDock submenu
-    QMenu* multiDockMenu = menu->addMenu("MultiDock");
-    
-    action = multiDockMenu->addAction("New MultiDock...");
-    QObject::connect(action, &QAction::triggered, []() { 
-        StreamUP::MultiDock::ShowNewMultiDockDialog(); 
+    QMenu* multiDockMenu = menu->addMenu(obs_module_text("Menu.MultiDock"));
+
+    action = multiDockMenu->addAction(obs_module_text("Menu.MultiDock.New"));
+    QObject::connect(action, &QAction::triggered, []() {
+        StreamUP::MultiDock::ShowNewMultiDockDialog();
     });
-    
-    action = multiDockMenu->addAction("Manage MultiDocks...");
-    QObject::connect(action, &QAction::triggered, []() { 
-        StreamUP::MultiDock::ShowManageMultiDocksDialog(); 
+
+    action = multiDockMenu->addAction(obs_module_text("Menu.MultiDock.Manage"));
+    QObject::connect(action, &QAction::triggered, []() {
+        StreamUP::MultiDock::ShowManageMultiDocksDialog();
     });
     
     // Get the MultiDockManager instance and add existing multidocks to menu

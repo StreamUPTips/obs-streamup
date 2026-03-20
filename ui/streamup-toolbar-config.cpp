@@ -462,61 +462,6 @@ int ToolbarConfiguration::getItemIndex(const QString& id) const {
     return -1;
 }
 
-void ToolbarConfiguration::addItemToGroup(const QString& groupId, std::shared_ptr<ToolbarItem> item) {
-    if (!item) return;
-    
-    // Find the group
-    for (auto& existingItem : items) {
-        if (existingItem->type == ItemType::Group && existingItem->id == groupId) {
-            auto group = std::static_pointer_cast<GroupItem>(existingItem);
-            group->addChild(item);
-            invalidateCache();
-            return;
-        }
-    }
-}
-
-void ToolbarConfiguration::removeItemFromGroup(const QString& groupId, const QString& itemId) {
-    // Find the group
-    for (auto& existingItem : items) {
-        if (existingItem->type == ItemType::Group && existingItem->id == groupId) {
-            auto group = std::static_pointer_cast<GroupItem>(existingItem);
-            group->removeChild(itemId);
-            invalidateCache();
-            return;
-        }
-    }
-}
-
-void ToolbarConfiguration::moveItemToGroup(const QString& itemId, const QString& targetGroupId) {
-    // Find the item first
-    std::shared_ptr<ToolbarItem> itemToMove = findItem(itemId);
-    if (!itemToMove) return;
-    
-    // Remove from current location
-    removeItem(itemId);
-    
-    // Add to target group
-    addItemToGroup(targetGroupId, itemToMove);
-}
-
-void ToolbarConfiguration::moveItemOutOfGroup(const QString& itemId) {
-    // Search for the item in all groups and remove it
-    for (auto& existingItem : items) {
-        if (existingItem->type == ItemType::Group) {
-            auto group = std::static_pointer_cast<GroupItem>(existingItem);
-            auto foundItem = group->findChild(itemId);
-            if (foundItem) {
-                group->removeChild(itemId);
-                // Add to main items list
-                items.append(foundItem);
-                invalidateCache();
-                return;
-            }
-        }
-    }
-}
-
 QList<std::shared_ptr<ToolbarItem>> ToolbarConfiguration::getFlattenedItems() const {
     QList<std::shared_ptr<ToolbarItem>> result;
     

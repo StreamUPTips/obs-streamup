@@ -75,6 +75,9 @@ bool GetBoolWithDefault(obs_data_t* data, const char* key, bool defaultValue)
     if (!data || !key) {
         return defaultValue;
     }
+    if (!obs_data_has_user_value(data, key)) {
+        return defaultValue;
+    }
     return obs_data_get_bool(data, key);
 }
 
@@ -97,12 +100,18 @@ int GetIntWithDefault(obs_data_t* data, const char* key, int defaultValue)
     if (!data || !key) {
         return defaultValue;
     }
+    if (!obs_data_has_user_value(data, key)) {
+        return defaultValue;
+    }
     return static_cast<int>(obs_data_get_int(data, key));
 }
 
 double GetDoubleWithDefault(obs_data_t* data, const char* key, double defaultValue)
 {
     if (!data || !key) {
+        return defaultValue;
+    }
+    if (!obs_data_has_user_value(data, key)) {
         return defaultValue;
     }
     return obs_data_get_double(data, key);
@@ -248,8 +257,9 @@ obs_scene_t* ValidateAndGetScene(obs_data_t* request, obs_data_t* response, cons
         return nullptr;
     }
 
-    // Note: caller must release the source, not the scene
-    obs_source_release(sceneSource);
+    // Note: scene is a borrowed reference from sceneSource.
+    // Do NOT release sceneSource here - the caller must call
+    // obs_source_release(obs_scene_get_source(scene)) when done.
     return scene;
 }
 

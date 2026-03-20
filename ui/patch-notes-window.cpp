@@ -108,17 +108,27 @@ void CreatePatchNotesDialog()
         QVBoxLayout* versionLayout = new QVBoxLayout(versionGroup);
         versionLayout->setContentsMargins(8, 8, 8, 8);
         
+        // Detect platform
+#if defined(_WIN32)
+        QString platform = "Windows x64";
+#elif defined(__APPLE__)
+        QString platform = "macOS";
+#else
+        QString platform = "Linux";
+#endif
+
         QString versionInfo = QString(R"(
 <div style="color: %1; line-height: 1.5; font-size: 13px;">
     <p style="margin: 4px 0;"><strong>Version:</strong> %2</p>
     <p style="margin: 4px 0;"><strong>Build:</strong> Release</p>
-    <p style="margin: 4px 0;"><strong>Platform:</strong> Windows x64</p>
+    <p style="margin: 4px 0;"><strong>Platform:</strong> %4</p>
     <p style="margin: 4px 0; color: %3;">For the latest updates and community support, check out our links below!</p>
 </div>
         )")
             .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
             .arg(PROJECT_VERSION)
-            .arg(StreamUP::UIStyles::Colors::TEXT_MUTED);
+            .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
+            .arg(platform);
         
         QLabel* versionLabel = UIHelpers::CreateRichTextLabel(versionInfo, false, true, Qt::Alignment(), true);
         versionLayout->addWidget(versionLabel);

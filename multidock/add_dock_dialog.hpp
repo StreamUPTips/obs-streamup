@@ -5,6 +5,7 @@
 #include <QListWidget>
 #include <QDockWidget>
 #include <QPushButton>
+#include <QPointer>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -38,7 +39,7 @@ private:
     QPushButton* m_addButton;
     QPushButton* m_cancelButton;
     
-    QList<QDockWidget*> m_availableDocks;
+    QList<QPointer<QDockWidget>> m_availableDocks;
 };
 
 } // namespace MultiDock

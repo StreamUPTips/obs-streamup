@@ -1,5 +1,4 @@
-#ifndef STREAMUP_SETTINGS_MANAGER_HPP
-#define STREAMUP_SETTINGS_MANAGER_HPP
+#pragma once
 
 #include <obs-data.h>
 #include <map>
@@ -246,5 +245,3 @@ bool AreUpdatesSkipped(const std::map<std::string, std::string>& currentOutdated
 // Global functions for toolbar management (defined in streamup.cpp)
 extern void ApplyToolbarVisibility();
 extern void ApplyToolbarPosition();
-
-#endif // STREAMUP_SETTINGS_MANAGER_HPP

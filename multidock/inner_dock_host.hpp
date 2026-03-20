@@ -3,11 +3,8 @@
 
 #include "multidock_utils.hpp"
 #include <QMainWindow>
-#include <QToolBar>
-#include <QAction>
 #include <QHash>
-
-class QLabel;
+#include <QMap>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -100,17 +97,12 @@ private:
     void SetupDockOptions();
     void ConnectDockSignals(QDockWidget* dock);
     void DisconnectDockSignals(QDockWidget* dock);
-    void HideDockToolBars(QDockWidget* dock);
-    void RestoreDockToolBars(QDockWidget* dock);
+    void applyDockFeatures(bool locked);
 
     QString m_multiDockId;
-    QToolBar* m_toolBar;
-    QAction* m_addDockAction;
-    QAction* m_returnDockAction;
-    QAction* m_closeDockAction;
-    QLabel* m_statusLabel;
-    
+
     QHash<DockId, CapturedDock> m_capturedDocks;
+    QMap<QDockWidget*, QMetaObject::Connection> m_visibilityConnections;
     bool m_docksLocked;
     
     // Removed timers - we save on OBS shutdown instead

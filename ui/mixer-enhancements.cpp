@@ -577,5 +577,18 @@ void ApplyMixerEnhancements()
     });
 }
 
+void ResetThemeCache()
+{
+    g_themeChecked = false;
+}
+
+void CleanupMixerEnhancements()
+{
+    delete g_mixerFilter;
+    g_mixerFilter = nullptr;
+    g_mixerWatcherInstalled = false;
+    g_themeChecked = false;
+}
+
 } // namespace MixerEnhancements
 } // namespace StreamUP

@@ -15,9 +15,9 @@ class PluginState {
 public:
     static PluginState& Instance();
     
-    // Plugin management
-    const std::map<std::string, PluginInfo>& GetAllPlugins() const;
-    const std::map<std::string, PluginInfo>& GetRequiredPlugins() const;
+    // Plugin management (returns copies for thread safety)
+    std::map<std::string, PluginInfo> GetAllPlugins() const;
+    std::map<std::string, PluginInfo> GetRequiredPlugins() const;
     void SetAllPlugins(const std::map<std::string, PluginInfo>& plugins);
     void SetRequiredPlugins(const std::map<std::string, PluginInfo>& plugins);
     void AddPlugin(const std::string& key, const PluginInfo& plugin);
@@ -38,7 +38,7 @@ public:
         bool isValid = false;
     };
     
-    const PluginCheckResults& GetCachedPluginStatus() const;
+    PluginCheckResults GetCachedPluginStatus() const;
     void SetPluginStatus(const PluginCheckResults& results);
     void InvalidatePluginStatus();
     bool IsPluginStatusCached() const;
@@ -61,12 +61,12 @@ private:
     PluginCheckResults m_cachedStatus;
 };
 
-// Convenience access functions
-inline const std::map<std::string, PluginInfo>& GetAllPlugins() {
+// Convenience access functions (return copies for thread safety)
+inline std::map<std::string, PluginInfo> GetAllPlugins() {
     return PluginState::Instance().GetAllPlugins();
 }
 
-inline const std::map<std::string, PluginInfo>& GetRequiredPlugins() {
+inline std::map<std::string, PluginInfo> GetRequiredPlugins() {
     return PluginState::Instance().GetRequiredPlugins();
 }
 

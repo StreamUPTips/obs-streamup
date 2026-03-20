@@ -1,5 +1,6 @@
 #include "studio-mode-enhancements.hpp"
 #include "theme-enhancements.hpp"
+#include "ui-styles.hpp"
 #include "../utilities/debug-logger.hpp"
 #include <obs-frontend-api.h>
 #include <QMainWindow>
@@ -35,7 +36,7 @@ bool SliderMidpointFilter::eventFilter(QObject* watched, QEvent* event)
 
 void SliderMidpointFilter::drawMidpointMarker(QSlider* slider, QPaintEvent* paintEvent)
 {
-    UNUSED_PARAMETER(paintEvent);
+    Q_UNUSED(paintEvent);
 
     // Let the slider paint itself first
     QSlider temp(slider->orientation());
@@ -76,7 +77,7 @@ void SliderMidpointFilter::drawMidpointMarker(QSlider* slider, QPaintEvent* pain
         }
 
         // Draw vertical line at midpoint
-        painter.setPen(QPen(QColor(255, 255, 255, 200), 2));
+        painter.setPen(QPen(QColor(StreamUP::UIStyles::Colors::TEXT_PRIMARY).lighter(), 2));
         painter.drawLine(midPosition, grooveRect.top(), midPosition, grooveRect.bottom());
     } else {
         // Calculate vertical midpoint position
@@ -89,7 +90,7 @@ void SliderMidpointFilter::drawMidpointMarker(QSlider* slider, QPaintEvent* pain
         }
 
         // Draw horizontal line at midpoint
-        painter.setPen(QPen(QColor(255, 255, 255, 200), 2));
+        painter.setPen(QPen(QColor(StreamUP::UIStyles::Colors::TEXT_PRIMARY).lighter(), 2));
         painter.drawLine(grooveRect.left(), midPosition, grooveRect.right(), midPosition);
     }
 }
@@ -118,11 +119,10 @@ void EnhanceTransitionSlider()
              objectName.toUtf8().constData(), toolTip.toUtf8().constData());
 
         // The transition slider is typically named "transitionDuration" or similar
-        // Also check if it's horizontal and in a reasonable range
+        // Only install on transition-related sliders, not all horizontal sliders
         if (objectName.contains("transition", Qt::CaseInsensitive) ||
             objectName.contains("duration", Qt::CaseInsensitive) ||
-            toolTip.contains("transition", Qt::CaseInsensitive) ||
-            slider->orientation() == Qt::Horizontal) {
+            toolTip.contains("transition", Qt::CaseInsensitive)) {
 
             blog(LOG_INFO, "[StreamUP] Studio Mode Enhancement: Installing event filter on slider - objectName: '%s'",
                  objectName.toUtf8().constData());
@@ -241,7 +241,7 @@ void StyleProgramContainer()
 
 static void OnStudioModeEvent(enum obs_frontend_event event, void *data)
 {
-    UNUSED_PARAMETER(data);
+    Q_UNUSED(data);
 
     if (event == OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED) {
         blog(LOG_INFO, "[StreamUP] Studio Mode enabled - applying enhancements with delay");
@@ -267,6 +267,11 @@ void ApplyStudioModeEnhancements()
 
     // Register event callback to apply enhancements when studio mode is enabled
     obs_frontend_add_event_callback(OnStudioModeEvent, nullptr);
+}
+
+void CleanupStudioModeEnhancements()
+{
+    obs_frontend_remove_event_callback(OnStudioModeEvent, nullptr);
 }
 
 } // namespace StudioModeEnhancements
