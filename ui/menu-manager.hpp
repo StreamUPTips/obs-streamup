@@ -1,5 +1,4 @@
-#ifndef STREAMUP_MENU_MANAGER_HPP
-#define STREAMUP_MENU_MANAGER_HPP
+#pragma once
 
 #include <QMenu>
 
@@ -27,5 +26,3 @@ void LoadMenuItems(QMenu* menu);
 
 } // namespace MenuManager
 } // namespace StreamUP
-
-#endif // STREAMUP_MENU_MANAGER_HPP

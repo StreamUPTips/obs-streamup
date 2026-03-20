@@ -151,12 +151,8 @@ public:
     std::shared_ptr<ToolbarItem> findItem(const QString& id) const;
     int getItemIndex(const QString& id) const;
     
-    // Group-specific utility methods
-    void addItemToGroup(const QString& groupId, std::shared_ptr<ToolbarItem> item);
-    void removeItemFromGroup(const QString& groupId, const QString& itemId);
-    void moveItemToGroup(const QString& itemId, const QString& targetGroupId);
-    void moveItemOutOfGroup(const QString& itemId);
-    QList<std::shared_ptr<ToolbarItem>> getFlattenedItems() const; // Get all items ignoring groups
+    // Get all items flattened (expanding any legacy groups)
+    QList<std::shared_ptr<ToolbarItem>> getFlattenedItems() const;
     
     // Get available dock buttons
     static QList<DockButtonItem> getAvailableDockButtons();

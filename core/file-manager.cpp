@@ -272,27 +272,9 @@ void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
             fontTable->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         }
 
-        // Remove table border to blend with group box (same as PluginsHaveIssue)
+        // Remove table border to blend with group box
         fontTable->setStyleSheet(
-            fontTable->styleSheet() +
-            "QTableWidget { "
-            "border: none; "
-            "background: transparent; "
-            "border-radius: 8px; "
-            "} "
-            "QTableWidget::item { "
-            "border-bottom: 1px solid #374151; "
-            "} "
-            "QTableWidget::item:last { "
-            "border-bottom: none; "
-            "} "
-            "QHeaderView::section:first { "
-            "border-top-left-radius: 8px; "
-            "} "
-            "QHeaderView::section:last { "
-            "border-top-right-radius: 8px; "
-            "}"
-        );
+            fontTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET);
 
         fontLayout->addWidget(fontTable);
         contentLayout->addWidget(fontGroup);
@@ -378,7 +360,8 @@ std::vector<TextSourceFontInfo> ScanCurrentSceneForTextSources()
 		// Use unversioned ID to handle text_gdiplus_v3, etc.
 		if (id && (strcmp(id, "text_gdiplus") == 0 || strcmp(id, "text_ft2_source") == 0)) {
 			TextSourceFontInfo info;
-			info.source = source;  // Not addref'd - valid only during enumeration
+			info.source = source;
+			obs_source_get_ref(source);  // addref so pointer stays valid beyond enumeration
 			info.sourceName = obs_source_get_name(source);
 
 			obs_data_t *settings = obs_source_get_settings(source);
@@ -483,6 +466,18 @@ void ShowFontUrlManagerDialog()
 		// Scan current scene for text sources
 		std::vector<TextSourceFontInfo> textSources = ScanCurrentSceneForTextSources();
 
+		// Release addref'd source pointers when dialog is destroyed
+		auto *textSourcesCopy = new std::vector<TextSourceFontInfo>(textSources);
+		QObject::connect(dialog, &QDialog::destroyed, [textSourcesCopy]() {
+			for (auto &info : *textSourcesCopy) {
+				if (info.source) {
+					obs_source_release(info.source);
+					info.source = nullptr;
+				}
+			}
+			delete textSourcesCopy;
+		});
+
 		if (textSources.empty()) {
 			// No text sources found - show message
 			QLabel *emptyLabel = new QLabel(obs_module_text("FontUrlManager.Status.NoTextSources"));
@@ -544,22 +539,7 @@ void ShowFontUrlManagerDialog()
 
 			// Style table to match dialog
 			table->setStyleSheet(
-				table->styleSheet() +
-				"QTableWidget { "
-				"border: none; "
-				"background: transparent; "
-				"border-radius: 8px; "
-				"} "
-				"QTableWidget::item { "
-				"border-bottom: 1px solid #374151; "
-				"} "
-				"QHeaderView::section:first { "
-				"border-top-left-radius: 8px; "
-				"} "
-				"QHeaderView::section:last { "
-				"border-top-right-radius: 8px; "
-				"}"
-			);
+				table->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET);
 
 			StreamUP::UIStyles::AutoResizeTableColumns(table);
 			contentLayout->addWidget(table);
@@ -733,13 +713,19 @@ void ResizeMoveFilters(obs_source_t *parent, obs_source_t *child, void *param)
 
 	if (strcmp(filter_id, "move_source_filter") == 0) {
 		obs_data_t *settings = obs_source_get_settings(child);
-		ResizeMoveSetting(obs_data_get_obj(settings, "pos"), factor);
-		ResizeMoveSetting(obs_data_get_obj(settings, "bounds"), factor);
+		obs_data_t *pos = obs_data_get_obj(settings, "pos");
+		ResizeMoveSetting(pos, factor);
+		obs_data_release(pos);
+		obs_data_t *bounds = obs_data_get_obj(settings, "bounds");
+		ResizeMoveSetting(bounds, factor);
+		obs_data_release(bounds);
 		const char *source_name = obs_data_get_string(settings, "source");
 		obs_source_t *source = (source_name && strlen(source_name)) ? obs_get_source_by_name(source_name) : nullptr;
 		// Skip resize if cloning a Scene or Group
 		if (!obs_scene_from_source(source) && !obs_group_from_source(source) && !IsCloningSceneOrGroup(source)) {
-			ResizeMoveSetting(obs_data_get_obj(settings, "scale"), factor);
+			obs_data_t *scale = obs_data_get_obj(settings, "scale");
+			ResizeMoveSetting(scale, factor);
+			obs_data_release(scale);
 		}
 		obs_source_release(source);
 		obs_data_set_string(settings, "transform_text", "");
@@ -874,8 +860,10 @@ void MergeScenes(obs_source_t *s, obs_data_t *scene_settings)
 			const char *name = obs_data_get_string(item_data, "name");
 			if (strcmp(name, name_orig) == 0) {
 				found = true;
+				obs_data_release(item_data);
 				break;
 			}
+			obs_data_release(item_data);
 		}
 		if (!found) {
 			obs_data_array_push_back(items, item_data_orig);
@@ -907,7 +895,7 @@ void MergeFilters(obs_source_t *s, obs_data_array_t *filters)
 		obs_data_release(filter_data);
 	}
 
-	obs_data_array_release(filters);
+	// Note: caller owns the filters array lifecycle - do not release here
 }
 
 void LoadSources(obs_data_array_t *data, const QString &path)
@@ -965,7 +953,10 @@ void LoadSources(obs_data_array_t *data, const QString &path)
 			}
 			obs_source_update(s, scene_settings);
 			obs_data_release(scene_settings);
-			load_sources.push_back(s);
+			if (!new_source) {
+				// Only push existing scenes; new sources were already added above
+				load_sources.push_back(s);
+			}
 		}
 		obs_data_release(sourceData);
 	}

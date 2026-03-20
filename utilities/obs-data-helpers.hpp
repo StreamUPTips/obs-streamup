@@ -147,7 +147,8 @@ obs_source_t* ValidateAndGetSource(obs_data_t* request, obs_data_t* response, co
  * @param request The request data object
  * @param response The response data object (for error messages)  
  * @param paramName The parameter name to check (default: "sceneName")
- * @return obs_scene_t* Valid scene or nullptr (caller must release if non-null)
+ * @return obs_scene_t* Valid scene or nullptr. Caller must call
+ *         obs_source_release(obs_scene_get_source(scene)) when done.
  */
 obs_scene_t* ValidateAndGetScene(obs_data_t* request, obs_data_t* response, const char* paramName = "sceneName");
 

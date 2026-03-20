@@ -31,7 +31,6 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QHBoxLayout>
-#include <QList>
 #include <vector>
 #include <functional>
 
@@ -351,19 +350,19 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	ui->setupUi(this);
 
 	// Create buttons with standard QPushButton to allow theme customization
-	button1 = new QPushButton("", this);
-	button2 = new QPushButton("", this);
-	button3 = new QPushButton("", this);
-	button4 = new QPushButton("", this);
+	lockAllSourcesButton = new QPushButton("", this);
+	lockCurrentSourcesButton = new QPushButton("", this);
+	refreshBrowserButton = new QPushButton("", this);
+	refreshAudioButton = new QPushButton("", this);
 	videoCaptureButton = new QPushButton("", this);
 	groupSelectedSourcesButton = new QPushButton("", this);
 	toggleVisibilityButton = new QPushButton("", this);
 
 	// Apply initial icons to buttons
-	applyFileIconToButton(button1, StreamUP::UIHelpers::GetThemedIconPath("all-scene-source-locked"));
-	applyFileIconToButton(button2, StreamUP::UIHelpers::GetThemedIconPath("current-scene-source-locked"));
-	applyFileIconToButton(button3, StreamUP::UIHelpers::GetThemedIconPath("refresh-browser-sources"));
-	applyFileIconToButton(button4, StreamUP::UIHelpers::GetThemedIconPath("refresh-audio-monitoring"));
+	applyFileIconToButton(lockAllSourcesButton, StreamUP::UIHelpers::GetThemedIconPath("all-scene-source-locked"));
+	applyFileIconToButton(lockCurrentSourcesButton, StreamUP::UIHelpers::GetThemedIconPath("current-scene-source-locked"));
+	applyFileIconToButton(refreshBrowserButton, StreamUP::UIHelpers::GetThemedIconPath("refresh-browser-sources"));
+	applyFileIconToButton(refreshAudioButton, StreamUP::UIHelpers::GetThemedIconPath("refresh-audio-monitoring"));
 	applyFileIconToButton(videoCaptureButton, StreamUP::UIHelpers::GetThemedIconPath("camera"));
 	applyFileIconToButton(groupSelectedSourcesButton, StreamUP::UIHelpers::GetThemedIconPath("add-sources-to-group"));
 	applyFileIconToButton(toggleVisibilityButton, StreamUP::UIHelpers::GetThemedIconPath("visible"));
@@ -395,19 +394,19 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	};
 
 	// Set properties for each button
-	setButtonProperties(button1);
-	setButtonProperties(button2);
-	setButtonProperties(button3);
-	setButtonProperties(button4);
+	setButtonProperties(lockAllSourcesButton);
+	setButtonProperties(lockCurrentSourcesButton);
+	setButtonProperties(refreshBrowserButton);
+	setButtonProperties(refreshAudioButton);
 	setButtonProperties(videoCaptureButton);
 	setButtonProperties(groupSelectedSourcesButton);
 	setButtonProperties(toggleVisibilityButton);
 
 	// Set tooltips for buttons
-	button1->setToolTip(obs_module_text("Feature.SourceLock.All.Title"));
-	button2->setToolTip(obs_module_text("Feature.SourceLock.Current.Title"));
-	button3->setToolTip(obs_module_text("Feature.BrowserSources.Title"));
-	button4->setToolTip(obs_module_text("Feature.AudioMonitoring.Title"));
+	lockAllSourcesButton->setToolTip(obs_module_text("Feature.SourceLock.All.Title"));
+	lockCurrentSourcesButton->setToolTip(obs_module_text("Feature.SourceLock.Current.Title"));
+	refreshBrowserButton->setToolTip(obs_module_text("Feature.BrowserSources.Title"));
+	refreshAudioButton->setToolTip(obs_module_text("Feature.AudioMonitoring.Title"));
 	videoCaptureButton->setToolTip(obs_module_text("Feature.VideoCapture.Title"));
 	groupSelectedSourcesButton->setToolTip(obs_module_text("Dock.Tool.GroupSelectedSources.Title"));
 	toggleVisibilityButton->setToolTip(obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Title"));
@@ -415,10 +414,10 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	// Create a flow layout to hold the buttons
 	mainDockLayout = new FlowLayout(this, 5, 5, 5);
 
-	mainDockLayout->addWidget(button1);
-	mainDockLayout->addWidget(button2);
-	mainDockLayout->addWidget(button3);
-	mainDockLayout->addWidget(button4);
+	mainDockLayout->addWidget(lockAllSourcesButton);
+	mainDockLayout->addWidget(lockCurrentSourcesButton);
+	mainDockLayout->addWidget(refreshBrowserButton);
+	mainDockLayout->addWidget(refreshAudioButton);
 	mainDockLayout->addWidget(videoCaptureButton);
 	mainDockLayout->addWidget(groupSelectedSourcesButton);
 	mainDockLayout->addWidget(toggleVisibilityButton);
@@ -427,10 +426,10 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	this->setLayout(mainDockLayout);
 
 	// Connect buttons to their respective slots
-	connect(button1, &QPushButton::clicked, this, &StreamUPDock::ButtonToggleLockAllSources);
-	connect(button2, &QPushButton::clicked, this, &StreamUPDock::ButtonToggleLockSourcesInCurrentScene);
-	connect(button3, &QPushButton::clicked, this, &StreamUPDock::ButtonRefreshBrowserSources);
-	connect(button4, &QPushButton::clicked, this, &StreamUPDock::ButtonRefreshAudioMonitoring);
+	connect(lockAllSourcesButton, &QPushButton::clicked, this, &StreamUPDock::ButtonToggleLockAllSources);
+	connect(lockCurrentSourcesButton, &QPushButton::clicked, this, &StreamUPDock::ButtonToggleLockSourcesInCurrentScene);
+	connect(refreshBrowserButton, &QPushButton::clicked, this, &StreamUPDock::ButtonRefreshBrowserSources);
+	connect(refreshAudioButton, &QPushButton::clicked, this, &StreamUPDock::ButtonRefreshAudioMonitoring);
 	connect(videoCaptureButton, &QPushButton::clicked, this, &StreamUPDock::ButtonShowVideoCapturePopup);
 	connect(groupSelectedSourcesButton, &QPushButton::clicked, this, &StreamUPDock::ButtonGroupSelectedSources);
 	connect(toggleVisibilityButton, &QPushButton::clicked, this, &StreamUPDock::ButtonToggleVisibilitySelectedSources);
@@ -459,17 +458,18 @@ StreamUPDock::~StreamUPDock()
 {
 	// Remove this dock from the static list
 	dockInstances.removeAll(this);
-	
-	signal_handler_t *sh = obs_get_signal_handler();
-	signal_handler_disconnect(sh, "item_add", onSceneItemAdded, this);
-	signal_handler_disconnect(sh, "item_remove", onSceneItemRemoved, this);
-	signal_handler_disconnect(sh, "item_locked", onItemLockChanged, this);
-	
+
+	// Remove frontend event callback
+	obs_frontend_remove_event_callback(onFrontendEvent, this);
+
+	// Disconnect from the stored scene signals
+	disconnectSceneSignals();
+
 	if (videoCapturePopup) {
 		videoCapturePopup->deleteLater();
 		videoCapturePopup = nullptr;
 	}
-	
+
 	delete ui;
 }
 
@@ -611,23 +611,23 @@ void StreamUPDock::ButtonToggleVisibilitySelectedSources()
 
 void StreamUPDock::updateButtonIcons()
 {
-	// Update button1 icon based on whether all sources are locked in all scenes
+	// Update lockAllSourcesButton icon based on whether all sources are locked in all scenes
 	if (StreamUP::SourceManager::AreAllSourcesLockedInAllScenes()) {
-		applyFileIconToButton(button1, StreamUP::UIHelpers::GetThemedIconPath("all-scene-source-locked"));
+		applyFileIconToButton(lockAllSourcesButton, StreamUP::UIHelpers::GetThemedIconPath("all-scene-source-locked"));
 	} else {
-		applyFileIconToButton(button1, StreamUP::UIHelpers::GetThemedIconPath("all-scene-source-unlocked"));
+		applyFileIconToButton(lockAllSourcesButton, StreamUP::UIHelpers::GetThemedIconPath("all-scene-source-unlocked"));
 	}
 
-	// Update button2 icon based on whether all sources are locked in the current scene
+	// Update lockCurrentSourcesButton icon based on whether all sources are locked in the current scene
 	if (StreamUP::SourceManager::AreAllSourcesLockedInCurrentScene()) {
-		applyFileIconToButton(button2, StreamUP::UIHelpers::GetThemedIconPath("current-scene-source-locked"));
+		applyFileIconToButton(lockCurrentSourcesButton, StreamUP::UIHelpers::GetThemedIconPath("current-scene-source-locked"));
 	} else {
-		applyFileIconToButton(button2, StreamUP::UIHelpers::GetThemedIconPath("current-scene-source-unlocked"));
+		applyFileIconToButton(lockCurrentSourcesButton, StreamUP::UIHelpers::GetThemedIconPath("current-scene-source-unlocked"));
 	}
 
 	// Update static button icons that don't change based on state
-	applyFileIconToButton(button3, StreamUP::UIHelpers::GetThemedIconPath("refresh-browser-sources"));
-	applyFileIconToButton(button4, StreamUP::UIHelpers::GetThemedIconPath("refresh-audio-monitoring"));
+	applyFileIconToButton(refreshBrowserButton, StreamUP::UIHelpers::GetThemedIconPath("refresh-browser-sources"));
+	applyFileIconToButton(refreshAudioButton, StreamUP::UIHelpers::GetThemedIconPath("refresh-audio-monitoring"));
 	applyFileIconToButton(videoCaptureButton, StreamUP::UIHelpers::GetThemedIconPath("camera"));
 	applyFileIconToButton(groupSelectedSourcesButton, StreamUP::UIHelpers::GetThemedIconPath("add-sources-to-group"));
 	applyFileIconToButton(toggleVisibilityButton, StreamUP::UIHelpers::GetThemedIconPath("visible"));
@@ -660,6 +660,9 @@ void StreamUPDock::setupObsSignals()
 
 void StreamUPDock::connectSceneSignals()
 {
+	// Disconnect from previous scene first
+	disconnectSceneSignals();
+
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	if (current_scene) {
 		signal_handler_t *scene_handler = obs_source_get_signal_handler(current_scene);
@@ -668,21 +671,22 @@ void StreamUPDock::connectSceneSignals()
 			signal_handler_connect(scene_handler, "item_remove", StreamUPDock::onSceneItemRemoved, this);
 			signal_handler_connect(scene_handler, "item_locked", StreamUPDock::onItemLockChanged, this);
 		}
-		obs_source_release(current_scene);
+		// Store the connected scene (addref for our stored reference)
+		m_connectedScene = current_scene; // already has a ref from obs_frontend_get_current_scene
 	}
 }
 
 void StreamUPDock::disconnectSceneSignals()
 {
-	obs_source_t *current_scene = obs_frontend_get_current_scene();
-	if (current_scene) {
-		signal_handler_t *scene_handler = obs_source_get_signal_handler(current_scene);
+	if (m_connectedScene) {
+		signal_handler_t *scene_handler = obs_source_get_signal_handler(m_connectedScene);
 		if (scene_handler) {
 			signal_handler_disconnect(scene_handler, "item_add", StreamUPDock::onSceneItemAdded, this);
 			signal_handler_disconnect(scene_handler, "item_remove", StreamUPDock::onSceneItemRemoved, this);
 			signal_handler_disconnect(scene_handler, "item_locked", StreamUPDock::onItemLockChanged, this);
 		}
-		obs_source_release(current_scene);
+		obs_source_release(m_connectedScene);
+		m_connectedScene = nullptr;
 	}
 }
 
@@ -693,61 +697,63 @@ void StreamUPDock::onFrontendEvent(enum obs_frontend_event event, void *private_
 		return;
 
 	if (event == OBS_FRONTEND_EVENT_SCENE_CHANGED) {
-		dock->disconnectSceneSignals();
-		dock->connectSceneSignals();
-		dock->updateButtonIcons();
+		QMetaObject::invokeMethod(dock, [dock]() {
+			dock->disconnectSceneSignals();
+			dock->connectSceneSignals();
+			dock->updateButtonIcons();
+		}, Qt::QueuedConnection);
 	}
 	else if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING || event == OBS_FRONTEND_EVENT_PROFILE_CHANGED) {
 		// OBS finished loading or profile changed, update icons with proper theme detection
 		StreamUP::DebugLogger::LogDebugFormat("UI", "Event", "Dock received %s event",
 			event == OBS_FRONTEND_EVENT_FINISHED_LOADING ? "FINISHED_LOADING" : "PROFILE_CHANGED");
-		dock->updateButtonIcons();
+		QMetaObject::invokeMethod(dock, "updateButtonIcons", Qt::QueuedConnection);
 	}
 	else if (event == OBS_FRONTEND_EVENT_THEME_CHANGED) {
 		// Theme changed, update button icons for new theme
 		StreamUP::DebugLogger::LogDebug("UI", "Theme", "Dock received OBS_FRONTEND_EVENT_THEME_CHANGED event");
-		dock->updateButtonIcons();
+		QMetaObject::invokeMethod(dock, "updateButtonIcons", Qt::QueuedConnection);
 	}
 }
 
 void StreamUPDock::onSceneItemAdded(void *param, calldata_t *data)
 {
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(data);
 
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
 	if (self->isProcessing)
 		return;
-	self->updateButtonIcons();
+	QMetaObject::invokeMethod(self, "updateButtonIcons", Qt::QueuedConnection);
 }
 
 void StreamUPDock::onSceneItemRemoved(void *param, calldata_t *data)
 {
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(data);
 
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
 	if (self->isProcessing)
 		return;
-	self->updateButtonIcons();
+	QMetaObject::invokeMethod(self, "updateButtonIcons", Qt::QueuedConnection);
 }
 
 void StreamUPDock::onItemLockChanged(void *param, calldata_t *data)
 {
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(data);
 
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
 	if (self->isProcessing)
 		return;
-	self->updateButtonIcons();
+	QMetaObject::invokeMethod(self, "updateButtonIcons", Qt::QueuedConnection);
 }
 
 void StreamUPDock::updateToolVisibility()
 {
 	StreamUP::SettingsManager::DockToolSettings settings = StreamUP::SettingsManager::GetDockToolSettings();
 
-	button1->setVisible(settings.showLockAllSources);
-	button2->setVisible(settings.showLockCurrentSources);
-	button3->setVisible(settings.showRefreshBrowserSources);
-	button4->setVisible(settings.showRefreshAudioMonitoring);
+	lockAllSourcesButton->setVisible(settings.showLockAllSources);
+	lockCurrentSourcesButton->setVisible(settings.showLockCurrentSources);
+	refreshBrowserButton->setVisible(settings.showRefreshBrowserSources);
+	refreshAudioButton->setVisible(settings.showRefreshAudioMonitoring);
 	videoCaptureButton->setVisible(settings.showVideoCaptureOptions);
 	groupSelectedSourcesButton->setVisible(settings.showGroupSelectedSources);
 	toggleVisibilityButton->setVisible(settings.showToggleVisibilitySelectedSources);

@@ -1,5 +1,6 @@
 #include "http-client.hpp"
 #include "debug-logger.hpp"
+#include "../version.h"
 #include <curl/curl.h>
 #include <pthread.h>
 #include <obs-module.h>
@@ -24,7 +25,8 @@ bool MakeGetRequest(const std::string& url, std::string& response)
 
     // Set headers for GitHub API compatibility
     struct curl_slist* headers = nullptr;
-    headers = curl_slist_append(headers, "User-Agent: StreamUP-OBS-Plugin/1.7.1");
+    std::string userAgent = std::string("User-Agent: StreamUP-OBS-Plugin/") + PROJECT_VERSION;
+    headers = curl_slist_append(headers, userAgent.c_str());
     headers = curl_slist_append(headers, "Accept: application/vnd.github.v3+json");
     
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -61,7 +63,9 @@ void* MakeApiRequestThread(void* arg)
         curl_easy_setopt(curl, CURLOPT_URL, data->url.c_str());
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data->response);
-        
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+
         CURLcode res = curl_easy_perform(curl);
         if (res != CURLE_OK) {
             StreamUP::DebugLogger::LogWarningFormat("HttpClient", "curl_easy_perform() failed: %s", curl_easy_strerror(res));

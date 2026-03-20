@@ -74,9 +74,9 @@ static TransitionData copiedHideTransition;
 //-------------------HOTKEY HANDLERS-------------------
 void HotkeyRefreshBrowserSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 	if (!pressed)
 		return;
 	obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr);
@@ -86,9 +86,9 @@ void HotkeyRefreshBrowserSources(void *data, obs_hotkey_id id, obs_hotkey_t *hot
 
 void HotkeyLockAllSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 	if (!pressed)
 		return;
 	StreamUP::SourceManager::ToggleLockAllSources();
@@ -96,9 +96,9 @@ void HotkeyLockAllSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bo
 
 void HotkeyRefreshAudioMonitoring(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 	if (!pressed)
 		return;
 	obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr);
@@ -108,9 +108,9 @@ void HotkeyRefreshAudioMonitoring(void *data, obs_hotkey_id id, obs_hotkey_t *ho
 
 void HotkeyLockCurrentSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 	if (!pressed)
 		return;
 	StreamUP::SourceManager::ToggleLockSourcesInCurrentScene();
@@ -118,9 +118,9 @@ void HotkeyLockCurrentSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 
 void HotkeyOpenSourceProperties(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 
 	if (!pressed)
 		return;
@@ -137,15 +137,14 @@ void HotkeyOpenSourceProperties(void *data, obs_hotkey_id id, obs_hotkey_t *hotk
 		// Open the properties of the selected source
 		obs_frontend_open_source_properties(selected_source);
 		obs_source_release(selected_source);
-	} else {
 	}
 }
 
 void HotkeyOpenSourceFilters(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 
 	if (!pressed)
 		return;
@@ -162,15 +161,14 @@ void HotkeyOpenSourceFilters(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey,
 		// Open the filters of the selected source
 		obs_frontend_open_source_filters(selected_source);
 		obs_source_release(selected_source);
-	} else {
 	}
 }
 
 void HotkeyOpenSourceInteract(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 
 	if (!pressed)
 		return;
@@ -187,15 +185,14 @@ void HotkeyOpenSourceInteract(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 		// Open the interact window of the selected source
 		obs_frontend_open_source_interaction(selected_source);
 		obs_source_release(selected_source); // Release reference count
-	} else {
 	}
 }
 
 void HotkeyOpenSceneFilters(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 
 	if (!pressed)
 		return;
@@ -216,9 +213,9 @@ void HotkeyOpenSceneFilters(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, 
 
 void HotkeyActivateAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 	
 	if (!pressed)
 		return;
@@ -228,9 +225,9 @@ void HotkeyActivateAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_hotk
 
 void HotkeyDeactivateAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 	
 	if (!pressed)
 		return;
@@ -240,9 +237,9 @@ void HotkeyDeactivateAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_ho
 
 void HotkeyRefreshAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 
 	if (!pressed)
 		return;
@@ -252,9 +249,9 @@ void HotkeyRefreshAllVideoCaptureDevices(void *data, obs_hotkey_id id, obs_hotke
 
 void HotkeyCopyShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 
 	if (!pressed)
 		return;
@@ -305,9 +302,9 @@ void HotkeyCopyShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 
 void HotkeyCopyHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 
 	if (!pressed)
 		return;
@@ -358,9 +355,9 @@ void HotkeyCopyHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 
 void HotkeyPasteShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 
 	if (!pressed)
 		return;
@@ -419,9 +416,9 @@ void HotkeyPasteShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 
 void HotkeyPasteHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 
 	if (!pressed)
 		return;
@@ -480,9 +477,9 @@ void HotkeyPasteHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 
 void HotkeyGroupSelectedSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 
 	if (!pressed)
 		return;
@@ -492,9 +489,9 @@ void HotkeyGroupSelectedSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotk
 
 void HotkeyToggleVisibilitySelectedSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
 {
-	UNUSED_PARAMETER(id);
-	UNUSED_PARAMETER(hotkey);
-	UNUSED_PARAMETER(data);
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
 
 	if (!pressed)
 		return;
@@ -505,7 +502,7 @@ void HotkeyToggleVisibilitySelectedSources(void *data, obs_hotkey_id id, obs_hot
 //-------------------HOTKEY MANAGEMENT-------------------
 void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 {
-	UNUSED_PARAMETER(param);
+	Q_UNUSED(param);
 	
 	if (saving) {
 		// save hotkeys

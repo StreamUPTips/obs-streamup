@@ -835,5 +835,35 @@ void ApplyAdvAudioEnhancements(QWidget* advAudioDialog)
     advAudioDialog->setProperty("streamup_advadio_enhanced", true);
 }
 
+void ResetThemeCache()
+{
+    g_themeChecked = false;
+}
+
+void CleanupThemeEnhancements()
+{
+    if (g_colorFilter) {
+        delete g_colorFilter;
+        g_colorFilter = nullptr;
+    }
+    if (g_appFilter) {
+        // Remove from QApplication before deleting
+        if (QApplication::instance()) {
+            QApplication::instance()->removeEventFilter(g_appFilter);
+        }
+        delete g_appFilter;
+        g_appFilter = nullptr;
+    }
+    if (g_statusBarFilter) {
+        delete g_statusBarFilter;
+        g_statusBarFilter = nullptr;
+    }
+    if (g_advAudioFilter) {
+        delete g_advAudioFilter;
+        g_advAudioFilter = nullptr;
+    }
+    g_themeChecked = false;
+}
+
 } // namespace ThemeEnhancements
 } // namespace StreamUP

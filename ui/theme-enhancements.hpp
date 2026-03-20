@@ -96,6 +96,21 @@ void RefreshThemeEnhancements();
 bool IsUsingStreamUPTheme();
 
 /**
+ * @brief Reset the cached theme check so it is re-evaluated on next call
+ *
+ * Call this when the OBS theme changes (e.g., from a frontend event callback).
+ */
+void ResetThemeCache();
+
+/**
+ * @brief Clean up theme enhancement resources
+ *
+ * Deletes global event filters and resets state.
+ * Call during plugin shutdown.
+ */
+void CleanupThemeEnhancements();
+
+/**
  * @brief Apply enhancements to Advanced Audio Properties dialog
  *
  * Sets monitoring type property on comboboxes so CSS can show different icons

@@ -1,5 +1,4 @@
-#ifndef STREAMUP_UI_STYLES_HPP
-#define STREAMUP_UI_STYLES_HPP
+#pragma once
 
 #include <QString>
 
@@ -196,6 +195,27 @@ namespace Sizes {
     constexpr int BORDER_WIDTH = BUTTON_BORDER_SIZE;
 }
 
+// Reusable table-in-groupbox stylesheet (appended to existing table stylesheet)
+// Used by plugin-manager and file-manager dialogs to blend tables into group boxes
+inline const QString TABLE_INLINE_STYLESHEET =
+    "QTableWidget { "
+    "border: none; "
+    "background: transparent; "
+    "border-radius: 8px; "
+    "} "
+    "QTableWidget::item { "
+    "border-bottom: 1px solid #374151; "
+    "} "
+    "QTableWidget::item:last { "
+    "border-bottom: none; "
+    "} "
+    "QHeaderView::section:first { "
+    "border-top-left-radius: 8px; "
+    "} "
+    "QHeaderView::section:last { "
+    "border-top-right-radius: 8px; "
+    "}";
+
 // Common style strings - minimal styling that inherits from StreamUP theme
 QString GetDialogStyle();
 QString GetTitleLabelStyle();
@@ -270,5 +290,3 @@ void SetupDialogNavigation(StandardDialogComponents& components, std::function<v
 
 } // namespace UIStyles
 } // namespace StreamUP
-
-#endif // STREAMUP_UI_STYLES_HPP

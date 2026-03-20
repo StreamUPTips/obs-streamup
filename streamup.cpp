@@ -66,7 +66,8 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 {
 	StreamUP::UIHelpers::ShowDialogOnUIThread([infoText1, infoText2, infoText3, titleText, buttonCallback, jsonString, how1, how2, how3, how4,
 			      notificationMessage]() {
-		const char *titleTextChar = titleText.toUtf8().constData();
+		QByteArray titleUtf8 = titleText.toUtf8();
+		const char *titleTextChar = titleUtf8.constData();
 		QString titleStr = obs_module_text(titleTextChar);
 		QString infoText1Str = obs_module_text(infoText1);
 		QString infoText2Str = obs_module_text(infoText2);
@@ -135,7 +136,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 std::string SearchStringInFile(const char *path, const char *search)
 {
 	std::string filepath = StreamUP::PathUtils::GetMostRecentTxtFile(path);
-	FILE *file = fopen(filepath.c_str(), "r+");
+	FILE *file = fopen(filepath.c_str(), "r");
 	constexpr size_t LINE_BUFFER_SIZE = 256;
 	char line[LINE_BUFFER_SIZE];
 	std::regex version_regex_triple("[0-9]+\\.[0-9]+\\.[0-9]+");
@@ -173,31 +174,7 @@ std::string SearchStringInFile(const char *path, const char *search)
 	return "";
 }
 
-std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
-{
-	std::vector<std::pair<std::string, std::string>> installedPlugins;
-	char *filepath = StreamUP::PathUtils::GetOBSLogPath();
-	if (filepath == nullptr) {
-		return installedPlugins;
-	}
-
-	const auto& allPlugins = StreamUP::GetAllPlugins();
-	for (const auto &module : allPlugins) {
-		const std::string &plugin_name = module.first;
-		const StreamUP::PluginInfo &plugin_info = module.second;
-		const std::string &search_string = plugin_info.searchString;
-
-		std::string installed_version = SearchStringInFile(filepath, search_string.c_str());
-
-		if (!installed_version.empty()) {
-			installedPlugins.emplace_back(plugin_name, installed_version);
-		}
-	}
-
-	bfree(filepath);
-
-	return installedPlugins;
-}
+// GetInstalledPlugins removed - use StreamUP::PluginManager::GetInstalledPlugins() instead
 
 //-------------------- HELPER FUNCTIONS--------------------
 
@@ -306,6 +283,7 @@ void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 	if (!transition_type) {
 		obs_data_set_string(response_data, "error", "Invalid transition display name.");
 		obs_data_set_bool(response_data, "success", false);
+		obs_data_release(transition_settings);
 		return;
 	}
 
@@ -313,6 +291,7 @@ void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 	if (!scene_source) {
 		obs_data_set_string(response_data, "error", "Scene not found.");
 		obs_data_set_bool(response_data, "success", false);
+		obs_data_release(transition_settings);
 		return;
 	}
 
@@ -322,6 +301,7 @@ void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 		obs_data_set_string(response_data, "error", "Source not found in scene.");
 		obs_data_set_bool(response_data, "success", false);
 		obs_source_release(scene_source);
+		obs_data_release(transition_settings);
 		return;
 	}
 
@@ -331,6 +311,7 @@ void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 		obs_data_set_string(response_data, "error", "Unable to create transition of specified type.");
 		obs_data_set_bool(response_data, "success", false);
 		obs_source_release(scene_source);
+		obs_data_release(transition_settings);
 		return;
 	}
 
@@ -346,6 +327,7 @@ void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 
 	obs_source_release(transition);
 	obs_source_release(scene_source);
+	obs_data_release(transition_settings);
 }
 
 //--------------------WEBSOCKET VENDOR REQUESTS--------------------
@@ -839,6 +821,13 @@ static void OnOBSShutdown(enum obs_frontend_event event, void *private_data)
 {
 	UNUSED_PARAMETER(private_data);
 
+	if (event == OBS_FRONTEND_EVENT_THEME_CHANGED) {
+		// Reset cached theme checks so enhancements re-evaluate on next use
+		StreamUP::MixerEnhancements::ResetThemeCache();
+		StreamUP::ThemeEnhancements::ResetThemeCache();
+		return;
+	}
+
 	if (event == OBS_FRONTEND_EVENT_EXIT) {
 		StreamUP::DebugLogger::LogInfo("Plugin", "OBS shutting down, saving settings...");
 
@@ -1004,15 +993,15 @@ void obs_module_unload()
 	StreamUP::DebugLogger::SetInitializationComplete(false);
 
 	try {
-		blog(LOG_INFO, "[StreamUP] Unload step 1/6: Removing shutdown event callback");
+		blog(LOG_INFO, "[StreamUP] Unload step 1/7: Removing shutdown event callback");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Removing shutdown event callback");
 		obs_frontend_remove_event_callback(OnOBSShutdown, nullptr);
 
-		blog(LOG_INFO, "[StreamUP] Unload step 2/6: Removing save callback for hotkeys");
+		blog(LOG_INFO, "[StreamUP] Unload step 2/7: Removing save callback for hotkeys");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Removing save callback for hotkeys");
 		obs_frontend_remove_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
 
-		blog(LOG_INFO, "[StreamUP] Unload step 3/6: Unregistering hotkeys");
+		blog(LOG_INFO, "[StreamUP] Unload step 3/7: Unregistering hotkeys");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Unregistering hotkeys");
 		StreamUP::HotkeyManager::UnregisterHotkeys();
 
@@ -1026,14 +1015,21 @@ void obs_module_unload()
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Shutting down MultiDock system");
 		StreamUP::MultiDock::MultiDockManager::Shutdown();
 
+		// Clean up studio mode, mixer, and theme enhancements
+		blog(LOG_INFO, "[StreamUP] Unload step 6/9: Cleaning up UI enhancements");
+		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up UI enhancements");
+		StreamUP::StudioModeEnhancements::CleanupStudioModeEnhancements();
+		StreamUP::MixerEnhancements::CleanupMixerEnhancements();
+		StreamUP::ThemeEnhancements::CleanupThemeEnhancements();
+
 		// Save all current settings before cleanup
-		blog(LOG_INFO, "[StreamUP] Unload step 6/7: Saving current settings");
+		blog(LOG_INFO, "[StreamUP] Unload step 7/9: Saving current settings");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Saving current settings");
 		StreamUP::SettingsManager::PluginSettings currentSettings = StreamUP::SettingsManager::GetCurrentSettings();
 		StreamUP::SettingsManager::UpdateSettings(currentSettings);
 
 		// Clean up settings cache
-		blog(LOG_INFO, "[StreamUP] Unload step 7/7: Cleaning up settings cache");
+		blog(LOG_INFO, "[StreamUP] Unload step 8/9: Cleaning up settings cache");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up settings cache");
 		StreamUP::SettingsManager::CleanupSettingsCache();
 
