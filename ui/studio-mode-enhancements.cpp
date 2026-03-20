@@ -15,6 +15,9 @@
 namespace StreamUP {
 namespace StudioModeEnhancements {
 
+// Guard against timer callbacks firing after cleanup (issue #10)
+static bool g_studioModeActive = false;
+
 SliderMidpointFilter::SliderMidpointFilter(QObject* parent)
     : QObject(parent)
 {
@@ -247,6 +250,8 @@ static void OnStudioModeEvent(enum obs_frontend_event event, void *data)
         blog(LOG_INFO, "[StreamUP] Studio Mode enabled - applying enhancements with delay");
         // Use a timer to delay applying enhancements, giving OBS time to create the programWidget
         QTimer::singleShot(100, []() {
+            if (!g_studioModeActive)
+                return;
             blog(LOG_INFO, "[StreamUP] Studio Mode: Applying delayed enhancements");
             EnhanceTransitionSlider();
             StyleProgramContainer();
@@ -257,6 +262,7 @@ static void OnStudioModeEvent(enum obs_frontend_event event, void *data)
 void ApplyStudioModeEnhancements()
 {
     blog(LOG_INFO, "[StreamUP] Registering Studio Mode event handler...");
+    g_studioModeActive = true;
 
     // Check if studio mode is already enabled
     if (obs_frontend_preview_program_mode_active()) {
@@ -271,6 +277,7 @@ void ApplyStudioModeEnhancements()
 
 void CleanupStudioModeEnhancements()
 {
+    g_studioModeActive = false;
     obs_frontend_remove_event_callback(OnStudioModeEvent, nullptr);
 }
 

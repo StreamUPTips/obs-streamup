@@ -567,13 +567,16 @@ void ApplyMixerEnhancements()
     // Apply enhancements to existing volume controls
     RefreshMixerEnhancements();
 
-    // Re-apply after a delay to catch late-loaded sources
+    // Re-apply after a delay to catch late-loaded sources.
+    // Guard against the filter being cleaned up before the timer fires (issue #10).
     QTimer::singleShot(500, []() {
-        RefreshMixerEnhancements();
+        if (g_mixerFilter)
+            RefreshMixerEnhancements();
     });
 
     QTimer::singleShot(2000, []() {
-        RefreshMixerEnhancements();
+        if (g_mixerFilter)
+            RefreshMixerEnhancements();
     });
 }
 
@@ -584,6 +587,21 @@ void ResetThemeCache()
 
 void CleanupMixerEnhancements()
 {
+    // Remove event filters from mixer widgets BEFORE deleting the filter
+    // to avoid use-after-free if Qt dispatches events during shutdown (issue #10).
+    if (g_mixerFilter && g_mixerWatcherInstalled) {
+        QWidget* mixerWidget = FindMixerDock();
+        if (mixerWidget) {
+            mixerWidget->removeEventFilter(g_mixerFilter);
+            QList<QScrollArea*> scrollAreas = mixerWidget->findChildren<QScrollArea*>();
+            for (QScrollArea* area : scrollAreas) {
+                area->removeEventFilter(g_mixerFilter);
+                if (area->widget()) {
+                    area->widget()->removeEventFilter(g_mixerFilter);
+                }
+            }
+        }
+    }
     delete g_mixerFilter;
     g_mixerFilter = nullptr;
     g_mixerWatcherInstalled = false;
