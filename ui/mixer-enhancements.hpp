@@ -66,5 +66,11 @@ void ResetThemeCache();
  */
 void CleanupMixerEnhancements();
 
+/**
+ * @brief Check if OBS version is 32.1 or newer
+ * Mixer enhancements require OBS 32.1+ due to mixer layout changes
+ */
+bool IsOBS32_1OrNewer();
+
 } // namespace MixerEnhancements
 } // namespace StreamUP
