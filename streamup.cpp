@@ -752,15 +752,10 @@ bool obs_module_load()
 	try {
 		blog(LOG_INFO, "[StreamUP] Inside try block - about to start step 1/8");
 
-#ifdef __APPLE__
-		// Mac workaround: Skip menu initialization entirely to isolate crash
-		blog(LOG_INFO, "[StreamUP] Step 1/8: Mac detected - completely skipping menu initialization");
-#else
 		blog(LOG_INFO, "[StreamUP] Step 1/8: Starting menu initialization");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Starting menu initialization");
 		StreamUP::MenuManager::InitializeMenu();
 		blog(LOG_INFO, "[StreamUP] Step 1/8: Menu initialization completed");
-#endif
 
 		blog(LOG_INFO, "[StreamUP] Step 2/8: Registering WebSocket requests");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Registering WebSocket requests");
