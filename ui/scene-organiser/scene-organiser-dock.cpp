@@ -227,6 +227,9 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
 
 SceneOrganiserDock::~SceneOrganiserDock()
 {
+    // Remove frontend event callback to prevent use-after-free
+    obs_frontend_remove_event_callback(onFrontendEvent, this);
+
     // Clean up copy filters source
     if (m_copyFiltersSource) {
         obs_weak_source_release(m_copyFiltersSource);
@@ -2072,8 +2075,13 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
+        // Skip during scene collection changes to avoid accessing stale scene data
+        if (!dock->m_initialLoadComplete)
+            break;
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Event", "Scene list changed event received");
         QTimer::singleShot(50, dock, [dock]() {
+            if (!dock->m_initialLoadComplete)
+                return;
             dock->refreshSceneList();
         });
         break;
@@ -2114,13 +2122,21 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
         });
         break;
     case OBS_FRONTEND_EVENT_SCENE_CHANGED:
+        if (!dock->m_initialLoadComplete)
+            break;
         QTimer::singleShot(50, dock, [dock]() {
+            if (!dock->m_initialLoadComplete)
+                return;
             dock->updateActiveSceneHighlight();
         });
         break;
     case OBS_FRONTEND_EVENT_PREVIEW_SCENE_CHANGED:
         // Update highlighting when preview scene changes in studio mode
+        if (!dock->m_initialLoadComplete)
+            break;
         QTimer::singleShot(50, dock, [dock]() {
+            if (!dock->m_initialLoadComplete)
+                return;
             dock->updateActiveSceneHighlight();
         });
         break;

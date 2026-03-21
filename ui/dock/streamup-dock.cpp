@@ -696,7 +696,22 @@ void StreamUPDock::onFrontendEvent(enum obs_frontend_event event, void *private_
 	if (dock->isProcessing)
 		return;
 
-	if (event == OBS_FRONTEND_EVENT_SCENE_CHANGED) {
+	if (event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING) {
+		// Disconnect scene signals immediately before collection teardown
+		// to prevent item_remove signals from firing into stale state
+		dock->disconnectSceneSignals();
+		dock->m_sceneCollectionChanging = true;
+	}
+	else if (event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED) {
+		dock->m_sceneCollectionChanging = false;
+		QMetaObject::invokeMethod(dock, [dock]() {
+			dock->connectSceneSignals();
+			dock->updateButtonIcons();
+		}, Qt::QueuedConnection);
+	}
+	else if (event == OBS_FRONTEND_EVENT_SCENE_CHANGED) {
+		if (dock->m_sceneCollectionChanging)
+			return;
 		QMetaObject::invokeMethod(dock, [dock]() {
 			dock->disconnectSceneSignals();
 			dock->connectSceneSignals();
@@ -707,6 +722,7 @@ void StreamUPDock::onFrontendEvent(enum obs_frontend_event event, void *private_
 		// OBS finished loading or profile changed, update icons with proper theme detection
 		StreamUP::DebugLogger::LogDebugFormat("UI", "Event", "Dock received %s event",
 			event == OBS_FRONTEND_EVENT_FINISHED_LOADING ? "FINISHED_LOADING" : "PROFILE_CHANGED");
+		dock->m_sceneCollectionChanging = false;
 		QMetaObject::invokeMethod(dock, "updateButtonIcons", Qt::QueuedConnection);
 	}
 	else if (event == OBS_FRONTEND_EVENT_THEME_CHANGED) {
@@ -721,7 +737,7 @@ void StreamUPDock::onSceneItemAdded(void *param, calldata_t *data)
 	Q_UNUSED(data);
 
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
-	if (self->isProcessing)
+	if (self->isProcessing || self->m_sceneCollectionChanging)
 		return;
 	QMetaObject::invokeMethod(self, "updateButtonIcons", Qt::QueuedConnection);
 }
@@ -731,7 +747,7 @@ void StreamUPDock::onSceneItemRemoved(void *param, calldata_t *data)
 	Q_UNUSED(data);
 
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
-	if (self->isProcessing)
+	if (self->isProcessing || self->m_sceneCollectionChanging)
 		return;
 	QMetaObject::invokeMethod(self, "updateButtonIcons", Qt::QueuedConnection);
 }
@@ -741,7 +757,7 @@ void StreamUPDock::onItemLockChanged(void *param, calldata_t *data)
 	Q_UNUSED(data);
 
 	StreamUPDock *self = static_cast<StreamUPDock *>(param);
-	if (self->isProcessing)
+	if (self->isProcessing || self->m_sceneCollectionChanging)
 		return;
 	QMetaObject::invokeMethod(self, "updateButtonIcons", Qt::QueuedConnection);
 }

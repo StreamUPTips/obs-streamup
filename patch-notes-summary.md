@@ -1,3 +1,10 @@
+# StreamUP v2.1.8 - Patch Update
+
+## Bug Fixes
+- **Scene Collection Crash Fix** - Fixed a crash that occurred when changing scene collections
+
+---
+
 # StreamUP v2.1.7 - Patch Update
 
 ## Improvements & Bug Fixes

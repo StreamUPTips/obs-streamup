@@ -56,6 +56,7 @@ private:
 	FlowLayout *mainDockLayout;
 	VideoCapturePopup *videoCapturePopup;
 	std::atomic<bool> isProcessing;
+	std::atomic<bool> m_sceneCollectionChanging{false};
 	obs_source_t *m_connectedScene = nullptr;
 
 	void applyFileIconToButton(QPushButton *button, const QString &filePath);
