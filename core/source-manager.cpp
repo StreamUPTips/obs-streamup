@@ -90,6 +90,8 @@ bool RefreshBrowserSources(void *data, obs_source_t *source)
 	UNUSED_PARAMETER(data);
 
 	const char *source_id = obs_source_get_id(source);
+	if (!source_id)
+		return true;
 
 	if (strcmp(source_id, "browser_source") == 0) {
 		obs_data_t *settings = obs_source_get_settings(source);
@@ -420,7 +422,9 @@ const char *GetSelectedSourceFromCurrentScene()
 	// If there is exactly one selected item, return its source name
 	if (data.sceneItems.size() == 1) {
 		obs_source_t *selected_source = obs_sceneitem_get_source(data.sceneItems[0]);
-		return obs_source_get_name(selected_source); // Return the source name
+		if (!selected_source)
+			return nullptr;
+		return obs_source_get_name(selected_source);
 	}
 
 	return nullptr; // No source or multiple sources selected

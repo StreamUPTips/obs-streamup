@@ -63,7 +63,9 @@ void HotkeySelectorDialog::setupUI() {
     QVBoxLayout* detailsLayout = new QVBoxLayout(detailsGroup);
     
     selectedHotkeyName = new QLabel(obs_module_text("HotkeySelector.Message.NoSelection"), detailsGroup);
-    selectedHotkeyName->setStyleSheet("font-weight: bold; font-size: 14px;");
+    selectedHotkeyName->setStyleSheet(QString("font-weight: bold; font-size: %1px; color: %2;")
+        .arg(UIStyles::Sizes::FONT_SIZE_NORMAL)
+        .arg(UIStyles::Colors::TEXT_PRIMARY));
     detailsLayout->addWidget(selectedHotkeyName);
     
     selectedHotkeyDescription = new QLabel("", detailsGroup);
@@ -71,7 +73,7 @@ void HotkeySelectorDialog::setupUI() {
     detailsLayout->addWidget(selectedHotkeyDescription);
     
     selectedHotkeyKeys = new QLabel("", detailsGroup);
-    selectedHotkeyKeys->setStyleSheet("color: blue; font-family: monospace;");
+    selectedHotkeyKeys->setStyleSheet(QString("color: %1; font-family: monospace;").arg(UIStyles::Colors::PRIMARY_LIGHT));
     detailsLayout->addWidget(selectedHotkeyKeys);
     
     selectedHotkeyHelp = new QTextEdit(detailsGroup);
@@ -93,11 +95,8 @@ void HotkeySelectorDialog::setupUI() {
     buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
     
-    okButton = new QPushButton(obs_module_text("HotkeySelector.Button.Add"), this);
-    cancelButton = new QPushButton(obs_module_text("UI.Button.Cancel"), this);
-
-    okButton->setStyleSheet(UIStyles::GetButtonStyle());
-    cancelButton->setStyleSheet(UIStyles::GetButtonStyle());
+    okButton = UIStyles::CreateStyledButton(obs_module_text("HotkeySelector.Button.Add"), "info");
+    cancelButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
 
     okButton->setEnabled(false); // Disabled until selection is made
     

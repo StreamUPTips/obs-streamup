@@ -21,6 +21,15 @@
 
 namespace StreamUP {
 
+static const QString ICON_BUTTON_STYLESHEET = QString(
+    "QToolButton { border: 2px solid transparent; border-radius: 4px; }"
+    "QToolButton:checked { border: 2px solid %1; background-color: %2; }"
+    "QToolButton:hover { border: 2px solid %3; background-color: %4; }"
+).arg(UIStyles::Colors::PRIMARY_COLOR,
+     UIStyles::Colors::PRIMARY_ALPHA_30,
+     UIStyles::Colors::PRIMARY_HOVER,
+     UIStyles::Colors::SURFACE_SUBTLE);
+
 IconSelectorDialog::IconSelectorDialog(const QString& currentIcon,
                                       const QString& currentCustomIcon,
                                       bool useCustomIconFlag,
@@ -73,11 +82,8 @@ void IconSelectorDialog::setupUI() {
     buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
     
-    okButton = new QPushButton(obs_module_text("UI.Button.OK"), this);
-    cancelButton = new QPushButton(obs_module_text("UI.Button.Cancel"), this);
-
-    okButton->setStyleSheet(UIStyles::GetButtonStyle());
-    cancelButton->setStyleSheet(UIStyles::GetButtonStyle());
+    okButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.OK"), "info");
+    cancelButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
     
     buttonLayout->addWidget(okButton);
     buttonLayout->addWidget(cancelButton);
@@ -116,8 +122,7 @@ void IconSelectorDialog::setupIconTabs() {
     QHBoxLayout* customPathLayout = new QHBoxLayout();
     customIconPath = new QLineEdit(customIconsWidget);
     customIconPath->setPlaceholderText(obs_module_text("IconSelector.Placeholder.Path"));
-    browseCustomButton = new QPushButton(obs_module_text("UI.Button.Browse"), customIconsWidget);
-    browseCustomButton->setStyleSheet(UIStyles::GetButtonStyle());
+    browseCustomButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.Browse"), "info");
 
     customPathLayout->addWidget(customIconPath);
     customPathLayout->addWidget(browseCustomButton);
@@ -191,7 +196,7 @@ void IconSelectorDialog::populateOBSIcons() {
         // Add fallback message
         QLabel* noIconsLabel = new QLabel(obs_module_text("IconSelector.Error.NoThemeDir"));
         noIconsLabel->setAlignment(Qt::AlignCenter);
-        noIconsLabel->setStyleSheet("color: gray; font-style: italic;");
+        noIconsLabel->setStyleSheet(QString("color: %1; font-style: italic;").arg(UIStyles::Colors::TEXT_MUTED));
         obsIconsLayout->addWidget(noIconsLabel, 0, 0, 1, GRID_COLUMNS);
         return;
     }
@@ -207,7 +212,7 @@ void IconSelectorDialog::populateOBSIcons() {
     if (!themeDir.exists()) {
         QLabel* noIconsLabel = new QLabel(obs_module_text("IconSelector.Error.NoThemeDir"));
         noIconsLabel->setAlignment(Qt::AlignCenter);
-        noIconsLabel->setStyleSheet("color: gray; font-style: italic;");
+        noIconsLabel->setStyleSheet(QString("color: %1; font-style: italic;").arg(UIStyles::Colors::TEXT_MUTED));
         obsIconsLayout->addWidget(noIconsLabel, 0, 0, 1, GRID_COLUMNS);
         return;
     }
@@ -256,7 +261,7 @@ void IconSelectorDialog::populateOBSIcons() {
         // No icons found, add a placeholder
         QLabel* noIconsLabel = new QLabel(obs_module_text("IconSelector.Error.NoValidIcons"));
         noIconsLabel->setAlignment(Qt::AlignCenter);
-        noIconsLabel->setStyleSheet("color: gray; font-style: italic;");
+        noIconsLabel->setStyleSheet(QString("color: %1; font-style: italic;").arg(UIStyles::Colors::TEXT_MUTED));
         obsIconsLayout->addWidget(noIconsLabel, 0, 0, 1, GRID_COLUMNS);
     } else {
         // Add some spacing at the end
@@ -349,9 +354,7 @@ void IconSelectorDialog::populateCommonIcons() {
 
         // Add styling to make selection more visible
         button->setStyleSheet(
-            "QToolButton { border: 2px solid transparent; border-radius: 4px; }"
-            "QToolButton:checked { border: 2px solid #007ACC; background-color: rgba(0, 122, 204, 0.2); }"
-            "QToolButton:hover { border: 2px solid #005A9E; background-color: rgba(0, 90, 158, 0.1); }"
+            ICON_BUTTON_STYLESHEET
         );
 
         iconButtonGroup->addButton(button);

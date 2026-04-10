@@ -13,6 +13,7 @@
 #include <QAbstractButton>
 #include <functional>
 #include <unordered_map>
+#include <mutex>
 
 namespace StreamUP {
 namespace UIHelpers {
@@ -49,6 +50,7 @@ public:
     static bool IsSingletonDialogOpen(const std::string& dialogId);
 
 private:
+    static std::mutex s_dialogsMutex;
     static std::unordered_map<std::string, QPointer<QDialog>> s_dialogs;
 };
 

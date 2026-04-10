@@ -1460,8 +1460,9 @@ void DraggableListWidget::paintEvent(QPaintEvent* event)
         painter.setRenderHint(QPainter::Antialiasing);
         
         // Use StreamUP primary color for the drop indicator
-        painter.setPen(QPen(QColor("#0076df"), 2));
-        painter.setBrush(QBrush(QColor("#0076df")));
+        QColor primaryColor(StreamUP::UIStyles::Colors::PRIMARY_COLOR);
+        painter.setPen(QPen(primaryColor, 2));
+        painter.setBrush(QBrush(primaryColor));
         
         int y;
         if (dropIndicatorIndex == count()) {

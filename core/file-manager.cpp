@@ -847,9 +847,20 @@ void MergeScenes(obs_source_t *s, obs_data_t *scene_settings)
 {
 	obs_source_save(s);
 	obs_data_array_t *items = obs_data_get_array(scene_settings, "items");
+	if (!items)
+		return;
 	const size_t item_count = obs_data_array_count(items);
 	obs_data_t *scene_settings_orig = obs_source_get_settings(s);
+	if (!scene_settings_orig) {
+		obs_data_array_release(items);
+		return;
+	}
 	obs_data_array_t *items_orig = obs_data_get_array(scene_settings_orig, "items");
+	if (!items_orig) {
+		obs_data_release(scene_settings_orig);
+		obs_data_array_release(items);
+		return;
+	}
 	const size_t item_count_orig = obs_data_array_count(items_orig);
 	for (size_t j = 0; j < item_count_orig; j++) {
 		obs_data_t *item_data_orig = obs_data_array_item(items_orig, j);

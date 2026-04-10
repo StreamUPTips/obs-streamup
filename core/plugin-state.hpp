@@ -24,8 +24,14 @@ public:
     void AddRequiredPlugin(const std::string& key, const PluginInfo& plugin);
     
     // State management
-    bool IsInitialized() const { return m_initialized; }
-    void SetInitialized(bool initialized) { m_initialized = initialized; }
+    bool IsInitialized() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_initialized;
+    }
+    void SetInitialized(bool initialized) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_initialized = initialized;
+    }
     
     // Plugin status caching
     struct PluginCheckResults {

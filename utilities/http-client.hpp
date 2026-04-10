@@ -8,14 +8,6 @@ namespace StreamUP {
 namespace HttpClient {
 
 /**
- * @brief Structure to hold HTTP request data
- */
-struct RequestData {
-    std::string url;
-    std::string response;
-};
-
-/**
  * @brief Make a synchronous HTTP GET request
  * @param url The URL to request
  * @param response Output parameter for the response data
@@ -41,13 +33,6 @@ bool MakeAsyncGetRequest(const std::string& url,
  * @return size_t Number of bytes processed
  */
 size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::string* out);
-
-/**
- * @brief Internal pthread function for making API requests
- * @param arg Pointer to RequestData structure
- * @return void* Always returns nullptr
- */
-void* MakeApiRequestThread(void* arg);
 
 } // namespace HttpClient
 } // namespace StreamUP

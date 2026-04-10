@@ -31,15 +31,17 @@ namespace StreamUP {
 namespace UIHelpers {
 
 //-------------------DIALOG MANAGEMENT-------------------
-// Static member definition
+// Static member definitions
+std::mutex DialogManager::s_dialogsMutex;
 std::unordered_map<std::string, QPointer<QDialog>> DialogManager::s_dialogs;
 
-bool DialogManager::ShowSingletonDialog(const std::string& dialogId, 
+bool DialogManager::ShowSingletonDialog(const std::string& dialogId,
                                        const std::function<QDialog*()>& createFunction,
                                        bool bringToFront)
 {
+    std::lock_guard<std::mutex> lock(s_dialogsMutex);
     auto it = s_dialogs.find(dialogId);
-    
+
     // Check if dialog already exists and is visible
     if (it != s_dialogs.end() && !it->second.isNull() && it->second->isVisible()) {
         if (bringToFront) {
@@ -48,24 +50,25 @@ bool DialogManager::ShowSingletonDialog(const std::string& dialogId,
         }
         return false; // Existing dialog found
     }
-    
+
     // Clean up any null pointers
     if (it != s_dialogs.end() && it->second.isNull()) {
         s_dialogs.erase(it);
     }
-    
+
     // Create new dialog
     QDialog* dialog = createFunction();
     if (dialog) {
         s_dialogs[dialogId] = dialog;
         return true; // New dialog created
     }
-    
+
     return false;
 }
 
 void DialogManager::CloseSingletonDialog(const std::string& dialogId)
 {
+    std::lock_guard<std::mutex> lock(s_dialogsMutex);
     auto it = s_dialogs.find(dialogId);
     if (it != s_dialogs.end() && !it->second.isNull()) {
         it->second->close();
@@ -75,6 +78,7 @@ void DialogManager::CloseSingletonDialog(const std::string& dialogId)
 
 bool DialogManager::IsSingletonDialogOpen(const std::string& dialogId)
 {
+    std::lock_guard<std::mutex> lock(s_dialogsMutex);
     auto it = s_dialogs.find(dialogId);
     return it != s_dialogs.end() && !it->second.isNull() && it->second->isVisible();
 }

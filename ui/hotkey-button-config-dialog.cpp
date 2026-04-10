@@ -50,14 +50,13 @@ void HotkeyButtonConfigDialog::setupUI() {
     hotkeyFormLayout = new QFormLayout(hotkeyGroup);
     
     selectedHotkeyLabel = new QLabel(obs_module_text("HotkeyButton.Message.NoSelection"), hotkeyGroup);
-    selectedHotkeyLabel->setStyleSheet("color: gray; font-style: italic;");
-    
+    selectedHotkeyLabel->setStyleSheet(QString("color: %1; font-style: italic;").arg(UIStyles::Colors::TEXT_MUTED));
+
     hotkeyDescriptionLabel = new QLabel("", hotkeyGroup);
     hotkeyDescriptionLabel->setWordWrap(true);
-    hotkeyDescriptionLabel->setStyleSheet("color: white;");
+    hotkeyDescriptionLabel->setStyleSheet(QString("color: %1;").arg(UIStyles::Colors::TEXT_PRIMARY));
     
-    selectHotkeyButton = new QPushButton(obs_module_text("HotkeyButton.Button.SelectHotkey"), hotkeyGroup);
-    selectHotkeyButton->setStyleSheet(UIStyles::GetButtonStyle());
+    selectHotkeyButton = UIStyles::CreateStyledButton(obs_module_text("HotkeyButton.Button.SelectHotkey"), "info");
     
     hotkeyFormLayout->addRow(QString(obs_module_text("HotkeyButton.Label.Selected")), selectedHotkeyLabel);
     hotkeyFormLayout->addRow(QString(obs_module_text("HotkeyButton.Label.Description")), hotkeyDescriptionLabel);
@@ -77,12 +76,11 @@ void HotkeyButtonConfigDialog::setupUI() {
     iconPreviewLabel = new QLabel(obs_module_text("HotkeyButton.Label.Preview"), iconGroup);
     iconPreview = new QLabel(iconGroup);
     iconPreview->setFixedSize(32, 32);
-    iconPreview->setStyleSheet("border: 1px solid gray;");
+    iconPreview->setStyleSheet(QString("border: 1px solid %1;").arg(UIStyles::Colors::BORDER_MEDIUM));
     iconPreview->setAlignment(Qt::AlignCenter);
     iconPreview->setScaledContents(true);
 
-    selectIconButton = new QPushButton(obs_module_text("HotkeyButton.Button.SelectIcon"), iconGroup);
-    selectIconButton->setStyleSheet(UIStyles::GetButtonStyle());
+    selectIconButton = UIStyles::CreateStyledButton(obs_module_text("HotkeyButton.Button.SelectIcon"), "info");
 
     iconPreviewLayout->addWidget(iconPreviewLabel);
     iconPreviewLayout->addWidget(iconPreview);
@@ -115,11 +113,9 @@ void HotkeyButtonConfigDialog::setupUI() {
     buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
     
-    okButton = new QPushButton(isEditMode ? obs_module_text("HotkeyButton.Button.Update") : obs_module_text("HotkeyButton.Button.Add"), this);
-    cancelButton = new QPushButton(obs_module_text("UI.Button.Cancel"), this);
-
-    okButton->setStyleSheet(UIStyles::GetButtonStyle());
-    cancelButton->setStyleSheet(UIStyles::GetButtonStyle());
+    okButton = UIStyles::CreateStyledButton(
+        isEditMode ? obs_module_text("HotkeyButton.Button.Update") : obs_module_text("HotkeyButton.Button.Add"), "info");
+    cancelButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
 
     okButton->setDefault(true);
     okButton->setEnabled(false); // Initially disabled until hotkey is selected
@@ -196,11 +192,11 @@ void HotkeyButtonConfigDialog::onSelectIconClicked() {
 void HotkeyButtonConfigDialog::updateHotkeyDisplay() {
     if (selectedHotkey.name.isEmpty()) {
         selectedHotkeyLabel->setText(obs_module_text("HotkeyButton.Message.NoSelection"));
-        selectedHotkeyLabel->setStyleSheet("color: gray; font-style: italic;");
+        selectedHotkeyLabel->setStyleSheet(QString("color: %1; font-style: italic;").arg(UIStyles::Colors::TEXT_MUTED));
         hotkeyDescriptionLabel->clear();
     } else {
         selectedHotkeyLabel->setText(selectedHotkey.name);
-        selectedHotkeyLabel->setStyleSheet("color: white; font-weight: bold;");
+        selectedHotkeyLabel->setStyleSheet(QString("color: %1; font-weight: bold;").arg(UIStyles::Colors::TEXT_PRIMARY));
         hotkeyDescriptionLabel->setText(selectedHotkey.description);
         
         // Auto-fill button text and tooltip if empty
