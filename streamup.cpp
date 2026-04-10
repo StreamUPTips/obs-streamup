@@ -28,6 +28,7 @@
 #include "ui/theme-enhancements.hpp"
 #include "multidock/multidock_manager.hpp"
 #include "multidock/multidock_utils.hpp"
+#include "sources/adjustment-layer.hpp"
 
 // Standard library
 #include <filesystem>
@@ -747,10 +748,11 @@ bool obs_module_load()
 	}
 #endif
 
-	blog(LOG_INFO, "[StreamUP] About to enter try block for step 1/8");
+	// Register source types (before frontend initialization)
+	StreamUP::AdjustmentLayer::Register();
+	blog(LOG_INFO, "[StreamUP] Registered Adjustment Layer source");
 
 	try {
-		blog(LOG_INFO, "[StreamUP] Inside try block - about to start step 1/8");
 
 		blog(LOG_INFO, "[StreamUP] Step 1/8: Starting menu initialization");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Starting menu initialization");
@@ -988,43 +990,43 @@ void obs_module_unload()
 	StreamUP::DebugLogger::SetInitializationComplete(false);
 
 	try {
-		blog(LOG_INFO, "[StreamUP] Unload step 1/7: Removing shutdown event callback");
+		blog(LOG_INFO, "[StreamUP] Unload step 1/8: Removing shutdown event callback");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Removing shutdown event callback");
 		obs_frontend_remove_event_callback(OnOBSShutdown, nullptr);
 
-		blog(LOG_INFO, "[StreamUP] Unload step 2/7: Removing save callback for hotkeys");
+		blog(LOG_INFO, "[StreamUP] Unload step 2/8: Removing save callback for hotkeys");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Removing save callback for hotkeys");
 		obs_frontend_remove_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
 
-		blog(LOG_INFO, "[StreamUP] Unload step 3/7: Unregistering hotkeys");
+		blog(LOG_INFO, "[StreamUP] Unload step 3/8: Unregistering hotkeys");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Unregistering hotkeys");
 		StreamUP::HotkeyManager::UnregisterHotkeys();
 
 		// Clean up toolbar - just nullify the pointer, let Qt/OBS handle destruction
-		blog(LOG_INFO, "[StreamUP] Unload step 4/7: Cleaning up toolbar reference");
+		blog(LOG_INFO, "[StreamUP] Unload step 4/8: Cleaning up toolbar reference");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up toolbar reference");
 		globalToolbar = nullptr;
 
 		// Shutdown MultiDock system
-		blog(LOG_INFO, "[StreamUP] Unload step 5/7: Shutting down MultiDock system");
+		blog(LOG_INFO, "[StreamUP] Unload step 5/8: Shutting down MultiDock system");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Shutting down MultiDock system");
 		StreamUP::MultiDock::MultiDockManager::Shutdown();
 
 		// Clean up studio mode, mixer, and theme enhancements
-		blog(LOG_INFO, "[StreamUP] Unload step 6/9: Cleaning up UI enhancements");
+		blog(LOG_INFO, "[StreamUP] Unload step 6/8: Cleaning up UI enhancements");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up UI enhancements");
 		StreamUP::StudioModeEnhancements::CleanupStudioModeEnhancements();
 		StreamUP::MixerEnhancements::CleanupMixerEnhancements();
 		StreamUP::ThemeEnhancements::CleanupThemeEnhancements();
 
 		// Save all current settings before cleanup
-		blog(LOG_INFO, "[StreamUP] Unload step 7/9: Saving current settings");
+		blog(LOG_INFO, "[StreamUP] Unload step 7/8: Saving current settings");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Saving current settings");
 		StreamUP::SettingsManager::PluginSettings currentSettings = StreamUP::SettingsManager::GetCurrentSettings();
 		StreamUP::SettingsManager::UpdateSettings(currentSettings);
 
 		// Clean up settings cache
-		blog(LOG_INFO, "[StreamUP] Unload step 8/9: Cleaning up settings cache");
+		blog(LOG_INFO, "[StreamUP] Unload step 8/8: Cleaning up settings cache");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up settings cache");
 		StreamUP::SettingsManager::CleanupSettingsCache();
 
