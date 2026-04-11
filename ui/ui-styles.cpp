@@ -19,6 +19,8 @@
 #include <QHeaderView>
 #include <QTableWidgetItem>
 #include <QAbstractItemView>
+#include <QAbstractScrollArea>
+#include <QComboBox>
 #include <QMenu>
 #include <QAction>
 #include <QApplication>
@@ -197,6 +199,27 @@ FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title)
                         QVariant::fromValue(static_cast<void *>(shell.contentLayout)));
     dialog->setProperty("streamup_footer_layout",
                         QVariant::fromValue(static_cast<void *>(shell.footerLayout)));
+
+    // Fix all combo box popups inside this dialog once the subclass has populated its UI.
+    // Combo popups are top-level windows whose view widget doesn't inherit the dialog's
+    // stylesheet, so we have to reach in via C++ and kill the reserved scrollbar corner
+    // space, the native window drop shadow, and the view's frame.
+    QTimer::singleShot(0, dialog, [dialog]() {
+        const auto combos = dialog->findChildren<QComboBox *>();
+        for (QComboBox *combo : combos) {
+            QAbstractItemView *view = combo->view();
+            if (!view) continue;
+            view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            view->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+            if (auto *scrollArea = qobject_cast<QAbstractScrollArea *>(view)) {
+                scrollArea->setFrameShape(QFrame::NoFrame);
+            }
+            if (QWidget *popupWindow = view->window()) {
+                popupWindow->setAttribute(Qt::WA_TranslucentBackground);
+                popupWindow->setWindowFlag(Qt::NoDropShadowWindowHint);
+            }
+        }
+    });
 
     return shell;
 }
@@ -1203,7 +1226,7 @@ QString GetComboBoxStyle() {
         "QComboBox::down-arrow {"
         "    image: url(:/images/icons/ui/dropdown-arrow-light.svg);"
         "    width: 12px;"
-        "    height: 12px;"
+        "    height: 14px;"
         "}"
         "QComboBox::down-arrow:on {"
         "    image: url(:/images/icons/ui/dropdown-arrow-light.svg);"
