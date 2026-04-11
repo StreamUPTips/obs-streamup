@@ -3,6 +3,7 @@
 #include "ui-styles.hpp"
 #include "patch-notes-window.hpp"
 #include "settings-manager.hpp"
+#include "../flow-layout.hpp"
 #include "../utilities/error-handler.hpp"
 #include "../utilities/http-client.hpp"
 #include "../core/plugin-manager.hpp"
@@ -1452,14 +1453,12 @@ void CreateSplashDialog(ShowCondition condition)
         // Header (logo + version + patch notes button) inline at the top
         contentLayout->addWidget(headerWidget);
 
-        // Welcome section — flat
-        contentLayout->addWidget(StreamUP::UIStyles::CreateSectionHeader("Welcome to StreamUP"));
+        // Welcome section — the HTML body has its own h2, no duplicate header.
         std::string welcomeMessage = GetWelcomeMessage();
         QLabel* mainContentLabel = UIHelpers::CreateRichTextLabel(QString::fromStdString(welcomeMessage), false, true, Qt::Alignment(), true);
         contentLayout->addWidget(mainContentLabel);
 
-        // Support section — flat
-        contentLayout->addWidget(StreamUP::UIStyles::CreateSectionHeader("Support StreamUP"));
+        // Support section — same, HTML carries its own heading.
         std::string supportContent = LoadLocalSupportInfo();
         QLabel* supportLabel = UIHelpers::CreateRichTextLabel(QString::fromStdString(supportContent), false, true, Qt::Alignment(), true);
         contentLayout->addWidget(supportLabel);
@@ -1507,21 +1506,143 @@ void CreateSplashDialog(ShowCondition condition)
         
         contentLayout->addLayout(donationLayout);
 
-        // Supporters section — flat
-        contentLayout->addWidget(StreamUP::UIStyles::CreateSectionHeader("Thank You to Our Supporters!"));
-        QLabel* supportersLabel = UIHelpers::CreateRichTextLabel(GenerateSupportersHTML(), false, true, Qt::Alignment(), true);
-        supportersLabel->setObjectName("supportersLabel");
-        contentLayout->addWidget(supportersLabel);
-        
-        // Set up a timer to refresh the supporters display every 2 seconds until loaded
-        QTimer* refreshTimer = new QTimer(dialog);
-        QObject::connect(refreshTimer, &QTimer::timeout, [supportersLabel, refreshTimer]() {
-            supportersLabel->setText(GenerateSupportersHTML());
+        // === Supporters section — real widgets, FlowLayout, proper pills ===
+        // Wrapper card so the section reads as a distinct panel.
+        QFrame *supportersCard = new QFrame();
+        supportersCard->setObjectName("supportersCard");
+        supportersCard->setStyleSheet(QString(
+            "QFrame#supportersCard { background: %1; border: 1px solid %2; border-radius: 14px; }")
+            .arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
+            .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE));
+        QVBoxLayout *supportersCardLay = new QVBoxLayout(supportersCard);
+        supportersCardLay->setContentsMargins(20, 18, 20, 20);
+        supportersCardLay->setSpacing(12);
+
+        QLabel *supportersTitle = new QLabel("Thank You to Our Supporters");
+        supportersTitle->setStyleSheet(QString("color: %1; font-size: 16px; font-weight: 700; background: transparent;")
+            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
+        supportersCardLay->addWidget(supportersTitle);
+
+        // Two named groups (Andi / StreamUP) live as inner sub-cards inside the
+        // wrapper. Pre-build empty containers and let RebuildSupporters() repopulate
+        // them so the refresh timer doesn't have to throw away widgets.
+        struct SupporterGroup {
+            QString title;
+            QString accent;        // text/border accent
+            QString badgeBg;       // pill background
+            QString badgeFg;       // pill text
+            QFrame *card;
+            QVBoxLayout *cardLay;
+            QWidget *flowHost;
+            FlowLayout *flow;
+        };
+
+        auto buildGroup = [&](const QString &title, const QString &accent,
+                              const QString &badgeBg, const QString &badgeFg) {
+            SupporterGroup g{};
+            g.title = title;
+            g.accent = accent;
+            g.badgeBg = badgeBg;
+            g.badgeFg = badgeFg;
+            g.card = new QFrame();
+            g.card->setStyleSheet(QString("QFrame { background: transparent; border: none; }"));
+            g.cardLay = new QVBoxLayout(g.card);
+            g.cardLay->setContentsMargins(0, 0, 0, 0);
+            g.cardLay->setSpacing(10);
+            QLabel *t = new QLabel(title);
+            t->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;").arg(accent));
+            g.cardLay->addWidget(t);
+            g.flowHost = new QWidget();
+            g.flowHost->setStyleSheet("background: transparent;");
+            g.flow = new FlowLayout(g.flowHost, 0, 8, 8);
+            g.cardLay->addWidget(g.flowHost);
+            supportersCardLay->addWidget(g.card);
+            return g;
+        };
+
+        SupporterGroup andiGroup = buildGroup("Andi's Supporters", "#fbbf24",
+                                               "rgba(251, 191, 36, 0.15)", "#fde68a");
+        SupporterGroup streamupGroup = buildGroup("StreamUP Supporters", "#a855f7",
+                                                   "rgba(168, 85, 247, 0.15)", "#e9d5ff");
+
+        // Empty-state placeholder shown when neither list has loaded yet.
+        QLabel *emptyLabel = new QLabel("Loading supporters...");
+        emptyLabel->setStyleSheet(QString("color: %1; font-style: italic; background: transparent;")
+            .arg(StreamUP::UIStyles::Colors::TEXT_MUTED));
+        supportersCardLay->addWidget(emptyLabel);
+
+        // Modernised opt-in card.
+        QFrame *optInBox = new QFrame();
+        optInBox->setStyleSheet(QString(
+            "QFrame { background: rgba(168, 85, 247, 0.10); border: 1px solid rgba(168, 85, 247, 0.40); border-radius: 12px; }"));
+        QVBoxLayout *optInLay = new QVBoxLayout(optInBox);
+        optInLay->setContentsMargins(16, 14, 16, 14);
+        optInLay->setSpacing(6);
+        QLabel *optInTitle = new QLabel("If you're a supporter and your name is not here");
+        optInTitle->setStyleSheet("color: #f5d0fe; font-size: 13px; font-weight: 700; background: transparent;");
+        QLabel *optInBody = new QLabel("This is an opt-in feature which you can enable in your account settings. You can opt-in right now and choose exactly how your name will appear.");
+        optInBody->setWordWrap(true);
+        optInBody->setStyleSheet("color: #e9d5ff; font-size: 12px; background: transparent;");
+        QLabel *optInLink = new QLabel(R"(<a href="https://streamup.tips/Identity/Account/Manage" style="color: #c4b5fd; text-decoration: underline;">https://streamup.tips/Identity/Account/Manage</a>)");
+        optInLink->setOpenExternalLinks(true);
+        optInLink->setStyleSheet("background: transparent; font-size: 12px;");
+        optInLay->addWidget(optInTitle);
+        optInLay->addWidget(optInBody);
+        optInLay->addWidget(optInLink);
+        supportersCardLay->addWidget(optInBox);
+
+        contentLayout->addWidget(supportersCard);
+
+        // Rebuild helper — clears each flow layout and re-adds badges.
+        auto rebuildSupporters = [andiGroup, streamupGroup, emptyLabel]() {
+            auto clear = [](FlowLayout *flow) {
+                while (QLayoutItem *item = flow->takeAt(0)) {
+                    if (QWidget *w = item->widget()) w->deleteLater();
+                    delete item;
+                }
+            };
+            auto addBadges = [](const SupporterGroup &g, const std::vector<Supporter> &list) {
+                const QString style = QString(
+                    "QLabel { background: %1; color: %2; padding: 6px 14px;"
+                    "  border-radius: 12px; font-size: 12px; font-weight: 600; }")
+                    .arg(g.badgeBg, g.badgeFg);
+                for (const auto &supporter : list) {
+                    QLabel *badge = new QLabel(supporter.displayName);
+                    badge->setStyleSheet(style);
+                    g.flow->addWidget(badge);
+                }
+            };
+            clear(andiGroup.flow);
+            clear(streamupGroup.flow);
+            addBadges(andiGroup, supportersData.andiSupporters);
+            addBadges(streamupGroup, supportersData.streamupSupporters);
+            const bool any = !supportersData.andiSupporters.empty()
+                          || !supportersData.streamupSupporters.empty();
+            andiGroup.card->setVisible(!supportersData.andiSupporters.empty());
+            streamupGroup.card->setVisible(!supportersData.streamupSupporters.empty());
+            emptyLabel->setVisible(!any);
+            if (any) {
+                if (supportersData.loaded && supportersData.andiSupporters.empty() && supportersData.streamupSupporters.empty()) {
+                    emptyLabel->setText("No public supporters to display at this time.");
+                    emptyLabel->setVisible(true);
+                }
+            } else if (supportersData.loaded) {
+                emptyLabel->setText("No public supporters to display at this time.");
+            }
+        };
+
+        // Initial population.
+        rebuildSupporters();
+
+        // Refresh until data is loaded.
+        QTimer *refreshTimer = new QTimer(dialog);
+        QObject::connect(refreshTimer, &QTimer::timeout, [refreshTimer, rebuildSupporters]() {
+            rebuildSupporters();
             if (supportersData.loaded) {
-                refreshTimer->stop(); // Stop refreshing once data is loaded
+                refreshTimer->stop();
             }
         });
-        refreshTimer->start(2000); // Refresh every 2 seconds
+        refreshTimer->start(2000);
 
         scrollArea->setWidget(contentWidget);
 

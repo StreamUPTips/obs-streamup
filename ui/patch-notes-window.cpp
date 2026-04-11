@@ -19,8 +19,6 @@
 #include <QTextStream>
 #include <QStringList>
 #include <QRegularExpression>
-#include <QPropertyAnimation>
-#include <QEasingCurve>
 
 namespace StreamUP {
 namespace PatchNotesWindow {
@@ -129,10 +127,11 @@ static QVector<VersionBlock> LoadVersionBlocks()
 	return blocks;
 }
 
-// Build one collapsible card: clickable version header + animated body container.
-// The body lives inside a wrapper QWidget whose maximumHeight is animated between
-// 0 and the body's heightForWidth so the curve follows the actual rendered text
-// height (a wordwrap'd rich-text label needs heightForWidth, sizeHint lies).
+// Build one collapsible card: clickable version header + body label that
+// toggles via setVisible. We deliberately do NOT animate maximumHeight here:
+// animating it on a QScrollArea-hosted wordwrap QLabel re-runs the entire
+// layout pass each frame (heightForWidth is expensive on rich text), which
+// pegs the CPU and looks worse than an instant toggle.
 static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 {
 	QFrame *card = new QFrame();
@@ -147,9 +146,8 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 	cardLay->setContentsMargins(0, 0, 0, 0);
 	cardLay->setSpacing(0);
 
-	// Header button — fully transparent (no hover/checked bg) so the rounded
-	// card outline isn't fighting a square button background. Indication of
-	// state is the chevron rotation only.
+	// Header button — fully transparent so the rounded card outline isn't
+	// fighting a square button background. Hover indication = chevron colour.
 	QPushButton *header = new QPushButton();
 	header->setCheckable(true);
 	header->setChecked(expanded);
@@ -170,41 +168,18 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 		.arg(UIStyles::Colors::PRIMARY_LIGHT));
 	cardLay->addWidget(header);
 
-	// Body wrapper. Animate maximumHeight on toggle.
-	QWidget *bodyWrapper = new QWidget();
-	bodyWrapper->setStyleSheet("background: transparent;");
-	QVBoxLayout *bodyWrapperLay = new QVBoxLayout(bodyWrapper);
-	bodyWrapperLay->setContentsMargins(0, 0, 0, 0);
-	bodyWrapperLay->setSpacing(0);
-
 	QLabel *body = new QLabel(block.bodyHtml);
 	body->setTextFormat(Qt::RichText);
 	body->setWordWrap(true);
 	body->setOpenExternalLinks(true);
 	body->setStyleSheet(QString("QLabel { background: transparent; color: %1; padding: 4px 14px 12px 14px; }")
 		.arg(UIStyles::Colors::TEXT_SECONDARY));
-	bodyWrapperLay->addWidget(body);
+	body->setVisible(expanded);
+	cardLay->addWidget(body);
 
-	bodyWrapper->setMaximumHeight(expanded ? QWIDGETSIZE_MAX : 0);
-
-	QObject::connect(header, &QPushButton::toggled, bodyWrapper, [header, body, bodyWrapper](bool checked) {
-		// heightForWidth gives the actual rendered height for a wordwrap label.
-		// Fall back to sizeHint if width isn't laid out yet.
-		int width = body->width() > 0 ? body->width() : bodyWrapper->width();
-		int targetHeight = width > 0 ? body->heightForWidth(width) : body->sizeHint().height();
-		if (targetHeight <= 0) targetHeight = body->sizeHint().height();
-
-		auto *anim = new QPropertyAnimation(bodyWrapper, "maximumHeight");
-		anim->setDuration(220);
-		anim->setEasingCurve(QEasingCurve::OutCubic);
-		anim->setStartValue(checked ? 0 : bodyWrapper->height());
-		anim->setEndValue(checked ? targetHeight : 0);
-		QObject::connect(anim, &QPropertyAnimation::finished, bodyWrapper, [bodyWrapper, checked]() {
-			if (checked) bodyWrapper->setMaximumHeight(QWIDGETSIZE_MAX);
-		});
-		anim->start(QAbstractAnimation::DeleteWhenStopped);
-
-		// Update the chevron text immediately.
+	QObject::connect(header, &QPushButton::toggled, body, [header, body](bool checked) {
+		body->setVisible(checked);
+		// Swap chevron without rebuilding the rest of the label.
 		QString label = header->text();
 		int idx = label.indexOf(' ', 2);
 		if (idx > 0) {
@@ -213,7 +188,6 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 		}
 	});
 
-	cardLay->addWidget(bodyWrapper);
 	return card;
 }
 
