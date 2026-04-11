@@ -1732,7 +1732,7 @@ void CreateSplashDialog(ShowCondition condition)
         });
 
         QPushButton *dorasBtn = makeSocialButton("Doras", ":images/icons/social/doras.svg",
-                                                  "#7c3aed", "#6d28d9", "#ffffff");
+                                                  "#ac4944", "#923a36", "#ffffff");
         QObject::connect(dorasBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://doras.to/streamup"));
         });
