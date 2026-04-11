@@ -110,8 +110,18 @@ bool DragFilter::eventFilter(QObject *obj, QEvent *event)
 //-------------------COMBO POPUP FILTER-------------------
 bool ComboPopupFilter::eventFilter(QObject *obj, QEvent *event)
 {
-    Q_UNUSED(obj)
-    Q_UNUSED(event)
+    QWidget *view = qobject_cast<QWidget *>(obj);
+    if (!view) return false;
+
+    // Apply a rounded mask on show/resize. On Windows the DWM shadow follows
+    // the widget mask, so a rounded mask gives a rounded shadow — no square
+    // artifact bleeding outside the stylesheet's rounded corners.
+    if (event->type() == QEvent::Show || event->type() == QEvent::Resize) {
+        const int radius = Sizes::RADIUS_LG;
+        QPainterPath path;
+        path.addRoundedRect(QRectF(view->rect()), radius, radius);
+        view->setMask(path.toFillPolygon().toPolygon());
+    }
     return false;
 }
 
@@ -1243,7 +1253,7 @@ QString GetComboBoxStyle() {
         "QComboBox QAbstractItemView {"
         "    background-color: %10;"
         "    border: 1px solid %11;"
-        "    border-radius: 0px;" // square to align with Windows DWM popup shadow
+        "    border-radius: %12px;"
         "    selection-background-color: %13;"
         "    color: %6;"
         "    padding: %14px;"
