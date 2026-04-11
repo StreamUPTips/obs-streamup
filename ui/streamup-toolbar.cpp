@@ -1553,9 +1553,8 @@ void StreamUPToolbar::clearLayout()
 
 void StreamUPToolbar::onConfigureToolbarClicked()
 {
-	// Heap-allocated: ApplyFramelessChrome sets WA_DeleteOnClose, so Qt owns teardown
-	auto* configurator = new StreamUP::ToolbarConfigurator(this);
-	if (configurator->exec() == QDialog::Accepted) {
+	StreamUP::ToolbarConfigurator configurator(this);
+	if (configurator.exec() == QDialog::Accepted) {
 		refreshFromConfiguration();
 	}
 }

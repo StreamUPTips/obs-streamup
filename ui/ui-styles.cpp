@@ -132,7 +132,11 @@ FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title)
 
     dialog->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
     dialog->setAttribute(Qt::WA_TranslucentBackground);
-    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    // NOTE: WA_DeleteOnClose is intentionally NOT set here. Dialogs that use
+    // exec() are incompatible with WA_DeleteOnClose — exec() processes the
+    // queued deleteLater before returning, so any caller checking exec()'s
+    // return value would be holding a dangling pointer. CreateStyledDialog
+    // (the heap-allocated non-modal show() path) sets WA_DeleteOnClose itself.
 
     // Layer 1: outer layout (1px margin for border rendering)
     QVBoxLayout *outerLay = new QVBoxLayout(dialog);
@@ -613,6 +617,9 @@ QDialog* CreateStyledDialog(const QString& title, QWidget* parentWidget) {
     QDialog *dialog = new QDialog(parent);
     dialog->setWindowTitle(title);
     ApplyFramelessChrome(dialog, title);
+    // CreateStyledDialog is the heap-allocated entry point — used with show(),
+    // not exec() — so WA_DeleteOnClose is safe and necessary to avoid leaking.
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
     return dialog;
 }
 

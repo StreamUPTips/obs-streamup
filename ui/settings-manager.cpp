@@ -953,8 +953,8 @@ void ShowSettingsDialog(int tabIndex)
 			if (mainWindow) {
 				StreamUPToolbar* toolbar = mainWindow->findChild<StreamUPToolbar*>();
 				if (toolbar) {
-					auto* configurator = new StreamUP::ToolbarConfigurator(dialog);
-					if (configurator->exec() == QDialog::Accepted) {
+					StreamUP::ToolbarConfigurator configurator(dialog);
+					if (configurator.exec() == QDialog::Accepted) {
 						toolbar->refreshFromConfiguration();
 					}
 				}

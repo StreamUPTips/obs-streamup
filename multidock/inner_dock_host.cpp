@@ -280,12 +280,9 @@ QStringList InnerDockHost::GetCapturedDockIds() const
 
 void InnerDockHost::ShowAddDockDialog()
 {
-    // Heap-allocated: ApplyFramelessChrome sets WA_DeleteOnClose, so a stack
-    // object here would double-free once exec() returned and the stack unwound.
-    // Qt owns teardown.
-    auto* dialog = new AddDockDialog(m_multiDockId, this);
-    if (dialog->exec() == QDialog::Accepted) {
-        if (QDockWidget* selectedDock = dialog->GetSelectedDock()) {
+    AddDockDialog dialog(m_multiDockId, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        if (QDockWidget* selectedDock = dialog.GetSelectedDock()) {
             AddDock(selectedDock);
         }
     }
