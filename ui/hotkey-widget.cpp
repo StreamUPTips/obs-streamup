@@ -165,19 +165,27 @@ void HotkeyWidget::StartRecording()
     m_recording = true;
     m_recordedKey = 0;
     m_recordedModifiers = Qt::NoModifier;
-    
-    m_recordButton->setText(obs_module_text("Hotkey.Widget.Cancel"));
-    {
-        auto *temp = StreamUP::UIStyles::CreateStyledButton("", "error");
-        m_recordButton->setStyleSheet(temp->styleSheet());
-        delete temp;
-    }
+
+    // Highlight the icon button while recording — solid primary fill, no text.
+    m_recordButton->setStyleSheet(QString(
+        "QPushButton {"
+        "  background: %1;"
+        "  border: 1px solid %1;"
+        "  border-radius: 12px;"
+        "  min-width: 22px; max-width: 22px;"
+        "  min-height: 22px; max-height: 22px;"
+        "  padding: 0;"
+        "}"
+        "QPushButton:hover { background: %2; border: 1px solid %2; }")
+        .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR)
+        .arg(StreamUP::UIStyles::Colors::PRIMARY_HOVER));
+
     m_displayLabel->setText(obs_module_text("Hotkey.Widget.PressKeys"));
-    m_displayLabel->setStyleSheet(m_displayLabel->styleSheet() + 
+    m_displayLabel->setStyleSheet(m_displayLabel->styleSheet() +
         QString("background: %1; border-color: %2;")
         .arg(StreamUP::UIStyles::Colors::WARNING)
         .arg(StreamUP::UIStyles::Colors::WARNING));
-    
+
     setFocus();
     grabKeyboard();
 }
@@ -185,16 +193,23 @@ void HotkeyWidget::StartRecording()
 void HotkeyWidget::StopRecording()
 {
     if (!m_recording) return;
-    
+
     m_recording = false;
     releaseKeyboard();
-    
-    m_recordButton->setText(obs_module_text("Hotkey.Widget.Set"));
-    {
-        auto *temp = StreamUP::UIStyles::CreateStyledButton("", "info");
-        m_recordButton->setStyleSheet(temp->styleSheet());
-        delete temp;
-    }
+
+    // Restore neutral icon button styling.
+    m_recordButton->setStyleSheet(QString(
+        "QPushButton {"
+        "  background: transparent;"
+        "  border: 1px solid %1;"
+        "  border-radius: 12px;"
+        "  min-width: 22px; max-width: 22px;"
+        "  min-height: 22px; max-height: 22px;"
+        "  padding: 0;"
+        "}"
+        "QPushButton:hover { background: %2; border: 1px solid %2; }")
+        .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
+        .arg(StreamUP::UIStyles::Colors::HOVER_OVERLAY));
     
     // Create hotkey data from recorded key combination
     if (m_recordedKey != 0) {
