@@ -11,6 +11,7 @@
 #include <QVBoxLayout>
 #include <QFrame>
 #include <QTimer>
+#include <QPalette>
 
 namespace StreamUP {
 namespace StudioModeEnhancements {
@@ -80,7 +81,9 @@ void SliderMidpointFilter::drawMidpointMarker(QSlider* slider, QPaintEvent* pain
         }
 
         // Draw vertical line at midpoint
-        painter.setPen(QPen(QColor(StreamUP::UIStyles::Colors::TEXT_PRIMARY).lighter(), 2));
+        // Use the slider's own palette text colour so we follow the active OBS
+        // theme instead of forcing a hardcoded StreamUP value.
+        painter.setPen(QPen(slider->palette().color(QPalette::WindowText).lighter(), 2));
         painter.drawLine(midPosition, grooveRect.top(), midPosition, grooveRect.bottom());
     } else {
         // Calculate vertical midpoint position
@@ -93,7 +96,9 @@ void SliderMidpointFilter::drawMidpointMarker(QSlider* slider, QPaintEvent* pain
         }
 
         // Draw horizontal line at midpoint
-        painter.setPen(QPen(QColor(StreamUP::UIStyles::Colors::TEXT_PRIMARY).lighter(), 2));
+        // Use the slider's own palette text colour so we follow the active OBS
+        // theme instead of forcing a hardcoded StreamUP value.
+        painter.setPen(QPen(slider->palette().color(QPalette::WindowText).lighter(), 2));
         painter.drawLine(grooveRect.left(), midPosition, grooveRect.right(), midPosition);
     }
 }
