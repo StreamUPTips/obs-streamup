@@ -1,3 +1,25 @@
+# StreamUP v2.2.0 - Feature Update
+
+## New Features
+- **Adjustment Layer Source** - A brand new source type that lets you apply filters to everything beneath it in your scene, without having to duplicate filters across multiple sources
+- **Dock Visibility Button** - The visibility button in the StreamUP dock now reflects the actual state of your selected sources, so you can see at a glance what's visible and what's not
+
+## Improvements
+- **UI Refresh** - The entire plugin has been given a fresh coat of paint to match the OBS theme palette properly. Dialogs, buttons, dropdowns, and input fields all look cleaner and feel more at home inside OBS
+- **Redesigned About Window** - Condensed layout with a cleaner header so it takes up less space and is easier to read
+- **Redesigned Patch Notes** - Each version now lives in its own collapsible card so you can quickly find the release you're looking for
+- **Dock Config Dialog** - Reworked to use a cleaner section and card layout, making it much easier to navigate
+- **Hotkey Recording** - Only one hotkey can be recorded at a time now, so you won't accidentally capture input into multiple slots
+- **Multi-Dock & Hotkeys Polish** - Better buttons in the Multi-Dock interface and cleaner section dividers in the Hotkeys menu
+
+## Bug Fixes
+- **Toolbar Configurator Crash** - Fixed a crash that could happen when opening the Toolbar Configurator
+- **Dialog Crashes** - Fixed several crashes caused by frameless dialogs being closed in the wrong order
+- **Thread Safety & Null Checks** - Added extra safety checks across the plugin to prevent rare crashes
+- **Locale Fixes** - Filled in missing translations and fixed a bullet point encoding issue in certain languages
+
+---
+
 # StreamUP v2.1.8 - Patch Update
 
 ## Bug Fixes
