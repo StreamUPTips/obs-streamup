@@ -110,17 +110,8 @@ bool DragFilter::eventFilter(QObject *obj, QEvent *event)
 //-------------------COMBO POPUP FILTER-------------------
 bool ComboPopupFilter::eventFilter(QObject *obj, QEvent *event)
 {
-    QWidget *view = qobject_cast<QWidget *>(obj);
-    if (!view) return false;
-
-    // The view is reparented into a popup window on show. Kill the native DWM
-    // shadow and make the window translucent so stylesheet-rounded corners
-    // render cleanly without a square shadow bleeding outside them.
-    if (event->type() == QEvent::Show) {
-        view->setAttribute(Qt::WA_TranslucentBackground, true);
-        view->setWindowFlag(Qt::NoDropShadowWindowHint, true);
-        view->setWindowFlag(Qt::FramelessWindowHint, true);
-    }
+    Q_UNUSED(obj)
+    Q_UNUSED(event)
     return false;
 }
 
@@ -1252,7 +1243,7 @@ QString GetComboBoxStyle() {
         "QComboBox QAbstractItemView {"
         "    background-color: %10;"
         "    border: 1px solid %11;"
-        "    border-radius: %12px;"
+        "    border-radius: 0px;" // square to align with Windows DWM popup shadow
         "    selection-background-color: %13;"
         "    color: %6;"
         "    padding: %14px;"
