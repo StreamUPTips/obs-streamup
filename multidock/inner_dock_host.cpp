@@ -54,16 +54,16 @@ void InnerDockHost::SetupDockOptions()
     setAutoFillBackground(true);
 
     // Set object name for styling
+    // Theme hook: QMainWindow#InnerDockHost — the OBS theme owns appearance
+    // (background, border, border-radius, etc.). We only ship structural rules.
     setObjectName("InnerDockHost");
 
     // Set content margins to create gap between docks and edges
     setContentsMargins(8, 8, 8, 8);
 
-    // Add rounded corners and hide float buttons
-    setStyleSheet(
-        "QMainWindow#InnerDockHost { border-radius: 14px; }"
-        "QDockWidget::float-button { width: 0px; height: 0px; }"
-    );
+    // Functional rule only: hide the per-dock float button (multi-dock owns
+    // float state itself). All visual styling is left to the OBS theme.
+    setStyleSheet("QDockWidget::float-button { width: 0px; height: 0px; }");
 }
 
 
@@ -394,11 +394,11 @@ void InnerDockHost::UpdateToolBarState()
 
 void InnerDockHost::applyDockFeatures(bool locked)
 {
-    // Only hide close buttons when locked, hide float buttons always
+    // Functional only: hide float button always, hide close button when locked.
+    // Visual styling (background, border, radius) is owned by the OBS theme.
     QString closeButtonStyle = locked ? "width: 0px; height: 0px;" : "";
 
     setStyleSheet(
-        "QMainWindow#InnerDockHost { border-radius: 14px; }"
         "QDockWidget::close-button { " + closeButtonStyle + " }"
         "QDockWidget::float-button { width: 0px; height: 0px; }"
     );

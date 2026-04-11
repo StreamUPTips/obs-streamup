@@ -855,6 +855,25 @@ bool CheckIfAnySelectedVisible()
 	return any_visible;
 }
 
+bool HasAnySelectedSceneItem()
+{
+	obs_source_t *current_scene = obs_frontend_get_current_scene();
+	if (!current_scene) return false;
+
+	obs_scene_t *scene = obs_scene_from_source(current_scene);
+	if (!scene) {
+		obs_source_release(current_scene);
+		return false;
+	}
+
+	SceneFindBoxData data;
+	obs_scene_enum_items(scene, FindSelected, &data);
+
+	const bool any = !data.sceneItems.empty();
+	obs_source_release(current_scene);
+	return any;
+}
+
 bool ToggleVisibilitySelectedSources(bool sendNotification)
 {
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
