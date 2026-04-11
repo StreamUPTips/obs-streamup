@@ -326,8 +326,8 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 	QString obsRawJson =
 		QString(R"({"requestType":"CallVendorRequest","requestData":{"vendorName":"streamup","requestType":"%1","requestData":{}}})")
 			.arg(command);
-	QPushButton *obsRawBtn = StreamUP::UIStyles::CreateStyledButton("OBS Raw", "info");
-	obsRawBtn->setFixedSize(95, 28); // Set static size - bigger for "OBS Raw" text
+	QPushButton *obsRawBtn = StreamUP::UIStyles::CreateStyledButton("Raw", "info");
+	obsRawBtn->setFixedSize(72, 24);
 	obsRawBtn->setToolTip(obs_module_text("WebSocket.Button.OBSRaw.Tooltip"));
 	QObject::connect(obsRawBtn, &QPushButton::clicked, [obsRawBtn, obsRawJson]() {
 		QApplication::clipboard()->setText(obsRawJson);
@@ -356,7 +356,7 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 		QString(R"(CPH.ObsSendRaw("CallVendorRequest", "{\"vendorName\":\"streamup\",\"requestType\":\"%1\",\"requestData\":{}}", 0);)")
 			.arg(command);
 	QPushButton *cphBtn = StreamUP::UIStyles::CreateStyledButton("CPH", "info");
-	cphBtn->setFixedSize(85, 28); // Set static size - wider to accommodate "Copied" text
+	cphBtn->setFixedSize(72, 24);
 	cphBtn->setToolTip(obs_module_text("WebSocket.Button.CPH.Tooltip"));
 	QObject::connect(cphBtn, &QPushButton::clicked, [cphBtn, cphCommand]() {
 		QApplication::clipboard()->setText(cphCommand);

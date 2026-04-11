@@ -313,19 +313,19 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 			QLabel *messageLabel = new QLabel(obs_module_text("Plugin.Status.AllUpToDate"));
 			messageLabel->setStyleSheet(QString(
 				"QLabel {"
-				"color: white;"
+				"color: %2;"
 				"font-size: %1px;"
 				"font-weight: bold;"
 				"background: transparent;"
 				"border: none;"
-				"}").arg(StreamUP::UIStyles::Sizes::FONT_SIZE_MEDIUM));
+				"}").arg(StreamUP::UIStyles::Sizes::FONT_SIZE_MEDIUM).arg(StreamUP::UIStyles::Colors::BG_DARKEST));
 			messageLabel->setAlignment(Qt::AlignCenter);
 			toastLayout->addWidget(messageLabel);
-			
+
 			QLabel *countdownLabel = new QLabel(obs_module_text("Plugin.Message.AutoClosing3"));
 			countdownLabel->setStyleSheet(QString(
 				"QLabel {"
-				"color: rgba(255, 255, 255, 0.8);"
+				"color: rgba(30, 30, 46, 0.75);"
 				"font-size: %1px;"
 				"background: transparent;"
 				"border: none;"
@@ -382,8 +382,9 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			titleText = obs_module_text("Plugin.Status.FailedToLoadOnly");
 		}
 
-		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
-		
+		QString prefixedTitle = QString::fromUtf8("StreamUP \xe2\x80\xa2 ") + titleText;
+		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(prefixedTitle);
+
 		QVBoxLayout *dialogLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 
 		// Header section (same style as WebSocket Commands)
