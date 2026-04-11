@@ -107,6 +107,23 @@ bool DragFilter::eventFilter(QObject *obj, QEvent *event)
     return false;
 }
 
+//-------------------COMBO POPUP FILTER-------------------
+bool ComboPopupFilter::eventFilter(QObject *obj, QEvent *event)
+{
+    QWidget *view = qobject_cast<QWidget *>(obj);
+    if (!view) return false;
+
+    // The view is reparented into a popup window on show. Kill the native DWM
+    // shadow and make the window translucent so stylesheet-rounded corners
+    // render cleanly without a square shadow bleeding outside them.
+    if (event->type() == QEvent::Show) {
+        view->setAttribute(Qt::WA_TranslucentBackground, true);
+        view->setWindowFlag(Qt::NoDropShadowWindowHint, true);
+        view->setWindowFlag(Qt::FramelessWindowHint, true);
+    }
+    return false;
+}
+
 //-------------------FRAMELESS CHROME-------------------
 FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title)
 {
@@ -200,10 +217,10 @@ FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title)
     dialog->setProperty("streamup_footer_layout",
                         QVariant::fromValue(static_cast<void *>(shell.footerLayout)));
 
-    // Fix all combo box popups inside this dialog once the subclass has populated its UI.
-    // Combo popups are top-level windows whose view widget doesn't inherit the dialog's
-    // stylesheet, so we have to reach in via C++ and kill the reserved scrollbar corner
-    // space, the native window drop shadow, and the view's frame.
+    // Fix all combo box popups inside this dialog once the subclass has populated
+    // its UI. Combo popups are top-level windows whose view is reparented into a
+    // new popup on every show, so we install a ComboPopupFilter on the view that
+    // re-applies the frameless/no-shadow flags each time the popup opens.
     QTimer::singleShot(0, dialog, [dialog]() {
         const auto combos = dialog->findChildren<QComboBox *>();
         for (QComboBox *combo : combos) {
@@ -214,9 +231,10 @@ FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title)
             if (auto *scrollArea = qobject_cast<QAbstractScrollArea *>(view)) {
                 scrollArea->setFrameShape(QFrame::NoFrame);
             }
-            if (QWidget *popupWindow = view->window()) {
-                popupWindow->setAttribute(Qt::WA_TranslucentBackground);
-                popupWindow->setWindowFlag(Qt::NoDropShadowWindowHint);
+            // Install once — guard with dynamic property.
+            if (!view->property("streamup_combo_filter_installed").toBool()) {
+                view->installEventFilter(new ComboPopupFilter(dialog));
+                view->setProperty("streamup_combo_filter_installed", true);
             }
         }
     });

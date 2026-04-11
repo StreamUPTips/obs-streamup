@@ -54,6 +54,18 @@ protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
 };
 
+// ComboPopupFilter — installed on a QComboBox's view. When the view is shown
+// (i.e. the popup window is about to appear) it reapplies frameless/no-shadow
+// flags so Qt's rounded stylesheet corners aren't fighting the Windows DWM
+// native drop shadow.
+class ComboPopupFilter : public QObject {
+    Q_OBJECT
+public:
+    using QObject::QObject;
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+};
+
 // Shell returned by ApplyFramelessChrome — callers use contentLayout for their widgets
 struct FramelessDialogShell {
     RoundedContainer *container;
