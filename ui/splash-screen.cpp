@@ -1361,14 +1361,15 @@ void CreateSplashDialog(ShowCondition condition)
 
         mainLayout->addWidget(earlyAccessBanner);
 
-        // Header section in scrollable area — tight, single row: logo + version
-        // + patch notes button. Socials moved to footer with the other links.
+        // Header section in scrollable area — vertical centered stack:
+        // logo, version line, patch notes button. Socials moved to footer.
         QWidget* headerWidget = new QWidget();
         headerWidget->setObjectName("headerWidget");
         headerWidget->setStyleSheet("QWidget#headerWidget { background: transparent; }");
-        QHBoxLayout* headerLayout = new QHBoxLayout(headerWidget);
-        headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-        headerLayout->setContentsMargins(0, 0, 0, 0);
+        QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
+        headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+        headerLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::PADDING_SMALL, 0, StreamUP::UIStyles::Sizes::PADDING_SMALL);
+        headerLayout->setAlignment(Qt::AlignHCenter);
         
         // StreamUP text logo (clickable)
         class ClickableLabel : public QLabel {
@@ -1421,22 +1422,21 @@ void CreateSplashDialog(ShowCondition condition)
                 "}")
                 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_LARGE));
         }
-        textLogoLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        textLogoLabel->setAlignment(Qt::AlignCenter);
 
         QString versionText = QString(obs_module_text("StreamUP.SplashScreen.VersionText")).arg(PROJECT_VERSION);
         QLabel* versionLabel = StreamUP::UIStyles::CreateStyledDescription(versionText);
         versionLabel->setObjectName("versionLabel");
-        versionLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        versionLabel->setAlignment(Qt::AlignCenter);
 
         QPushButton* patchNotesBtn = StreamUP::UIStyles::CreateStyledButton("View Patch Notes", "success");
         QObject::connect(patchNotesBtn, &QPushButton::clicked, []() {
             StreamUP::PatchNotesWindow::ShowPatchNotesWindow();
         });
 
-        headerLayout->addWidget(textLogoLabel);
-        headerLayout->addWidget(versionLabel);
-        headerLayout->addStretch();
-        headerLayout->addWidget(patchNotesBtn);
+        headerLayout->addWidget(textLogoLabel, 0, Qt::AlignHCenter);
+        headerLayout->addWidget(versionLabel, 0, Qt::AlignHCenter);
+        headerLayout->addWidget(patchNotesBtn, 0, Qt::AlignHCenter);
 
         // Content area with modern StreamUP scrollbar styling
         QScrollArea* scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
@@ -1571,21 +1571,29 @@ void CreateSplashDialog(ShowCondition condition)
             .arg(StreamUP::UIStyles::Colors::TEXT_MUTED));
         supportersCardLay->addWidget(emptyLabel);
 
-        // Modernised opt-in card.
+        // Modernised opt-in card. Object-name scoped so the border doesn't
+        // cascade onto child QLabels.
         QFrame *optInBox = new QFrame();
+        optInBox->setObjectName("optInBox");
         optInBox->setStyleSheet(QString(
-            "QFrame { background: rgba(168, 85, 247, 0.10); border: 1px solid rgba(168, 85, 247, 0.40); border-radius: 12px; }"));
+            "QFrame#optInBox { background: %1; border: 1px solid %2; border-radius: 12px; }"
+            "QFrame#optInBox QLabel { background: transparent; border: none; }")
+            .arg(StreamUP::UIStyles::Colors::BG_TERTIARY)
+            .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE));
         QVBoxLayout *optInLay = new QVBoxLayout(optInBox);
         optInLay->setContentsMargins(16, 14, 16, 14);
         optInLay->setSpacing(6);
         QLabel *optInTitle = new QLabel("If you're a supporter and your name is not here");
-        optInTitle->setStyleSheet("color: #f5d0fe; font-size: 13px; font-weight: 700; background: transparent;");
+        optInTitle->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: 700;")
+            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
         QLabel *optInBody = new QLabel("This is an opt-in feature which you can enable in your account settings. You can opt-in right now and choose exactly how your name will appear.");
         optInBody->setWordWrap(true);
-        optInBody->setStyleSheet("color: #e9d5ff; font-size: 12px; background: transparent;");
-        QLabel *optInLink = new QLabel(R"(<a href="https://streamup.tips/Identity/Account/Manage" style="color: #c4b5fd; text-decoration: underline;">https://streamup.tips/Identity/Account/Manage</a>)");
+        optInBody->setStyleSheet(QString("color: %1; font-size: 12px;")
+            .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY));
+        QLabel *optInLink = new QLabel(QString(R"(<a href="https://streamup.tips/Identity/Account/Manage" style="color: %1; text-decoration: underline;">https://streamup.tips/Identity/Account/Manage</a>)")
+            .arg(StreamUP::UIStyles::Colors::PRIMARY_LIGHT));
         optInLink->setOpenExternalLinks(true);
-        optInLink->setStyleSheet("background: transparent; font-size: 12px;");
+        optInLink->setStyleSheet("font-size: 12px;");
         optInLay->addWidget(optInTitle);
         optInLay->addWidget(optInBody);
         optInLay->addWidget(optInLink);
