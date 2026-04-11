@@ -46,14 +46,35 @@ HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
         .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS));
     m_displayLabel->setAlignment(Qt::AlignCenter);
     
-    // Record button
-    m_recordButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Hotkey.Widget.Set"), "info");
-    m_recordButton->setFixedWidth(70);
+    // Icon-only set/clear buttons matching the OBS hotkey settings layout —
+    // keeps each row to a single line.
+    const QString iconBtnQss = QString(
+        "QPushButton {"
+        "  background: transparent;"
+        "  border: 1px solid %1;"
+        "  border-radius: 12px;"
+        "  min-width: 22px; max-width: 22px;"
+        "  min-height: 22px; max-height: 22px;"
+        "  padding: 0;"
+        "}"
+        "QPushButton:hover { background: %2; border: 1px solid %2; }")
+        .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
+        .arg(StreamUP::UIStyles::Colors::HOVER_OVERLAY);
+
+    m_recordButton = new QPushButton();
+    m_recordButton->setIcon(QIcon(":/images/icons/ui/hotkey-set-light.svg"));
+    m_recordButton->setIconSize(QSize(14, 14));
+    m_recordButton->setCursor(Qt::PointingHandCursor);
+    m_recordButton->setToolTip(obs_module_text("Hotkey.Widget.Set"));
+    m_recordButton->setStyleSheet(iconBtnQss);
     connect(m_recordButton, &QPushButton::clicked, this, &HotkeyWidget::OnRecordButtonClicked);
-    
-    // Clear button  
-    m_clearButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Hotkey.Widget.Clear"), "neutral");
-    m_clearButton->setFixedWidth(70);
+
+    m_clearButton = new QPushButton();
+    m_clearButton->setIcon(QIcon(":/images/icons/ui/hotkey-clear-light.svg"));
+    m_clearButton->setIconSize(QSize(14, 14));
+    m_clearButton->setCursor(Qt::PointingHandCursor);
+    m_clearButton->setToolTip(obs_module_text("Hotkey.Widget.Clear"));
+    m_clearButton->setStyleSheet(iconBtnQss);
     connect(m_clearButton, &QPushButton::clicked, this, &HotkeyWidget::OnClearButtonClicked);
     
     layout->addWidget(m_displayLabel, 1);
