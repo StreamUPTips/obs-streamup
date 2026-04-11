@@ -154,9 +154,11 @@ void HotkeyButtonConfigDialog::setExistingItem(std::shared_ptr<StreamUP::Toolbar
 }
 
 void HotkeyButtonConfigDialog::onSelectHotkeyClicked() {
-    HotkeySelectorDialog dialog(this);
-    if (dialog.exec() == QDialog::Accepted && dialog.hasSelection()) {
-        selectedHotkey = dialog.getSelectedHotkey();
+    // Heap-allocated: ApplyFramelessChrome sets WA_DeleteOnClose, so a stack
+    // object would double-free once exec() returned and the stack unwound.
+    auto* dialog = new HotkeySelectorDialog(this);
+    if (dialog->exec() == QDialog::Accepted && dialog->hasSelection()) {
+        selectedHotkey = dialog->getSelectedHotkey();
         updateHotkeyDisplay();
         updateIconDisplay(); // Update default icon preview if using default
         validateInput();
@@ -167,15 +169,15 @@ void HotkeyButtonConfigDialog::onSelectIconClicked() {
     // Determine if current icon is custom (absolute path) or built-in (relative)
     bool isCustomIcon = QFileInfo(selectedIconPath).isAbsolute();
 
-    IconSelectorDialog dialog(
+    auto* dialog = new IconSelectorDialog(
         isCustomIcon ? QString() : selectedIconPath,  // currentIcon
         isCustomIcon ? selectedIconPath : QString(),  // currentCustomIcon
         isCustomIcon,                                  // useCustomIcon
         this
     );
 
-    if (dialog.exec() == QDialog::Accepted) {
-        QString newIconPath = dialog.getSelectedIcon();
+    if (dialog->exec() == QDialog::Accepted) {
+        QString newIconPath = dialog->getSelectedIcon();
         if (!newIconPath.isEmpty()) {
             selectedIconPath = newIconPath;
             updateIconDisplay();

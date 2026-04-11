@@ -1293,10 +1293,11 @@ void ToolbarConfigurator::onSpacerSettingsChanged()
 
 void ToolbarConfigurator::onAddHotkeyButton()
 {
-    // Open the hotkey button configuration dialog
-    HotkeyButtonConfigDialog dialog(this);
-    if (dialog.exec() == QDialog::Accepted) {
-        auto hotkeyItem = dialog.getHotkeyButtonItem();
+    // Heap-allocated: ApplyFramelessChrome sets WA_DeleteOnClose, stack would
+    // double-free on unwind. Qt owns teardown.
+    auto* dialog = new HotkeyButtonConfigDialog(this);
+    if (dialog->exec() == QDialog::Accepted) {
+        auto hotkeyItem = dialog->getHotkeyButtonItem();
         if (hotkeyItem) {
             config.addItem(hotkeyItem);
             populateCurrentConfiguration();
