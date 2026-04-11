@@ -10,6 +10,8 @@
 namespace StreamUP {
 namespace UI {
 
+HotkeyWidget* HotkeyWidget::s_currentRecorder = nullptr;
+
 HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
     : QWidget(parent)
     , m_hotkeyName(hotkeyName)
@@ -89,6 +91,7 @@ HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
 
 HotkeyWidget::~HotkeyWidget()
 {
+    if (s_currentRecorder == this) s_currentRecorder = nullptr;
     if (m_currentHotkeyData) {
         obs_data_array_release(m_currentHotkeyData);
     }
@@ -162,6 +165,12 @@ void HotkeyWidget::OnClearButtonClicked()
 
 void HotkeyWidget::StartRecording()
 {
+    // Cancel any other widget that's currently recording — only one capture at a time.
+    if (s_currentRecorder && s_currentRecorder != this) {
+        s_currentRecorder->StopRecording();
+    }
+    s_currentRecorder = this;
+
     m_recording = true;
     m_recordedKey = 0;
     m_recordedModifiers = Qt::NoModifier;
@@ -195,6 +204,7 @@ void HotkeyWidget::StopRecording()
     if (!m_recording) return;
 
     m_recording = false;
+    if (s_currentRecorder == this) s_currentRecorder = nullptr;
     releaseKeyboard();
 
     // Restore neutral icon button styling.
