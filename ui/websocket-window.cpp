@@ -166,44 +166,21 @@ void ShowWebSocketWindow(bool showInternalTools)
 			if (!commandsByCategory.contains(category) || commandsByCategory[category].isEmpty())
 				continue;
 
-			// Category icon mapping
-			QString categoryIcon;
-			QString categoryStyle;
-			if (category == obs_module_text("WebSocket.Category.Utility")) {
-				categoryIcon = "⚙️";
-				categoryStyle = "info";
-			} else if (category == obs_module_text("WebSocket.Category.PluginManagement")) {
-				categoryIcon = "🔌";
-				categoryStyle = "success";
-			} else if (category == obs_module_text("WebSocket.Category.SourceManagement")) {
-				categoryIcon = "🎭";
-				categoryStyle = "info";
-			} else if (category == obs_module_text("WebSocket.Category.SourceProperties")) {
-				categoryIcon = "🎨";
-				categoryStyle = "warning";
-			} else if (category == obs_module_text("WebSocket.Category.TransitionManagement")) {
-				categoryIcon = "🔄";
-				categoryStyle = "info";
-			} else if (category == obs_module_text("WebSocket.Category.FileManagement")) {
-				categoryIcon = "📁";
-				categoryStyle = "success";
-			} else if (category == obs_module_text("WebSocket.Category.UIInteraction")) {
-				categoryIcon = "🖱️";
-				categoryStyle = "warning";
-			} else if (category == obs_module_text("WebSocket.Category.VideoDeviceManagement")) {
-				categoryIcon = "🎥";
-				categoryStyle = "error";
-			}
+			// Section header with bottom divider — cleaner than a groupbox and
+			// reads as a proper section break
+			contentLayout->addWidget(StreamUP::UIStyles::CreateSectionHeader(category));
 
-			QGroupBox *categoryGroupBox =
-				StreamUP::UIStyles::CreateStyledGroupBox(categoryIcon + " " + category, categoryStyle);
-
-			QVBoxLayout *categoryLayout = new QVBoxLayout(categoryGroupBox);
-			categoryLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-							   0, // No top padding
-							   StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-							   0); // No bottom padding
-			categoryLayout->setSpacing(0);         // No spacing since we handle it in the widget padding
+			// Commands container — rounded card so the section reads as a distinct panel
+			QFrame *categoryCard = new QFrame();
+			categoryCard->setStyleSheet(QString(
+				"QFrame { background: %1; border-radius: %2px; border: 1px solid %3; }")
+				.arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
+				.arg(StreamUP::UIStyles::Sizes::RADIUS_MD)
+				.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE));
+			QVBoxLayout *categoryLayout = new QVBoxLayout(categoryCard);
+			categoryLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0,
+							   StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
+			categoryLayout->setSpacing(0);
 
 			// Add commands for this category
 			const auto &commands = commandsByCategory[category];
@@ -229,7 +206,7 @@ void ShowWebSocketWindow(bool showInternalTools)
 				}
 			}
 
-			contentLayout->addWidget(categoryGroupBox);
+			contentLayout->addWidget(categoryCard);
 		}
 
 		// Add stretch to push content to top
