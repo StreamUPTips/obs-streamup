@@ -1079,8 +1079,8 @@ void CreateSplashDialog(ShowCondition condition)
     UIHelpers::ShowSingletonDialogOnUIThread("splash", []() -> QDialog* {
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("StreamUP.SplashScreen.Title"));
         dialog->setModal(false);
-        // Taller than before so the footer buttons and supporters list don't get clipped.
-        dialog->setFixedSize(820, 760);
+        // Taller so all content + the pinned footer fit without clipping.
+        dialog->setFixedSize(820, 820);
         
         // Ensure version tracking is updated when dialog closes (any way)
         QObject::connect(dialog, &QDialog::finished, []() {
@@ -1588,43 +1588,48 @@ void CreateSplashDialog(ShowCondition condition)
         });
         refreshTimer->start(2000); // Refresh every 2 seconds
 
-        // Links section — flat
-        contentLayout->addWidget(StreamUP::UIStyles::CreateSectionHeader("Useful Links"));
-        QHBoxLayout* linksButtonLayout = new QHBoxLayout();
-        linksButtonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
-        linksButtonLayout->setContentsMargins(0, 0, 0, 0);
-        
+        scrollArea->setWidget(contentWidget);
+
+        mainLayout->addWidget(scrollArea);
+
+        // === Persistent footer: links + actions, always visible ===
+        // Two rows: top row = link buttons, bottom row = check-for-update + close.
+        QVBoxLayout* footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
+
+        QHBoxLayout* linksRow = new QHBoxLayout();
+        linksRow->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+
         QPushButton* docsBtn = StreamUP::UIStyles::CreateStyledButton("Documentation", "success");
         QObject::connect(docsBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.doras.click/docs"));
         });
-        
+
         QPushButton* discordBtn = StreamUP::UIStyles::CreateStyledButton("Discord", "info");
         discordBtn->setIcon(QIcon(":images/icons/social/discord.svg"));
         discordBtn->setIconSize(QSize(16, 16));
         QObject::connect(discordBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://discord.com/invite/RnDKRaVCEu"));
         });
-        
-        QPushButton* websiteBtn = StreamUP::UIStyles::CreateStyledButton("Website", "error");
+
+        QPushButton* websiteBtn = StreamUP::UIStyles::CreateStyledButton("Website", "primary-outline");
         QObject::connect(websiteBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.tips"));
         });
-        
+
         QPushButton* twitterBtn = StreamUP::UIStyles::CreateStyledButton("Twitter", "neutral");
         twitterBtn->setIcon(QIcon(":images/icons/social/twitter.svg"));
         twitterBtn->setIconSize(QSize(16, 16));
         QObject::connect(twitterBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://twitter.com/StreamUPTips"));
         });
-        
+
         QPushButton* blueskyBtn = StreamUP::UIStyles::CreateStyledButton("Bluesky", "neutral");
         blueskyBtn->setIcon(QIcon(":images/icons/social/bluesky.svg"));
         blueskyBtn->setIconSize(QSize(16, 16));
         QObject::connect(blueskyBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://bsky.app/profile/streamup.tips"));
         });
-        
+
         QPushButton* dorasBtn = StreamUP::UIStyles::CreateStyledButton("Doras", "neutral");
         dorasBtn->setIcon(QIcon(":images/icons/social/doras.svg"));
         dorasBtn->setIconSize(QSize(16, 16));
@@ -1632,57 +1637,36 @@ void CreateSplashDialog(ShowCondition condition)
             QDesktopServices::openUrl(QUrl("https://doras.to/streamup"));
         });
 
-        linksButtonLayout->addStretch();
-        linksButtonLayout->addWidget(docsBtn);
-        linksButtonLayout->addWidget(discordBtn);
-        linksButtonLayout->addWidget(websiteBtn);
-        linksButtonLayout->addStretch();
-        
-        // Second row for social media buttons
-        QHBoxLayout* socialLinksLayout = new QHBoxLayout();
-        socialLinksLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
-        socialLinksLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::SPACING_SMALL, 0, 0);
-        
-        socialLinksLayout->addStretch();
-        socialLinksLayout->addWidget(twitterBtn);
-        socialLinksLayout->addWidget(blueskyBtn);
-        socialLinksLayout->addWidget(dorasBtn);
-        socialLinksLayout->addStretch();
-        
-        contentLayout->addLayout(linksButtonLayout);
-        contentLayout->addLayout(socialLinksLayout);
+        linksRow->addStretch();
+        linksRow->addWidget(docsBtn);
+        linksRow->addWidget(discordBtn);
+        linksRow->addWidget(websiteBtn);
+        linksRow->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        linksRow->addWidget(twitterBtn);
+        linksRow->addWidget(blueskyBtn);
+        linksRow->addWidget(dorasBtn);
+        linksRow->addStretch();
+        footerLayout->addLayout(linksRow);
 
-        // Bottom button area with two buttons
-        QWidget* buttonWidget = new QWidget();
-        buttonWidget->setStyleSheet(QString("background: transparent; padding: %1px;")
-            .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
-        QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
-        buttonLayout->setContentsMargins(0, 0, 0, 0);
-        buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-        
-        // Check for Plugin Update button
+        QHBoxLayout* actionRow = new QHBoxLayout();
+        actionRow->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
         QPushButton* updateBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("StreamUP.SplashScreen.CheckForUpdate"), "info");
         QObject::connect(updateBtn, &QPushButton::clicked, []() {
             StreamUP::PluginManager::ShowCachedPluginUpdatesDialog();
         });
-        
-        // Close button
+
         QPushButton* closeBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Close"), "neutral");
         closeBtn->setDefault(true);
         QObject::connect(closeBtn, &QPushButton::clicked, [dialog]() {
             dialog->close();
         });
-        
-        buttonLayout->addStretch();
-        buttonLayout->addWidget(updateBtn);
-        buttonLayout->addWidget(closeBtn);
-        buttonLayout->addStretch();
-        
-        contentLayout->addWidget(buttonWidget);
 
-        scrollArea->setWidget(contentWidget);
-        
-        mainLayout->addWidget(scrollArea);
+        actionRow->addStretch();
+        actionRow->addWidget(updateBtn);
+        actionRow->addWidget(closeBtn);
+        actionRow->addStretch();
+        footerLayout->addLayout(actionRow);
 
         // Dialog will be managed by DialogManager
 

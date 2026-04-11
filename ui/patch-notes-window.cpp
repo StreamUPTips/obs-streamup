@@ -19,6 +19,8 @@
 #include <QTextStream>
 #include <QStringList>
 #include <QRegularExpression>
+#include <QPropertyAnimation>
+#include <QEasingCurve>
 
 namespace StreamUP {
 namespace PatchNotesWindow {
@@ -123,8 +125,10 @@ static QVector<VersionBlock> LoadVersionBlocks()
 	return blocks;
 }
 
-// Build one collapsible card: clickable version header + hideable body label.
-// `expanded` controls the initial state.
+// Build one collapsible card: clickable version header + animated body container.
+// The body lives inside a wrapper QWidget whose maximumHeight is animated between
+// 0 (collapsed) and the body's natural sizeHint height (expanded), giving us a
+// smooth expand/collapse without any layout-flicker.
 static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 {
 	QFrame *card = new QFrame();
@@ -161,20 +165,42 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 		.arg(UIStyles::Colors::BG_TERTIARY));
 	cardLay->addWidget(header);
 
-	// Body
+	// Body inside an animatable wrapper. The wrapper's maximumHeight is what
+	// we animate; the inner label sits at its natural sizeHint and gets clipped
+	// by the wrapper as it shrinks.
+	QWidget *bodyWrapper = new QWidget();
+	bodyWrapper->setStyleSheet("background: transparent;");
+	QVBoxLayout *bodyWrapperLay = new QVBoxLayout(bodyWrapper);
+	bodyWrapperLay->setContentsMargins(0, 0, 0, 0);
+	bodyWrapperLay->setSpacing(0);
+
 	QLabel *body = new QLabel(block.bodyHtml);
 	body->setTextFormat(Qt::RichText);
 	body->setWordWrap(true);
 	body->setOpenExternalLinks(true);
 	body->setStyleSheet(QString("QLabel { background: transparent; color: %1; padding: 4px 14px 12px 14px; }")
 		.arg(UIStyles::Colors::TEXT_SECONDARY));
-	body->setVisible(expanded);
-	cardLay->addWidget(body);
+	bodyWrapperLay->addWidget(body);
 
-	QObject::connect(header, &QPushButton::toggled, body, [header, body, &block](bool checked) {
-		Q_UNUSED(block)
-		body->setVisible(checked);
-		// Re-render arrow
+	bodyWrapper->setMaximumHeight(expanded ? QWIDGETSIZE_MAX : 0);
+
+	QObject::connect(header, &QPushButton::toggled, bodyWrapper, [header, body, bodyWrapper](bool checked) {
+		// Animate maximumHeight between 0 and the body's natural height.
+		// Use sizeHint so wrapped rich-text reports its actual rendered height.
+		const int targetHeight = body->sizeHint().height();
+		auto *anim = new QPropertyAnimation(bodyWrapper, "maximumHeight");
+		anim->setDuration(180);
+		anim->setEasingCurve(QEasingCurve::InOutCubic);
+		anim->setStartValue(checked ? 0 : targetHeight);
+		anim->setEndValue(checked ? targetHeight : 0);
+		// When we expand, release the cap once the animation is done so the
+		// wrapper can grow if the dialog is later resized.
+		QObject::connect(anim, &QPropertyAnimation::finished, bodyWrapper, [bodyWrapper, checked]() {
+			if (checked) bodyWrapper->setMaximumHeight(QWIDGETSIZE_MAX);
+		});
+		anim->start(QAbstractAnimation::DeleteWhenStopped);
+
+		// Update the chevron text immediately.
 		QString label = header->text();
 		int idx = label.indexOf(' ', 2);
 		if (idx > 0) {
@@ -183,6 +209,7 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 		}
 	});
 
+	cardLay->addWidget(bodyWrapper);
 	return card;
 }
 
@@ -221,10 +248,20 @@ void CreatePatchNotesDialog()
 			}
 		}
 
-		// Useful links section
-		contentLayout->addWidget(UIStyles::CreateSectionHeader("Useful Links"));
-		QHBoxLayout *buttonsLayout = new QHBoxLayout();
-		buttonsLayout->setSpacing(UIStyles::Sizes::SPACING_SMALL);
+		contentLayout->addStretch();
+
+		scrollArea->setWidget(contentWidget);
+		scrollArea->setWidgetResizable(true);
+		scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+		mainLayout->addWidget(scrollArea);
+
+		// Footer: useful links pinned at the bottom (always visible) + close button.
+		QVBoxLayout *footerLayout = UIStyles::GetDialogFooterLayout(dialog);
+
+		QHBoxLayout *linksLay = new QHBoxLayout();
+		linksLay->setSpacing(UIStyles::Sizes::SPACING_SMALL);
+		linksLay->addStretch();
 
 		QPushButton *docsBtn = UIStyles::CreateStyledButton("Documentation", "success");
 		QObject::connect(docsBtn, &QPushButton::clicked, []() {
@@ -243,29 +280,16 @@ void CreatePatchNotesDialog()
 			QDesktopServices::openUrl(QUrl("https://streamup.tips"));
 		});
 
-		buttonsLayout->addWidget(docsBtn);
-		buttonsLayout->addWidget(discordBtn);
-		buttonsLayout->addWidget(websiteBtn);
-		buttonsLayout->addStretch();
-		contentLayout->addLayout(buttonsLayout);
-
-		contentLayout->addStretch();
-
-		scrollArea->setWidget(contentWidget);
-		scrollArea->setWidgetResizable(true);
-		scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-		scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-		mainLayout->addWidget(scrollArea);
-
-		// Footer close button
-		QVBoxLayout *footerLayout = UIStyles::GetDialogFooterLayout(dialog);
-		QHBoxLayout *footerBtnLay = new QHBoxLayout();
 		QPushButton *closeButton = UIStyles::CreateStyledButton("Close", "neutral");
 		QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
-		footerBtnLay->addStretch();
-		footerBtnLay->addWidget(closeButton);
-		footerBtnLay->addStretch();
-		footerLayout->addLayout(footerBtnLay);
+
+		linksLay->addWidget(docsBtn);
+		linksLay->addWidget(discordBtn);
+		linksLay->addWidget(websiteBtn);
+		linksLay->addSpacing(UIStyles::Sizes::SPACING_LARGE);
+		linksLay->addWidget(closeButton);
+		linksLay->addStretch();
+		footerLayout->addLayout(linksLay);
 
 		UIStyles::ApplyAutoSizing(dialog, 720, 900, 720, 820);
 		UIHelpers::CenterDialog(dialog);
