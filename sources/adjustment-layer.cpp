@@ -3,6 +3,7 @@
 
 #include <obs.h>
 #include <obs-module.h>
+#include <obs-frontend-api.h>
 #include <util/threading.h>
 #include <graphics/vec4.h>
 #include <graphics/matrix4.h>
@@ -21,6 +22,19 @@ static inline bool TransitionIsActive(obs_source_t *transition)
 {
 	float t = obs_transition_get_time(transition);
 	return t > 0.0f && t < 1.0f;
+}
+
+// Scene-item visibility mutations (set_visible) are global and fire instantly,
+// which causes originals to pop on/off mid-transition. Defer mutations while
+// the program transition is animating.
+static bool IsProgramTransitionActive()
+{
+	obs_source_t *tr = obs_frontend_get_current_transition();
+	if (!tr)
+		return false;
+	bool active = TransitionIsActive(tr);
+	obs_source_release(tr);
+	return active;
 }
 
 // Inline effect shader for opacity - multiplies all 4 channels (premultiplied-safe)
@@ -806,8 +820,12 @@ static void VideoTick(void *data, float seconds)
 
 	// Skip all work when the source isn't visible in any output
 	if (!obs_source_showing(d->source)) {
-		// Restore any items we hid before going idle
-		if (!d->actively_hidden_ids.empty())
+		// Restore any items we hid before going idle, but not during
+		// a program transition - the outgoing scene is still being
+		// rendered and mutating visibility would pop originals back on
+		// mid-fade.
+		if (!d->actively_hidden_ids.empty() &&
+		    !IsProgramTransitionActive())
 			RestoreAllHiddenItems(d);
 		d->parent_cache_valid = false;
 		return;
@@ -850,13 +868,23 @@ static void VideoTick(void *data, float seconds)
 		d->parent_cache_valid = true;
 	}
 
-	// Manage hide-originals visibility
+	// Manage hide-originals visibility. Visibility mutations are global
+	// scene state and will pop mid-transition, so freeze them while the
+	// program transition is animating. We still need collected_items
+	// populated for VideoRender, so collect without mutating.
 	d->items_collected_in_tick = false;
+	bool transition_active = IsProgramTransitionActive();
 	if (d->hide_originals && d->parent_cache_valid) {
-		ManageHiddenItems(d);
+		if (transition_active) {
+			CollectTargetItems(d, d->actively_hidden_ids);
+		} else {
+			ManageHiddenItems(d);
+		}
 		d->items_collected_in_tick = true;
-	} else if (!d->hide_originals && !d->actively_hidden_ids.empty()) {
+	} else if (!d->hide_originals && !d->actively_hidden_ids.empty() &&
+		   !transition_active) {
 		// Feature was just turned off - restore all hidden items
+		// (but wait until any transition finishes)
 		RestoreAllHiddenItems(d);
 	}
 }
