@@ -393,43 +393,6 @@ struct SupportersData {
 
 static SupportersData supportersData;
 
-// Monthly supporters list (you'll want to update this regularly)
-// Note: Currently using dynamic API loading instead of static list
-[[maybe_unused]] static const char* MONTHLY_SUPPORTERS = R"(
-<h3>💝 Thank You to Our Monthly Supporters!</h3>
-<p><i>Your support makes StreamUP possible and helps us continue developing amazing features!</i></p>
-
-<h4>🌟 Diamond Supporters ($25+)</h4>
-<ul>
-<li>StreamerName1</li>
-<li>ContentCreator2</li>
-<li>TechEnthusiast3</li>
-</ul>
-
-<h4>💎 Gold Supporters ($10+)</h4>
-<ul>
-<li>Supporter1</li>
-<li>Supporter2</li>
-<li>Supporter3</li>
-<li>Supporter4</li>
-<li>Supporter5</li>
-</ul>
-
-<h4>⭐ Silver Supporters ($5+)</h4>
-<ul>
-<li>Fan1</li>
-<li>Fan2</li>
-<li>Fan3</li>
-<li>Fan4</li>
-<li>Fan5</li>
-<li>Fan6</li>
-<li>Fan7</li>
-<li>Fan8</li>
-</ul>
-
-<p><i>And many more amazing supporters who make this project possible! ❤️</i></p>
-)";
-
 std::string ProcessInlineFormatting(const std::string& text)
 {
     std::string result = text;

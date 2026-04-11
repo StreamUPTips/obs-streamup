@@ -41,68 +41,52 @@ void ShowDockConfigDialog()
 {
 	StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
 		QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Dock.Title"));
-		dialog->resize(600, 450);
-		
+		dialog->resize(600, 540);
+
 		QVBoxLayout* mainLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 
-		// Header section
-		QWidget* headerWidget = new QWidget();
-		headerWidget->setObjectName("headerWidget");
-		headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px %3px; }")
-			.arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
-			.arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
-			.arg(StreamUP::UIStyles::Sizes::PADDING_XL));
-		
-		QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
-		headerLayout->setContentsMargins(0, 0, 0, 0);
-		
-		QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("Settings.Dock.Title"));
-		titleLabel->setAlignment(Qt::AlignCenter);
-		headerLayout->addWidget(titleLabel);
-		
-		headerLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
-		
-		QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("Settings.Dock.Description"));
-		headerLayout->addWidget(subtitleLabel);
-		
-		mainLayout->addWidget(headerWidget);
+		// Subtitle (title is already in the frameless chrome header)
+		mainLayout->addWidget(StreamUP::UIStyles::CreateStyledDescription(
+			obs_module_text("Settings.Dock.Description")));
 
-		// Content area
-		QWidget* contentWidget = new QWidget();
-		contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
-		QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
-		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
-			StreamUP::UIStyles::Sizes::PADDING_XL, 
-			StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
-			StreamUP::UIStyles::Sizes::PADDING_XL);
-		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
-
-		// Info section
+		// Info card — bordered panel using shared theme constants
+		QFrame* infoCard = new QFrame();
+		infoCard->setObjectName("dockInfoCard");
+		infoCard->setStyleSheet(QString(
+			"QFrame#dockInfoCard { background: %1; border: 1px solid %2; border-radius: %3px; }"
+			"QFrame#dockInfoCard QLabel { background: transparent; border: none; color: %4; }")
+			.arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
+			.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
+			.arg(StreamUP::UIStyles::Sizes::RADIUS_MD)
+			.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY));
+		QVBoxLayout* infoLay = new QVBoxLayout(infoCard);
+		infoLay->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+		                            StreamUP::UIStyles::Sizes::PADDING_SMALL + 2,
+		                            StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+		                            StreamUP::UIStyles::Sizes::PADDING_SMALL + 2);
 		QLabel* infoLabel = new QLabel(obs_module_text("Settings.Dock.Info"));
-		infoLabel->setStyleSheet(QString(
-			"QLabel {"
-			"color: %1;"
-			"font-size: %2px;"
-			"line-height: 1.3;"
-			"padding: %3px;"
-			"background: %4;"
-			"border: 1px solid %5;"
-			"border-radius: %6px;"
-			"}")
-			.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-			.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-			.arg(StreamUP::UIStyles::Sizes::PADDING_SMALL + 2)
-			.arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
-			.arg(StreamUP::UIStyles::Colors::BACKGROUND_HOVER)
-			.arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS));
 		infoLabel->setWordWrap(true);
-		contentLayout->addWidget(infoLabel);
+		infoLabel->setStyleSheet(QString("font-size: %1px; line-height: 1.4;")
+			.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY));
+		infoLay->addWidget(infoLabel);
+		mainLayout->addWidget(infoCard);
 
-		// Create GroupBox for dock tools configuration
-		QGroupBox* toolsGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Settings.Dock.ToolsGroupTitle"), "info");
-		
-		QVBoxLayout* toolsGroupLayout = new QVBoxLayout(toolsGroup);
-		toolsGroupLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0, StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
+		// Tools section header + bordered card — same pattern as websocket / hotkey
+		mainLayout->addWidget(StreamUP::UIStyles::CreateSectionHeader(
+			obs_module_text("Settings.Dock.ToolsGroupTitle")));
+
+		QFrame* toolsCard = new QFrame();
+		toolsCard->setObjectName("dockToolsCard");
+		toolsCard->setStyleSheet(QString(
+			"QFrame#dockToolsCard { background: %1; border: 1px solid %2; border-radius: %3px; }"
+			"QFrame#dockToolsCard QWidget { background: transparent; }"
+			"QFrame#dockToolsCard QLabel { border: none; }")
+			.arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
+			.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
+			.arg(StreamUP::UIStyles::Sizes::RADIUS_MD));
+		QVBoxLayout* toolsGroupLayout = new QVBoxLayout(toolsCard);
+		toolsGroupLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0,
+		                                     StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
 		toolsGroupLayout->setSpacing(0);
 		
 		// Get current dock settings
@@ -132,41 +116,24 @@ void ShowDockConfigDialog()
 			const auto& tool = dockTools[i];
 			
 			QWidget* toolRow = new QWidget();
-			toolRow->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
-			
+
 			QHBoxLayout* toolRowLayout = new QHBoxLayout(toolRow);
-			toolRowLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3, 0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3);
+			toolRowLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3, 0,
+			                                  StreamUP::UIStyles::Sizes::PADDING_SMALL + 3);
 			toolRowLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-			
+
 			// Text section
 			QVBoxLayout* textLayout = new QVBoxLayout();
 			textLayout->setSpacing(2);
 			textLayout->setContentsMargins(0, 0, 0, 0);
-			
+
 			QLabel* nameLabel = new QLabel(tool.name);
-			nameLabel->setStyleSheet(QString(
-				"QLabel {"
-				"color: %1;"
-				"font-size: %2px;"
-				"font-weight: bold;"
-				"background: transparent;"
-				"border: none;"
-				"margin: 0px;"
-				"padding: 0px;"
-				"}")
+			nameLabel->setStyleSheet(QString("QLabel { color: %1; font-size: %2px; font-weight: bold; }")
 				.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-			
+
 			QLabel* descLabel = new QLabel(tool.description);
-			descLabel->setStyleSheet(QString(
-				"QLabel {"
-				"color: %1;"
-				"font-size: %2px;"
-				"background: transparent;"
-				"border: none;"
-				"margin: 0px;"
-				"padding: 0px;"
-				"}")
+			descLabel->setStyleSheet(QString("QLabel { color: %1; font-size: %2px; }")
 				.arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
 				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
 			descLabel->setWordWrap(true);
@@ -229,19 +196,14 @@ void ShowDockConfigDialog()
 			toolRowLayout->addLayout(switchWrapperLayout);
 			toolsGroupLayout->addWidget(toolRow);
 			
-			// Add separator line between tools (but not after the last one)
+			// Subtle row divider — uses the shared theme border colour.
 			if (i < static_cast<int>(dockTools.size()) - 1) {
 				QFrame* separator = new QFrame();
 				separator->setFrameShape(QFrame::HLine);
 				separator->setFrameShadow(QFrame::Plain);
 				separator->setStyleSheet(QString(
-					"QFrame {"
-					"color: rgba(113, 128, 150, 0.3);"
-					"background-color: rgba(113, 128, 150, 0.3);"
-					"border: none;"
-					"margin: 0px;"
-					"max-height: 1px;"
-					"}"));
+					"QFrame { background-color: %1; border: none; max-height: 1px; }")
+					.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE));
 				toolsGroupLayout->addWidget(separator);
 			}
 		}
@@ -253,16 +215,15 @@ void ShowDockConfigDialog()
 		
 		QPushButton* resetButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Settings.Dock.ResetConfig"), "error");
 		
-		QObject::connect(resetButton, &QPushButton::clicked, [toolsGroup]() {
-			StreamUP::UIHelpers::ShowDialogOnUIThread([toolsGroup]() {
+		QObject::connect(resetButton, &QPushButton::clicked, [toolsCard]() {
+			StreamUP::UIHelpers::ShowDialogOnUIThread([toolsCard]() {
 				QDialog* confirmDialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Dock.ResetTitle"));
 				confirmDialog->resize(400, 200);
 				
 				QVBoxLayout* layout = StreamUP::UIStyles::GetDialogContentLayout(confirmDialog);
 				
 				QLabel* warningLabel = new QLabel(obs_module_text("Settings.Dock.ResetWarning"));
-				warningLabel->setStyleSheet(QString("color: %1; font-size: %2px; padding: %3px;")
-					.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+				warningLabel->setStyleSheet(QString("font-size: %1px; padding: %2px;")
 					.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)
 					.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
 				warningLabel->setWordWrap(true);
@@ -274,12 +235,12 @@ void ShowDockConfigDialog()
 				QPushButton* resetBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Settings.Dock.ResetButton"), "error");
 
 				QObject::connect(cancelBtn, &QPushButton::clicked, confirmDialog, &QDialog::close);
-				QObject::connect(resetBtn, &QPushButton::clicked, [confirmDialog, toolsGroup]() {
+				QObject::connect(resetBtn, &QPushButton::clicked, [confirmDialog, toolsCard]() {
 					StreamUP::SettingsManager::DockToolSettings defaultSettings;
 					StreamUP::SettingsManager::UpdateDockToolSettings(defaultSettings);
 
 					// Find all switch buttons in the toolsGroup
-					QList<StreamUP::UIStyles::SwitchButton*> switches = toolsGroup->findChildren<StreamUP::UIStyles::SwitchButton*>();
+					QList<StreamUP::UIStyles::SwitchButton*> switches = toolsCard->findChildren<StreamUP::UIStyles::SwitchButton*>();
 					for (int j = 0; j < switches.size(); ++j) {
 						StreamUP::UIStyles::SwitchButton* switchButton = switches.at(j);
 						if (switchButton) {
@@ -304,12 +265,9 @@ void ShowDockConfigDialog()
 		
 		actionLayout->addStretch();
 		actionLayout->addWidget(resetButton);
-		
+
 		toolsGroupLayout->addLayout(actionLayout);
-		contentLayout->addWidget(toolsGroup);
-		contentLayout->addStretch();
-		
-		mainLayout->addWidget(contentWidget);
+		mainLayout->addStretch();
 
 		// Close button in footer
 		QVBoxLayout* footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
