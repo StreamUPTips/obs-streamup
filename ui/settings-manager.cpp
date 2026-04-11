@@ -1567,53 +1567,47 @@ void ShowSettingsDialog(int tabIndex)
 			QString obsHotkeyName;
 		};
 		
-		// Source Locking Hotkeys Section
-		QGroupBox *lockingGroup = StreamUP::UIStyles::CreateStyledGroupBox("Source Locking", "info");
-		QVBoxLayout *lockingLayout = new QVBoxLayout(lockingGroup);
-		lockingLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-		
+		// Helper: build a section = [section header with divider] + [bordered card].
+		// Matches the WebSocket Commands window so both dialogs feel like the
+		// same product. Returns the card's layout so the existing
+		// buildHotkeySection helper can populate it unchanged.
+		auto makeHotkeySection = [](QVBoxLayout *parentLayout, const QString &title) -> QVBoxLayout * {
+			parentLayout->addWidget(StreamUP::UIStyles::CreateSectionHeader(title));
+			QFrame *card = new QFrame();
+			card->setStyleSheet(QString(
+				"QFrame { background: %1; border-radius: %2px; border: 1px solid %3; }")
+				.arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
+				.arg(StreamUP::UIStyles::Sizes::RADIUS_MD)
+				.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE));
+			QVBoxLayout *cardLay = new QVBoxLayout(card);
+			cardLay->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0,
+						     StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
+			cardLay->setSpacing(0);
+			parentLayout->addWidget(card);
+			return cardLay;
+		};
 		std::vector<HotkeyInfo> lockingHotkeys = {
 			{obs_module_text("Hotkey.LockAllSources.Name"), obs_module_text("Hotkey.LockAllSources.Description"), "streamup_lock_all_sources"},
 			{obs_module_text("Hotkey.LockCurrentSources.Name"), obs_module_text("Hotkey.LockCurrentSources.Description"), "streamup_lock_current_sources"}
 		};
-		
-		// Refresh Operations Section
-		QGroupBox *refreshGroup = StreamUP::UIStyles::CreateStyledGroupBox("Refresh Operations", "info");
-		QVBoxLayout *refreshLayout = new QVBoxLayout(refreshGroup);
-		refreshLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-		
+
 		std::vector<HotkeyInfo> refreshHotkeys = {
 			{obs_module_text("Hotkey.RefreshBrowserSources.Name"), obs_module_text("Hotkey.RefreshBrowserSources.Description"), "streamup_refresh_browser_sources"},
 			{obs_module_text("Hotkey.RefreshAudioMonitoring.Name"), obs_module_text("Hotkey.RefreshAudioMonitoring.Description"), "streamup_refresh_audio_monitoring"}
 		};
-		
-		// Source Interaction Section
-		QGroupBox *interactionGroup = StreamUP::UIStyles::CreateStyledGroupBox("Source Interaction", "info");
-		QVBoxLayout *interactionLayout = new QVBoxLayout(interactionGroup);
-		interactionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-		
+
 		std::vector<HotkeyInfo> interactionHotkeys = {
 			{obs_module_text("Hotkey.OpenSourceProperties.Name"), obs_module_text("Hotkey.OpenSourceProperties.Description"), "streamup_open_source_properties"},
 			{obs_module_text("Hotkey.OpenSourceFilters.Name"), obs_module_text("Hotkey.OpenSourceFilters.Description"), "streamup_open_source_filters"},
 			{obs_module_text("Hotkey.OpenSourceInteract.Name"), obs_module_text("Hotkey.OpenSourceInteract.Description"), "streamup_open_source_interact"},
 			{obs_module_text("Hotkey.OpenSceneFilters.Name"), obs_module_text("Hotkey.OpenSceneFilters.Description"), "streamup_open_scene_filters"}
 		};
-		
-		// Video Capture Device Section
-		QGroupBox *videoCaptureGroup = StreamUP::UIStyles::CreateStyledGroupBox("Video Capture Devices", "info");
-		QVBoxLayout *videoCaptureLayout = new QVBoxLayout(videoCaptureGroup);
-		videoCaptureLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
 		std::vector<HotkeyInfo> videoCaptureHotkeys = {
 			{obs_module_text("Hotkey.ActivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.ActivateVideoCaptureDevices.Description"), "streamup_activate_video_capture_devices"},
 			{obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Description"), "streamup_deactivate_video_capture_devices"},
 			{obs_module_text("Hotkey.RefreshVideoCaptureDevices.Name"), obs_module_text("Hotkey.RefreshVideoCaptureDevices.Description"), "streamup_refresh_video_capture_devices"}
 		};
-
-		// Transition Management Section
-		QGroupBox *transitionGroup = StreamUP::UIStyles::CreateStyledGroupBox("Transition Management", "info");
-		QVBoxLayout *transitionLayout = new QVBoxLayout(transitionGroup);
-		transitionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
 		std::vector<HotkeyInfo> transitionHotkeys = {
 			{obs_module_text("Hotkey.CopyShowTransition.Name"), obs_module_text("Hotkey.CopyShowTransition.Description"), "streamup_copy_show_transition"},
@@ -1709,25 +1703,13 @@ void ShowSettingsDialog(int tabIndex)
 			parentLayout->addLayout(sectionLayout);
 		};
 		
-		// Build each hotkey section
-		QGroupBox *groupVisibilityGroup = StreamUP::UIStyles::CreateStyledGroupBox("Group and Visibility Management", "info");
-		QVBoxLayout *groupVisibilityLayout = new QVBoxLayout(groupVisibilityGroup);
-		groupVisibilityLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-
-		buildHotkeySection(lockingHotkeys, lockingLayout);
-		buildHotkeySection(refreshHotkeys, refreshLayout);
-		buildHotkeySection(interactionHotkeys, interactionLayout);
-		buildHotkeySection(videoCaptureHotkeys, videoCaptureLayout);
-		buildHotkeySection(transitionHotkeys, transitionLayout);
-		buildHotkeySection(groupVisibilityHotkeys, groupVisibilityLayout);
-
-		// Add all sections to main layout
-		hotkeysContentLayout->addWidget(lockingGroup);
-		hotkeysContentLayout->addWidget(refreshGroup);
-		hotkeysContentLayout->addWidget(interactionGroup);
-		hotkeysContentLayout->addWidget(videoCaptureGroup);
-		hotkeysContentLayout->addWidget(transitionGroup);
-		hotkeysContentLayout->addWidget(groupVisibilityGroup);
+		// Build each hotkey section: header + card + rows
+		buildHotkeySection(lockingHotkeys,       makeHotkeySection(hotkeysContentLayout, "Source Locking"));
+		buildHotkeySection(refreshHotkeys,       makeHotkeySection(hotkeysContentLayout, "Refresh Operations"));
+		buildHotkeySection(interactionHotkeys,   makeHotkeySection(hotkeysContentLayout, "Source Interaction"));
+		buildHotkeySection(videoCaptureHotkeys,  makeHotkeySection(hotkeysContentLayout, "Video Capture Devices"));
+		buildHotkeySection(transitionHotkeys,    makeHotkeySection(hotkeysContentLayout, "Transition Management"));
+		buildHotkeySection(groupVisibilityHotkeys, makeHotkeySection(hotkeysContentLayout, "Group and Visibility Management"));
 		
 		hotkeysMainLayout->addWidget(hotkeysContentWidget);
 		hotkeysMainLayout->addStretch();
