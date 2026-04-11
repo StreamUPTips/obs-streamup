@@ -359,15 +359,13 @@ void CreateThemeDialog()
 {
     UIHelpers::ShowSingletonDialogOnUIThread("theme", []() -> QDialog* {
         // Create modern unified dialog
-        QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP - Theme");
+        QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP \xe2\x80\xa2 Theme");
         dialog->setModal(false);
         dialog->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
         
         // Dialog will be managed by DialogManager
         
-        QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
-        mainLayout->setContentsMargins(0, 0, 0, 0);
-        mainLayout->setSpacing(0);
+        QVBoxLayout* mainLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 
         // Modern unified content area with scroll - everything inside
         QScrollArea* scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
@@ -390,19 +388,13 @@ void CreateThemeDialog()
         headerLayout->setContentsMargins(0, 0, 0, 0);
         headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACE_8);
 
-        // Title with modern styling
-        QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle("StreamUP OBS Theme");
-        titleLabel->setAlignment(Qt::AlignCenter);
-
-        // Description with modern styling
+        // Brief subtitle (title already in frameless chrome header)
         QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription("The cleanest OBS theme out there - available to all supporters of any tier");
         subtitleLabel->setAlignment(Qt::AlignCenter);
 
-        headerLayout->addWidget(titleLabel);
         headerLayout->addWidget(subtitleLabel);
-        
+
         contentLayout->addWidget(headerSection);
-        contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
         
         // Description section
         QGroupBox* descriptionGroup = StreamUP::UIStyles::CreateStyledGroupBox("About the StreamUP Theme", "info");
@@ -471,7 +463,7 @@ void CreateThemeDialog()
         accessLayout->addWidget(accessText);
         
         // Support button
-        QPushButton* supportButton = StreamUP::UIStyles::CreateStyledButton("Become a Supporter", "primary", 0, 150);
+        QPushButton* supportButton = StreamUP::UIStyles::CreateStyledButton("Become a Supporter", "primary");
         QObject::connect(supportButton, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.tips/premium"));
         });
@@ -479,32 +471,24 @@ void CreateThemeDialog()
         
         contentLayout->addWidget(accessGroup);
         
-        // Add close button at the bottom of the content area (inside scroll)
-        contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
-        
-        // Modern button section inside scrollable content
-        QHBoxLayout* buttonLayout = new QHBoxLayout();
-        buttonLayout->setContentsMargins(0, 0, 0, 0);
-        
+        scrollArea->setWidget(contentWidget);
+        mainLayout->addWidget(scrollArea);
+
+        // Action/close buttons in footer
+        QVBoxLayout* footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
+        QHBoxLayout* footerBtnLay = new QHBoxLayout();
         QPushButton* visitButton = StreamUP::UIStyles::CreateStyledButton("Visit StreamUP.tips", "primary");
         QObject::connect(visitButton, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.tips/"));
         });
-        
         QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton("Close", "neutral");
         QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
-
-        buttonLayout->addStretch();
-        buttonLayout->addWidget(visitButton);
-        buttonLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-        buttonLayout->addWidget(closeButton);
-        buttonLayout->addStretch();
-        
-        contentLayout->addLayout(buttonLayout);
-        contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-
-        scrollArea->setWidget(contentWidget);
-        mainLayout->addWidget(scrollArea);
+        footerBtnLay->addStretch();
+        footerBtnLay->addWidget(visitButton);
+        footerBtnLay->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        footerBtnLay->addWidget(closeButton);
+        footerLayout->addLayout(footerBtnLay);
+        footerLayout->addStretch();
         
         // Apply flexible sizing that fits content - made wider for carousel
         StreamUP::UIStyles::ApplyDynamicSizing(dialog, 900, 1100, 700, 850);

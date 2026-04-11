@@ -186,13 +186,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		QString infoText3Str = obs_module_text(infoText3);
 
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleStr);
-		
-		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
-			StreamUP::UIStyles::Sizes::PADDING_LARGE, 
-			StreamUP::UIStyles::Sizes::PADDING_XL, 
-			StreamUP::UIStyles::Sizes::PADDING_LARGE);
-		dialogLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+		QVBoxLayout *dialogLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 
 		// Add styled title
 		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(titleStr);
@@ -246,17 +240,17 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		
 		dialogLayout->addWidget(messageGroup);
 
-		// Add styled button
+		// Add styled button to footer
+		QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 		buttonLayout->addStretch();
-		
+
 		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("OK"), "info");
 		QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
 		buttonLayout->addWidget(okButton);
 		buttonLayout->addStretch();
 
-		dialogLayout->addLayout(buttonLayout);
-		dialog->setLayout(dialogLayout);
+		footerLayout->addLayout(buttonLayout);
 		
 		// Apply auto-sizing
 		StreamUP::UIStyles::ApplyAutoSizing(dialog, 450, 600, 350, 500);

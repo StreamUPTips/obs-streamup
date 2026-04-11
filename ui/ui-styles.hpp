@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QString>
+#include <QFrame>
+#include <QObject>
 
 class QDialog;
 class QLabel;
@@ -11,62 +13,104 @@ class QWidget;
 class QVBoxLayout;
 class QTableWidget;
 class QPoint;
+class QToolButton;
 
 #include <functional>
 
 namespace StreamUP {
 namespace UIStyles {
 
-// StreamUP Theme Design Variables - These are used for custom UI elements only
-// For OBS-native docks and controls, use OBS/Qt theming instead
+// Rounded container with setMask() for proper child clipping (Catppuccin Mocha)
+class RoundedContainer : public QFrame {
+    Q_OBJECT
+    int m_radius;
+public:
+    explicit RoundedContainer(int radius = 14, QWidget *parent = nullptr);
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+};
+
+// DragFilter — enables window dragging from a header widget on frameless dialogs
+class DragFilter : public QObject {
+    Q_OBJECT
+    QPoint m_dragPos;
+    bool m_dragging = false;
+public:
+    using QObject::QObject;
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+};
+
+// Shell returned by ApplyFramelessChrome — callers use contentLayout for their widgets
+struct FramelessDialogShell {
+    RoundedContainer *container;
+    QVBoxLayout *contentLayout;
+    QWidget *footerWidget;
+    QVBoxLayout *footerLayout;
+};
+
+// Apply the frameless 3-layer chrome (outer > RoundedContainer > header + content + footer)
+FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title);
+
+// Retrieve the content/footer layouts stored by ApplyFramelessChrome on a dialog
+QVBoxLayout *GetDialogContentLayout(QDialog *dialog);
+QVBoxLayout *GetDialogFooterLayout(QDialog *dialog);
+
+// StreamUP Theme — Catppuccin Mocha
+// Used for custom StreamUP UI elements (dialogs, panels, popups).
+// For OBS-native docks and controls, use OBS/Qt theming instead.
 namespace Colors {
-    // Primary Theme Colors - only for custom StreamUP UI
+    // Primary Theme Colors
     constexpr const char* PRIMARY_COLOR = "#0076df";
     constexpr const char* PRIMARY_HOVER = "#0071e3";
     constexpr const char* PRIMARY_LIGHT = "#2997ff";
     constexpr const char* PRIMARY_INACTIVE = "#002e5d";
-    
-    // Note: Background colors should use Qt palette for OBS integration
-    // These are preserved for custom floating panels and dialogs only
-    constexpr const char* BG_PRIMARY = "#161617";
-    constexpr const char* BG_SECONDARY = "#111111";
-    constexpr const char* BG_TERTIARY = "#2c2c2e";
-    constexpr const char* BG_DARKEST = "#090909";
-    
+
+    // Background Colors (Catppuccin Mocha)
+    constexpr const char* BG_DARKEST = "#1e1e2e";     // base
+    constexpr const char* BG_PRIMARY = "#272738";      // card / mantle
+    constexpr const char* BG_SECONDARY = "#1a1a2a";    // crust / code block
+    constexpr const char* BG_TERTIARY = "#313244";     // surface0
+    constexpr const char* SIDEBAR_BG = "#181825";      // mantle (side panels)
+
     // Status Colors
-    constexpr const char* COLOR_SUCCESS = "#32d74b";
-    constexpr const char* COLOR_WARNING = "#ff9f0a";
+    constexpr const char* COLOR_SUCCESS = "#a6e3a1";   // green
+    constexpr const char* COLOR_WARNING = "#fab387";   // peach
     constexpr const char* COLOR_DANGER = "#ff453a";
-    
+
+    // Accent Colors
+    constexpr const char* TAG_COLOR = "#89b4fa";       // blue (tags, links)
+
     // Interactive State Colors
     constexpr const char* PRIMARY_ALPHA_30 = "rgba(0, 118, 223, 0.3)";
-    constexpr const char* HOVER_OVERLAY = "rgba(60, 60, 67, 0.6)";
-    constexpr const char* MENU_OVERLAY = "rgba(28, 28, 30, 0.95)";
+    constexpr const char* HOVER_OVERLAY = "rgba(49, 50, 68, 0.6)";
+    constexpr const char* MENU_OVERLAY = "rgba(30, 30, 46, 0.95)";
     constexpr const char* MENU_BACKDROP = "rgba(0, 0, 0, 0.35)";
-    constexpr const char* POPUP_OVERLAY = "rgba(0, 0, 0, 0.95)";
-    
+    constexpr const char* POPUP_OVERLAY = "rgba(30, 30, 46, 0.95)";
+
     // Border & Surface Colors
-    constexpr const char* BORDER_SUBTLE = "rgba(255, 255, 255, 0.08)";
+    constexpr const char* BORDER_SUBTLE = "rgba(255, 255, 255, 0.06)";
     constexpr const char* BORDER_SOFT = "rgba(255, 255, 255, 0.10)";
     constexpr const char* BORDER_MEDIUM = "rgba(255, 255, 255, 0.15)";
     constexpr const char* BORDER_HOVER = "rgba(255, 255, 255, 0.14)";
-    constexpr const char* BORDER_DISABLED = "#002e5d"; // --primary_inactive
+    constexpr const char* BORDER_DISABLED = "#002e5d";
     constexpr const char* SURFACE_SUBTLE = "rgba(255, 255, 255, 0.06)";
-    
-    // Text Colors
-    constexpr const char* TEXT_PRIMARY = "#ffffff";
-    constexpr const char* TEXT_SECONDARY = "#c7c7cc";
-    constexpr const char* TEXT_MUTED = "#8e8e93";
-    constexpr const char* TEXT_DISABLED = "rgba(255, 255, 255, 0.4)";
-    constexpr const char* TEXT_PLACEHOLDER = "rgba(255, 255, 255, 0.35)";
-    
+
+    // Text Colors (Catppuccin Mocha)
+    constexpr const char* TEXT_PRIMARY = "#cdd6f4";    // text
+    constexpr const char* TEXT_SECONDARY = "#bac2de";   // subtext1
+    constexpr const char* TEXT_MUTED = "#6c7086";       // overlay1
+    constexpr const char* TEXT_DISABLED = "rgba(205, 214, 244, 0.4)";
+    constexpr const char* TEXT_PLACEHOLDER = "rgba(205, 214, 244, 0.35)";
+
     // Legacy aliases for backward compatibility
     constexpr const char* BACKGROUND_DARK = BG_DARKEST;
     constexpr const char* BACKGROUND_CARD = BG_PRIMARY;
     constexpr const char* BACKGROUND_INPUT = BG_SECONDARY;
     constexpr const char* BACKGROUND_HOVER = BG_TERTIARY;
     constexpr const char* SUCCESS = COLOR_SUCCESS;
-    constexpr const char* SUCCESS_HOVER = COLOR_SUCCESS; // Use same for now
+    constexpr const char* SUCCESS_HOVER = COLOR_SUCCESS;
     constexpr const char* ERROR = COLOR_DANGER;
     constexpr const char* ERROR_HOVER = COLOR_DANGER;
     constexpr const char* WARNING = COLOR_WARNING;
@@ -197,23 +241,17 @@ namespace Sizes {
 
 // Reusable table-in-groupbox stylesheet (appended to existing table stylesheet)
 // Used by plugin-manager and file-manager dialogs to blend tables into group boxes
+// Inline table variant: transparent bg, blends into parent container
 inline const QString TABLE_INLINE_STYLESHEET =
     "QTableWidget { "
     "border: none; "
     "background: transparent; "
-    "border-radius: 8px; "
     "} "
     "QTableWidget::item { "
-    "border-bottom: 1px solid #374151; "
+    "border-bottom: 1px solid #313244; "
     "} "
     "QTableWidget::item:last { "
     "border-bottom: none; "
-    "} "
-    "QHeaderView::section:first { "
-    "border-top-left-radius: 8px; "
-    "} "
-    "QHeaderView::section:last { "
-    "border-top-right-radius: 8px; "
     "}";
 
 // Common style strings - minimal styling that inherits from StreamUP theme
@@ -257,11 +295,15 @@ QLabel* CreateStyledContent(const QString& text);
 QPushButton* CreateStyledButton(const QString& text, const QString& type = "neutral", int height = 0, int minWidth = 0);
 QPushButton* CreateStyledSquircleButton(const QString& text, const QString& type = "neutral", int size = 16);
 QGroupBox* CreateStyledGroupBox(const QString& title, const QString& type = "info");
+QWidget* CreateSectionHeader(const QString& text);
 QScrollArea* CreateStyledScrollArea();
 
 // Table utilities - inherit from StreamUP theme styling
+// Tables are wrapped in a RoundedContainer for proper corner clipping.
+// Use GetTableContainer(table) to get the container widget for adding to layouts.
 QTableWidget* CreateStyledTableWidget(QWidget* parent = nullptr);
 QTableWidget* CreateStyledTable(const QStringList& headers, QWidget* parent = nullptr);
+QWidget* GetTableContainer(QTableWidget* table);
 void AutoResizeTableColumns(QTableWidget* table);
 void HandleTableCellClick(QTableWidget* table, int row, int column);
 

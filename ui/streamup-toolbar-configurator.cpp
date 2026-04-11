@@ -32,12 +32,9 @@ ToolbarConfigurator::ToolbarConfigurator(QWidget *parent)
     // Register custom types for QVariant
     qRegisterMetaType<std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem>>();
     
-    setWindowTitle(obs_module_text("StreamUP.Toolbar.Configurator.Title"));
+    UIStyles::ApplyFramelessChrome(this, obs_module_text("StreamUP.Toolbar.Configurator.Title"));
     setModal(true);
     resize(900, 650);
-    
-    // Apply StreamUP dialog styling
-    setStyleSheet(UIStyles::GetDialogStyle());
     
     setupUI();
     
@@ -54,10 +51,7 @@ ToolbarConfigurator::~ToolbarConfigurator() = default;
 
 void ToolbarConfigurator::setupUI()
 {
-    // Main layout with 12px margin
-    QVBoxLayout* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(12, 12, 12, 12);
-    mainLayout->setSpacing(12);
+    QVBoxLayout* mainLayout = UIStyles::GetDialogContentLayout(this);
     
     // Create splitter for left and right panels
     mainSplitter = new QSplitter(Qt::Horizontal, this);
@@ -478,20 +472,19 @@ void ToolbarConfigurator::setupUI()
     mainSplitter->setSizes({280, 420});
     mainSplitter->setHandleWidth(12); // Add 12px gap between panels
     
-    // === BOTTOM BUTTONS ===
+    // === BOTTOM BUTTONS (in footer) ===
+    QVBoxLayout *footerLayout = UIStyles::GetDialogFooterLayout(this);
     bottomButtonsLayout = new QHBoxLayout();
     bottomButtonsLayout->addStretch();
-    
-    saveButton = new QPushButton(QString::fromUtf8(obs_module_text("UI.Button.Save")));
+
+    saveButton = UIStyles::CreateStyledButton(QString::fromUtf8(obs_module_text("UI.Button.Save")), "info");
     saveButton->setDefault(true);
-    saveButton->setStyleSheet(UIStyles::GetButtonStyle());
     bottomButtonsLayout->addWidget(saveButton);
-    
-    cancelButton = new QPushButton(QString::fromUtf8(obs_module_text("UI.Button.Cancel")));
-    cancelButton->setStyleSheet(UIStyles::GetButtonStyle());
+
+    cancelButton = UIStyles::CreateStyledButton(QString::fromUtf8(obs_module_text("UI.Button.Cancel")), "neutral");
     bottomButtonsLayout->addWidget(cancelButton);
-    
-    mainLayout->addLayout(bottomButtonsLayout);
+
+    footerLayout->addLayout(bottomButtonsLayout);
     
     // Connect signals
     connect(builtinButtonsList, &QTreeWidget::itemSelectionChanged, this, &ToolbarConfigurator::updateButtonStates);

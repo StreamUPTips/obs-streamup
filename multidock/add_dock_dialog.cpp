@@ -23,32 +23,33 @@ AddDockDialog::AddDockDialog(const QString& multiDockId, QWidget* parent)
     , m_addButton(nullptr)
     , m_cancelButton(nullptr)
 {
-    setWindowTitle(obs_module_text("MultiDock.Dialog.AddDockTitle"));
+    StreamUP::UIStyles::ApplyFramelessChrome(this, obs_module_text("MultiDock.Dialog.AddDockTitle"));
     setModal(true);
     resize(400, 300);
-    
-    QVBoxLayout* layout = new QVBoxLayout(this);
-    
-    // Header
+
+    QVBoxLayout* layout = StreamUP::UIStyles::GetDialogContentLayout(this);
+
+    // Header label
     layout->addWidget(new QLabel(obs_module_text("MultiDock.Label.SelectDock")));
-    
+
     // Dock list
     m_dockList = new QListWidget(this);
     m_dockList->setSelectionMode(QAbstractItemView::SingleSelection);
     m_dockList->setStyleSheet(StreamUP::UIStyles::GetListWidgetStyle());
     layout->addWidget(m_dockList);
-    
-    // Buttons
+
+    // Buttons in footer
+    QVBoxLayout* footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(this);
     QHBoxLayout* buttonLayout = new QHBoxLayout();
     m_addButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("MultiDock.Button.Add"), "info");
     m_cancelButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
-    
+
     m_addButton->setEnabled(false);
     m_addButton->setDefault(true);
-    
+
     buttonLayout->addWidget(m_addButton);
     buttonLayout->addWidget(m_cancelButton);
-    layout->addLayout(buttonLayout);
+    footerLayout->addLayout(buttonLayout);
     
     // Connect signals
     connect(m_dockList, &QListWidget::itemSelectionChanged, this, &AddDockDialog::OnSelectionChanged);

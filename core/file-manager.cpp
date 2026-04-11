@@ -61,13 +61,13 @@ QTableWidget* CreateMissingFontsTable(const std::vector<FontInfo>& missingFonts)
         if (!fontInfo.url.empty()) {
             QTableWidgetItem* downloadItem = new QTableWidgetItem(
                 obs_module_text("UI.Button.Download"));
-            downloadItem->setForeground(QColor("#3b82f6"));
+            downloadItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
             downloadItem->setData(Qt::UserRole, QString::fromStdString(fontInfo.url));
             table->setItem(row, 1, downloadItem);
         } else {
             QTableWidgetItem* noLinkItem = new QTableWidgetItem(
                 obs_module_text("Font.Message.NoDownloadAvailable"));
-            noLinkItem->setForeground(QColor("#9ca3af")); // Gray for unavailable
+            noLinkItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
             table->setItem(row, 1, noLinkItem);
         }
 
@@ -208,9 +208,7 @@ void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
         QString titleText = obs_module_text("Font.Status.MissingFonts");
         QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
 
-        QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-        dialogLayout->setContentsMargins(0, 0, 0, 0);
-        dialogLayout->setSpacing(0);
+        QVBoxLayout *dialogLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 
         // Header section (same pattern as PluginsHaveIssue)
         QWidget* headerWidget = new QWidget();
@@ -276,7 +274,7 @@ void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
         fontTable->setStyleSheet(
             fontTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET);
 
-        fontLayout->addWidget(fontTable);
+        fontLayout->addWidget(StreamUP::UIStyles::GetTableContainer(fontTable));
         contentLayout->addWidget(fontGroup);
 
         // Warning message (same pattern as PluginsHaveIssue)
@@ -303,12 +301,9 @@ void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
             .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
         dialogLayout->addWidget(warningLabel);
 
-        // Buttons
+        // Buttons in footer
+        QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
         QHBoxLayout *buttonLayout = new QHBoxLayout();
-        buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5,
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM,
-            StreamUP::UIStyles::Sizes::PADDING_XL + 5,
-            StreamUP::UIStyles::Sizes::PADDING_XL);
         buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
         buttonLayout->addStretch();
 
@@ -323,12 +318,11 @@ void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
 
         // Cancel button
         QPushButton *cancelButton = StreamUP::UIStyles::CreateStyledButton(
-            obs_module_text("UI.Button.Cancel"), "neutral", 30, 100);
+            obs_module_text("UI.Button.Cancel"), "neutral");
         QObject::connect(cancelButton, &QPushButton::clicked, dialog, &QDialog::close);
         buttonLayout->addWidget(cancelButton);
 
-        dialogLayout->addLayout(buttonLayout);
-        dialog->setLayout(dialogLayout);
+        footerLayout->addLayout(buttonLayout);
 
         // Apply auto-sizing
         StreamUP::UIStyles::ApplyAutoSizing(dialog, 500, 800, 200, 600);
@@ -425,9 +419,7 @@ void ShowFontUrlManagerDialog()
 		QString titleText = obs_module_text("FontUrlManager.Title");
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
 
-		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(0, 0, 0, 0);
-		dialogLayout->setSpacing(0);
+		QVBoxLayout *dialogLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 
 		// Header section
 		QWidget* headerWidget = new QWidget();
@@ -542,18 +534,15 @@ void ShowFontUrlManagerDialog()
 				table->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET);
 
 			StreamUP::UIStyles::AutoResizeTableColumns(table);
-			contentLayout->addWidget(table);
+			contentLayout->addWidget(StreamUP::UIStyles::GetTableContainer(table));
 
 			// Store table for button handlers (sources stored in row data)
 			dialog->setProperty("table", QVariant::fromValue(static_cast<void*>(table)));
 		}
 
-		// Buttons
+		// Buttons in footer
+		QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5,
-			StreamUP::UIStyles::Sizes::SPACING_MEDIUM,
-			StreamUP::UIStyles::Sizes::PADDING_XL + 5,
-			StreamUP::UIStyles::Sizes::PADDING_XL);
 		buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 		buttonLayout->addStretch();
 
@@ -593,8 +582,7 @@ void ShowFontUrlManagerDialog()
 		QObject::connect(cancelButton, &QPushButton::clicked, dialog, &QDialog::close);
 		buttonLayout->addWidget(cancelButton);
 
-		dialogLayout->addLayout(buttonLayout);
-		dialog->setLayout(dialogLayout);
+		footerLayout->addLayout(buttonLayout);
 
 		// Apply auto-sizing
 		StreamUP::UIStyles::ApplyAutoSizing(dialog, 550, 850, 200, 500);

@@ -109,9 +109,7 @@ void ShowWebSocketWindow(bool showInternalTools)
 		// Start with compact size - will expand based on content
 		dialog->resize(700, 700);
 
-		QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
-		mainLayout->setContentsMargins(0, 0, 0, 0);
-		mainLayout->setSpacing(0);
+		QVBoxLayout *mainLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 
 		// Modern unified content area with scroll - everything inside
 		QScrollArea *scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
@@ -237,27 +235,18 @@ void ShowWebSocketWindow(bool showInternalTools)
 		// Add stretch to push content to top
 		contentLayout->addStretch();
 
-		// Add close button at the bottom of the content area (inside scroll)
-		contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
-		
-		// Modern button section inside scrollable content
-		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		buttonLayout->setContentsMargins(0, 0, 0, 0);
-		
-		QPushButton *closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WebSocket.Button.Close"), "neutral");
-		QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
-
-		buttonLayout->addStretch();
-		buttonLayout->addWidget(closeButton);
-		buttonLayout->addStretch();
-		
-		contentLayout->addLayout(buttonLayout);
-		contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-
 		scrollArea->setWidget(contentWidget);
 		mainLayout->addWidget(scrollArea);
 
-		dialog->setLayout(mainLayout);
+		// Close button in footer
+		QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
+		QHBoxLayout *footerBtnLay = new QHBoxLayout();
+		QPushButton *closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WebSocket.Button.Close"), "neutral");
+		QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
+		footerBtnLay->addStretch();
+		footerBtnLay->addWidget(closeButton);
+		footerBtnLay->addStretch();
+		footerLayout->addLayout(footerBtnLay);
 
 		// Apply consistent sizing for websocket window
 		StreamUP::UIStyles::ApplyConsistentSizing(dialog, 700, 1100, 500, 800);
@@ -337,7 +326,7 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 	QString obsRawJson =
 		QString(R"({"requestType":"CallVendorRequest","requestData":{"vendorName":"streamup","requestType":"%1","requestData":{}}})")
 			.arg(command);
-	QPushButton *obsRawBtn = StreamUP::UIStyles::CreateStyledButton("OBS Raw", "info", 0, 95);
+	QPushButton *obsRawBtn = StreamUP::UIStyles::CreateStyledButton("OBS Raw", "info");
 	obsRawBtn->setFixedSize(95, 28); // Set static size - bigger for "OBS Raw" text
 	obsRawBtn->setToolTip(obs_module_text("WebSocket.Button.OBSRaw.Tooltip"));
 	QObject::connect(obsRawBtn, &QPushButton::clicked, [obsRawBtn, obsRawJson]() {
@@ -366,7 +355,7 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 	QString cphCommand =
 		QString(R"(CPH.ObsSendRaw("CallVendorRequest", "{\"vendorName\":\"streamup\",\"requestType\":\"%1\",\"requestData\":{}}", 0);)")
 			.arg(command);
-	QPushButton *cphBtn = StreamUP::UIStyles::CreateStyledButton("CPH", "info", 28, 85);
+	QPushButton *cphBtn = StreamUP::UIStyles::CreateStyledButton("CPH", "info");
 	cphBtn->setFixedSize(85, 28); // Set static size - wider to accommodate "Copied" text
 	cphBtn->setToolTip(obs_module_text("WebSocket.Button.CPH.Tooltip"));
 	QObject::connect(cphBtn, &QPushButton::clicked, [cphBtn, cphCommand]() {

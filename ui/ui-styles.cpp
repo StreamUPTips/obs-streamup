@@ -3,6 +3,7 @@
 #include <QDialog>
 #include <QLabel>
 #include <QPushButton>
+#include <QToolButton>
 #include <QGroupBox>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -28,12 +29,182 @@
 #include <QPalette>
 #include <QWidget>
 #include <QStyle>
+#include <QPainter>
+#include <QPainterPath>
+#include <QMouseEvent>
+#include <QResizeEvent>
+#include <QWindow>
 #include <functional>
 #include <obs-module.h>
 #include <obs-frontend-api.h>
+#include "../version.h"
 
 namespace StreamUP {
 namespace UIStyles {
+
+//-------------------ROUNDED CONTAINER-------------------
+RoundedContainer::RoundedContainer(int radius, QWidget *parent)
+    : QFrame(parent), m_radius(radius) {}
+
+void RoundedContainer::resizeEvent(QResizeEvent *event)
+{
+    QFrame::resizeEvent(event);
+    QPainterPath path;
+    path.addRoundedRect(QRectF(rect()), m_radius, m_radius);
+    setMask(path.toFillPolygon().toPolygon());
+}
+
+void RoundedContainer::paintEvent(QPaintEvent *event)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    QPainterPath path;
+    path.addRoundedRect(QRectF(rect()), m_radius, m_radius);
+    painter.fillPath(path, QColor(Colors::BG_DARKEST));
+    QPainterPath borderPath;
+    borderPath.addRoundedRect(
+        QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), m_radius, m_radius);
+    painter.setPen(QPen(QColor(255, 255, 255, 15), 1));
+    painter.drawPath(borderPath);
+    QFrame::paintEvent(event);
+}
+
+//-------------------DRAG FILTER-------------------
+bool DragFilter::eventFilter(QObject *obj, QEvent *event)
+{
+    (void)obj;
+    QWidget *dlg = qobject_cast<QWidget *>(parent());
+    if (!dlg) return false;
+
+    if (event->type() == QEvent::MouseButtonPress) {
+        auto *me = static_cast<QMouseEvent *>(event);
+        if (me->button() == Qt::LeftButton) {
+            QWindow *wh = dlg->windowHandle();
+            if (wh && wh->startSystemMove())
+                return true;
+            m_dragPos = me->globalPosition().toPoint() - dlg->frameGeometry().topLeft();
+            m_dragging = true;
+            return true;
+        }
+    } else if (event->type() == QEvent::MouseMove && m_dragging) {
+        auto *me = static_cast<QMouseEvent *>(event);
+        dlg->move(me->globalPosition().toPoint() - m_dragPos);
+        return true;
+    } else if (event->type() == QEvent::MouseButtonRelease) {
+        m_dragging = false;
+    }
+    return false;
+}
+
+//-------------------FRAMELESS CHROME-------------------
+FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title)
+{
+    FramelessDialogShell shell = {};
+
+    dialog->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
+    dialog->setAttribute(Qt::WA_TranslucentBackground);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+
+    // Layer 1: outer layout (1px margin for border rendering)
+    QVBoxLayout *outerLay = new QVBoxLayout(dialog);
+    outerLay->setContentsMargins(1, 1, 1, 1);
+    outerLay->setSpacing(0);
+
+    // Layer 2: rounded container
+    shell.container = new RoundedContainer(14);
+    QVBoxLayout *mainLay = new QVBoxLayout(shell.container);
+    mainLay->setContentsMargins(0, 0, 0, 0);
+    mainLay->setSpacing(0);
+    outerLay->addWidget(shell.container);
+
+    // Header (36px): title + version + stretch + close
+    QWidget *header = new QWidget();
+    header->setFixedHeight(36);
+    header->setStyleSheet(
+        QString("background: %1; border-bottom: 1px solid %2;")
+            .arg(Colors::BG_PRIMARY, Colors::BORDER_SUBTLE));
+
+    QHBoxLayout *hdrLay = new QHBoxLayout(header);
+    hdrLay->setContentsMargins(14, 0, 6, 0);
+    hdrLay->setSpacing(8);
+
+    QLabel *titleLabel = new QLabel(title);
+    titleLabel->setStyleSheet(
+        QString("color: %1; font-size: 12px; font-weight: 600; background: transparent;")
+            .arg(Colors::TEXT_PRIMARY));
+    hdrLay->addWidget(titleLabel);
+
+    // Version badge
+    QLabel *ver = new QLabel(QString("v%1").arg(PROJECT_VERSION));
+    ver->setStyleSheet(
+        QString("color: %1; font-size: 9px; background: %2; "
+                "padding: 1px 6px; border-radius: 3px; font-family: Consolas, monospace;")
+            .arg(Colors::TEXT_MUTED, Colors::BG_SECONDARY));
+    hdrLay->addWidget(ver);
+
+    hdrLay->addStretch();
+
+    // Close button
+    QToolButton *closeBtn = new QToolButton();
+    closeBtn->setText(QString::fromUtf8("\xC3\x97")); // multiplication sign (x)
+    closeBtn->setFixedSize(22, 22);
+    closeBtn->setCursor(Qt::PointingHandCursor);
+    closeBtn->setFont(QFont("Arial", 11));
+    closeBtn->setAutoRaise(true);
+    closeBtn->setStyleSheet(
+        QString("QToolButton { color: %1; background: transparent; border-radius: 4px; }"
+                "QToolButton:hover { color: %2; background: rgba(255,69,58,0.25); }")
+            .arg(Colors::TEXT_MUTED, Colors::COLOR_DANGER));
+    QObject::connect(closeBtn, &QToolButton::clicked, dialog, &QDialog::close);
+    hdrLay->addWidget(closeBtn);
+
+    // Install drag filter on header (parent = dialog so it moves the dialog)
+    DragFilter *dragFilter = new DragFilter(dialog);
+    header->installEventFilter(dragFilter);
+
+    mainLay->addWidget(header);
+
+    // Content area (stretch = 1)
+    QWidget *contentArea = new QWidget();
+    contentArea->setStyleSheet(
+        QString("background: %1;").arg(Colors::BG_DARKEST));
+    shell.contentLayout = new QVBoxLayout(contentArea);
+    shell.contentLayout->setContentsMargins(16, 12, 16, 12);
+    shell.contentLayout->setSpacing(10);
+    mainLay->addWidget(contentArea, 1);
+
+    // Footer (stretch = 0, separate from content for macOS overlap prevention)
+    shell.footerWidget = new QWidget();
+    shell.footerWidget->setStyleSheet(
+        QString("background: transparent; border-top: 1px solid %1;")
+            .arg(Colors::BORDER_SUBTLE));
+    shell.footerLayout = new QVBoxLayout(shell.footerWidget);
+    shell.footerLayout->setContentsMargins(16, 8, 16, 10);
+    shell.footerLayout->setSpacing(8);
+    mainLay->addWidget(shell.footerWidget, 0);
+
+    // Store layouts as dynamic properties for GetDialogContentLayout/GetDialogFooterLayout
+    dialog->setProperty("streamup_content_layout",
+                        QVariant::fromValue(static_cast<void *>(shell.contentLayout)));
+    dialog->setProperty("streamup_footer_layout",
+                        QVariant::fromValue(static_cast<void *>(shell.footerLayout)));
+
+    return shell;
+}
+
+QVBoxLayout *GetDialogContentLayout(QDialog *dialog)
+{
+    if (!dialog) return nullptr;
+    QVariant v = dialog->property("streamup_content_layout");
+    return v.isValid() ? static_cast<QVBoxLayout *>(v.value<void *>()) : nullptr;
+}
+
+QVBoxLayout *GetDialogFooterLayout(QDialog *dialog)
+{
+    if (!dialog) return nullptr;
+    QVariant v = dialog->property("streamup_footer_layout");
+    return v.isValid() ? static_cast<QVBoxLayout *>(v.value<void *>()) : nullptr;
+}
 
 QString GetDialogStyle() {
     // Modern StreamUP dialog styling - prefer GetOBSCompliantDialogStyle() for new code
@@ -87,46 +258,34 @@ QString GetDescriptionLabelStyle() {
 }
 
 QString GetGroupBoxStyle(const QString& borderColor, const QString& titleColor) {
-    // Modern StreamUP group box styling matching OBSBasicSettings
+    // Lightweight flat group box — no visible box, just a titled section
     Q_UNUSED(borderColor)
     Q_UNUSED(titleColor)
-    
+
     return QString(
         "QGroupBox {"
-        "    padding: %1px;"
-        "    padding-top: %2px;"
-        "    margin-right: %3px;"
-        "    margin-top: %4px;"
-        "    margin-bottom: %1px;"
-        "    outline: none;"
-        "    border-radius: %5px;"
-        "    background-color: %6;"
+        "    padding: 0px;"
+        "    padding-top: 22px;"
+        "    margin: 0px;"
+        "    border: none;"
+        "    border-radius: 0px;"
+        "    background: transparent;"
         "}"
         "QGroupBox::title {"
-        "    background-color: %6;"
-        "    color: %7;"
-        "    padding: %8px %9px %9px %9px;"
-        "    margin: %3px 0 %3px 0;"
-        "    border-top-left-radius: %5px;"
-        "    border-top-right-radius: %10px;"
+        "    background: transparent;"
+        "    color: %1;"
+        "    padding: 0px 0px 4px 0px;"
+        "    margin: 0;"
+        "    border: none;"
         "    subcontrol-origin: margin;"
         "    subcontrol-position: top left;"
-        "    top: -%11px;"
+        "    top: 0px;"
+        "    left: 0px;"
         "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
-        "    font-weight: 800;"
-        "    font-size: 14px;"
+        "    font-weight: 700;"
+        "    font-size: 13px;"
         "}"
-    ).arg(Sizes::PADDING_LARGE)        // 1. General padding (20px)
-     .arg(Sizes::PADDING_LARGE + 10)   // 2. Top padding (30px)
-     .arg(Sizes::SPACE_10)             // 3. Margin right (10px)
-     .arg(Sizes::SPACE_14 + 1)         // 4. Margin top (15px)
-     .arg(Sizes::RADIUS_GROUPBOX)      // 5. Border radius (32px) - Increased for more rounded corners
-     .arg(Colors::BG_PRIMARY)          // 6. Background color - Match main toolbar configurator
-     .arg(Colors::TEXT_PRIMARY)        // 7. Title text color
-     .arg(Sizes::SPACE_4)              // 8. Title padding vertical (4px)
-     .arg(Sizes::SPACE_16)             // 9. Title padding horizontal (16px)
-     .arg(Sizes::RADIUS_LG)            // 10. Title top-right radius (14px)
-     .arg(Sizes::SPACE_8);             // 11. Title top offset (8px)
+    ).arg(Colors::TEXT_PRIMARY);
 }
 
 QString GetContentLabelStyle() {
@@ -145,56 +304,67 @@ QString GetContentLabelStyle() {
     ).arg(Colors::TEXT_PRIMARY);
 }
 
-QString GetButtonStyle(const QString& baseColor, const QString& hoverColor, int height) {
-    // Updated to match StreamUP theme button styles
-    Q_UNUSED(baseColor)
-    Q_UNUSED(hoverColor)
-    Q_UNUSED(height)
-    
+// Common pill-button base style shared by all variants.
+// ALL variants use border: 1px so filled and outlined buttons have identical height.
+static QString ButtonBaseStyle(int height) {
+    int btnHeight = height > 0 ? height : 24;
+    int radius = btnHeight / 2; // true pill shape
     return QString(
-        "QPushButton {"
-        "    background-color: transparent;"
-        "    color: %1;"
-        "    border: %2px solid %3;"
-        "    min-height: %4px;"
-        "    max-height: %4px;"
-        "    border-radius: %5px;"
-        "    margin: %6px;"
-        "    padding: %6px %7px;"
-        "    outline: none;"
-        "    font-weight: 800;"
+        "    min-height: %1px; max-height: %1px;"
+        "    min-width: 80px;"
+        "    border-radius: %2px;"
+        "    padding: 2px 14px;"
+        "    outline: none; font-weight: bold;"
         "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
-        "    font-size: 14px;"
-        "}"
-        "QPushButton:hover {"
-        "    background-color: %3;"
-        "    color: %1;"
-        "}"
-        "QPushButton:pressed {"
-        "    background-color: %8;"
-        "    color: %1;"
-        "}"
-        "QPushButton:disabled {"
-        "    color: %9;"
-        "    border-color: %10;"
-        "    background-color: transparent;"
-        "}"
-        "QPushButton:disabled:hover,"
-        "QPushButton:disabled:pressed {"
-        "    background-color: transparent;"
-        "    border-color: %10;"
-        "    color: %9;"
-        "}"
-    ).arg(Colors::TEXT_PRIMARY)
-     .arg(Sizes::BUTTON_BORDER_SIZE)
-     .arg(Colors::PRIMARY_COLOR)
-     .arg(Sizes::BUTTON_HEIGHT)
-     .arg(Sizes::RADIUS_LG)
-     .arg(Sizes::SPACE_2)
-     .arg(Sizes::SPACE_12)
-     .arg(Colors::PRIMARY_HOVER)
-     .arg(Colors::TEXT_DISABLED)
-     .arg(Colors::BORDER_DISABLED);
+        "    font-size: 11px;"
+    ).arg(btnHeight).arg(radius);
+}
+
+QString GetButtonStyle(const QString& variant, const QString& /*unused*/, int height) {
+    QString base = ButtonBaseStyle(height);
+    QString disabled = QString(
+        "QPushButton:disabled { color: %1; background: transparent; border: 1px solid %2; }"
+        "QPushButton:disabled:hover, QPushButton:disabled:pressed { background: transparent; border: 1px solid %2; color: %1; }"
+    ).arg(Colors::TEXT_DISABLED, Colors::BORDER_DISABLED);
+
+    // Primary filled — 1px border matches colour so it's invisible but height-consistent
+    if (variant == "primary" || variant == "info") {
+        return QString(
+            "QPushButton { background: %1; border: 1px solid %1; color: white; %2 }"
+            "QPushButton:hover { background: %3; border: 1px solid %3; }"
+            "QPushButton:pressed { background: #005abb; border: 1px solid #005abb; }"
+        ).arg(Colors::PRIMARY_COLOR, base, Colors::PRIMARY_HOVER) + disabled;
+    }
+    // Danger
+    if (variant == "danger" || variant == "error") {
+        return QString(
+            "QPushButton { background: transparent; border: 1px solid %1; color: %1; %2 }"
+            "QPushButton:hover { background: %1; color: white; border: 1px solid %1; }"
+            "QPushButton:pressed { background: rgba(255,69,58,0.8); color: white; }"
+        ).arg(Colors::COLOR_DANGER, base) + disabled;
+    }
+    // Primary outline
+    if (variant == "primary-outline") {
+        return QString(
+            "QPushButton { background: transparent; border: 1px solid %1; color: %1; %2 }"
+            "QPushButton:hover { background: %1; color: white; border: 1px solid %1; }"
+            "QPushButton:pressed { background: %3; color: white; border: 1px solid %3; }"
+        ).arg(Colors::PRIMARY_COLOR, base, Colors::PRIMARY_HOVER) + disabled;
+    }
+    // Success
+    if (variant == "success") {
+        return QString(
+            "QPushButton { background: transparent; border: 1px solid %1; color: %1; %2 }"
+            "QPushButton:hover { background: %1; color: white; border: 1px solid %1; }"
+            "QPushButton:pressed { background: rgba(166,227,161,0.8); color: white; }"
+        ).arg(Colors::COLOR_SUCCESS, base) + disabled;
+    }
+    // Secondary / neutral — default fallback
+    return QString(
+        "QPushButton { background: transparent; border: 1px solid %1; color: %2; %3 }"
+        "QPushButton:hover { background: rgba(255,255,255,0.04); }"
+        "QPushButton:pressed { background: rgba(255,255,255,0.02); }"
+    ).arg(Colors::TEXT_MUTED, Colors::TEXT_SECONDARY, base) + disabled;
 }
 
 QString GetSquircleButtonStyle(const QString& baseColor, const QString& hoverColor, int size) {
@@ -246,19 +416,21 @@ QString GetSquircleButtonStyle(const QString& baseColor, const QString& hoverCol
 }
 
 QString GetScrollAreaStyle() {
-    // Modern StreamUP scrollbar styling
+    // Scrollbar sits inside rounded container — transparent track, inset handle
     return QString(
-        "QScrollBar {"
-        "    background-color: %1;"
-        "    margin: 0px;"
-        "    border-radius: 3px;"
-        "}"
+        "QScrollArea { background: transparent; border: none; }"
+        "QScrollArea > QWidget > QWidget { background: transparent; }"
         "QScrollArea::corner {"
-        "    background-color: %1;"
+        "    background: transparent;"
         "    border: none;"
         "}"
+        "QScrollBar {"
+        "    background: transparent;"
+        "    margin: 2px;"
+        "    border-radius: 3px;"
+        "}"
         "QScrollBar:vertical {"
-        "    width: 6px;"
+        "    width: 8px;"
         "}"
         "QScrollBar::add-line:vertical,"
         "QScrollBar::sub-line:vertical {"
@@ -275,7 +447,7 @@ QString GetScrollAreaStyle() {
         "    color: none;"
         "}"
         "QScrollBar:horizontal {"
-        "    height: 6px;"
+        "    height: 8px;"
         "}"
         "QScrollBar::add-line:horizontal,"
         "QScrollBar::sub-line:horizontal {"
@@ -292,26 +464,86 @@ QString GetScrollAreaStyle() {
         "    color: none;"
         "}"
         "QScrollBar::handle {"
-        "    background-color: %2;"
+        "    background-color: rgba(255, 255, 255, 0.10);"
         "    border-radius: 3px;"
+        "    min-height: 24px;"
         "}"
         "QScrollBar::handle:hover {"
-        "    background-color: %3;"
-        "}"
-    ).arg(Colors::BG_SECONDARY)
-     .arg(Colors::PRIMARY_COLOR)  
-     .arg(Colors::PRIMARY_HOVER);
+        "    background-color: rgba(255, 255, 255, 0.18);"
+        "}");
 }
 
 QString GetTableStyle() {
-    // Apply modern table styling matching StreamUP theme
-    return GetListWidgetStyle() + GetEnhancedScrollAreaStyle();
+    // Table lives inside a RoundedContainer — no border/radius here
+    return QString(
+        "QTableWidget {"
+        "    background-color: %1;"
+        "    border: 1px solid %5;"
+        "    gridline-color: %2;"
+        "    outline: none;"
+        "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
+        "    font-size: 12px;"
+        "    color: %3;"
+        "    selection-background-color: %4;"
+        "}"
+        "QTableWidget::item {"
+        "    padding: 6px 10px;"
+        "    border-bottom: 1px solid %2;"
+        "}"
+        "QTableWidget::item:selected {"
+        "    background-color: %4;"
+        "    color: %3;"
+        "}"
+        "QHeaderView::section {"
+        "    background-color: %5;"
+        "    color: %6;"
+        "    font-weight: bold;"
+        "    font-size: 11px;"
+        "    padding: 6px 10px;"
+        "    border: none;"
+        "    border-bottom: 1px solid %2;"
+        "}"
+        // Narrow scrollbar — RoundedContainer mask clips corners
+        "QScrollBar:vertical {"
+        "    width: 6px;"
+        "    background: transparent;"
+        "    border: none;"
+        "    margin: 0px;"
+        "}"
+        "QScrollBar::handle:vertical {"
+        "    background: %7;"
+        "    border: none;"
+        "    border-radius: 3px;"
+        "    min-height: 20px;"
+        "}"
+        "QScrollBar::handle:vertical:hover {"
+        "    background: %8;"
+        "    border: none;"
+        "}"
+        "QScrollBar::add-line:vertical,"
+        "QScrollBar::sub-line:vertical {"
+        "    height: 0px; border: none; background: none;"
+        "}"
+        "QScrollBar::add-page:vertical,"
+        "QScrollBar::sub-page:vertical {"
+        "    background: none;"
+        "}"
+    ).arg(Colors::BG_PRIMARY)         // %1
+     .arg(Colors::BORDER_SUBTLE)      // %2
+     .arg(Colors::TEXT_PRIMARY)       // %3
+     .arg(Colors::PRIMARY_ALPHA_30)   // %4
+     .arg(Colors::BG_TERTIARY)        // %5
+     .arg(Colors::TEXT_SECONDARY)     // %6
+     .arg("rgba(0, 118, 223, 0.25)")  // %7 - scrollbar handle (primary @ 25%)
+     .arg("rgba(0, 118, 223, 0.45)"); // %8 - scrollbar handle hover (primary @ 45%)
 }
 
 QDialog* CreateStyledDialog(const QString& title, QWidget* parentWidget) {
-    QDialog* dialog = StreamUP::UIHelpers::CreateDialogWindow(title.toUtf8().constData(), parentWidget);
-    // Apply modern StreamUP dialog styling
-    dialog->setStyleSheet(GetDialogStyle());
+    QWidget *parent = parentWidget ? parentWidget
+                                   : static_cast<QWidget *>(obs_frontend_get_main_window());
+    QDialog *dialog = new QDialog(parent);
+    dialog->setWindowTitle(title);
+    ApplyFramelessChrome(dialog, title);
     return dialog;
 }
 
@@ -397,37 +629,24 @@ QLabel* CreateStyledContent(const QString& text) {
 }
 
 QPushButton* CreateStyledButton(const QString& text, const QString& type, int height, int minWidth) {
+    int btnHeight = height > 0 ? height : 24;
     QPushButton* button = new QPushButton(text);
-    
-    // Basic size policy
+    button->setCursor(Qt::PointingHandCursor);
+    button->setFixedHeight(btnHeight);
     button->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
-    
-    // Set minimum width if specified
-    if (minWidth > 0) {
+    if (minWidth > 0)
         button->setMinimumWidth(minWidth);
-    }
-    
-    // Apply pill shape styling - ignore height parameter to ensure consistency
-    button->setStyleSheet(GetButtonStyle("", "", 0));
-    
-    Q_UNUSED(type)
-    Q_UNUSED(height) // Ignored for consistency
-    
+    button->setStyleSheet(GetButtonStyle(type, "", height));
     return button;
 }
 
 QPushButton* CreateStyledSquircleButton(const QString& text, const QString& type, int size) {
+    Q_UNUSED(type) // Squircle buttons use a fixed icon-button style regardless of type
     QPushButton* button = new QPushButton(text);
-    
-    // Set fixed size for icon buttons
+    button->setCursor(Qt::PointingHandCursor);
     button->setFixedSize(size, size);
     button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    
-    // Apply pill/circular shape styling for square icon buttons
     button->setStyleSheet(GetSquircleButtonStyle("", "", size));
-    
-    Q_UNUSED(type)
-    
     return button;
 }
 
@@ -441,6 +660,28 @@ QGroupBox* CreateStyledGroupBox(const QString& title, const QString& type) {
     return groupBox;
 }
 
+QWidget* CreateSectionHeader(const QString& text) {
+    QWidget *section = new QWidget();
+    QVBoxLayout *lay = new QVBoxLayout(section);
+    lay->setContentsMargins(0, 6, 0, 2);
+    lay->setSpacing(4);
+
+    QLabel *label = new QLabel(text);
+    label->setStyleSheet(
+        QString("color: %1; font-size: 13px; font-weight: 700; background: transparent; padding: 0;"
+                " font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;")
+            .arg(Colors::TEXT_SECONDARY));
+    lay->addWidget(label);
+
+    QFrame *line = new QFrame();
+    line->setFrameShape(QFrame::HLine);
+    line->setFixedHeight(1);
+    line->setStyleSheet(QString("background: %1; border: none;").arg(Colors::BORDER_SUBTLE));
+    lay->addWidget(line);
+
+    return section;
+}
+
 QScrollArea* CreateStyledScrollArea() {
     QScrollArea* scrollArea = new QScrollArea();
     scrollArea->setWidgetResizable(true);
@@ -452,24 +693,27 @@ QScrollArea* CreateStyledScrollArea() {
 }
 
 // Table utility functions
+// GetTableContainer() wraps the table in a RoundedContainer on first call.
+// Callers: create table, configure it, then use GetTableContainer() for layout.
 QTableWidget* CreateStyledTableWidget(QWidget* parent) {
     QTableWidget* table = new QTableWidget(parent);
-    
-    // Configure table behavior (not styling)
-    table->setAlternatingRowColors(true);
+
+    // Configure table behavior
+    table->setAlternatingRowColors(false);
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSortingEnabled(false);
     table->setShowGrid(false);
-    
+    table->setFrameShape(QFrame::NoFrame);
+
     // Header configuration
     table->horizontalHeader()->setStretchLastSection(true);
     table->verticalHeader()->setVisible(false);
     table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
-    
-    // Apply modern scrollbar styling to table
+
+    // Apply styling
     table->setStyleSheet(GetTableStyle());
-    
+
     // Add context menu support for copying
     table->setContextMenuPolicy(Qt::CustomContextMenu);
     QObject::connect(table, &QWidget::customContextMenuRequested, [table](const QPoint& pos) {
@@ -477,14 +721,12 @@ QTableWidget* CreateStyledTableWidget(QWidget* parent) {
         if (!item) return;
 
         QMenu contextMenu(table);
-        
-        // Copy cell content
+
         QAction* copyAction = contextMenu.addAction("Copy");
         QObject::connect(copyAction, &QAction::triggered, [item]() {
             QApplication::clipboard()->setText(item->text());
         });
-        
-        // Copy entire row
+
         QAction* copyRowAction = contextMenu.addAction("Copy Row");
         QObject::connect(copyRowAction, &QAction::triggered, [table, item]() {
             int row = item->row();
@@ -498,8 +740,39 @@ QTableWidget* CreateStyledTableWidget(QWidget* parent) {
 
         contextMenu.exec(table->mapToGlobal(pos));
     });
-    
+
     return table;
+}
+
+QWidget* GetTableContainer(QTableWidget* table) {
+    if (!table) return table;
+
+    // Return cached container if already wrapped
+    QVariant v = table->property("streamup_table_container");
+    if (v.isValid())
+        return static_cast<QWidget *>(v.value<void *>());
+
+    // Wrap now — after caller has finished configuring (setFixedHeight, etc.)
+    RoundedContainer *container = new RoundedContainer(10, table->parentWidget());
+    QVBoxLayout *lay = new QVBoxLayout(container);
+    lay->setContentsMargins(0, 0, 0, 0);
+    lay->setSpacing(0);
+
+    // Propagate size constraints from table to container
+    if (table->minimumHeight() > 0)
+        container->setMinimumHeight(table->minimumHeight());
+    if (table->maximumHeight() < QWIDGETSIZE_MAX)
+        container->setMaximumHeight(table->maximumHeight());
+    if (table->minimumWidth() > 0)
+        container->setMinimumWidth(table->minimumWidth());
+    container->setSizePolicy(table->sizePolicy());
+
+    table->setParent(container);
+    lay->addWidget(table);
+
+    table->setProperty("streamup_table_container",
+                       QVariant::fromValue(static_cast<QWidget *>(container)));
+    return container;
 }
 
 QTableWidget* CreateStyledTable(const QStringList& headers, QWidget* parent) {
@@ -738,27 +1011,25 @@ StandardDialogComponents CreateStandardDialog(const QString& windowTitle, const 
     components.dialog = CreateStyledDialog(windowTitle, parentWidget);
     components.dialog->resize(700, 500);
     
-    QVBoxLayout* mainLayout = new QVBoxLayout(components.dialog);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
-    mainLayout->setSpacing(0);
+    QVBoxLayout* mainLayout = GetDialogContentLayout(components.dialog);
 
     // Header section - no custom styling, inherit from theme
     components.headerWidget = new QWidget();
     components.headerWidget->setObjectName("headerWidget");
     // No custom styling - let StreamUP theme handle header appearance
-    
+
     QVBoxLayout* headerLayout = new QVBoxLayout(components.headerWidget);
     headerLayout->setContentsMargins(20, 20, 20, 20);
-    
+
     components.titleLabel = CreateStyledTitle(headerTitle);
     components.titleLabel->setAlignment(Qt::AlignCenter);
     headerLayout->addWidget(components.titleLabel);
-    
+
     headerLayout->addSpacing(5);
-    
+
     components.subtitleLabel = CreateStyledDescription(headerDescription);
     headerLayout->addWidget(components.subtitleLabel);
-    
+
     mainLayout->addWidget(components.headerWidget);
 
     // Content area with scroll
@@ -773,19 +1044,17 @@ StandardDialogComponents CreateStandardDialog(const QString& windowTitle, const 
     components.scrollArea->setWidget(components.contentWidget);
     mainLayout->addWidget(components.scrollArea);
 
-    // Bottom button area
-    QWidget* buttonWidget = new QWidget();
-    // No custom styling - inherit from theme
-    QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
-    buttonLayout->setContentsMargins(20, 10, 20, 10);
+    // Bottom button area in footer
+    QVBoxLayout* footerLayout = GetDialogFooterLayout(components.dialog);
+    QHBoxLayout* buttonLayout = new QHBoxLayout();
 
     components.mainButton = CreateStyledButton("Close", "neutral");
-    
+
     buttonLayout->addStretch();
     buttonLayout->addWidget(components.mainButton);
     buttonLayout->addStretch();
-    
-    mainLayout->addWidget(buttonWidget);
+
+    footerLayout->addLayout(buttonLayout);
     
     return components;
 }
@@ -890,8 +1159,8 @@ QString GetComboBoxStyle() {
         "}"
         "QComboBox QAbstractItemView {"
         "    background-color: %10;"
-        "    border: 0px solid %11;"
-        "    border-radius: %12px;"
+        "    border: 1px solid %11;"
+        "    border-radius: 0px;"
         "    selection-background-color: %13;"
         "    color: %6;"
         "    padding: %14px;"

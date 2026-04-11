@@ -12,19 +12,16 @@ namespace StreamUP {
 HotkeySelectorDialog::HotkeySelectorDialog(QWidget* parent)
     : QDialog(parent)
 {
-    setWindowTitle(obs_module_text("HotkeySelector.Dialog.Title"));
+    UIStyles::ApplyFramelessChrome(this, obs_module_text("HotkeySelector.Dialog.Title"));
     setModal(true);
     resize(800, 600);
-
-    // Apply StreamUP dialog styling
-    setStyleSheet(UIStyles::GetDialogStyle());
 
     setupUI();
     populateHotkeys();
 }
 
 void HotkeySelectorDialog::setupUI() {
-    mainLayout = new QVBoxLayout(this);
+    mainLayout = UIStyles::GetDialogContentLayout(this);
     
     // Main splitter
     mainSplitter = new QSplitter(Qt::Horizontal, this);
@@ -91,19 +88,20 @@ void HotkeySelectorDialog::setupUI() {
     mainSplitter->setStretchFactor(0, 2); // Left panel gets more space
     mainSplitter->setStretchFactor(1, 1); // Right panel gets less space
     
-    // Dialog buttons
+    // Dialog buttons in footer
+    QVBoxLayout *footerLayout = UIStyles::GetDialogFooterLayout(this);
     buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
-    
+
     okButton = UIStyles::CreateStyledButton(obs_module_text("HotkeySelector.Button.Add"), "info");
     cancelButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
 
-    okButton->setEnabled(false); // Disabled until selection is made
-    
+    okButton->setEnabled(false);
+
     buttonLayout->addWidget(okButton);
     buttonLayout->addWidget(cancelButton);
-    
-    mainLayout->addLayout(buttonLayout);
+
+    footerLayout->addLayout(buttonLayout);
     
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);

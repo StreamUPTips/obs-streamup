@@ -37,12 +37,9 @@ IconSelectorDialog::IconSelectorDialog(const QString& currentIcon,
     : QDialog(parent)
     , iconButtonGroup(new QButtonGroup(this))
 {
-    setWindowTitle(obs_module_text("IconSelector.Dialog.Title"));
+    UIStyles::ApplyFramelessChrome(this, obs_module_text("IconSelector.Dialog.Title"));
     setModal(true);
     resize(700, 600);
-
-    // Apply StreamUP dialog styling
-    setStyleSheet(UIStyles::GetDialogStyle());
 
     // Determine the initial selected path
     if (useCustomIconFlag && !currentCustomIcon.isEmpty()) {
@@ -72,23 +69,24 @@ IconSelectorDialog::IconSelectorDialog(const QString& currentIcon,
 }
 
 void IconSelectorDialog::setupUI() {
-    mainLayout = new QVBoxLayout(this);
+    mainLayout = UIStyles::GetDialogContentLayout(this);
 
     // Icon tabs
     setupIconTabs();
     mainLayout->addWidget(iconTabs);
 
-    // Dialog buttons
+    // Dialog buttons in footer
+    QVBoxLayout *footerLayout = UIStyles::GetDialogFooterLayout(this);
     buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
-    
+
     okButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.OK"), "info");
     cancelButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
-    
+
     buttonLayout->addWidget(okButton);
     buttonLayout->addWidget(cancelButton);
-    
-    mainLayout->addLayout(buttonLayout);
+
+    footerLayout->addLayout(buttonLayout);
     
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);

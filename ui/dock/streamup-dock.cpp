@@ -43,9 +43,7 @@ void ShowDockConfigDialog()
 		QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Dock.Title"));
 		dialog->resize(600, 450);
 		
-		QVBoxLayout* mainLayout = new QVBoxLayout(dialog);
-		mainLayout->setContentsMargins(0, 0, 0, 0);
-		mainLayout->setSpacing(0);
+		QVBoxLayout* mainLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 
 		// Header section
 		QWidget* headerWidget = new QWidget();
@@ -260,7 +258,7 @@ void ShowDockConfigDialog()
 				QDialog* confirmDialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Dock.ResetTitle"));
 				confirmDialog->resize(400, 200);
 				
-				QVBoxLayout* layout = new QVBoxLayout(confirmDialog);
+				QVBoxLayout* layout = StreamUP::UIStyles::GetDialogContentLayout(confirmDialog);
 				
 				QLabel* warningLabel = new QLabel(obs_module_text("Settings.Dock.ResetWarning"));
 				warningLabel->setStyleSheet(QString("color: %1; font-size: %2px; padding: %3px;")
@@ -272,16 +270,14 @@ void ShowDockConfigDialog()
 				
 				layout->addWidget(warningLabel);
 				
-				QHBoxLayout* buttonLayout = new QHBoxLayout();
-				
 				QPushButton* cancelBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
 				QPushButton* resetBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Settings.Dock.ResetButton"), "error");
-				
+
 				QObject::connect(cancelBtn, &QPushButton::clicked, confirmDialog, &QDialog::close);
 				QObject::connect(resetBtn, &QPushButton::clicked, [confirmDialog, toolsGroup]() {
 					StreamUP::SettingsManager::DockToolSettings defaultSettings;
 					StreamUP::SettingsManager::UpdateDockToolSettings(defaultSettings);
-					
+
 					// Find all switch buttons in the toolsGroup
 					QList<StreamUP::UIStyles::SwitchButton*> switches = toolsGroup->findChildren<StreamUP::UIStyles::SwitchButton*>();
 					for (int j = 0; j < switches.size(); ++j) {
@@ -290,15 +286,16 @@ void ShowDockConfigDialog()
 							switchButton->setChecked(true);
 						}
 					}
-					
+
 					confirmDialog->close();
 				});
-				
-				buttonLayout->addStretch();
-				buttonLayout->addWidget(cancelBtn);
-				buttonLayout->addWidget(resetBtn);
-				
-				layout->addLayout(buttonLayout);
+
+				QVBoxLayout* footerVLay = StreamUP::UIStyles::GetDialogFooterLayout(confirmDialog);
+				QHBoxLayout* footerBtnLay = new QHBoxLayout();
+				footerBtnLay->addStretch();
+				footerBtnLay->addWidget(cancelBtn);
+				footerBtnLay->addWidget(resetBtn);
+				footerVLay->addLayout(footerBtnLay);
 				
 				confirmDialog->show();
 				StreamUP::UIHelpers::CenterDialog(confirmDialog);
@@ -314,27 +311,17 @@ void ShowDockConfigDialog()
 		
 		mainLayout->addWidget(contentWidget);
 
-		// Bottom button area
-		QWidget* buttonWidget = new QWidget();
-		buttonWidget->setStyleSheet("background: transparent;");
-		QHBoxLayout* buttonLayout = new QHBoxLayout(buttonWidget);
-		buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
-			StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
-			StreamUP::UIStyles::Sizes::PADDING_XL, 
-			StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
-
+		// Close button in footer
+		QVBoxLayout* footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
+		QHBoxLayout* footerBtnLay = new QHBoxLayout();
 		QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Close"), "neutral");
 		QObject::connect(closeButton, &QPushButton::clicked, [=]() {
 			dialog->close();
 		});
-
-		buttonLayout->addStretch();
-		buttonLayout->addWidget(closeButton);
-		buttonLayout->addStretch();
-		
-		mainLayout->addWidget(buttonWidget);
-
-		dialog->setLayout(mainLayout);
+		footerBtnLay->addStretch();
+		footerBtnLay->addWidget(closeButton);
+		footerBtnLay->addStretch();
+		footerLayout->addLayout(footerBtnLay);
 		StreamUP::UIStyles::ApplyConsistentSizing(dialog, 600, 900, 450, 700);
 		dialog->show();
 	});

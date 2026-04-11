@@ -501,13 +501,11 @@ void ShowSettingsDialog(int tabIndex)
 			return nullptr;
 		}
 
-		// Create modern unified dialog with darkest background
+		// Create modern unified dialog with frameless chrome
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Window.Title"));
 		dialog->resize(900, 600);
-		dialog->setStyleSheet(QString("QDialog { background-color: %1; }")
-				      .arg(StreamUP::UIStyles::Colors::BG_DARKEST));
 
-		QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
+		QVBoxLayout *mainLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 		mainLayout->setContentsMargins(0, 0, 0, 0);
 		mainLayout->setSpacing(0);
 
@@ -1919,16 +1917,9 @@ void ShowSettingsDialog(int tabIndex)
 		mainWidget->setLayout(contentLayout);
 		mainLayout->addWidget(mainWidget);
 
-		// Bottom button area with consistent background
-		QWidget *buttonWidget = new QWidget();
-		buttonWidget->setStyleSheet(QString("background: %1; padding: %2px;")
-					    .arg(StreamUP::UIStyles::Colors::BG_DARKEST)
-					    .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
-		QHBoxLayout *buttonLayout = new QHBoxLayout(buttonWidget);
-		buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
-						 StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-						 StreamUP::UIStyles::Sizes::PADDING_XL, 
-						 StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+		// Bottom button area in footer
+		QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
+		QHBoxLayout *buttonLayout = new QHBoxLayout();
 
 		QPushButton *closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Close"), "neutral");
 		QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
@@ -1937,7 +1928,7 @@ void ShowSettingsDialog(int tabIndex)
 		buttonLayout->addWidget(closeButton);
 		buttonLayout->addStretch();
 
-		mainLayout->addWidget(buttonWidget);
+		footerLayout->addLayout(buttonLayout);
 
 		QObject::connect(dialog, &QDialog::finished, [=](int) {
 			// Ensure all settings are saved when dialog closes
@@ -2083,7 +2074,7 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
 			StreamUP::UIStyles::HandleTableCellClick(pluginTable, row, column);
 		});
 
-		pluginsLayout->addWidget(pluginTable, 0, Qt::AlignTop);
+		pluginsLayout->addWidget(StreamUP::UIStyles::GetTableContainer(pluginTable), 0, Qt::AlignTop);
 
 		// Set container to accommodate table width plus minimal padding
 		int tableWidth = pluginTable->minimumWidth();
@@ -2137,38 +2128,12 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 		// Start smaller - will be resized based on content
 		dialog->resize(600, 500);
 
-		QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
-		mainLayout->setContentsMargins(0, 0, 0, 0);
-		mainLayout->setSpacing(0);
-
-		// Header section with title
-		QWidget *headerWidget = new QWidget();
-		headerWidget->setObjectName("headerWidget");
-		headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px; }")
-						    .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
-						    .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
-
-		QVBoxLayout *headerLayout = new QVBoxLayout(headerWidget);
-		headerLayout->setContentsMargins(0, 0, 0, 0);
-
-		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("Settings.Plugin.InstalledPluginsTitle"));
-		headerLayout->addWidget(titleLabel);
-
-		QLabel *subtitleLabel =
-			StreamUP::UIStyles::CreateStyledDescription(obs_module_text("Settings.Plugin.InstalledPluginsDesc"));
-		headerLayout->addWidget(subtitleLabel);
-
-		mainLayout->addWidget(headerWidget);
-
-		// Content area - direct layout without scrolling
-		QVBoxLayout *contentLayout = new QVBoxLayout();
+		QVBoxLayout *contentLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
 						  StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
 						  StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
 						  StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
 		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-
-		mainLayout->addLayout(contentLayout);
 
 		// Info section - fit to UI width
 		QLabel *infoLabel = new QLabel(obs_module_text("Settings.Plugin.InstalledPluginsInfo"));
@@ -2239,17 +2204,12 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 			int dialogWidth = std::max(tableWidth + 80, 600); // Minimal padding, lower minimum
 			dialog->resize(dialogWidth, 650);
 
-			contentLayout->addWidget(pluginTable);
+			contentLayout->addWidget(StreamUP::UIStyles::GetTableContainer(pluginTable));
 		}
 
-		// Bottom button area
-		QWidget *buttonWidget = new QWidget();
-		buttonWidget->setStyleSheet(QString("background: %1; padding: %2px;")
-						    .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
-						    .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
-		QHBoxLayout *buttonLayout = new QHBoxLayout(buttonWidget);
-		buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0,
-						 StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
+		// Bottom button area in footer
+		QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
+		QHBoxLayout *buttonLayout = new QHBoxLayout();
 
 		QPushButton *updateButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("StreamUP.Settings.CheckForUpdate"), "info");
 		QObject::connect(updateButton, &QPushButton::clicked, [dialog]() {
@@ -2260,9 +2220,7 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 		buttonLayout->addStretch();
 		buttonLayout->addWidget(updateButton);
 
-		mainLayout->addWidget(buttonWidget);
-
-		dialog->setLayout(mainLayout);
+		footerLayout->addLayout(buttonLayout);
 
 		// Apply consistent sizing that adjusts to actual content size (also centers dialog after sizing)
 		StreamUP::UIStyles::ApplyConsistentSizing(dialog, 650, 1000, 400, 800);
@@ -2526,7 +2484,7 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 				StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Hotkeys.ResetTitle"));
 			confirmDialog->resize(400, 200);
 
-			QVBoxLayout *layout = new QVBoxLayout(confirmDialog);
+			QVBoxLayout *layout = StreamUP::UIStyles::GetDialogContentLayout(confirmDialog);
 
 			QLabel *warningLabel = new QLabel(obs_module_text("Settings.Hotkeys.ResetWarning"));
 			warningLabel->setStyleSheet(QString("color: %1; font-size: %2px; padding: %3px;")
@@ -2537,8 +2495,6 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 			warningLabel->setAlignment(Qt::AlignCenter);
 
 			layout->addWidget(warningLabel);
-
-			QHBoxLayout *buttonLayout = new QHBoxLayout();
 
 			QPushButton *cancelBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
 			QPushButton *resetBtn = StreamUP::UIStyles::CreateStyledButton(
@@ -2559,11 +2515,13 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 				confirmDialog->close();
 			});
 
+			QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(confirmDialog);
+			QHBoxLayout *buttonLayout = new QHBoxLayout();
 			buttonLayout->addStretch();
 			buttonLayout->addWidget(cancelBtn);
 			buttonLayout->addWidget(resetBtn);
 
-			layout->addLayout(buttonLayout);
+			footerLayout->addLayout(buttonLayout);
 
 			confirmDialog->show();
 			StreamUP::UIHelpers::CenterDialog(confirmDialog);
@@ -2884,7 +2842,7 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 				StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Dock.ResetTitle"));
 			confirmDialog->resize(400, 200);
 
-			QVBoxLayout *layout = new QVBoxLayout(confirmDialog);
+			QVBoxLayout *layout = StreamUP::UIStyles::GetDialogContentLayout(confirmDialog);
 
 			QLabel *warningLabel = new QLabel(obs_module_text("Settings.Dock.ResetWarning"));
 			warningLabel->setStyleSheet(QString("color: %1; font-size: %2px; padding: %3px;")
@@ -2895,8 +2853,6 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 			warningLabel->setAlignment(Qt::AlignCenter);
 
 			layout->addWidget(warningLabel);
-
-			QHBoxLayout *buttonLayout = new QHBoxLayout();
 
 			QPushButton *cancelBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
 			QPushButton *resetBtn = StreamUP::UIStyles::CreateStyledButton(
@@ -2918,11 +2874,13 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 				confirmDialog->close();
 			});
 
+			QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(confirmDialog);
+			QHBoxLayout *buttonLayout = new QHBoxLayout();
 			buttonLayout->addStretch();
 			buttonLayout->addWidget(cancelBtn);
 			buttonLayout->addWidget(resetBtn);
 
-			layout->addLayout(buttonLayout);
+			footerLayout->addLayout(buttonLayout);
 
 			confirmDialog->show();
 			StreamUP::UIHelpers::CenterDialog(confirmDialog);

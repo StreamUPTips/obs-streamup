@@ -14,12 +14,9 @@ HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(QWidget* parent)
     : QDialog(parent)
     , isEditMode(false)
 {
-    setWindowTitle(obs_module_text("HotkeyButton.Dialog.AddTitle"));
+    UIStyles::ApplyFramelessChrome(this, obs_module_text("HotkeyButton.Dialog.AddTitle"));
     setModal(true);
     resize(500, 400);
-
-    // Apply StreamUP dialog styling
-    setStyleSheet(UIStyles::GetDialogStyle());
 
     setupUI();
     validateInput();
@@ -29,12 +26,9 @@ HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(std::shared_ptr<StreamUP::Too
     : QDialog(parent)
     , isEditMode(true)
 {
-    setWindowTitle(obs_module_text("HotkeyButton.Dialog.EditTitle"));
+    UIStyles::ApplyFramelessChrome(this, obs_module_text("HotkeyButton.Dialog.EditTitle"));
     setModal(true);
     resize(500, 400);
-
-    // Apply StreamUP dialog styling
-    setStyleSheet(UIStyles::GetDialogStyle());
 
     setupUI();
     setExistingItem(existingItem);
@@ -42,7 +36,7 @@ HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(std::shared_ptr<StreamUP::Too
 }
 
 void HotkeyButtonConfigDialog::setupUI() {
-    mainLayout = new QVBoxLayout(this);
+    mainLayout = UIStyles::GetDialogContentLayout(this);
     
     // Hotkey selection section
     hotkeyGroup = new QGroupBox(obs_module_text("HotkeyButton.Group.Hotkey"), this);
@@ -109,21 +103,22 @@ void HotkeyButtonConfigDialog::setupUI() {
     
     mainLayout->addWidget(customizationGroup);
     
-    // Dialog buttons
+    // Dialog buttons in footer
+    QVBoxLayout *footerLayout = UIStyles::GetDialogFooterLayout(this);
     buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
-    
+
     okButton = UIStyles::CreateStyledButton(
         isEditMode ? obs_module_text("HotkeyButton.Button.Update") : obs_module_text("HotkeyButton.Button.Add"), "info");
     cancelButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
 
     okButton->setDefault(true);
-    okButton->setEnabled(false); // Initially disabled until hotkey is selected
-    
+    okButton->setEnabled(false);
+
     buttonLayout->addWidget(okButton);
     buttonLayout->addWidget(cancelButton);
-    
-    mainLayout->addLayout(buttonLayout);
+
+    footerLayout->addLayout(buttonLayout);
     
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
