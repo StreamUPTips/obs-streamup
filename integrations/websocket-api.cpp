@@ -18,6 +18,58 @@ extern void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response
 namespace StreamUP {
 namespace WebSocketAPI {
 
+//-------------------INTERNAL HELPERS-------------------
+struct SceneItemLookup {
+	obs_source_t *scene_source = nullptr;
+	obs_sceneitem_t *sceneitem = nullptr;
+};
+
+// Looks up a scene item by sourceName and optional sceneName from request data.
+// On success, caller MUST call obs_source_release(result.scene_source) when done.
+// On failure, sets error on response_data and returns empty result.
+static SceneItemLookup FindSceneItemFromRequest(obs_data_t *request_data,
+						obs_data_t *response_data)
+{
+	SceneItemLookup result;
+
+	const char *source_name = obs_data_get_string(request_data, "sourceName");
+	const char *scene_name = obs_data_get_string(request_data, "sceneName");
+
+	if (!source_name || !strlen(source_name)) {
+		obs_data_set_string(response_data, "error", "sourceName parameter is required");
+		return result;
+	}
+
+	if (scene_name && strlen(scene_name)) {
+		result.scene_source = obs_get_source_by_name(scene_name);
+	} else {
+		result.scene_source = obs_frontend_get_current_scene();
+	}
+
+	if (!result.scene_source) {
+		obs_data_set_string(response_data, "error", "Scene not found");
+		return result;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(result.scene_source);
+	if (!scene) {
+		obs_source_release(result.scene_source);
+		result.scene_source = nullptr;
+		obs_data_set_string(response_data, "error", "Invalid scene");
+		return result;
+	}
+
+	result.sceneitem = obs_scene_find_source(scene, source_name);
+	if (!result.sceneitem) {
+		obs_source_release(result.scene_source);
+		result.scene_source = nullptr;
+		obs_data_set_string(response_data, "error", "Source not found in scene");
+		return result;
+	}
+
+	return result;
+}
+
 //-------------------UTILITY FUNCTIONS-------------------
 void WebsocketRequestBitrate(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
@@ -285,62 +337,24 @@ void WebsocketRequestGetBlendingMethod(obs_data_t *request_data, obs_data_t *res
 {
 	UNUSED_PARAMETER(private_data);
 
-	const char *source_name = obs_data_get_string(request_data, "sourceName");
-	const char *scene_name = obs_data_get_string(request_data, "sceneName");
-
-	if (!source_name || !strlen(source_name)) {
-		obs_data_set_string(response_data, "error", "sourceName parameter is required");
+	auto lookup = FindSceneItemFromRequest(request_data, response_data);
+	if (!lookup.sceneitem)
 		return;
-	}
 
-	obs_source_t *scene_source = nullptr;
-	if (scene_name && strlen(scene_name)) {
-		scene_source = obs_get_source_by_name(scene_name);
-	} else {
-		scene_source = obs_frontend_get_current_scene();
-	}
-
-	if (!scene_source) {
-		obs_data_set_string(response_data, "error", "Scene not found");
-		return;
-	}
-
-	obs_scene_t *scene = obs_scene_from_source(scene_source);
-	if (!scene) {
-		obs_source_release(scene_source);
-		obs_data_set_string(response_data, "error", "Invalid scene");
-		return;
-	}
-
-	obs_sceneitem_t *sceneitem = obs_scene_find_source(scene, source_name);
-	if (!sceneitem) {
-		obs_source_release(scene_source);
-		obs_data_set_string(response_data, "error", "Source not found in scene");
-		return;
-	}
-
-	enum obs_blending_method method = obs_sceneitem_get_blending_method(sceneitem);
+	enum obs_blending_method method = obs_sceneitem_get_blending_method(lookup.sceneitem);
 	const char *method_name = (method == OBS_BLEND_METHOD_SRGB_OFF) ? "srgb_off" : "default";
-	
+
 	obs_data_set_string(response_data, "blendingMethod", method_name);
 	obs_data_set_bool(response_data, "success", true);
-	
-	obs_source_release(scene_source);
+
+	obs_source_release(lookup.scene_source);
 }
 
 void WebsocketRequestSetBlendingMethod(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
 	UNUSED_PARAMETER(private_data);
 
-	const char *source_name = obs_data_get_string(request_data, "sourceName");
-	const char *scene_name = obs_data_get_string(request_data, "sceneName");
 	const char *method_str = obs_data_get_string(request_data, "method");
-
-	if (!source_name || !strlen(source_name)) {
-		obs_data_set_string(response_data, "error", "sourceName parameter is required");
-		return;
-	}
-
 	if (!method_str || !strlen(method_str)) {
 		obs_data_set_string(response_data, "error", "method parameter is required");
 		return;
@@ -356,36 +370,14 @@ void WebsocketRequestSetBlendingMethod(obs_data_t *request_data, obs_data_t *res
 		return;
 	}
 
-	obs_source_t *scene_source = nullptr;
-	if (scene_name && strlen(scene_name)) {
-		scene_source = obs_get_source_by_name(scene_name);
-	} else {
-		scene_source = obs_frontend_get_current_scene();
-	}
-
-	if (!scene_source) {
-		obs_data_set_string(response_data, "error", "Scene not found");
+	auto lookup = FindSceneItemFromRequest(request_data, response_data);
+	if (!lookup.sceneitem)
 		return;
-	}
 
-	obs_scene_t *scene = obs_scene_from_source(scene_source);
-	if (!scene) {
-		obs_source_release(scene_source);
-		obs_data_set_string(response_data, "error", "Invalid scene");
-		return;
-	}
-
-	obs_sceneitem_t *sceneitem = obs_scene_find_source(scene, source_name);
-	if (!sceneitem) {
-		obs_source_release(scene_source);
-		obs_data_set_string(response_data, "error", "Source not found in scene");
-		return;
-	}
-
-	obs_sceneitem_set_blending_method(sceneitem, method);
+	obs_sceneitem_set_blending_method(lookup.sceneitem, method);
 	obs_data_set_string(response_data, "status", "success");
-	
-	obs_source_release(scene_source);
+
+	obs_source_release(lookup.scene_source);
 }
 
 void WebsocketRequestGetDeinterlacing(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
@@ -500,42 +492,12 @@ void WebsocketRequestGetScaleFiltering(obs_data_t *request_data, obs_data_t *res
 {
 	UNUSED_PARAMETER(private_data);
 
-	const char *source_name = obs_data_get_string(request_data, "sourceName");
-	const char *scene_name = obs_data_get_string(request_data, "sceneName");
-
-	if (!source_name || !strlen(source_name)) {
-		obs_data_set_string(response_data, "error", "sourceName parameter is required");
+	auto lookup = FindSceneItemFromRequest(request_data, response_data);
+	if (!lookup.sceneitem)
 		return;
-	}
 
-	obs_source_t *scene_source = nullptr;
-	if (scene_name && strlen(scene_name)) {
-		scene_source = obs_get_source_by_name(scene_name);
-	} else {
-		scene_source = obs_frontend_get_current_scene();
-	}
+	enum obs_scale_type filter = obs_sceneitem_get_scale_filter(lookup.sceneitem);
 
-	if (!scene_source) {
-		obs_data_set_string(response_data, "error", "Scene not found");
-		return;
-	}
-
-	obs_scene_t *scene = obs_scene_from_source(scene_source);
-	if (!scene) {
-		obs_source_release(scene_source);
-		obs_data_set_string(response_data, "error", "Invalid scene");
-		return;
-	}
-
-	obs_sceneitem_t *sceneitem = obs_scene_find_source(scene, source_name);
-	if (!sceneitem) {
-		obs_source_release(scene_source);
-		obs_data_set_string(response_data, "error", "Source not found in scene");
-		return;
-	}
-
-	enum obs_scale_type filter = obs_sceneitem_get_scale_filter(sceneitem);
-	
 	const char *filter_name;
 	switch (filter) {
 		case OBS_SCALE_DISABLE: filter_name = "disable"; break;
@@ -546,26 +508,18 @@ void WebsocketRequestGetScaleFiltering(obs_data_t *request_data, obs_data_t *res
 		case OBS_SCALE_AREA: filter_name = "area"; break;
 		default: filter_name = "unknown"; break;
 	}
-	
+
 	obs_data_set_string(response_data, "scaleFilter", filter_name);
 	obs_data_set_bool(response_data, "success", true);
-	
-	obs_source_release(scene_source);
+
+	obs_source_release(lookup.scene_source);
 }
 
 void WebsocketRequestSetScaleFiltering(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
 	UNUSED_PARAMETER(private_data);
 
-	const char *source_name = obs_data_get_string(request_data, "sourceName");
-	const char *scene_name = obs_data_get_string(request_data, "sceneName");
 	const char *filter_str = obs_data_get_string(request_data, "filter");
-
-	if (!source_name || !strlen(source_name)) {
-		obs_data_set_string(response_data, "error", "sourceName parameter is required");
-		return;
-	}
-
 	if (!filter_str || !strlen(filter_str)) {
 		obs_data_set_string(response_data, "error", "filter parameter is required");
 		return;
@@ -589,36 +543,14 @@ void WebsocketRequestSetScaleFiltering(obs_data_t *request_data, obs_data_t *res
 		return;
 	}
 
-	obs_source_t *scene_source = nullptr;
-	if (scene_name && strlen(scene_name)) {
-		scene_source = obs_get_source_by_name(scene_name);
-	} else {
-		scene_source = obs_frontend_get_current_scene();
-	}
-
-	if (!scene_source) {
-		obs_data_set_string(response_data, "error", "Scene not found");
+	auto lookup = FindSceneItemFromRequest(request_data, response_data);
+	if (!lookup.sceneitem)
 		return;
-	}
 
-	obs_scene_t *scene = obs_scene_from_source(scene_source);
-	if (!scene) {
-		obs_source_release(scene_source);
-		obs_data_set_string(response_data, "error", "Invalid scene");
-		return;
-	}
-
-	obs_sceneitem_t *sceneitem = obs_scene_find_source(scene, source_name);
-	if (!sceneitem) {
-		obs_source_release(scene_source);
-		obs_data_set_string(response_data, "error", "Source not found in scene");
-		return;
-	}
-
-	obs_sceneitem_set_scale_filter(sceneitem, filter);
+	obs_sceneitem_set_scale_filter(lookup.sceneitem, filter);
 	obs_data_set_string(response_data, "status", "success");
-	
-	obs_source_release(scene_source);
+
+	obs_source_release(lookup.scene_source);
 }
 
 void WebsocketRequestGetDownmixMono(obs_data_t *request_data, obs_data_t *response_data, void *private_data)

@@ -282,8 +282,7 @@ void InnerDockHost::ShowAddDockDialog()
 {
     AddDockDialog dialog(m_multiDockId, this);
     if (dialog.exec() == QDialog::Accepted) {
-        QDockWidget* selectedDock = dialog.GetSelectedDock();
-        if (selectedDock) {
+        if (QDockWidget* selectedDock = dialog.GetSelectedDock()) {
             AddDock(selectedDock);
         }
     }

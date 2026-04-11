@@ -54,27 +54,6 @@ struct AsyncRequestData {
     std::function<void(const std::string&, const std::string&, bool)> callback;
 };
 
-void* MakeApiRequestThread(void* arg)
-{
-    RequestData* data = (RequestData*)arg;
-    CURL* curl = curl_easy_init();
-
-    if (curl) {
-        curl_easy_setopt(curl, CURLOPT_URL, data->url.c_str());
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data->response);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-
-        CURLcode res = curl_easy_perform(curl);
-        if (res != CURLE_OK) {
-            StreamUP::DebugLogger::LogWarningFormat("HttpClient", "curl_easy_perform() failed: %s", curl_easy_strerror(res));
-        }
-        curl_easy_cleanup(curl);
-    }
-    return nullptr;
-}
-
 void* AsyncRequestThread(void* arg)
 {
     AsyncRequestData* asyncData = (AsyncRequestData*)arg;

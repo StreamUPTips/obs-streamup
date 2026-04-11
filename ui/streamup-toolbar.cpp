@@ -1555,7 +1555,6 @@ void StreamUPToolbar::onConfigureToolbarClicked()
 {
 	StreamUP::ToolbarConfigurator configurator(this);
 	if (configurator.exec() == QDialog::Accepted) {
-		// Refresh the toolbar with new configuration
 		refreshFromConfiguration();
 	}
 }

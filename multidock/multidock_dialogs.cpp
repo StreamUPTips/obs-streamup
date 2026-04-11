@@ -195,14 +195,17 @@ void ShowManageMultiDocksDialog()
     newButton->setToolTip(obs_module_text("MultiDock.Button.New"));
     newButton->setStyleSheet(StreamUP::UIStyles::GetSquircleButtonStyle("", "", 28));
     newButton->setFixedSize(28, 28);
-    QPushButton* openButton = new QPushButton(obs_module_text("UI.Button.Open"), &dialog);
-    QPushButton* renameButton = new QPushButton(obs_module_text("MultiDock.Button.Rename"), &dialog);
+    QPushButton* openButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Open"), "info");
+    openButton->setParent(&dialog);
+    QPushButton* renameButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("MultiDock.Button.Rename"), "neutral");
+    renameButton->setParent(&dialog);
     QPushButton* deleteButton = new QPushButton(&dialog);
     deleteButton->setProperty("class", "icon-trash");
     deleteButton->setToolTip(obs_module_text("MultiDock.Button.Delete"));
     deleteButton->setStyleSheet(StreamUP::UIStyles::GetSquircleButtonStyle("", "", 28));
     deleteButton->setFixedSize(28, 28);
-    QPushButton* closeButton = new QPushButton(obs_module_text("UI.Button.Close"), &dialog);
+    QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Close"), "neutral");
+    closeButton->setParent(&dialog);
     
     // Enable/disable buttons based on selection
     bool hasSelection = listWidget->currentItem() != nullptr && 

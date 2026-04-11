@@ -44,7 +44,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/utilities
     ${CMAKE_CURRENT_SOURCE_DIR}/ui
     ${CMAKE_CURRENT_SOURCE_DIR}/integrations
-    ${CMAKE_CURRENT_SOURCE_DIR}/multidock)
+    ${CMAKE_CURRENT_SOURCE_DIR}/multidock
+    ${CMAKE_CURRENT_SOURCE_DIR}/sources)
 
 if((OS_LINUX OR OS_FREEBSD OR OS_OPENBSD) AND Qt_VERSION VERSION_LESS "6.9.0")
 	target_link_libraries(${PROJECT_NAME} PRIVATE Qt::GuiPrivate)
@@ -108,7 +109,13 @@ target_sources(${PROJECT_NAME} PRIVATE
   utilities/obs-data-helpers.hpp
   utilities/obs-data-helpers.cpp
   utilities/debug-logger.hpp
-  utilities/debug-logger.cpp)
+  utilities/debug-logger.cpp
+  utilities/undo-helpers.hpp)
+
+# Sources module files (Adjustment Layer)
+target_sources(${PROJECT_NAME} PRIVATE
+  sources/adjustment-layer.hpp
+  sources/adjustment-layer.cpp)
 
 # UI module files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -223,7 +230,12 @@ source_group("Utilities" FILES
   utilities/obs-data-helpers.hpp
   utilities/obs-data-helpers.cpp
   utilities/debug-logger.hpp
-  utilities/debug-logger.cpp)
+  utilities/debug-logger.cpp
+  utilities/undo-helpers.hpp)
+
+source_group("Sources" FILES
+  sources/adjustment-layer.hpp
+  sources/adjustment-layer.cpp)
 
 source_group("UI" FILES
   ui/hotkey-manager.hpp

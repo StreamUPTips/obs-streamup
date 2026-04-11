@@ -74,6 +74,11 @@ private:
     int m_recordedKey;
     Qt::KeyboardModifiers m_recordedModifiers;
     obs_data_array_t* m_currentHotkeyData;
+
+    // Tracks which HotkeyWidget is currently in recording mode so that
+    // starting a new recording cancels any previous one — only one widget
+    // can be capturing keys at a time.
+    static HotkeyWidget* s_currentRecorder;
 };
 
 } // namespace UI

@@ -32,12 +32,9 @@ ToolbarConfigurator::ToolbarConfigurator(QWidget *parent)
     // Register custom types for QVariant
     qRegisterMetaType<std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem>>();
     
-    setWindowTitle(obs_module_text("StreamUP.Toolbar.Configurator.Title"));
+    UIStyles::ApplyFramelessChrome(this, obs_module_text("StreamUP.Toolbar.Configurator.Title"));
     setModal(true);
     resize(900, 650);
-    
-    // Apply StreamUP dialog styling
-    setStyleSheet(UIStyles::GetDialogStyle());
     
     setupUI();
     
@@ -54,10 +51,7 @@ ToolbarConfigurator::~ToolbarConfigurator() = default;
 
 void ToolbarConfigurator::setupUI()
 {
-    // Main layout with 12px margin
-    QVBoxLayout* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(12, 12, 12, 12);
-    mainLayout->setSpacing(12);
+    QVBoxLayout* mainLayout = UIStyles::GetDialogContentLayout(this);
     
     // Create splitter for left and right panels
     mainSplitter = new QSplitter(Qt::Horizontal, this);
@@ -139,9 +133,10 @@ void ToolbarConfigurator::setupUI()
         "    show-decoration-selected: 0; "
         "} "
         "QTreeWidget::item { "
-        "    padding: 4px 8px; "
-        "    border-radius: 6px; "
-        "    margin: 1px; "
+        "    padding: 6px 12px; "
+        "    border: none; "
+        "    border-radius: 14px; "
+        "    margin: 2px 4px; "
         "} "
         "QTreeWidget::item:hover { "
 				      "    background-color: " +
@@ -229,9 +224,10 @@ void ToolbarConfigurator::setupUI()
         "    show-decoration-selected: 0; "
         "} "
         "QTreeWidget::item { "
-        "    padding: 4px 8px; "
-        "    border-radius: 6px; "
-        "    margin: 1px; "
+        "    padding: 6px 12px; "
+        "    border: none; "
+        "    border-radius: 14px; "
+        "    margin: 2px 4px; "
         "} "
         "QTreeWidget::item:hover { "
 				   "    background-color: " +
@@ -406,19 +402,23 @@ void ToolbarConfigurator::setupUI()
         "    border-radius: 12px; "
         "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_DARKEST) + "; "
         "    color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
-        "    selection-background-color: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    selection-background-color: transparent; "
         "    selection-color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
         "    outline: none; "
         "    padding: 8px; "
+        "    show-decoration-selected: 0; "
         "} "
         "QListWidget::item { "
-        "    padding: 4px 8px; "
-        "    margin: 1px; "
-        "    border-radius: 6px; "
-        "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_SECONDARY) + "; "
+        "    padding: 6px 12px; "
+        "    margin: 2px 4px; "
+        "    border: none; "
+        "    border-radius: 14px; "
+        "    background-color: transparent; "
         "} "
-        "QListWidget::item:selected { "
+        "QListWidget::item:selected, QListWidget::item:selected:active, QListWidget::item:selected:!active { "
         "    background-color: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
+        "    border: none; "
+        "    outline: none; "
         "} "
         "QListWidget::item:hover { "
 				     "    background-color: " +
@@ -478,20 +478,19 @@ void ToolbarConfigurator::setupUI()
     mainSplitter->setSizes({280, 420});
     mainSplitter->setHandleWidth(12); // Add 12px gap between panels
     
-    // === BOTTOM BUTTONS ===
+    // === BOTTOM BUTTONS (in footer) ===
+    QVBoxLayout *footerLayout = UIStyles::GetDialogFooterLayout(this);
     bottomButtonsLayout = new QHBoxLayout();
     bottomButtonsLayout->addStretch();
-    
-    saveButton = new QPushButton(QString::fromUtf8(obs_module_text("UI.Button.Save")));
+
+    saveButton = UIStyles::CreateStyledButton(QString::fromUtf8(obs_module_text("UI.Button.Save")), "info");
     saveButton->setDefault(true);
-    saveButton->setStyleSheet(UIStyles::GetButtonStyle());
     bottomButtonsLayout->addWidget(saveButton);
-    
-    cancelButton = new QPushButton(QString::fromUtf8(obs_module_text("UI.Button.Cancel")));
-    cancelButton->setStyleSheet(UIStyles::GetButtonStyle());
+
+    cancelButton = UIStyles::CreateStyledButton(QString::fromUtf8(obs_module_text("UI.Button.Cancel")), "neutral");
     bottomButtonsLayout->addWidget(cancelButton);
-    
-    mainLayout->addLayout(bottomButtonsLayout);
+
+    footerLayout->addLayout(bottomButtonsLayout);
     
     // Connect signals
     connect(builtinButtonsList, &QTreeWidget::itemSelectionChanged, this, &ToolbarConfigurator::updateButtonStates);
@@ -1294,7 +1293,6 @@ void ToolbarConfigurator::onSpacerSettingsChanged()
 
 void ToolbarConfigurator::onAddHotkeyButton()
 {
-    // Open the hotkey button configuration dialog
     HotkeyButtonConfigDialog dialog(this);
     if (dialog.exec() == QDialog::Accepted) {
         auto hotkeyItem = dialog.getHotkeyButtonItem();
@@ -1460,8 +1458,9 @@ void DraggableListWidget::paintEvent(QPaintEvent* event)
         painter.setRenderHint(QPainter::Antialiasing);
         
         // Use StreamUP primary color for the drop indicator
-        painter.setPen(QPen(QColor("#0076df"), 2));
-        painter.setBrush(QBrush(QColor("#0076df")));
+        QColor primaryColor(StreamUP::UIStyles::Colors::PRIMARY_COLOR);
+        painter.setPen(QPen(primaryColor, 2));
+        painter.setBrush(QBrush(primaryColor));
         
         int y;
         if (dropIndicatorIndex == count()) {

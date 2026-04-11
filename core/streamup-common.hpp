@@ -29,8 +29,6 @@ struct PluginInfo {
 	bool required;
 };
 
-// RequestData moved to StreamUP::HttpClient module
-
 // SystemTrayNotification struct moved to StreamUP::NotificationManager module
 
 // Global plugin state moved to StreamUP::PluginState class

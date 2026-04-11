@@ -63,6 +63,11 @@
 		<file>images/icons/ui/visible-light.svg</file>
 		<file>images/icons/ui/visible-dark.svg</file>
 
+		<!-- Form Control Icons -->
+		<file>images/icons/ui/dropdown-arrow-light.svg</file>
+		<file>images/icons/ui/hotkey-set-light.svg</file>
+		<file>images/icons/ui/hotkey-clear-light.svg</file>
+
 		<!-- Social Media Icons -->
 		<file>images/icons/social/patreon.svg</file>
 		<file>images/icons/social/kofi.svg</file>

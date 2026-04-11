@@ -10,6 +10,8 @@
 namespace StreamUP {
 namespace UI {
 
+HotkeyWidget* HotkeyWidget::s_currentRecorder = nullptr;
+
 HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
     : QWidget(parent)
     , m_hotkeyName(hotkeyName)
@@ -46,14 +48,35 @@ HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
         .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS));
     m_displayLabel->setAlignment(Qt::AlignCenter);
     
-    // Record button
-    m_recordButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Hotkey.Widget.Set"), "info");
-    m_recordButton->setFixedWidth(70);
+    // Icon-only set/clear buttons matching the OBS hotkey settings layout —
+    // keeps each row to a single line.
+    const QString iconBtnQss = QString(
+        "QPushButton {"
+        "  background: transparent;"
+        "  border: 1px solid %1;"
+        "  border-radius: 12px;"
+        "  min-width: 22px; max-width: 22px;"
+        "  min-height: 22px; max-height: 22px;"
+        "  padding: 0;"
+        "}"
+        "QPushButton:hover { background: %2; border: 1px solid %2; }")
+        .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
+        .arg(StreamUP::UIStyles::Colors::HOVER_OVERLAY);
+
+    m_recordButton = new QPushButton();
+    m_recordButton->setIcon(QIcon(":/images/icons/ui/hotkey-set-light.svg"));
+    m_recordButton->setIconSize(QSize(14, 14));
+    m_recordButton->setCursor(Qt::PointingHandCursor);
+    m_recordButton->setToolTip(obs_module_text("Hotkey.Widget.Set"));
+    m_recordButton->setStyleSheet(iconBtnQss);
     connect(m_recordButton, &QPushButton::clicked, this, &HotkeyWidget::OnRecordButtonClicked);
-    
-    // Clear button  
-    m_clearButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("Hotkey.Widget.Clear"), "neutral");
-    m_clearButton->setFixedWidth(70);
+
+    m_clearButton = new QPushButton();
+    m_clearButton->setIcon(QIcon(":/images/icons/ui/hotkey-clear-light.svg"));
+    m_clearButton->setIconSize(QSize(14, 14));
+    m_clearButton->setCursor(Qt::PointingHandCursor);
+    m_clearButton->setToolTip(obs_module_text("Hotkey.Widget.Clear"));
+    m_clearButton->setStyleSheet(iconBtnQss);
     connect(m_clearButton, &QPushButton::clicked, this, &HotkeyWidget::OnClearButtonClicked);
     
     layout->addWidget(m_displayLabel, 1);
@@ -68,6 +91,7 @@ HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
 
 HotkeyWidget::~HotkeyWidget()
 {
+    if (s_currentRecorder == this) s_currentRecorder = nullptr;
     if (m_currentHotkeyData) {
         obs_data_array_release(m_currentHotkeyData);
     }
@@ -141,22 +165,36 @@ void HotkeyWidget::OnClearButtonClicked()
 
 void HotkeyWidget::StartRecording()
 {
+    // Cancel any other widget that's currently recording — only one capture at a time.
+    if (s_currentRecorder && s_currentRecorder != this) {
+        s_currentRecorder->StopRecording();
+    }
+    s_currentRecorder = this;
+
     m_recording = true;
     m_recordedKey = 0;
     m_recordedModifiers = Qt::NoModifier;
-    
-    m_recordButton->setText(obs_module_text("Hotkey.Widget.Cancel"));
-    {
-        auto *temp = StreamUP::UIStyles::CreateStyledButton("", "error");
-        m_recordButton->setStyleSheet(temp->styleSheet());
-        delete temp;
-    }
+
+    // Highlight the icon button while recording — solid primary fill, no text.
+    m_recordButton->setStyleSheet(QString(
+        "QPushButton {"
+        "  background: %1;"
+        "  border: 1px solid %1;"
+        "  border-radius: 12px;"
+        "  min-width: 22px; max-width: 22px;"
+        "  min-height: 22px; max-height: 22px;"
+        "  padding: 0;"
+        "}"
+        "QPushButton:hover { background: %2; border: 1px solid %2; }")
+        .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR)
+        .arg(StreamUP::UIStyles::Colors::PRIMARY_HOVER));
+
     m_displayLabel->setText(obs_module_text("Hotkey.Widget.PressKeys"));
-    m_displayLabel->setStyleSheet(m_displayLabel->styleSheet() + 
+    m_displayLabel->setStyleSheet(m_displayLabel->styleSheet() +
         QString("background: %1; border-color: %2;")
         .arg(StreamUP::UIStyles::Colors::WARNING)
         .arg(StreamUP::UIStyles::Colors::WARNING));
-    
+
     setFocus();
     grabKeyboard();
 }
@@ -164,16 +202,24 @@ void HotkeyWidget::StartRecording()
 void HotkeyWidget::StopRecording()
 {
     if (!m_recording) return;
-    
+
     m_recording = false;
+    if (s_currentRecorder == this) s_currentRecorder = nullptr;
     releaseKeyboard();
-    
-    m_recordButton->setText(obs_module_text("Hotkey.Widget.Set"));
-    {
-        auto *temp = StreamUP::UIStyles::CreateStyledButton("", "info");
-        m_recordButton->setStyleSheet(temp->styleSheet());
-        delete temp;
-    }
+
+    // Restore neutral icon button styling.
+    m_recordButton->setStyleSheet(QString(
+        "QPushButton {"
+        "  background: transparent;"
+        "  border: 1px solid %1;"
+        "  border-radius: 12px;"
+        "  min-width: 22px; max-width: 22px;"
+        "  min-height: 22px; max-height: 22px;"
+        "  padding: 0;"
+        "}"
+        "QPushButton:hover { background: %2; border: 1px solid %2; }")
+        .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
+        .arg(StreamUP::UIStyles::Colors::HOVER_OVERLAY));
     
     // Create hotkey data from recorded key combination
     if (m_recordedKey != 0) {

@@ -501,13 +501,11 @@ void ShowSettingsDialog(int tabIndex)
 			return nullptr;
 		}
 
-		// Create modern unified dialog with darkest background
+		// Create modern unified dialog with frameless chrome
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Window.Title"));
 		dialog->resize(900, 600);
-		dialog->setStyleSheet(QString("QDialog { background-color: %1; }")
-				      .arg(StreamUP::UIStyles::Colors::BG_DARKEST));
 
-		QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
+		QVBoxLayout *mainLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 		mainLayout->setContentsMargins(0, 0, 0, 0);
 		mainLayout->setSpacing(0);
 
@@ -957,7 +955,6 @@ void ShowSettingsDialog(int tabIndex)
 				if (toolbar) {
 					StreamUP::ToolbarConfigurator configurator(dialog);
 					if (configurator.exec() == QDialog::Accepted) {
-						// Refresh the toolbar with new configuration
 						toolbar->refreshFromConfiguration();
 					}
 				}
@@ -1570,53 +1567,47 @@ void ShowSettingsDialog(int tabIndex)
 			QString obsHotkeyName;
 		};
 		
-		// Source Locking Hotkeys Section
-		QGroupBox *lockingGroup = StreamUP::UIStyles::CreateStyledGroupBox("Source Locking", "info");
-		QVBoxLayout *lockingLayout = new QVBoxLayout(lockingGroup);
-		lockingLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-		
+		// Helper: build a section = [section header with divider] + [bordered card].
+		// Matches the WebSocket Commands window so both dialogs feel like the
+		// same product. Returns the card's layout so the existing
+		// buildHotkeySection helper can populate it unchanged.
+		auto makeHotkeySection = [](QVBoxLayout *parentLayout, const QString &title) -> QVBoxLayout * {
+			parentLayout->addWidget(StreamUP::UIStyles::CreateSectionHeader(title));
+			QFrame *card = new QFrame();
+			card->setStyleSheet(QString(
+				"QFrame { background: %1; border-radius: %2px; border: 1px solid %3; }")
+				.arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
+				.arg(StreamUP::UIStyles::Sizes::RADIUS_MD)
+				.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE));
+			QVBoxLayout *cardLay = new QVBoxLayout(card);
+			cardLay->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0,
+						     StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
+			cardLay->setSpacing(0);
+			parentLayout->addWidget(card);
+			return cardLay;
+		};
 		std::vector<HotkeyInfo> lockingHotkeys = {
 			{obs_module_text("Hotkey.LockAllSources.Name"), obs_module_text("Hotkey.LockAllSources.Description"), "streamup_lock_all_sources"},
 			{obs_module_text("Hotkey.LockCurrentSources.Name"), obs_module_text("Hotkey.LockCurrentSources.Description"), "streamup_lock_current_sources"}
 		};
-		
-		// Refresh Operations Section
-		QGroupBox *refreshGroup = StreamUP::UIStyles::CreateStyledGroupBox("Refresh Operations", "info");
-		QVBoxLayout *refreshLayout = new QVBoxLayout(refreshGroup);
-		refreshLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-		
+
 		std::vector<HotkeyInfo> refreshHotkeys = {
 			{obs_module_text("Hotkey.RefreshBrowserSources.Name"), obs_module_text("Hotkey.RefreshBrowserSources.Description"), "streamup_refresh_browser_sources"},
 			{obs_module_text("Hotkey.RefreshAudioMonitoring.Name"), obs_module_text("Hotkey.RefreshAudioMonitoring.Description"), "streamup_refresh_audio_monitoring"}
 		};
-		
-		// Source Interaction Section
-		QGroupBox *interactionGroup = StreamUP::UIStyles::CreateStyledGroupBox("Source Interaction", "info");
-		QVBoxLayout *interactionLayout = new QVBoxLayout(interactionGroup);
-		interactionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-		
+
 		std::vector<HotkeyInfo> interactionHotkeys = {
 			{obs_module_text("Hotkey.OpenSourceProperties.Name"), obs_module_text("Hotkey.OpenSourceProperties.Description"), "streamup_open_source_properties"},
 			{obs_module_text("Hotkey.OpenSourceFilters.Name"), obs_module_text("Hotkey.OpenSourceFilters.Description"), "streamup_open_source_filters"},
 			{obs_module_text("Hotkey.OpenSourceInteract.Name"), obs_module_text("Hotkey.OpenSourceInteract.Description"), "streamup_open_source_interact"},
 			{obs_module_text("Hotkey.OpenSceneFilters.Name"), obs_module_text("Hotkey.OpenSceneFilters.Description"), "streamup_open_scene_filters"}
 		};
-		
-		// Video Capture Device Section
-		QGroupBox *videoCaptureGroup = StreamUP::UIStyles::CreateStyledGroupBox("Video Capture Devices", "info");
-		QVBoxLayout *videoCaptureLayout = new QVBoxLayout(videoCaptureGroup);
-		videoCaptureLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
 		std::vector<HotkeyInfo> videoCaptureHotkeys = {
 			{obs_module_text("Hotkey.ActivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.ActivateVideoCaptureDevices.Description"), "streamup_activate_video_capture_devices"},
 			{obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Description"), "streamup_deactivate_video_capture_devices"},
 			{obs_module_text("Hotkey.RefreshVideoCaptureDevices.Name"), obs_module_text("Hotkey.RefreshVideoCaptureDevices.Description"), "streamup_refresh_video_capture_devices"}
 		};
-
-		// Transition Management Section
-		QGroupBox *transitionGroup = StreamUP::UIStyles::CreateStyledGroupBox("Transition Management", "info");
-		QVBoxLayout *transitionLayout = new QVBoxLayout(transitionGroup);
-		transitionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 
 		std::vector<HotkeyInfo> transitionHotkeys = {
 			{obs_module_text("Hotkey.CopyShowTransition.Name"), obs_module_text("Hotkey.CopyShowTransition.Description"), "streamup_copy_show_transition"},
@@ -1712,25 +1703,13 @@ void ShowSettingsDialog(int tabIndex)
 			parentLayout->addLayout(sectionLayout);
 		};
 		
-		// Build each hotkey section
-		QGroupBox *groupVisibilityGroup = StreamUP::UIStyles::CreateStyledGroupBox("Group and Visibility Management", "info");
-		QVBoxLayout *groupVisibilityLayout = new QVBoxLayout(groupVisibilityGroup);
-		groupVisibilityLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-
-		buildHotkeySection(lockingHotkeys, lockingLayout);
-		buildHotkeySection(refreshHotkeys, refreshLayout);
-		buildHotkeySection(interactionHotkeys, interactionLayout);
-		buildHotkeySection(videoCaptureHotkeys, videoCaptureLayout);
-		buildHotkeySection(transitionHotkeys, transitionLayout);
-		buildHotkeySection(groupVisibilityHotkeys, groupVisibilityLayout);
-
-		// Add all sections to main layout
-		hotkeysContentLayout->addWidget(lockingGroup);
-		hotkeysContentLayout->addWidget(refreshGroup);
-		hotkeysContentLayout->addWidget(interactionGroup);
-		hotkeysContentLayout->addWidget(videoCaptureGroup);
-		hotkeysContentLayout->addWidget(transitionGroup);
-		hotkeysContentLayout->addWidget(groupVisibilityGroup);
+		// Build each hotkey section: header + card + rows
+		buildHotkeySection(lockingHotkeys,       makeHotkeySection(hotkeysContentLayout, "Source Locking"));
+		buildHotkeySection(refreshHotkeys,       makeHotkeySection(hotkeysContentLayout, "Refresh Operations"));
+		buildHotkeySection(interactionHotkeys,   makeHotkeySection(hotkeysContentLayout, "Source Interaction"));
+		buildHotkeySection(videoCaptureHotkeys,  makeHotkeySection(hotkeysContentLayout, "Video Capture Devices"));
+		buildHotkeySection(transitionHotkeys,    makeHotkeySection(hotkeysContentLayout, "Transition Management"));
+		buildHotkeySection(groupVisibilityHotkeys, makeHotkeySection(hotkeysContentLayout, "Group and Visibility Management"));
 		
 		hotkeysMainLayout->addWidget(hotkeysContentWidget);
 		hotkeysMainLayout->addStretch();
@@ -1919,16 +1898,9 @@ void ShowSettingsDialog(int tabIndex)
 		mainWidget->setLayout(contentLayout);
 		mainLayout->addWidget(mainWidget);
 
-		// Bottom button area with consistent background
-		QWidget *buttonWidget = new QWidget();
-		buttonWidget->setStyleSheet(QString("background: %1; padding: %2px;")
-					    .arg(StreamUP::UIStyles::Colors::BG_DARKEST)
-					    .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
-		QHBoxLayout *buttonLayout = new QHBoxLayout(buttonWidget);
-		buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
-						 StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-						 StreamUP::UIStyles::Sizes::PADDING_XL, 
-						 StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+		// Bottom button area in footer
+		QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
+		QHBoxLayout *buttonLayout = new QHBoxLayout();
 
 		QPushButton *closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Close"), "neutral");
 		QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
@@ -1937,7 +1909,7 @@ void ShowSettingsDialog(int tabIndex)
 		buttonLayout->addWidget(closeButton);
 		buttonLayout->addStretch();
 
-		mainLayout->addWidget(buttonWidget);
+		footerLayout->addLayout(buttonLayout);
 
 		QObject::connect(dialog, &QDialog::finished, [=](int) {
 			// Ensure all settings are saved when dialog closes
@@ -2083,7 +2055,7 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
 			StreamUP::UIStyles::HandleTableCellClick(pluginTable, row, column);
 		});
 
-		pluginsLayout->addWidget(pluginTable, 0, Qt::AlignTop);
+		pluginsLayout->addWidget(StreamUP::UIStyles::GetTableContainer(pluginTable), 0, Qt::AlignTop);
 
 		// Set container to accommodate table width plus minimal padding
 		int tableWidth = pluginTable->minimumWidth();
@@ -2137,38 +2109,12 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 		// Start smaller - will be resized based on content
 		dialog->resize(600, 500);
 
-		QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
-		mainLayout->setContentsMargins(0, 0, 0, 0);
-		mainLayout->setSpacing(0);
-
-		// Header section with title
-		QWidget *headerWidget = new QWidget();
-		headerWidget->setObjectName("headerWidget");
-		headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px; }")
-						    .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
-						    .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
-
-		QVBoxLayout *headerLayout = new QVBoxLayout(headerWidget);
-		headerLayout->setContentsMargins(0, 0, 0, 0);
-
-		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("Settings.Plugin.InstalledPluginsTitle"));
-		headerLayout->addWidget(titleLabel);
-
-		QLabel *subtitleLabel =
-			StreamUP::UIStyles::CreateStyledDescription(obs_module_text("Settings.Plugin.InstalledPluginsDesc"));
-		headerLayout->addWidget(subtitleLabel);
-
-		mainLayout->addWidget(headerWidget);
-
-		// Content area - direct layout without scrolling
-		QVBoxLayout *contentLayout = new QVBoxLayout();
+		QVBoxLayout *contentLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
 						  StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
 						  StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
 						  StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
 		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-
-		mainLayout->addLayout(contentLayout);
 
 		// Info section - fit to UI width
 		QLabel *infoLabel = new QLabel(obs_module_text("Settings.Plugin.InstalledPluginsInfo"));
@@ -2239,17 +2185,12 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 			int dialogWidth = std::max(tableWidth + 80, 600); // Minimal padding, lower minimum
 			dialog->resize(dialogWidth, 650);
 
-			contentLayout->addWidget(pluginTable);
+			contentLayout->addWidget(StreamUP::UIStyles::GetTableContainer(pluginTable));
 		}
 
-		// Bottom button area
-		QWidget *buttonWidget = new QWidget();
-		buttonWidget->setStyleSheet(QString("background: %1; padding: %2px;")
-						    .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
-						    .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
-		QHBoxLayout *buttonLayout = new QHBoxLayout(buttonWidget);
-		buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0,
-						 StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
+		// Bottom button area in footer
+		QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
+		QHBoxLayout *buttonLayout = new QHBoxLayout();
 
 		QPushButton *updateButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("StreamUP.Settings.CheckForUpdate"), "info");
 		QObject::connect(updateButton, &QPushButton::clicked, [dialog]() {
@@ -2260,9 +2201,7 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 		buttonLayout->addStretch();
 		buttonLayout->addWidget(updateButton);
 
-		mainLayout->addWidget(buttonWidget);
-
-		dialog->setLayout(mainLayout);
+		footerLayout->addLayout(buttonLayout);
 
 		// Apply consistent sizing that adjusts to actual content size (also centers dialog after sizing)
 		StreamUP::UIStyles::ApplyConsistentSizing(dialog, 650, 1000, 400, 800);
@@ -2526,7 +2465,7 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 				StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Hotkeys.ResetTitle"));
 			confirmDialog->resize(400, 200);
 
-			QVBoxLayout *layout = new QVBoxLayout(confirmDialog);
+			QVBoxLayout *layout = StreamUP::UIStyles::GetDialogContentLayout(confirmDialog);
 
 			QLabel *warningLabel = new QLabel(obs_module_text("Settings.Hotkeys.ResetWarning"));
 			warningLabel->setStyleSheet(QString("color: %1; font-size: %2px; padding: %3px;")
@@ -2537,8 +2476,6 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 			warningLabel->setAlignment(Qt::AlignCenter);
 
 			layout->addWidget(warningLabel);
-
-			QHBoxLayout *buttonLayout = new QHBoxLayout();
 
 			QPushButton *cancelBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
 			QPushButton *resetBtn = StreamUP::UIStyles::CreateStyledButton(
@@ -2559,11 +2496,13 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 				confirmDialog->close();
 			});
 
+			QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(confirmDialog);
+			QHBoxLayout *buttonLayout = new QHBoxLayout();
 			buttonLayout->addStretch();
 			buttonLayout->addWidget(cancelBtn);
 			buttonLayout->addWidget(resetBtn);
 
-			layout->addLayout(buttonLayout);
+			footerLayout->addLayout(buttonLayout);
 
 			confirmDialog->show();
 			StreamUP::UIHelpers::CenterDialog(confirmDialog);
@@ -2884,7 +2823,7 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 				StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Dock.ResetTitle"));
 			confirmDialog->resize(400, 200);
 
-			QVBoxLayout *layout = new QVBoxLayout(confirmDialog);
+			QVBoxLayout *layout = StreamUP::UIStyles::GetDialogContentLayout(confirmDialog);
 
 			QLabel *warningLabel = new QLabel(obs_module_text("Settings.Dock.ResetWarning"));
 			warningLabel->setStyleSheet(QString("color: %1; font-size: %2px; padding: %3px;")
@@ -2895,8 +2834,6 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 			warningLabel->setAlignment(Qt::AlignCenter);
 
 			layout->addWidget(warningLabel);
-
-			QHBoxLayout *buttonLayout = new QHBoxLayout();
 
 			QPushButton *cancelBtn = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
 			QPushButton *resetBtn = StreamUP::UIStyles::CreateStyledButton(
@@ -2918,11 +2855,13 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 				confirmDialog->close();
 			});
 
+			QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(confirmDialog);
+			QHBoxLayout *buttonLayout = new QHBoxLayout();
 			buttonLayout->addStretch();
 			buttonLayout->addWidget(cancelBtn);
 			buttonLayout->addWidget(resetBtn);
 
-			layout->addLayout(buttonLayout);
+			footerLayout->addLayout(buttonLayout);
 
 			confirmDialog->show();
 			StreamUP::UIHelpers::CenterDialog(confirmDialog);

@@ -116,24 +116,24 @@ QTableWidget* CreateMissingPluginsTable(const std::map<std::string, std::string>
 		
 		// Status column - Missing
 		QTableWidgetItem* statusItem = new QTableWidgetItem("❌ " + QString(obs_module_text("UI.Message.MISSING")));
-		statusItem->setForeground(QColor("#ef4444"));
+		statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_DANGER));
 		table->setItem(row, 1, statusItem);
 		
 		// Version column
 		QTableWidgetItem* versionItem = new QTableWidgetItem("v" + QString::fromStdString(required_version));
-		versionItem->setForeground(QColor("#22c55e"));
+		versionItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_SUCCESS));
 		table->setItem(row, 2, versionItem);
 		
 		// Download Link column
 		QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
-		downloadItem->setForeground(QColor("#3b82f6"));
+		downloadItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 		downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
 		table->setItem(row, 3, downloadItem);
 		
 		// Website Link column - show domain name
 		QString domainName = ExtractDomainFromUrl(QString::fromStdString(forum_link));
 		QTableWidgetItem* websiteItem = new QTableWidgetItem(domainName);
-		websiteItem->setForeground(QColor("#3b82f6"));
+		websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 		websiteItem->setData(Qt::UserRole, QString::fromStdString(forum_link));
 		table->setItem(row, 4, websiteItem);
 		
@@ -176,24 +176,24 @@ QTableWidget* CreateUpdatesTable(const std::map<std::string, std::string>& versi
 		
 		// Installed Version column
 		QTableWidgetItem* installedItem = new QTableWidgetItem("v" + QString::fromStdString(installed_version));
-		installedItem->setForeground(QColor("#ef4444"));
+		installedItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_DANGER));
 		table->setItem(row, 1, installedItem);
 		
 		// Current Version column
 		QTableWidgetItem* currentItem = new QTableWidgetItem("v" + QString::fromStdString(required_version));
-		currentItem->setForeground(QColor("#22c55e"));
+		currentItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_SUCCESS));
 		table->setItem(row, 2, currentItem);
 		
 		// Download Link column
 		QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
-		downloadItem->setForeground(QColor("#3b82f6"));
+		downloadItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 		downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
 		table->setItem(row, 3, downloadItem);
 		
 		// Website Link column - show domain name
 		QString domainName = ExtractDomainFromUrl(QString::fromStdString(forum_link));
 		QTableWidgetItem* websiteItem = new QTableWidgetItem(domainName);
-		websiteItem->setForeground(QColor("#3b82f6"));
+		websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 		websiteItem->setData(Qt::UserRole, QString::fromStdString(forum_link));
 		table->setItem(row, 4, websiteItem);
 		
@@ -239,7 +239,7 @@ QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& fai
 
 		// Status column - Failed to Load
 		QTableWidgetItem* statusItem = new QTableWidgetItem("⚠️ " + QString(obs_module_text("Plugin.Status.FailedToLoad")));
-		statusItem->setForeground(QColor("#f59e0b")); // Orange/amber color for warning
+		statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_WARNING)); // Orange/amber color for warning
 		table->setItem(row, 1, statusItem);
 
 		if (found_in_api && plugin_info) {
@@ -251,26 +251,26 @@ QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& fai
 				QString::fromStdString(plugin_info->generalURL)).toStdString();
 
 			QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
-			downloadItem->setForeground(QColor("#3b82f6"));
+			downloadItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 			downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
 			table->setItem(row, 2, downloadItem);
 
 			// Website Link column - show domain name
 			QString domainName = ExtractDomainFromUrl(QString::fromStdString(plugin_info->generalURL));
 			QTableWidgetItem* websiteItem = new QTableWidgetItem(domainName);
-			websiteItem->setForeground(QColor("#3b82f6"));
+			websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 			websiteItem->setData(Qt::UserRole, QString::fromStdString(plugin_info->generalURL));
 			table->setItem(row, 3, websiteItem);
 		} else {
 			// Plugin not in our API - show message to find manually
 			QTableWidgetItem* notSupportedItem = new QTableWidgetItem(obs_module_text("Plugin.Message.NotSupported"));
-			notSupportedItem->setForeground(QColor("#9ca3af")); // Gray
+			notSupportedItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED)); // Gray
 			table->setItem(row, 2, notSupportedItem);
 
 			// Link to OBS forums for manual search
 			QString obsForumUrl = "https://obsproject.com/forum/resources/";
 			QTableWidgetItem* forumItem = new QTableWidgetItem("OBS Forums");
-			forumItem->setForeground(QColor("#3b82f6"));
+			forumItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 			forumItem->setData(Qt::UserRole, obsForumUrl);
 			table->setItem(row, 3, forumItem);
 		}
@@ -313,19 +313,19 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 			QLabel *messageLabel = new QLabel(obs_module_text("Plugin.Status.AllUpToDate"));
 			messageLabel->setStyleSheet(QString(
 				"QLabel {"
-				"color: white;"
+				"color: %2;"
 				"font-size: %1px;"
 				"font-weight: bold;"
 				"background: transparent;"
 				"border: none;"
-				"}").arg(StreamUP::UIStyles::Sizes::FONT_SIZE_MEDIUM));
+				"}").arg(StreamUP::UIStyles::Sizes::FONT_SIZE_MEDIUM).arg(StreamUP::UIStyles::Colors::BG_DARKEST));
 			messageLabel->setAlignment(Qt::AlignCenter);
 			toastLayout->addWidget(messageLabel);
-			
+
 			QLabel *countdownLabel = new QLabel(obs_module_text("Plugin.Message.AutoClosing3"));
 			countdownLabel->setStyleSheet(QString(
 				"QLabel {"
-				"color: rgba(255, 255, 255, 0.8);"
+				"color: rgba(30, 30, 46, 0.75);"
 				"font-size: %1px;"
 				"background: transparent;"
 				"border: none;"
@@ -382,11 +382,10 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			titleText = obs_module_text("Plugin.Status.FailedToLoadOnly");
 		}
 
-		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleText);
-		
-		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(0, 0, 0, 0);
-		dialogLayout->setSpacing(0);
+		QString prefixedTitle = QString::fromUtf8("StreamUP \xe2\x80\xa2 ") + titleText;
+		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(prefixedTitle);
+
+		QVBoxLayout *dialogLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 
 		// Header section (same style as WebSocket Commands)
 		QWidget* headerWidget = new QWidget();
@@ -472,7 +471,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 				StreamUP::UIStyles::HandleTableCellClick(missingTable, row, column);
 			});
 			
-			missingLayout->addWidget(missingTable);
+			missingLayout->addWidget(StreamUP::UIStyles::GetTableContainer(missingTable));
 			contentLayout->addWidget(missingGroup);
 		}
 
@@ -513,7 +512,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 				StreamUP::UIStyles::HandleTableCellClick(updateTable, row, column);
 			});
 			
-			updateLayout->addWidget(updateTable);
+			updateLayout->addWidget(StreamUP::UIStyles::GetTableContainer(updateTable));
 			contentLayout->addWidget(updateGroup);
 		}
 
@@ -554,7 +553,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 				StreamUP::UIStyles::HandleTableCellClick(failedTable, row, column);
 			});
 
-			failedLayout->addWidget(failedTable);
+			failedLayout->addWidget(StreamUP::UIStyles::GetTableContainer(failedTable));
 			contentLayout->addWidget(failedGroup);
 		}
 
@@ -596,15 +595,12 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			dialogLayout->addWidget(skipCheckbox);
 		}
 
-		// Add styled buttons
+		// Add styled buttons in footer
+		QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		buttonLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
-			StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-			StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
-			StreamUP::UIStyles::Sizes::PADDING_XL);
 		buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
 		buttonLayout->addStretch();
-		
+
 		// Add Continue Anyway button if callback is provided
 		if (continueCallback) {
 			QPushButton *continueButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Message.ContinueAnyway"), "warning");
@@ -614,8 +610,8 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			});
 			buttonLayout->addWidget(continueButton);
 		}
-		
-		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.OK"), "neutral", 30, 100);
+
+		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.OK"), "neutral");
 		QObject::connect(okButton, &QPushButton::clicked, [dialog, skipCheckbox, version_mismatch_modules, failed_to_load_modules]() {
 			// Save skipped updates if checkbox is checked
 			if (skipCheckbox && skipCheckbox->isChecked()) {
@@ -638,8 +634,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		});
 		buttonLayout->addWidget(okButton);
 
-		dialogLayout->addLayout(buttonLayout);
-		dialog->setLayout(dialogLayout);
+		footerLayout->addLayout(buttonLayout);
 		
 		// Apply auto-sizing with larger defaults for plugin tables
 		StreamUP::UIStyles::ApplyAutoSizing(dialog, 700, 1000, 150, 800);

@@ -12,19 +12,16 @@ namespace StreamUP {
 HotkeySelectorDialog::HotkeySelectorDialog(QWidget* parent)
     : QDialog(parent)
 {
-    setWindowTitle(obs_module_text("HotkeySelector.Dialog.Title"));
+    UIStyles::ApplyFramelessChrome(this, obs_module_text("HotkeySelector.Dialog.Title"));
     setModal(true);
     resize(800, 600);
-
-    // Apply StreamUP dialog styling
-    setStyleSheet(UIStyles::GetDialogStyle());
 
     setupUI();
     populateHotkeys();
 }
 
 void HotkeySelectorDialog::setupUI() {
-    mainLayout = new QVBoxLayout(this);
+    mainLayout = UIStyles::GetDialogContentLayout(this);
     
     // Main splitter
     mainSplitter = new QSplitter(Qt::Horizontal, this);
@@ -63,7 +60,9 @@ void HotkeySelectorDialog::setupUI() {
     QVBoxLayout* detailsLayout = new QVBoxLayout(detailsGroup);
     
     selectedHotkeyName = new QLabel(obs_module_text("HotkeySelector.Message.NoSelection"), detailsGroup);
-    selectedHotkeyName->setStyleSheet("font-weight: bold; font-size: 14px;");
+    selectedHotkeyName->setStyleSheet(QString("font-weight: bold; font-size: %1px; color: %2;")
+        .arg(UIStyles::Sizes::FONT_SIZE_NORMAL)
+        .arg(UIStyles::Colors::TEXT_PRIMARY));
     detailsLayout->addWidget(selectedHotkeyName);
     
     selectedHotkeyDescription = new QLabel("", detailsGroup);
@@ -71,7 +70,7 @@ void HotkeySelectorDialog::setupUI() {
     detailsLayout->addWidget(selectedHotkeyDescription);
     
     selectedHotkeyKeys = new QLabel("", detailsGroup);
-    selectedHotkeyKeys->setStyleSheet("color: blue; font-family: monospace;");
+    selectedHotkeyKeys->setStyleSheet(QString("color: %1; font-family: monospace;").arg(UIStyles::Colors::PRIMARY_LIGHT));
     detailsLayout->addWidget(selectedHotkeyKeys);
     
     selectedHotkeyHelp = new QTextEdit(detailsGroup);
@@ -89,22 +88,20 @@ void HotkeySelectorDialog::setupUI() {
     mainSplitter->setStretchFactor(0, 2); // Left panel gets more space
     mainSplitter->setStretchFactor(1, 1); // Right panel gets less space
     
-    // Dialog buttons
+    // Dialog buttons in footer
+    QVBoxLayout *footerLayout = UIStyles::GetDialogFooterLayout(this);
     buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
-    
-    okButton = new QPushButton(obs_module_text("HotkeySelector.Button.Add"), this);
-    cancelButton = new QPushButton(obs_module_text("UI.Button.Cancel"), this);
 
-    okButton->setStyleSheet(UIStyles::GetButtonStyle());
-    cancelButton->setStyleSheet(UIStyles::GetButtonStyle());
+    okButton = UIStyles::CreateStyledButton(obs_module_text("HotkeySelector.Button.Add"), "info");
+    cancelButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
 
-    okButton->setEnabled(false); // Disabled until selection is made
-    
+    okButton->setEnabled(false);
+
     buttonLayout->addWidget(okButton);
     buttonLayout->addWidget(cancelButton);
-    
-    mainLayout->addLayout(buttonLayout);
+
+    footerLayout->addLayout(buttonLayout);
     
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);

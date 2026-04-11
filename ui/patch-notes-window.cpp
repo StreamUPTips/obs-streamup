@@ -1,6 +1,6 @@
 #include "patch-notes-window.hpp"
 #include "ui-helpers.hpp"
-#include "ui-styles.hpp" 
+#include "ui-styles.hpp"
 #include "splash-screen.hpp"
 #include "../utilities/error-handler.hpp"
 #include "../version.h"
@@ -14,210 +14,309 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QPointer>
-#include <QGroupBox>
+#include <QFrame>
+#include <QFile>
+#include <QTextStream>
+#include <QStringList>
+#include <QRegularExpression>
 
 namespace StreamUP {
 namespace PatchNotesWindow {
 
-// Patch notes dialog is now managed by DialogManager in ui-helpers
+namespace {
+
+struct VersionBlock {
+	QString versionLabel; // e.g. "StreamUP v2.1.8 - Patch Update"
+	QString bodyHtml;     // rendered body (excludes the h1)
+};
+
+// Apply **bold** / *italic* inline formatting.
+static QString ApplyInlineFormatting(QString line)
+{
+	// **bold**
+	while (true) {
+		int open = line.indexOf("**");
+		if (open < 0) break;
+		int close = line.indexOf("**", open + 2);
+		if (close < 0) break;
+		QString inner = line.mid(open + 2, close - open - 2);
+		line.replace(open, close - open + 2, QString("<b>%1</b>").arg(inner));
+	}
+	return line;
+}
+
+// Convert a single version's markdown body (no h1) to inline-styled HTML.
+static QString MarkdownBodyToHtml(const QString &md)
+{
+	QString out;
+	bool inList = false;
+	const QStringList lines = md.split('\n');
+	for (const QString &raw : lines) {
+		QString line = raw;
+		if (line.trimmed().isEmpty()) continue;
+
+		auto closeList = [&]() {
+			if (inList) {
+				out += "</ul>\n";
+				inList = false;
+			}
+		};
+
+		if (line.startsWith("### ")) {
+			closeList();
+			out += QString("<h4 style=\"color: %1; margin: 10px 0 4px 0; font-size: 13px; font-weight: 600;\">%2</h4>\n")
+				.arg(UIStyles::Colors::TEXT_PRIMARY, line.mid(4));
+		} else if (line.startsWith("## ")) {
+			closeList();
+			out += QString("<h3 style=\"color: %1; margin: 12px 0 6px 0; font-size: 14px; font-weight: 700;\">%2</h3>\n")
+				.arg(UIStyles::Colors::PRIMARY_LIGHT, line.mid(3));
+		} else if (line.startsWith("- ")) {
+			if (!inList) {
+				out += "<ul style=\"margin: 4px 0 8px 0; padding-left: 18px;\">\n";
+				inList = true;
+			}
+			out += QString("<li style=\"margin: 2px 0;\">%1</li>\n")
+				.arg(ApplyInlineFormatting(line.mid(2)));
+		} else {
+			closeList();
+			out += QString("<p style=\"margin: 6px 0;\">%1</p>\n").arg(ApplyInlineFormatting(line));
+		}
+	}
+	if (inList) out += "</ul>\n";
+
+	return QString("<div style=\"color: %1; line-height: 1.45; font-size: 12px;\">%2</div>")
+		.arg(UIStyles::Colors::TEXT_SECONDARY, out);
+}
+
+// Read the raw patch notes markdown and split into per-version blocks.
+static QVector<VersionBlock> LoadVersionBlocks()
+{
+	QVector<VersionBlock> blocks;
+
+	QFile file(":patch-notes-summary.md");
+	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		ErrorHandler::LogWarning("Failed to open local patch notes file", ErrorHandler::Category::UI);
+		return blocks;
+	}
+	QTextStream in(&file);
+	const QString md = in.readAll();
+	file.close();
+	if (md.isEmpty()) return blocks;
+
+	// Split on the `---` separator. Each chunk should start with `# StreamUP vX.Y.Z ...`.
+	const QStringList chunks = md.split(QRegularExpression("\\n-{3,}\\n"));
+	for (const QString &chunk : chunks) {
+		QString trimmed = chunk.trimmed();
+		if (trimmed.isEmpty()) continue;
+
+		int firstNewline = trimmed.indexOf('\n');
+		QString headerLine = firstNewline < 0 ? trimmed : trimmed.left(firstNewline);
+		QString body = firstNewline < 0 ? QString() : trimmed.mid(firstNewline + 1);
+
+		if (!headerLine.startsWith("# ")) continue;
+		QString label = headerLine.mid(2).trimmed();
+		// Only keep real version blocks. Other H1s in the markdown
+		// (e.g. "Support This Project") are rendered elsewhere or skipped.
+		if (!label.startsWith("StreamUP v")) continue;
+		VersionBlock block;
+		block.versionLabel = label;
+		block.bodyHtml = MarkdownBodyToHtml(body);
+		blocks.append(block);
+	}
+
+	return blocks;
+}
+
+// Build one collapsible card: clickable version header + body label that
+// toggles via setVisible. We deliberately do NOT animate maximumHeight here:
+// animating it on a QScrollArea-hosted wordwrap QLabel re-runs the entire
+// layout pass each frame (heightForWidth is expensive on rich text), which
+// pegs the CPU and looks worse than an instant toggle.
+static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
+{
+	QFrame *card = new QFrame();
+	card->setObjectName("patchNotesCard");
+	card->setStyleSheet(QString(
+		"QFrame#patchNotesCard { background: %1; border: 1px solid %2; border-radius: %3px; }")
+		.arg(UIStyles::Colors::BG_PRIMARY)
+		.arg(UIStyles::Colors::BORDER_SUBTLE)
+		.arg(UIStyles::Sizes::RADIUS_MD));
+
+	QVBoxLayout *cardLay = new QVBoxLayout(card);
+	cardLay->setContentsMargins(0, 0, 0, 0);
+	cardLay->setSpacing(0);
+
+	// Header button — fully transparent so the rounded card outline isn't
+	// fighting a square button background. Hover indication = chevron colour.
+	QPushButton *header = new QPushButton();
+	header->setCheckable(true);
+	header->setChecked(expanded);
+	header->setCursor(Qt::PointingHandCursor);
+	header->setText(QString("  %1  %2").arg(expanded ? QChar(0x25BC) : QChar(0x25B6)).arg(block.versionLabel));
+	header->setStyleSheet(QString(
+		"QPushButton {"
+		"  text-align: left;"
+		"  background: transparent;"
+		"  border: none;"
+		"  color: %1;"
+		"  font-size: 14px;"
+		"  font-weight: 700;"
+		"  padding: 12px 14px;"
+		"}"
+		"QPushButton:hover { color: %2; }")
+		.arg(UIStyles::Colors::TEXT_PRIMARY)
+		.arg(UIStyles::Colors::PRIMARY_LIGHT));
+	cardLay->addWidget(header);
+
+	QLabel *body = new QLabel(block.bodyHtml);
+	body->setTextFormat(Qt::RichText);
+	body->setWordWrap(true);
+	body->setOpenExternalLinks(true);
+	body->setStyleSheet(QString("QLabel { background: transparent; color: %1; padding: 4px 14px 12px 14px; }")
+		.arg(UIStyles::Colors::TEXT_SECONDARY));
+	body->setVisible(expanded);
+	cardLay->addWidget(body);
+
+	QObject::connect(header, &QPushButton::toggled, body, [header, body](bool checked) {
+		body->setVisible(checked);
+		// Swap chevron without rebuilding the rest of the label.
+		QString label = header->text();
+		int idx = label.indexOf(' ', 2);
+		if (idx > 0) {
+			QString tail = label.mid(idx);
+			header->setText(QString("  %1%2").arg(checked ? QChar(0x25BC) : QChar(0x25B6)).arg(tail));
+		}
+	});
+
+	return card;
+}
+
+} // namespace
 
 void CreatePatchNotesDialog()
 {
-    UIHelpers::ShowSingletonDialogOnUIThread("patch-notes", []() -> QDialog* {
-        QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP - Patch Notes");
+	UIHelpers::ShowSingletonDialogOnUIThread("patch-notes", []() -> QDialog * {
+		QDialog *dialog = UIStyles::CreateStyledDialog("StreamUP \xe2\x80\xa2 Patch Notes");
+		dialog->resize(720, 720);
 
-        // Start with compact size - will expand based on content
-        dialog->resize(700, 700);
+		QVBoxLayout *mainLayout = UIStyles::GetDialogContentLayout(dialog);
 
-        QVBoxLayout *mainLayout = new QVBoxLayout(dialog);
-        mainLayout->setContentsMargins(0, 0, 0, 0);
-        mainLayout->setSpacing(0);
+		// Scrollable content
+		QScrollArea *scrollArea = UIStyles::CreateStyledScrollArea();
+		QWidget *contentWidget = new QWidget();
+		contentWidget->setStyleSheet(QString("background: %1;").arg(UIStyles::Colors::BG_DARKEST));
+		QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
+		contentLayout->setContentsMargins(UIStyles::Sizes::PADDING_LARGE, UIStyles::Sizes::PADDING_LARGE,
+						  UIStyles::Sizes::PADDING_LARGE, UIStyles::Sizes::PADDING_LARGE);
+		contentLayout->setSpacing(UIStyles::Sizes::SPACING_MEDIUM);
 
-        // Modern unified content area with scroll - everything inside
-        QScrollArea *scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+		// Subtitle
+		QString subtitle = QString("Latest updates and improvements in v%1").arg(PROJECT_VERSION);
+		contentLayout->addWidget(UIStyles::CreateStyledDescription(subtitle));
 
-        QWidget *contentWidget = new QWidget();
-        contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
-        QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
-        contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
-                          StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
-        contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+		// Per-version collapsible cards — latest expanded, rest collapsed.
+		QVector<VersionBlock> blocks = LoadVersionBlocks();
+		if (blocks.isEmpty()) {
+			QLabel *fallback = new QLabel("Unable to load patch notes.");
+			fallback->setStyleSheet(QString("QLabel { color: %1; }").arg(UIStyles::Colors::WARNING));
+			contentLayout->addWidget(fallback);
+		} else {
+			for (int i = 0; i < blocks.size(); ++i) {
+				contentLayout->addWidget(BuildVersionCard(blocks[i], i == 0));
+			}
+		}
 
-        // Modern header inside scrollable area
-        QWidget *headerSection = new QWidget();
-        QVBoxLayout *headerLayout = new QVBoxLayout(headerSection);
-        headerLayout->setContentsMargins(0, 0, 0, 0);
-        headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+		contentLayout->addStretch();
 
-        // Title with modern styling
-        QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle("📋 Patch Notes");
-        titleLabel->setAlignment(Qt::AlignCenter);
+		scrollArea->setWidget(contentWidget);
+		scrollArea->setWidgetResizable(true);
+		scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+		mainLayout->addWidget(scrollArea);
 
-        // Description with modern styling
-        QString versionText = QString("Latest updates and improvements in v%1").arg(PROJECT_VERSION);
-        QLabel *subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(versionText);
-        subtitleLabel->setAlignment(Qt::AlignCenter);
+		// Footer: support row + links row + close, all pinned to the bottom.
+		QVBoxLayout *footerLayout = UIStyles::GetDialogFooterLayout(dialog);
 
-        headerLayout->addWidget(titleLabel);
-        headerLayout->addWidget(subtitleLabel);
-        
-        contentLayout->addWidget(headerSection);
-        contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+		// Support This Project row
+		QHBoxLayout *supportLay = new QHBoxLayout();
+		supportLay->setSpacing(UIStyles::Sizes::SPACING_SMALL);
+		supportLay->addStretch();
 
-        // Load patch notes content from splash screen module
-        std::string patchNotesContent = StreamUP::SplashScreen::LoadLocalPatchNotes();
-        QString patchNotesText = QString::fromStdString(patchNotesContent);
-        
-        if (patchNotesText.isEmpty()) {
-            patchNotesText = QString(R"(
-<div style="color: %1; line-height: 1.6; font-size: 14px;">
-    <h2 style="color: %2; margin: 0 0 15px 0; font-size: 20px; font-weight: 700;">🚀 StreamUP v%3 - Complete Redesign</h2>
-    <p style="margin: 8px 0; color: %4; font-size: 13px;">⚠️ Unable to load patch notes from local file</p>
-    <div style="margin: 15px 0;">
-        <h3 style="color: %5; font-size: 16px; font-weight: 600; margin: 12px 0 8px 0;">✨ Key Features</h3>
-        <ul style="margin: 8px 0; padding-left: 20px; line-height: 1.8;">
-            <li><strong>Modular Architecture:</strong> Complete restructuring for better performance</li>
-            <li><strong>Enhanced WebSocket API:</strong> Modern PascalCase commands</li>
-            <li><strong>Improved UI/UX:</strong> Beautiful interfaces with consistent design</li>
-            <li><strong>Advanced Settings:</strong> Comprehensive configuration options</li>
-            <li><strong>Better Notifications:</strong> Enhanced user feedback system</li>
-        </ul>
-    </div>
-</div>
-            )")
-                .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-                .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR)
-                .arg(PROJECT_VERSION)
-                .arg(StreamUP::UIStyles::Colors::WARNING)
-                .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY);
-        }
-        
-        // Create main patch notes group box
-        QGroupBox* patchNotesGroup = StreamUP::UIStyles::CreateStyledGroupBox("📋 Latest Updates", "success");
-        QVBoxLayout* patchNotesLayout = new QVBoxLayout(patchNotesGroup);
-        patchNotesLayout->setContentsMargins(8, 8, 8, 8);
-        
-        // Add patch notes content to group box
-        QLabel* patchNotesLabel = UIHelpers::CreateRichTextLabel(patchNotesText, false, true, Qt::Alignment(), true);
-        patchNotesLayout->addWidget(patchNotesLabel);
-        
-        contentLayout->addWidget(patchNotesGroup);
-        
-        // Add version and build information section
-        QGroupBox* versionGroup = StreamUP::UIStyles::CreateStyledGroupBox("ℹ️ Version Information", "warning");
-        QVBoxLayout* versionLayout = new QVBoxLayout(versionGroup);
-        versionLayout->setContentsMargins(8, 8, 8, 8);
-        
-        // Detect platform
-#if defined(_WIN32)
-        QString platform = "Windows x64";
-#elif defined(__APPLE__)
-        QString platform = "macOS";
-#else
-        QString platform = "Linux";
-#endif
+		QPushButton *patreonBtn = UIStyles::CreateStyledButton("Patreon", "warning");
+		patreonBtn->setIcon(QIcon(":images/icons/social/patreon.svg"));
+		patreonBtn->setIconSize(QSize(16, 16));
+		QObject::connect(patreonBtn, &QPushButton::clicked, []() {
+			QDesktopServices::openUrl(QUrl("https://www.patreon.com/streamup"));
+		});
 
-        QString versionInfo = QString(R"(
-<div style="color: %1; line-height: 1.5; font-size: 13px;">
-    <p style="margin: 4px 0;"><strong>Version:</strong> %2</p>
-    <p style="margin: 4px 0;"><strong>Build:</strong> Release</p>
-    <p style="margin: 4px 0;"><strong>Platform:</strong> %4</p>
-    <p style="margin: 4px 0; color: %3;">For the latest updates and community support, check out our links below!</p>
-</div>
-        )")
-            .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-            .arg(PROJECT_VERSION)
-            .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-            .arg(platform);
-        
-        QLabel* versionLabel = UIHelpers::CreateRichTextLabel(versionInfo, false, true, Qt::Alignment(), true);
-        versionLayout->addWidget(versionLabel);
-        contentLayout->addWidget(versionGroup);
-        
-        // Create links section with modern card styling
-        QGroupBox* linksGroup = StreamUP::UIStyles::CreateStyledGroupBox("🔗 Useful Links", "info");
-        QVBoxLayout* linksGroupLayout = new QVBoxLayout(linksGroup);
-        linksGroupLayout->setContentsMargins(8, 8, 8, 8);
-        
-        // Link buttons with improved layout
-        QHBoxLayout* buttonsLayout = new QHBoxLayout();
-        buttonsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
-        
-        QPushButton* docsBtn = StreamUP::UIStyles::CreateStyledButton("📖 Documentation", "success");
-        docsBtn->setToolTip("View comprehensive documentation and guides");
-        QObject::connect(docsBtn, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://streamup.doras.click/docs"));
-        });
-        
-        QPushButton* discordBtn = StreamUP::UIStyles::CreateStyledButton("💬 Discord", "info");
-        discordBtn->setIcon(QIcon(":images/icons/social/discord.svg"));
-        discordBtn->setIconSize(QSize(16, 16));
-        discordBtn->setToolTip("Join our community Discord server");
-        QObject::connect(discordBtn, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://discord.com/invite/RnDKRaVCEu"));
-        });
-        
-        QPushButton* websiteBtn = StreamUP::UIStyles::CreateStyledButton("🌐 Website", "neutral");
-        websiteBtn->setToolTip("Visit the official StreamUP website");
-        QObject::connect(websiteBtn, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://streamup.tips"));
-        });
-        
-        buttonsLayout->addWidget(docsBtn);
-        buttonsLayout->addWidget(discordBtn);
-        buttonsLayout->addWidget(websiteBtn);
-        buttonsLayout->addStretch();
-        
-        linksGroupLayout->addLayout(buttonsLayout);
-        contentLayout->addWidget(linksGroup);
+		QPushButton *kofiBtn = UIStyles::CreateStyledButton("Ko-Fi", "warning");
+		kofiBtn->setIcon(QIcon(":images/icons/social/kofi.svg"));
+		kofiBtn->setIconSize(QSize(16, 16));
+		QObject::connect(kofiBtn, &QPushButton::clicked, []() {
+			QDesktopServices::openUrl(QUrl("https://ko-fi.com/streamup"));
+		});
 
-        // Add stretch to push content to top
-        contentLayout->addStretch();
+		QPushButton *beerBtn = UIStyles::CreateStyledButton("Buy a Beer", "warning");
+		beerBtn->setIcon(QIcon(":images/icons/social/beer.svg"));
+		beerBtn->setIconSize(QSize(16, 16));
+		QObject::connect(beerBtn, &QPushButton::clicked, []() {
+			QDesktopServices::openUrl(QUrl("https://paypal.me/andilippi"));
+		});
 
-        // Add close button at the bottom of the content area (inside scroll)
-        contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
-        
-        // Modern button section inside scrollable content
-        QHBoxLayout *buttonLayout = new QHBoxLayout();
-        buttonLayout->setContentsMargins(0, 0, 0, 0);
-        
-        QPushButton *closeButton = StreamUP::UIStyles::CreateStyledButton("Close", "neutral");
-        QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
-        
-        buttonLayout->addStretch();
-        buttonLayout->addWidget(closeButton);
-        buttonLayout->addStretch();
-        
-        contentLayout->addLayout(buttonLayout);
+		supportLay->addWidget(patreonBtn);
+		supportLay->addWidget(kofiBtn);
+		supportLay->addWidget(beerBtn);
+		supportLay->addStretch();
+		footerLayout->addLayout(supportLay);
 
-        // Set up scroll area
-        scrollArea->setWidget(contentWidget);
-        scrollArea->setWidgetResizable(true);
-        scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+		// Links + close row
+		QHBoxLayout *linksLay = new QHBoxLayout();
+		linksLay->setSpacing(UIStyles::Sizes::SPACING_SMALL);
+		linksLay->addStretch();
 
-        mainLayout->addWidget(scrollArea);
-        dialog->setLayout(mainLayout);
+		QPushButton *docsBtn = UIStyles::CreateStyledButton("Documentation", "success");
+		QObject::connect(docsBtn, &QPushButton::clicked, []() {
+			QDesktopServices::openUrl(QUrl("https://streamup.doras.click/docs"));
+		});
 
-        // Apply consistent sizing similar to WebSocket window
-        StreamUP::UIStyles::ApplyAutoSizing(dialog, 700, 900, 700, 800);
-        
-        // Center the dialog
-        StreamUP::UIHelpers::CenterDialog(dialog);
-        return dialog;
-    });
+		QPushButton *discordBtn = UIStyles::CreateStyledButton("Discord", "info");
+		discordBtn->setIcon(QIcon(":images/icons/social/discord.svg"));
+		discordBtn->setIconSize(QSize(16, 16));
+		QObject::connect(discordBtn, &QPushButton::clicked, []() {
+			QDesktopServices::openUrl(QUrl("https://discord.com/invite/RnDKRaVCEu"));
+		});
+
+		QPushButton *websiteBtn = UIStyles::CreateStyledButton("Website", "primary-outline");
+		QObject::connect(websiteBtn, &QPushButton::clicked, []() {
+			QDesktopServices::openUrl(QUrl("https://streamup.tips"));
+		});
+
+		QPushButton *closeButton = UIStyles::CreateStyledButton("Close", "neutral");
+		QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
+
+		linksLay->addWidget(docsBtn);
+		linksLay->addWidget(discordBtn);
+		linksLay->addWidget(websiteBtn);
+		linksLay->addSpacing(UIStyles::Sizes::SPACING_LARGE);
+		linksLay->addWidget(closeButton);
+		linksLay->addStretch();
+		footerLayout->addLayout(linksLay);
+
+		UIStyles::ApplyAutoSizing(dialog, 720, 900, 720, 820);
+		UIHelpers::CenterDialog(dialog);
+		return dialog;
+	});
 }
 
 void ShowPatchNotesWindow()
 {
-    CreatePatchNotesDialog();
-    
-    ErrorHandler::LogInfo("Patch notes window shown", ErrorHandler::Category::UI);
+	CreatePatchNotesDialog();
+	ErrorHandler::LogInfo("Patch notes window shown", ErrorHandler::Category::UI);
 }
 
 bool IsPatchNotesWindowOpen()
 {
-    return UIHelpers::DialogManager::IsSingletonDialogOpen("patch-notes");
+	return UIHelpers::DialogManager::IsSingletonDialogOpen("patch-notes");
 }
 
 } // namespace PatchNotesWindow

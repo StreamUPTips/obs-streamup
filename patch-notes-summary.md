@@ -118,7 +118,7 @@
 
 ---
 
-# StreamUP v2.1.0 - Major Update 🚀
+# StreamUP v2.1.0 - Major Update
 
 We've listened to your feedback and completely rebuilt the StreamUP OBS plugin from scratch. This has been an enormous project that's taken months of work. The plugin remains completely free - if you find it useful, please share it with friends and consider supporting us!
 
@@ -158,7 +158,7 @@ Options in StreamUP > Tools now trigger their function directly instead of openi
 
 ---
 
-# 💖 Support This Project
+# Support This Project
 
 StreamUP is completely free and always will be. Your support helps us continue developing amazing features!
 
@@ -180,4 +180,4 @@ StreamUP is completely free and always will be. Your support helps us continue d
 
 ---
 
-*StreamUP v2.0.0 is our biggest update yet - a complete rebuild that makes everything more reliable whilst adding loads of new features. Thanks for being part of the StreamUP community! 🇬🇧*
+*StreamUP v2.0.0 is our biggest update yet - a complete rebuild that makes everything more reliable whilst adding loads of new features. Thanks for being part of the StreamUP community.*
