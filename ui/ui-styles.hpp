@@ -20,14 +20,21 @@ class QToolButton;
 namespace StreamUP {
 namespace UIStyles {
 
-// Rounded container with setMask() for proper child clipping (Catppuccin Mocha)
+// Rounded container. Two modes:
+//  - Masked (default): uses setMask() so children with different bgs (header/content/
+//    footer in frameless dialogs) don't bleed into the rounded corner region. Mask is
+//    bitmap so corners are slightly jagged, acceptable for full-dialog chrome.
+//  - Unmasked: just paints rounded fill + AA border. Intended for containers where
+//    children share the same bg as the container (e.g. tables), so square child
+//    corners are hidden by matching colour and corners render with clean AA.
 class RoundedContainer : public QFrame {
     Q_OBJECT
     int m_radius;
     QString m_fillColor;
     int m_borderAlpha;
+    bool m_useMask;
 public:
-    explicit RoundedContainer(int radius = 14, QWidget *parent = nullptr);
+    explicit RoundedContainer(int radius = 14, QWidget *parent = nullptr, bool useMask = true);
     // Optional: override fill/border appearance (e.g. for table containers that want
     // a lighter surface with a more visible outline than the default dialog chrome)
     void setSurface(const QString &fillColor, int borderAlpha);

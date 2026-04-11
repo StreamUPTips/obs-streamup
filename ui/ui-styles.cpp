@@ -43,8 +43,8 @@ namespace StreamUP {
 namespace UIStyles {
 
 //-------------------ROUNDED CONTAINER-------------------
-RoundedContainer::RoundedContainer(int radius, QWidget *parent)
-    : QFrame(parent), m_radius(radius), m_fillColor(Colors::BG_DARKEST), m_borderAlpha(15) {}
+RoundedContainer::RoundedContainer(int radius, QWidget *parent, bool useMask)
+    : QFrame(parent), m_radius(radius), m_fillColor(Colors::BG_DARKEST), m_borderAlpha(15), m_useMask(useMask) {}
 
 void RoundedContainer::setSurface(const QString &fillColor, int borderAlpha)
 {
@@ -56,9 +56,11 @@ void RoundedContainer::setSurface(const QString &fillColor, int borderAlpha)
 void RoundedContainer::resizeEvent(QResizeEvent *event)
 {
     QFrame::resizeEvent(event);
-    QPainterPath path;
-    path.addRoundedRect(QRectF(rect()), m_radius, m_radius);
-    setMask(path.toFillPolygon().toPolygon());
+    if (m_useMask) {
+        QPainterPath path;
+        path.addRoundedRect(QRectF(rect()), m_radius, m_radius);
+        setMask(path.toFillPolygon().toPolygon());
+    }
 }
 
 void RoundedContainer::paintEvent(QPaintEvent *event)
@@ -312,20 +314,21 @@ QString GetContentLabelStyle() {
 }
 
 // Common pill-button base style shared by all variants.
-// ALL variants use border: 1px so filled and outlined buttons have identical height.
-// border-radius is intentionally huge — Qt clamps it to half the rendered box so we
-// always get a real pill regardless of padding/content.
+// Qt does NOT clamp border-radius to half the box — oversized values render as square,
+// so we compute an explicit radius from the expected rendered height.
+// Rendered box ≈ min-height + padding (0 here) + border (2) → radius = (height + 2) / 2.
 static QString ButtonBaseStyle(int height) {
     int btnHeight = height > 0 ? height : 22;
+    int radius = (btnHeight + 2) / 2;
     return QString(
         "    min-height: %1px; max-height: %1px;"
         "    min-width: 80px;"
-        "    border-radius: 9999px;"
+        "    border-radius: %2px;"
         "    padding: 0px 14px;"
         "    outline: none; font-weight: bold;"
         "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
         "    font-size: 11px;"
-    ).arg(btnHeight);
+    ).arg(btnHeight).arg(radius);
 }
 
 QString GetButtonStyle(const QString& variant, const QString& /*unused*/, int height) {
@@ -483,35 +486,54 @@ QString GetScrollAreaStyle() {
 }
 
 QString GetTableStyle() {
-    // Table lives inside a RoundedContainer — container draws the outline,
-    // table fills the container fully with no extra border so the outline stays visible.
+    // Table lives inside a RoundedContainer (unmasked, AA-painted rounded border).
+    // Strategy: matching bg to container, no grid, per-row dividers via item border,
+    // alternating row colors, flat header section.
     return QString(
-        "QTableWidget {"
+        "QTableWidget, QTableView {"
         "    background-color: %1;"
+        "    alternate-background-color: %9;"
         "    border: none;"
-        "    gridline-color: %2;"
+        "    gridline-color: transparent;"
         "    outline: none;"
         "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
         "    font-size: 12px;"
         "    color: %3;"
         "    selection-background-color: %4;"
+        "    selection-color: %3;"
+        "    show-decoration-selected: 1;"
         "}"
-        "QTableWidget::item {"
-        "    padding: 6px 10px;"
+        "QTableWidget::item, QTableView::item {"
+        "    padding: 8px 12px;"
+        "    border: none;"
         "    border-bottom: 1px solid %2;"
         "}"
-        "QTableWidget::item:selected {"
+        "QTableWidget::item:selected, QTableView::item:selected {"
         "    background-color: %4;"
         "    color: %3;"
+        "}"
+        "QHeaderView {"
+        "    background-color: %5;"
+        "    border: none;"
         "}"
         "QHeaderView::section {"
         "    background-color: %5;"
         "    color: %6;"
-        "    font-weight: bold;"
+        "    font-weight: 700;"
         "    font-size: 11px;"
-        "    padding: 6px 10px;"
+        "    padding: 10px 12px;"
         "    border: none;"
         "    border-bottom: 1px solid %2;"
+        "}"
+        "QHeaderView::section:first {"
+        "    border-top-left-radius: 9px;"
+        "}"
+        "QHeaderView::section:last {"
+        "    border-top-right-radius: 9px;"
+        "}"
+        "QTableCornerButton::section {"
+        "    background-color: %5;"
+        "    border: none;"
         "}"
         // Narrow scrollbar — RoundedContainer mask clips corners
         "QScrollBar:vertical {"
@@ -538,14 +560,15 @@ QString GetTableStyle() {
         "QScrollBar::sub-page:vertical {"
         "    background: none;"
         "}"
-    ).arg(Colors::BG_PRIMARY)         // %1
-     .arg(Colors::BORDER_SUBTLE)      // %2
-     .arg(Colors::TEXT_PRIMARY)       // %3
-     .arg(Colors::PRIMARY_ALPHA_30)   // %4
-     .arg(Colors::BG_TERTIARY)        // %5
-     .arg(Colors::TEXT_SECONDARY)     // %6
-     .arg("rgba(0, 118, 223, 0.25)")  // %7 - scrollbar handle (primary @ 25%)
-     .arg("rgba(0, 118, 223, 0.45)"); // %8 - scrollbar handle hover (primary @ 45%)
+    ).arg(Colors::BG_PRIMARY)                // %1 - base row bg
+     .arg(Colors::BORDER_SUBTLE)              // %2 - row divider / header underline
+     .arg(Colors::TEXT_PRIMARY)               // %3 - text
+     .arg(Colors::PRIMARY_ALPHA_30)           // %4 - selection
+     .arg(Colors::BG_TERTIARY)                // %5 - header bg
+     .arg(Colors::TEXT_SECONDARY)             // %6 - header text
+     .arg("rgba(0, 118, 223, 0.25)")          // %7 - scrollbar handle
+     .arg("rgba(0, 118, 223, 0.45)")          // %8 - scrollbar handle hover
+     .arg("rgba(255, 255, 255, 0.025)");      // %9 - alternate row (subtle)
 }
 
 QDialog* CreateStyledDialog(const QString& title, QWidget* parentWidget) {
@@ -709,7 +732,7 @@ QTableWidget* CreateStyledTableWidget(QWidget* parent) {
     QTableWidget* table = new QTableWidget(parent);
 
     // Configure table behavior
-    table->setAlternatingRowColors(false);
+    table->setAlternatingRowColors(true);
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSortingEnabled(false);
@@ -763,12 +786,13 @@ QWidget* GetTableContainer(QTableWidget* table) {
         return static_cast<QWidget *>(v.value<void *>());
 
     // Wrap now — after caller has finished configuring (setFixedHeight, etc.)
-    RoundedContainer *container = new RoundedContainer(Sizes::RADIUS_MD, table->parentWidget());
-    // Table container: use card-surface fill + visible outline so the table reads as
-    // a distinct panel against the dialog background.
+    // Unmasked container: paintEvent draws AA rounded fill + border, the table's
+    // matching bg hides its own square corners. Inset by 1px so the container border
+    // reads cleanly around the table viewport.
+    RoundedContainer *container = new RoundedContainer(Sizes::RADIUS_MD, table->parentWidget(), /*useMask=*/false);
     container->setSurface(Colors::BG_PRIMARY, 40);
     QVBoxLayout *lay = new QVBoxLayout(container);
-    lay->setContentsMargins(0, 0, 0, 0);
+    lay->setContentsMargins(1, 1, 1, 1);
     lay->setSpacing(0);
 
     // Propagate size constraints from table to container
@@ -1165,11 +1189,23 @@ QString GetComboBoxStyle() {
         "    outline: none;"
         "}"
         "QComboBox::drop-down {"
+        "    subcontrol-origin: padding;"
+        "    subcontrol-position: top right;"
         "    border: none;"
         "    width: %7px;"
         "    background-color: %9;"
         "    border-top-right-radius: %2px;"
         "    border-bottom-right-radius: %2px;"
+        "}"
+        "QComboBox::down-arrow {"
+        "    image: none;"
+        "    width: 0px;"
+        "    height: 0px;"
+        "    border: none;"
+        "    background: transparent;"
+        "}"
+        "QComboBox::down-arrow:on, QComboBox::down-arrow:hover, QComboBox::down-arrow:off {"
+        "    image: none;"
         "}"
         "QComboBox QAbstractItemView {"
         "    background-color: %10;"
