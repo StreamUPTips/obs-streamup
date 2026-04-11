@@ -62,6 +62,8 @@
 		<file>images/icons/ui/add-sources-to-group-dark.svg</file>
 		<file>images/icons/ui/visible-light.svg</file>
 		<file>images/icons/ui/visible-dark.svg</file>
+		<file>images/icons/ui/visible-off-light.svg</file>
+		<file>images/icons/ui/visible-off-dark.svg</file>
 
 		<!-- Form Control Icons -->
 		<file>images/icons/ui/dropdown-arrow-light.svg</file>

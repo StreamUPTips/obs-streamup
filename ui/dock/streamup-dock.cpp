@@ -617,8 +617,29 @@ void StreamUPDock::updateButtonIcons()
 	applyFileIconToButton(refreshAudioButton, StreamUP::UIHelpers::GetThemedIconPath("refresh-audio-monitoring"));
 	applyFileIconToButton(videoCaptureButton, StreamUP::UIHelpers::GetThemedIconPath("camera"));
 	applyFileIconToButton(groupSelectedSourcesButton, StreamUP::UIHelpers::GetThemedIconPath("add-sources-to-group"));
-	applyFileIconToButton(toggleVisibilityButton, StreamUP::UIHelpers::GetThemedIconPath("visible"));
 
+	// Visibility button reflects what the next click will do, based on the
+	// current selection. Idle (nothing selected) = "visible" icon. Any
+	// selected item already visible = next click hides them = "visible-off"
+	// icon. All selected items hidden = next click shows them = "visible".
+	updateVisibilityButtonIcon();
+}
+
+void StreamUPDock::updateVisibilityButtonIcon()
+{
+	if (!toggleVisibilityButton) return;
+
+	const bool hasSelection = StreamUP::SourceManager::HasAnySelectedSceneItem();
+	const bool anyVisible = hasSelection && StreamUP::SourceManager::CheckIfAnySelectedVisible();
+
+	const QString iconKey = (hasSelection && anyVisible) ? "visible-off" : "visible";
+	applyFileIconToButton(toggleVisibilityButton, StreamUP::UIHelpers::GetThemedIconPath(iconKey));
+
+	toggleVisibilityButton->setToolTip(
+		hasSelection
+			? (anyVisible ? obs_module_text("Dock.Tool.HideSelectedSources.Title")
+				      : obs_module_text("Dock.Tool.ShowSelectedSources.Title"))
+			: obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Title"));
 }
 
 bool StreamUPDock::AreAllSourcesLockedInAllScenes()
@@ -657,6 +678,9 @@ void StreamUPDock::connectSceneSignals()
 			signal_handler_connect(scene_handler, "item_add", StreamUPDock::onSceneItemAdded, this);
 			signal_handler_connect(scene_handler, "item_remove", StreamUPDock::onSceneItemRemoved, this);
 			signal_handler_connect(scene_handler, "item_locked", StreamUPDock::onItemLockChanged, this);
+			signal_handler_connect(scene_handler, "item_select", StreamUPDock::onItemSelectionChanged, this);
+			signal_handler_connect(scene_handler, "item_deselect", StreamUPDock::onItemSelectionChanged, this);
+			signal_handler_connect(scene_handler, "item_visible", StreamUPDock::onItemVisibilityChanged, this);
 		}
 		// Store the connected scene (addref for our stored reference)
 		m_connectedScene = current_scene; // already has a ref from obs_frontend_get_current_scene
@@ -671,6 +695,9 @@ void StreamUPDock::disconnectSceneSignals()
 			signal_handler_disconnect(scene_handler, "item_add", StreamUPDock::onSceneItemAdded, this);
 			signal_handler_disconnect(scene_handler, "item_remove", StreamUPDock::onSceneItemRemoved, this);
 			signal_handler_disconnect(scene_handler, "item_locked", StreamUPDock::onItemLockChanged, this);
+			signal_handler_disconnect(scene_handler, "item_select", StreamUPDock::onItemSelectionChanged, this);
+			signal_handler_disconnect(scene_handler, "item_deselect", StreamUPDock::onItemSelectionChanged, this);
+			signal_handler_disconnect(scene_handler, "item_visible", StreamUPDock::onItemVisibilityChanged, this);
 		}
 		obs_source_release(m_connectedScene);
 		m_connectedScene = nullptr;
@@ -747,6 +774,28 @@ void StreamUPDock::onItemLockChanged(void *param, calldata_t *data)
 	if (self->isProcessing || self->m_sceneCollectionChanging)
 		return;
 	QMetaObject::invokeMethod(self, "updateButtonIcons", Qt::QueuedConnection);
+}
+
+void StreamUPDock::onItemSelectionChanged(void *param, calldata_t *data)
+{
+	Q_UNUSED(data);
+
+	StreamUPDock *self = static_cast<StreamUPDock *>(param);
+	if (self->isProcessing || self->m_sceneCollectionChanging)
+		return;
+	// Selection changes only affect the visibility button, no need to refresh
+	// every other icon — go straight to the targeted update.
+	QMetaObject::invokeMethod(self, "updateVisibilityButtonIcon", Qt::QueuedConnection);
+}
+
+void StreamUPDock::onItemVisibilityChanged(void *param, calldata_t *data)
+{
+	Q_UNUSED(data);
+
+	StreamUPDock *self = static_cast<StreamUPDock *>(param);
+	if (self->isProcessing || self->m_sceneCollectionChanging)
+		return;
+	QMetaObject::invokeMethod(self, "updateVisibilityButtonIcon", Qt::QueuedConnection);
 }
 
 void StreamUPDock::updateToolVisibility()

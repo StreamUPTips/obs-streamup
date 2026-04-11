@@ -199,6 +199,14 @@ bool ToggleVisibilitySelectedSources(bool sendNotification = true);
  */
 bool CheckIfAnySelectedVisible();
 
+/**
+ * Check whether there is at least one scene item selected in the current scene.
+ * Used by the dock to decide whether the visibility button should reflect a
+ * specific selection state or fall back to its idle icon.
+ * @return bool True if at least one item is selected
+ */
+bool HasAnySelectedSceneItem();
+
 } // namespace SourceManager
 } // namespace StreamUP
 

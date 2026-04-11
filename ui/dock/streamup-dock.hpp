@@ -61,6 +61,7 @@ private:
 
 	void applyFileIconToButton(QPushButton *button, const QString &filePath);
 	Q_INVOKABLE void updateButtonIcons();
+	Q_INVOKABLE void updateVisibilityButtonIcon();
 
 	void setupObsSignals();
 	void connectSceneSignals();
@@ -75,6 +76,8 @@ public slots:
 	static void onSceneItemAdded(void *param, calldata_t *data);
 	static void onSceneItemRemoved(void *param, calldata_t *data);
 	static void onItemLockChanged(void *param, calldata_t *data);
+	static void onItemSelectionChanged(void *param, calldata_t *data);
+	static void onItemVisibilityChanged(void *param, calldata_t *data);
 
 protected:
 	void contextMenuEvent(QContextMenuEvent* event) override;
