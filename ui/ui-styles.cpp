@@ -21,6 +21,7 @@
 #include <QAbstractItemView>
 #include <QAbstractScrollArea>
 #include <QComboBox>
+#include <QGraphicsDropShadowEffect>
 #include <QMenu>
 #include <QAction>
 #include <QApplication>
@@ -108,19 +109,73 @@ bool DragFilter::eventFilter(QObject *obj, QEvent *event)
 }
 
 //-------------------COMBO POPUP FILTER-------------------
+// Padding reserved around the popup contents for the shadow to render into —
+// the popup window is grown by this much on all sides, Qt's drop shadow effect
+// draws into that margin.
+static constexpr int kComboShadowMargin = 12;
+
 bool ComboPopupFilter::eventFilter(QObject *obj, QEvent *event)
 {
     QWidget *view = qobject_cast<QWidget *>(obj);
     if (!view) return false;
 
-    // Apply a rounded mask on show/resize. On Windows the DWM shadow follows
-    // the widget mask, so a rounded mask gives a rounded shadow — no square
-    // artifact bleeding outside the stylesheet's rounded corners.
-    if (event->type() == QEvent::Show || event->type() == QEvent::Resize) {
-        const int radius = Sizes::RADIUS_LG;
-        QPainterPath path;
-        path.addRoundedRect(QRectF(view->rect()), radius, radius);
-        view->setMask(path.toFillPolygon().toPolygon());
+    if (event->type() == QEvent::Show) {
+        // Frameless translucent popup with an AA-painted rounded background +
+        // a Qt drop shadow effect. Window flags have to be set each time
+        // because Qt reparents the view into a fresh popup window on every
+        // showPopup().
+        view->setAttribute(Qt::WA_TranslucentBackground, true);
+        view->setAttribute(Qt::WA_StyledBackground, true);
+        view->setWindowFlag(Qt::NoDropShadowWindowHint, true);
+        view->setWindowFlag(Qt::FramelessWindowHint, true);
+
+        // Explicit stylesheet directly on the view — the cascade from the
+        // parent combo doesn't reach the view once it's reparented into its
+        // own top-level popup window, so we apply here. Margins on the root
+        // selector leave room for the drop shadow effect.
+        view->setStyleSheet(
+            QString("QAbstractItemView {"
+                    "  background-color: %1;"
+                    "  border: 1px solid %2;"
+                    "  border-radius: %3px;"
+                    "  color: %4;"
+                    "  padding: 4px;"
+                    "  margin: %5px;"
+                    "  outline: none;"
+                    "  font-weight: 600;"
+                    "  font-size: 13px;"
+                    "}"
+                    "QAbstractItemView::item {"
+                    "  padding: 6px 12px;"
+                    "  border-radius: %6px;"
+                    "  margin: 1px 2px;"
+                    "  min-height: 20px;"
+                    "  border: none;"
+                    "}"
+                    "QAbstractItemView::item:selected {"
+                    "  background-color: %7;"
+                    "  color: %4;"
+                    "}"
+                    "QAbstractItemView::item:hover {"
+                    "  background-color: %8;"
+                    "}")
+                .arg(Colors::MENU_OVERLAY)
+                .arg(Colors::BORDER_MEDIUM)
+                .arg(Sizes::RADIUS_LG)
+                .arg(Colors::TEXT_PRIMARY)
+                .arg(kComboShadowMargin)
+                .arg(Sizes::MENU_ITEM_PILL_RADIUS)
+                .arg(Colors::PRIMARY_COLOR)
+                .arg(Colors::PRIMARY_ALPHA_30));
+
+        // Install the drop shadow once.
+        if (!view->graphicsEffect()) {
+            auto *shadow = new QGraphicsDropShadowEffect(view);
+            shadow->setBlurRadius(kComboShadowMargin * 1.4);
+            shadow->setColor(QColor(0, 0, 0, 180));
+            shadow->setOffset(0, 3);
+            view->setGraphicsEffect(shadow);
+        }
     }
     return false;
 }
