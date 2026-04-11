@@ -24,8 +24,13 @@ namespace UIStyles {
 class RoundedContainer : public QFrame {
     Q_OBJECT
     int m_radius;
+    QString m_fillColor;
+    int m_borderAlpha;
 public:
     explicit RoundedContainer(int radius = 14, QWidget *parent = nullptr);
+    // Optional: override fill/border appearance (e.g. for table containers that want
+    // a lighter surface with a more visible outline than the default dialog chrome)
+    void setSurface(const QString &fillColor, int borderAlpha);
 protected:
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;

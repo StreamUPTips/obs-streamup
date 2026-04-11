@@ -44,7 +44,14 @@ namespace UIStyles {
 
 //-------------------ROUNDED CONTAINER-------------------
 RoundedContainer::RoundedContainer(int radius, QWidget *parent)
-    : QFrame(parent), m_radius(radius) {}
+    : QFrame(parent), m_radius(radius), m_fillColor(Colors::BG_DARKEST), m_borderAlpha(15) {}
+
+void RoundedContainer::setSurface(const QString &fillColor, int borderAlpha)
+{
+    m_fillColor = fillColor;
+    m_borderAlpha = borderAlpha;
+    update();
+}
 
 void RoundedContainer::resizeEvent(QResizeEvent *event)
 {
@@ -60,11 +67,11 @@ void RoundedContainer::paintEvent(QPaintEvent *event)
     painter.setRenderHint(QPainter::Antialiasing);
     QPainterPath path;
     path.addRoundedRect(QRectF(rect()), m_radius, m_radius);
-    painter.fillPath(path, QColor(Colors::BG_DARKEST));
+    painter.fillPath(path, QColor(m_fillColor));
     QPainterPath borderPath;
     borderPath.addRoundedRect(
         QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), m_radius, m_radius);
-    painter.setPen(QPen(QColor(255, 255, 255, 15), 1));
+    painter.setPen(QPen(QColor(255, 255, 255, m_borderAlpha), 1));
     painter.drawPath(borderPath);
     QFrame::paintEvent(event);
 }
@@ -306,26 +313,28 @@ QString GetContentLabelStyle() {
 
 // Common pill-button base style shared by all variants.
 // ALL variants use border: 1px so filled and outlined buttons have identical height.
+// border-radius is intentionally huge — Qt clamps it to half the rendered box so we
+// always get a real pill regardless of padding/content.
 static QString ButtonBaseStyle(int height) {
-    int btnHeight = height > 0 ? height : 24;
-    int radius = btnHeight / 2; // true pill shape
+    int btnHeight = height > 0 ? height : 22;
     return QString(
         "    min-height: %1px; max-height: %1px;"
         "    min-width: 80px;"
-        "    border-radius: %2px;"
-        "    padding: 2px 14px;"
+        "    border-radius: 9999px;"
+        "    padding: 0px 14px;"
         "    outline: none; font-weight: bold;"
         "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
         "    font-size: 11px;"
-    ).arg(btnHeight).arg(radius);
+    ).arg(btnHeight);
 }
 
 QString GetButtonStyle(const QString& variant, const QString& /*unused*/, int height) {
     QString base = ButtonBaseStyle(height);
+    // Neutral greyed-out state: muted text, subtle neutral border, no coloured accent.
     QString disabled = QString(
         "QPushButton:disabled { color: %1; background: transparent; border: 1px solid %2; }"
         "QPushButton:disabled:hover, QPushButton:disabled:pressed { background: transparent; border: 1px solid %2; color: %1; }"
-    ).arg(Colors::TEXT_DISABLED, Colors::BORDER_DISABLED);
+    ).arg(Colors::TEXT_DISABLED, Colors::BORDER_SUBTLE);
 
     // Primary filled — 1px border matches colour so it's invisible but height-consistent
     if (variant == "primary" || variant == "info") {
@@ -474,11 +483,12 @@ QString GetScrollAreaStyle() {
 }
 
 QString GetTableStyle() {
-    // Table lives inside a RoundedContainer — no border/radius here
+    // Table lives inside a RoundedContainer — container draws the outline,
+    // table fills the container fully with no extra border so the outline stays visible.
     return QString(
         "QTableWidget {"
         "    background-color: %1;"
-        "    border: 1px solid %5;"
+        "    border: none;"
         "    gridline-color: %2;"
         "    outline: none;"
         "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
@@ -753,7 +763,10 @@ QWidget* GetTableContainer(QTableWidget* table) {
         return static_cast<QWidget *>(v.value<void *>());
 
     // Wrap now — after caller has finished configuring (setFixedHeight, etc.)
-    RoundedContainer *container = new RoundedContainer(10, table->parentWidget());
+    RoundedContainer *container = new RoundedContainer(Sizes::RADIUS_MD, table->parentWidget());
+    // Table container: use card-surface fill + visible outline so the table reads as
+    // a distinct panel against the dialog background.
+    container->setSurface(Colors::BG_PRIMARY, 40);
     QVBoxLayout *lay = new QVBoxLayout(container);
     lay->setContentsMargins(0, 0, 0, 0);
     lay->setSpacing(0);
@@ -1146,8 +1159,9 @@ QString GetComboBoxStyle() {
         "    max-height: %7px;"
         "    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
         "}"
-        "QComboBox:hover, QComboBox:focus {"
+        "QComboBox:hover, QComboBox:focus, QComboBox:on {"
         "    background-color: %8;"
+        "    border-radius: %2px;"
         "    outline: none;"
         "}"
         "QComboBox::drop-down {"
@@ -1160,7 +1174,7 @@ QString GetComboBoxStyle() {
         "QComboBox QAbstractItemView {"
         "    background-color: %10;"
         "    border: 1px solid %11;"
-        "    border-radius: 0px;"
+        "    border-radius: %12px;"
         "    selection-background-color: %13;"
         "    color: %6;"
         "    padding: %14px;"
