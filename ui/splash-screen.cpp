@@ -1361,15 +1361,16 @@ void CreateSplashDialog(ShowCondition condition)
 
         mainLayout->addWidget(earlyAccessBanner);
 
-        // Header section in scrollable area — vertical centered stack:
-        // logo, version line, patch notes button. Socials moved to footer.
+        // Header section: 3-column row [left spacer | centered logo+version stack | patch notes].
+        // The left spacer is sized to the button's width so the centered stack
+        // remains visually centered against the dialog rather than offset by
+        // the button on the right.
         QWidget* headerWidget = new QWidget();
         headerWidget->setObjectName("headerWidget");
         headerWidget->setStyleSheet("QWidget#headerWidget { background: transparent; }");
-        QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
-        headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
-        headerLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::PADDING_SMALL, 0, StreamUP::UIStyles::Sizes::PADDING_SMALL);
-        headerLayout->setAlignment(Qt::AlignHCenter);
+        QHBoxLayout* headerLayout = new QHBoxLayout(headerWidget);
+        headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+        headerLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0, StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
         
         // StreamUP text logo (clickable)
         class ClickableLabel : public QLabel {
@@ -1423,20 +1424,42 @@ void CreateSplashDialog(ShowCondition condition)
                 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_LARGE));
         }
         textLogoLabel->setAlignment(Qt::AlignCenter);
+        textLogoLabel->setStyleSheet(textLogoLabel->styleSheet() + "QLabel { padding: 0; margin: 0; }");
 
         QString versionText = QString(obs_module_text("StreamUP.SplashScreen.VersionText")).arg(PROJECT_VERSION);
         QLabel* versionLabel = StreamUP::UIStyles::CreateStyledDescription(versionText);
         versionLabel->setObjectName("versionLabel");
         versionLabel->setAlignment(Qt::AlignCenter);
+        versionLabel->setWordWrap(false); // single line under the logo
+        versionLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
         QPushButton* patchNotesBtn = StreamUP::UIStyles::CreateStyledButton("View Patch Notes", "success");
         QObject::connect(patchNotesBtn, &QPushButton::clicked, []() {
             StreamUP::PatchNotesWindow::ShowPatchNotesWindow();
         });
 
-        headerLayout->addWidget(textLogoLabel, 0, Qt::AlignHCenter);
-        headerLayout->addWidget(versionLabel, 0, Qt::AlignHCenter);
-        headerLayout->addWidget(patchNotesBtn, 0, Qt::AlignHCenter);
+        // Center cell: logo + version stacked vertically
+        QWidget* centerStack = new QWidget();
+        centerStack->setStyleSheet("background: transparent;");
+        QVBoxLayout* centerLay = new QVBoxLayout(centerStack);
+        centerLay->setContentsMargins(0, 0, 0, 0);
+        centerLay->setSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
+        centerLay->addWidget(textLogoLabel, 0, Qt::AlignHCenter);
+        centerLay->addWidget(versionLabel, 0, Qt::AlignHCenter);
+
+        // Left spacer matches the button's width so the center stack stays
+        // visually centered against the dialog instead of shifted left by
+        // the button on the right.
+        const int balancerWidth = patchNotesBtn->sizeHint().width();
+        QWidget* leftBalancer = new QWidget();
+        leftBalancer->setFixedWidth(balancerWidth);
+        leftBalancer->setStyleSheet("background: transparent;");
+
+        headerLayout->addWidget(leftBalancer);
+        headerLayout->addStretch();
+        headerLayout->addWidget(centerStack);
+        headerLayout->addStretch();
+        headerLayout->addWidget(patchNotesBtn);
 
         // Content area with modern StreamUP scrollbar styling
         QScrollArea* scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
