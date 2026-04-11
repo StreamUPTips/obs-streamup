@@ -525,12 +525,6 @@ QString GetTableStyle() {
         "    border: none;"
         "    border-bottom: 1px solid %2;"
         "}"
-        "QHeaderView::section:first {"
-        "    border-top-left-radius: 9px;"
-        "}"
-        "QHeaderView::section:last {"
-        "    border-top-right-radius: 9px;"
-        "}"
         "QTableCornerButton::section {"
         "    background-color: %5;"
         "    border: none;"
@@ -785,12 +779,21 @@ QWidget* GetTableContainer(QTableWidget* table) {
     if (v.isValid())
         return static_cast<QWidget *>(v.value<void *>());
 
-    // Wrap now — after caller has finished configuring (setFixedHeight, etc.)
-    // Unmasked container: paintEvent draws AA rounded fill + border, the table's
-    // matching bg hides its own square corners. Inset by 1px so the container border
-    // reads cleanly around the table viewport.
-    RoundedContainer *container = new RoundedContainer(Sizes::RADIUS_MD, table->parentWidget(), /*useMask=*/false);
-    container->setSurface(Colors::BG_PRIMARY, 40);
+    // Wrap in a plain QFrame with stylesheet border-radius. Qt renders the rounded
+    // border with antialiasing natively, and we avoid the custom-paint corner
+    // artifacts entirely. The table inside shares the wrapper bg so its square
+    // corners are hidden behind the rounded border.
+    QFrame *container = new QFrame(table->parentWidget());
+    container->setObjectName("streamupTableWrapper");
+    container->setAttribute(Qt::WA_StyledBackground, true);
+    container->setStyleSheet(
+        QString("QFrame#streamupTableWrapper {"
+                "  background-color: %1;"
+                "  border: 1px solid rgba(255,255,255,0.15);"
+                "  border-radius: %2px;"
+                "}")
+            .arg(Colors::BG_PRIMARY)
+            .arg(Sizes::RADIUS_MD));
     QVBoxLayout *lay = new QVBoxLayout(container);
     lay->setContentsMargins(1, 1, 1, 1);
     lay->setSpacing(0);
@@ -1197,16 +1200,6 @@ QString GetComboBoxStyle() {
         "    border-top-right-radius: %2px;"
         "    border-bottom-right-radius: %2px;"
         "}"
-        "QComboBox::down-arrow {"
-        "    image: none;"
-        "    width: 0px;"
-        "    height: 0px;"
-        "    border: none;"
-        "    background: transparent;"
-        "}"
-        "QComboBox::down-arrow:on, QComboBox::down-arrow:hover, QComboBox::down-arrow:off {"
-        "    image: none;"
-        "}"
         "QComboBox QAbstractItemView {"
         "    background-color: %10;"
         "    border: 1px solid %11;"
@@ -1217,6 +1210,14 @@ QString GetComboBoxStyle() {
         "    font-weight: 600;"
         "    outline: none;"
         "    show-decoration-selected: 0;"
+        "}"
+        "QComboBox QAbstractItemView QAbstractScrollArea::corner {"
+        "    background: transparent;"
+        "    border: none;"
+        "}"
+        "QComboBox QAbstractScrollArea::corner {"
+        "    background: transparent;"
+        "    border: none;"
         "}"
         "QComboBox QAbstractItemView::item {"
         "    padding: %3px %15px;"
