@@ -597,7 +597,7 @@ QString GenerateSupportersHTML()
 
     // Andi's supporters section
     if (!supportersData.andiSupporters.empty()) {
-        html += R"(<h4 style="color: #fbbf24; margin: 12px 0 8px 0; font-size: 14px;">💛 Andi's Supporters</h4>)";
+        html += R"(<h4 style="color: #fbbf24; margin: 12px 0 8px 0; font-size: 14px;">Andi's Supporters</h4>)";
         html += R"(<p style="margin: 8px 0; line-height: 2.0;">)";
 
         for (size_t i = 0; i < supportersData.andiSupporters.size(); ++i) {
@@ -615,7 +615,7 @@ QString GenerateSupportersHTML()
 
     // StreamUP supporters section
     if (!supportersData.streamupSupporters.empty()) {
-        html += R"(<h4 style="color: #a855f7; margin: 12px 0 8px 0; font-size: 14px;">💜 StreamUP Supporters</h4>)";
+        html += R"(<h4 style="color: #a855f7; margin: 12px 0 8px 0; font-size: 14px;">StreamUP Supporters</h4>)";
         html += R"(<p style="margin: 8px 0; line-height: 2.0;">)";
 
         for (size_t i = 0; i < supportersData.streamupSupporters.size(); ++i) {
@@ -642,7 +642,7 @@ QString GenerateSupportersHTML()
     html += R"(<strong>If you're a supporter and your name is not here:</strong><br>)";
     html += R"(This is an opt-in feature which you can enable in your account settings.<br>)";
     html += R"(You can opt-in right now and choose exactly how your name will appear<br>)";
-    html += R"(👉 <a href="https://streamup.tips/Identity/Account/Manage" style="color: #c4b5fd; text-decoration: underline;">https://streamup.tips/Identity/Account/Manage</a>)";
+    html += R"(<a href="https://streamup.tips/Identity/Account/Manage" style="color: #c4b5fd; text-decoration: underline;">https://streamup.tips/Identity/Account/Manage</a>)";
     html += R"(</p></div>)";
 
     html += R"(</div>)";
@@ -866,36 +866,36 @@ std::string GetWelcomeMessage()
 {
     return std::string(R"(
 <div style="color: #cdd6f4; line-height: 1.4; font-size: 14px;">
-    <h2 style="color: #89b4fa; margin: 18px 0 12px 0; font-size: 20px; font-weight: 600;">🎉 Welcome to StreamUP!</h2>
+    <h2 style="color: #89b4fa; margin: 18px 0 12px 0; font-size: 20px; font-weight: 600;">Welcome to StreamUP</h2>
 
     <p style="margin: 12px 0; color: #cdd6f4; font-size: 15px;">
-        <strong>Thank you for installing StreamUP!</strong> You've just unlocked a powerful toolkit designed to supercharge your OBS Studio experience.
+        <strong>Thank you for installing StreamUP.</strong> You've just unlocked a powerful toolkit designed to supercharge your OBS Studio experience.
     </p>
 
-    <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;">✨ What is StreamUP?</h3>
+    <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;">What is StreamUP?</h3>
     <p style="margin: 8px 0;">
-        StreamUP is an advanced plugin that provides essential tools for content creators, streamers, and anyone using OBS Studio. From source management and plugin updates to WebSocket API control and automated workflows - StreamUP streamlines your creative process.
+        StreamUP is an advanced plugin that provides essential tools for content creators, streamers, and anyone using OBS Studio. From source management and plugin updates to WebSocket API control and automated workflows — StreamUP streamlines your creative process.
     </p>
 
-    <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;">📚 Getting Started</h3>
+    <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;">Getting Started</h3>
     <p style="margin: 8px 0;">
-        Ready to dive in? Check out our comprehensive documentation to learn about all the amazing features at your fingertips:
+        Ready to dive in? Check out our comprehensive documentation to learn about all the features at your fingertips:
     </p>
     <p style="margin: 8px 0;">
-        <a href="https://streamup.doras.click/docs" style="color: #89b4fa; text-decoration: underline; font-weight: 500;">📖 Read the Documentation</a>
+        <a href="https://streamup.doras.click/docs" style="color: #89b4fa; text-decoration: underline; font-weight: 500;">Read the Documentation</a>
     </p>
 
-    <h3 style="color: #fbbf24; margin: 16px 0 8px 0; font-size: 16px;">💖 Support Our Development</h3>
+    <h3 style="color: #fbbf24; margin: 16px 0 8px 0; font-size: 16px;">Support Our Development</h3>
     <p style="margin: 8px 0;">
-        StreamUP is a passion project created with love for the OBS community. If you find it useful, please consider supporting our development efforts. Your support helps us continue adding new features and maintaining compatibility with the latest OBS versions.
+        StreamUP is a passion project created for the OBS community. If you find it useful, please consider supporting our development efforts. Your support helps us continue adding new features and maintaining compatibility with the latest OBS versions.
     </p>
     <p style="margin: 8px 0;">
-        Every contribution, no matter how small, makes a real difference and keeps this project thriving!
+        Every contribution, no matter how small, makes a real difference and keeps this project thriving.
     </p>
 
     <div style="margin: 16px 0; padding: 12px; border-left: 4px solid #a855f7; border-radius: 4px;">
         <p style="margin: 0; color: #e9d5ff; font-style: italic;">
-            💜 Love from <strong>Andi (Andilippi)</strong><br>
+            Love from <strong>Andi (Andilippi)</strong><br>
             <a href="https://doras.to/andi" style="color: #c4b5fd; text-decoration: underline;">https://doras.to/andi</a>
         </p>
     </div>
@@ -1020,8 +1020,8 @@ std::string GetPatchNotes()
     return std::string(R"(
 <div style="color: #cdd6f4; line-height: 1.3; font-size: 12px;">
     <h2 style="color: #89b4fa; margin: 12px 0 8px 0;">What's New in )") + PROJECT_VERSION + R"(</h2>
-    <p style="margin: 0 0 8px 0; color: #fbbf24; font-style: italic;">⚠️ Unable to load patch notes from local file</p>
-    <p style="margin: 0;"><b>🚀 Recent Features:</b> WebSocket API, Plugin Manager, Notifications, Settings UI</p>
+    <p style="margin: 0 0 8px 0; color: #fbbf24; font-style: italic;">Unable to load patch notes from local file.</p>
+    <p style="margin: 0;"><b>Recent Features:</b> WebSocket API, Plugin Manager, Notifications, Settings UI</p>
 </div>
     )";
 }
@@ -1079,7 +1079,8 @@ void CreateSplashDialog(ShowCondition condition)
     UIHelpers::ShowSingletonDialogOnUIThread("splash", []() -> QDialog* {
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("StreamUP.SplashScreen.Title"));
         dialog->setModal(false);
-        dialog->setFixedSize(800, 600);
+        // Taller than before so the footer buttons and supporters list don't get clipped.
+        dialog->setFixedSize(820, 760);
         
         // Ensure version tracking is updated when dialog closes (any way)
         QObject::connect(dialog, &QDialog::finished, []() {
@@ -1124,7 +1125,7 @@ void CreateSplashDialog(ShowCondition condition)
                     // Header - using HTML like the about window
                     QString headerHTML = R"(
 <div style="color: #cdd6f4; line-height: 1.4; font-size: 14px;">
-    <h2 style="color: #fbbf24; margin: 18px 0 12px 0; font-size: 20px; font-weight: 600; text-align: center;">🌟 Get Exclusive Early Access to New Features!</h2>
+    <h2 style="color: #fbbf24; margin: 18px 0 12px 0; font-size: 20px; font-weight: 600; text-align: center;">Get Exclusive Early Access to New Features</h2>
     <p style="margin: 12px 0; color: #cdd6f4; font-size: 15px; text-align: center;">
         Support StreamUP development and unlock cutting-edge features before they're released to the public:
     </p>
@@ -1344,7 +1345,7 @@ void CreateSplashDialog(ShowCondition condition)
         // Text content - two lines centered
         QLabel* bannerText = new QLabel(
             "<div style='text-align: center;'>"
-            "<b>🌟 Early Access Features Available! 🌟</b><br>"
+            "<b>Early Access Features Available</b><br>"
             "Unlock Source Explorer, exclusive OBS theme, Stream widgets and more. Click to find out more."
             "</div>",
             earlyAccessBanner);
@@ -1358,11 +1359,12 @@ void CreateSplashDialog(ShowCondition condition)
 
         mainLayout->addWidget(earlyAccessBanner);
 
-        // Header section in scrollable area
+        // Header section in scrollable area — tight, just logo + version + socials.
         QWidget* headerWidget = new QWidget();
         headerWidget->setObjectName("headerWidget");
-        headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: transparent; padding: %1px; }")
-            .arg(StreamUP::UIStyles::Sizes::PADDING_XL)); // Even padding all around
+        headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: transparent; padding: %1px %2px; }")
+            .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
+            .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
         headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
         headerLayout->setAlignment(Qt::AlignCenter);
@@ -1399,7 +1401,7 @@ void CreateSplashDialog(ShowCondition condition)
             textLogoPixmap = QPixmap(path);
             if (!textLogoPixmap.isNull()) {
                 // Scale the text logo to fit nicely in header - static size
-                QPixmap scaledTextLogo = textLogoPixmap.scaled(250, 50, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                QPixmap scaledTextLogo = textLogoPixmap.scaled(180, 36, Qt::KeepAspectRatio, Qt::SmoothTransformation);
                 textLogoLabel->setPixmap(scaledTextLogo);
                 textLogoLoaded = true;
                 break;
@@ -1503,7 +1505,7 @@ void CreateSplashDialog(ShowCondition condition)
         actionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
         actionLayout->setContentsMargins(0, 0, 0, 0);
         
-        QPushButton* patchNotesBtn = StreamUP::UIStyles::CreateStyledButton("📋 View Patch Notes", "success");
+        QPushButton* patchNotesBtn = StreamUP::UIStyles::CreateStyledButton("View Patch Notes", "success");
         QObject::connect(patchNotesBtn, &QPushButton::clicked, []() {
             StreamUP::PatchNotesWindow::ShowPatchNotesWindow();
         });
@@ -1592,7 +1594,7 @@ void CreateSplashDialog(ShowCondition condition)
         linksButtonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
         linksButtonLayout->setContentsMargins(0, 0, 0, 0);
         
-        QPushButton* docsBtn = StreamUP::UIStyles::CreateStyledButton("📖 Documentation", "success");
+        QPushButton* docsBtn = StreamUP::UIStyles::CreateStyledButton("Documentation", "success");
         QObject::connect(docsBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.doras.click/docs"));
         });
@@ -1604,7 +1606,7 @@ void CreateSplashDialog(ShowCondition condition)
             QDesktopServices::openUrl(QUrl("https://discord.com/invite/RnDKRaVCEu"));
         });
         
-        QPushButton* websiteBtn = StreamUP::UIStyles::CreateStyledButton("🌐 Website", "error");
+        QPushButton* websiteBtn = StreamUP::UIStyles::CreateStyledButton("Website", "error");
         QObject::connect(websiteBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.tips"));
         });
