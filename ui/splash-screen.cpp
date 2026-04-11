@@ -597,15 +597,14 @@ QString GenerateSupportersHTML()
 
     // Andi's supporters section
     if (!supportersData.andiSupporters.empty()) {
-        html += R"(<h4 style="color: #fbbf24; margin: 12px 0 8px 0; font-size: 14px;">Andi's Supporters</h4>)";
-        html += R"(<p style="margin: 8px 0; line-height: 2.0;">)";
+        html += R"(<h4 style="color: #fbbf24; margin: 14px 0 10px 0; font-size: 14px; font-weight: 700;">Andi's Supporters</h4>)";
+        html += R"(<p style="margin: 8px 0; line-height: 2.4;">)";
 
         for (size_t i = 0; i < supportersData.andiSupporters.size(); ++i) {
             const auto& supporter = supportersData.andiSupporters[i];
-            html += QString(R"(<span style="background-color: rgba(251, 191, 36, 0.2); color: #fde68a; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; white-space: nowrap;">%1</span>)")
+            html += QString(R"(<span style="background-color: rgba(251, 191, 36, 0.18); color: #fde68a; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap;">%1</span>)")
                 .arg(supporter.displayName.toHtmlEscaped());
 
-            // Add space between badges
             if (i < supportersData.andiSupporters.size() - 1) {
                 html += " &nbsp; ";
             }
@@ -615,15 +614,14 @@ QString GenerateSupportersHTML()
 
     // StreamUP supporters section
     if (!supportersData.streamupSupporters.empty()) {
-        html += R"(<h4 style="color: #a855f7; margin: 12px 0 8px 0; font-size: 14px;">StreamUP Supporters</h4>)";
-        html += R"(<p style="margin: 8px 0; line-height: 2.0;">)";
+        html += R"(<h4 style="color: #a855f7; margin: 14px 0 10px 0; font-size: 14px; font-weight: 700;">StreamUP Supporters</h4>)";
+        html += R"(<p style="margin: 8px 0; line-height: 2.4;">)";
 
         for (size_t i = 0; i < supportersData.streamupSupporters.size(); ++i) {
             const auto& supporter = supportersData.streamupSupporters[i];
-            html += QString(R"(<span style="background-color: rgba(168, 85, 247, 0.2); color: #e9d5ff; padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; white-space: nowrap;">%1</span>)")
+            html += QString(R"(<span style="background-color: rgba(168, 85, 247, 0.18); color: #e9d5ff; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap;">%1</span>)")
                 .arg(supporter.displayName.toHtmlEscaped());
 
-            // Add space between badges
             if (i < supportersData.streamupSupporters.size() - 1) {
                 html += " &nbsp; ";
             }
@@ -636,14 +634,12 @@ QString GenerateSupportersHTML()
         html += R"(<p style="margin: 0; color: #d8b4fe; font-style: italic;">No public supporters to display at this time.</p>)";
     }
 
-    // Opt-in message
-    html += R"(<div style="margin: 16px 0 0 0; padding: 12px; background: rgba(168, 85, 247, 0.1); border-left: 3px solid #a855f7; border-radius: 4px;">)";
-    html += R"(<p style="margin: 0; color: #e9d5ff; font-size: 12px;">)";
-    html += R"(<strong>If you're a supporter and your name is not here:</strong><br>)";
-    html += R"(This is an opt-in feature which you can enable in your account settings.<br>)";
-    html += R"(You can opt-in right now and choose exactly how your name will appear<br>)";
-    html += R"(<a href="https://streamup.tips/Identity/Account/Manage" style="color: #c4b5fd; text-decoration: underline;">https://streamup.tips/Identity/Account/Manage</a>)";
-    html += R"(</p></div>)";
+    // Opt-in message — modern card with rounded edges and generous padding
+    html += R"(<div style="margin: 18px 0 0 0; padding: 16px 20px; background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 14px;">)";
+    html += R"(<p style="margin: 0 0 6px 0; color: #f5d0fe; font-size: 13px; font-weight: 700;">If you're a supporter and your name is not here</p>)";
+    html += R"(<p style="margin: 0 0 4px 0; color: #e9d5ff; font-size: 12px; line-height: 1.6;">This is an opt-in feature which you can enable in your account settings. You can opt-in right now and choose exactly how your name will appear.</p>)";
+    html += R"(<p style="margin: 8px 0 0 0;"><a href="https://streamup.tips/Identity/Account/Manage" style="color: #c4b5fd; text-decoration: underline; font-size: 12px;">https://streamup.tips/Identity/Account/Manage</a></p>)";
+    html += R"(</div>)";
 
     html += R"(</div>)";
     return html;
@@ -1088,6 +1084,11 @@ void CreateSplashDialog(ShowCondition condition)
         });
         
         QVBoxLayout* mainLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
+        // Strip the chrome's content margins so the early access banner can sit
+        // flush against the dialog header. The actual content area below the
+        // banner gets its own padding via the scroll content widget.
+        mainLayout->setContentsMargins(0, 0, 0, 0);
+        mainLayout->setSpacing(0);
 
         // Early Access Banner - Clickable banner at the very top
         // Define the clickable banner class first
@@ -1359,15 +1360,13 @@ void CreateSplashDialog(ShowCondition condition)
 
         mainLayout->addWidget(earlyAccessBanner);
 
-        // Header section in scrollable area — tight, just logo + version + socials.
+        // Header section in scrollable area — tight, single row: logo + version
+        // + patch notes button. Socials moved to footer with the other links.
         QWidget* headerWidget = new QWidget();
         headerWidget->setObjectName("headerWidget");
-        headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: transparent; padding: %1px %2px; }")
-            .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
-            .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
-        QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
-        headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_TINY);
-        headerLayout->setAlignment(Qt::AlignCenter);
+        headerWidget->setStyleSheet("QWidget#headerWidget { background: transparent; }");
+        QHBoxLayout* headerLayout = new QHBoxLayout(headerWidget);
+        headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
         headerLayout->setContentsMargins(0, 0, 0, 0);
         
         // StreamUP text logo (clickable)
@@ -1421,101 +1420,37 @@ void CreateSplashDialog(ShowCondition condition)
                 "}")
                 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_LARGE));
         }
-        textLogoLabel->setAlignment(Qt::AlignCenter);
-        
+        textLogoLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+
         QString versionText = QString(obs_module_text("StreamUP.SplashScreen.VersionText")).arg(PROJECT_VERSION);
         QLabel* versionLabel = StreamUP::UIStyles::CreateStyledDescription(versionText);
         versionLabel->setObjectName("versionLabel");
-        
-        headerLayout->addWidget(textLogoLabel);
-        headerLayout->addWidget(versionLabel);
-        
-        // Social media icons - icon only buttons
-        QHBoxLayout* socialIconsLayout = new QHBoxLayout();
-        socialIconsLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL + 2);
-        socialIconsLayout->setContentsMargins(0, 0, 0, 0);
-        
-        // Create standardized squircle social media icon buttons (same size as dock)
-        QPushButton* twitterIcon = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
-        twitterIcon->setIcon(QIcon(":images/icons/social/twitter.svg"));
-        twitterIcon->setIconSize(QSize(16, 16));
-        twitterIcon->setCursor(Qt::PointingHandCursor);
-        // Additional styling for transparency - keep borders for pill shape visibility
-        twitterIcon->setStyleSheet(twitterIcon->styleSheet() + 
-            QString("QPushButton { background: transparent; color: %1; }").arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
-        QObject::connect(twitterIcon, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://twitter.com/StreamUPTips"));
-        });
-        
-        QPushButton* blueskyIcon = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
-        blueskyIcon->setIcon(QIcon(":images/icons/social/bluesky.svg"));
-        blueskyIcon->setIconSize(QSize(16, 16));
-        blueskyIcon->setCursor(Qt::PointingHandCursor);
-        // Additional styling for transparency - keep borders for pill shape visibility
-        blueskyIcon->setStyleSheet(blueskyIcon->styleSheet() + 
-            QString("QPushButton { background: transparent; color: %1; }").arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
-        QObject::connect(blueskyIcon, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://bsky.app/profile/streamup.tips"));
-        });
-        
-        QPushButton* dorasIcon = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
-        dorasIcon->setIcon(QIcon(":images/icons/social/doras.svg"));
-        dorasIcon->setIconSize(QSize(16, 16));
-        dorasIcon->setCursor(Qt::PointingHandCursor);
-        // Additional styling for transparency - keep borders for pill shape visibility
-        dorasIcon->setStyleSheet(dorasIcon->styleSheet() + 
-            QString("QPushButton { background: transparent; color: %1; }").arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
-        QObject::connect(dorasIcon, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://doras.to/streamup"));
-        });
-        
-        socialIconsLayout->addStretch();
-        socialIconsLayout->addWidget(twitterIcon);
-        socialIconsLayout->addWidget(blueskyIcon);
-        socialIconsLayout->addWidget(dorasIcon);
-        socialIconsLayout->addStretch();
-        
-        headerLayout->addLayout(socialIconsLayout);
+        versionLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 
-        // Content area with modern StreamUP scrollbar styling
-        QScrollArea* scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-        
-        QWidget* contentWidget = new QWidget();
-        contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
-        QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
-        contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_LARGE, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::PADDING_LARGE, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-        contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
-
-        // Add header to the scrollable content
-        contentLayout->addWidget(headerWidget);
-
-        // Action buttons section near the top
-        QWidget* actionButtonsCard = new QWidget();
-        actionButtonsCard->setStyleSheet("QWidget { background: transparent; border: none; padding: 0px; }");
-        QVBoxLayout* actionButtonsLayout = new QVBoxLayout(actionButtonsCard);
-        actionButtonsLayout->setContentsMargins(StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM, 
-            StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-        
-        QHBoxLayout* actionLayout = new QHBoxLayout();
-        actionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
-        actionLayout->setContentsMargins(0, 0, 0, 0);
-        
         QPushButton* patchNotesBtn = StreamUP::UIStyles::CreateStyledButton("View Patch Notes", "success");
         QObject::connect(patchNotesBtn, &QPushButton::clicked, []() {
             StreamUP::PatchNotesWindow::ShowPatchNotesWindow();
         });
-        
-        actionLayout->addStretch();
-        actionLayout->addWidget(patchNotesBtn);
-        actionLayout->addStretch();
-        
-        actionButtonsLayout->addLayout(actionLayout);
-        contentLayout->addWidget(actionButtonsCard);
+
+        headerLayout->addWidget(textLogoLabel);
+        headerLayout->addWidget(versionLabel);
+        headerLayout->addStretch();
+        headerLayout->addWidget(patchNotesBtn);
+
+        // Content area with modern StreamUP scrollbar styling
+        QScrollArea* scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+
+        QWidget* contentWidget = new QWidget();
+        contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+        QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
+        contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_LARGE,
+            StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+            StreamUP::UIStyles::Sizes::PADDING_LARGE,
+            StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+        contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+
+        // Header (logo + version + patch notes button) inline at the top
+        contentLayout->addWidget(headerWidget);
 
         // Welcome section — flat
         contentLayout->addWidget(StreamUP::UIStyles::CreateSectionHeader("Welcome to StreamUP"));
@@ -1616,23 +1551,36 @@ void CreateSplashDialog(ShowCondition condition)
             QDesktopServices::openUrl(QUrl("https://streamup.tips"));
         });
 
-        QPushButton* twitterBtn = StreamUP::UIStyles::CreateStyledButton("Twitter", "neutral");
-        twitterBtn->setIcon(QIcon(":images/icons/social/twitter.svg"));
-        twitterBtn->setIconSize(QSize(16, 16));
+        // Brand-coloured social buttons. Each gets its own filled stylesheet
+        // matching the platform's primary colour.
+        auto makeSocialButton = [](const QString &text, const QString &iconPath,
+                                   const QString &bg, const QString &hover, const QString &fg) {
+            QPushButton *btn = StreamUP::UIStyles::CreateStyledButton(text, "neutral");
+            btn->setIcon(QIcon(iconPath));
+            btn->setIconSize(QSize(16, 16));
+            btn->setStyleSheet(QString(
+                "QPushButton { background: %1; color: %3; border: 1px solid %1;"
+                "  border-radius: 12px; font-weight: bold; font-size: 11px;"
+                "  padding: 0 14px; min-height: 22px; max-height: 22px; min-width: 80px; }"
+                "QPushButton:hover { background: %2; border: 1px solid %2; }")
+                .arg(bg, hover, fg));
+            return btn;
+        };
+
+        QPushButton *twitterBtn = makeSocialButton("Twitter", ":images/icons/social/twitter.svg",
+                                                    "#000000", "#1d1d1d", "#ffffff");
         QObject::connect(twitterBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://twitter.com/StreamUPTips"));
         });
 
-        QPushButton* blueskyBtn = StreamUP::UIStyles::CreateStyledButton("Bluesky", "neutral");
-        blueskyBtn->setIcon(QIcon(":images/icons/social/bluesky.svg"));
-        blueskyBtn->setIconSize(QSize(16, 16));
+        QPushButton *blueskyBtn = makeSocialButton("Bluesky", ":images/icons/social/bluesky.svg",
+                                                    "#1185fe", "#0a6fd9", "#ffffff");
         QObject::connect(blueskyBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://bsky.app/profile/streamup.tips"));
         });
 
-        QPushButton* dorasBtn = StreamUP::UIStyles::CreateStyledButton("Doras", "neutral");
-        dorasBtn->setIcon(QIcon(":images/icons/social/doras.svg"));
-        dorasBtn->setIconSize(QSize(16, 16));
+        QPushButton *dorasBtn = makeSocialButton("Doras", ":images/icons/social/doras.svg",
+                                                  "#7c3aed", "#6d28d9", "#ffffff");
         QObject::connect(dorasBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://doras.to/streamup"));
         });

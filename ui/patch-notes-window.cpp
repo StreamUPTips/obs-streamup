@@ -116,8 +116,12 @@ static QVector<VersionBlock> LoadVersionBlocks()
 		QString body = firstNewline < 0 ? QString() : trimmed.mid(firstNewline + 1);
 
 		if (!headerLine.startsWith("# ")) continue;
+		QString label = headerLine.mid(2).trimmed();
+		// Only keep real version blocks. Other H1s in the markdown
+		// (e.g. "Support This Project") are rendered elsewhere or skipped.
+		if (!label.startsWith("StreamUP v")) continue;
 		VersionBlock block;
-		block.versionLabel = headerLine.mid(2).trimmed();
+		block.versionLabel = label;
 		block.bodyHtml = MarkdownBodyToHtml(body);
 		blocks.append(block);
 	}
@@ -127,8 +131,8 @@ static QVector<VersionBlock> LoadVersionBlocks()
 
 // Build one collapsible card: clickable version header + animated body container.
 // The body lives inside a wrapper QWidget whose maximumHeight is animated between
-// 0 (collapsed) and the body's natural sizeHint height (expanded), giving us a
-// smooth expand/collapse without any layout-flicker.
+// 0 and the body's heightForWidth so the curve follows the actual rendered text
+// height (a wordwrap'd rich-text label needs heightForWidth, sizeHint lies).
 static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 {
 	QFrame *card = new QFrame();
@@ -143,7 +147,9 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 	cardLay->setContentsMargins(0, 0, 0, 0);
 	cardLay->setSpacing(0);
 
-	// Header button
+	// Header button — fully transparent (no hover/checked bg) so the rounded
+	// card outline isn't fighting a square button background. Indication of
+	// state is the chevron rotation only.
 	QPushButton *header = new QPushButton();
 	header->setCheckable(true);
 	header->setChecked(expanded);
@@ -159,15 +165,12 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 		"  font-weight: 700;"
 		"  padding: 12px 14px;"
 		"}"
-		"QPushButton:hover { background: %2; }"
-		"QPushButton:checked { background: %2; }")
+		"QPushButton:hover { color: %2; }")
 		.arg(UIStyles::Colors::TEXT_PRIMARY)
-		.arg(UIStyles::Colors::BG_TERTIARY));
+		.arg(UIStyles::Colors::PRIMARY_LIGHT));
 	cardLay->addWidget(header);
 
-	// Body inside an animatable wrapper. The wrapper's maximumHeight is what
-	// we animate; the inner label sits at its natural sizeHint and gets clipped
-	// by the wrapper as it shrinks.
+	// Body wrapper. Animate maximumHeight on toggle.
 	QWidget *bodyWrapper = new QWidget();
 	bodyWrapper->setStyleSheet("background: transparent;");
 	QVBoxLayout *bodyWrapperLay = new QVBoxLayout(bodyWrapper);
@@ -185,16 +188,17 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 	bodyWrapper->setMaximumHeight(expanded ? QWIDGETSIZE_MAX : 0);
 
 	QObject::connect(header, &QPushButton::toggled, bodyWrapper, [header, body, bodyWrapper](bool checked) {
-		// Animate maximumHeight between 0 and the body's natural height.
-		// Use sizeHint so wrapped rich-text reports its actual rendered height.
-		const int targetHeight = body->sizeHint().height();
+		// heightForWidth gives the actual rendered height for a wordwrap label.
+		// Fall back to sizeHint if width isn't laid out yet.
+		int width = body->width() > 0 ? body->width() : bodyWrapper->width();
+		int targetHeight = width > 0 ? body->heightForWidth(width) : body->sizeHint().height();
+		if (targetHeight <= 0) targetHeight = body->sizeHint().height();
+
 		auto *anim = new QPropertyAnimation(bodyWrapper, "maximumHeight");
-		anim->setDuration(180);
-		anim->setEasingCurve(QEasingCurve::InOutCubic);
-		anim->setStartValue(checked ? 0 : targetHeight);
+		anim->setDuration(220);
+		anim->setEasingCurve(QEasingCurve::OutCubic);
+		anim->setStartValue(checked ? 0 : bodyWrapper->height());
 		anim->setEndValue(checked ? targetHeight : 0);
-		// When we expand, release the cap once the animation is done so the
-		// wrapper can grow if the dialog is later resized.
 		QObject::connect(anim, &QPropertyAnimation::finished, bodyWrapper, [bodyWrapper, checked]() {
 			if (checked) bodyWrapper->setMaximumHeight(QWIDGETSIZE_MAX);
 		});
@@ -256,9 +260,42 @@ void CreatePatchNotesDialog()
 		scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 		mainLayout->addWidget(scrollArea);
 
-		// Footer: useful links pinned at the bottom (always visible) + close button.
+		// Footer: support row + links row + close, all pinned to the bottom.
 		QVBoxLayout *footerLayout = UIStyles::GetDialogFooterLayout(dialog);
 
+		// Support This Project row
+		QHBoxLayout *supportLay = new QHBoxLayout();
+		supportLay->setSpacing(UIStyles::Sizes::SPACING_SMALL);
+		supportLay->addStretch();
+
+		QPushButton *patreonBtn = UIStyles::CreateStyledButton("Patreon", "warning");
+		patreonBtn->setIcon(QIcon(":images/icons/social/patreon.svg"));
+		patreonBtn->setIconSize(QSize(16, 16));
+		QObject::connect(patreonBtn, &QPushButton::clicked, []() {
+			QDesktopServices::openUrl(QUrl("https://www.patreon.com/streamup"));
+		});
+
+		QPushButton *kofiBtn = UIStyles::CreateStyledButton("Ko-Fi", "warning");
+		kofiBtn->setIcon(QIcon(":images/icons/social/kofi.svg"));
+		kofiBtn->setIconSize(QSize(16, 16));
+		QObject::connect(kofiBtn, &QPushButton::clicked, []() {
+			QDesktopServices::openUrl(QUrl("https://ko-fi.com/streamup"));
+		});
+
+		QPushButton *beerBtn = UIStyles::CreateStyledButton("Buy a Beer", "warning");
+		beerBtn->setIcon(QIcon(":images/icons/social/beer.svg"));
+		beerBtn->setIconSize(QSize(16, 16));
+		QObject::connect(beerBtn, &QPushButton::clicked, []() {
+			QDesktopServices::openUrl(QUrl("https://paypal.me/andilippi"));
+		});
+
+		supportLay->addWidget(patreonBtn);
+		supportLay->addWidget(kofiBtn);
+		supportLay->addWidget(beerBtn);
+		supportLay->addStretch();
+		footerLayout->addLayout(supportLay);
+
+		// Links + close row
 		QHBoxLayout *linksLay = new QHBoxLayout();
 		linksLay->setSpacing(UIStyles::Sizes::SPACING_SMALL);
 		linksLay->addStretch();
@@ -275,7 +312,7 @@ void CreatePatchNotesDialog()
 			QDesktopServices::openUrl(QUrl("https://discord.com/invite/RnDKRaVCEu"));
 		});
 
-		QPushButton *websiteBtn = UIStyles::CreateStyledButton("Website", "neutral");
+		QPushButton *websiteBtn = UIStyles::CreateStyledButton("Website", "primary-outline");
 		QObject::connect(websiteBtn, &QPushButton::clicked, []() {
 			QDesktopServices::openUrl(QUrl("https://streamup.tips"));
 		});
