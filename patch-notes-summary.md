@@ -1,3 +1,10 @@
+# StreamUP v2.2.1 - Patch Update
+
+## Bug Fixes
+- **Adjustment Layer Freeze** - Fixed sources flickering on and off during scene transitions when using the Adjustment Layer with "Hide Originals" enabled. Visibility mutations are now deferred until the transition completes
+
+---
+
 # StreamUP v2.2.0 - Feature Update
 
 ## New Features
