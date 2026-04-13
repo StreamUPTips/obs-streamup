@@ -90,12 +90,7 @@ QFrame* StreamUPToolbar::createSeparator()
 	separator->setProperty("class", "toolbar-separator");
 	separator->setFrameShape(QFrame::NoFrame);
 	separator->setFixedWidth(1);
-
-	// Set height based on current icon size
-	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-	int separatorHeight = settings.toolbarIconSize;
-	separator->setFixedHeight(separatorHeight);
-
+	// Height determined by CSS / layout stretch
 	return separator;
 }
 
@@ -105,12 +100,7 @@ QFrame* StreamUPToolbar::createHorizontalSeparator()
 	separator->setProperty("class", "toolbar-separator");
 	separator->setFrameShape(QFrame::NoFrame);
 	separator->setFixedHeight(1);
-
-	// Set width based on current icon size
-	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-	int separatorWidth = settings.toolbarIconSize;
-	separator->setFixedWidth(separatorWidth);
-
+	// Width determined by CSS / layout stretch
 	return separator;
 } 
 
@@ -856,16 +846,16 @@ void StreamUPToolbar::updateLayoutOrientation()
 		if (shouldBeVertical) {
 			mainLayout = new QVBoxLayout(centralWidget);
 			setOrientation(Qt::Vertical);
-			mainLayout->setContentsMargins(4, 8, 4, 8);
+			mainLayout->setContentsMargins(0, 0, 0, 0);
 			mainLayout->setAlignment(Qt::AlignHCenter); // Center widgets horizontally
 		} else {
 			mainLayout = new QHBoxLayout(centralWidget);
 			setOrientation(Qt::Horizontal);
-			mainLayout->setContentsMargins(8, 4, 8, 4);  // Added vertical padding (top, bottom)
+			mainLayout->setContentsMargins(0, 0, 0, 0);
 			// No alignment needed for horizontal layout (default is fine)
 		}
-		mainLayout->setSpacing(4);
-		
+		mainLayout->setSpacing(1);
+
 		// Re-add widgets with proper orientation handling, including StreamUP button positioning
 		QWidget* streamupButton = nullptr;
 		QList<QWidget*> mainWidgets;
@@ -963,44 +953,9 @@ void StreamUPToolbar::updateLayoutOrientation()
 
 void StreamUPToolbar::updateToolbarSizeConstraints()
 {
-	// Get current icon size from settings
-	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-	int iconSize = settings.toolbarIconSize;
-
-	// Get current toolbar position from the main window
-	QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
-	if (!mainWindow) {
-		return;
-	}
-
-	Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
-	bool isVertical = (currentArea == Qt::LeftToolBarArea || currentArea == Qt::RightToolBarArea);
-
-	// Calculate minimum size based on icon size plus padding and margins
-	// Button padding: ~8px (4px each side)
-	// Layout margins: 8px horizontal, 4px vertical (or reversed for vertical)
-	// Total extra space needed: iconSize + 16px for the direction perpendicular to layout
-
-	if (isVertical) {
-		// For vertical toolbar, set minimum width
-		// iconSize + button padding (8px) + layout margins (4px left + 4px right) = iconSize + 16px
-		int minWidth = iconSize + 16;
-		setMinimumWidth(minWidth);
-		setMaximumWidth(QWIDGETSIZE_MAX); // Allow expansion
-		setMinimumHeight(0); // No minimum height constraint
-	} else {
-		// For horizontal toolbar, set minimum height
-		// iconSize + button padding (8px) + layout margins (4px top + 4px bottom) = iconSize + 16px
-		int minHeight = iconSize + 16;
-		setMinimumHeight(minHeight);
-		setMaximumHeight(QWIDGETSIZE_MAX); // Allow expansion
-		setMinimumWidth(0); // No minimum width constraint
-	}
-
-	StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Size Constraints",
-		"Updated toolbar size constraints for icon size %dpx: %s toolbar with min %s = %dpx",
-		iconSize, isVertical ? "vertical" : "horizontal",
-		isVertical ? "width" : "height", iconSize + 16);
+	// No custom size constraints — let OBS theme CSS handle all sizing
+	setMinimumSize(0, 0);
+	setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
 }
 
 void StreamUPToolbar::setupDynamicUI()
@@ -1028,8 +983,8 @@ void StreamUPToolbar::setupDynamicUI()
 	centralWidget = new QWidget(this);
 	centralWidget->setObjectName("StreamUPToolbarCentralWidget");
 	mainLayout = new QHBoxLayout(centralWidget);
-	mainLayout->setContentsMargins(8, 4, 8, 4);  // Added vertical padding (top, bottom)
-	mainLayout->setSpacing(4);
+	mainLayout->setContentsMargins(0, 0, 0, 0);
+	mainLayout->setSpacing(1);
 	
 	// Clear existing buttons and properly clean up old references
 	dynamicButtons.clear();
@@ -1159,16 +1114,11 @@ void StreamUPToolbar::setupDynamicUI()
 					if (buttonItem) {
 						// Add pause button immediately after record button
 						if (buttonItem->buttonType == "record") {
-							// Get current settings for dynamic sizing
-							StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-							int iconSize = settings.toolbarIconSize;
-
 							// Create new pause button for this position
 							QToolButton* newPauseButton = new QToolButton(centralWidget);
 							newPauseButton->setObjectName("pauseButton");
 							newPauseButton->setProperty("class", "streamup-toolbar-button");
 							newPauseButton->setProperty("buttonType", "streamup-button");
-							newPauseButton->setIconSize(QSize(iconSize, iconSize));
 							newPauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newPauseButton->setIcon(getCachedIcon("pause"));
 							newPauseButton->setToolTip("Pause Recording");
@@ -1184,16 +1134,11 @@ void StreamUPToolbar::setupDynamicUI()
 						}
 						// Add save_replay button immediately after replay_buffer button
 						else if (buttonItem->buttonType == "replay_buffer") {
-							// Get current settings for dynamic sizing
-							StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-							int iconSize = settings.toolbarIconSize;
-
 							// Create new save_replay button for this position
 							QToolButton* newSaveReplayButton = new QToolButton(centralWidget);
 							newSaveReplayButton->setObjectName("saveReplayButton");
 							newSaveReplayButton->setProperty("class", "streamup-toolbar-button");
 							newSaveReplayButton->setProperty("buttonType", "streamup-button");
-							newSaveReplayButton->setIconSize(QSize(iconSize, iconSize));
 							newSaveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newSaveReplayButton->setIcon(getCachedIcon("save-replay"));
 							newSaveReplayButton->setToolTip("Save Replay");
@@ -1269,12 +1214,7 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 {
 	QToolButton* button = new QToolButton(centralWidget);
 
-	// Get current settings for dynamic sizing
-	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-	int iconSize = settings.toolbarIconSize;
-
-	// Set dynamic icon size based on settings - let CSS handle button size
-	button->setIconSize(QSize(iconSize, iconSize));
+	// Icon size inherited from QToolBar::iconSize() which is set by OBS theme
 	button->setToolButtonStyle(Qt::ToolButtonIconOnly);
 
 	// Add consistent styling properties for custom StreamUP icons
@@ -1408,77 +1348,24 @@ QFrame* StreamUPToolbar::createSeparatorFromConfig(bool isVertical)
 	separator->setProperty("class", "toolbar-separator");
 	separator->setFrameShape(QFrame::NoFrame);
 
-	// Set size based on current icon size
-	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-	int separatorSize = settings.toolbarIconSize;
-
 	if (isVertical) {
 		separator->setFixedHeight(1);
-		separator->setFixedWidth(separatorSize);
+		// Width stretches with layout
 	} else {
 		separator->setFixedWidth(1);
-		separator->setFixedHeight(separatorSize);
+		// Height stretches with layout
 	}
 	return separator;
 }
 
 void StreamUPToolbar::updateButtonSizes()
 {
-	// Get current settings for dynamic sizing
-	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-	int iconSize = settings.toolbarIconSize;
-
-	StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Button Sizes", "Updating button sizes with icon size: %d px", iconSize);
-
-	// Update all toolbar buttons
-	QList<QToolButton*> allButtons = centralWidget->findChildren<QToolButton*>();
-	for (QToolButton* button : allButtons) {
-		// Set icon size
-		button->setIconSize(QSize(iconSize, iconSize));
-
-		// Clear any size constraints that might limit growth
-		button->setMinimumSize(0, 0);
-		button->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
-
-		// Force button to recalculate its size hint
-		button->updateGeometry();
+	// No custom sizing — OBS theme CSS handles icon sizes and button dimensions.
+	// Just refresh geometry so the theme can reapply.
+	if (centralWidget) {
+		centralWidget->updateGeometry();
 	}
-
-	// Update all separators to match new icon size
-	QList<QFrame*> allSeparators = centralWidget->findChildren<QFrame*>();
-	for (QFrame* separator : allSeparators) {
-		// Only update separators, not other frames
-		if (separator->property("class").toString() == "toolbar-separator") {
-			// Check if vertical or horizontal based on current toolbar orientation
-			QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
-			if (mainWindow) {
-				Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
-				bool isVertical = (currentArea == Qt::LeftToolBarArea || currentArea == Qt::RightToolBarArea);
-
-				if (isVertical) {
-					// Horizontal separator in vertical toolbar (iconSize wide, 1px tall)
-					separator->setFixedWidth(iconSize);
-					separator->setFixedHeight(1);
-				} else {
-					// Vertical separator in horizontal toolbar (1px wide, iconSize tall)
-					separator->setFixedWidth(1);
-					separator->setFixedHeight(iconSize);
-				}
-			}
-		}
-	}
-
-	// Force style refresh to apply new icon sizes with theme-scaled padding and borders
-	if (mainLayout) {
-		mainLayout->update();
-	}
-	centralWidget->updateGeometry();
 	updateGeometry();
-
-	// Update toolbar size constraints for the new icon size
-	updateToolbarSizeConstraints();
-
-	// Refresh styling to apply theme-based sizing
 	style()->unpolish(this);
 	style()->polish(this);
 

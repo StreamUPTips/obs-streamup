@@ -882,59 +882,6 @@ void ShowSettingsDialog(int tabIndex)
 	// Add spacing between sections
 	toolbarLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
 
-	// Icon Size Slider
-		QHBoxLayout *iconSizeLayout = new QHBoxLayout();
-		iconSizeLayout->setContentsMargins(0, 0, 0, 0);
-		iconSizeLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
-
-		QLabel *iconSizeLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarIconSize"));
-		iconSizeLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
-							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-		iconSizeLabel->setToolTip(obs_module_text("StreamUP.Settings.ToolbarIconSizeDesc"));
-
-		QSlider *iconSizeSlider = new QSlider(Qt::Horizontal);
-		iconSizeSlider->setMinimum(10);
-		iconSizeSlider->setMaximum(24);
-		iconSizeSlider->setValue(currentSettings.toolbarIconSize);
-		iconSizeSlider->setTickPosition(QSlider::TicksBelow);
-		iconSizeSlider->setTickInterval(2);
-		iconSizeSlider->setToolTip(obs_module_text("StreamUP.Settings.ToolbarIconSizeTooltip"));
-		iconSizeSlider->setMaximumWidth(200);
-
-		QLabel *iconSizeValueLabel = new QLabel(QString::number(currentSettings.toolbarIconSize) + "px");
-		iconSizeValueLabel->setStyleSheet(QString("color: %1; font-size: %2px; min-width: 45px; background: transparent;")
-							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-		iconSizeValueLabel->setAlignment(Qt::AlignCenter);
-
-		// Update label and toolbar as slider moves (real-time updates)
-		QObject::connect(iconSizeSlider, &QSlider::valueChanged, [iconSizeValueLabel](int value) {
-			iconSizeValueLabel->setText(QString::number(value) + "px");
-
-			PluginSettings settings = GetCurrentSettings();
-			settings.toolbarIconSize = value;
-			UpdateSettings(settings);
-
-			// Update toolbar button sizes without rebuilding (preserves customizations)
-			QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
-			if (mainWindow) {
-				StreamUPToolbar* toolbar = mainWindow->findChild<StreamUPToolbar*>();
-				if (toolbar) {
-					toolbar->updateButtonSizes();
-				}
-			}
-		});
-
-		iconSizeLayout->addWidget(iconSizeLabel);
-		iconSizeLayout->addStretch();
-		iconSizeLayout->addWidget(iconSizeSlider);
-		iconSizeLayout->addWidget(iconSizeValueLabel);
-		toolbarLayout->addLayout(iconSizeLayout);
-
-		// Add spacing between sections
-		toolbarLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
-
 		// Add "Configure Toolbar" button
 		QHBoxLayout *configureToolbarLayout = new QHBoxLayout();
 		
