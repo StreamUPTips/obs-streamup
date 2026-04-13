@@ -822,6 +822,8 @@ static void OnOBSShutdown(enum obs_frontend_event event, void *private_data)
 		// Reset cached theme checks so enhancements re-evaluate on next use
 		StreamUP::MixerEnhancements::ResetThemeCache();
 		StreamUP::ThemeEnhancements::ResetThemeCache();
+		// Re-apply theme enhancements (sets/clears native dialog override etc.)
+		StreamUP::ThemeEnhancements::ApplyThemeEnhancements();
 		return;
 	}
 

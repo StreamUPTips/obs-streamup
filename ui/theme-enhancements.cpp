@@ -15,6 +15,8 @@
 #include <QStatusBar>
 #include <QApplication>
 #include <QComboBox>
+#include <QHeaderView>
+#include <QTableView>
 #include <QPainter>
 #include <QPainterPath>
 #include <QRegion>
@@ -301,6 +303,24 @@ void ColorPreviewFilter::applyPillStyle(QWidget* widget)
 }
 
 // ============================================================================
+// Helper: fix table row height in dialogs with hardcoded 24px rows
+// ============================================================================
+
+static const int TABLE_ROW_HEIGHT = 36;
+
+static void ApplyTableRowHeight(QWidget* widget)
+{
+    QList<QTableView*> tables = widget->findChildren<QTableView*>();
+    for (QTableView* table : tables) {
+        if (!table) continue;
+        QHeaderView* vh = table->verticalHeader();
+        if (vh && vh->defaultSectionSize() < TABLE_ROW_HEIGHT) {
+            vh->setDefaultSectionSize(TABLE_ROW_HEIGHT);
+        }
+    }
+}
+
+// ============================================================================
 // AppWidgetFilter Implementation - Application-wide event filter
 // ============================================================================
 
@@ -353,6 +373,13 @@ bool AppWidgetFilter::eventFilter(QObject* watched, QEvent* event)
     // Check if this is the Advanced Audio Properties dialog
     else if (widget->objectName() == "OBSAdvAudio" || className == "OBSBasicAdvAudio") {
         ApplyAdvAudioEnhancements(widget);
+    }
+    // Fix table row height in Remux/Importer/Missing Files dialogs
+    else if (widget->objectName() == "OBSRemux" || widget->objectName() == "OBSImporter" || widget->objectName() == "OBSMissingFiles") {
+        if (!widget->property("streamup_table_fixed").toBool()) {
+            widget->setProperty("streamup_table_fixed", true);
+            ApplyTableRowHeight(widget);
+        }
     }
     // Also scan top-level windows when they're shown
     else if (widget->isWindow()) {
