@@ -2665,7 +2665,9 @@ void SceneOrganiserDock::onDuplicateSceneClicked()
     QString format = currentSceneName + " %1";
     int i = 2;
     QString newName = format.arg(i);
-    while (obs_get_source_by_name(newName.toUtf8().constData())) {
+    obs_source_t *existing = nullptr;
+    while ((existing = obs_get_source_by_name(newName.toUtf8().constData())) != nullptr) {
+        obs_source_release(existing);
         newName = format.arg(++i);
     }
 
@@ -2677,6 +2679,7 @@ void SceneOrganiserDock::onDuplicateSceneClicked()
 
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Duplication",
             QString("Duplicated scene '%1' to '%2'").arg(currentSceneName, newName).toUtf8().constData());
+        obs_scene_release(duplicatedScene);
     }
 
     obs_source_release(currentSource);
