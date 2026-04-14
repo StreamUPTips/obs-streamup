@@ -1,3 +1,14 @@
+# StreamUP v2.2.2 - Patch Update
+
+## Improvements
+- **Toolbar Theming** - Stripped custom sizing so the toolbar now follows OBS theme standards for a more consistent look
+- **Theme Switching** - Table row heights and theme styling now re-apply correctly when switching between themes without needing to restart
+
+## Bug Fixes
+- **Scene Organiser Memory Leak** - Fixed leaked source references when duplicating scenes from the Scene Organiser
+
+---
+
 # StreamUP v2.2.1 - Patch Update
 
 ## Bug Fixes
