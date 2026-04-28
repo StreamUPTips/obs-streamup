@@ -256,19 +256,7 @@ void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
 
         QTableWidget *fontTable = CreateMissingFontsTable(missingFonts);
 
-        // Dynamic height calculation: max 10 rows
-        int rowCount = fontTable->rowCount();
-        int maxVisibleRows = std::min(rowCount, 10);
-        int headerHeight = 35;
-        int rowHeight = 30;
-        int tableHeight = headerHeight + (rowHeight * maxVisibleRows) + 6;
-
-        fontTable->setFixedHeight(tableHeight);
-        if (rowCount > 10) {
-            fontTable->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        } else {
-            fontTable->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        }
+        StreamUP::UIStyles::ApplyDialogTableSizing(fontTable);
 
         // Remove table border to blend with group box
         fontTable->setStyleSheet(
@@ -515,19 +503,7 @@ void ShowFontUrlManagerDialog()
 				row++;
 			}
 
-			// Dynamic height calculation: max 10 rows
-			int rowCount = table->rowCount();
-			int maxVisibleRows = std::min(rowCount, 10);
-			int headerHeight = 35;
-			int rowHeight = 30;
-			int tableHeight = headerHeight + (rowHeight * maxVisibleRows) + 6;
-
-			table->setFixedHeight(tableHeight);
-			if (rowCount > 10) {
-				table->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-			} else {
-				table->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-			}
+			StreamUP::UIStyles::ApplyDialogTableSizing(table);
 
 			// Style table to match dialog
 			table->setStyleSheet(

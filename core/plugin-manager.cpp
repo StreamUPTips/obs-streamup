@@ -446,21 +446,9 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			
 			// Create modern table widget
 			QTableWidget *missingTable = CreateMissingPluginsTable(missing_modules);
-			
-			// Dynamic height calculation: max 10 rows, auto-size otherwise
-			int rowCount = missingTable->rowCount();
-			int maxVisibleRows = std::min(rowCount, 10);
-			int headerHeight = 35; // Standard header height
-			int rowHeight = 30; // Standard row height for consistency
-			int tableHeight = headerHeight + (rowHeight * maxVisibleRows) + 6; // +6 for borders
-			
-			missingTable->setFixedHeight(tableHeight);
-			if (rowCount > 10) {
-				missingTable->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-			} else {
-				missingTable->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-			}
-			
+
+			StreamUP::UIStyles::ApplyDialogTableSizing(missingTable);
+
 			// Remove table border and background to blend with group box
 			missingTable->setStyleSheet(
 				missingTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET);
@@ -487,21 +475,9 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			
 			// Create modern table widget
 			QTableWidget *updateTable = CreateUpdatesTable(version_mismatch_modules);
-			
-			// Dynamic height calculation: max 10 rows, auto-size otherwise
-			int rowCount = updateTable->rowCount();
-			int maxVisibleRows = std::min(rowCount, 10);
-			int headerHeight = 35; // Standard header height
-			int rowHeight = 30; // Standard row height for consistency
-			int tableHeight = headerHeight + (rowHeight * maxVisibleRows) + 6; // +6 for borders
-			
-			updateTable->setFixedHeight(tableHeight);
-			if (rowCount > 10) {
-				updateTable->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-			} else {
-				updateTable->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-			}
-			
+
+			StreamUP::UIStyles::ApplyDialogTableSizing(updateTable);
+
 			// Remove table border and background to blend with group box
 			updateTable->setStyleSheet(
 				updateTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET);
@@ -529,19 +505,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			// Create modern table widget
 			QTableWidget *failedTable = CreateFailedToLoadPluginsTable(failed_to_load_modules);
 
-			// Dynamic height calculation: max 10 rows, auto-size otherwise
-			int rowCount = failedTable->rowCount();
-			int maxVisibleRows = std::min(rowCount, 10);
-			int headerHeight = 35; // Standard header height
-			int rowHeight = 30; // Standard row height for consistency
-			int tableHeight = headerHeight + (rowHeight * maxVisibleRows) + 6; // +6 for borders
-
-			failedTable->setFixedHeight(tableHeight);
-			if (rowCount > 10) {
-				failedTable->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-			} else {
-				failedTable->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-			}
+			StreamUP::UIStyles::ApplyDialogTableSizing(failedTable);
 
 			// Remove table border and background to blend with group box
 			failedTable->setStyleSheet(

@@ -33,6 +33,7 @@
 #include <QStyle>
 #include <QPainter>
 #include <QPainterPath>
+#include <algorithm>
 #include <QMouseEvent>
 #include <QResizeEvent>
 #include <QWindow>
@@ -905,6 +906,25 @@ void AutoResizeTableColumns(QTableWidget* table) {
     
     // Set the table's minimum width - last column will stretch to fill any extra space
     table->setMinimumWidth(totalMinWidth);
+}
+
+void ApplyDialogTableSizing(QTableWidget* table, int maxRows) {
+    if (!table) return;
+    // Match the row height enforced by the global theme filter (ApplyTableRowHeight,
+    // 36px) so the row height we *plan* for matches what gets *rendered*. Without
+    // this, the filter bumps rows after we setFixedHeight, and the rows clip flat
+    // — see issue #39 (text invisible in Plugin Updates dialog).
+    constexpr int kRowHeight = 36;
+    table->verticalHeader()->setDefaultSectionSize(kRowHeight);
+
+    const int rowCount = table->rowCount();
+    const int visibleRows = std::min(rowCount, maxRows);
+    // sizeHint() is DPI- and font-aware; the previous magic 35px constant
+    // underestimated header height under Windows display scaling.
+    const int headerH = table->horizontalHeader()->sizeHint().height();
+    table->setFixedHeight(headerH + (kRowHeight * visibleRows) + 6);
+    table->setVerticalScrollBarPolicy(rowCount > maxRows ? Qt::ScrollBarAsNeeded
+                                                          : Qt::ScrollBarAlwaysOff);
 }
 
 void HandleTableCellClick(QTableWidget* table, int row, int column) {

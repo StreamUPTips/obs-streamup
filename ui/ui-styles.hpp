@@ -330,6 +330,9 @@ QTableWidget* CreateStyledTable(const QStringList& headers, QWidget* parent = nu
 QWidget* GetTableContainer(QTableWidget* table);
 void AutoResizeTableColumns(QTableWidget* table);
 void HandleTableCellClick(QTableWidget* table, int row, int column);
+// Pin row height + compute a fixed table height that won't clip rows at high DPI.
+// Use for tables hosted inside group boxes / dialogs (max maxRows visible, then scroll).
+void ApplyDialogTableSizing(QTableWidget* table, int maxRows = 10);
 
 // Auto-sizing utilities
 void ApplyAutoSizing(QDialog* dialog, int minWidth = 700, int maxWidth = 900, int minHeight = 150, int maxHeight = 750);
