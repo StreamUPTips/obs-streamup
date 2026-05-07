@@ -1,3 +1,14 @@
+# StreamUP v2.2.3 - Patch Update
+
+## New Features
+- **Switch to New Scene on Create** - New Scene Organiser setting, off by default. Switch it on and creating a scene auto-switches OBS to it. In Studio Mode it only sets the preview, never goes to program.
+
+## Bug Fixes
+- **Installer App ID** - Windows installer was shipping with a blank AppId. Fixed by reading UUID_APP from the buildspec.
+- **Plugin Updates Dialog** - Rows in the plugin updates table were getting clipped flat on high-DPI displays. Fixed.
+
+---
+
 # StreamUP v2.2.2 - Patch Update
 
 ## Improvements
