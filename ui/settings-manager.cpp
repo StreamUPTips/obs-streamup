@@ -288,6 +288,7 @@ PluginSettings GetCurrentSettings()
 		settings.sceneOrganiserDisablePreviewSwitchingInStudioMode = false;
 		settings.sceneOrganiserDisableTransitionInStudioMode = false;
 	}
+	settings.sceneOrganiserSwitchToNewScene = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_switch_to_new_scene", false);
 	settings.sceneOrganiserItemHeight = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "scene_organiser_item_height", 50);
 	// Ensure the height is within valid range (10-200%)
 	if (settings.sceneOrganiserItemHeight < 10) {
@@ -391,6 +392,7 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "scene_organiser_remember_folder_state", settings.sceneOrganiserRememberFolderState);
 	obs_data_set_bool(data, "scene_organiser_disable_preview_switching_in_studio_mode", settings.sceneOrganiserDisablePreviewSwitchingInStudioMode);
 	obs_data_set_bool(data, "scene_organiser_disable_transition_in_studio_mode", settings.sceneOrganiserDisableTransitionInStudioMode);
+	obs_data_set_bool(data, "scene_organiser_switch_to_new_scene", settings.sceneOrganiserSwitchToNewScene);
 	obs_data_set_int(data, "scene_organiser_item_height", settings.sceneOrganiserItemHeight);
 
 	// Save scene sort method setting
@@ -1074,6 +1076,32 @@ void ShowSettingsDialog(int tabIndex)
 		disableTransitionLayout->addStretch();
 		disableTransitionLayout->addWidget(disableTransitionSwitch);
 		sceneOrganiserLayout->addLayout(disableTransitionLayout);
+
+		// Switch to New Scene on Create setting
+		QHBoxLayout *switchToNewSceneLayout = new QHBoxLayout();
+		switchToNewSceneLayout->setContentsMargins(0, 0, 0, 0);
+		switchToNewSceneLayout->setSpacing(StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+
+		QLabel *switchToNewSceneLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.SwitchToNewScene"));
+		switchToNewSceneLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		switchToNewSceneLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.SwitchToNewSceneDesc"));
+
+		StreamUP::UIStyles::SwitchButton *switchToNewSceneSwitch =
+			StreamUP::UIStyles::CreateStyledSwitch("", currentSettings.sceneOrganiserSwitchToNewScene);
+		switchToNewSceneSwitch->setToolTip(obs_module_text("SceneOrganiser.Settings.SwitchToNewSceneDesc"));
+
+		QObject::connect(switchToNewSceneSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+			PluginSettings settings = GetCurrentSettings();
+			settings.sceneOrganiserSwitchToNewScene = checked;
+			UpdateSettings(settings);
+		});
+
+		switchToNewSceneLayout->addWidget(switchToNewSceneLabel);
+		switchToNewSceneLayout->addStretch();
+		switchToNewSceneLayout->addWidget(switchToNewSceneSwitch);
+		sceneOrganiserLayout->addLayout(switchToNewSceneLayout);
 
 		// Item Height setting
 		QHBoxLayout *itemHeightLayout = new QHBoxLayout();

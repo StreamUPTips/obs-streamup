@@ -1362,8 +1362,15 @@ void SceneOrganiserDock::onCreateSceneClicked()
             // The scene will automatically appear in our tree view due to the OBS event system
             // We don't need to manually add it here
 
-            // Optionally switch to the new scene
-            obs_frontend_set_current_scene(scene_source);
+            StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+            if (settings.sceneOrganiserSwitchToNewScene) {
+                // In studio mode, only ever set the preview — never push the new scene to program
+                if (obs_frontend_preview_program_mode_active()) {
+                    obs_frontend_set_current_preview_scene(scene_source);
+                } else {
+                    obs_frontend_set_current_scene(scene_source);
+                }
+            }
 
             obs_scene_release(scene);
 
