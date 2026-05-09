@@ -733,6 +733,57 @@ static void ManageHiddenItems(AdjustmentLayerData *d)
 	d->actively_hidden_ids = std::move(new_ids);
 }
 
+// ---- Hide-originals startup recovery ----
+//
+// hide_originals works by calling obs_sceneitem_set_visible(item, false). That
+// flag is part of the scene's saved state, so the next time OBS loads the
+// collection the items come back invisible. Our actively_hidden_ids list is
+// runtime-only — empty on a fresh tick — so without recovery the AL would see
+// invisible items it cannot prove it owns and skip them, leaving the composite
+// empty and the source not visible until the user toggled hide_originals
+// off-and-on again. Adoption claims any included item that is currently
+// invisible at the moment we enter the hide_originals branch with an empty
+// tracker; we assume we hid it last session.
+
+static bool AdoptScanCallback(obs_scene_t *scene, obs_sceneitem_t *item,
+			      void *param)
+{
+	UNUSED_PARAMETER(scene);
+	auto *d = static_cast<AdjustmentLayerData *>(param);
+	if (obs_sceneitem_get_source(item) == d->source)
+		return true;
+	if (obs_sceneitem_visible(item))
+		return true;
+	if (!PassesFilter(d, item))
+		return true;
+	d->actively_hidden_ids.push_back(obs_sceneitem_get_id(item));
+	return true;
+}
+
+static void AdoptPreviouslyHidden(AdjustmentLayerData *d)
+{
+	if (!d->parent_cache_valid)
+		return;
+
+	if (d->cached_parent_group) {
+		obs_source_t *gs =
+			obs_sceneitem_get_source(d->cached_parent_group);
+		obs_scene_t *group_scene = obs_group_from_source(gs);
+		if (group_scene)
+			obs_scene_enum_items(group_scene, AdoptScanCallback, d);
+		if (!d->group_only) {
+			obs_scene_t *parent = obs_sceneitem_get_scene(
+				d->cached_parent_group);
+			if (parent)
+				obs_scene_enum_items(parent,
+						     AdoptScanCallback, d);
+		}
+	} else if (d->cached_parent_scene) {
+		obs_scene_enum_items(d->cached_parent_scene, AdoptScanCallback,
+				     d);
+	}
+}
+
 // ---- Z-order snap (include/exclude modes) ----
 //
 // In include/exclude mode the user's mental model is "filter only these
@@ -974,6 +1025,13 @@ static void VideoTick(void *data, float seconds)
 	d->items_collected_in_tick = false;
 	bool transition_active = IsProgramTransitionActive();
 	if (d->hide_originals && d->parent_cache_valid) {
+		// Recover from a previous session: items saved as invisible by
+		// us last time need to be claimed before ManageHiddenItems can
+		// see them as targets. Idempotent — does nothing if the
+		// tracker already has entries.
+		if (d->actively_hidden_ids.empty())
+			AdoptPreviouslyHidden(d);
+
 		if (transition_active) {
 			CollectTargetItems(d, d->actively_hidden_ids);
 		} else {
