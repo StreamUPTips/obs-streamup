@@ -733,6 +733,104 @@ static void ManageHiddenItems(AdjustmentLayerData *d)
 	d->actively_hidden_ids = std::move(new_ids);
 }
 
+// ---- Z-order snap (include/exclude modes) ----
+//
+// In include/exclude mode the user's mental model is "filter only these
+// sources at their z-position, leave everything else alone". The AL's natural
+// rendering draws its full-canvas composite at the AL's own scene z-order,
+// which means a full-canvas included source covers any "not included" source
+// that sits above it. The fix is to move the AL itself to one slot above the
+// lowest passing item every tick — that way the composite occupies the right
+// z-band and items above the AL render on top, undisturbed.
+
+struct SnapScanCtx {
+	AdjustmentLayerData *d;
+	int pos;
+	int self_pos;
+	int lowest_passing;
+};
+
+static bool SnapScanCallback(obs_scene_t *scene, obs_sceneitem_t *item,
+			     void *param)
+{
+	UNUSED_PARAMETER(scene);
+	auto *c = static_cast<SnapScanCtx *>(param);
+	if (obs_sceneitem_get_source(item) == c->d->source) {
+		c->self_pos = c->pos;
+	} else if (PassesFilter(c->d, item)) {
+		if (c->lowest_passing == -1)
+			c->lowest_passing = c->pos;
+	}
+	c->pos++;
+	return true;
+}
+
+static obs_sceneitem_t *FindSelfItem(obs_scene_t *scene, obs_source_t *self)
+{
+	struct FindCtx {
+		obs_source_t *self;
+		obs_sceneitem_t *result;
+	} ctx = {self, nullptr};
+	obs_scene_enum_items(
+		scene,
+		[](obs_scene_t *, obs_sceneitem_t *item, void *p) -> bool {
+			auto *c = static_cast<FindCtx *>(p);
+			if (obs_sceneitem_get_source(item) == c->self) {
+				obs_sceneitem_addref(item);
+				c->result = item;
+				return false;
+			}
+			return true;
+		},
+		&ctx);
+	return ctx.result;
+}
+
+static void MaybeSnapZOrder(AdjustmentLayerData *d)
+{
+	if (!d->auto_snap_zorder)
+		return;
+	if (d->filter_mode == FILTER_MODE_ALL_BELOW)
+		return;
+	if (!d->parent_cache_valid)
+		return;
+
+	// Decide which scene we're in (group's inner scene if the AL sits in
+	// a group, otherwise the parent scene).
+	obs_scene_t *scene = nullptr;
+	if (d->cached_parent_group) {
+		obs_source_t *gs =
+			obs_sceneitem_get_source(d->cached_parent_group);
+		scene = obs_group_from_source(gs);
+	} else {
+		scene = d->cached_parent_scene;
+	}
+	if (!scene)
+		return;
+
+	SnapScanCtx ctx = {d, 0, -1, -1};
+	obs_scene_enum_items(scene, SnapScanCallback, &ctx);
+
+	if (ctx.lowest_passing < 0 || ctx.self_pos < 0)
+		return; // Nothing to snap to, or the AL is not in this scene.
+
+	// Target: one slot above the lowest passing item. set_order_position
+	// removes-and-reinserts, so we account for the AL's own current
+	// position when computing the target index.
+	int target = ctx.lowest_passing + 1;
+	if (ctx.self_pos < ctx.lowest_passing)
+		target = ctx.lowest_passing; // AL was below the passing item; account for the shift on removal.
+
+	if (ctx.self_pos == target)
+		return; // Already where we want to be.
+
+	obs_sceneitem_t *self_item = FindSelfItem(scene, d->source);
+	if (!self_item)
+		return;
+	obs_sceneitem_set_order_position(self_item, target);
+	obs_sceneitem_release(self_item);
+}
+
 // ---- OBS Source Callbacks ----
 
 static const char *GetName(void *type_data)
@@ -751,6 +849,7 @@ static void *Create(obs_data_t *settings, obs_source_t *source)
 	data->group_only = true;
 	data->hide_originals = false;
 	data->filter_mode = FILTER_MODE_ALL_BELOW;
+	data->auto_snap_zorder = true;
 	data->settings_dirty = false;
 	data->cached_parent_scene = nullptr;
 	data->cached_parent_group = nullptr;
@@ -887,6 +986,13 @@ static void VideoTick(void *data, float seconds)
 		// (but wait until any transition finishes)
 		RestoreAllHiddenItems(d);
 	}
+
+	// Snap z-position so include/exclude rendering happens at the
+	// correct depth. Skipped during program transitions for the same
+	// reason hide-originals is — mutating the source list mid-fade pops
+	// items around visually.
+	if (!transition_active)
+		MaybeSnapZOrder(d);
 }
 
 static void VideoRender(void *data, gs_effect_t *effect)
@@ -1076,6 +1182,8 @@ static bool FilterModeChanged(obs_properties_t *props, obs_property_t *prop,
 				 show);
 	obs_property_set_visible(
 		obs_properties_get(props, "filter_sources"), show);
+	obs_property_set_visible(
+		obs_properties_get(props, "auto_snap_zorder"), show);
 	return true;
 }
 
@@ -1184,11 +1292,22 @@ static obs_properties_t *GetProperties(void *data)
 		filter_list,
 		obs_module_text("AdjustmentLayer.Tooltip.FilterSources"));
 
+	// Auto z-order snap toggle. Only meaningful in include/exclude mode —
+	// in "All Sources Below" mode the AL's z-position already matches the
+	// user's intent (filter everything below where I am).
+	obs_property_t *snap_prop = obs_properties_add_bool(
+		props, "auto_snap_zorder",
+		obs_module_text("AdjustmentLayer.Property.AutoSnapZ"));
+	obs_property_set_long_description(
+		snap_prop,
+		obs_module_text("AdjustmentLayer.Tooltip.AutoSnapZ"));
+
 	// Set initial visibility (hidden for "All Sources" mode)
 	if (d) {
 		bool show = (d->filter_mode != FILTER_MODE_ALL_BELOW);
 		obs_property_set_visible(picker, show);
 		obs_property_set_visible(filter_list, show);
+		obs_property_set_visible(snap_prop, show);
 	}
 
 	// ---- Footer ----
@@ -1211,6 +1330,11 @@ static void GetDefaults(obs_data_t *settings)
 	obs_data_set_default_bool(settings, "hide_originals", false);
 	obs_data_set_default_int(settings, "filter_mode",
 				 FILTER_MODE_ALL_BELOW);
+	// On by default: in include/exclude mode the user's mental model is
+	// "filter these specific sources at their position". Without auto-snap
+	// the composite ends up drawn at the AL's own z-position, covering
+	// non-included sources above the included ones.
+	obs_data_set_default_bool(settings, "auto_snap_zorder", true);
 }
 
 static void Update(void *data, obs_data_t *settings)
@@ -1220,6 +1344,7 @@ static void Update(void *data, obs_data_t *settings)
 	d->group_only = obs_data_get_bool(settings, "group_only");
 	d->hide_originals = obs_data_get_bool(settings, "hide_originals");
 	d->filter_mode = (int)obs_data_get_int(settings, "filter_mode");
+	d->auto_snap_zorder = obs_data_get_bool(settings, "auto_snap_zorder");
 
 	// Parse the source list into filter_sources (mutex-protected
 	// to prevent data race with render thread reading via swap)

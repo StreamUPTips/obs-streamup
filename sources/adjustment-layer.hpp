@@ -36,6 +36,10 @@ struct AdjustmentLayerData {
 	bool group_only;     // When in a group, only affect group siblings
 	bool hide_originals; // Replace originals with filtered output
 	int filter_mode;     // FilterMode enum
+	bool auto_snap_zorder; // In include/exclude mode, snap our scene-item z-position
+	                       // to one slot above the lowest passing item so the
+	                       // filtered composite renders at the correct z-order
+	                       // and items above stay visible.
 
 	// filter_sources is written by Update() under settings_mutex.
 	// render_filter_sources is swapped in VideoTick() and read by render.
