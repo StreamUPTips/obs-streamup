@@ -1,11 +1,17 @@
 # StreamUP v2.2.3 - Patch Update
 
 ## New Features
+- **Toolbar Size** - New Small / Medium / Large dropdown in StreamUP Settings, Toolbar tab. Scales icon size and button padding together so buttons stay balanced at every tier.
+- **Plugins Picker** - One place to turn each piece of StreamUP on or off, new tab in Settings. Soft toggles flip instantly, the rest show a "Restart required" badge. First-launch wizard runs on fresh installs and after version bumps.
+- **Adjustment Layer Auto-Position** - New property, on by default. The AL slots itself just above the lowest included source so the composite paints in the right z-band, leaving un-included sources untouched.
 - **Switch to New Scene on Create** - New Scene Organiser setting, off by default. Switch it on and creating a scene auto-switches OBS to it. In Studio Mode it only sets the preview, never goes to program.
 
 ## Bug Fixes
+- **Adjustment Layer Hide Originals on Startup** - Originals stayed invisible after restarting OBS because the saved scene state remembered the hidden flag but our runtime tracker did not. The AL now adopts already-hidden included items on first tick.
+- **Scene Organiser Item Height** - Fresh installs defaulted to 100% even though the in-code defaults and upgrader path used 50%. Lined them all up on 50%.
 - **Installer App ID** - Windows installer was shipping with a blank AppId. Fixed by reading UUID_APP from the buildspec.
 - **Plugin Updates Dialog** - Rows in the plugin updates table were getting clipped flat on high-DPI displays. Fixed.
+- **Wizard Save & Continue Button** - Qt was eating the ampersand as a mnemonic prefix so it rendered "Save  continue". Doubled the & for a literal ampersand.
 
 ---
 
