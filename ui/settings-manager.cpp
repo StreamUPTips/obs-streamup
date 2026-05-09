@@ -13,6 +13,7 @@
 #include "scene-organiser/scene-organiser-dock.hpp"
 #include "streamup-toolbar.hpp"
 #include "streamup-toolbar-configurator.hpp"
+#include "../multidock/multidock_manager.hpp"
 #include <obs-module.h>
 #include <obs-data.h>
 #include <obs-properties.h>
@@ -47,6 +48,8 @@
 #include <memory>
 #include <mutex>
 #include <algorithm>
+#include <functional>
+#include <vector>
 #include <util/platform.h>
 
 // UI settings management implementation
@@ -165,6 +168,57 @@ void AddIncompatiblePluginRow(QTableWidget *table, const std::string &moduleName
 
 // Settings dialog is now managed by DialogManager in ui-helpers
 
+// Tracks whether configs.json existed at the first LoadSettings of this OBS
+// session. Used by HasAnyExistingSettings() to distinguish a brand-new install
+// (file did not exist) from an upgrade (file existed, even if the new
+// "modules" object hasn't been written yet). Latched by LoadSettings, never
+// reset.
+static bool settingsFileExistedAtFirstLoad = false;
+static bool settingsFileFirstLoadChecked = false;
+
+static void LoadModuleSettings(obs_data_t *data, ModuleSettings &out)
+{
+    obs_data_t *modulesData = obs_data_get_obj(data, "modules");
+    if (!modulesData) {
+        // No modules object yet — fall back to the legacy show_toolbar key for
+        // toolbar so users who previously turned it off via the General tab
+        // don't suddenly have it back on.
+        out = ModuleSettings();
+        out.toolbar = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "show_toolbar", true);
+        return;
+    }
+
+    out.toolbar = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "toolbar", true);
+    out.multiDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "multi_dock", true);
+    out.hotkeys = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "hotkeys", true);
+    out.sceneOrganiser = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "scene_organiser", true);
+    out.streamupDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "streamup_dock", true);
+    out.mixerEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "mixer_enhancements", true);
+    out.studioModeEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "studio_mode_enhancements", true);
+    out.themeEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "theme_enhancements", true);
+    out.websocketApi = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "websocket_api", true);
+    out.adjustmentLayerSource = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "adjustment_layer_source", true);
+
+    obs_data_release(modulesData);
+}
+
+static void SaveModuleSettings(obs_data_t *data, const ModuleSettings &in)
+{
+    obs_data_t *modulesData = obs_data_create();
+    obs_data_set_bool(modulesData, "toolbar", in.toolbar);
+    obs_data_set_bool(modulesData, "multi_dock", in.multiDock);
+    obs_data_set_bool(modulesData, "hotkeys", in.hotkeys);
+    obs_data_set_bool(modulesData, "scene_organiser", in.sceneOrganiser);
+    obs_data_set_bool(modulesData, "streamup_dock", in.streamupDock);
+    obs_data_set_bool(modulesData, "mixer_enhancements", in.mixerEnhancements);
+    obs_data_set_bool(modulesData, "studio_mode_enhancements", in.studioModeEnhancements);
+    obs_data_set_bool(modulesData, "theme_enhancements", in.themeEnhancements);
+    obs_data_set_bool(modulesData, "websocket_api", in.websocketApi);
+    obs_data_set_bool(modulesData, "adjustment_layer_source", in.adjustmentLayerSource);
+    obs_data_set_obj(data, "modules", modulesData);
+    obs_data_release(modulesData);
+}
+
 obs_data_t *LoadSettings()
 {
 	std::lock_guard<std::mutex> lock(settingsCacheMutex);
@@ -177,6 +231,12 @@ obs_data_t *LoadSettings()
 
 	char *configPath = StreamUP::PathUtils::GetOBSConfigPath("configs.json");
 	obs_data_t *data = obs_data_create_from_json_file(configPath);
+
+	// Latch whether the file existed prior to this session (for first-launch wizard detection).
+	if (!settingsFileFirstLoadChecked) {
+		settingsFileExistedAtFirstLoad = (data != nullptr);
+		settingsFileFirstLoadChecked = true;
+	}
 
 	if (!data) {
 		StreamUP::DebugLogger::LogDebug("Settings", "Initialize", "Settings not found. Creating default settings...");
@@ -352,6 +412,12 @@ PluginSettings GetCurrentSettings()
 			settings.toolbarIconSize = 24;
 		}
 
+		// Load module enable/disable settings
+		LoadModuleSettings(data, settings.modules);
+		settings.moduleSetupComplete = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "module_setup_complete", false);
+		const char *wvs = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "wizard_version_shown", "");
+		settings.wizardVersionShown = wvs ? wvs : "";
+
 		// Load dock tool settings
 		obs_data_t *dockData = obs_data_get_obj(data, "dock_tools");
 		if (dockData) {
@@ -465,6 +531,11 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_obj(data, "dock_tools", dockData);
 	obs_data_release(dockData);
 
+	// Save module enable/disable settings
+	SaveModuleSettings(data, settings.modules);
+	obs_data_set_bool(data, "module_setup_complete", settings.moduleSetupComplete);
+	obs_data_set_string(data, "wizard_version_shown", settings.wizardVersionShown.c_str());
+
 	SaveSettings(data);
 
 	// Update global state
@@ -576,19 +647,44 @@ void ShowSettingsDialog(int tabIndex)
 
 		sidebarLayout->addWidget(categoryList);
 
-		// Add categories to sidebar
+		// Add categories to sidebar.
+		// NOTE: Existing callers reference these by index (0/1/2/5). Append
+		// new categories rather than insert so those indices stay stable.
 		QStringList categories = {
 			obs_module_text("Settings.Group.General"),
 			obs_module_text("Settings.Group.Toolbar"),
 			obs_module_text("SceneOrganiser.Settings.Title"),
 			obs_module_text("Settings.Group.PluginManagement"),
 			obs_module_text("Settings.Group.Hotkeys"),
-			obs_module_text("Settings.Group.DockConfig")
+			obs_module_text("Settings.Group.DockConfig"),
+			obs_module_text("Settings.Group.Plugins")
 		};
 
 		for (const QString &category : categories) {
 			categoryList->addItem(category);
 		}
+
+		// Gray out sidebar entries for plugins that are currently disabled.
+		// We keep the entries in the list (preserving fixed indices used by
+		// other callers) but strip ItemIsEnabled so the row paints muted and
+		// can't be clicked — making disabled plugins feel uninstalled
+		// without breaking ShowSettingsDialog(int) callers.
+		{
+			PluginSettings dimSettings = GetCurrentSettings();
+			auto setEnabled = [categoryList](int row, bool enabled) {
+				if (auto *item = categoryList->item(row); item) {
+					Qt::ItemFlags f = item->flags();
+					if (enabled) f |= Qt::ItemIsEnabled;
+					else         f &= ~Qt::ItemIsEnabled;
+					item->setFlags(f);
+				}
+			};
+			setEnabled(1, dimSettings.modules.toolbar);        // Toolbar
+			setEnabled(2, dimSettings.modules.sceneOrganiser); // Scene Organiser
+			setEnabled(4, dimSettings.modules.hotkeys);        // Hotkeys
+			setEnabled(5, dimSettings.modules.streamupDock);   // Dock Configuration
+		}
+
 		categoryList->setCurrentRow(tabIndex);
 
 		// Right content area
@@ -1856,7 +1952,213 @@ void ShowSettingsDialog(int tabIndex)
 		dockScrollArea->setWidget(dockContentContainer);
 		dockPageLayout->addWidget(dockScrollArea);
 		stackedWidget->addWidget(dockPage);
-		
+
+		// 7. Plugins Page — master enable/disable for each part of StreamUP.
+		QWidget *modulesPage = new QWidget();
+		QVBoxLayout *modulesPageLayout = new QVBoxLayout(modulesPage);
+		modulesPageLayout->setContentsMargins(0, 0, 0, 0);
+		modulesPageLayout->setSpacing(0);
+
+		QScrollArea *modulesScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+		modulesScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+		modulesScrollArea->setStyleSheet(modulesScrollArea->styleSheet() + QString(
+			"QScrollArea { background-color: %1; border: none; border-radius: %2px; }"
+			"QScrollArea > QWidget > QWidget { background: transparent; }"
+		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY).arg(StreamUP::UIStyles::Sizes::RADIUS_DOCK));
+
+		QWidget *modulesContentContainer = new QWidget();
+		modulesContentContainer->setStyleSheet("QWidget { background: transparent; }");
+		QVBoxLayout *modulesContentLayout = new QVBoxLayout(modulesContentContainer);
+		modulesContentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
+		                                         StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
+		modulesContentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+
+		// Page intro — explains what each toggle actually controls so users
+		// aren't worried about hidden resource cost.
+		QLabel *pluginsIntro = new QLabel(obs_module_text("Plugins.IntroBlurb"));
+		pluginsIntro->setWordWrap(true);
+		pluginsIntro->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+			.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
+			.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		modulesContentLayout->addWidget(pluginsIntro);
+
+		// Restart-required banner (visible only when at least one hard toggle is dirty).
+		QLabel *modulesRestartBanner = new QLabel(obs_module_text("Plugins.RestartRequired.Banner"));
+		modulesRestartBanner->setWordWrap(true);
+		modulesRestartBanner->setStyleSheet(QString(
+			"QLabel { background-color: rgba(250, 179, 135, 0.15); color: %1; "
+			"border: 1px solid rgba(250, 179, 135, 0.5); border-radius: %2px; "
+			"padding: 10px; font-size: %3px; }"
+		).arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+		 .arg(StreamUP::UIStyles::Sizes::RADIUS_SM)
+		 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		modulesRestartBanner->setVisible(false);
+		modulesContentLayout->addWidget(modulesRestartBanner);
+
+		// Hard-module restart-required chips. Captured by the row builder so the
+		// banner can refresh whenever any hard toggle changes.
+		auto hardChips = std::make_shared<std::vector<QLabel*>>();
+
+		// Helper: build one module row inside a parent layout.
+		// `getValue` returns the current bool from PluginSettings, `setValue` writes
+		// it back. `isHard` controls whether a "Restart required" chip is shown.
+		// `onAfterChange` runs after the new value is persisted, useful for soft
+		// toggles to apply runtime behaviour immediately.
+		auto refreshBanner = [hardChips, modulesRestartBanner]() {
+			bool anyDirty = false;
+			for (QLabel *chip : *hardChips) {
+				if (chip && chip->isVisible()) { anyDirty = true; break; }
+			}
+			modulesRestartBanner->setVisible(anyDirty);
+		};
+
+		auto addModuleRow = [&](QVBoxLayout *parent, const char *titleKey, const char *descKey,
+		                        std::function<bool(const PluginSettings&)> getValue,
+		                        std::function<void(PluginSettings&, bool)> setValue,
+		                        bool isHard,
+		                        std::function<bool(const AppliedModuleSnapshot&)> getApplied,
+		                        std::function<void()> onAfterChange) {
+			QWidget *row = new QWidget();
+			QHBoxLayout *rowLayout = new QHBoxLayout(row);
+			// Vertical padding so descriptions don't run together row-to-row.
+			rowLayout->setContentsMargins(0, StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+			                              0, StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
+			rowLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+
+			QWidget *textBlock = new QWidget();
+			QVBoxLayout *textLayout = new QVBoxLayout(textBlock);
+			textLayout->setContentsMargins(0, 0, 0, 0);
+			textLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+
+			QLabel *titleLabel = new QLabel(obs_module_text(titleKey));
+			titleLabel->setStyleSheet(QString("color: %1; font-size: 15px; font-weight: 600; background: transparent;")
+				.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
+
+			QLabel *descLabel = new QLabel(obs_module_text(descKey));
+			descLabel->setWordWrap(true);
+			descLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+				.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
+				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+
+			textLayout->addWidget(titleLabel);
+			textLayout->addWidget(descLabel);
+			rowLayout->addWidget(textBlock, 1);
+
+			QLabel *restartChip = nullptr;
+			if (isHard) {
+				restartChip = new QLabel(obs_module_text("Plugins.RestartRequired"));
+				restartChip->setStyleSheet(QString(
+					"QLabel { color: rgb(250, 179, 135); background-color: rgba(250, 179, 135, 0.15); "
+					"border: 1px solid rgba(250, 179, 135, 0.4); border-radius: 8px; "
+					"padding: 2px 8px; font-size: %1px; }"
+				).arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+				restartChip->setVisible(false);
+				rowLayout->addWidget(restartChip);
+				hardChips->push_back(restartChip);
+			}
+
+			PluginSettings cur = GetCurrentSettings();
+			AppliedModuleSnapshot snap = GetAppliedModuleSnapshot();
+			StreamUP::UIStyles::SwitchButton *moduleSwitch =
+				StreamUP::UIStyles::CreateStyledSwitch("", getValue(cur));
+
+			// Initial chip state
+			if (restartChip && getApplied) {
+				bool dirty = (getValue(cur) != getApplied(snap));
+				restartChip->setVisible(dirty);
+			}
+
+			QObject::connect(moduleSwitch, &StreamUP::UIStyles::SwitchButton::toggled,
+				[setValue, isHard, getApplied, restartChip, onAfterChange, refreshBanner](bool checked) {
+					PluginSettings s = GetCurrentSettings();
+					setValue(s, checked);
+					UpdateSettings(s);
+					if (restartChip && getApplied) {
+						AppliedModuleSnapshot snap2 = GetAppliedModuleSnapshot();
+						restartChip->setVisible(checked != getApplied(snap2));
+					}
+					if (onAfterChange) {
+						onAfterChange();
+					}
+					refreshBanner();
+				});
+
+			rowLayout->addWidget(moduleSwitch, 0, Qt::AlignVCenter);
+			parent->addWidget(row);
+		};
+
+		// Interface plugins section
+		QGroupBox *uiGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Plugins.Section.UI"), "info");
+		QVBoxLayout *uiGroupLayout = StreamUP::UIHelpers::CreateVBoxLayout(uiGroup);
+
+		addModuleRow(uiGroupLayout, "Plugins.Toolbar.Title", "Plugins.Toolbar.Description",
+			[](const PluginSettings &s) { return s.modules.toolbar; },
+			[](PluginSettings &s, bool v) { s.modules.toolbar = v; },
+			false, nullptr,
+			[]() { ApplyToolbarVisibility(); });
+
+		addModuleRow(uiGroupLayout, "Plugins.MultiDock.Title", "Plugins.MultiDock.Description",
+			[](const PluginSettings &s) { return s.modules.multiDock; },
+			[](PluginSettings &s, bool v) { s.modules.multiDock = v; },
+			false, nullptr,
+			[]() { StreamUP::SettingsManager::PluginSettings ps = GetCurrentSettings();
+			       StreamUP::MultiDock::MultiDockManager::SetGlobalEnabled(ps.modules.multiDock); });
+
+		addModuleRow(uiGroupLayout, "Plugins.SceneOrganiser.Title", "Plugins.SceneOrganiser.Description",
+			[](const PluginSettings &s) { return s.modules.sceneOrganiser; },
+			[](PluginSettings &s, bool v) { s.modules.sceneOrganiser = v; },
+			true,
+			[](const AppliedModuleSnapshot &a) { return a.sceneOrganiser; },
+			nullptr);
+
+		addModuleRow(uiGroupLayout, "Plugins.StreamupDock.Title", "Plugins.StreamupDock.Description",
+			[](const PluginSettings &s) { return s.modules.streamupDock; },
+			[](PluginSettings &s, bool v) { s.modules.streamupDock = v; },
+			true,
+			[](const AppliedModuleSnapshot &a) { return a.streamupDock; },
+			nullptr);
+
+		// StreamUP OBS Theme Enhancements have no toggle. Mixer, studio
+		// mode and theme polish all self-gate on whether a StreamUP theme
+		// is currently active — they're already inert on any other theme,
+		// and they're part of what makes the StreamUP theme look right when
+		// it is active. So they always run.
+
+		modulesContentLayout->addWidget(uiGroup);
+
+		// System plugins section
+		QGroupBox *sysGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Plugins.Section.System"), "info");
+		QVBoxLayout *sysGroupLayout = StreamUP::UIHelpers::CreateVBoxLayout(sysGroup);
+
+		addModuleRow(sysGroupLayout, "Plugins.Hotkeys.Title", "Plugins.Hotkeys.Description",
+			[](const PluginSettings &s) { return s.modules.hotkeys; },
+			[](PluginSettings &s, bool v) { s.modules.hotkeys = v; },
+			false, nullptr,
+			[]() { StreamUP::SettingsManager::PluginSettings ps = GetCurrentSettings();
+			       StreamUP::HotkeyManager::SetHotkeyGroupEnabled(ps.modules.hotkeys); });
+
+		// WebSocket API toggle deliberately omitted — the vendor is always
+		// registered. It powers Streamer.Bot, custom scripts, and OBS Raw
+		// integrations, stays idle until something connects, and removing it
+		// breaks more workflows than it saves resources.
+
+		addModuleRow(sysGroupLayout, "Plugins.AdjustmentLayer.Title", "Plugins.AdjustmentLayer.Description",
+			[](const PluginSettings &s) { return s.modules.adjustmentLayerSource; },
+			[](PluginSettings &s, bool v) { s.modules.adjustmentLayerSource = v; },
+			true,
+			[](const AppliedModuleSnapshot &a) { return a.adjustmentLayerSource; },
+			nullptr);
+
+		modulesContentLayout->addWidget(sysGroup);
+		modulesContentLayout->addStretch();
+
+		modulesScrollArea->setWidget(modulesContentContainer);
+		modulesPageLayout->addWidget(modulesScrollArea);
+		stackedWidget->addWidget(modulesPage);
+
+		// Set initial banner state based on current dirty chips
+		refreshBanner();
+
 		// Connect category selection to page switching
 		QObject::connect(categoryList, &QListWidget::currentRowChanged, [stackedWidget](int index) {
 			stackedWidget->setCurrentIndex(index);
@@ -3029,6 +3331,63 @@ bool AreUpdatesSkipped(const std::map<std::string, std::string>& currentOutdated
 	std::sort(sortedSkipped.begin(), sortedSkipped.end());
 
 	return sortedCurrent == sortedSkipped;
+}
+
+AppliedModuleSnapshot GetAppliedModuleSnapshot()
+{
+	AppliedModuleSnapshot snap;
+	obs_data_t *data = LoadSettings();
+	if (!data) {
+		return snap;
+	}
+
+	obs_data_t *appliedData = obs_data_get_obj(data, "applied_modules");
+	if (appliedData) {
+		snap.sceneOrganiser = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "scene_organiser", true);
+		snap.streamupDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "streamup_dock", true);
+		snap.mixerEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "mixer_enhancements", true);
+		snap.studioModeEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "studio_mode_enhancements", true);
+		snap.themeEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "theme_enhancements", true);
+		snap.websocketApi = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "websocket_api", true);
+		snap.adjustmentLayerSource = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "adjustment_layer_source", true);
+		obs_data_release(appliedData);
+	}
+
+	obs_data_release(data);
+	return snap;
+}
+
+void CommitAppliedModuleSnapshot(const AppliedModuleSnapshot &snapshot)
+{
+	obs_data_t *data = LoadSettings();
+	if (!data) {
+		data = obs_data_create();
+	}
+
+	obs_data_t *appliedData = obs_data_create();
+	obs_data_set_bool(appliedData, "scene_organiser", snapshot.sceneOrganiser);
+	obs_data_set_bool(appliedData, "streamup_dock", snapshot.streamupDock);
+	obs_data_set_bool(appliedData, "mixer_enhancements", snapshot.mixerEnhancements);
+	obs_data_set_bool(appliedData, "studio_mode_enhancements", snapshot.studioModeEnhancements);
+	obs_data_set_bool(appliedData, "theme_enhancements", snapshot.themeEnhancements);
+	obs_data_set_bool(appliedData, "websocket_api", snapshot.websocketApi);
+	obs_data_set_bool(appliedData, "adjustment_layer_source", snapshot.adjustmentLayerSource);
+	obs_data_set_obj(data, "applied_modules", appliedData);
+	obs_data_release(appliedData);
+
+	SaveSettings(data);
+	obs_data_release(data);
+}
+
+bool HasAnyExistingSettings()
+{
+	// Make sure the latch has been initialised (calling LoadSettings is the
+	// only way to set settingsFileFirstLoadChecked).
+	obs_data_t *data = LoadSettings();
+	if (data) {
+		obs_data_release(data);
+	}
+	return settingsFileExistedAtFirstLoad;
 }
 
 } // namespace SettingsManager

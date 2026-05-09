@@ -546,8 +546,18 @@ void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 }
 
 //-------------------HOTKEY REGISTRATION-------------------
+// Tracks whether the hotkey block is currently registered so the master
+// toggle (SetHotkeyGroupEnabled) can avoid double-register / double-unregister.
+// Set by Register/UnregisterHotkeys themselves so the flag stays accurate
+// regardless of caller.
+static bool s_hotkeysCurrentlyRegistered = false;
+
 void RegisterHotkeys()
 {
+	if (s_hotkeysCurrentlyRegistered) {
+		return;
+	}
+	s_hotkeysCurrentlyRegistered = true;
 	refresh_browser_sources_hotkey_id = obs_hotkey_register_frontend("streamup_refresh_browser_sources", "StreamUP: Refresh Browser Sources",
 											 HotkeyRefreshBrowserSources, nullptr);
 	refresh_audio_monitoring_hotkey_id = obs_hotkey_register_frontend("streamup_refresh_audio_monitoring", "StreamUP: Refresh Audio Monitoring",
@@ -584,8 +594,21 @@ void RegisterHotkeys()
 											HotkeyToggleVisibilitySelectedSources, nullptr);
 }
 
+void SetHotkeyGroupEnabled(bool enabled)
+{
+	if (enabled && !s_hotkeysCurrentlyRegistered) {
+		RegisterHotkeys();
+	} else if (!enabled && s_hotkeysCurrentlyRegistered) {
+		UnregisterHotkeys();
+	}
+}
+
 void UnregisterHotkeys()
 {
+	if (!s_hotkeysCurrentlyRegistered) {
+		return;
+	}
+	s_hotkeysCurrentlyRegistered = false;
 	obs_hotkey_unregister(refresh_browser_sources_hotkey_id);
 	obs_hotkey_unregister(refresh_audio_monitoring_hotkey_id);
 	obs_hotkey_unregister(lock_all_sources_hotkey_id);

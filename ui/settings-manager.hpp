@@ -43,6 +43,61 @@ struct DockToolSettings {
 };
 
 /**
+ * @brief Per-module enable/disable flags (Modules tab + first-launch wizard)
+ */
+struct ModuleSettings {
+    // Soft toggles — apply at runtime without an OBS restart
+    bool toolbar;
+    bool multiDock;
+    bool hotkeys;
+
+    // Hard toggles — require an OBS restart to apply (no unregister API in OBS)
+    bool sceneOrganiser;
+    bool streamupDock;
+    bool mixerEnhancements;
+    bool studioModeEnhancements;
+    bool themeEnhancements;
+    bool websocketApi;
+    bool adjustmentLayerSource;
+
+    ModuleSettings() :
+        toolbar(true),
+        multiDock(true),
+        hotkeys(true),
+        sceneOrganiser(true),
+        streamupDock(true),
+        mixerEnhancements(true),
+        studioModeEnhancements(true),
+        themeEnhancements(true),
+        websocketApi(true),
+        adjustmentLayerSource(true) {}
+};
+
+/**
+ * @brief Snapshot of hard-module values that were actually applied at the most
+ * recent successful obs_module_load. Compared against the live ModuleSettings
+ * to drive the "Restart required" indicator on the Modules settings tab.
+ */
+struct AppliedModuleSnapshot {
+    bool sceneOrganiser;
+    bool streamupDock;
+    bool mixerEnhancements;
+    bool studioModeEnhancements;
+    bool themeEnhancements;
+    bool websocketApi;
+    bool adjustmentLayerSource;
+
+    AppliedModuleSnapshot() :
+        sceneOrganiser(true),
+        streamupDock(true),
+        mixerEnhancements(true),
+        studioModeEnhancements(true),
+        themeEnhancements(true),
+        websocketApi(true),
+        adjustmentLayerSource(true) {}
+};
+
+/**
  * @brief Toolbar position options
  */
 enum class ToolbarPosition {
@@ -92,8 +147,11 @@ struct PluginSettings {
     ToolbarPosition toolbarPosition;
     DockToolSettings dockTools;
     int toolbarIconSize;            // Icon size (10-24 pixels, default 16)
+    ModuleSettings modules;
+    bool moduleSetupComplete;       // Legacy wizard sentinel (kept for compat)
+    std::string wizardVersionShown; // PROJECT_VERSION when the wizard last ran. Drives the upgrader prompt.
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(50), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarIconSize(16) {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(50), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarIconSize(16), moduleSetupComplete(false), wizardVersionShown() {}
 };
 
 /**
@@ -239,6 +297,27 @@ void ClearSkippedUpdates();
  * @return bool True if current updates exactly match skipped updates
  */
 bool AreUpdatesSkipped(const std::map<std::string, std::string>& currentOutdated, const std::vector<std::string>& currentFailed);
+
+/**
+ * @brief Get the most recently persisted snapshot of which hard-toggle modules
+ * were applied at the last successful module load. Used by the Modules tab to
+ * detect "Restart required" state.
+ */
+AppliedModuleSnapshot GetAppliedModuleSnapshot();
+
+/**
+ * @brief Persist the snapshot of hard-toggle modules that were just applied
+ * (called from streamup.cpp at the end of obs_module_load and OnOBSFinishedLoading).
+ */
+void CommitAppliedModuleSnapshot(const AppliedModuleSnapshot& snapshot);
+
+/**
+ * @brief Whether any pre-existing StreamUP settings key is present in the
+ * config file. Used by the first-launch wizard to distinguish a fresh install
+ * (no keys) from an upgrade from an older version (keys present, but no
+ * module_setup_complete flag yet).
+ */
+bool HasAnyExistingSettings();
 
 } // namespace SettingsManager
 } // namespace StreamUP

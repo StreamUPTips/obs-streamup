@@ -28,6 +28,13 @@ public:
     static void Shutdown();
 
     /**
+     * @brief Master enable/disable for the entire Multi-Dock system.
+     *        Calls Initialize()/Shutdown() under the hood so the toggle takes
+     *        effect immediately at runtime without an OBS restart.
+     */
+    static void SetGlobalEnabled(bool enabled);
+
+    /**
      * @brief Create a new MultiDock
      * @param name Display name for the MultiDock
      * @return Unique ID of the created MultiDock, or empty string on failure

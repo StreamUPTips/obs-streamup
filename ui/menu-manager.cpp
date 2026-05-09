@@ -8,6 +8,7 @@
 #include "patch-notes-window.hpp"
 #include "theme-window.hpp"
 #include "websocket-window.hpp"
+#include "settings-manager.hpp"
 #include "../multidock/multidock_dialogs.hpp"
 #include "../multidock/multidock_manager.hpp"
 #include "../core/streamup-common.hpp"
@@ -80,6 +81,13 @@ void LoadMenuItems(QMenu* menu)
     menu->clear();
     QAction* action;
 
+    // Read current module settings so submenus can be hidden when their
+    // backing module is turned off in Settings > Modules. Re-read each time
+    // the menu is shown (this function is wired to QMenu::aboutToShow), so
+    // toggles take effect on the next menu open without restarting OBS.
+    StreamUP::SettingsManager::PluginSettings menuSettings = StreamUP::SettingsManager::GetCurrentSettings();
+    const StreamUP::SettingsManager::ModuleSettings &menuMod = menuSettings.modules;
+
     // Platform-specific actions (Windows only)
 #ifdef _WIN32
     action = menu->addAction(obs_module_text("Menu.Plugin.InstallProduct"));
@@ -119,105 +127,117 @@ void LoadMenuItems(QMenu* menu)
         StreamUP::PluginManager::ShowCachedPluginUpdatesDialog(); 
     });
 
-    // Tools submenu
-    QMenu* toolsMenu = menu->addMenu(obs_module_text("Menu.Tools"));
-    
-    // Source Management tools
-    action = toolsMenu->addAction(obs_module_text("Menu.Source.LockAllSources"));
-    QObject::connect(action, &QAction::triggered, []() { 
-        StreamUP::SourceManager::ToggleLockAllSources(); 
-    });
-    
-    action = toolsMenu->addAction(obs_module_text("Menu.Source.LockCurrentSources"));
-    QObject::connect(action, &QAction::triggered, []() { 
-        StreamUP::SourceManager::ToggleLockSourcesInCurrentScene(); 
-    });
-    
-    toolsMenu->addSeparator();
-    
-    // Audio/Video tools
-    action = toolsMenu->addAction(obs_module_text("Menu.Source.RefreshAudioMonitoring"));
-    QObject::connect(action, &QAction::triggered, []() { 
-        obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr); 
-    });
-    
-    action = toolsMenu->addAction(obs_module_text("Menu.Source.RefreshBrowserSources"));
-    QObject::connect(action, &QAction::triggered, []() { 
-        obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr); 
-    });
-    
-    // Video device management submenu
-    QMenu* videoDeviceMenu = toolsMenu->addMenu(obs_module_text("Menu.VideoCapture.Root"));
-    
-    action = videoDeviceMenu->addAction(obs_module_text("Menu.VideoCapture.ActivateAll"));
-    QObject::connect(action, &QAction::triggered, []() { 
-        StreamUP::SourceManager::ActivateAllVideoCaptureDevices(); 
-    });
-    
-    action = videoDeviceMenu->addAction(obs_module_text("Menu.VideoCapture.DeactivateAll"));
-    QObject::connect(action, &QAction::triggered, []() { 
-        StreamUP::SourceManager::DeactivateAllVideoCaptureDevices(); 
-    });
-    
-    action = videoDeviceMenu->addAction(obs_module_text("Menu.VideoCapture.RefreshAll"));
-    QObject::connect(action, &QAction::triggered, []() {
-        StreamUP::SourceManager::RefreshAllVideoCaptureDevices();
-    });
+    // Tools submenu — gated on the StreamUP Dock module since these source
+    // management actions duplicate the dock's quick-action buttons. When the
+    // dock is hidden, hiding the redundant menu entries makes the plugin look
+    // like that section isn't installed.
+    if (menuMod.streamupDock) {
+        QMenu* toolsMenu = menu->addMenu(obs_module_text("Menu.Tools"));
 
-    // MultiDock submenu
-    QMenu* multiDockMenu = menu->addMenu(obs_module_text("Menu.MultiDock"));
+        // Source Management tools
+        action = toolsMenu->addAction(obs_module_text("Menu.Source.LockAllSources"));
+        QObject::connect(action, &QAction::triggered, []() {
+            StreamUP::SourceManager::ToggleLockAllSources();
+        });
 
-    action = multiDockMenu->addAction(obs_module_text("Menu.MultiDock.New"));
-    QObject::connect(action, &QAction::triggered, []() {
-        StreamUP::MultiDock::ShowNewMultiDockDialog();
-    });
+        action = toolsMenu->addAction(obs_module_text("Menu.Source.LockCurrentSources"));
+        QObject::connect(action, &QAction::triggered, []() {
+            StreamUP::SourceManager::ToggleLockSourcesInCurrentScene();
+        });
 
-    action = multiDockMenu->addAction(obs_module_text("Menu.MultiDock.Manage"));
-    QObject::connect(action, &QAction::triggered, []() {
-        StreamUP::MultiDock::ShowManageMultiDocksDialog();
-    });
-    
-    // Get the MultiDockManager instance and add existing multidocks to menu
-    StreamUP::MultiDock::MultiDockManager* manager = StreamUP::MultiDock::MultiDockManager::Instance();
-    if (manager) {
-        QList<StreamUP::MultiDock::MultiDockInfo> multiDocks = manager->GetMultiDockInfoList();
-        
-        // Only add separator and multidocks if there are any
-        if (!multiDocks.isEmpty()) {
-            multiDockMenu->addSeparator();
-            
-            // Add each multidock as a checkable action
-            for (const StreamUP::MultiDock::MultiDockInfo& info : multiDocks) {
-                QAction* dockAction = multiDockMenu->addAction(info.name);
-                dockAction->setCheckable(true);
-                
-                // Check if the multidock is currently visible
-                bool isVisible = manager->IsMultiDockVisible(info.id);
-                dockAction->setChecked(isVisible);
-                
-                // Connect to toggle visibility
-                QObject::connect(dockAction, &QAction::triggered, [manager, info](bool checked) {
-                    manager->SetMultiDockVisible(info.id, checked);
-                });
+        toolsMenu->addSeparator();
+
+        // Audio/Video tools
+        action = toolsMenu->addAction(obs_module_text("Menu.Source.RefreshAudioMonitoring"));
+        QObject::connect(action, &QAction::triggered, []() {
+            obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr);
+        });
+
+        action = toolsMenu->addAction(obs_module_text("Menu.Source.RefreshBrowserSources"));
+        QObject::connect(action, &QAction::triggered, []() {
+            obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr);
+        });
+
+        // Video device management submenu
+        QMenu* videoDeviceMenu = toolsMenu->addMenu(obs_module_text("Menu.VideoCapture.Root"));
+
+        action = videoDeviceMenu->addAction(obs_module_text("Menu.VideoCapture.ActivateAll"));
+        QObject::connect(action, &QAction::triggered, []() {
+            StreamUP::SourceManager::ActivateAllVideoCaptureDevices();
+        });
+
+        action = videoDeviceMenu->addAction(obs_module_text("Menu.VideoCapture.DeactivateAll"));
+        QObject::connect(action, &QAction::triggered, []() {
+            StreamUP::SourceManager::DeactivateAllVideoCaptureDevices();
+        });
+
+        action = videoDeviceMenu->addAction(obs_module_text("Menu.VideoCapture.RefreshAll"));
+        QObject::connect(action, &QAction::triggered, []() {
+            StreamUP::SourceManager::RefreshAllVideoCaptureDevices();
+        });
+    }
+
+    // MultiDock submenu — only shown when the Multi-Dock module is enabled.
+    if (menuMod.multiDock) {
+        QMenu* multiDockMenu = menu->addMenu(obs_module_text("Menu.MultiDock"));
+
+        action = multiDockMenu->addAction(obs_module_text("Menu.MultiDock.New"));
+        QObject::connect(action, &QAction::triggered, []() {
+            StreamUP::MultiDock::ShowNewMultiDockDialog();
+        });
+
+        action = multiDockMenu->addAction(obs_module_text("Menu.MultiDock.Manage"));
+        QObject::connect(action, &QAction::triggered, []() {
+            StreamUP::MultiDock::ShowManageMultiDocksDialog();
+        });
+
+        // Get the MultiDockManager instance and add existing multidocks to menu
+        StreamUP::MultiDock::MultiDockManager* manager = StreamUP::MultiDock::MultiDockManager::Instance();
+        if (manager) {
+            QList<StreamUP::MultiDock::MultiDockInfo> multiDocks = manager->GetMultiDockInfoList();
+
+            // Only add separator and multidocks if there are any
+            if (!multiDocks.isEmpty()) {
+                multiDockMenu->addSeparator();
+
+                // Add each multidock as a checkable action
+                for (const StreamUP::MultiDock::MultiDockInfo& info : multiDocks) {
+                    QAction* dockAction = multiDockMenu->addAction(info.name);
+                    dockAction->setCheckable(true);
+
+                    // Check if the multidock is currently visible
+                    bool isVisible = manager->IsMultiDockVisible(info.id);
+                    dockAction->setChecked(isVisible);
+
+                    // Connect to toggle visibility
+                    QObject::connect(dockAction, &QAction::triggered, [manager, info](bool checked) {
+                        manager->SetMultiDockVisible(info.id, checked);
+                    });
+                }
             }
         }
     }
 
     menu->addSeparator();
 
-    // Theme, WebSocket Commands, Settings, Patch Notes, About (in requested order)
-    action = menu->addAction(obs_module_text("Menu.Theme"));
+    // StreamUP OBS Theme picker, WebSocket Commands, StreamUP Settings.
+    action = menu->addAction(obs_module_text("Menu.StreamUPTheme"));
     QObject::connect(action, &QAction::triggered, []() { StreamUP::ThemeWindow::ShowThemeWindow(); });
 
+    // WebSocket Commands is always visible — the vendor is always registered.
     action = menu->addAction(obs_module_text("Menu.WebSocket"));
-    QObject::connect(action, &QAction::triggered, []() { 
+    QObject::connect(action, &QAction::triggered, []() {
         // Check if Shift is held to show internal tools
         bool showInternalTools = QApplication::keyboardModifiers() & Qt::ShiftModifier;
-        StreamUP::WebSocketWindow::ShowWebSocketWindow(showInternalTools); 
+        StreamUP::WebSocketWindow::ShowWebSocketWindow(showInternalTools);
     });
 
-    action = menu->addAction(obs_module_text("Menu.Settings"));
+    action = menu->addAction(obs_module_text("Menu.StreamUPSettings"));
     QObject::connect(action, &QAction::triggered, []() { SettingsDialog(); });
+
+    // Visual divider separating the active controls above from the
+    // info / about-style entries below.
+    menu->addSeparator();
 
     action = menu->addAction(obs_module_text("Menu.PatchNotes"));
     QObject::connect(action, &QAction::triggered, []() { StreamUP::PatchNotesWindow::ShowPatchNotesWindow(); });

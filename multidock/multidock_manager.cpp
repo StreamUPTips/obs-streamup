@@ -79,10 +79,10 @@ void MultiDockManager::Shutdown()
     if (!s_instance) {
         return;
     }
-    
+
     // Don't save during shutdown - the widgets may already be destroyed
     // We've already saved when needed via the event callback
-    
+
     // Clean up remaining MultiDocks if any still exist
     QList<MultiDockDock*> multiDocks = s_instance->GetAllMultiDocks();
     for (MultiDockDock* multiDock : multiDocks) {
@@ -91,10 +91,26 @@ void MultiDockManager::Shutdown()
             // Don't deleteLater - obs_frontend_remove_dock handles widget cleanup
         }
     }
-    
+
     delete s_instance;
     s_instance = nullptr;
-    
+
+}
+
+void MultiDockManager::SetGlobalEnabled(bool enabled)
+{
+    if (enabled) {
+        if (!s_instance) {
+            Initialize();
+        }
+    } else {
+        if (s_instance) {
+            // Persist current dock layouts before tearing down so re-enabling
+            // restores the user's existing multi-docks.
+            s_instance->SaveAllMultiDocks();
+            Shutdown();
+        }
+    }
 }
 
 QString MultiDockManager::CreateMultiDock(const QString& name)

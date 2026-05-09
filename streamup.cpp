@@ -23,6 +23,7 @@
 #include "ui/hotkey-manager.hpp"
 #include "ui/splash-screen.hpp"
 #include "ui/patch-notes-window.hpp"
+#include "ui/module-setup-wizard.hpp"
 #include "ui/studio-mode-enhancements.hpp"
 #include "ui/mixer-enhancements.hpp"
 #include "ui/theme-enhancements.hpp"
@@ -635,7 +636,10 @@ void ApplyToolbarVisibility()
 {
 	if (globalToolbar) {
 		StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-		globalToolbar->setVisible(settings.showToolbar);
+		// Both the legacy "Show StreamUP Toolbar" preference and the new
+		// Modules > Toolbar master toggle must be true for the toolbar to be
+		// visible. The Modules toggle wins when off.
+		globalToolbar->setVisible(settings.showToolbar && settings.modules.toolbar);
 	}
 }
 
@@ -748,51 +752,107 @@ bool obs_module_load()
 	}
 #endif
 
+	// Load module enable/disable settings up-front so each init block can be
+	// gated. Defaults (all-on) are produced if the config file doesn't exist
+	// or doesn't yet contain the modules object.
+	StreamUP::SettingsManager::PluginSettings moduleSettings = StreamUP::SettingsManager::GetCurrentSettings();
+	const StreamUP::SettingsManager::ModuleSettings &mod = moduleSettings.modules;
+
 	// Register source types (before frontend initialization)
-	StreamUP::AdjustmentLayer::Register();
-	blog(LOG_INFO, "[StreamUP] Registered Adjustment Layer source");
+	if (mod.adjustmentLayerSource) {
+		StreamUP::AdjustmentLayer::Register();
+		blog(LOG_INFO, "[StreamUP] Registered Adjustment Layer source");
+	} else {
+		blog(LOG_INFO, "[StreamUP] Module 'adjustment_layer_source' disabled — skipping registration");
+	}
 
 	try {
 
 		blog(LOG_INFO, "[StreamUP] Step 1/8: Starting menu initialization");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Starting menu initialization");
+		// MenuManager is always initialised — the Tools > StreamUP menu hosts
+		// the Settings dialog the user needs to re-enable disabled modules.
 		StreamUP::MenuManager::InitializeMenu();
 		blog(LOG_INFO, "[StreamUP] Step 1/8: Menu initialization completed");
 
+		// WebSocket vendor is always registered. It powers many integrations
+		// (Streamer.Bot, custom scripts, OBS Raw clients), is invisible to
+		// users who don't use it, and stays idle until something connects.
 		blog(LOG_INFO, "[StreamUP] Step 2/8: Registering WebSocket requests");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Registering WebSocket requests");
 		RegisterWebsocketRequests();
 		blog(LOG_INFO, "[StreamUP] Step 2/8: WebSocket requests registered");
 
-		blog(LOG_INFO, "[StreamUP] Step 3/8: Registering hotkeys");
-		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Registering hotkeys");
-		StreamUP::HotkeyManager::RegisterHotkeys();
-		blog(LOG_INFO, "[StreamUP] Step 3/8: Hotkeys registered");
+		if (mod.hotkeys) {
+			blog(LOG_INFO, "[StreamUP] Step 3/8: Registering hotkeys");
+			StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Registering hotkeys");
+			StreamUP::HotkeyManager::RegisterHotkeys();
+			blog(LOG_INFO, "[StreamUP] Step 3/8: Hotkeys registered");
 
-		blog(LOG_INFO, "[StreamUP] Step 4/8: Adding save callback for hotkeys");
-		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Adding save callback for hotkeys");
-		obs_frontend_add_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
-		blog(LOG_INFO, "[StreamUP] Step 4/8: Save callback added");
+			blog(LOG_INFO, "[StreamUP] Step 4/8: Adding save callback for hotkeys");
+			StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Adding save callback for hotkeys");
+			obs_frontend_add_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
+			blog(LOG_INFO, "[StreamUP] Step 4/8: Save callback added");
+		} else {
+			blog(LOG_INFO, "[StreamUP] Step 3-4/8: Module 'hotkeys' disabled — skipping registration and save callback");
+		}
 
-		blog(LOG_INFO, "[StreamUP] Step 5/8: Loading StreamUP dock");
-		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading StreamUP dock");
-		LoadStreamUPDock();
-		blog(LOG_INFO, "[StreamUP] Step 5/8: StreamUP dock loaded");
+		if (mod.streamupDock) {
+			blog(LOG_INFO, "[StreamUP] Step 5/8: Loading StreamUP dock");
+			StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading StreamUP dock");
+			LoadStreamUPDock();
+			blog(LOG_INFO, "[StreamUP] Step 5/8: StreamUP dock loaded");
+		} else {
+			blog(LOG_INFO, "[StreamUP] Step 5/8: Module 'streamup_dock' disabled — skipping");
+		}
 
-		blog(LOG_INFO, "[StreamUP] Step 6/8: Loading Scene Organiser docks");
-		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading Scene Organiser docks");
-		LoadSceneOrganiserDocks();
-		blog(LOG_INFO, "[StreamUP] Step 6/8: Scene Organiser docks loaded");
+		if (mod.sceneOrganiser) {
+			blog(LOG_INFO, "[StreamUP] Step 6/8: Loading Scene Organiser docks");
+			StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading Scene Organiser docks");
+			LoadSceneOrganiserDocks();
+			blog(LOG_INFO, "[StreamUP] Step 6/8: Scene Organiser docks loaded");
+		} else {
+			blog(LOG_INFO, "[StreamUP] Step 6/8: Module 'scene_organiser' disabled — skipping");
+		}
 
-		blog(LOG_INFO, "[StreamUP] Step 7/8: Loading StreamUP toolbar");
-		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading StreamUP toolbar");
-		LoadStreamUPToolbar();
-		blog(LOG_INFO, "[StreamUP] Step 7/8: StreamUP toolbar loaded");
+		if (mod.toolbar) {
+			blog(LOG_INFO, "[StreamUP] Step 7/8: Loading StreamUP toolbar");
+			StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading StreamUP toolbar");
+			LoadStreamUPToolbar();
+			blog(LOG_INFO, "[StreamUP] Step 7/8: StreamUP toolbar loaded");
+		} else {
+			blog(LOG_INFO, "[StreamUP] Step 7/8: Module 'toolbar' disabled — skipping");
+		}
 
-		blog(LOG_INFO, "[StreamUP] Step 8/8: Initializing MultiDock system");
-		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Initializing MultiDock system");
-		StreamUP::MultiDock::MultiDockManager::Initialize();
-		blog(LOG_INFO, "[StreamUP] Step 8/8: MultiDock system initialized");
+		if (mod.multiDock) {
+			blog(LOG_INFO, "[StreamUP] Step 8/8: Initializing MultiDock system");
+			StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Initializing MultiDock system");
+			StreamUP::MultiDock::MultiDockManager::Initialize();
+			blog(LOG_INFO, "[StreamUP] Step 8/8: MultiDock system initialized");
+		} else {
+			blog(LOG_INFO, "[StreamUP] Step 8/8: Module 'multi_dock' disabled — skipping");
+		}
+
+		// Persist the snapshot of which hard-toggle modules were actually
+		// applied this run. The Modules settings tab compares this against
+		// the live module settings to drive the "Restart required" badge.
+		// We commit only the hard-toggle state — soft toggles take effect
+		// at runtime so they have no "applied vs. desired" drift.
+		{
+			StreamUP::SettingsManager::AppliedModuleSnapshot snap;
+			snap.sceneOrganiser = mod.sceneOrganiser;
+			snap.streamupDock = mod.streamupDock;
+			snap.websocketApi = true; // Always registered — see Step 2/8 above.
+			snap.adjustmentLayerSource = mod.adjustmentLayerSource;
+			// Enhancement values are committed in OnOBSFinishedLoading where
+			// they are actually applied; carry forward the previous snapshot
+			// values here so we don't briefly clear them.
+			StreamUP::SettingsManager::AppliedModuleSnapshot prev = StreamUP::SettingsManager::GetAppliedModuleSnapshot();
+			snap.mixerEnhancements = prev.mixerEnhancements;
+			snap.studioModeEnhancements = prev.studioModeEnhancements;
+			snap.themeEnhancements = prev.themeEnhancements;
+			StreamUP::SettingsManager::CommitAppliedModuleSnapshot(snap);
+		}
 
 		blog(LOG_INFO, "[StreamUP] Plugin initialization completed successfully");
 		StreamUP::DebugLogger::LogInfo("Plugin", "Plugin initialization completed successfully");
@@ -819,10 +879,11 @@ static void OnOBSShutdown(enum obs_frontend_event event, void *private_data)
 	UNUSED_PARAMETER(private_data);
 
 	if (event == OBS_FRONTEND_EVENT_THEME_CHANGED) {
-		// Reset cached theme checks so enhancements re-evaluate on next use
+		// Reset cached theme checks so enhancements re-evaluate on next use,
+		// then re-apply. Apply self-gates on whether a StreamUP theme is
+		// active, so this is silent on any other theme.
 		StreamUP::MixerEnhancements::ResetThemeCache();
 		StreamUP::ThemeEnhancements::ResetThemeCache();
-		// Re-apply theme enhancements (sets/clears native dialog override etc.)
 		StreamUP::ThemeEnhancements::ApplyThemeEnhancements();
 		return;
 	}
@@ -886,14 +947,24 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 		// Apply style overrides to OBS native docks
 		ApplyOBSDockStyleOverrides();
 
-		// Apply studio mode enhancements (midpoint marker on transition slider)
+		// Mixer, studio mode, and theme polish always run. Each Apply*
+		// function self-gates on whether a StreamUP OBS theme is currently
+		// active, so on any other theme these are silent no-ops. When the
+		// StreamUP theme is set, this is what makes it look right.
 		StreamUP::StudioModeEnhancements::ApplyStudioModeEnhancements();
-
-		// Apply mixer enhancements (centered labels, multi-line names)
 		StreamUP::MixerEnhancements::ApplyMixerEnhancements();
-
-		// Apply theme enhancements (color preview pills, stats dock naming)
 		StreamUP::ThemeEnhancements::ApplyThemeEnhancements();
+
+		// Snapshot fields for the three enhancements always read true now —
+		// there is no user-facing toggle for them, so the "Restart required"
+		// badge in the Plugins tab can never fire on these.
+		{
+			StreamUP::SettingsManager::AppliedModuleSnapshot snap = StreamUP::SettingsManager::GetAppliedModuleSnapshot();
+			snap.studioModeEnhancements = true;
+			snap.mixerEnhancements = true;
+			snap.themeEnhancements = true;
+			StreamUP::SettingsManager::CommitAppliedModuleSnapshot(snap);
+		}
 
 		// Remove the event callback since we only need this to run once
 		StreamUP::DebugLogger::LogDebug("Plugin", "OBS Finished Loading", "Removing event callback");
@@ -915,17 +986,33 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 			StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
 				constexpr int STARTUP_DELAY_MS = 2000;
 				QTimer::singleShot(STARTUP_DELAY_MS, []() {
-					// Check splash screen condition
-					StreamUP::SplashScreen::ShowCondition condition = StreamUP::SplashScreen::CheckSplashCondition();
-					
-					if (condition == StreamUP::SplashScreen::ShowCondition::FirstInstall) {
-						// Show welcome screen for first install
-						StreamUP::SplashScreen::ShowSplashScreenIfNeeded();
-					} else if (condition == StreamUP::SplashScreen::ShowCondition::VersionUpdate) {
-						// Show patch notes popup for version updates
-						StreamUP::SplashScreen::ShowSplashScreenIfNeeded();
+					// Lambda that runs the existing splash/patch-notes flow.
+					// Defined first so it can be invoked directly OR chained
+					// after the first-launch wizard.
+					auto runSplashFlow = []() {
+						StreamUP::SplashScreen::ShowCondition condition = StreamUP::SplashScreen::CheckSplashCondition();
+						if (condition == StreamUP::SplashScreen::ShowCondition::FirstInstall) {
+							StreamUP::SplashScreen::ShowSplashScreenIfNeeded();
+						} else if (condition == StreamUP::SplashScreen::ShowCondition::VersionUpdate) {
+							StreamUP::SplashScreen::ShowSplashScreenIfNeeded();
+						}
+						// If Never, don't show anything.
+					};
+
+					// Show the plugin picker whenever the saved version stamp
+					// doesn't match the current build. Catches three cases:
+					//   - Fresh install (no key, mismatch with "")
+					//   - Upgrader from a build before the wizard existed (no key)
+					//   - Future deliberate version bump where we want the user
+					//     to see the picker again because new plugins exist
+					// On finish the wizard writes PROJECT_VERSION back, so users
+					// who already saw THIS exact build go straight to the splash.
+					StreamUP::SettingsManager::PluginSettings startupSettings = StreamUP::SettingsManager::GetCurrentSettings();
+					if (startupSettings.wizardVersionShown != PROJECT_VERSION) {
+						StreamUP::ModuleSetupWizard::Show(runSplashFlow);
+					} else {
+						runSplashFlow();
 					}
-					// If Never, don't show anything
 				});
 			});
 			

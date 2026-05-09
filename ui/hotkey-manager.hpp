@@ -181,6 +181,12 @@ void RegisterHotkeys();
 void UnregisterHotkeys();
 
 /**
+ * Master enable/disable for the hotkey group. Calls Register/Unregister so the
+ * toggle takes effect at runtime without an OBS restart. Idempotent.
+ */
+void SetHotkeyGroupEnabled(bool enabled);
+
+/**
  * Reset all StreamUP hotkeys to have no key combinations assigned
  */
 void ResetAllHotkeys();
