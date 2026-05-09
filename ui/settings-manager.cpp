@@ -257,7 +257,7 @@ obs_data_t *LoadSettings()
 		obs_data_set_bool(data, "scene_organiser_remember_folder_state", true);
 		obs_data_set_bool(data, "scene_organiser_disable_preview_switching_in_studio_mode", false);
 		obs_data_set_bool(data, "scene_organiser_disable_transition_in_studio_mode", false);
-		obs_data_set_int(data, "scene_organiser_item_height", 100);
+		obs_data_set_int(data, "scene_organiser_item_height", 50);
 		obs_data_set_string(data, "scene_organiser_switch_mode", "single_click");
 		obs_data_set_string(data, "scene_organiser_sort_method", "none");
 		obs_data_set_string(data, "toolbar_position", "top");
