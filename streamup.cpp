@@ -554,6 +554,7 @@ static StreamUPToolbar* globalToolbar = nullptr;
 // Forward declarations
 void ApplyToolbarVisibility();
 void ApplyToolbarPosition();
+void ApplyToolbarSize();
 
 static void LoadStreamUPToolbar()
 {
@@ -640,6 +641,13 @@ void ApplyToolbarVisibility()
 		// Modules > Toolbar master toggle must be true for the toolbar to be
 		// visible. The Modules toggle wins when off.
 		globalToolbar->setVisible(settings.showToolbar && settings.modules.toolbar);
+	}
+}
+
+void ApplyToolbarSize()
+{
+	if (globalToolbar) {
+		globalToolbar->refreshSizeClass();
 	}
 }
 

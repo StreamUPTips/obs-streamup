@@ -7,6 +7,7 @@
 #include "ui-helpers.hpp"
 #include "settings-manager.hpp"
 #include "obs-hotkey-manager.hpp"
+#include <QStyle>
 #include <obs-module.h>
 #include <QIcon>
 #include <QHBoxLayout>
@@ -792,6 +793,10 @@ void StreamUPToolbar::updatePositionAwareTheme()
 	style()->unpolish(this);
 	style()->polish(this);
 
+	// Now that the position-aware objectName is in place, apply the size tier
+	// so the theme's `QToolBar#StreamUPToolbar-{Top|...}[size="..."]` selectors
+	// can match.
+	applySizeClass();
 }
 
 void StreamUPToolbar::updateLayoutOrientation()
@@ -956,6 +961,101 @@ void StreamUPToolbar::updateToolbarSizeConstraints()
 	// No custom size constraints — let OBS theme CSS handle all sizing
 	setMinimumSize(0, 0);
 	setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+}
+
+void StreamUPToolbar::applySizeClass()
+{
+	// Read current size tier from settings.
+	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+	const char *sizeKey;
+	switch (settings.toolbarSize) {
+	case StreamUP::SettingsManager::ToolbarSize::Small:
+		sizeKey = "small";
+		break;
+	case StreamUP::SettingsManager::ToolbarSize::Large:
+		sizeKey = "large";
+		break;
+	case StreamUP::SettingsManager::ToolbarSize::Medium:
+	default:
+		sizeKey = "medium";
+		break;
+	}
+
+	// Set the dynamic property the OBS theme uses for [size="..."] selectors.
+	// Set on the toolbar AND every child QToolButton so themes can target either
+	// the descendant selector form or the button-direct form.
+	const QVariant value = QString::fromLatin1(sizeKey);
+	setProperty("size", value);
+	if (centralWidget) {
+		centralWidget->setProperty("size", value);
+	}
+	const QList<QToolButton*> buttons = findChildren<QToolButton*>();
+	for (QToolButton *b : buttons) {
+		if (b) {
+			b->setProperty("size", value);
+		}
+	}
+
+	// Force the style engine to re-evaluate selectors with the new property
+	// FIRST. QStyle::polish() on a QToolBar re-syncs iconSize from the style's
+	// PM_ToolBarIconSize metric, so anything we set before polish gets wiped.
+	if (QStyle *s = style()) {
+		s->unpolish(this);
+		s->polish(this);
+	}
+	for (QToolButton *b : buttons) {
+		if (!b) continue;
+		if (QStyle *s = b->style()) {
+			s->unpolish(b);
+			s->polish(b);
+		}
+	}
+
+	// THEN set iconSize at the Qt level so themes without per-size selectors
+	// (Aitum, Yami, System) still differentiate the tiers. The pixel values
+	// here match what StreamUP.obt declares per tier so behavior is consistent
+	// across themes.
+	//
+	// Crucially, we set iconSize on every child QToolButton too. QToolBar's
+	// iconSize property only affects the QToolButtons it creates internally
+	// from QActions; the StreamUP toolbar adds buttons via addWidget() inside
+	// a centralWidget, and those buttons do NOT inherit the toolbar's
+	// iconSize. Without this loop, the toolbar's iconSize is purely cosmetic
+	// for our layout.
+	QSize fallbackIconSize(16, 16);
+	switch (settings.toolbarSize) {
+	case StreamUP::SettingsManager::ToolbarSize::Small:
+		fallbackIconSize = QSize(12, 12);
+		break;
+	case StreamUP::SettingsManager::ToolbarSize::Large:
+		fallbackIconSize = QSize(22, 22);
+		break;
+	default:
+		break;
+	}
+	setIconSize(fallbackIconSize);
+	for (QToolButton *b : buttons) {
+		if (b) {
+			b->setIconSize(fallbackIconSize);
+		}
+	}
+
+	// Layout may need to re-measure after icon size change
+	if (centralWidget) {
+		centralWidget->updateGeometry();
+		QLayout *layout = centralWidget->layout();
+		if (layout) {
+			layout->invalidate();
+			layout->activate();
+		}
+	}
+	updateGeometry();
+	update();
+}
+
+void StreamUPToolbar::refreshSizeClass()
+{
+	applySizeClass();
 }
 
 void StreamUPToolbar::setupDynamicUI()
@@ -1204,6 +1304,12 @@ void StreamUPToolbar::setupDynamicUI()
 
 	// Update toolbar size constraints based on icon size and orientation
 	updateToolbarSizeConstraints();
+
+	// Note: applySizeClass() is called from updatePositionAwareTheme(), which
+	// runs immediately after this in the construction/refresh sequence. We
+	// need the position-aware objectName ("StreamUPToolbar-Top" etc.) on the
+	// toolbar before applying size, otherwise the theme's
+	// `QToolBar#StreamUPToolbar-Top[size="..."]` selectors don't match.
 
 	// Clear flag and update buttons now that reconstruction is complete
 	isReconstructingUI = false;

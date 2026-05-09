@@ -108,6 +108,20 @@ enum class ToolbarPosition {
 };
 
 /**
+ * @brief Toolbar size options
+ *
+ * Discrete tiers (rather than a free pixel slider) so the OBS theme controls
+ * the actual icon size and surrounding chrome (padding, radius) per tier and
+ * everything stays visually balanced. The plugin only sets a "size" dynamic
+ * property on the toolbar; the theme reacts via [size="..."] selectors.
+ */
+enum class ToolbarSize {
+    Small,
+    Medium,
+    Large
+};
+
+/**
  * @brief Scene switching click mode options
  */
 enum class SceneSwitchMode {
@@ -146,12 +160,12 @@ struct PluginSettings {
     SceneSortMethod sceneOrganiserSortMethod;
     ToolbarPosition toolbarPosition;
     DockToolSettings dockTools;
-    int toolbarIconSize;            // Icon size (10-24 pixels, default 16)
+    ToolbarSize toolbarSize;        // Size tier — actual pixel sizing comes from the OBS theme via [size="..."] selectors
     ModuleSettings modules;
     bool moduleSetupComplete;       // Legacy wizard sentinel (kept for compat)
     std::string wizardVersionShown; // PROJECT_VERSION when the wizard last ran. Drives the upgrader prompt.
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(50), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarIconSize(16), moduleSetupComplete(false), wizardVersionShown() {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(50), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), moduleSetupComplete(false), wizardVersionShown() {}
 };
 
 /**
@@ -325,3 +339,4 @@ bool HasAnyExistingSettings();
 // Global functions for toolbar management (defined in streamup.cpp)
 extern void ApplyToolbarVisibility();
 extern void ApplyToolbarPosition();
+extern void ApplyToolbarSize();

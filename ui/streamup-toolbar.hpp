@@ -24,6 +24,7 @@ public:
     void updatePositionAwareTheme();
     void refreshFromConfiguration();
     void updateButtonSizes();  // Update button and icon sizes without rebuilding
+    void refreshSizeClass();   // Re-read toolbar size setting and re-polish styles
 
 private slots:
     void onStreamButtonClicked();
@@ -89,6 +90,11 @@ private:
 
     // Update toolbar size constraints based on icon size and orientation
     void updateToolbarSizeConstraints();
+
+    // Apply the user-selected size tier as a Qt dynamic property so the OBS
+    // theme can react via [size="small|medium|large"] selectors. Pixel sizes
+    // and chrome scaling are owned by the theme — the plugin only signals.
+    void applySizeClass();
 
     // Flag to prevent updates during UI reconstruction
     bool isReconstructingUI = false;

@@ -261,7 +261,7 @@ obs_data_t *LoadSettings()
 		obs_data_set_string(data, "scene_organiser_switch_mode", "single_click");
 		obs_data_set_string(data, "scene_organiser_sort_method", "none");
 		obs_data_set_string(data, "toolbar_position", "top");
-		obs_data_set_int(data, "toolbar_icon_size", 16);
+		obs_data_set_string(data, "toolbar_size", "medium");
 
 		// Set default dock tool settings
 		obs_data_t *dockData = obs_data_create();
@@ -403,13 +403,26 @@ PluginSettings GetCurrentSettings()
 			settings.toolbarPosition = ToolbarPosition::Top;
 		}
 
-		// Load toolbar icon size setting (default to 16 if not set)
-		settings.toolbarIconSize = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "toolbar_icon_size", 16);
-		// Clamp to valid range (10-24 pixels)
-		if (settings.toolbarIconSize < 10) {
-			settings.toolbarIconSize = 10;
-		} else if (settings.toolbarIconSize > 24) {
-			settings.toolbarIconSize = 24;
+		// Load toolbar size tier (default to medium). Migrate from the legacy
+		// per-pixel toolbar_icon_size setting if no toolbar_size key exists yet.
+		const char *sizeStr = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "toolbar_size", "");
+		if (sizeStr && strcmp(sizeStr, "small") == 0) {
+			settings.toolbarSize = ToolbarSize::Small;
+		} else if (sizeStr && strcmp(sizeStr, "large") == 0) {
+			settings.toolbarSize = ToolbarSize::Large;
+		} else if (sizeStr && strcmp(sizeStr, "medium") == 0) {
+			settings.toolbarSize = ToolbarSize::Medium;
+		} else if (obs_data_has_user_value(data, "toolbar_icon_size")) {
+			int legacyPx = (int)obs_data_get_int(data, "toolbar_icon_size");
+			if (legacyPx <= 13) {
+				settings.toolbarSize = ToolbarSize::Small;
+			} else if (legacyPx >= 20) {
+				settings.toolbarSize = ToolbarSize::Large;
+			} else {
+				settings.toolbarSize = ToolbarSize::Medium;
+			}
+		} else {
+			settings.toolbarSize = ToolbarSize::Medium;
 		}
 
 		// Load module enable/disable settings
@@ -515,8 +528,24 @@ void UpdateSettings(const PluginSettings &settings)
 	}
 	obs_data_set_string(data, "toolbar_position", positionStr);
 
-	// Save toolbar icon size setting
-	obs_data_set_int(data, "toolbar_icon_size", settings.toolbarIconSize);
+	// Save toolbar size tier
+	const char *sizeKey;
+	switch (settings.toolbarSize) {
+	case ToolbarSize::Small:
+		sizeKey = "small";
+		break;
+	case ToolbarSize::Large:
+		sizeKey = "large";
+		break;
+	case ToolbarSize::Medium:
+	default:
+		sizeKey = "medium";
+		break;
+	}
+	obs_data_set_string(data, "toolbar_size", sizeKey);
+	// Drop the legacy pixel-size key once the new setting takes over so
+	// the migration path runs only on the first upgraded launch.
+	obs_data_unset_user_value(data, "toolbar_icon_size");
 
 	// Save dock tool settings
 	obs_data_t *dockData = obs_data_create();
@@ -976,6 +1005,42 @@ void ShowSettingsDialog(int tabIndex)
 		toolbarPositionLayout->addStretch();
 		toolbarPositionLayout->addWidget(positionComboBox);
 		toolbarLayout->addLayout(toolbarPositionLayout);
+
+		// Toolbar size tier (Small / Medium / Large) — actual pixel sizes come
+		// from the OBS theme via [size="..."] selectors so themes scale icon
+		// size and surrounding chrome together.
+		QHBoxLayout *toolbarSizeLayout = new QHBoxLayout();
+
+		QLabel *toolbarSizeLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarSize"));
+		toolbarSizeLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+							  .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+							  .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		toolbarSizeLabel->setToolTip(obs_module_text("StreamUP.Settings.ToolbarSizeDesc"));
+
+		QComboBox *sizeComboBox = new QComboBox();
+		sizeComboBox->addItem(obs_module_text("StreamUP.Settings.ToolbarSize.Small"), static_cast<int>(ToolbarSize::Small));
+		sizeComboBox->addItem(obs_module_text("StreamUP.Settings.ToolbarSize.Medium"), static_cast<int>(ToolbarSize::Medium));
+		sizeComboBox->addItem(obs_module_text("StreamUP.Settings.ToolbarSize.Large"), static_cast<int>(ToolbarSize::Large));
+
+		sizeComboBox->setCurrentIndex(static_cast<int>(currentSettings.toolbarSize));
+		sizeComboBox->setStyleSheet(StreamUP::UIStyles::GetComboBoxStyle());
+		sizeComboBox->setMinimumWidth(100);
+		sizeComboBox->setMaximumWidth(150);
+		sizeComboBox->setToolTip(obs_module_text("StreamUP.Settings.ToolbarSizeDesc"));
+
+		QObject::connect(sizeComboBox, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+				 [](int index) {
+					 if (index < 0) return;
+					 PluginSettings updated = GetCurrentSettings();
+					 updated.toolbarSize = static_cast<ToolbarSize>(index);
+					 UpdateSettings(updated);
+					 ApplyToolbarSize();
+				 });
+
+		toolbarSizeLayout->addWidget(toolbarSizeLabel);
+		toolbarSizeLayout->addStretch();
+		toolbarSizeLayout->addWidget(sizeComboBox);
+		toolbarLayout->addLayout(toolbarSizeLayout);
 
 	// Add spacing between sections
 	toolbarLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
