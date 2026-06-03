@@ -27,14 +27,14 @@
 namespace StreamUP {
 
 ToolbarConfigurator::ToolbarConfigurator(QWidget *parent)
-    : QDialog(parent)
+    : UIStyles::ShadowDialog(parent)
 {
     // Register custom types for QVariant
     qRegisterMetaType<std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem>>();
-    
+
     UIStyles::ApplyFramelessChrome(this, obs_module_text("StreamUP.Toolbar.Configurator.Title"));
     setModal(true);
-    resize(900, 650);
+    resize(900 + 2 * UIStyles::ShadowDialog::kShadowMargin, 650 + 2 * UIStyles::ShadowDialog::kShadowMargin);
     
     setupUI();
     

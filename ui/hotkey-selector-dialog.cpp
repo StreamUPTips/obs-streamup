@@ -10,11 +10,11 @@
 namespace StreamUP {
 
 HotkeySelectorDialog::HotkeySelectorDialog(QWidget* parent)
-    : QDialog(parent)
+    : UIStyles::ShadowDialog(parent)
 {
     UIStyles::ApplyFramelessChrome(this, obs_module_text("HotkeySelector.Dialog.Title"));
     setModal(true);
-    resize(800, 600);
+    resize(800 + 2 * UIStyles::ShadowDialog::kShadowMargin, 600 + 2 * UIStyles::ShadowDialog::kShadowMargin);
 
     setupUI();
     populateHotkeys();

@@ -3,6 +3,7 @@
 #include <QString>
 #include <QFrame>
 #include <QObject>
+#include <QDialog>
 
 class QDialog;
 class QLabel;
@@ -20,27 +21,41 @@ class QToolButton;
 namespace StreamUP {
 namespace UIStyles {
 
-// Rounded container. Two modes:
+// Rounded container. Fill only — no border stroke. The elevation shadow is the
+// edge; a painted outer hairline wraps the header/footer corners like a frame.
+// Structure comes from the INTERNAL separator lines only. Two modes:
 //  - Masked (default): uses setMask() so children with different bgs (header/content/
 //    footer in frameless dialogs) don't bleed into the rounded corner region. Mask is
 //    bitmap so corners are slightly jagged, acceptable for full-dialog chrome.
-//  - Unmasked: just paints rounded fill + AA border. Intended for containers where
-//    children share the same bg as the container (e.g. tables), so square child
-//    corners are hidden by matching colour and corners render with clean AA.
+//  - Unmasked: just paints the rounded fill with clean AA. Intended for containers
+//    where children share the same bg as the container (e.g. tables).
 class RoundedContainer : public QFrame {
     Q_OBJECT
     int m_radius;
     QString m_fillColor;
-    int m_borderAlpha;
     bool m_useMask;
 public:
     explicit RoundedContainer(int radius = 14, QWidget *parent = nullptr, bool useMask = true);
-    // Optional: override fill/border appearance (e.g. for table containers that want
-    // a lighter surface with a more visible outline than the default dialog chrome)
-    void setSurface(const QString &fillColor, int borderAlpha);
+    // Optional: override the fill colour (e.g. the up-to-date toast's success card)
+    void setFillColor(const QString &fillColor);
 protected:
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+};
+
+// ShadowDialog — host for the elevation shadow. Frameless dark windows stacked
+// on top of each other visually merge: same surface colour, no OS chrome. The
+// fix is depth, not a thicker border: a soft ambient drop shadow painted into a
+// transparent margin around the card. Painted manually (concentric rounded
+// rects approximating a gaussian) because QGraphicsDropShadowEffect fights
+// setMask() and re-rasterises on repaints. ApplyFramelessChrome reserves
+// kShadowMargin in the outer layout when the dialog is a ShadowDialog.
+class ShadowDialog : public QDialog {
+public:
+    static constexpr int kShadowMargin = 20; // transparent canvas for the shadow
+    using QDialog::QDialog;
+protected:
+    void paintEvent(QPaintEvent *event) override;
 };
 
 // DragFilter — enables window dragging from a header widget on frameless dialogs
@@ -80,6 +95,12 @@ FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title)
 // Retrieve the content/footer layouts stored by ApplyFramelessChrome on a dialog
 QVBoxLayout *GetDialogContentLayout(QDialog *dialog);
 QVBoxLayout *GetDialogFooterLayout(QDialog *dialog);
+
+// Size the dialog so the visible CARD is width x height. ShadowDialogs carry a
+// transparent kShadowMargin band around the card for the elevation shadow, so
+// the window itself must be larger than the card by 2x the margin.
+void ResizeDialogCard(QDialog *dialog, int width, int height);
+void SetFixedDialogCardSize(QDialog *dialog, int width, int height);
 
 // StreamUP Theme — Catppuccin Mocha
 // Used for custom StreamUP UI elements (dialogs, panels, popups).

@@ -293,20 +293,28 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 {
 	if (manuallyTriggered) {
 		StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
-			QDialog *toast = new QDialog();
+			// Frameless toast card: ShadowDialog elevation shadow + rounded
+			// success-green RoundedContainer (fill only, no border stroke).
+			const int sm = StreamUP::UIStyles::ShadowDialog::kShadowMargin;
+			QDialog *toast = new StreamUP::UIStyles::ShadowDialog();
 			toast->setWindowTitle(obs_module_text("App.Name"));
-			toast->setWindowFlags(Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint | Qt::WindowStaysOnTopHint);
+			toast->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog | Qt::WindowStaysOnTopHint);
 			toast->setAttribute(Qt::WA_DeleteOnClose);
-			toast->setStyleSheet(QString("QDialog { background: %1; border-radius: %2px; }")
-				.arg(StreamUP::UIStyles::Colors::SUCCESS)
-				.arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS));
-			toast->resize(400, 100);
-			toast->setFixedSize(400, 100);
-			
-			QVBoxLayout *toastLayout = new QVBoxLayout(toast);
-			toastLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
-				StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
-				StreamUP::UIStyles::Sizes::PADDING_XL, 
+			toast->setAttribute(Qt::WA_TranslucentBackground);
+			toast->setFixedSize(400 + 2 * sm, 100 + 2 * sm);
+
+			QVBoxLayout *outerLayout = new QVBoxLayout(toast);
+			outerLayout->setContentsMargins(sm, sm, sm, sm);
+			outerLayout->setSpacing(0);
+
+			auto *card = new StreamUP::UIStyles::RoundedContainer(14);
+			card->setFillColor(StreamUP::UIStyles::Colors::SUCCESS);
+			outerLayout->addWidget(card);
+
+			QVBoxLayout *toastLayout = new QVBoxLayout(card);
+			toastLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL,
+				StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
+				StreamUP::UIStyles::Sizes::PADDING_XL,
 				StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
 			toastLayout->setSpacing(8);
 			
@@ -333,7 +341,6 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 			countdownLabel->setAlignment(Qt::AlignCenter);
 			toastLayout->addWidget(countdownLabel);
 			
-			toast->setLayout(toastLayout);
 			toast->show();
 			
 			// Create countdown timer

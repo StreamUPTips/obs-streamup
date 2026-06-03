@@ -107,7 +107,7 @@ void ShowWebSocketWindow(bool showInternalTools)
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WebSocket.Window.Title"));
 
 		// Start with compact size - will expand based on content
-		dialog->resize(700, 700);
+		StreamUP::UIStyles::ResizeDialogCard(dialog, 700, 700);
 
 		QVBoxLayout *mainLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 

@@ -12,10 +12,11 @@
 #include <QTextEdit>
 #include <QSplitter>
 #include "obs-hotkey-manager.hpp"
+#include "ui-styles.hpp"
 
 namespace StreamUP {
 
-class HotkeySelectorDialog : public QDialog {
+class HotkeySelectorDialog : public UIStyles::ShadowDialog {
     Q_OBJECT
 
 public:

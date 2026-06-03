@@ -17,7 +17,7 @@ namespace StreamUP {
 namespace MultiDock {
 
 AddDockDialog::AddDockDialog(const QString& multiDockId, QWidget* parent)
-    : QDialog(parent)
+    : UIStyles::ShadowDialog(parent)
     , m_multiDockId(multiDockId)
     , m_dockList(nullptr)
     , m_addButton(nullptr)
@@ -25,7 +25,7 @@ AddDockDialog::AddDockDialog(const QString& multiDockId, QWidget* parent)
 {
     StreamUP::UIStyles::ApplyFramelessChrome(this, obs_module_text("MultiDock.Dialog.AddDockTitle"));
     setModal(true);
-    resize(400, 300);
+    resize(400 + 2 * UIStyles::ShadowDialog::kShadowMargin, 300 + 2 * UIStyles::ShadowDialog::kShadowMargin);
 
     QVBoxLayout* layout = StreamUP::UIStyles::GetDialogContentLayout(this);
 

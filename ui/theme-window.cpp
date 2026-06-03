@@ -263,18 +263,22 @@ private:
     {
         if (currentIndex >= images.size()) return;
 
-        // Create modal zoom dialog
-        QDialog* zoomDialog = new QDialog(this->window());
+        // Create modal zoom dialog (frameless rounded card + elevation shadow)
+        const int sm = StreamUP::UIStyles::ShadowDialog::kShadowMargin;
+        QDialog* zoomDialog = new StreamUP::UIStyles::ShadowDialog(this->window());
         zoomDialog->setWindowTitle("Theme Preview - Full Size");
         zoomDialog->setModal(true);
-        zoomDialog->setStyleSheet(QString(
-            "QDialog {"
-            "    background: %1;"
-            "    color: white;"
-            "}"
-        ).arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+        zoomDialog->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
+        zoomDialog->setAttribute(Qt::WA_TranslucentBackground);
 
-        QVBoxLayout* layout = new QVBoxLayout(zoomDialog);
+        QVBoxLayout* outerLayout = new QVBoxLayout(zoomDialog);
+        outerLayout->setContentsMargins(sm, sm, sm, sm);
+        outerLayout->setSpacing(0);
+
+        auto* zoomCard = new StreamUP::UIStyles::RoundedContainer(14);
+        outerLayout->addWidget(zoomCard);
+
+        QVBoxLayout* layout = new QVBoxLayout(zoomCard);
         layout->setContentsMargins(20, 20, 20, 20);
 
         // Full-size image label with fixed container size
@@ -298,13 +302,13 @@ private:
         layout->addSpacing(10);
         layout->addWidget(instructionLabel);
 
-        // Fixed dialog size
-        zoomDialog->setFixedSize(860, 720);
+        // Fixed dialog size (+ shadow margin)
+        zoomDialog->setFixedSize(860 + 2 * sm, 720 + 2 * sm);
 
         // Center on screen
         zoomDialog->move(
-            (QApplication::primaryScreen()->geometry().width() - 860) / 2,
-            (QApplication::primaryScreen()->geometry().height() - 720) / 2
+            (QApplication::primaryScreen()->geometry().width() - (860 + 2 * sm)) / 2,
+            (QApplication::primaryScreen()->geometry().height() - (720 + 2 * sm)) / 2
         );
 
         // Install event filter for closing on click

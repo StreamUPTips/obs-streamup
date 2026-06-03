@@ -16,10 +16,11 @@
 #include <QRadioButton>
 #include <QDir>
 #include <QIcon>
+#include "ui-styles.hpp"
 
 namespace StreamUP {
 
-class IconSelectorDialog : public QDialog {
+class IconSelectorDialog : public UIStyles::ShadowDialog {
     Q_OBJECT
 
 public:

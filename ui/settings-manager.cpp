@@ -605,7 +605,7 @@ void ShowSettingsDialog(int tabIndex)
 
 		// Create modern unified dialog with frameless chrome
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Window.Title"));
-		dialog->resize(900, 600);
+		StreamUP::UIStyles::ResizeDialogCard(dialog, 900, 600);
 
 		QVBoxLayout *mainLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 		mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -2449,7 +2449,7 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 			StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Plugin.InstalledPlugins"), parentWidget);
 
 		// Start smaller - will be resized based on content
-		dialog->resize(600, 500);
+		StreamUP::UIStyles::ResizeDialogCard(dialog, 600, 500);
 
 		QVBoxLayout *contentLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
@@ -2525,7 +2525,7 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 			// Adjust dialog size to exactly fit table content
 			int tableWidth = pluginTable->minimumWidth();
 			int dialogWidth = std::max(tableWidth + 80, 600); // Minimal padding, lower minimum
-			dialog->resize(dialogWidth, 650);
+			StreamUP::UIStyles::ResizeDialogCard(dialog, dialogWidth, 650);
 
 			contentLayout->addWidget(StreamUP::UIStyles::GetTableContainer(pluginTable));
 		}
@@ -2805,7 +2805,7 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 		StreamUP::UIHelpers::ShowDialogOnUIThread([allHotkeyWidgets]() {
 			QDialog *confirmDialog =
 				StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Hotkeys.ResetTitle"));
-			confirmDialog->resize(400, 200);
+			StreamUP::UIStyles::ResizeDialogCard(confirmDialog, 400, 200);
 
 			QVBoxLayout *layout = StreamUP::UIStyles::GetDialogContentLayout(confirmDialog);
 
@@ -3163,7 +3163,7 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 		StreamUP::UIHelpers::ShowDialogOnUIThread([allSwitches]() {
 			QDialog *confirmDialog =
 				StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Dock.ResetTitle"));
-			confirmDialog->resize(400, 200);
+			StreamUP::UIStyles::ResizeDialogCard(confirmDialog, 400, 200);
 
 			QVBoxLayout *layout = StreamUP::UIStyles::GetDialogContentLayout(confirmDialog);
 

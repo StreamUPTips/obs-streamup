@@ -12,10 +12,11 @@
 #include <QButtonGroup>
 #include "streamup-toolbar-config.hpp"
 #include "obs-hotkey-manager.hpp"
+#include "ui-styles.hpp"
 
 namespace StreamUP {
 
-class HotkeyButtonConfigDialog : public QDialog {
+class HotkeyButtonConfigDialog : public UIStyles::ShadowDialog {
     Q_OBJECT
 
 public:

@@ -34,12 +34,12 @@ IconSelectorDialog::IconSelectorDialog(const QString& currentIcon,
                                       const QString& currentCustomIcon,
                                       bool useCustomIconFlag,
                                       QWidget* parent)
-    : QDialog(parent)
+    : UIStyles::ShadowDialog(parent)
     , iconButtonGroup(new QButtonGroup(this))
 {
     UIStyles::ApplyFramelessChrome(this, obs_module_text("IconSelector.Dialog.Title"));
     setModal(true);
-    resize(700, 600);
+    resize(700 + 2 * UIStyles::ShadowDialog::kShadowMargin, 600 + 2 * UIStyles::ShadowDialog::kShadowMargin);
 
     // Determine the initial selected path
     if (useCustomIconFlag && !currentCustomIcon.isEmpty()) {

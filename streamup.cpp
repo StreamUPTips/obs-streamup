@@ -79,12 +79,8 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		QString howTo3Str = obs_module_text(how3);
 		QString howTo4Str = obs_module_text(how4);
 
-		QDialog *dialog = StreamUP::UIHelpers::CreateDialogWindow(titleTextChar);
-		QVBoxLayout *dialogLayout = new QVBoxLayout(dialog);
-		dialogLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, 
-		                                 StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
-		                                 StreamUP::UIStyles::Sizes::PADDING_XL, 
-		                                 StreamUP::UIStyles::Sizes::SPACING_SMALL);
+		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleStr);
+		QVBoxLayout *dialogLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 
 		QHBoxLayout *buttonLayout = new QHBoxLayout();
 
@@ -125,10 +121,8 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		QObject::connect(copyJsonButton, &QPushButton::clicked, [=]() { StreamUP::UIHelpers::CopyToClipboard(jsonString); });
 		info3BoxLayout->addWidget(copyJsonButton);
 		dialogLayout->addWidget(info3Box);
-		dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
-		dialogLayout->addLayout(buttonLayout);
-		dialog->setLayout(dialogLayout);
+		StreamUP::UIStyles::GetDialogFooterLayout(dialog)->addLayout(buttonLayout);
 		dialog->show();
 	});
 }

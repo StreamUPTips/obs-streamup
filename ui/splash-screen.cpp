@@ -235,18 +235,22 @@ protected:
     {
         if (currentIndex >= images.size()) return;
 
-        // Create modal zoom dialog
-        QDialog* zoomDialog = new QDialog(this->window());
+        // Create modal zoom dialog (frameless rounded card + elevation shadow)
+        const int sm = StreamUP::UIStyles::ShadowDialog::kShadowMargin;
+        QDialog* zoomDialog = new StreamUP::UIStyles::ShadowDialog(this->window());
         zoomDialog->setWindowTitle("Image Preview - Full Size");
         zoomDialog->setModal(true);
-        zoomDialog->setStyleSheet(QString(
-            "QDialog {"
-            "    background: %1;"
-            "    color: white;"
-            "}"
-        ).arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+        zoomDialog->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
+        zoomDialog->setAttribute(Qt::WA_TranslucentBackground);
 
-        QVBoxLayout* layout = new QVBoxLayout(zoomDialog);
+        QVBoxLayout* outerLayout = new QVBoxLayout(zoomDialog);
+        outerLayout->setContentsMargins(sm, sm, sm, sm);
+        outerLayout->setSpacing(0);
+
+        auto* zoomCard = new StreamUP::UIStyles::RoundedContainer(14);
+        outerLayout->addWidget(zoomCard);
+
+        QVBoxLayout* layout = new QVBoxLayout(zoomCard);
         layout->setContentsMargins(20, 20, 20, 20);
 
         // Full-size image label with fixed container size
@@ -270,13 +274,13 @@ protected:
         layout->addSpacing(10);
         layout->addWidget(instructionLabel);
 
-        // Fixed dialog size
-        zoomDialog->setFixedSize(860, 720);
+        // Fixed dialog size (+ shadow margin)
+        zoomDialog->setFixedSize(860 + 2 * sm, 720 + 2 * sm);
 
         // Center on screen
         zoomDialog->move(
-            (QApplication::primaryScreen()->geometry().width() - 860) / 2,
-            (QApplication::primaryScreen()->geometry().height() - 720) / 2
+            (QApplication::primaryScreen()->geometry().width() - (860 + 2 * sm)) / 2,
+            (QApplication::primaryScreen()->geometry().height() - (720 + 2 * sm)) / 2
         );
 
         // Install event filter for closing on click
@@ -1040,7 +1044,7 @@ void CreateSplashDialog(ShowCondition condition)
         QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("StreamUP.SplashScreen.Title"));
         dialog->setModal(false);
         // Taller so all content + the pinned footer fit without clipping.
-        dialog->setFixedSize(820, 820);
+        StreamUP::UIStyles::SetFixedDialogCardSize(dialog, 820, 820);
         
         // Ensure version tracking is updated when dialog closes (any way)
         QObject::connect(dialog, &QDialog::finished, []() {
@@ -1072,7 +1076,7 @@ void CreateSplashDialog(ShowCondition condition)
                 StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
                     QDialog* earlyAccessDialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP \xe2\x80\xa2 Early Access");
                     earlyAccessDialog->setModal(true);
-                    earlyAccessDialog->setFixedSize(800, 600);
+                    StreamUP::UIStyles::SetFixedDialogCardSize(earlyAccessDialog, 800, 600);
 
                     QVBoxLayout* dialogLayout = StreamUP::UIStyles::GetDialogContentLayout(earlyAccessDialog);
 

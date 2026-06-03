@@ -41,7 +41,7 @@ void ShowDockConfigDialog()
 {
 	StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
 		QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Dock.Title"));
-		dialog->resize(600, 540);
+		StreamUP::UIStyles::ResizeDialogCard(dialog, 600, 540);
 
 		QVBoxLayout* mainLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 
@@ -218,7 +218,7 @@ void ShowDockConfigDialog()
 		QObject::connect(resetButton, &QPushButton::clicked, [toolsCard]() {
 			StreamUP::UIHelpers::ShowDialogOnUIThread([toolsCard]() {
 				QDialog* confirmDialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("Settings.Dock.ResetTitle"));
-				confirmDialog->resize(400, 200);
+				StreamUP::UIStyles::ResizeDialogCard(confirmDialog, 400, 200);
 				
 				QVBoxLayout* layout = StreamUP::UIStyles::GetDialogContentLayout(confirmDialog);
 				

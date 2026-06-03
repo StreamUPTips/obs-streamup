@@ -47,12 +47,11 @@ namespace UIStyles {
 
 //-------------------ROUNDED CONTAINER-------------------
 RoundedContainer::RoundedContainer(int radius, QWidget *parent, bool useMask)
-    : QFrame(parent), m_radius(radius), m_fillColor(Colors::BG_DARKEST), m_borderAlpha(15), m_useMask(useMask) {}
+    : QFrame(parent), m_radius(radius), m_fillColor(Colors::BG_DARKEST), m_useMask(useMask) {}
 
-void RoundedContainer::setSurface(const QString &fillColor, int borderAlpha)
+void RoundedContainer::setFillColor(const QString &fillColor)
 {
     m_fillColor = fillColor;
-    m_borderAlpha = borderAlpha;
     update();
 }
 
@@ -73,12 +72,32 @@ void RoundedContainer::paintEvent(QPaintEvent *event)
     QPainterPath path;
     path.addRoundedRect(QRectF(rect()), m_radius, m_radius);
     painter.fillPath(path, QColor(m_fillColor));
-    QPainterPath borderPath;
-    borderPath.addRoundedRect(
-        QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), m_radius, m_radius);
-    painter.setPen(QPen(QColor(255, 255, 255, m_borderAlpha), 1));
-    painter.drawPath(borderPath);
+    // Fill only — no border stroke. The elevation shadow is the edge; an outer
+    // hairline would wrap the header/footer corners like a frame. Structure
+    // comes from the internal separator lines only.
     QFrame::paintEvent(event);
+}
+
+//-------------------SHADOW DIALOG-------------------
+void ShadowDialog::paintEvent(QPaintEvent *)
+{
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(Qt::NoPen);
+    const QRectF card = QRectF(rect()).adjusted(
+        kShadowMargin, kShadowMargin, -kShadowMargin, -kShadowMargin);
+    // Concentric rings, low alpha each; the overlap builds a smooth falloff
+    // (~65 total at the card edge). +2px vertical offset reads as elevation
+    // with light from above.
+    for (int i = kShadowMargin; i >= 1; --i) {
+        const qreal t = (qreal)i / kShadowMargin; // 1 outer -> 0 card
+        const int alpha = (int)(10.0 * (1.0 - t) * (1.0 - t) + 0.5);
+        if (alpha <= 0)
+            continue;
+        QPainterPath ring;
+        ring.addRoundedRect(card.adjusted(-i, -i + 2, i, i + 2), 14 + i, 14 + i);
+        p.fillPath(ring, QColor(0, 0, 0, alpha));
+    }
 }
 
 //-------------------DRAG FILTER-------------------
@@ -139,9 +158,12 @@ FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title)
     // return value would be holding a dangling pointer. CreateStyledDialog
     // (the heap-allocated non-modal show() path) sets WA_DeleteOnClose itself.
 
-    // Layer 1: outer layout (1px margin for border rendering)
+    // Layer 1: outer layout. ShadowDialogs reserve a transparent margin that
+    // the elevation shadow paints into; a plain QDialog (no shadow painter)
+    // keeps the old 1px margin so nothing renders a dead transparent band.
+    const int margin = dynamic_cast<ShadowDialog *>(dialog) ? ShadowDialog::kShadowMargin : 1;
     QVBoxLayout *outerLay = new QVBoxLayout(dialog);
-    outerLay->setContentsMargins(1, 1, 1, 1);
+    outerLay->setContentsMargins(margin, margin, margin, margin);
     outerLay->setSpacing(0);
 
     // Layer 2: rounded container
@@ -151,29 +173,31 @@ FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title)
     mainLay->setSpacing(0);
     outerLay->addWidget(shell.container);
 
-    // Header (36px): title + version + stretch + close
+    // Header (44px): title + version + stretch + close. The divider rule is
+    // scoped with an object-name selector so the border-bottom applies ONLY to
+    // the header itself — a selectorless stylesheet would propagate the border
+    // to every child widget (title label, close button).
     QWidget *header = new QWidget();
-    header->setFixedHeight(36);
+    header->setObjectName("dlgHeader");
+    header->setFixedHeight(44);
     header->setStyleSheet(
-        QString("background: %1; border-bottom: 1px solid %2;")
-            .arg(Colors::BG_PRIMARY, Colors::BORDER_SUBTLE));
+        QString("QWidget#dlgHeader { background: transparent; border-bottom: 1px solid %1; }")
+            .arg(Colors::BORDER_SUBTLE));
 
     QHBoxLayout *hdrLay = new QHBoxLayout(header);
-    hdrLay->setContentsMargins(14, 0, 6, 0);
-    hdrLay->setSpacing(8);
+    hdrLay->setContentsMargins(18, 0, 10, 0);
+    hdrLay->setSpacing(10);
 
     QLabel *titleLabel = new QLabel(title);
-    titleLabel->setStyleSheet(
-        QString("color: %1; font-size: 12px; font-weight: 600; background: transparent;")
-            .arg(Colors::TEXT_PRIMARY));
+    titleLabel->setStyleSheet("color: white; font-size: 14px; font-weight: bold;");
     hdrLay->addWidget(titleLabel);
 
     // Version badge
     QLabel *ver = new QLabel(QString("v%1").arg(PROJECT_VERSION));
     ver->setStyleSheet(
-        QString("color: %1; font-size: 9px; background: %2; "
-                "padding: 1px 6px; border-radius: 3px; font-family: Consolas, monospace;")
-            .arg(Colors::TEXT_MUTED, Colors::BG_SECONDARY));
+        QString("color: %1; font-size: 10px; background: %2; "
+                "padding: 2px 7px; border-radius: 4px; font-family: Consolas, monospace;")
+            .arg(Colors::TEXT_MUTED, Colors::BG_PRIMARY));
     hdrLay->addWidget(ver);
 
     hdrLay->addStretch();
@@ -181,14 +205,14 @@ FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title)
     // Close button
     QToolButton *closeBtn = new QToolButton();
     closeBtn->setText(QString::fromUtf8("\xC3\x97")); // multiplication sign (x)
-    closeBtn->setFixedSize(22, 22);
+    closeBtn->setFixedSize(28, 28);
     closeBtn->setCursor(Qt::PointingHandCursor);
-    closeBtn->setFont(QFont("Arial", 11));
+    closeBtn->setFont(QFont("Arial", 14));
     closeBtn->setAutoRaise(true);
     closeBtn->setStyleSheet(
-        QString("QToolButton { color: %1; background: transparent; border-radius: 4px; }"
-                "QToolButton:hover { color: %2; background: rgba(255,69,58,0.25); }")
-            .arg(Colors::TEXT_MUTED, Colors::COLOR_DANGER));
+        QString("QToolButton { color: %1; background: %2; border-radius: 6px; }"
+                "QToolButton:hover { color: %3; background: rgba(255,69,58,0.3); }")
+            .arg(Colors::TEXT_PRIMARY, Colors::BORDER_SUBTLE, Colors::COLOR_DANGER));
     QObject::connect(closeBtn, &QToolButton::clicked, dialog, &QDialog::close);
     hdrLay->addWidget(closeBtn);
 
@@ -207,10 +231,12 @@ FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title)
     shell.contentLayout->setSpacing(10);
     mainLay->addWidget(contentArea, 1);
 
-    // Footer (stretch = 0, separate from content for macOS overlap prevention)
+    // Footer (stretch = 0, separate from content for macOS overlap prevention).
+    // Border rule scoped by object name so the divider doesn't leak to children.
     shell.footerWidget = new QWidget();
+    shell.footerWidget->setObjectName("dlgFooter");
     shell.footerWidget->setStyleSheet(
-        QString("background: transparent; border-top: 1px solid %1;")
+        QString("QWidget#dlgFooter { background: transparent; border-top: 1px solid %1; }")
             .arg(Colors::BORDER_SUBTLE));
     shell.footerLayout = new QVBoxLayout(shell.footerWidget);
     shell.footerLayout->setContentsMargins(16, 8, 16, 10);
@@ -260,6 +286,25 @@ QVBoxLayout *GetDialogFooterLayout(QDialog *dialog)
     if (!dialog) return nullptr;
     QVariant v = dialog->property("streamup_footer_layout");
     return v.isValid() ? static_cast<QVBoxLayout *>(v.value<void *>()) : nullptr;
+}
+
+static int DialogShadowPadding(QDialog *dialog)
+{
+    return dynamic_cast<ShadowDialog *>(dialog) ? 2 * ShadowDialog::kShadowMargin : 0;
+}
+
+void ResizeDialogCard(QDialog *dialog, int width, int height)
+{
+    if (!dialog) return;
+    const int pad = DialogShadowPadding(dialog);
+    dialog->resize(width + pad, height + pad);
+}
+
+void SetFixedDialogCardSize(QDialog *dialog, int width, int height)
+{
+    if (!dialog) return;
+    const int pad = DialogShadowPadding(dialog);
+    dialog->setFixedSize(width + pad, height + pad);
 }
 
 QString GetDialogStyle() {
@@ -365,7 +410,7 @@ QString GetContentLabelStyle() {
 // so we compute an explicit radius from the expected rendered height.
 // Rendered box ≈ min-height + padding (0 here) + border (2) → radius = (height + 2) / 2.
 static QString ButtonBaseStyle(int height) {
-    int btnHeight = height > 0 ? height : 22;
+    int btnHeight = height > 0 ? height : 28; // standard pill: 28px content + 1px border -> radius 15
     int radius = (btnHeight + 2) / 2;
     return QString(
         "    min-height: %1px; max-height: %1px;"
@@ -615,7 +660,7 @@ QString GetTableStyle() {
 QDialog* CreateStyledDialog(const QString& title, QWidget* parentWidget) {
     QWidget *parent = parentWidget ? parentWidget
                                    : static_cast<QWidget *>(obs_frontend_get_main_window());
-    QDialog *dialog = new QDialog(parent);
+    QDialog *dialog = new ShadowDialog(parent);
     dialog->setWindowTitle(title);
     ApplyFramelessChrome(dialog, title);
     // CreateStyledDialog is the heap-allocated entry point — used with show(),
@@ -706,7 +751,7 @@ QLabel* CreateStyledContent(const QString& text) {
 }
 
 QPushButton* CreateStyledButton(const QString& text, const QString& type, int height, int minWidth) {
-    int btnHeight = height > 0 ? height : 24;
+    int btnHeight = height > 0 ? height : 28; // keep in sync with ButtonBaseStyle's default
     QPushButton* button = new QPushButton(text);
     button->setCursor(Qt::PointingHandCursor);
     button->setFixedHeight(btnHeight);
@@ -1118,7 +1163,7 @@ StandardDialogComponents CreateStandardDialog(const QString& windowTitle, const 
     
     // Create main dialog
     components.dialog = CreateStyledDialog(windowTitle, parentWidget);
-    components.dialog->resize(700, 500);
+    ResizeDialogCard(components.dialog, 700, 500);
     
     QVBoxLayout* mainLayout = GetDialogContentLayout(components.dialog);
 

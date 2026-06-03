@@ -100,7 +100,7 @@ void Show(std::function<void()> onFinished)
 			StreamUP::SettingsManager::GetCurrentSettings().modules);
 
 		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("PluginWizard.Window.Title"));
-		dialog->resize(720, 760);
+		StreamUP::UIStyles::ResizeDialogCard(dialog, 720, 760);
 
 		QVBoxLayout *mainLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
 		mainLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,

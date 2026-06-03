@@ -11,24 +11,24 @@
 namespace StreamUP {
 
 HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(QWidget* parent)
-    : QDialog(parent)
+    : UIStyles::ShadowDialog(parent)
     , isEditMode(false)
 {
     UIStyles::ApplyFramelessChrome(this, obs_module_text("HotkeyButton.Dialog.AddTitle"));
     setModal(true);
-    resize(500, 400);
+    resize(500 + 2 * UIStyles::ShadowDialog::kShadowMargin, 400 + 2 * UIStyles::ShadowDialog::kShadowMargin);
 
     setupUI();
     validateInput();
 }
 
 HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(std::shared_ptr<StreamUP::ToolbarConfig::HotkeyButtonItem> existingItem, QWidget* parent)
-    : QDialog(parent)
+    : UIStyles::ShadowDialog(parent)
     , isEditMode(true)
 {
     UIStyles::ApplyFramelessChrome(this, obs_module_text("HotkeyButton.Dialog.EditTitle"));
     setModal(true);
-    resize(500, 400);
+    resize(500 + 2 * UIStyles::ShadowDialog::kShadowMargin, 400 + 2 * UIStyles::ShadowDialog::kShadowMargin);
 
     setupUI();
     setExistingItem(existingItem);

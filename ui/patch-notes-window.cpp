@@ -197,7 +197,7 @@ void CreatePatchNotesDialog()
 {
 	UIHelpers::ShowSingletonDialogOnUIThread("patch-notes", []() -> QDialog * {
 		QDialog *dialog = UIStyles::CreateStyledDialog("StreamUP \xe2\x80\xa2 Patch Notes");
-		dialog->resize(720, 720);
+		UIStyles::ResizeDialogCard(dialog, 720, 720);
 
 		QVBoxLayout *mainLayout = UIStyles::GetDialogContentLayout(dialog);
 

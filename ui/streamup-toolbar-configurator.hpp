@@ -18,6 +18,7 @@
 #include <QTabWidget>
 #include <QMetaType>
 #include "streamup-toolbar-config.hpp"
+#include "ui-styles.hpp"
 
 QT_BEGIN_NAMESPACE
 QT_END_NAMESPACE
@@ -32,7 +33,7 @@ namespace StreamUP {
 
 class DraggableListWidget;
 
-class ToolbarConfigurator : public QDialog {
+class ToolbarConfigurator : public UIStyles::ShadowDialog {
     Q_OBJECT
 
 public:
