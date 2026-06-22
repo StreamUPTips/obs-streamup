@@ -40,7 +40,7 @@ void HotkeyButtonConfigDialog::setupUI() {
     
     // Hotkey selection section
     hotkeyGroup = new QGroupBox(obs_module_text("HotkeyButton.Group.Hotkey"), this);
-    hotkeyGroup->setStyleSheet(UIStyles::GetGroupBoxStyle("", ""));
+    hotkeyGroup->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetGroupBoxStyle("", "")));
     hotkeyFormLayout = new QFormLayout(hotkeyGroup);
     
     selectedHotkeyLabel = new QLabel(obs_module_text("HotkeyButton.Message.NoSelection"), hotkeyGroup);
@@ -62,15 +62,15 @@ void HotkeyButtonConfigDialog::setupUI() {
     
     // Icon selection section
     iconGroup = new QGroupBox(obs_module_text("HotkeyButton.Group.Icon"), this);
-    iconGroup->setStyleSheet(UIStyles::GetGroupBoxStyle("", ""));
+    iconGroup->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetGroupBoxStyle("", "")));
     iconLayout = new QVBoxLayout(iconGroup);
 
     // Icon preview section
     iconPreviewLayout = new QHBoxLayout();
     iconPreviewLabel = new QLabel(obs_module_text("HotkeyButton.Label.Preview"), iconGroup);
     iconPreview = new QLabel(iconGroup);
-    iconPreview->setFixedSize(32, 32);
-    iconPreview->setStyleSheet(QString("border: 1px solid %1;").arg(UIStyles::Colors::BORDER_MEDIUM));
+    iconPreview->setFixedSize(StreamUP::UIStyles::S(32), StreamUP::UIStyles::S(32));
+    iconPreview->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("border: 1px solid %1;").arg(UIStyles::Colors::BORDER_MEDIUM)));
     iconPreview->setAlignment(Qt::AlignCenter);
     iconPreview->setScaledContents(true);
 
@@ -89,7 +89,7 @@ void HotkeyButtonConfigDialog::setupUI() {
     
     // Button customization section
     customizationGroup = new QGroupBox(obs_module_text("HotkeyButton.Group.Customization"), this);
-    customizationGroup->setStyleSheet(UIStyles::GetGroupBoxStyle("", ""));
+    customizationGroup->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetGroupBoxStyle("", "")));
     customizationLayout = new QFormLayout(customizationGroup);
     
     buttonTextEdit = new QLineEdit(customizationGroup);

@@ -172,11 +172,11 @@ void ShowWebSocketWindow(bool showInternalTools)
 
 			// Commands container — rounded card so the section reads as a distinct panel
 			QFrame *categoryCard = new QFrame();
-			categoryCard->setStyleSheet(QString(
+			categoryCard->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 				"QFrame { background: %1; border-radius: %2px; border: 1px solid %3; }")
 				.arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
 				.arg(StreamUP::UIStyles::Sizes::RADIUS_MD)
-				.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE));
+				.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)));
 			QVBoxLayout *categoryLayout = new QVBoxLayout(categoryCard);
 			categoryLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0,
 							   StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
@@ -195,13 +195,13 @@ void ShowWebSocketWindow(bool showInternalTools)
 					QFrame *separator = new QFrame();
 					separator->setFrameShape(QFrame::HLine);
 					separator->setFrameShadow(QFrame::Plain);
-					separator->setStyleSheet(QString("QFrame {"
+					separator->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QFrame {"
 									 "color: rgba(113, 128, 150, 0.3);"
 									 "background-color: rgba(113, 128, 150, 0.3);"
 									 "border: none;"
 									 "margin: 0px;"
 									 "max-height: 1px;"
-									 "}"));
+									 "}")));
 					categoryLayout->addWidget(separator);
 				}
 			}
@@ -235,11 +235,11 @@ void ShowWebSocketWindow(bool showInternalTools)
 QWidget *CreateCommandWidget(const QString &command, const QString &description)
 {
 	QWidget *widget = new QWidget();
-	widget->setStyleSheet(QString("QWidget {"
+	widget->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QWidget {"
 				      "background: transparent;"
 				      "border: none;"
 				      "padding: 0px;" // No padding on the widget itself
-				      "}"));
+				      "}")));
 
 	QHBoxLayout *layout = new QHBoxLayout(widget);
 	layout->setContentsMargins(0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3, 0,
@@ -248,12 +248,12 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 
 	// Command info section - use vertical layout but center it
 	QVBoxLayout *infoLayout = new QVBoxLayout();
-	infoLayout->setSpacing(2); // Tight spacing between name and description
+	infoLayout->setSpacing(StreamUP::UIStyles::S(2)); // Tight spacing between name and description
 	infoLayout->setContentsMargins(0, 0, 0, 0);
 
 	// Command name
 	QLabel *nameLabel = new QLabel(command);
-	nameLabel->setStyleSheet(QString("QLabel {"
+	nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
 					 "color: %1;"
 					 "font-size: %2px;"
 					 "font-weight: bold;"
@@ -263,11 +263,11 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 					 "padding: 0px;"
 					 "}")
 					 .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-					 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+					 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 
 	// Command description
 	QLabel *descLabel = new QLabel(description);
-	descLabel->setStyleSheet(QString("QLabel {"
+	descLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
 					 "color: %1;"
 					 "font-size: %2px;"
 					 "background: transparent;"
@@ -276,7 +276,7 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 					 "padding: 0px;"
 					 "}")
 					 .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-					 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+					 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
 	descLabel->setWordWrap(true);
 
 	infoLayout->addWidget(nameLabel);
@@ -304,7 +304,7 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 		QString(R"({"requestType":"CallVendorRequest","requestData":{"vendorName":"streamup","requestType":"%1","requestData":{}}})")
 			.arg(command);
 	QPushButton *obsRawBtn = StreamUP::UIStyles::CreateStyledButton("Raw", "info");
-	obsRawBtn->setFixedSize(72, 24);
+	obsRawBtn->setFixedSize(StreamUP::UIStyles::S(72), StreamUP::UIStyles::S(24));
 	obsRawBtn->setToolTip(obs_module_text("WebSocket.Button.OBSRaw.Tooltip"));
 	QObject::connect(obsRawBtn, &QPushButton::clicked, [obsRawBtn, obsRawJson]() {
 		QApplication::clipboard()->setText(obsRawJson);
@@ -315,16 +315,16 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 		obsRawBtn->setEnabled(false);
 
 		// Change to success style temporarily
-		obsRawBtn->setStyleSheet(StreamUP::UIStyles::GetButtonStyle(StreamUP::UIStyles::Colors::SUCCESS,
-									    StreamUP::UIStyles::Colors::SUCCESS_HOVER, 28));
+		obsRawBtn->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetButtonStyle(StreamUP::UIStyles::Colors::SUCCESS,
+									    StreamUP::UIStyles::Colors::SUCCESS_HOVER, 28)));
 
 		// Restore button after 1 second
 		QTimer::singleShot(1000, [obsRawBtn, originalText]() {
 			obsRawBtn->setText(originalText);
 			obsRawBtn->setEnabled(true);
 			// Restore original blue style
-			obsRawBtn->setStyleSheet(StreamUP::UIStyles::GetButtonStyle(StreamUP::UIStyles::Colors::INFO,
-										    StreamUP::UIStyles::Colors::INFO_HOVER, 28));
+			obsRawBtn->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetButtonStyle(StreamUP::UIStyles::Colors::INFO,
+										    StreamUP::UIStyles::Colors::INFO_HOVER, 28)));
 		});
 	});
 
@@ -333,7 +333,7 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 		QString(R"(CPH.ObsSendRaw("CallVendorRequest", "{\"vendorName\":\"streamup\",\"requestType\":\"%1\",\"requestData\":{}}", 0);)")
 			.arg(command);
 	QPushButton *cphBtn = StreamUP::UIStyles::CreateStyledButton("CPH", "info");
-	cphBtn->setFixedSize(72, 24);
+	cphBtn->setFixedSize(StreamUP::UIStyles::S(72), StreamUP::UIStyles::S(24));
 	cphBtn->setToolTip(obs_module_text("WebSocket.Button.CPH.Tooltip"));
 	QObject::connect(cphBtn, &QPushButton::clicked, [cphBtn, cphCommand]() {
 		QApplication::clipboard()->setText(cphCommand);
@@ -344,16 +344,16 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 		cphBtn->setEnabled(false);
 
 		// Change to success style temporarily
-		cphBtn->setStyleSheet(StreamUP::UIStyles::GetButtonStyle(StreamUP::UIStyles::Colors::SUCCESS,
-									 StreamUP::UIStyles::Colors::SUCCESS_HOVER, 28));
+		cphBtn->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetButtonStyle(StreamUP::UIStyles::Colors::SUCCESS,
+									 StreamUP::UIStyles::Colors::SUCCESS_HOVER, 28)));
 
 		// Restore button after 1 second
 		QTimer::singleShot(1000, [cphBtn, originalText]() {
 			cphBtn->setText(originalText);
 			cphBtn->setEnabled(true);
 			// Restore original blue style
-			cphBtn->setStyleSheet(StreamUP::UIStyles::GetButtonStyle(StreamUP::UIStyles::Colors::INFO,
-										 StreamUP::UIStyles::Colors::INFO_HOVER, 28));
+			cphBtn->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetButtonStyle(StreamUP::UIStyles::Colors::INFO,
+										 StreamUP::UIStyles::Colors::INFO_HOVER, 28)));
 		});
 	});
 

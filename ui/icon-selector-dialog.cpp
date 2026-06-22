@@ -337,8 +337,8 @@ void IconSelectorDialog::populateCommonIcons() {
         commonIcons.append({iconMapping.name, iconMapping.displayName});
 
         QToolButton* button = new QToolButton();
-        button->setFixedSize(BUTTON_SIZE, BUTTON_SIZE);
-        button->setIconSize(QSize(ICON_SIZE, ICON_SIZE));
+        button->setFixedSize(StreamUP::UIStyles::S(BUTTON_SIZE), StreamUP::UIStyles::S(BUTTON_SIZE));
+        button->setIconSize(QSize(StreamUP::UIStyles::S(ICON_SIZE), StreamUP::UIStyles::S(ICON_SIZE)));
         button->setCheckable(true);
         button->setAutoRaise(true);
         button->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -351,9 +351,9 @@ void IconSelectorDialog::populateCommonIcons() {
         button->setProperty("category", "common");
 
         // Add styling to make selection more visible
-        button->setStyleSheet(
+        button->setStyleSheet(StreamUP::UIStyles::scale_qss(
             ICON_BUTTON_STYLESHEET
-        );
+        ));
 
         iconButtonGroup->addButton(button);
         connect(button, &QToolButton::clicked, this, &IconSelectorDialog::onIconButtonClicked);
@@ -425,18 +425,18 @@ void IconSelectorDialog::populateCommonIcons() {
 
 void IconSelectorDialog::createIconButton(const QString& iconPath, const QString& iconName, QGridLayout* layout, int& row, int& col, const QString& category) {
     QToolButton* button = new QToolButton();
-    button->setFixedSize(BUTTON_SIZE, BUTTON_SIZE);
-    button->setIconSize(QSize(ICON_SIZE, ICON_SIZE));
+    button->setFixedSize(StreamUP::UIStyles::S(BUTTON_SIZE), StreamUP::UIStyles::S(BUTTON_SIZE));
+    button->setIconSize(QSize(StreamUP::UIStyles::S(ICON_SIZE), StreamUP::UIStyles::S(ICON_SIZE)));
     button->setCheckable(true);
     button->setAutoRaise(true);
     button->setToolButtonStyle(Qt::ToolButtonIconOnly);
 
     // Add styling to make selection more visible
-    button->setStyleSheet(
+    button->setStyleSheet(StreamUP::UIStyles::scale_qss(
         "QToolButton { border: 2px solid transparent; border-radius: 4px; }"
         "QToolButton:checked { border: 2px solid #007ACC; background-color: rgba(0, 122, 204, 0.2); }"
         "QToolButton:hover { border: 2px solid #005A9E; background-color: rgba(0, 90, 158, 0.1); }"
-    );
+    ));
 
     // Load icon
     QIcon icon = loadPreviewIcon(iconPath);
@@ -600,8 +600,8 @@ void IconSelectorDialog::populateCustomIcons() {
         }
 
         QToolButton* button = new QToolButton();
-        button->setFixedSize(BUTTON_SIZE, BUTTON_SIZE);
-        button->setIconSize(QSize(ICON_SIZE, ICON_SIZE));
+        button->setFixedSize(StreamUP::UIStyles::S(BUTTON_SIZE), StreamUP::UIStyles::S(BUTTON_SIZE));
+        button->setIconSize(QSize(StreamUP::UIStyles::S(ICON_SIZE), StreamUP::UIStyles::S(ICON_SIZE)));
         button->setCheckable(true);
         button->setAutoRaise(true);
         button->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -615,11 +615,11 @@ void IconSelectorDialog::populateCustomIcons() {
             button->setProperty("category", "custom");
 
             // Add styling to make selection more visible
-            button->setStyleSheet(
+            button->setStyleSheet(StreamUP::UIStyles::scale_qss(
                 "QToolButton { border: 2px solid transparent; border-radius: 4px; }"
                 "QToolButton:checked { border: 2px solid #007ACC; background-color: rgba(0, 122, 204, 0.2); }"
                 "QToolButton:hover { border: 2px solid #005A9E; background-color: rgba(0, 90, 158, 0.1); }"
-            );
+            ));
 
             iconButtonGroup->addButton(button);
             connect(button, &QToolButton::clicked, this, &IconSelectorDialog::onIconButtonClicked);

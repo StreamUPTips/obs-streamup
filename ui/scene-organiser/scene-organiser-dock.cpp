@@ -381,7 +381,7 @@ void SceneOrganiserDock::createBottomToolbar()
     m_toolbar->setOrientation(Qt::Horizontal);
 
     // Match native OBS scenes dock styling exactly
-    m_toolbar->setIconSize(QSize(16, 16));  // Standard OBS toolbar icon size
+    m_toolbar->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));  // Standard OBS toolbar icon size
 
     // Let OBS theme handle all toolbar styling - no custom stylesheets
     // The toolbar will inherit appearance from the active OBS theme
@@ -476,7 +476,7 @@ void SceneOrganiserDock::createBottomToolbar()
     rightButtonsContainer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
     QHBoxLayout *rightButtonsLayout = new QHBoxLayout(rightButtonsContainer);
     rightButtonsLayout->setContentsMargins(0, 0, 0, 0);
-    rightButtonsLayout->setSpacing(2); // Match toolbar button spacing
+    rightButtonsLayout->setSpacing(StreamUP::UIStyles::S(2)); // Match toolbar button spacing
 
     // Lock checkbox - using exact same approach as OBS source dock
     QCheckBox *lockCheckbox = new QCheckBox(rightButtonsContainer);
@@ -764,8 +764,8 @@ void SceneOrganiserDock::setupSearchBar()
     // Create search widget container
     m_searchWidget = new QWidget(this);
     m_searchLayout = new QHBoxLayout(m_searchWidget);
-    m_searchLayout->setContentsMargins(4, 2, 4, 2);
-    m_searchLayout->setSpacing(4);
+    m_searchLayout->setContentsMargins(StreamUP::UIStyles::S(4), StreamUP::UIStyles::S(2), StreamUP::UIStyles::S(4), StreamUP::UIStyles::S(2));
+    m_searchLayout->setSpacing(StreamUP::UIStyles::S(4));
 
     // Create search input
     m_searchEdit = new QLineEdit(m_searchWidget);

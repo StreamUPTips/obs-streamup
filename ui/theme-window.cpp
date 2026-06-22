@@ -40,7 +40,7 @@ class ThemeImageCarousel : public QWidget
 public:
     explicit ThemeImageCarousel(QWidget* parent = nullptr) : QWidget(parent), currentIndex(0)
     {
-        setFixedHeight(400);
+        setFixedHeight(StreamUP::UIStyles::S(400));
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         setupUI();
         loadImages();
@@ -86,7 +86,7 @@ private:
 
         // Image container - full width to place buttons at edges
         imageContainer = new QFrame();
-        imageContainer->setFixedHeight(350);
+        imageContainer->setFixedHeight(StreamUP::UIStyles::S(350));
         imageContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         imageContainer->setStyleSheet(QString(
             "QFrame {"
@@ -101,12 +101,12 @@ private:
 
         // Navigation buttons (hidden - using external buttons instead)
         prevButton = StreamUP::UIStyles::CreateStyledButton("❮", "neutral", 40);
-        prevButton->setFixedSize(40, 40);
+        prevButton->setFixedSize(StreamUP::UIStyles::S(40), StreamUP::UIStyles::S(40));
         prevButton->setVisible(false);
         connect(prevButton, &QPushButton::clicked, this, &ThemeImageCarousel::previousImage);
 
         nextButton = StreamUP::UIStyles::CreateStyledButton("❯", "neutral", 40);
-        nextButton->setFixedSize(40, 40);
+        nextButton->setFixedSize(StreamUP::UIStyles::S(40), StreamUP::UIStyles::S(40));
         nextButton->setVisible(false);
         connect(nextButton, &QPushButton::clicked, this, &ThemeImageCarousel::nextImage);
 
@@ -126,7 +126,7 @@ private:
         // Dots indicator - centered
         dotsContainer = new QHBoxLayout();
         dotsContainer->setContentsMargins(0, 0, 0, 0);
-        dotsContainer->setSpacing(8);
+        dotsContainer->setSpacing(StreamUP::UIStyles::S(8));
         dotsContainer->addStretch(); // Add stretch before dots to center them
 
         layout->addWidget(imageContainer);
@@ -153,10 +153,10 @@ private:
         for (int i = 0; i < images.size(); ++i) {
             QPushButton* dot = new QPushButton();
             dot->setText("");  // Ensure no text
-            dot->setFixedSize(10, 10);
+            dot->setFixedSize(StreamUP::UIStyles::S(10), StreamUP::UIStyles::S(10));
             dot->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
             dot->setFlat(true);
-            dot->setStyleSheet(QString(
+            dot->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
                 "QPushButton {"
                 "    background-color: %1;"
                 "    border: none;"
@@ -172,7 +172,7 @@ private:
                 "}"
             ).arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
              .arg(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30)
-             .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR));
+             .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR)));
             
             connect(dot, &QPushButton::clicked, [this, i]() { goToImage(i); });
             dots.append(dot);
@@ -224,7 +224,7 @@ private:
              .arg(StreamUP::UIStyles::Colors::PRIMARY_HOVER)
              .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR);
             
-            dots[i]->setStyleSheet(style);
+            dots[i]->setStyleSheet(StreamUP::UIStyles::scale_qss(style));
         }
     }
 
@@ -279,7 +279,7 @@ private:
         outerLayout->addWidget(zoomCard);
 
         QVBoxLayout* layout = new QVBoxLayout(zoomCard);
-        layout->setContentsMargins(20, 20, 20, 20);
+        layout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
 
         // Full-size image label with fixed container size
         QLabel* fullImageLabel = new QLabel();
@@ -299,16 +299,16 @@ private:
         instructionLabel->setAlignment(Qt::AlignCenter);
 
         layout->addWidget(fullImageLabel, 1);
-        layout->addSpacing(10);
+        layout->addSpacing(StreamUP::UIStyles::S(10));
         layout->addWidget(instructionLabel);
 
         // Fixed dialog size (+ shadow margin)
-        zoomDialog->setFixedSize(860 + 2 * sm, 720 + 2 * sm);
+        zoomDialog->setFixedSize(StreamUP::UIStyles::S(860) + 2 * sm, StreamUP::UIStyles::S(720) + 2 * sm);
 
         // Center on screen
         zoomDialog->move(
-            (QApplication::primaryScreen()->geometry().width() - (860 + 2 * sm)) / 2,
-            (QApplication::primaryScreen()->geometry().height() - (720 + 2 * sm)) / 2
+            (QApplication::primaryScreen()->geometry().width() - (StreamUP::UIStyles::S(860) + 2 * sm)) / 2,
+            (QApplication::primaryScreen()->geometry().height() - (StreamUP::UIStyles::S(720) + 2 * sm)) / 2
         );
 
         // Install event filter for closing on click
@@ -380,7 +380,7 @@ void CreateThemeDialog()
         QWidget* contentWidget = new QWidget();
         contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
         contentWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        contentWidget->setMaximumWidth(900); // Match dialog width minus padding
+        contentWidget->setMaximumWidth(StreamUP::UIStyles::S(900)); // Match dialog width minus padding
         QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
         contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
                                           StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
@@ -434,9 +434,9 @@ void CreateThemeDialog()
         
         // Create external navigation buttons for group box edges
         QPushButton* externalPrevButton = StreamUP::UIStyles::CreateStyledButton("❮", "neutral", 40);
-        externalPrevButton->setFixedSize(40, 40);
+        externalPrevButton->setFixedSize(StreamUP::UIStyles::S(40), StreamUP::UIStyles::S(40));
         QPushButton* externalNextButton = StreamUP::UIStyles::CreateStyledButton("❯", "neutral", 40);
-        externalNextButton->setFixedSize(40, 40);
+        externalNextButton->setFixedSize(StreamUP::UIStyles::S(40), StreamUP::UIStyles::S(40));
         
         // Connect external buttons to carousel methods
         QObject::connect(externalPrevButton, &QPushButton::clicked, carousel, &ThemeImageCarousel::previousImage);

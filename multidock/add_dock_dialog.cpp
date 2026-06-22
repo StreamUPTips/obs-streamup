@@ -35,7 +35,7 @@ AddDockDialog::AddDockDialog(const QString& multiDockId, QWidget* parent)
     // Dock list
     m_dockList = new QListWidget(this);
     m_dockList->setSelectionMode(QAbstractItemView::SingleSelection);
-    m_dockList->setStyleSheet(StreamUP::UIStyles::GetListWidgetStyle());
+    m_dockList->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetListWidgetStyle()));
     layout->addWidget(m_dockList);
 
     // Buttons in footer

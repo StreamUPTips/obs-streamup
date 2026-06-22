@@ -25,11 +25,11 @@ HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
     // Create layout
     QHBoxLayout* layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(5);
+    layout->setSpacing(StreamUP::UIStyles::S(5));
     
     // Display label showing current hotkey
     m_displayLabel = new QLabel(obs_module_text("Hotkey.Widget.None"));
-    m_displayLabel->setStyleSheet(QString(
+    m_displayLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
         "QLabel {"
         "color: %1;"
         "font-size: %2px;"
@@ -45,7 +45,7 @@ HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
         .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
         .arg(StreamUP::UIStyles::Colors::BACKGROUND_INPUT)
         .arg(StreamUP::UIStyles::Colors::BORDER_LIGHT)
-        .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS));
+        .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS)));
     m_displayLabel->setAlignment(Qt::AlignCenter);
     
     // Icon-only set/clear buttons matching the OBS hotkey settings layout —
@@ -65,18 +65,18 @@ HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
 
     m_recordButton = new QPushButton();
     m_recordButton->setIcon(QIcon(":/images/icons/ui/hotkey-set-light.svg"));
-    m_recordButton->setIconSize(QSize(14, 14));
+    m_recordButton->setIconSize(QSize(StreamUP::UIStyles::S(14), StreamUP::UIStyles::S(14)));
     m_recordButton->setCursor(Qt::PointingHandCursor);
     m_recordButton->setToolTip(obs_module_text("Hotkey.Widget.Set"));
-    m_recordButton->setStyleSheet(iconBtnQss);
+    m_recordButton->setStyleSheet(StreamUP::UIStyles::scale_qss(iconBtnQss));
     connect(m_recordButton, &QPushButton::clicked, this, &HotkeyWidget::OnRecordButtonClicked);
 
     m_clearButton = new QPushButton();
     m_clearButton->setIcon(QIcon(":/images/icons/ui/hotkey-clear-light.svg"));
-    m_clearButton->setIconSize(QSize(14, 14));
+    m_clearButton->setIconSize(QSize(StreamUP::UIStyles::S(14), StreamUP::UIStyles::S(14)));
     m_clearButton->setCursor(Qt::PointingHandCursor);
     m_clearButton->setToolTip(obs_module_text("Hotkey.Widget.Clear"));
-    m_clearButton->setStyleSheet(iconBtnQss);
+    m_clearButton->setStyleSheet(StreamUP::UIStyles::scale_qss(iconBtnQss));
     connect(m_clearButton, &QPushButton::clicked, this, &HotkeyWidget::OnClearButtonClicked);
     
     layout->addWidget(m_displayLabel, 1);
@@ -176,7 +176,7 @@ void HotkeyWidget::StartRecording()
     m_recordedModifiers = Qt::NoModifier;
 
     // Highlight the icon button while recording — solid primary fill, no text.
-    m_recordButton->setStyleSheet(QString(
+    m_recordButton->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
         "QPushButton {"
         "  background: %1;"
         "  border: 1px solid %1;"
@@ -187,7 +187,7 @@ void HotkeyWidget::StartRecording()
         "}"
         "QPushButton:hover { background: %2; border: 1px solid %2; }")
         .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR)
-        .arg(StreamUP::UIStyles::Colors::PRIMARY_HOVER));
+        .arg(StreamUP::UIStyles::Colors::PRIMARY_HOVER)));
 
     m_displayLabel->setText(obs_module_text("Hotkey.Widget.PressKeys"));
     m_displayLabel->setStyleSheet(m_displayLabel->styleSheet() +
@@ -208,7 +208,7 @@ void HotkeyWidget::StopRecording()
     releaseKeyboard();
 
     // Restore neutral icon button styling.
-    m_recordButton->setStyleSheet(QString(
+    m_recordButton->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
         "QPushButton {"
         "  background: transparent;"
         "  border: 1px solid %1;"
@@ -219,7 +219,7 @@ void HotkeyWidget::StopRecording()
         "}"
         "QPushButton:hover { background: %2; border: 1px solid %2; }")
         .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
-        .arg(StreamUP::UIStyles::Colors::HOVER_OVERLAY));
+        .arg(StreamUP::UIStyles::Colors::HOVER_OVERLAY)));
     
     // Create hotkey data from recorded key combination
     if (m_recordedKey != 0) {
@@ -297,7 +297,7 @@ void HotkeyWidget::UpdateDisplay()
     }
     
     m_displayLabel->setText(displayText);
-    m_displayLabel->setStyleSheet(normalStyle);
+    m_displayLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(normalStyle));
 }
 
 QString HotkeyWidget::FormatKeyCombo(int key, Qt::KeyboardModifiers modifiers)

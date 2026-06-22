@@ -1,4 +1,5 @@
 #include "mixer-enhancements.hpp"
+#include "ui-styles.hpp"
 
 #include <obs.h>
 #include <obs-frontend-api.h>
@@ -235,7 +236,7 @@ static void CenterVolumeControlContent(QWidget* volumeControl)
         if (meterLayout) {
             // Add left margin to shift meter+slider to the right (center them)
             QMargins margins = meterLayout->contentsMargins();
-            meterLayout->setContentsMargins(14, margins.top(), margins.right(), margins.bottom());
+            meterLayout->setContentsMargins(StreamUP::UIStyles::S(14), margins.top(), margins.right(), margins.bottom());
 
             QBoxLayout* meterBox = qobject_cast<QBoxLayout*>(meterLayout);
             if (meterBox) {
@@ -434,7 +435,7 @@ static void EnableMultiLineName(QWidget* volumeControl)
                 nameLabel->setMaximumWidth(QWIDGETSIZE_MAX);
 
                 // Set a reasonable minimum height for multi-line
-                button->setMinimumHeight(32);
+                button->setMinimumHeight(StreamUP::UIStyles::S(32));
 
                 // Install event filter to maintain our changes after OBS re-elides
                 // Filter caches the name to avoid expensive lookups
@@ -463,7 +464,7 @@ void EnhanceVolumeControl(QWidget* volumeControl)
         // Adjust the VolumeControl's own layout margins
         QLayout* layout = volumeControl->layout();
         if (layout) {
-            layout->setContentsMargins(2, 4, 2, 4);
+            layout->setContentsMargins(StreamUP::UIStyles::S(2), StreamUP::UIStyles::S(4), StreamUP::UIStyles::S(2), StreamUP::UIStyles::S(4));
         }
 
         // Also adjust any child widget layouts
@@ -532,7 +533,7 @@ static void AdjustMixerToolbar(QWidget* mixerWidget)
     }
 
     // Add margins to toolbar contents
-    toolbar->setContentsMargins(8, 0, 8, 0);
+    toolbar->setContentsMargins(StreamUP::UIStyles::S(8), 0, StreamUP::UIStyles::S(8), 0);
 
     // Find buttons and adjust their margins via stylesheet
     QList<QPushButton*> buttons = toolbar->findChildren<QPushButton*>();
@@ -541,11 +542,11 @@ static void AdjustMixerToolbar(QWidget* mixerWidget)
         if (text.contains("hidden", Qt::CaseInsensitive)) {
             // Add left margin to the hidden button via stylesheet
             QString currentStyle = btn->styleSheet();
-            btn->setStyleSheet(currentStyle + " QPushButton { margin-left: 8px; }");
+            btn->setStyleSheet(StreamUP::UIStyles::scale_qss(currentStyle + " QPushButton { margin-left: 8px; }"));
         } else if (text.contains("Options", Qt::CaseInsensitive)) {
             // Add left margin to push Options button away from the icons
             QString currentStyle = btn->styleSheet();
-            btn->setStyleSheet(currentStyle + " QPushButton { margin-left: 16px; }");
+            btn->setStyleSheet(StreamUP::UIStyles::scale_qss(currentStyle + " QPushButton { margin-left: 16px; }"));
         }
     }
 

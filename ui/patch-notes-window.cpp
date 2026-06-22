@@ -136,11 +136,11 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 {
 	QFrame *card = new QFrame();
 	card->setObjectName("patchNotesCard");
-	card->setStyleSheet(QString(
+	card->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 		"QFrame#patchNotesCard { background: %1; border: 1px solid %2; border-radius: %3px; }")
 		.arg(UIStyles::Colors::BG_PRIMARY)
 		.arg(UIStyles::Colors::BORDER_SUBTLE)
-		.arg(UIStyles::Sizes::RADIUS_MD));
+		.arg(UIStyles::Sizes::RADIUS_MD)));
 
 	QVBoxLayout *cardLay = new QVBoxLayout(card);
 	cardLay->setContentsMargins(0, 0, 0, 0);
@@ -153,7 +153,7 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 	header->setChecked(expanded);
 	header->setCursor(Qt::PointingHandCursor);
 	header->setText(QString("  %1  %2").arg(expanded ? QChar(0x25BC) : QChar(0x25B6)).arg(block.versionLabel));
-	header->setStyleSheet(QString(
+	header->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 		"QPushButton {"
 		"  text-align: left;"
 		"  background: transparent;"
@@ -165,15 +165,15 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 		"}"
 		"QPushButton:hover { color: %2; }")
 		.arg(UIStyles::Colors::TEXT_PRIMARY)
-		.arg(UIStyles::Colors::PRIMARY_LIGHT));
+		.arg(UIStyles::Colors::PRIMARY_LIGHT)));
 	cardLay->addWidget(header);
 
 	QLabel *body = new QLabel(block.bodyHtml);
 	body->setTextFormat(Qt::RichText);
 	body->setWordWrap(true);
 	body->setOpenExternalLinks(true);
-	body->setStyleSheet(QString("QLabel { background: transparent; color: %1; padding: 4px 14px 12px 14px; }")
-		.arg(UIStyles::Colors::TEXT_SECONDARY));
+	body->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { background: transparent; color: %1; padding: 4px 14px 12px 14px; }")
+		.arg(UIStyles::Colors::TEXT_SECONDARY)));
 	body->setVisible(expanded);
 	cardLay->addWidget(body);
 
@@ -244,21 +244,21 @@ void CreatePatchNotesDialog()
 
 		QPushButton *patreonBtn = UIStyles::CreateStyledButton("Patreon", "warning");
 		patreonBtn->setIcon(QIcon(":images/icons/social/patreon.svg"));
-		patreonBtn->setIconSize(QSize(16, 16));
+		patreonBtn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
 		QObject::connect(patreonBtn, &QPushButton::clicked, []() {
 			QDesktopServices::openUrl(QUrl("https://www.patreon.com/streamup"));
 		});
 
 		QPushButton *kofiBtn = UIStyles::CreateStyledButton("Ko-Fi", "warning");
 		kofiBtn->setIcon(QIcon(":images/icons/social/kofi.svg"));
-		kofiBtn->setIconSize(QSize(16, 16));
+		kofiBtn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
 		QObject::connect(kofiBtn, &QPushButton::clicked, []() {
 			QDesktopServices::openUrl(QUrl("https://ko-fi.com/streamup"));
 		});
 
 		QPushButton *beerBtn = UIStyles::CreateStyledButton("Buy a Beer", "warning");
 		beerBtn->setIcon(QIcon(":images/icons/social/beer.svg"));
-		beerBtn->setIconSize(QSize(16, 16));
+		beerBtn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
 		QObject::connect(beerBtn, &QPushButton::clicked, []() {
 			QDesktopServices::openUrl(QUrl("https://paypal.me/andilippi"));
 		});
@@ -281,7 +281,7 @@ void CreatePatchNotesDialog()
 
 		QPushButton *discordBtn = UIStyles::CreateStyledButton("Discord", "info");
 		discordBtn->setIcon(QIcon(":images/icons/social/discord.svg"));
-		discordBtn->setIconSize(QSize(16, 16));
+		discordBtn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
 		QObject::connect(discordBtn, &QPushButton::clicked, []() {
 			QDesktopServices::openUrl(QUrl("https://discord.com/invite/RnDKRaVCEu"));
 		});

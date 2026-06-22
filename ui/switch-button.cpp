@@ -19,7 +19,7 @@ SwitchButton::SwitchButton(QWidget* parent)
     , m_offset(MARGIN)
     , m_animation(nullptr)
 {
-    setMinimumSize(SWITCH_WIDTH + 20, SWITCH_HEIGHT + 4); // Minimum size with padding for shorter switch
+    setMinimumSize(S(SWITCH_WIDTH + 20), S(SWITCH_HEIGHT + 4)); // Minimum size with padding for shorter switch
     setCursor(Qt::PointingHandCursor);
     
     // Create animation for smooth toggle
@@ -70,11 +70,11 @@ void SwitchButton::setText(const QString& text)
     // Calculate required width based on text using standard font
     if (!m_text.isEmpty()) {
         QFontMetrics fm(QFont("Arial", Sizes::FONT_SIZE_NORMAL, Sizes::FONT_WEIGHT_NORMAL));
-        int textWidth = fm.horizontalAdvance(m_text) + 20; // Extra padding
-        int totalWidth = textWidth + SWITCH_WIDTH + 20; // Text + switch + padding
-        setFixedSize(totalWidth, SWITCH_HEIGHT + 4);
+        int textWidth = fm.horizontalAdvance(m_text) + S(20); // Extra padding
+        int totalWidth = textWidth + S(SWITCH_WIDTH + 20); // Text + switch + padding
+        setFixedSize(totalWidth, S(SWITCH_HEIGHT + 4));
     } else {
-        setFixedSize(SWITCH_WIDTH + 20, SWITCH_HEIGHT + 4);
+        setFixedSize(S(SWITCH_WIDTH + 20), S(SWITCH_HEIGHT + 4));
     }
     
     update();
@@ -190,11 +190,11 @@ QSize SwitchButton::sizeHint() const
 {
     if (!m_text.isEmpty()) {
         QFontMetrics fm(QFont("Arial", Sizes::FONT_SIZE_NORMAL, Sizes::FONT_WEIGHT_NORMAL));
-        int textWidth = fm.horizontalAdvance(m_text) + 20; // Extra padding
-        int totalWidth = textWidth + SWITCH_WIDTH + 20; // Text + switch + padding
-        return QSize(totalWidth, SWITCH_HEIGHT + 4);
+        int textWidth = fm.horizontalAdvance(m_text) + S(20); // Extra padding
+        int totalWidth = textWidth + S(SWITCH_WIDTH + 20); // Text + switch + padding
+        return QSize(totalWidth, S(SWITCH_HEIGHT + 4));
     } else {
-        return QSize(SWITCH_WIDTH + 20, SWITCH_HEIGHT + 4);
+        return QSize(S(SWITCH_WIDTH + 20), S(SWITCH_HEIGHT + 4));
     }
 }
 

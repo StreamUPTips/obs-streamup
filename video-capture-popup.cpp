@@ -28,7 +28,7 @@ VideoCapturePopup::VideoCapturePopup(QWidget *parent)
 	
 	// Set button properties for standardized squircle style
 	auto setButtonProperties = [](QPushButton *button) {
-		button->setIconSize(QSize(16, 16));  // Match dock button icon size
+		button->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));  // Match dock button icon size
 		// Size is set by CreateStyledSquircleButton, don't override
 	};
 	
@@ -43,8 +43,8 @@ VideoCapturePopup::VideoCapturePopup(QWidget *parent)
 	
 	// Create horizontal layout
 	layout = new QHBoxLayout(this);
-	layout->setContentsMargins(5, 5, 5, 5);
-	layout->setSpacing(2);
+	layout->setContentsMargins(StreamUP::UIStyles::S(5), StreamUP::UIStyles::S(5), StreamUP::UIStyles::S(5), StreamUP::UIStyles::S(5));
+	layout->setSpacing(StreamUP::UIStyles::S(2));
 	
 	layout->addWidget(activateButton);
 	layout->addWidget(deactivateButton);

@@ -4,6 +4,12 @@
 #include <QFrame>
 #include <QObject>
 #include <QDialog>
+#include <QApplication>
+#include <QFontInfo>
+#include <QRegularExpression>
+
+#include <algorithm>
+#include <cmath>
 
 class QDialog;
 class QLabel;
@@ -20,6 +26,60 @@ class QToolButton;
 
 namespace StreamUP {
 namespace UIStyles {
+
+// ── UI scale ──
+// Qt already maps logical pixels through the per-monitor display scale
+// (OBS runs with HighDpiScaleFactorRoundingPolicy::PassThrough), so widget
+// geometry tracks the monitor's scale automatically. What it does NOT track
+// is the OS text-size preference (Windows "Make text bigger", macOS larger
+// system font): that only shows up in the default application font. OBS's
+// own UI follows that font; our hardcoded px sizes don't. ui_scale() derives
+// a factor from the default font so our dialogs grow with it too.
+inline qreal ui_scale()
+{
+    static const qreal s = []() {
+        // Baseline: Windows Segoe UI 9pt = 12 logical px at 100% text size.
+#ifdef __APPLE__
+        const qreal baseline = 13.0; // macOS system font 13pt
+#else
+        const qreal baseline = 12.0;
+#endif
+        const int px = QFontInfo(QApplication::font()).pixelSize();
+        if (px <= 0)
+            return 1.0;
+        return std::clamp(px / baseline, 1.0, 3.0);
+    }();
+    return s;
+}
+
+// Scale a logical-pixel design size by the text-size factor.
+inline int S(int px)
+{
+    return (int)std::lround(px * ui_scale());
+}
+
+// Scale every "<N>px" value inside a stylesheet by the text-size factor.
+// Lets existing stylesheets stay readable (literal design px) while still
+// honouring the OS text-size preference. No-op at 100%.
+inline QString scale_qss(const QString &qss)
+{
+    if (ui_scale() <= 1.0)
+        return qss;
+    static const QRegularExpression rx(QStringLiteral("(-?\\d+)px"));
+    QString out;
+    out.reserve(qss.size() + 16);
+    qsizetype last = 0;
+    auto it = rx.globalMatch(qss);
+    while (it.hasNext()) {
+        const QRegularExpressionMatch m = it.next();
+        out += qss.mid(last, m.capturedStart() - last);
+        out += QString::number(S(m.captured(1).toInt()));
+        out += QStringLiteral("px");
+        last = m.capturedEnd();
+    }
+    out += qss.mid(last);
+    return out;
+}
 
 // Rounded container. Fill only — no border stroke. The elevation shadow is the
 // edge; a painted outer hairline wraps the header/footer corners like a frame.

@@ -52,13 +52,13 @@ void ShowDockConfigDialog()
 		// Info card — bordered panel using shared theme constants
 		QFrame* infoCard = new QFrame();
 		infoCard->setObjectName("dockInfoCard");
-		infoCard->setStyleSheet(QString(
+		infoCard->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 			"QFrame#dockInfoCard { background: %1; border: 1px solid %2; border-radius: %3px; }"
 			"QFrame#dockInfoCard QLabel { background: transparent; border: none; color: %4; }")
 			.arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
 			.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
 			.arg(StreamUP::UIStyles::Sizes::RADIUS_MD)
-			.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY));
+			.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)));
 		QVBoxLayout* infoLay = new QVBoxLayout(infoCard);
 		infoLay->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
 		                            StreamUP::UIStyles::Sizes::PADDING_SMALL + 2,
@@ -66,8 +66,8 @@ void ShowDockConfigDialog()
 		                            StreamUP::UIStyles::Sizes::PADDING_SMALL + 2);
 		QLabel* infoLabel = new QLabel(obs_module_text("Settings.Dock.Info"));
 		infoLabel->setWordWrap(true);
-		infoLabel->setStyleSheet(QString("font-size: %1px; line-height: 1.4;")
-			.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY));
+		infoLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("font-size: %1px; line-height: 1.4;")
+			.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)));
 		infoLay->addWidget(infoLabel);
 		mainLayout->addWidget(infoCard);
 
@@ -77,13 +77,13 @@ void ShowDockConfigDialog()
 
 		QFrame* toolsCard = new QFrame();
 		toolsCard->setObjectName("dockToolsCard");
-		toolsCard->setStyleSheet(QString(
+		toolsCard->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 			"QFrame#dockToolsCard { background: %1; border: 1px solid %2; border-radius: %3px; }"
 			"QFrame#dockToolsCard QWidget { background: transparent; }"
 			"QFrame#dockToolsCard QLabel { border: none; }")
 			.arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
 			.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
-			.arg(StreamUP::UIStyles::Sizes::RADIUS_MD));
+			.arg(StreamUP::UIStyles::Sizes::RADIUS_MD)));
 		QVBoxLayout* toolsGroupLayout = new QVBoxLayout(toolsCard);
 		toolsGroupLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0,
 		                                     StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
@@ -124,18 +124,18 @@ void ShowDockConfigDialog()
 
 			// Text section
 			QVBoxLayout* textLayout = new QVBoxLayout();
-			textLayout->setSpacing(2);
+			textLayout->setSpacing(StreamUP::UIStyles::S(2));
 			textLayout->setContentsMargins(0, 0, 0, 0);
 
 			QLabel* nameLabel = new QLabel(tool.name);
-			nameLabel->setStyleSheet(QString("QLabel { color: %1; font-size: %2px; font-weight: bold; }")
+			nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { color: %1; font-size: %2px; font-weight: bold; }")
 				.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 
 			QLabel* descLabel = new QLabel(tool.description);
-			descLabel->setStyleSheet(QString("QLabel { color: %1; font-size: %2px; }")
+			descLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { color: %1; font-size: %2px; }")
 				.arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
 			descLabel->setWordWrap(true);
 			
 			textLayout->addWidget(nameLabel);
@@ -201,9 +201,9 @@ void ShowDockConfigDialog()
 				QFrame* separator = new QFrame();
 				separator->setFrameShape(QFrame::HLine);
 				separator->setFrameShadow(QFrame::Plain);
-				separator->setStyleSheet(QString(
+				separator->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 					"QFrame { background-color: %1; border: none; max-height: 1px; }")
-					.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE));
+					.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)));
 				toolsGroupLayout->addWidget(separator);
 			}
 		}
@@ -223,9 +223,9 @@ void ShowDockConfigDialog()
 				QVBoxLayout* layout = StreamUP::UIStyles::GetDialogContentLayout(confirmDialog);
 				
 				QLabel* warningLabel = new QLabel(obs_module_text("Settings.Dock.ResetWarning"));
-				warningLabel->setStyleSheet(QString("font-size: %1px; padding: %2px;")
+				warningLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("font-size: %1px; padding: %2px;")
 					.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)
-					.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM));
+					.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)));
 				warningLabel->setWordWrap(true);
 				warningLabel->setAlignment(Qt::AlignCenter);
 				
@@ -313,18 +313,18 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	applyFileIconToButton(toggleVisibilityButton, StreamUP::UIHelpers::GetThemedIconPath("visible"));
 
 	auto setButtonProperties = [](QPushButton *button) {
-		button->setIconSize(QSize(16, 16));  // Smaller icon for smaller button
+		button->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));  // Smaller icon for smaller button
 		// Force square dimensions aggressively
-		button->setFixedSize(28, 28);
-		button->setMinimumSize(28, 28);
-		button->setMaximumSize(28, 28);
+		button->setFixedSize(StreamUP::UIStyles::S(28), StreamUP::UIStyles::S(28));
+		button->setMinimumSize(StreamUP::UIStyles::S(28), StreamUP::UIStyles::S(28));
+		button->setMaximumSize(StreamUP::UIStyles::S(28), StreamUP::UIStyles::S(28));
 		button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 		// Remove any padding/margins that might stretch the button
 		button->setContentsMargins(0, 0, 0, 0);
 
 		// Apply minimal structural styling - only size and spacing properties, no colors
 		// This ensures the FlowLayout calculates positions correctly
-		button->setStyleSheet(
+		button->setStyleSheet(StreamUP::UIStyles::scale_qss(
 			"QPushButton {"
 			"    min-width: 28px;"
 			"    max-width: 28px;"
@@ -335,7 +335,7 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 			"    padding: 0px;"
 			"    margin: 2px;"
 			"}"
-		);
+		));
 	};
 
 	// Set properties for each button

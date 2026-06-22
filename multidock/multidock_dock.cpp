@@ -60,7 +60,7 @@ void MultiDockDock::SetupUi()
     innerContainer->setFrameStyle(QFrame::NoFrame);
     // No custom styling - let OBS theme handle everything
     QVBoxLayout* innerLayout = new QVBoxLayout(innerContainer);
-    innerLayout->setContentsMargins(4, 4, 4, 4); // 4px margins on all sides
+    innerLayout->setContentsMargins(StreamUP::UIStyles::S(4), StreamUP::UIStyles::S(4), StreamUP::UIStyles::S(4), StreamUP::UIStyles::S(4)); // 4px margins on all sides
     innerLayout->setSpacing(0);
     
     // Create inner host as a direct child
@@ -81,7 +81,7 @@ void MultiDockDock::SetupUi()
     // No auto-save - we save on OBS shutdown
     
     // Set minimum size to ensure usability
-    setMinimumSize(400, 300);
+    setMinimumSize(StreamUP::UIStyles::S(400), StreamUP::UIStyles::S(300));
 
     // Let OBS theme handle all styling
     setFrameStyle(QFrame::NoFrame);
@@ -233,7 +233,7 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
     toolBar->setOrientation(Qt::Horizontal);
     
     // Match standard OBS toolbar icon size
-    toolBar->setIconSize(QSize(16, 16));
+    toolBar->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
 
     // Let OBS theme handle all toolbar styling - no custom stylesheets
     

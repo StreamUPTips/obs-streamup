@@ -55,14 +55,14 @@ void AddRow(QVBoxLayout *parent,
 	textLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
 	QLabel *titleLabel = new QLabel(obs_module_text(row.titleKey));
-	titleLabel->setStyleSheet(QString("color: %1; font-size: 15px; font-weight: 600; background: transparent;")
-		.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
+	titleLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 15px; font-weight: 600; background: transparent;")
+		.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)));
 
 	QLabel *descLabel = new QLabel(obs_module_text(row.descKey));
 	descLabel->setWordWrap(true);
-	descLabel->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent; line-height: 1.4;")
+	descLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent; line-height: 1.4;")
 		.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-		.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 
 	textLayout->addWidget(titleLabel);
 	textLayout->addWidget(descLabel);
@@ -82,8 +82,8 @@ void AddRow(QVBoxLayout *parent,
 		QFrame *separator = new QFrame();
 		separator->setFrameShape(QFrame::HLine);
 		separator->setFrameShadow(QFrame::Plain);
-		separator->setStyleSheet("QFrame { background-color: rgba(127, 132, 156, 0.2); "
-		                         "border: none; max-height: 1px; }");
+		separator->setStyleSheet(StreamUP::UIStyles::scale_qss("QFrame { background-color: rgba(127, 132, 156, 0.2); "
+		                         "border: none; max-height: 1px; }"));
 		parent->addWidget(separator);
 	}
 }
@@ -109,36 +109,36 @@ void Show(std::function<void()> onFinished)
 
 		// Headline.
 		QLabel *headline = new QLabel(obs_module_text("PluginWizard.Headline"));
-		headline->setStyleSheet(QString("color: %1; font-size: 22px; font-weight: 700; background: transparent;")
-			.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
+		headline->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 22px; font-weight: 700; background: transparent;")
+			.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)));
 		mainLayout->addWidget(headline);
 
 		// Welcome line — short, sets the frame.
 		QLabel *welcome = new QLabel(obs_module_text("PluginWizard.Welcome"));
 		welcome->setWordWrap(true);
-		welcome->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent;")
+		welcome->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
 			.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-			.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+			.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		mainLayout->addWidget(welcome);
 
 		// Resource reassurance — visually distinct, sits in a tinted callout
 		// box so people who skim still notice it.
 		QLabel *resourceNote = new QLabel(obs_module_text("PluginWizard.ResourceNote"));
 		resourceNote->setWordWrap(true);
-		resourceNote->setStyleSheet(QString(
+		resourceNote->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 			"QLabel { color: %1; font-size: %2px; background-color: rgba(137, 220, 235, 0.08); "
 			"border-left: 3px solid rgba(137, 220, 235, 0.6); border-radius: 4px; "
 			"padding: 10px 12px; }"
 		).arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-		 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+		 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		mainLayout->addWidget(resourceNote);
 
 		// Usage hint — small italic line.
 		QLabel *usageHint = new QLabel(obs_module_text("PluginWizard.UsageHint"));
 		usageHint->setWordWrap(true);
-		usageHint->setStyleSheet(QString("color: %1; font-size: %2px; background: transparent; font-style: italic;")
+		usageHint->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent; font-style: italic;")
 			.arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-			.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+			.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
 		mainLayout->addWidget(usageHint);
 
 		// Scrollable area for the plugin list (the dialog can be small on

@@ -213,11 +213,11 @@ void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
         // Header section (same pattern as PluginsHaveIssue)
         QWidget* headerWidget = new QWidget();
         headerWidget->setObjectName("headerWidget");
-        headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
+        headerWidget->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
             .arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
             .arg(StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
             .arg(StreamUP::UIStyles::Sizes::PADDING_XL)
-            .arg(StreamUP::UIStyles::Sizes::PADDING_XL));
+            .arg(StreamUP::UIStyles::Sizes::PADDING_XL)));
 
         QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
         headerLayout->setContentsMargins(0, 0, 0, 0);
@@ -247,11 +247,11 @@ void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
         // Create styled GroupBox with table
         QGroupBox *fontGroup = StreamUP::UIStyles::CreateStyledGroupBox(
             obs_module_text("Font.Dialog.MissingGroup"), "error");
-        fontGroup->setMinimumWidth(400);
+        fontGroup->setMinimumWidth(StreamUP::UIStyles::S(400));
         fontGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
 
         QVBoxLayout *fontLayout = new QVBoxLayout(fontGroup);
-        fontLayout->setContentsMargins(8, 8, 8, 8);
+        fontLayout->setContentsMargins(StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8));
         fontLayout->setSpacing(0);
 
         QTableWidget *fontTable = CreateMissingFontsTable(missingFonts);
@@ -259,8 +259,8 @@ void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
         StreamUP::UIStyles::ApplyDialogTableSizing(fontTable);
 
         // Remove table border to blend with group box
-        fontTable->setStyleSheet(
-            fontTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET);
+        fontTable->setStyleSheet(StreamUP::UIStyles::scale_qss(
+            fontTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET));
 
         fontLayout->addWidget(StreamUP::UIStyles::GetTableContainer(fontTable));
         contentLayout->addWidget(fontGroup);
@@ -271,7 +271,7 @@ void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
         QLabel *warningLabel = new QLabel(QString::fromUtf8("\xe2\x9a\xa0\xef\xb8\x8f ") +
             QString(obs_module_text("Font.Dialog.WarningContinue")));
         warningLabel->setWordWrap(true);
-        warningLabel->setStyleSheet(QString(
+        warningLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
             "QLabel {"
             "background: rgba(45, 55, 72, 0.8);"
             "color: #fbbf24;"
@@ -286,7 +286,7 @@ void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
             .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
             .arg(StreamUP::UIStyles::Sizes::SPACING_SMALL)
             .arg(StreamUP::UIStyles::Sizes::PADDING_XL + 5)
-            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+            .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
         dialogLayout->addWidget(warningLabel);
 
         // Buttons in footer
@@ -412,11 +412,11 @@ void ShowFontUrlManagerDialog()
 		// Header section
 		QWidget* headerWidget = new QWidget();
 		headerWidget->setObjectName("headerWidget");
-		headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
+		headerWidget->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
 			.arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
 			.arg(StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
 			.arg(StreamUP::UIStyles::Sizes::PADDING_XL)
-			.arg(StreamUP::UIStyles::Sizes::PADDING_XL));
+			.arg(StreamUP::UIStyles::Sizes::PADDING_XL)));
 
 		QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
 		headerLayout->setContentsMargins(0, 0, 0, 0);
@@ -462,8 +462,8 @@ void ShowFontUrlManagerDialog()
 			// No text sources found - show message
 			QLabel *emptyLabel = new QLabel(obs_module_text("FontUrlManager.Status.NoTextSources"));
 			emptyLabel->setAlignment(Qt::AlignCenter);
-			emptyLabel->setStyleSheet(QString("color: %1; padding: 20px;")
-				.arg(StreamUP::UIStyles::Colors::TEXT_MUTED));
+			emptyLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; padding: 20px;")
+				.arg(StreamUP::UIStyles::Colors::TEXT_MUTED)));
 			contentLayout->addWidget(emptyLabel);
 		} else {
 			// Create table with text sources
@@ -506,8 +506,8 @@ void ShowFontUrlManagerDialog()
 			StreamUP::UIStyles::ApplyDialogTableSizing(table);
 
 			// Style table to match dialog
-			table->setStyleSheet(
-				table->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET);
+			table->setStyleSheet(StreamUP::UIStyles::scale_qss(
+				table->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET));
 
 			StreamUP::UIStyles::AutoResizeTableColumns(table);
 			contentLayout->addWidget(StreamUP::UIStyles::GetTableContainer(table));

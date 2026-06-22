@@ -179,25 +179,25 @@ FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title)
     // to every child widget (title label, close button).
     QWidget *header = new QWidget();
     header->setObjectName("dlgHeader");
-    header->setFixedHeight(44);
-    header->setStyleSheet(
+    header->setFixedHeight(S(44));
+    header->setStyleSheet(StreamUP::UIStyles::scale_qss(
         QString("QWidget#dlgHeader { background: transparent; border-bottom: 1px solid %1; }")
-            .arg(Colors::BORDER_SUBTLE));
+            .arg(Colors::BORDER_SUBTLE)));
 
     QHBoxLayout *hdrLay = new QHBoxLayout(header);
-    hdrLay->setContentsMargins(18, 0, 10, 0);
-    hdrLay->setSpacing(10);
+    hdrLay->setContentsMargins(S(18), 0, S(10), 0);
+    hdrLay->setSpacing(S(10));
 
     QLabel *titleLabel = new QLabel(title);
-    titleLabel->setStyleSheet("color: white; font-size: 14px; font-weight: bold;");
+    titleLabel->setStyleSheet(StreamUP::UIStyles::scale_qss("color: white; font-size: 14px; font-weight: bold;"));
     hdrLay->addWidget(titleLabel);
 
     // Version badge
     QLabel *ver = new QLabel(QString("v%1").arg(PROJECT_VERSION));
-    ver->setStyleSheet(
+    ver->setStyleSheet(StreamUP::UIStyles::scale_qss(
         QString("color: %1; font-size: 10px; background: %2; "
                 "padding: 2px 7px; border-radius: 4px; font-family: Consolas, monospace;")
-            .arg(Colors::TEXT_MUTED, Colors::BG_PRIMARY));
+            .arg(Colors::TEXT_MUTED, Colors::BG_PRIMARY)));
     hdrLay->addWidget(ver);
 
     hdrLay->addStretch();
@@ -205,14 +205,14 @@ FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title)
     // Close button
     QToolButton *closeBtn = new QToolButton();
     closeBtn->setText(QString::fromUtf8("\xC3\x97")); // multiplication sign (x)
-    closeBtn->setFixedSize(28, 28);
+    closeBtn->setFixedSize(S(28), S(28));
     closeBtn->setCursor(Qt::PointingHandCursor);
     closeBtn->setFont(QFont("Arial", 14));
     closeBtn->setAutoRaise(true);
-    closeBtn->setStyleSheet(
+    closeBtn->setStyleSheet(StreamUP::UIStyles::scale_qss(
         QString("QToolButton { color: %1; background: %2; border-radius: 6px; }"
                 "QToolButton:hover { color: %3; background: rgba(255,69,58,0.3); }")
-            .arg(Colors::TEXT_PRIMARY, Colors::BORDER_SUBTLE, Colors::COLOR_DANGER));
+            .arg(Colors::TEXT_PRIMARY, Colors::BORDER_SUBTLE, Colors::COLOR_DANGER)));
     QObject::connect(closeBtn, &QToolButton::clicked, dialog, &QDialog::close);
     hdrLay->addWidget(closeBtn);
 
@@ -227,20 +227,20 @@ FramelessDialogShell ApplyFramelessChrome(QDialog *dialog, const QString &title)
     contentArea->setStyleSheet(
         QString("background: %1;").arg(Colors::BG_DARKEST));
     shell.contentLayout = new QVBoxLayout(contentArea);
-    shell.contentLayout->setContentsMargins(16, 12, 16, 12);
-    shell.contentLayout->setSpacing(10);
+    shell.contentLayout->setContentsMargins(S(16), S(12), S(16), S(12));
+    shell.contentLayout->setSpacing(S(10));
     mainLay->addWidget(contentArea, 1);
 
     // Footer (stretch = 0, separate from content for macOS overlap prevention).
     // Border rule scoped by object name so the divider doesn't leak to children.
     shell.footerWidget = new QWidget();
     shell.footerWidget->setObjectName("dlgFooter");
-    shell.footerWidget->setStyleSheet(
+    shell.footerWidget->setStyleSheet(StreamUP::UIStyles::scale_qss(
         QString("QWidget#dlgFooter { background: transparent; border-top: 1px solid %1; }")
-            .arg(Colors::BORDER_SUBTLE));
+            .arg(Colors::BORDER_SUBTLE)));
     shell.footerLayout = new QVBoxLayout(shell.footerWidget);
-    shell.footerLayout->setContentsMargins(16, 8, 16, 10);
-    shell.footerLayout->setSpacing(8);
+    shell.footerLayout->setContentsMargins(S(16), S(8), S(16), S(10));
+    shell.footerLayout->setSpacing(S(8));
     mainLay->addWidget(shell.footerWidget, 0);
 
     // Store layouts as dynamic properties for GetDialogContentLayout/GetDialogFooterLayout
@@ -297,14 +297,14 @@ void ResizeDialogCard(QDialog *dialog, int width, int height)
 {
     if (!dialog) return;
     const int pad = DialogShadowPadding(dialog);
-    dialog->resize(width + pad, height + pad);
+    dialog->resize(S(width) + pad, S(height) + pad);
 }
 
 void SetFixedDialogCardSize(QDialog *dialog, int width, int height)
 {
     if (!dialog) return;
     const int pad = DialogShadowPadding(dialog);
-    dialog->setFixedSize(width + pad, height + pad);
+    dialog->setFixedSize(S(width) + pad, S(height) + pad);
 }
 
 QString GetDialogStyle() {
@@ -686,7 +686,7 @@ QLabel* CreateStyledTitle(const QString& text) {
         "}"
     ).arg(Colors::TEXT_PRIMARY);
     
-    label->setStyleSheet(modernTitleStyle);
+    label->setStyleSheet(StreamUP::UIStyles::scale_qss(modernTitleStyle));
     label->setAlignment(Qt::AlignCenter);
     return label;
 }
@@ -709,7 +709,7 @@ QLabel* CreateStyledDescription(const QString& text) {
         "}"
     ).arg(Colors::TEXT_SECONDARY);
     
-    label->setStyleSheet(modernDescStyle);
+    label->setStyleSheet(StreamUP::UIStyles::scale_qss(modernDescStyle));
     label->setWordWrap(true);
     label->setAlignment(Qt::AlignCenter);
     return label;
@@ -743,7 +743,7 @@ QLabel* CreateStyledContent(const QString& text) {
      .arg(Colors::INFO)
      .arg(Colors::PRIMARY_HOVER);
     
-    label->setStyleSheet(modernContentStyle);
+    label->setStyleSheet(StreamUP::UIStyles::scale_qss(modernContentStyle));
     label->setTextFormat(Qt::RichText);
     label->setWordWrap(true);
     label->setOpenExternalLinks(true);
@@ -758,7 +758,7 @@ QPushButton* CreateStyledButton(const QString& text, const QString& type, int he
     button->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     if (minWidth > 0)
         button->setMinimumWidth(minWidth);
-    button->setStyleSheet(GetButtonStyle(type, "", height));
+    button->setStyleSheet(StreamUP::UIStyles::scale_qss(GetButtonStyle(type, "", height)));
     return button;
 }
 
@@ -768,7 +768,7 @@ QPushButton* CreateStyledSquircleButton(const QString& text, const QString& type
     button->setCursor(Qt::PointingHandCursor);
     button->setFixedSize(size, size);
     button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    button->setStyleSheet(GetSquircleButtonStyle("", "", size));
+    button->setStyleSheet(StreamUP::UIStyles::scale_qss(GetSquircleButtonStyle("", "", size)));
     return button;
 }
 
@@ -776,7 +776,7 @@ QGroupBox* CreateStyledGroupBox(const QString& title, const QString& type) {
     QGroupBox* groupBox = new QGroupBox(title);
     
     // Apply modern StreamUP group box styling
-    groupBox->setStyleSheet(GetGroupBoxStyle("", ""));
+    groupBox->setStyleSheet(StreamUP::UIStyles::scale_qss(GetGroupBoxStyle("", "")));
     Q_UNUSED(type)
     
     return groupBox;
@@ -785,14 +785,14 @@ QGroupBox* CreateStyledGroupBox(const QString& title, const QString& type) {
 QWidget* CreateSectionHeader(const QString& text) {
     QWidget *section = new QWidget();
     QVBoxLayout *lay = new QVBoxLayout(section);
-    lay->setContentsMargins(0, 6, 0, 2);
-    lay->setSpacing(4);
+    lay->setContentsMargins(0, S(6), 0, S(2));
+    lay->setSpacing(S(4));
 
     QLabel *label = new QLabel(text);
-    label->setStyleSheet(
+    label->setStyleSheet(StreamUP::UIStyles::scale_qss(
         QString("color: %1; font-size: 13px; font-weight: 700; background: transparent; padding: 0;"
                 " font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;")
-            .arg(Colors::TEXT_SECONDARY));
+            .arg(Colors::TEXT_SECONDARY)));
     lay->addWidget(label);
 
     QFrame *line = new QFrame();
@@ -810,7 +810,7 @@ QScrollArea* CreateStyledScrollArea() {
     scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     // Apply modern StreamUP scrollbar styling
-    scrollArea->setStyleSheet(GetScrollAreaStyle());
+    scrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(GetScrollAreaStyle()));
     return scrollArea;
 }
 
@@ -834,7 +834,7 @@ QTableWidget* CreateStyledTableWidget(QWidget* parent) {
     table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
 
     // Apply styling
-    table->setStyleSheet(GetTableStyle());
+    table->setStyleSheet(StreamUP::UIStyles::scale_qss(GetTableStyle()));
 
     // Add context menu support for copying
     table->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -881,16 +881,16 @@ QWidget* GetTableContainer(QTableWidget* table) {
     QFrame *container = new QFrame(table->parentWidget());
     container->setObjectName("streamupTableWrapper");
     container->setAttribute(Qt::WA_StyledBackground, true);
-    container->setStyleSheet(
+    container->setStyleSheet(StreamUP::UIStyles::scale_qss(
         QString("QFrame#streamupTableWrapper {"
                 "  background-color: %1;"
                 "  border: 1px solid rgba(255,255,255,0.15);"
                 "  border-radius: %2px;"
                 "}")
             .arg(Colors::BG_PRIMARY)
-            .arg(Sizes::RADIUS_MD));
+            .arg(Sizes::RADIUS_MD)));
     QVBoxLayout *lay = new QVBoxLayout(container);
-    lay->setContentsMargins(1, 1, 1, 1);
+    lay->setContentsMargins(S(1), S(1), S(1), S(1));
     lay->setSpacing(0);
 
     // Propagate size constraints from table to container
@@ -1173,13 +1173,13 @@ StandardDialogComponents CreateStandardDialog(const QString& windowTitle, const 
     // No custom styling - let StreamUP theme handle header appearance
 
     QVBoxLayout* headerLayout = new QVBoxLayout(components.headerWidget);
-    headerLayout->setContentsMargins(20, 20, 20, 20);
+    headerLayout->setContentsMargins(S(20), S(20), S(20), S(20));
 
     components.titleLabel = CreateStyledTitle(headerTitle);
     components.titleLabel->setAlignment(Qt::AlignCenter);
     headerLayout->addWidget(components.titleLabel);
 
-    headerLayout->addSpacing(5);
+    headerLayout->addSpacing(S(5));
 
     components.subtitleLabel = CreateStyledDescription(headerDescription);
     headerLayout->addWidget(components.subtitleLabel);
@@ -1192,8 +1192,8 @@ StandardDialogComponents CreateStandardDialog(const QString& windowTitle, const 
     components.contentWidget = new QWidget();
     // No custom styling - inherit from theme
     components.contentLayout = new QVBoxLayout(components.contentWidget);
-    components.contentLayout->setContentsMargins(20, 20, 20, 20);
-    components.contentLayout->setSpacing(20);
+    components.contentLayout->setContentsMargins(S(20), S(20), S(20), S(20));
+    components.contentLayout->setSpacing(S(20));
 
     components.scrollArea->setWidget(components.contentWidget);
     mainLayout->addWidget(components.scrollArea);
@@ -1597,7 +1597,7 @@ void ApplyStreamUPThemeStyles(QWidget* widget) {
         "}"
     ) + GetEnhancedScrollAreaStyle();
     
-    widget->setStyleSheet(globalStyle);
+    widget->setStyleSheet(StreamUP::UIStyles::scale_qss(globalStyle));
 }
 
 //-------------------OBS/QT-COMPLIANT STYLING FUNCTIONS-------------------

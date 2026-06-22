@@ -203,7 +203,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		
 		// First info text (main message)
 		QLabel *info1 = CreateRichTextLabel(infoText1Str, false, true, Qt::AlignCenter);
-		info1->setStyleSheet(QString(
+		info1->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 			"QLabel {"
 			"color: %1;"
 			"font-size: %2px;"
@@ -211,31 +211,31 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 			"background: transparent;"
 			"border: none;"
 			"}").arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-			   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+			   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		messageLayout->addWidget(info1);
 
 		// Second info text
 		QLabel *info2 = CreateRichTextLabel(infoText2Str, false, true, Qt::AlignCenter);
-		info2->setStyleSheet(QString(
+		info2->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 			"QLabel {"
 			"color: %1;"
 			"font-size: %2px;"
 			"background: transparent;"
 			"border: none;"
 			"}").arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-			   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+			   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
 		messageLayout->addWidget(info2);
 
 		// Third info text
 		QLabel *info3 = CreateRichTextLabel(infoText3Str, false, true, Qt::AlignCenter);
-		info3->setStyleSheet(QString(
+		info3->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 			"QLabel {"
 			"color: %1;"
 			"font-size: %2px;"
 			"background: transparent;"
 			"border: none;"
 			"}").arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-			   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+			   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
 		messageLayout->addWidget(info3);
 		
 		dialogLayout->addWidget(messageGroup);
@@ -307,8 +307,8 @@ QLabel *CreateIconLabel(const QStyle::StandardPixmap &iconName)
 #else
 	int pixmapSize = 64;
 #endif
-	icon->setPixmap(QApplication::style()->standardIcon(iconName).pixmap(pixmapSize, pixmapSize));
-	icon->setStyleSheet("padding-top: 3px;");
+	icon->setPixmap(QApplication::style()->standardIcon(iconName).pixmap(StreamUP::UIStyles::S(pixmapSize), StreamUP::UIStyles::S(pixmapSize)));
+	icon->setStyleSheet(StreamUP::UIStyles::scale_qss("padding-top: 3px;"));
 	return icon;
 }
 
@@ -320,7 +320,7 @@ QHBoxLayout *AddIconAndText(const QStyle::StandardPixmap &iconText, const char *
 
 	QHBoxLayout *iconTextLayout = new QHBoxLayout();
 	iconTextLayout->addWidget(icon, 0, Qt::AlignTop);
-	iconTextLayout->addSpacing(10);
+	iconTextLayout->addSpacing(StreamUP::UIStyles::S(10));
 	text->setWordWrap(true);
 	iconTextLayout->addWidget(text, 1);
 
@@ -330,7 +330,7 @@ QHBoxLayout *AddIconAndText(const QStyle::StandardPixmap &iconText, const char *
 QVBoxLayout *CreateVBoxLayout(QWidget *parent)
 {
 	QVBoxLayout *layout = new QVBoxLayout(parent);
-	layout->setContentsMargins(20, 15, 20, 10);
+	layout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(15), StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(10));
 	return layout;
 }
 

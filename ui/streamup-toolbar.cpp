@@ -859,7 +859,7 @@ void StreamUPToolbar::updateLayoutOrientation()
 			mainLayout->setContentsMargins(0, 0, 0, 0);
 			// No alignment needed for horizontal layout (default is fine)
 		}
-		mainLayout->setSpacing(1);
+		mainLayout->setSpacing(StreamUP::UIStyles::S(1));
 
 		// Re-add widgets with proper orientation handling, including StreamUP button positioning
 		QWidget* streamupButton = nullptr;
@@ -1084,7 +1084,7 @@ void StreamUPToolbar::setupDynamicUI()
 	centralWidget->setObjectName("StreamUPToolbarCentralWidget");
 	mainLayout = new QHBoxLayout(centralWidget);
 	mainLayout->setContentsMargins(0, 0, 0, 0);
-	mainLayout->setSpacing(1);
+	mainLayout->setSpacing(StreamUP::UIStyles::S(1));
 	
 	// Clear existing buttons and properly clean up old references
 	dynamicButtons.clear();

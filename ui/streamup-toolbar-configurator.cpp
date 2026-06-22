@@ -56,30 +56,30 @@ void ToolbarConfigurator::setupUI()
     // Create splitter for left and right panels
     mainSplitter = new QSplitter(Qt::Horizontal, this);
     // Style the splitter handle to use darkest color
-    mainSplitter->setStyleSheet(
+    mainSplitter->setStyleSheet(StreamUP::UIStyles::scale_qss(
         "QSplitter::handle { "
         "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_DARKEST) + "; "
         "    width: 2px; "
         "}"
-    );
+    ));
     mainLayout->addWidget(mainSplitter);
     
     // === LEFT PANEL: Available items ===
     leftPanel = new QWidget();
-    leftPanel->setStyleSheet("QWidget { background-color: " + QString(StreamUP::UIStyles::Colors::BG_PRIMARY) + "; border: none; border-radius: 24px;}");
+    leftPanel->setStyleSheet(StreamUP::UIStyles::scale_qss("QWidget { background-color: " + QString(StreamUP::UIStyles::Colors::BG_PRIMARY) + "; border: none; border-radius: 24px;}"));
     leftLayout = new QVBoxLayout(leftPanel);
-    leftLayout->setContentsMargins(12, 12, 12, 12); // Standard margins
-    leftLayout->setSpacing(12);
+    leftLayout->setContentsMargins(StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12)); // Standard margins
+    leftLayout->setSpacing(StreamUP::UIStyles::S(12));
     
     // Add heading to left panel
     QLabel* leftHeading = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AvailableItems")));
-    leftHeading->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
+    leftHeading->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetDescriptionLabelStyle()));
     leftLayout->addWidget(leftHeading);
     
     // Create tab widget
     itemTabWidget = new QTabWidget();
     // Style the tab widget with pill-shaped tabs and darkest color
-    itemTabWidget->setStyleSheet(
+    itemTabWidget->setStyleSheet(StreamUP::UIStyles::scale_qss(
         "QTabWidget::pane { "
         "    border: none; "
         "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_PRIMARY) + "; "
@@ -107,20 +107,20 @@ void ToolbarConfigurator::setupUI()
 				 "; "
         "    color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
         "}"
-    );
+    ));
     leftLayout->addWidget(itemTabWidget);
     
     // === TAB 1: Built-in Buttons ===
     QWidget* builtinTab = new QWidget();
     QVBoxLayout* builtinTabLayout = new QVBoxLayout(builtinTab);
-    builtinTabLayout->setContentsMargins(12, 12, 12, 12); // Standard margins
-    builtinTabLayout->setSpacing(12);
+    builtinTabLayout->setContentsMargins(StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12)); // Standard margins
+    builtinTabLayout->setSpacing(StreamUP::UIStyles::S(12));
     
     builtinButtonsList = new QTreeWidget();
     builtinButtonsList->setHeaderHidden(true);
     builtinButtonsList->setRootIsDecorated(true);
     builtinButtonsList->setIndentation(0); // No indentation - we'll handle it with styling
-    builtinButtonsList->setStyleSheet(
+    builtinButtonsList->setStyleSheet(StreamUP::UIStyles::scale_qss(
         "QTreeWidget { "
         "    border: none; "
         "    border-radius: 12px; "
@@ -188,7 +188,7 @@ void ToolbarConfigurator::setupUI()
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { "
         "    height: 0px; "
         "}"
-    );
+    ));
     builtinTabLayout->addWidget(builtinButtonsList, 1); // Give tree widget stretch priority
     
     // Add spacer to push button to bottom
@@ -196,7 +196,7 @@ void ToolbarConfigurator::setupUI()
     
     addBuiltinButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddSelectedButton")));
     addBuiltinButton->setEnabled(false);
-    addBuiltinButton->setStyleSheet(UIStyles::GetButtonStyle());
+    addBuiltinButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
     builtinTabLayout->addWidget(addBuiltinButton, 0); // Don't stretch button
     
     itemTabWidget->addTab(builtinTab, "OBS");
@@ -204,14 +204,14 @@ void ToolbarConfigurator::setupUI()
     // === TAB 2: StreamUP Dock Buttons ===
     QWidget* dockTab = new QWidget();
     QVBoxLayout* dockTabLayout = new QVBoxLayout(dockTab);
-    dockTabLayout->setContentsMargins(12, 12, 12, 12); // Standard margins
-    dockTabLayout->setSpacing(12);
+    dockTabLayout->setContentsMargins(StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12)); // Standard margins
+    dockTabLayout->setSpacing(StreamUP::UIStyles::S(12));
     
     dockButtonsList = new QTreeWidget();
     dockButtonsList->setHeaderHidden(true);
     dockButtonsList->setRootIsDecorated(true);
     dockButtonsList->setIndentation(0); // No indentation - we'll handle it with styling
-    dockButtonsList->setStyleSheet(
+    dockButtonsList->setStyleSheet(StreamUP::UIStyles::scale_qss(
         "QTreeWidget { "
         "    border: none; "
         "    border-radius: 12px; "
@@ -279,7 +279,7 @@ void ToolbarConfigurator::setupUI()
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { "
         "    height: 0px; "
         "}"
-    );
+    ));
     dockTabLayout->addWidget(dockButtonsList, 1); // Give tree widget stretch priority
     
     // Add spacer to push button to bottom
@@ -287,7 +287,7 @@ void ToolbarConfigurator::setupUI()
     
     addDockButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddSelectedDockButton")));
     addDockButton->setEnabled(false);
-    addDockButton->setStyleSheet(UIStyles::GetButtonStyle());
+    addDockButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
     dockTabLayout->addWidget(addDockButton, 0); // Don't stretch button
     
     itemTabWidget->addTab(dockTab, QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.StreamUPTab")));
@@ -295,34 +295,34 @@ void ToolbarConfigurator::setupUI()
     // === TAB 3: Hotkey Buttons ===
     QWidget* hotkeyTab = new QWidget();
     QVBoxLayout* hotkeyTabLayout = new QVBoxLayout(hotkeyTab);
-    hotkeyTabLayout->setContentsMargins(12, 12, 12, 12); // Standard margins
-    hotkeyTabLayout->setSpacing(12);
+    hotkeyTabLayout->setContentsMargins(StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12)); // Standard margins
+    hotkeyTabLayout->setSpacing(StreamUP::UIStyles::S(12));
     
     // Create background container to match other tabs
     QWidget* hotkeyContainer = new QWidget();
-    hotkeyContainer->setStyleSheet(
+    hotkeyContainer->setStyleSheet(StreamUP::UIStyles::scale_qss(
         "QWidget { "
         "    border: none; "
         "    border-radius: 12px; "
         "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_DARKEST) + "; "
         "}"
-    );
+    ));
     QVBoxLayout* hotkeyContainerLayout = new QVBoxLayout(hotkeyContainer);
-    hotkeyContainerLayout->setContentsMargins(8, 8, 8, 8);
-    hotkeyContainerLayout->setSpacing(6);
+    hotkeyContainerLayout->setContentsMargins(StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8));
+    hotkeyContainerLayout->setSpacing(StreamUP::UIStyles::S(6));
     
     // Hotkey button section
     QLabel* hotkeyLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.HotkeyButtons")));
-    hotkeyLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
+    hotkeyLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetDescriptionLabelStyle()));
     hotkeyContainerLayout->addWidget(hotkeyLabel);
     
     QLabel* hotkeyDescription = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.HotkeyDescription")));
     hotkeyDescription->setWordWrap(true);
-    hotkeyDescription->setStyleSheet("QLabel { color: " + QString(StreamUP::UIStyles::Colors::TEXT_SECONDARY) + "; font-size: 12px; }");
+    hotkeyDescription->setStyleSheet(StreamUP::UIStyles::scale_qss("QLabel { color: " + QString(StreamUP::UIStyles::Colors::TEXT_SECONDARY) + "; font-size: 12px; }"));
     hotkeyContainerLayout->addWidget(hotkeyDescription);
     
     addHotkeyButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddHotkeyButton")));
-    addHotkeyButton->setStyleSheet(UIStyles::GetButtonStyle());
+    addHotkeyButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
     hotkeyContainerLayout->addWidget(addHotkeyButton);
     
     hotkeyContainerLayout->addStretch(); // Push content to top
@@ -334,25 +334,25 @@ void ToolbarConfigurator::setupUI()
     // === TAB 4: Spacers & Separators ===
     QWidget* spacerTab = new QWidget();
     QVBoxLayout* spacerTabLayout = new QVBoxLayout(spacerTab);
-    spacerTabLayout->setContentsMargins(12, 12, 12, 12); // Standard margins  
+    spacerTabLayout->setContentsMargins(StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12)); // Standard margins  
     spacerTabLayout->setSpacing(0);
     
     // Create background container to match tree widgets
     QWidget* spacerContainer = new QWidget();
-    spacerContainer->setStyleSheet(
+    spacerContainer->setStyleSheet(StreamUP::UIStyles::scale_qss(
         "QWidget { "
         "    border: none; "
         "    border-radius: 12px; "
         "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_DARKEST) + "; "
         "}"
-    );
+    ));
     QVBoxLayout* spacerContainerLayout = new QVBoxLayout(spacerContainer);
-    spacerContainerLayout->setContentsMargins(8, 8, 8, 8);
-    spacerContainerLayout->setSpacing(6);
+    spacerContainerLayout->setContentsMargins(StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8));
+    spacerContainerLayout->setSpacing(StreamUP::UIStyles::S(6));
     
     // Custom spacer section
     QLabel* spacerLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.CustomSpacer")));
-    spacerLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
+    spacerLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetDescriptionLabelStyle()));
     spacerContainerLayout->addWidget(spacerLabel);
     
     QHBoxLayout* sizeLayout = new QHBoxLayout();
@@ -360,22 +360,22 @@ void ToolbarConfigurator::setupUI()
     spacerSizeSpinBox = new QSpinBox();
     spacerSizeSpinBox->setRange(5, 200);
     spacerSizeSpinBox->setValue(20);
-    spacerSizeSpinBox->setStyleSheet(UIStyles::GetSpinBoxStyle());
+    spacerSizeSpinBox->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetSpinBoxStyle()));
     sizeLayout->addWidget(spacerSizeSpinBox);
     sizeLayout->addStretch();
     spacerContainerLayout->addLayout(sizeLayout);
     
     addCustomSpacerButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddCustomSpacer")));
-    addCustomSpacerButton->setStyleSheet(UIStyles::GetButtonStyle());
+    addCustomSpacerButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
     spacerContainerLayout->addWidget(addCustomSpacerButton);
     
     // Separator section
     QLabel* separatorLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.Separator")));
-    separatorLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle());
+    separatorLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetDescriptionLabelStyle()));
     spacerContainerLayout->addWidget(separatorLabel);
     
     addSeparatorButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddSeparator")));
-    addSeparatorButton->setStyleSheet(UIStyles::GetButtonStyle());
+    addSeparatorButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
     spacerContainerLayout->addWidget(addSeparatorButton);
     
     spacerTabLayout->addWidget(spacerContainer);
@@ -386,17 +386,17 @@ void ToolbarConfigurator::setupUI()
     
     // === RIGHT PANEL: Current configuration ===
     rightPanel = new QWidget();
-    rightPanel->setStyleSheet("QWidget { background-color: " + QString(StreamUP::UIStyles::Colors::BG_PRIMARY) + "; border: none; border-radius: 24px;}");
+    rightPanel->setStyleSheet(StreamUP::UIStyles::scale_qss("QWidget { background-color: " + QString(StreamUP::UIStyles::Colors::BG_PRIMARY) + "; border: none; border-radius: 24px;}"));
     rightLayout = new QVBoxLayout(rightPanel);
-    rightLayout->setContentsMargins(12, 12, 12, 12);
-    rightLayout->setSpacing(12);
+    rightLayout->setContentsMargins(StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12));
+    rightLayout->setSpacing(StreamUP::UIStyles::S(12));
     
     configLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.CurrentConfiguration")));
-    configLabel->setStyleSheet(UIStyles::GetDescriptionLabelStyle() + "font-weight: bold;");
+    configLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetDescriptionLabelStyle() + "font-weight: bold;"));
     rightLayout->addWidget(configLabel);
     
     currentConfigList = new DraggableListWidget();
-    currentConfigList->setStyleSheet(
+    currentConfigList->setStyleSheet(StreamUP::UIStyles::scale_qss(
         "QListWidget { "
         "    border: none; "
         "    border-radius: 12px; "
@@ -441,7 +441,7 @@ void ToolbarConfigurator::setupUI()
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { "
         "    height: 0px; "
         "}"
-    );
+    ));
     rightLayout->addWidget(currentConfigList, 1); // Give list widget stretch priority
     
     // Add spacer to push buttons to bottom - matching left panel
@@ -452,23 +452,23 @@ void ToolbarConfigurator::setupUI()
     
     removeButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.Remove")));
     removeButton->setEnabled(false);
-    removeButton->setStyleSheet(UIStyles::GetButtonStyle());
+    removeButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
     configButtonsLayout->addWidget(removeButton);
     
     moveUpButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.MoveUp")));
     moveUpButton->setEnabled(false);
-    moveUpButton->setStyleSheet(UIStyles::GetButtonStyle());
+    moveUpButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
     configButtonsLayout->addWidget(moveUpButton);
     
     moveDownButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.MoveDown")));
     moveDownButton->setEnabled(false);
-    moveDownButton->setStyleSheet(UIStyles::GetButtonStyle());
+    moveDownButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
     configButtonsLayout->addWidget(moveDownButton);
     
     configButtonsLayout->addStretch();
     
     resetButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.ResetToDefault")));
-    resetButton->setStyleSheet(UIStyles::GetButtonStyle());
+    resetButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
     configButtonsLayout->addWidget(resetButton);
     
     rightLayout->addLayout(configButtonsLayout);
@@ -796,7 +796,7 @@ void ToolbarConfigurator::createExpandIndicator(QTreeWidget* treeWidget, QTreeWi
     
     QHBoxLayout* layout = new QHBoxLayout(containerWidget);
     layout->setContentsMargins(0, 0, 0, 0); // No margins needed with proper indentation
-    layout->setSpacing(6); // Space between icon and text
+    layout->setSpacing(StreamUP::UIStyles::S(6)); // Space between icon and text
     
     // Create the expand/collapse indicator
     QCheckBox* expandIndicator = new QCheckBox();

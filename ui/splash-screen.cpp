@@ -52,7 +52,7 @@ class ImageCarousel : public QWidget
 public:
     explicit ImageCarousel(QWidget* parent = nullptr) : QWidget(parent), currentIndex(0)
     {
-        setFixedHeight(300);
+        setFixedHeight(StreamUP::UIStyles::S(300));
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         setupUI();
     }
@@ -98,7 +98,7 @@ protected:
 
         // Image container
         imageContainer = new QFrame();
-        imageContainer->setFixedHeight(250);
+        imageContainer->setFixedHeight(StreamUP::UIStyles::S(250));
         imageContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         imageContainer->setStyleSheet("QFrame { background: transparent; border: none; }");
 
@@ -121,7 +121,7 @@ protected:
         // Dots indicator - centered
         dotsContainer = new QHBoxLayout();
         dotsContainer->setContentsMargins(0, 0, 0, 0);
-        dotsContainer->setSpacing(8);
+        dotsContainer->setSpacing(StreamUP::UIStyles::S(8));
         dotsContainer->addStretch();
 
         layout->addWidget(imageContainer);
@@ -135,10 +135,10 @@ protected:
         for (int i = 0; i < images.size(); ++i) {
             QPushButton* dot = new QPushButton();
             dot->setText("");
-            dot->setFixedSize(10, 10);
+            dot->setFixedSize(StreamUP::UIStyles::S(10), StreamUP::UIStyles::S(10));
             dot->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
             dot->setFlat(true);
-            dot->setStyleSheet(QString(
+            dot->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
                 "QPushButton {"
                 "    background-color: %1;"
                 "    border: none;"
@@ -148,7 +148,7 @@ protected:
                 "    background-color: %2;"
                 "}"
             ).arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-             .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY));
+             .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)));
 
             connect(dot, &QPushButton::clicked, this, [this, i]() {
                 goToImage(i);
@@ -196,7 +196,7 @@ protected:
             ).arg(i == currentIndex ? StreamUP::UIStyles::Colors::PRIMARY_COLOR : StreamUP::UIStyles::Colors::TEXT_MUTED)
              .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY);
 
-            dots[i]->setStyleSheet(style);
+            dots[i]->setStyleSheet(StreamUP::UIStyles::scale_qss(style));
         }
     }
 
@@ -251,7 +251,7 @@ protected:
         outerLayout->addWidget(zoomCard);
 
         QVBoxLayout* layout = new QVBoxLayout(zoomCard);
-        layout->setContentsMargins(20, 20, 20, 20);
+        layout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
 
         // Full-size image label with fixed container size
         QLabel* fullImageLabel = new QLabel();
@@ -271,16 +271,16 @@ protected:
         instructionLabel->setAlignment(Qt::AlignCenter);
 
         layout->addWidget(fullImageLabel, 1);
-        layout->addSpacing(10);
+        layout->addSpacing(StreamUP::UIStyles::S(10));
         layout->addWidget(instructionLabel);
 
         // Fixed dialog size (+ shadow margin)
-        zoomDialog->setFixedSize(860 + 2 * sm, 720 + 2 * sm);
+        zoomDialog->setFixedSize(StreamUP::UIStyles::S(860) + 2 * sm, StreamUP::UIStyles::S(720) + 2 * sm);
 
         // Center on screen
         zoomDialog->move(
-            (QApplication::primaryScreen()->geometry().width() - (860 + 2 * sm)) / 2,
-            (QApplication::primaryScreen()->geometry().height() - (720 + 2 * sm)) / 2
+            (QApplication::primaryScreen()->geometry().width() - (StreamUP::UIStyles::S(860) + 2 * sm)) / 2,
+            (QApplication::primaryScreen()->geometry().height() - (StreamUP::UIStyles::S(720) + 2 * sm)) / 2
         );
 
         // Install event filter for closing on click
@@ -1118,9 +1118,9 @@ void CreateSplashDialog(ShowCondition condition)
 
                     // Create external navigation buttons
                     QPushButton* explorerPrevButton = StreamUP::UIStyles::CreateStyledButton("❮", "neutral", 40);
-                    explorerPrevButton->setFixedSize(40, 40);
+                    explorerPrevButton->setFixedSize(StreamUP::UIStyles::S(40), StreamUP::UIStyles::S(40));
                     QPushButton* explorerNextButton = StreamUP::UIStyles::CreateStyledButton("❯", "neutral", 40);
-                    explorerNextButton->setFixedSize(40, 40);
+                    explorerNextButton->setFixedSize(StreamUP::UIStyles::S(40), StreamUP::UIStyles::S(40));
 
                     // Connect buttons to carousel
                     QObject::connect(explorerPrevButton, &QPushButton::clicked, explorerCarousel, &SourceExplorerCarousel::previousImage);
@@ -1168,9 +1168,9 @@ void CreateSplashDialog(ShowCondition condition)
 
                     // Create external navigation buttons
                     QPushButton* prevButton = StreamUP::UIStyles::CreateStyledButton("❮", "neutral", 40);
-                    prevButton->setFixedSize(40, 40);
+                    prevButton->setFixedSize(StreamUP::UIStyles::S(40), StreamUP::UIStyles::S(40));
                     QPushButton* nextButton = StreamUP::UIStyles::CreateStyledButton("❯", "neutral", 40);
-                    nextButton->setFixedSize(40, 40);
+                    nextButton->setFixedSize(StreamUP::UIStyles::S(40), StreamUP::UIStyles::S(40));
 
                     // Connect buttons to carousel
                     QObject::connect(prevButton, &QPushButton::clicked, carousel, &ThemeImageCarousel::previousImage);
@@ -1239,7 +1239,7 @@ void CreateSplashDialog(ShowCondition condition)
 
                     QPushButton* kofiBtn = StreamUP::UIStyles::CreateStyledButton("Ko-Fi", "warning");
                     kofiBtn->setIcon(QIcon(":images/icons/social/kofi.svg"));
-                    kofiBtn->setIconSize(QSize(16, 16));
+                    kofiBtn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
                     kofiBtn->setToolTip("Support us on Ko-Fi");
                     QObject::connect(kofiBtn, &QPushButton::clicked, []() {
                         QDesktopServices::openUrl(QUrl("https://ko-fi.com/streamup"));
@@ -1247,7 +1247,7 @@ void CreateSplashDialog(ShowCondition condition)
 
                     QPushButton* patreonBtn = StreamUP::UIStyles::CreateStyledButton("Patreon", "warning");
                     patreonBtn->setIcon(QIcon(":images/icons/social/patreon.svg"));
-                    patreonBtn->setIconSize(QSize(16, 16));
+                    patreonBtn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
                     patreonBtn->setToolTip("Support us on Patreon");
                     QObject::connect(patreonBtn, &QPushButton::clicked, []() {
                         QDesktopServices::openUrl(QUrl("https://www.patreon.com/streamup"));
@@ -1255,7 +1255,7 @@ void CreateSplashDialog(ShowCondition condition)
 
                     QPushButton* andiBtn = StreamUP::UIStyles::CreateStyledButton("Support Andi", "info");
                     andiBtn->setIcon(QIcon(":images/icons/social/doras.svg"));
-                    andiBtn->setIconSize(QSize(16, 16));
+                    andiBtn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
                     andiBtn->setToolTip("Support Andi Personally");
                     QObject::connect(andiBtn, &QPushButton::clicked, []() {
                         QDesktopServices::openUrl(QUrl("https://andilippi.co.uk/en-gbp"));
@@ -1290,7 +1290,7 @@ void CreateSplashDialog(ShowCondition condition)
         ClickableBanner* earlyAccessBanner = new ClickableBanner();
         earlyAccessBanner->setObjectName("earlyAccessBanner");
         earlyAccessBanner->setCursor(Qt::PointingHandCursor);
-        earlyAccessBanner->setStyleSheet(QString(
+        earlyAccessBanner->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
             "QWidget#earlyAccessBanner {"
             "    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
             "        stop:0 #f59e0b, stop:0.5 #fbbf24, stop:1 #f59e0b);"
@@ -1302,7 +1302,7 @@ void CreateSplashDialog(ShowCondition condition)
             "        stop:0 #d97706, stop:0.5 #f59e0b, stop:1 #d97706);"
             "}"
         ).arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
-         .arg(StreamUP::UIStyles::Sizes::PADDING_LARGE));
+         .arg(StreamUP::UIStyles::Sizes::PADDING_LARGE)));
 
         QHBoxLayout* bannerLayout = new QHBoxLayout(earlyAccessBanner);
         bannerLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
@@ -1318,9 +1318,9 @@ void CreateSplashDialog(ShowCondition condition)
             "Unlock Source Explorer, exclusive OBS theme, Stream widgets and more. Click to find out more."
             "</div>",
             earlyAccessBanner);
-        bannerText->setStyleSheet(QString(
+        bannerText->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
             "color: #78350f; font-size: %1px; font-weight: 400; background: transparent;"
-        ).arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
+        ).arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
         bannerText->setWordWrap(true);
         bannerText->setAlignment(Qt::AlignCenter);
 
@@ -1380,7 +1380,7 @@ void CreateSplashDialog(ShowCondition condition)
         if (!textLogoLoaded) {
             // Fallback to text if logo fails to load - static size
             textLogoLabel->setText("StreamUP");
-            textLogoLabel->setStyleSheet(QString(
+            textLogoLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
                 "QLabel {"
                 "font-size: %1px;"
                 "font-weight: bold;"
@@ -1388,7 +1388,7 @@ void CreateSplashDialog(ShowCondition condition)
                 "    stop:0 #f472b6, stop:0.25 #a855f7, stop:0.5 #89b4fa, stop:1 #06b6d4);"
                 "margin: 0;"
                 "}")
-                .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_LARGE));
+                .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_LARGE)));
         }
         textLogoLabel->setAlignment(Qt::AlignCenter);
         textLogoLabel->setStyleSheet(textLogoLabel->styleSheet() + "QLabel { padding: 0; margin: 0; }");
@@ -1461,28 +1461,28 @@ void CreateSplashDialog(ShowCondition condition)
             
         QPushButton* patreonBtn = StreamUP::UIStyles::CreateStyledButton("Patreon", "info");
         patreonBtn->setIcon(QIcon(":images/icons/social/patreon.svg"));
-        patreonBtn->setIconSize(QSize(16, 16));
+        patreonBtn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
         QObject::connect(patreonBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://www.patreon.com/streamup"));
         });
         
         QPushButton* kofiBtn = StreamUP::UIStyles::CreateStyledButton("Ko-Fi", "info");
         kofiBtn->setIcon(QIcon(":images/icons/social/kofi.svg"));
-        kofiBtn->setIconSize(QSize(16, 16));
+        kofiBtn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
         QObject::connect(kofiBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://ko-fi.com/streamup"));
         });
         
         QPushButton* beerBtn = StreamUP::UIStyles::CreateStyledButton("Buy a Beer", "warning");
         beerBtn->setIcon(QIcon(":images/icons/social/beer.svg"));
-        beerBtn->setIconSize(QSize(16, 16));
+        beerBtn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
         QObject::connect(beerBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.lemonsqueezy.com/buy/15f64c2f-8b8c-443e-bd6c-e8bf49a0fc97"));
         });
         
         QPushButton* githubBtn = StreamUP::UIStyles::CreateStyledButton("Star Project", "neutral");
         githubBtn->setIcon(QIcon(":images/icons/social/github.svg"));
-        githubBtn->setIconSize(QSize(16, 16));
+        githubBtn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
         QObject::connect(githubBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://github.com/StreamUPTips/obs-streamup"));
         });
@@ -1500,17 +1500,17 @@ void CreateSplashDialog(ShowCondition condition)
         // Wrapper card so the section reads as a distinct panel.
         QFrame *supportersCard = new QFrame();
         supportersCard->setObjectName("supportersCard");
-        supportersCard->setStyleSheet(QString(
+        supportersCard->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
             "QFrame#supportersCard { background: %1; border: 1px solid %2; border-radius: 14px; }")
             .arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-            .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE));
+            .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)));
         QVBoxLayout *supportersCardLay = new QVBoxLayout(supportersCard);
-        supportersCardLay->setContentsMargins(20, 18, 20, 20);
-        supportersCardLay->setSpacing(12);
+        supportersCardLay->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(18), StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
+        supportersCardLay->setSpacing(StreamUP::UIStyles::S(12));
 
         QLabel *supportersTitle = new QLabel("Thank You to Our Supporters");
-        supportersTitle->setStyleSheet(QString("color: %1; font-size: 16px; font-weight: 700; background: transparent;")
-            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
+        supportersTitle->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 16px; font-weight: 700; background: transparent;")
+            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)));
         supportersCardLay->addWidget(supportersTitle);
 
         // Two named groups (Andi / StreamUP) live as inner sub-cards inside the
@@ -1538,9 +1538,9 @@ void CreateSplashDialog(ShowCondition condition)
             g.card->setStyleSheet(QString("QFrame { background: transparent; border: none; }"));
             g.cardLay = new QVBoxLayout(g.card);
             g.cardLay->setContentsMargins(0, 0, 0, 0);
-            g.cardLay->setSpacing(10);
+            g.cardLay->setSpacing(StreamUP::UIStyles::S(10));
             QLabel *t = new QLabel(title);
-            t->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;").arg(accent));
+            t->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;").arg(accent)));
             g.cardLay->addWidget(t);
             g.flowHost = new QWidget();
             g.flowHost->setStyleSheet("background: transparent;");
@@ -1565,25 +1565,25 @@ void CreateSplashDialog(ShowCondition condition)
         // cascade onto child QLabels.
         QFrame *optInBox = new QFrame();
         optInBox->setObjectName("optInBox");
-        optInBox->setStyleSheet(QString(
+        optInBox->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
             "QFrame#optInBox { background: %1; border: 1px solid %2; border-radius: 12px; }"
             "QFrame#optInBox QLabel { background: transparent; border: none; }")
             .arg(StreamUP::UIStyles::Colors::BG_TERTIARY)
-            .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE));
+            .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)));
         QVBoxLayout *optInLay = new QVBoxLayout(optInBox);
-        optInLay->setContentsMargins(16, 14, 16, 14);
-        optInLay->setSpacing(6);
+        optInLay->setContentsMargins(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(14), StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(14));
+        optInLay->setSpacing(StreamUP::UIStyles::S(6));
         QLabel *optInTitle = new QLabel("If you're a supporter and your name is not here");
-        optInTitle->setStyleSheet(QString("color: %1; font-size: 13px; font-weight: 700;")
-            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
+        optInTitle->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 13px; font-weight: 700;")
+            .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)));
         QLabel *optInBody = new QLabel("This is an opt-in feature which you can enable in your account settings. You can opt-in right now and choose exactly how your name will appear.");
         optInBody->setWordWrap(true);
-        optInBody->setStyleSheet(QString("color: %1; font-size: 12px;")
-            .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY));
+        optInBody->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 12px;")
+            .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)));
         QLabel *optInLink = new QLabel(QString(R"(<a href="https://streamup.tips/Identity/Account/Manage" style="color: %1; text-decoration: underline;">https://streamup.tips/Identity/Account/Manage</a>)")
             .arg(StreamUP::UIStyles::Colors::PRIMARY_LIGHT));
         optInLink->setOpenExternalLinks(true);
-        optInLink->setStyleSheet("font-size: 12px;");
+        optInLink->setStyleSheet(StreamUP::UIStyles::scale_qss("font-size: 12px;"));
         optInLay->addWidget(optInTitle);
         optInLay->addWidget(optInBody);
         optInLay->addWidget(optInLink);
@@ -1606,7 +1606,7 @@ void CreateSplashDialog(ShowCondition condition)
                     .arg(g.badgeBg, g.badgeFg);
                 for (const auto &supporter : list) {
                     QLabel *badge = new QLabel(supporter.displayName);
-                    badge->setStyleSheet(style);
+                    badge->setStyleSheet(StreamUP::UIStyles::scale_qss(style));
                     g.flow->addWidget(badge);
                 }
             };
@@ -1660,7 +1660,7 @@ void CreateSplashDialog(ShowCondition condition)
 
         QPushButton* discordBtn = StreamUP::UIStyles::CreateStyledButton("Discord", "info");
         discordBtn->setIcon(QIcon(":images/icons/social/discord.svg"));
-        discordBtn->setIconSize(QSize(16, 16));
+        discordBtn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
         QObject::connect(discordBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://discord.com/invite/RnDKRaVCEu"));
         });
@@ -1676,13 +1676,13 @@ void CreateSplashDialog(ShowCondition condition)
                                    const QString &bg, const QString &hover, const QString &fg) {
             QPushButton *btn = StreamUP::UIStyles::CreateStyledButton(text, "neutral");
             btn->setIcon(QIcon(iconPath));
-            btn->setIconSize(QSize(16, 16));
-            btn->setStyleSheet(QString(
+            btn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
+            btn->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
                 "QPushButton { background: %1; color: %3; border: 1px solid %1;"
                 "  border-radius: 12px; font-weight: bold; font-size: 11px;"
                 "  padding: 0 14px; min-height: 22px; max-height: 22px; min-width: 80px; }"
                 "QPushButton:hover { background: %2; border: 1px solid %2; }")
-                .arg(bg, hover, fg));
+                .arg(bg, hover, fg)));
             return btn;
         };
 

@@ -301,7 +301,7 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 			toast->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog | Qt::WindowStaysOnTopHint);
 			toast->setAttribute(Qt::WA_DeleteOnClose);
 			toast->setAttribute(Qt::WA_TranslucentBackground);
-			toast->setFixedSize(400 + 2 * sm, 100 + 2 * sm);
+			toast->setFixedSize(StreamUP::UIStyles::S(400) + 2 * sm, StreamUP::UIStyles::S(100) + 2 * sm);
 
 			QVBoxLayout *outerLayout = new QVBoxLayout(toast);
 			outerLayout->setContentsMargins(sm, sm, sm, sm);
@@ -316,28 +316,28 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 				StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
 				StreamUP::UIStyles::Sizes::PADDING_XL,
 				StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
-			toastLayout->setSpacing(8);
+			toastLayout->setSpacing(StreamUP::UIStyles::S(8));
 			
 			QLabel *messageLabel = new QLabel(obs_module_text("Plugin.Status.AllUpToDate"));
-			messageLabel->setStyleSheet(QString(
+			messageLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 				"QLabel {"
 				"color: %2;"
 				"font-size: %1px;"
 				"font-weight: bold;"
 				"background: transparent;"
 				"border: none;"
-				"}").arg(StreamUP::UIStyles::Sizes::FONT_SIZE_MEDIUM).arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+				"}").arg(StreamUP::UIStyles::Sizes::FONT_SIZE_MEDIUM).arg(StreamUP::UIStyles::Colors::BG_DARKEST)));
 			messageLabel->setAlignment(Qt::AlignCenter);
 			toastLayout->addWidget(messageLabel);
 
 			QLabel *countdownLabel = new QLabel(obs_module_text("Plugin.Message.AutoClosing3"));
-			countdownLabel->setStyleSheet(QString(
+			countdownLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 				"QLabel {"
 				"color: rgba(30, 30, 46, 0.75);"
 				"font-size: %1px;"
 				"background: transparent;"
 				"border: none;"
-				"}").arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY));
+				"}").arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)));
 			countdownLabel->setAlignment(Qt::AlignCenter);
 			toastLayout->addWidget(countdownLabel);
 			
@@ -397,11 +397,11 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		// Header section (same style as WebSocket Commands)
 		QWidget* headerWidget = new QWidget();
 		headerWidget->setObjectName("headerWidget");
-		headerWidget->setStyleSheet(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
+		headerWidget->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
 			.arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
 			.arg(StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM) // More padding at top
 			.arg(StreamUP::UIStyles::Sizes::PADDING_XL)
-			.arg(StreamUP::UIStyles::Sizes::PADDING_XL)); // Standard padding at bottom
+			.arg(StreamUP::UIStyles::Sizes::PADDING_XL))); // Standard padding at bottom
 		
 		QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
 		headerLayout->setContentsMargins(0, 0, 0, 0);
@@ -444,11 +444,11 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		if (hasMissing) {
 			// Create expandable GroupBox with table
 			QGroupBox *missingGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Plugin.Dialog.MissingGroup"), "error");
-			missingGroup->setMinimumWidth(500);
+			missingGroup->setMinimumWidth(StreamUP::UIStyles::S(500));
 			missingGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
 			
 			QVBoxLayout *missingLayout = new QVBoxLayout(missingGroup);
-			missingLayout->setContentsMargins(8, 8, 8, 8); // Reduced top margin from 20 to 8
+			missingLayout->setContentsMargins(StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8)); // Reduced top margin from 20 to 8
 			missingLayout->setSpacing(0); // Remove spacing around table
 			
 			// Create modern table widget
@@ -457,8 +457,8 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			StreamUP::UIStyles::ApplyDialogTableSizing(missingTable);
 
 			// Remove table border and background to blend with group box
-			missingTable->setStyleSheet(
-				missingTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET);
+			missingTable->setStyleSheet(StreamUP::UIStyles::scale_qss(
+				missingTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET));
 			
 			// Connect click handler for website/download links
 			QObject::connect(missingTable, &QTableWidget::cellClicked, 
@@ -473,11 +473,11 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		if (hasUpdates) {
 			// Create expandable GroupBox with table
 			QGroupBox *updateGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Plugin.Dialog.UpdateGroup"), "warning");
-			updateGroup->setMinimumWidth(500);
+			updateGroup->setMinimumWidth(StreamUP::UIStyles::S(500));
 			updateGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
 			
 			QVBoxLayout *updateLayout = new QVBoxLayout(updateGroup);
-			updateLayout->setContentsMargins(8, 8, 8, 8); // Reduced top margin from 20 to 8
+			updateLayout->setContentsMargins(StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8)); // Reduced top margin from 20 to 8
 			updateLayout->setSpacing(0); // Remove spacing around table
 			
 			// Create modern table widget
@@ -486,8 +486,8 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			StreamUP::UIStyles::ApplyDialogTableSizing(updateTable);
 
 			// Remove table border and background to blend with group box
-			updateTable->setStyleSheet(
-				updateTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET);
+			updateTable->setStyleSheet(StreamUP::UIStyles::scale_qss(
+				updateTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET));
 			
 			// Connect click handler for website/download links
 			QObject::connect(updateTable, &QTableWidget::cellClicked, 
@@ -502,11 +502,11 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		if (hasFailedToLoad) {
 			// Create expandable GroupBox with table for failed to load plugins
 			QGroupBox *failedGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Plugin.Dialog.FailedToLoadGroup"), "warning");
-			failedGroup->setMinimumWidth(500);
+			failedGroup->setMinimumWidth(StreamUP::UIStyles::S(500));
 			failedGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
 
 			QVBoxLayout *failedLayout = new QVBoxLayout(failedGroup);
-			failedLayout->setContentsMargins(8, 8, 8, 8);
+			failedLayout->setContentsMargins(StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8));
 			failedLayout->setSpacing(0);
 
 			// Create modern table widget
@@ -515,8 +515,8 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			StreamUP::UIStyles::ApplyDialogTableSizing(failedTable);
 
 			// Remove table border and background to blend with group box
-			failedTable->setStyleSheet(
-				failedTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET);
+			failedTable->setStyleSheet(StreamUP::UIStyles::scale_qss(
+				failedTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET));
 
 			// Connect click handler for website/download links
 			QObject::connect(failedTable, &QTableWidget::cellClicked,
@@ -537,7 +537,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 
 			QLabel *warningLabel = new QLabel("⚠️ " + QString(obs_module_text("Plugin.Dialog.WarningContinue")));
 			warningLabel->setWordWrap(true);
-			warningLabel->setStyleSheet(QString(
+			warningLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 				"QLabel {"
 				"background: rgba(45, 55, 72, 0.8);"
 				"color: #fbbf24;"
@@ -552,7 +552,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 				.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
 				.arg(StreamUP::UIStyles::Sizes::SPACING_SMALL)
 				.arg(StreamUP::UIStyles::Sizes::PADDING_XL + 5)
-				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
+				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
 			dialogLayout->addWidget(warningLabel);
 		}
 

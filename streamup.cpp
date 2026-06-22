@@ -102,7 +102,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
 		QGroupBox *info3Box = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("UI.Message.HowToUse"), "info");
-		info3Box->setMinimumWidth(350); // Keep specific width requirement for this dialog
+		info3Box->setMinimumWidth(StreamUP::UIStyles::S(350)); // Keep specific width requirement for this dialog
 		QVBoxLayout *info3BoxLayout = StreamUP::UIHelpers::CreateVBoxLayout(info3Box);
 		QLabel *info3 = StreamUP::UIHelpers::CreateRichTextLabel(infoText3Str, false, true);
 		QLabel *howTo1 = StreamUP::UIHelpers::CreateRichTextLabel(howTo1Str, false, true);
@@ -110,7 +110,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		QLabel *howTo3 = StreamUP::UIHelpers::CreateRichTextLabel(howTo3Str, false, true);
 		QLabel *howTo4 = StreamUP::UIHelpers::CreateRichTextLabel(howTo4Str, false, true);
 		info3BoxLayout->addWidget(info3);
-		info3BoxLayout->addSpacing(5);
+		info3BoxLayout->addSpacing(StreamUP::UIStyles::S(5));
 		info3BoxLayout->addWidget(howTo1);
 		info3BoxLayout->addWidget(howTo2);
 		info3BoxLayout->addWidget(howTo3);

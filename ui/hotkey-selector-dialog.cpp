@@ -56,13 +56,13 @@ void HotkeySelectorDialog::setupUI() {
     rightLayout = new QVBoxLayout(rightPanel);
     
     detailsGroup = new QGroupBox(obs_module_text("HotkeySelector.Group.Details"), rightPanel);
-    detailsGroup->setStyleSheet(UIStyles::GetGroupBoxStyle("", ""));
+    detailsGroup->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetGroupBoxStyle("", "")));
     QVBoxLayout* detailsLayout = new QVBoxLayout(detailsGroup);
     
     selectedHotkeyName = new QLabel(obs_module_text("HotkeySelector.Message.NoSelection"), detailsGroup);
-    selectedHotkeyName->setStyleSheet(QString("font-weight: bold; font-size: %1px; color: %2;")
+    selectedHotkeyName->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("font-weight: bold; font-size: %1px; color: %2;")
         .arg(UIStyles::Sizes::FONT_SIZE_NORMAL)
-        .arg(UIStyles::Colors::TEXT_PRIMARY));
+        .arg(UIStyles::Colors::TEXT_PRIMARY)));
     detailsLayout->addWidget(selectedHotkeyName);
     
     selectedHotkeyDescription = new QLabel("", detailsGroup);
@@ -74,7 +74,7 @@ void HotkeySelectorDialog::setupUI() {
     detailsLayout->addWidget(selectedHotkeyKeys);
     
     selectedHotkeyHelp = new QTextEdit(detailsGroup);
-    selectedHotkeyHelp->setMaximumHeight(100);
+    selectedHotkeyHelp->setMaximumHeight(StreamUP::UIStyles::S(100));
     selectedHotkeyHelp->setReadOnly(true);
     selectedHotkeyHelp->setPlainText(obs_module_text("HotkeySelector.Help.SelectHotkey"));
     detailsLayout->addWidget(selectedHotkeyHelp);
