@@ -105,16 +105,25 @@ void SwitchButton::paintEvent(QPaintEvent* event)
         painter.setPen(palette().text().color()); // Use system text color
         painter.setFont(QFont("Arial", Sizes::FONT_SIZE_NORMAL, Sizes::FONT_WEIGHT_NORMAL));
         QFontMetrics fm(painter.font());
-        textWidth = fm.horizontalAdvance(m_text) + 10;
+        textWidth = fm.horizontalAdvance(m_text) + S(10);
         painter.drawText(QRect(0, 0, textWidth, height()), Qt::AlignLeft | Qt::AlignVCenter, m_text);
     }
-    
+
+    // Scale the switch graphic geometry to match the OS text-size factor used
+    // by the widget's outer size (setFixedSize / sizeHint), so the drawing
+    // stays proportional inside the scaled widget. S() is a no-op at 100%.
+    const int switchW = S(SWITCH_WIDTH);
+    const int switchH = S(SWITCH_HEIGHT);
+    const int knobW = S(KNOB_WIDTH);
+    const int knobH = S(KNOB_HEIGHT);
+    const int margin = S(MARGIN);
+
     // Calculate switch position
     int switchX = textWidth;
-    int switchY = (height() - SWITCH_HEIGHT) / 2;
-    
+    int switchY = (height() - switchH) / 2;
+
     // Ultra-flat iOS 26 track design
-    QRect trackRect(switchX, switchY, SWITCH_WIDTH, SWITCH_HEIGHT);
+    QRect trackRect(switchX, switchY, switchW, switchH);
     painter.setPen(Qt::NoPen);
     painter.setRenderHint(QPainter::Antialiasing, true);
     
@@ -136,16 +145,18 @@ void SwitchButton::paintEvent(QPaintEvent* event)
     }
     
     painter.setBrush(gradient);
-    painter.drawRoundedRect(trackRect, SWITCH_HEIGHT / 2, SWITCH_HEIGHT / 2);
-    
-    // Draw ultra-minimal iOS 26 pill-shaped knob (wider than tall)
-    QRect knobRect(switchX + m_offset, switchY + MARGIN, KNOB_WIDTH, KNOB_HEIGHT);
-    
+    painter.drawRoundedRect(trackRect, switchH / 2, switchH / 2);
+
+    // Draw ultra-minimal iOS 26 pill-shaped knob (wider than tall).
+    // m_offset is computed from unscaled constants (see setChecked), so scale
+    // the knob travel to the drawn track via S() too.
+    QRect knobRect(switchX + S(m_offset), switchY + margin, knobW, knobH);
+
     // iOS 26 style - minimal shadow for edge definition
     painter.setBrush(QColor(0, 0, 0, 8));
     QRect shadowRect = knobRect.adjusted(0, 1, 0, 1);
     // Use height for corner radius to make it truly pill-shaped
-    painter.drawRoundedRect(shadowRect, KNOB_HEIGHT / 2, KNOB_HEIGHT / 2);
+    painter.drawRoundedRect(shadowRect, knobH / 2, knobH / 2);
     
     // Draw the main knob with subtle gradient to match other buttons
     QLinearGradient knobGradient(knobRect.topLeft(), knobRect.bottomLeft());
@@ -154,7 +165,7 @@ void SwitchButton::paintEvent(QPaintEvent* event)
     
     painter.setBrush(knobGradient);
     // Corner radius based on height to create proper pill shape
-    painter.drawRoundedRect(knobRect, KNOB_HEIGHT / 2, KNOB_HEIGHT / 2);
+    painter.drawRoundedRect(knobRect, knobH / 2, knobH / 2);
     
     // No inner shadows or additional effects for iOS 26 flat design
 }
