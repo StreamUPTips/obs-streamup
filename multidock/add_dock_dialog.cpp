@@ -2,16 +2,21 @@
 #include "inner_dock_host.hpp"
 #include "../utilities/debug-logger.hpp"
 #include "multidock_utils.hpp"
-#include "../ui/ui-styles.hpp"
+#include <streamup/ui/window-chrome.hpp>
+#include <streamup/ui/pill-button.hpp>
+#include <streamup/ui/labels.hpp>
+#include <streamup/ui/ui-scrollbar.hpp>
+#include "version.h"
 #include <obs-module.h>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
 #include <QListWidgetItem>
-#include <QMessageBox>
 #include <QPushButton>
 #include <algorithm>
+
+using namespace StreamUP::UIStyles;
 
 namespace StreamUP {
 namespace MultiDock {
@@ -23,11 +28,14 @@ AddDockDialog::AddDockDialog(const QString& multiDockId, QWidget* parent)
     , m_addButton(nullptr)
     , m_cancelButton(nullptr)
 {
-    StreamUP::UIStyles::ApplyFramelessChrome(this, obs_module_text("MultiDock.Dialog.AddDockTitle"));
+    // brandFooter=false → secondary window (no brand line), "StreamUP".
+    WindowShell chrome = applyChrome(this, obs_module_text("MultiDock.Dialog.AddDockTitle"), "v" PROJECT_VERSION,
+                                     /*brandFooter=*/false, "StreamUP");
+    chrome.content->setContentsMargins(S(20), S(16), S(20), S(16));
     setModal(true);
-    resize(400 + 2 * UIStyles::ShadowDialog::kShadowMargin, 300 + 2 * UIStyles::ShadowDialog::kShadowMargin);
+    resize(S(400) + 2 * S(ShadowDialog::kShadowMargin), S(300) + 2 * S(ShadowDialog::kShadowMargin));
 
-    QVBoxLayout* layout = StreamUP::UIStyles::GetDialogContentLayout(this);
+    QVBoxLayout* layout = chrome.content;
 
     // Header label
     layout->addWidget(new QLabel(obs_module_text("MultiDock.Label.SelectDock")));
@@ -35,22 +43,23 @@ AddDockDialog::AddDockDialog(const QString& multiDockId, QWidget* parent)
     // Dock list
     m_dockList = new QListWidget(this);
     m_dockList->setSelectionMode(QAbstractItemView::SingleSelection);
-    m_dockList->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetListWidgetStyle()));
+    m_dockList->setStyleSheet(listStyle());
+    useScrollBars(m_dockList);
     layout->addWidget(m_dockList);
 
-    // Buttons in footer
-    QVBoxLayout* footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(this);
-    QHBoxLayout* buttonLayout = new QHBoxLayout();
-    m_addButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("MultiDock.Button.Add"), "info");
-    m_cancelButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
+    // Action buttons go in the footer's right-anchored slot (Cancel outline left,
+    // primary Add right).
+    auto* addButton = new PillButton(obs_module_text("MultiDock.Button.Add"), "primary");
+    auto* cancelButton = new PillButton(obs_module_text("UI.Button.Cancel"), "outline");
+    m_addButton = addButton;
+    m_cancelButton = cancelButton;
 
     m_addButton->setEnabled(false);
     m_addButton->setDefault(true);
 
-    buttonLayout->addWidget(m_addButton);
-    buttonLayout->addWidget(m_cancelButton);
-    footerLayout->addLayout(buttonLayout);
-    
+    chrome.footerButtons->addWidget(m_cancelButton);
+    chrome.footerButtons->addWidget(m_addButton);
+
     // Connect signals
     connect(m_dockList, &QListWidget::itemSelectionChanged, this, &AddDockDialog::OnSelectionChanged);
     connect(m_dockList, &QListWidget::itemDoubleClicked, this, &AddDockDialog::OnItemDoubleClicked);

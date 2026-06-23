@@ -1,11 +1,15 @@
 #include "scene-organiser-dock.hpp"
-#include "../ui-styles.hpp"
+#include <streamup/ui/dialogs.hpp>
+#include <streamup/ui/color-picker.hpp>
+#include <streamup/ui/window-chrome.hpp>
+#include <streamup/ui/pill-button.hpp>
 #include "../ui-helpers.hpp"
 #include "../settings-manager.hpp"
 #include "../../utilities/debug-logger.hpp"
 #include "../../utilities/obs-data-helpers.hpp"
 #include "../../utilities/path-utils.hpp"
 #include "../../core/plugin-manager.hpp"
+#include "../../version.h" // PROJECT_VERSION
 #include <obs-module.h>
 #include <QHeaderView>
 #include <QApplication>
@@ -14,13 +18,11 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
-#include <QInputDialog>
 #include <QToolBar>
 #include <QToolButton>
 #include <QAction>
-#include <QMessageBox>
 #include <QKeyEvent>
-#include <QColorDialog>
+#include <QPointer>
 #include <QPainter>
 #include <QPixmap>
 #include <QIcon>
@@ -35,6 +37,9 @@
 #include <QDir>
 #include <QDateTime>
 #include <util/platform.h>
+
+namespace su = StreamUP::UIStyles;
+using namespace StreamUP::UIStyles;
 
 namespace StreamUP {
 namespace SceneOrganiser {
@@ -1330,54 +1335,57 @@ void SceneOrganiserDock::showBackgroundContextMenu(const QPoint &pos)
 
 void SceneOrganiserDock::onAddFolderClicked()
 {
-    bool ok;
-    QString folderName = QInputDialog::getText(this,
-        obs_module_text("SceneOrganiser.Dialog.AddFolder.Title"),
-        obs_module_text("SceneOrganiser.Dialog.AddFolder.Text"),
-        QLineEdit::Normal, QString(), &ok);
-
-    if (ok && !folderName.isEmpty()) {
-        auto folderItem = m_model->createFolderItem(folderName);
-        m_model->invisibleRootItem()->appendRow(folderItem);
-        m_treeView->expand(folderItem->index());
-        applySortingIfEnabled();
-        m_saveTimer->start();
-    }
+    QPointer<SceneOrganiserDock> self(this);
+    su::prompt(this,
+        QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.AddFolder.Title")),
+        QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.AddFolder.Text")),
+        QString(),
+        [self](const QString &folderName) {
+            if (!self) return;
+            if (folderName.isEmpty()) return;
+            auto folderItem = self->m_model->createFolderItem(folderName);
+            self->m_model->invisibleRootItem()->appendRow(folderItem);
+            self->m_treeView->expand(folderItem->index());
+            self->applySortingIfEnabled();
+            self->m_saveTimer->start();
+        });
 }
 
 void SceneOrganiserDock::onCreateSceneClicked()
 {
-    bool ok;
-    QString sceneName = QInputDialog::getText(this,
-        obs_module_text("SceneOrganiser.Dialog.CreateScene.Title"),
-        obs_module_text("SceneOrganiser.Dialog.CreateScene.Text"),
-        QLineEdit::Normal, QString(), &ok);
+    QPointer<SceneOrganiserDock> self(this);
+    su::prompt(this,
+        QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.CreateScene.Title")),
+        QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.CreateScene.Text")),
+        QString(),
+        [self](const QString &sceneName) {
+            if (!self) return;
+            if (sceneName.isEmpty()) return;
 
-    if (ok && !sceneName.isEmpty()) {
-        // Create a new scene in OBS
-        obs_scene_t *scene = obs_scene_create(sceneName.toUtf8().constData());
-        if (scene) {
-            obs_source_t *scene_source = obs_scene_get_source(scene);
+            // Create a new scene in OBS
+            obs_scene_t *scene = obs_scene_create(sceneName.toUtf8().constData());
+            if (scene) {
+                obs_source_t *scene_source = obs_scene_get_source(scene);
 
-            // The scene will automatically appear in our tree view due to the OBS event system
-            // We don't need to manually add it here
+                // The scene will automatically appear in our tree view due to the OBS event system
+                // We don't need to manually add it here
 
-            StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-            if (settings.sceneOrganiserSwitchToNewScene) {
-                // In studio mode, only ever set the preview — never push the new scene to program
-                if (obs_frontend_preview_program_mode_active()) {
-                    obs_frontend_set_current_preview_scene(scene_source);
-                } else {
-                    obs_frontend_set_current_scene(scene_source);
+                StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+                if (settings.sceneOrganiserSwitchToNewScene) {
+                    // In studio mode, only ever set the preview — never push the new scene to program
+                    if (obs_frontend_preview_program_mode_active()) {
+                        obs_frontend_set_current_preview_scene(scene_source);
+                    } else {
+                        obs_frontend_set_current_scene(scene_source);
+                    }
                 }
+
+                obs_scene_release(scene);
+
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Creation",
+                    QString("Created new scene: %1").arg(sceneName).toUtf8().constData());
             }
-
-            obs_scene_release(scene);
-
-            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Creation",
-                QString("Created new scene: %1").arg(sceneName).toUtf8().constData());
-        }
-    }
+        });
 }
 
 void SceneOrganiserDock::onRemoveClicked()
@@ -1391,59 +1399,73 @@ void SceneOrganiserDock::onRemoveClicked()
 
     QString itemName = item->text();
     bool isFolder = (item->type() == SceneFolderItem::UserType + 1);
-    bool isScene = (item->type() == SceneTreeItem::UserType + 2);
     QString itemType = isFolder ? "folder" : "scene";
 
-    int ret = QMessageBox::question(this,
-        obs_module_text("SceneOrganiser.Dialog.Remove.Title"),
+    QPointer<SceneOrganiserDock> self(this);
+    su::confirm(this,
+        QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.Remove.Title")),
         QString(obs_module_text("SceneOrganiser.Dialog.Remove.Text")).arg(itemType, itemName),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
+        QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.Remove.Title")),
+        "danger",
+        [self]() {
+            if (!self) return;
 
-    if (ret == QMessageBox::Yes) {
-        if (isScene) {
-            // Delete the actual scene from OBS
-            obs_source_t *source = obs_get_source_by_name(itemName.toUtf8().constData());
-            if (source) {
-                // Before removing from OBS, clean up our tracking and UI
-                if (item->type() == SceneTreeItem::UserType + 2) {
-                    SceneTreeItem *sceneItem = static_cast<SceneTreeItem*>(item);
-                    obs_weak_source_t *weak = sceneItem->getWeakSource();
+            // Re-resolve the target item from the live selection at accept-time
+            // (the confirm dialog is modeless, so we avoid holding a raw
+            // QStandardItem* that may have been torn down).
+            QModelIndexList selected = self->m_treeView->selectionModel()->selectedIndexes();
+            if (selected.isEmpty()) return;
+            QModelIndex sourceIndex = self->m_proxyModel->mapToSource(selected.first());
+            QStandardItem *item = self->m_model->itemFromIndex(sourceIndex);
+            if (!item) return;
 
-                    // Remove from our tracking map
-                    m_model->removeSceneFromTracking(weak);
+            QString itemName = item->text();
+            bool isFolder = (item->type() == SceneFolderItem::UserType + 1);
+            bool isScene = (item->type() == SceneTreeItem::UserType + 2);
+
+            if (isScene) {
+                // Delete the actual scene from OBS
+                obs_source_t *source = obs_get_source_by_name(itemName.toUtf8().constData());
+                if (source) {
+                    // Before removing from OBS, clean up our tracking and UI
+                    if (item->type() == SceneTreeItem::UserType + 2) {
+                        SceneTreeItem *sceneItem = static_cast<SceneTreeItem*>(item);
+                        obs_weak_source_t *weak = sceneItem->getWeakSource();
+
+                        // Remove from our tracking map
+                        self->m_model->removeSceneFromTracking(weak);
+                    }
+
+                    // Clear selection first
+                    self->m_treeView->selectionModel()->clearSelection();
+
+                    // Remove the item from the tree view immediately
+                    QStandardItem *parent = item->parent();
+                    if (!parent) parent = self->m_model->invisibleRootItem();
+                    parent->removeRow(item->row());
+
+                    // Now remove from OBS
+                    obs_source_remove(source);
+                    obs_source_release(source);
+
+                    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Removal",
+                        QString("Deleted scene from OBS and removed from dock: %1").arg(itemName).toUtf8().constData());
+
+                    // Clean up any empty folders and save immediately
+                    self->m_model->cleanupEmptyItems();
+                    self->SaveConfiguration(); // Immediate save on deletion
                 }
-
-                // Clear selection first
-                m_treeView->selectionModel()->clearSelection();
-
-                // Remove the item from the tree view immediately
-                QStandardItem *parent = item->parent();
-                if (!parent) parent = m_model->invisibleRootItem();
-                parent->removeRow(item->row());
-
-                // Now remove from OBS
-                obs_source_remove(source);
-                obs_source_release(source);
-
-                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Removal",
-                    QString("Deleted scene from OBS and removed from dock: %1").arg(itemName).toUtf8().constData());
-
-                // Clean up any empty folders and save immediately
-                m_model->cleanupEmptyItems();
-                SaveConfiguration(); // Immediate save on deletion
             }
-        }
 
-        // Remove from tree model (this will be handled by OBS events for scenes)
-        if (isFolder) {
-            QStandardItem *parent = item->parent();
-            if (!parent) parent = m_model->invisibleRootItem();
-            parent->removeRow(item->row());
-            SaveConfiguration(); // Immediate save on folder deletion
-        }
-        // For scenes, the tree will be updated automatically by OBS events
-    }
+            // Remove from tree model (this will be handled by OBS events for scenes)
+            if (isFolder) {
+                QStandardItem *parent = item->parent();
+                if (!parent) parent = self->m_model->invisibleRootItem();
+                parent->removeRow(item->row());
+                self->SaveConfiguration(); // Immediate save on folder deletion
+            }
+            // For scenes, the tree will be updated automatically by OBS events
+        });
 }
 
 void SceneOrganiserDock::onFiltersClicked()
@@ -1615,23 +1637,50 @@ void SceneOrganiserDock::onSetCustomColorClicked()
     QVariant colorData = m_currentContextItem->data(Qt::UserRole + 1);
     QColor currentColor = colorData.isValid() ? colorData.value<QColor>() : QColor();
 
-    // Open color picker dialog
-    QColor selectedColor = QColorDialog::getColor(currentColor, this, "Choose Color");
-
-    if (selectedColor.isValid()) {
-        // Store the color in the item
-        m_currentContextItem->setData(selectedColor, Qt::UserRole + 1);
-
-        // Apply the color immediately
-        applyCustomColorToItem(m_currentContextItem, selectedColor);
-
-        // Save configuration
-        m_saveTimer->start();
-
-        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "CustomColor",
-            QString("Set custom color for item '%1': %2")
-            .arg(m_currentContextItem->text(), selectedColor.name()).toUtf8().constData());
+    // Open branded color picker dialog (replaces native QColorDialog; no alpha
+    // was ever used here, so the SoT ColorPicker is a faithful replacement).
+    auto sh = su::makeWindow(QString::fromUtf8("Choose Color"), "v" PROJECT_VERSION, this,
+                             /*brandFooter=*/false, "StreamUP");
+    auto *cp = new su::ColorPicker();
+    if (currentColor.isValid()) {
+        cp->setColor(currentColor);
     }
+    sh.content->setContentsMargins(su::S(16), su::S(16), su::S(16), su::S(8));
+    sh.content->addWidget(cp);
+
+    auto *cancel = new su::PillButton("Cancel", "outline");
+    auto *ok = new su::PillButton("Select", "primary");
+    sh.footerButtons->addWidget(cancel);
+    sh.footerButtons->addWidget(ok);
+
+    QObject::connect(cancel, &QPushButton::clicked, sh.dialog, &QDialog::close);
+
+    QPointer<SceneOrganiserDock> self(this);
+    QObject::connect(ok, &QPushButton::clicked, sh.dialog, [self, cp, dlg = sh.dialog]() {
+        if (self) {
+            // Re-read the context item the menu was opened on (same member the
+            // synchronous code used). Guard against it having been cleared.
+            QStandardItem *item = self->m_currentContextItem;
+            if (item) {
+                QColor selectedColor = cp->color();
+                if (selectedColor.isValid()) {
+                    // Store the color in the item
+                    item->setData(selectedColor, Qt::UserRole + 1);
+
+                    // Apply the color immediately
+                    self->applyCustomColorToItem(item, selectedColor);
+
+                    // Save configuration
+                    self->m_saveTimer->start();
+
+                    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "CustomColor",
+                        QString("Set custom color for item '%1': %2")
+                        .arg(item->text(), selectedColor.name()).toUtf8().constData());
+                }
+            }
+        }
+        dlg->close();
+    });
 }
 
 void SceneOrganiserDock::onClearCustomColorClicked()
@@ -2338,41 +2387,43 @@ void SceneOrganiserDock::LoadConfiguration()
 
             // Use QTimer to ensure prompt appears after UI is fully loaded
             QTimer::singleShot(500, this, [this, sceneCollectionName]() {
-                QMessageBox msgBox(QMessageBox::Question,
-                    "Import Scene Organization?",
+                QPointer<SceneOrganiserDock> self(this);
+                auto *dlg = su::confirm(this,
+                    QString::fromUtf8("Import Scene Organization?"),
                     QString("Settings from the SceneTree plugin were found for '%1'.\n\n"
                             "Would you like to import your scene organization?\n\n"
                             "You can access the Scene Organizer from View → Docks → Scene Organizer.").arg(sceneCollectionName),
-                    QMessageBox::Yes | QMessageBox::No,
-                    this);
-
-                msgBox.setDefaultButton(QMessageBox::Yes);
-
-                if (msgBox.exec() == QMessageBox::Yes) {
-                    if (m_model->migrateCurrentCollection()) {
-                        // Reload configuration and tree for ALL dock instances
-                        for (auto dock : SceneOrganiserDock::s_dockInstances) {
-                            if (dock && dock->m_model) {
-                                dock->LoadConfiguration();
-                                dock->m_model->loadSceneTree();
-                                dock->m_model->updateTree();
-                                dock->applyAllCustomColors();
+                    QString::fromUtf8("Import"),
+                    "primary",
+                    [self, sceneCollectionName]() {
+                        if (!self) return;
+                        if (self->m_model->migrateCurrentCollection()) {
+                            // Reload configuration and tree for ALL dock instances
+                            for (auto dock : SceneOrganiserDock::s_dockInstances) {
+                                if (dock && dock->m_model) {
+                                    dock->LoadConfiguration();
+                                    dock->m_model->loadSceneTree();
+                                    dock->m_model->updateTree();
+                                    dock->applyAllCustomColors();
+                                }
                             }
+
+                            su::info(self,
+                                QString::fromUtf8("Import Successful"),
+                                QString("Successfully imported scene organization for '%1'!\n\n"
+                                        "The Scene Organizer can be accessed from View → Docks → Scene Organizer.").arg(sceneCollectionName));
+                        } else {
+                            su::info(self,
+                                QString::fromUtf8("Import Failed"),
+                                QString::fromUtf8("Failed to import settings. Please check the log for details."));
                         }
+                    });
 
-                        QMessageBox::information(this,
-                            "Import Successful",
-                            QString("Successfully imported scene organization for '%1'!\n\n"
-                                    "The Scene Organizer can be accessed from View → Docks → Scene Organizer.").arg(sceneCollectionName));
-                    } else {
-                        QMessageBox::warning(this,
-                            "Import Failed",
-                            "Failed to import settings. Please check the log for details.");
-                    }
-                }
-
-                // Remove from currently prompting set after dialog is dismissed
-                currentlyPrompting.remove(sceneCollectionName);
+                // Remove from currently prompting set once the (modeless) dialog
+                // is dismissed — covers both the Import and Cancel paths.
+                QObject::connect(dlg, &QObject::destroyed, qApp, [sceneCollectionName]() {
+                    currentlyPrompting.remove(sceneCollectionName);
+                });
             });
         }
     }
@@ -2699,21 +2750,25 @@ void SceneOrganiserDock::onDeleteSceneClicked()
     QString sceneName = m_currentContextItem->text();
     obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
     if (!source) return;
+    // The confirm dialog is modeless; don't hold the source ref across it.
+    // Re-acquire by name inside the accept callback instead.
+    obs_source_release(source);
 
-    // Confirm deletion
-    int ret = QMessageBox::question(this,
+    QPointer<SceneOrganiserDock> self(this);
+    su::confirm(this,
         QString::fromUtf8(obs_frontend_get_locale_string("ConfirmRemove.Title"), -1),
         QString::fromUtf8(obs_frontend_get_locale_string("ConfirmRemove.Text"), -1).arg(sceneName),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
-
-    if (ret == QMessageBox::Yes) {
-        obs_source_remove(source);
-        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Deletion",
-            QString("Deleted scene: %1").arg(sceneName).toUtf8().constData());
-    }
-
-    obs_source_release(source);
+        QString::fromUtf8(obs_frontend_get_locale_string("ConfirmRemove.Title"), -1),
+        "danger",
+        [self, sceneName]() {
+            if (!self) return;
+            obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+            if (!source) return;
+            obs_source_remove(source);
+            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Deletion",
+                QString("Deleted scene: %1").arg(sceneName).toUtf8().constData());
+            obs_source_release(source);
+        });
 }
 
 void SceneOrganiserDock::onHideSceneClicked()

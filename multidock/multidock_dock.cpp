@@ -3,7 +3,7 @@
 #include "inner_dock_host.hpp"
 #include "persistence.hpp"
 #include "multidock_utils.hpp"
-#include "../ui/ui-styles.hpp"
+#include <streamup/ui/gallery-style.hpp>
 #include <obs-module.h>
 #include <QVBoxLayout>
 #include <QHBoxLayout>

@@ -3,7 +3,13 @@
 #include "multidock_utils.hpp"
 #include "multidock_manager.hpp"
 #include "multidock_dock.hpp"
-#include "../ui/ui-styles.hpp"
+#include <streamup/ui/window-chrome.hpp>
+#include <streamup/ui/pill-button.hpp>
+#include <streamup/ui/labels.hpp>
+#include <streamup/ui/dialogs.hpp>
+#include <streamup/ui/ui-scrollbar.hpp>
+#include <streamup/ui/svg-icon.hpp>
+#include "version.h"
 #include <obs-module.h>
 #include <QDialog>
 #include <QVBoxLayout>
@@ -12,7 +18,10 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QListWidget>
-#include <QMessageBox>
+#include <QPointer>
+
+using namespace StreamUP::UIStyles;
+namespace su = StreamUP::UIStyles;
 
 namespace StreamUP {
 namespace MultiDock {
@@ -21,39 +30,30 @@ namespace MultiDock {
 // Optionally updates a QListWidget if provided.
 static QString ShowCreateMultiDockDialog(QWidget* parent, QListWidget* listWidget = nullptr)
 {
-    QDialog dialog(parent);
-    dialog.setWindowTitle(obs_module_text("MultiDock.Dialog.NewTitle"));
-    dialog.setModal(true);
-    dialog.resize(StreamUP::UIStyles::S(300), StreamUP::UIStyles::S(120));
+    // Stack ShadowDialog + chrome; keep modal exec() semantics so the caller can
+    // read the created ID synchronously. brandFooter=false → secondary window.
+    ShadowDialog dialog(parent);
+    WindowShell sh = applyChrome(&dialog, obs_module_text("MultiDock.Dialog.NewTitle"), "v" PROJECT_VERSION,
+                                 /*brandFooter=*/false, "StreamUP");
+    sh.content->setContentsMargins(S(20), S(16), S(20), S(16));
+    dialog.setWindowModality(Qt::ApplicationModal);
+    dialog.resize(S(360) + 2 * S(ShadowDialog::kShadowMargin), S(150) + 2 * S(ShadowDialog::kShadowMargin));
 
-    // Set dialog background to BG_DARKEST
-    dialog.setStyleSheet(QString("QDialog { background-color: %1; }").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
-
-    QVBoxLayout* layout = new QVBoxLayout(&dialog);
+    QVBoxLayout* layout = sh.content;
 
     // Name input
     layout->addWidget(new QLabel(obs_module_text("MultiDock.Label.Name")));
     QLineEdit* nameEdit = new QLineEdit(&dialog);
     nameEdit->setPlaceholderText(obs_module_text("MultiDock.Placeholder.Name"));
-
-    // Style the input box
-    nameEdit->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetLineEditStyle()));
-
+    nameEdit->setStyleSheet(lineEditStyle());
+    nameEdit->setFixedHeight(S(28));
     layout->addWidget(nameEdit);
 
-    // Buttons
-    QHBoxLayout* buttonLayout = new QHBoxLayout();
-    QPushButton* createButton = new QPushButton(obs_module_text("MultiDock.Button.Create"), &dialog);
-    QPushButton* cancelButton = new QPushButton(obs_module_text("UI.Button.Cancel"), &dialog);
-
-    // Style buttons
-    createButton->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetButtonStyle()));
-    cancelButton->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetButtonStyle()));
-
-    buttonLayout->addStretch();
-    buttonLayout->addWidget(createButton);
-    buttonLayout->addWidget(cancelButton);
-    layout->addLayout(buttonLayout);
+    // Buttons — right-anchored in the footer (Cancel outline left, primary right).
+    PillButton* createButton = new PillButton(obs_module_text("MultiDock.Button.Create"), "primary");
+    PillButton* cancelButton = new PillButton(obs_module_text("UI.Button.Cancel"), "outline");
+    sh.footerButtons->addWidget(cancelButton);
+    sh.footerButtons->addWidget(createButton);
 
     QString createdId;
 
@@ -62,19 +62,19 @@ static QString ShowCreateMultiDockDialog(QWidget* parent, QListWidget* listWidge
     QObject::connect(createButton, &QPushButton::clicked, [&dialog, nameEdit, listWidget, &createdId]() {
         QString name = nameEdit->text().trimmed();
         if (name.isEmpty()) {
-            QMessageBox::warning(&dialog, obs_module_text("Plugin.Error.InvalidName"), obs_module_text("MultiDock.Error.InvalidName"));
+            su::info(&dialog, obs_module_text("Plugin.Error.InvalidName"), obs_module_text("MultiDock.Error.InvalidName"));
             return;
         }
 
         MultiDockManager* manager = MultiDockManager::Instance();
         if (!manager) {
-            QMessageBox::critical(&dialog, obs_module_text("Plugin.Error.Title"), obs_module_text("MultiDock.Error.SystemNotInitialized"));
+            su::info(&dialog, obs_module_text("Plugin.Error.Title"), obs_module_text("MultiDock.Error.SystemNotInitialized"));
             return;
         }
 
         QString id = manager->CreateMultiDock(name);
         if (id.isEmpty()) {
-            QMessageBox::critical(&dialog, obs_module_text("Plugin.Error.Title"), obs_module_text("MultiDock.Error.CreationFailed"));
+            su::info(&dialog, obs_module_text("Plugin.Error.Title"), obs_module_text("MultiDock.Error.CreationFailed"));
             return;
         }
 
@@ -127,48 +127,22 @@ void ShowManageMultiDocksDialog()
         return;
     }
     
-    QDialog dialog(mainWindow);
-    dialog.setWindowTitle(obs_module_text("MultiDock.Dialog.ManageTitle"));
-    dialog.setModal(true);
-    dialog.resize(StreamUP::UIStyles::S(400), StreamUP::UIStyles::S(300));
-    
-    // Set dialog background to BG_DARKEST
-    dialog.setStyleSheet(QString("QDialog { background-color: %1; }").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
-    
-    QVBoxLayout* layout = new QVBoxLayout(&dialog);
-    
+    // Stack ShadowDialog + chrome; keep modal exec(). brandFooter=false.
+    ShadowDialog dialog(mainWindow);
+    WindowShell sh = applyChrome(&dialog, obs_module_text("MultiDock.Dialog.ManageTitle"), "v" PROJECT_VERSION,
+                                 /*brandFooter=*/false, "StreamUP");
+    sh.content->setContentsMargins(S(20), S(16), S(20), S(16));
+    dialog.setWindowModality(Qt::ApplicationModal);
+    dialog.resize(S(440) + 2 * S(ShadowDialog::kShadowMargin), S(340) + 2 * S(ShadowDialog::kShadowMargin));
+
+    QVBoxLayout* layout = sh.content;
+
     // List widget
     layout->addWidget(new QLabel(obs_module_text("MultiDock.Label.ExistingDocks")));
     QListWidget* listWidget = new QListWidget(&dialog);
-    
-    // Style the list widget with rounded corners and proper background
-    listWidget->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
-        "QListWidget {"
-        "    background-color: %1;"
-        "    border: 0px solid %2;"
-        "    border-radius: %3px;"
-        "    padding: 4px;"
-        "    color: %4;"
-        "}"
-        "QListWidget::item {"
-        "    padding: 4px 8px;"
-        "    border-radius: %5px;"
-        "    margin: 1px;"
-        "}"
-        "QListWidget::item:selected {"
-        "    background-color: %6;"
-        "}"
-        "QListWidget::item:hover {"
-        "    background-color: %7;"
-        "}")
-        .arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
-        .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
-	.arg(StreamUP::UIStyles::Sizes::RADIUS_DOCK)
-        .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-        .arg(StreamUP::UIStyles::Sizes::RADIUS_LG)
-        .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR)
-	.arg(StreamUP::UIStyles::Colors::PRIMARY_HOVER)));
-    
+    listWidget->setStyleSheet(listStyle());
+    useScrollBars(listWidget);
+
     layout->addWidget(listWidget);
     
     // Populate with existing MultiDocks
@@ -188,32 +162,34 @@ void ShowManageMultiDocksDialog()
         listWidget->addItem(obs_module_text("MultiDock.Message.SystemNotInitialized"));
     }
     
-    // Buttons
+    // Buttons. New = Plus icon button; Delete = Trash icon button (the SoT now
+    // has Glyph::Trash) — the two icon-only actions pair cleanly on the left.
+    // Open/Rename/Close = labelled pills on the right. Placed in the footer's
+    // extra-rows slot (sh.footer) as one full-width row to preserve the split.
     QHBoxLayout* buttonLayout = new QHBoxLayout();
-    QPushButton* newButton = new QPushButton(&dialog);
-    newButton->setProperty("class", "icon-plus");
+    buttonLayout->setContentsMargins(0, 0, 0, 0);
+    buttonLayout->setSpacing(S(10));
+
+    IconButton* newButton = new IconButton(IconButton::Glyph::Plus, &dialog);
     newButton->setToolTip(obs_module_text("MultiDock.Button.New"));
-    newButton->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetSquircleButtonStyle("", "", 28)));
-    newButton->setFixedSize(StreamUP::UIStyles::S(28), StreamUP::UIStyles::S(28));
-    QPushButton* openButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Open"), "info");
-    openButton->setParent(&dialog);
-    QPushButton* renameButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("MultiDock.Button.Rename"), "neutral");
-    renameButton->setParent(&dialog);
-    QPushButton* deleteButton = new QPushButton(&dialog);
-    deleteButton->setProperty("class", "icon-trash");
+
+    IconButton* deleteButton = new IconButton(IconButton::Glyph::Trash, &dialog);
     deleteButton->setToolTip(obs_module_text("MultiDock.Button.Delete"));
-    deleteButton->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetSquircleButtonStyle("", "", 28)));
-    deleteButton->setFixedSize(StreamUP::UIStyles::S(28), StreamUP::UIStyles::S(28));
-    QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.Close"), "neutral");
+
+    PillButton* openButton = new PillButton(obs_module_text("UI.Button.Open"), "primary");
+    openButton->setParent(&dialog);
+    PillButton* renameButton = new PillButton(obs_module_text("MultiDock.Button.Rename"), "neutral");
+    renameButton->setParent(&dialog);
+    PillButton* closeButton = new PillButton(obs_module_text("UI.Button.Close"), "outline");
     closeButton->setParent(&dialog);
-    
+
     // Enable/disable buttons based on selection
-    bool hasSelection = listWidget->currentItem() != nullptr && 
+    bool hasSelection = listWidget->currentItem() != nullptr &&
                        !listWidget->currentItem()->data(Qt::UserRole).toString().isEmpty();
     openButton->setEnabled(hasSelection);
     renameButton->setEnabled(hasSelection);
     deleteButton->setEnabled(hasSelection);
-    
+
     // Left side: New, Delete
     buttonLayout->addWidget(newButton);
     buttonLayout->addWidget(deleteButton);
@@ -222,7 +198,7 @@ void ShowManageMultiDocksDialog()
     buttonLayout->addWidget(openButton);
     buttonLayout->addWidget(renameButton);
     buttonLayout->addWidget(closeButton);
-    layout->addLayout(buttonLayout);
+    sh.footer->addLayout(buttonLayout);
     
     // Connect signals - use explicit captures instead of [&]
     QObject::connect(listWidget, &QListWidget::itemSelectionChanged, [listWidget, openButton, renameButton, deleteButton]() {
@@ -263,42 +239,44 @@ void ShowManageMultiDocksDialog()
         if (!item || !manager) {
             return;
         }
-        
-        QString id = item->data(Qt::UserRole).toString();
-        QString name = item->text();
+
+        // Copy id/name into values the modeless confirm callback owns; QPointer-
+        // guard the list (the outer modal dialog owns it and stays alive, but the
+        // callback runs after the synchronous click handler returns).
+        const QString id = item->data(Qt::UserRole).toString();
+        const QString name = item->text();
         if (id.isEmpty()) {
             return;
         }
-        
-        // Create a separate dialog for confirmation to avoid any lifecycle issues
-        QMessageBox confirmDialog(&dialog);
-        confirmDialog.setWindowTitle(obs_module_text("MultiDock.Dialog.DeleteTitle"));
-        confirmDialog.setText(QString(obs_module_text("MultiDock.Confirm.Delete")).arg(name));
-        confirmDialog.setInformativeText(obs_module_text("MultiDock.Info.DeleteRestore"));
-        confirmDialog.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-        confirmDialog.setDefaultButton(QMessageBox::No);
-        confirmDialog.setIcon(QMessageBox::Question);
-        
-        int result = confirmDialog.exec();
-        if (result != QMessageBox::Yes) {
-            return;
-        }
-        
-        // Simple immediate deletion
-        StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dialog", "Attempting to remove MultiDock '%s'", name.toUtf8().constData());
-        
-        bool success = manager->RemoveMultiDock(id);
-        if (success) {
-            // Remove from the UI list
-            int row = listWidget->row(item);
-            if (row >= 0) {
-                delete listWidget->takeItem(row);
+
+        QPointer<QListWidget> listGuard(listWidget);
+        const QString message = QString(obs_module_text("MultiDock.Confirm.Delete")).arg(name) +
+                                "\n\n" + obs_module_text("MultiDock.Info.DeleteRestore");
+
+        su::confirm(&dialog, obs_module_text("MultiDock.Dialog.DeleteTitle"), message,
+                    obs_module_text("MultiDock.Button.Delete"), "danger",
+                    [manager, id, name, listGuard, dlg = &dialog]() {
+            // Simple immediate deletion
+            StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dialog", "Attempting to remove MultiDock '%s'", name.toUtf8().constData());
+
+            bool success = manager->RemoveMultiDock(id);
+            if (success) {
+                // Remove from the UI list (re-find by id — the row may have shifted).
+                if (listGuard) {
+                    for (int i = 0; i < listGuard->count(); ++i) {
+                        QListWidgetItem* it = listGuard->item(i);
+                        if (it && it->data(Qt::UserRole).toString() == id) {
+                            delete listGuard->takeItem(i);
+                            break;
+                        }
+                    }
+                }
+                StreamUP::DebugLogger::LogDebug("MultiDock", "Dialog", "Successfully removed MultiDock from UI");
+            } else {
+                StreamUP::DebugLogger::LogWarning("MultiDock", "Dialog: Failed to remove MultiDock");
+                su::info(dlg, obs_module_text("StreamUP.MultiDock.Error"), obs_module_text("StreamUP.MultiDock.FailedToDelete"));
             }
-            StreamUP::DebugLogger::LogDebug("MultiDock", "Dialog", "Successfully removed MultiDock from UI");
-        } else {
-            StreamUP::DebugLogger::LogWarning("MultiDock", "Dialog: Failed to remove MultiDock");
-            QMessageBox::warning(&dialog, obs_module_text("StreamUP.MultiDock.Error"), obs_module_text("StreamUP.MultiDock.FailedToDelete"));
-        }
+        });
     });
     
     QObject::connect(newButton, &QPushButton::clicked, [listWidget, &dialog]() {
@@ -317,57 +295,46 @@ void ShowManageMultiDocksDialog()
             return;
         }
         
-        // Show rename dialog
-        QDialog renameDialog(&dialog);
-        renameDialog.setWindowTitle(obs_module_text("MultiDock.Dialog.RenameTitle"));
-        renameDialog.setModal(true);
-        renameDialog.resize(StreamUP::UIStyles::S(300), StreamUP::UIStyles::S(120));
-        
-        // Set dialog background to BG_DARKEST
-        renameDialog.setStyleSheet(QString("QDialog { background-color: %1; }").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
-        
-        QVBoxLayout* renameLayout = new QVBoxLayout(&renameDialog);
-        
+        // Show rename dialog — stack ShadowDialog + chrome, modal exec.
+        ShadowDialog renameDialog(&dialog);
+        WindowShell rsh = applyChrome(&renameDialog, obs_module_text("MultiDock.Dialog.RenameTitle"), "v" PROJECT_VERSION,
+                                      /*brandFooter=*/false, "StreamUP");
+        rsh.content->setContentsMargins(S(20), S(16), S(20), S(16));
+        renameDialog.setWindowModality(Qt::ApplicationModal);
+        renameDialog.resize(S(360) + 2 * S(ShadowDialog::kShadowMargin), S(150) + 2 * S(ShadowDialog::kShadowMargin));
+
+        QVBoxLayout* renameLayout = rsh.content;
+
         // Name input
         renameLayout->addWidget(new QLabel(obs_module_text("MultiDock.Label.NewName")));
         QLineEdit* nameEdit = new QLineEdit(&renameDialog);
         nameEdit->setText(currentName);
         nameEdit->selectAll();
-        
-        // Style the input box
-        nameEdit->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetLineEditStyle()));
-        
+        nameEdit->setStyleSheet(lineEditStyle());
+        nameEdit->setFixedHeight(S(28));
         renameLayout->addWidget(nameEdit);
-        
-        // Buttons
-        QHBoxLayout* renameButtonLayout = new QHBoxLayout();
-        QPushButton* saveButton = new QPushButton(obs_module_text("UI.Button.Save"), &renameDialog);
-        QPushButton* cancelButton = new QPushButton(obs_module_text("UI.Button.Cancel"), &renameDialog);
-        
-        // Style buttons
-        saveButton->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetButtonStyle()));
-        cancelButton->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetButtonStyle()));
-        
-        renameButtonLayout->addStretch();
-        renameButtonLayout->addWidget(saveButton);
-        renameButtonLayout->addWidget(cancelButton);
-        renameLayout->addLayout(renameButtonLayout);
-        
+
+        // Buttons — right-anchored in the footer (Cancel outline, Save primary).
+        PillButton* saveButton = new PillButton(obs_module_text("UI.Button.Save"), "primary");
+        PillButton* cancelButton = new PillButton(obs_module_text("UI.Button.Cancel"), "outline");
+        rsh.footerButtons->addWidget(cancelButton);
+        rsh.footerButtons->addWidget(saveButton);
+
         // Connect signals
         QObject::connect(cancelButton, &QPushButton::clicked, &renameDialog, &QDialog::reject);
         QObject::connect(saveButton, &QPushButton::clicked, [&renameDialog, nameEdit, manager, item, id, currentName]() {
             QString newName = nameEdit->text().trimmed();
             if (newName.isEmpty()) {
-                QMessageBox::warning(&renameDialog, obs_module_text("Plugin.Error.InvalidName"), obs_module_text("MultiDock.Error.InvalidName"));
+                su::info(&renameDialog, obs_module_text("Plugin.Error.InvalidName"), obs_module_text("MultiDock.Error.InvalidName"));
                 return;
             }
-            
+
             if (newName == currentName) {
                 // No change needed
                 renameDialog.accept();
                 return;
             }
-            
+
             bool success = manager->RenameMultiDock(id, newName);
             if (success) {
                 // Update the UI list
@@ -375,14 +342,14 @@ void ShowManageMultiDocksDialog()
                 StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dialog", "Successfully renamed MultiDock to '%s'", newName.toUtf8().constData());
                 renameDialog.accept();
             } else {
-                QMessageBox::warning(&renameDialog, obs_module_text("StreamUP.MultiDock.Error"), obs_module_text("StreamUP.MultiDock.FailedToRename"));
+                su::info(&renameDialog, obs_module_text("StreamUP.MultiDock.Error"), obs_module_text("StreamUP.MultiDock.FailedToRename"));
             }
         });
-        
+
         // Make save button default
         saveButton->setDefault(true);
         nameEdit->setFocus();
-        
+
         renameDialog.exec();
     });
     

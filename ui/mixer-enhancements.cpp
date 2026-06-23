@@ -1,5 +1,5 @@
 #include "mixer-enhancements.hpp"
-#include "ui-styles.hpp"
+#include <streamup/ui/gallery-style.hpp>
 
 #include <obs.h>
 #include <obs-frontend-api.h>

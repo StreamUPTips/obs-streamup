@@ -8,15 +8,15 @@
 #include <QLineEdit>
 #include <QLabel>
 #include <QPushButton>
-#include <QGroupBox>
 #include <QTextEdit>
 #include <QSplitter>
 #include "obs-hotkey-manager.hpp"
-#include "ui-styles.hpp"
+#include <streamup/ui/window-chrome.hpp>
+#include <streamup/ui/pill-button.hpp>
 
 namespace StreamUP {
 
-class HotkeySelectorDialog : public UIStyles::ShadowDialog {
+class HotkeySelectorDialog : public StreamUP::UIStyles::ShadowDialog {
     Q_OBJECT
 
 public:
@@ -41,7 +41,8 @@ private:
     QString getHotkeyKeybinding(const QString& hotkeyName);
     
     // UI Components
-    QVBoxLayout* mainLayout;
+    QVBoxLayout* mainLayout;        // chrome.content
+    QHBoxLayout* footerButtons;     // chrome.footerButtons (right-anchored action slot)
     QSplitter* mainSplitter;
     
     QWidget* leftPanel;
@@ -51,15 +52,15 @@ private:
     
     QWidget* rightPanel;
     QVBoxLayout* rightLayout;
-    QGroupBox* detailsGroup;
+    QWidget* detailsGroup;
     QLabel* selectedHotkeyName;
     QLabel* selectedHotkeyDescription;
     QLabel* selectedHotkeyKeys;
     QTextEdit* selectedHotkeyHelp;
-    
+
     QHBoxLayout* buttonLayout;
-    QPushButton* okButton;
-    QPushButton* cancelButton;
+    StreamUP::UIStyles::PillButton* okButton;
+    StreamUP::UIStyles::PillButton* cancelButton;
     
     // Data
     StreamUP::HotkeyInfo selectedHotkey;

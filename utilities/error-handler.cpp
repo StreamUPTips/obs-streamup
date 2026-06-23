@@ -1,20 +1,17 @@
 #include "error-handler.hpp"
 #include "../ui/settings-manager.hpp"
 #include "ui-helpers.hpp"
-#include "ui-styles.hpp"
+#include <streamup/ui/dialogs.hpp>
 #include <obs-module.h>
+#include <obs-frontend-api.h>
 #include <QFile>
 #include <QFileInfo>
-#include <QDialog>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QLabel>
-#include <QPushButton>
-#include <QStyle>
-#include <QGroupBox>
-#include <QObject>
+#include <QWidget>
 #include <unordered_map>
 #include <vector>
+
+using namespace StreamUP::UIStyles;
+namespace su = StreamUP::UIStyles;
 
 namespace StreamUP {
 namespace ErrorHandler {
@@ -109,121 +106,33 @@ ErrorResult UIError(const std::string& message) {
 }
 
 // Dialog display functions
+//
+// These were title + message + OK popups built from the legacy CreateStyledDialog
+// factory. They are now the SoT branded notification: su::info(parent, title,
+// message) — a modeless ShadowDialog window with the message in the content and a
+// single dismiss button (brandFooter=false, secondary popup). su::info() self-
+// shows; ShowDialogOnUIThread keeps the construction on the UI thread.
 void ShowErrorDialog(const std::string& title, const std::string& message) {
     StreamUP::UIHelpers::ShowDialogOnUIThread([title, message]() {
-        QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(QString::fromStdString(title));
-        
-        QVBoxLayout* layout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
-
-        // Add styled title
-        QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(QString::fromStdString(title));
-        layout->addWidget(titleLabel);
-
-        // Add styled message group
-        QGroupBox* messageGroup = StreamUP::UIStyles::CreateStyledGroupBox("", "error");
-        QVBoxLayout* messageLayout = new QVBoxLayout(messageGroup);
-        messageLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-            StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-            StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-            StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
-        messageLayout->addStretch();
-
-        QLabel* messageLabel = StreamUP::UIStyles::CreateStyledContent(QString::fromStdString(message));
-        messageLabel->setAlignment(Qt::AlignCenter);
-        messageLayout->addWidget(messageLabel, 0, Qt::AlignCenter);
-        messageLayout->addStretch();
-        layout->addWidget(messageGroup);
-
-        // Add styled button to footer
-        QVBoxLayout* footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
-        QHBoxLayout* buttonLayout = new QHBoxLayout();
-        buttonLayout->addStretch();
-
-        QPushButton* okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("OK"), "neutral");
-        QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
-        buttonLayout->addWidget(okButton);
-        buttonLayout->addStretch();
-
-        footerLayout->addLayout(buttonLayout);
-        
-        // Apply auto-sizing
-        StreamUP::UIStyles::ApplyAutoSizing(dialog, 450, 600, 250, 400);
+        QWidget* parent = static_cast<QWidget*>(obs_frontend_get_main_window());
+        su::info(parent, QString::fromStdString(title), QString::fromStdString(message),
+                 obs_module_text("OK"));
     });
 }
 
 void ShowWarningDialog(const std::string& title, const std::string& message) {
     StreamUP::UIHelpers::ShowDialogOnUIThread([title, message]() {
-        QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(QString::fromStdString(title));
-        
-        QVBoxLayout* layout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
-
-        QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(QString::fromStdString(title));
-        layout->addWidget(titleLabel);
-
-        QGroupBox* messageGroup = StreamUP::UIStyles::CreateStyledGroupBox("", "warning");
-        QVBoxLayout* messageLayout = new QVBoxLayout(messageGroup);
-        messageLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-            StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-            StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-            StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
-        messageLayout->addStretch();
-
-        QLabel* messageLabel = StreamUP::UIStyles::CreateStyledContent(QString::fromStdString(message));
-        messageLabel->setAlignment(Qt::AlignCenter);
-        messageLayout->addWidget(messageLabel, 0, Qt::AlignCenter);
-        messageLayout->addStretch();
-        layout->addWidget(messageGroup);
-
-        QVBoxLayout* footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
-        QHBoxLayout* buttonLayout = new QHBoxLayout();
-        buttonLayout->addStretch();
-
-        QPushButton* okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("OK"), "warning");
-        QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
-        buttonLayout->addWidget(okButton);
-        buttonLayout->addStretch();
-
-        footerLayout->addLayout(buttonLayout);
-        
-        StreamUP::UIStyles::ApplyAutoSizing(dialog, 450, 600, 250, 400);
+        QWidget* parent = static_cast<QWidget*>(obs_frontend_get_main_window());
+        su::info(parent, QString::fromStdString(title), QString::fromStdString(message),
+                 obs_module_text("OK"));
     });
 }
 
 void ShowInfoDialog(const std::string& title, const std::string& message) {
     StreamUP::UIHelpers::ShowDialogOnUIThread([title, message]() {
-        QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog(QString::fromStdString(title));
-        
-        QVBoxLayout* layout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
-
-        QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(QString::fromStdString(title));
-        layout->addWidget(titleLabel);
-
-        QGroupBox* messageGroup = StreamUP::UIStyles::CreateStyledGroupBox("", "info");
-        QVBoxLayout* messageLayout = new QVBoxLayout(messageGroup);
-        messageLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-            StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-            StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-            StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
-        messageLayout->addStretch();
-
-        QLabel* messageLabel = StreamUP::UIStyles::CreateStyledContent(QString::fromStdString(message));
-        messageLabel->setAlignment(Qt::AlignCenter);
-        messageLayout->addWidget(messageLabel, 0, Qt::AlignCenter);
-        messageLayout->addStretch();
-        layout->addWidget(messageGroup);
-
-        QVBoxLayout* footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
-        QHBoxLayout* buttonLayout = new QHBoxLayout();
-        buttonLayout->addStretch();
-
-        QPushButton* okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("OK"), "info");
-        QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
-        buttonLayout->addWidget(okButton);
-        buttonLayout->addStretch();
-
-        footerLayout->addLayout(buttonLayout);
-        
-        StreamUP::UIStyles::ApplyAutoSizing(dialog, 450, 600, 250, 400);
+        QWidget* parent = static_cast<QWidget*>(obs_frontend_get_main_window());
+        su::info(parent, QString::fromStdString(title), QString::fromStdString(message),
+                 obs_module_text("OK"));
     });
 }
 

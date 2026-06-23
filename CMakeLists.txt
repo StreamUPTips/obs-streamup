@@ -25,13 +25,13 @@ else()
   target_link_libraries(${PROJECT_NAME} PRIVATE OBS::frontend-api)
 endif()
 
-find_package(Qt6 COMPONENTS Widgets Core)
+find_package(Qt6 COMPONENTS Widgets Core Svg)
 if(BUILD_OUT_OF_TREE)
   if(OS_LINUX OR OS_FREEBSD OR OS_OPENBSD)
     find_package(Qt6 REQUIRED Gui)
   endif()
 endif()
-target_link_libraries(${PROJECT_NAME} PRIVATE Qt::Core Qt::Widgets)
+target_link_libraries(${PROJECT_NAME} PRIVATE Qt::Core Qt::Widgets Qt::Svg)
 
 # Find and link CURL library
 find_package(CURL REQUIRED)
@@ -46,6 +46,21 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/integrations
     ${CMAKE_CURRENT_SOURCE_DIR}/multidock
     ${CMAKE_CURRENT_SOURCE_DIR}/sources)
+
+# Shared StreamUP custom-window UI design system (obs-streamup-ui-gallery),
+# vendored under shared/obs-streamup-ui/. Compiled directly into the plugin
+# (header-only + one moc'd .cpp) so each plugin is self-contained: no shared
+# sub-target, no cross-plugin link, builds in any config/order.
+set(STREAMUP_UI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shared/obs-streamup-ui")
+target_include_directories(${PROJECT_NAME} PRIVATE
+  "${STREAMUP_UI_DIR}/include"
+  "${STREAMUP_UI_DIR}/include/streamup/ui" # flat includes inside switch-button.cpp
+)
+target_sources(${PROJECT_NAME} PRIVATE
+  "${STREAMUP_UI_DIR}/src/switch-button.cpp"
+  "${STREAMUP_UI_DIR}/include/streamup/ui/switch-button.hpp" # Q_OBJECT -> AUTOMOC
+  "${STREAMUP_UI_DIR}/include/streamup/ui/ios-checkbox.hpp"  # Q_OBJECT -> AUTOMOC
+)
 
 if((OS_LINUX OR OS_FREEBSD OR OS_OPENBSD) AND Qt_VERSION VERSION_LESS "6.9.0")
 	target_link_libraries(${PROJECT_NAME} PRIVATE Qt::GuiPrivate)
@@ -125,10 +140,6 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/hotkey-widget.cpp
   ui/ui-helpers.hpp
   ui/ui-helpers.cpp
-  ui/ui-styles.hpp
-  ui/ui-styles.cpp
-  ui/switch-button.hpp
-  ui/switch-button.cpp
   ui/menu-manager.hpp
   ui/menu-manager.cpp
   ui/settings-manager.hpp
@@ -246,10 +257,6 @@ source_group("UI" FILES
   ui/hotkey-widget.cpp
   ui/ui-helpers.hpp
   ui/ui-helpers.cpp
-  ui/ui-styles.hpp
-  ui/ui-styles.cpp
-  ui/switch-button.hpp
-  ui/switch-button.cpp
   ui/menu-manager.hpp
   ui/menu-manager.cpp
   ui/settings-manager.hpp

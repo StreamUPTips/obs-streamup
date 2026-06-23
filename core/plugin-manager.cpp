@@ -7,8 +7,14 @@
 #include "path-utils.hpp"
 #include "http-client.hpp"
 #include <sstream>
+#include <algorithm>
 #include "../ui/ui-helpers.hpp"
-#include "../ui/ui-styles.hpp"
+#include <streamup/ui/window-chrome.hpp>
+#include <streamup/ui/pill-button.hpp>
+#include <streamup/ui/labels.hpp>
+#include <streamup/ui/ui-scrollbar.hpp>
+#include <streamup/ui/ios-checkbox.hpp>
+#include "version.h"
 #include "../ui/settings-manager.hpp"
 #include "obs-wrappers.hpp"
 #include "error-handler.hpp"
@@ -25,10 +31,15 @@
 #include <QTableWidgetItem>
 #include <QHeaderView>
 #include <QUrl>
-#include <QGroupBox>
-#include <QScrollArea>
+#include <QDesktopServices>
+#include <QApplication>
+#include <QClipboard>
+#include <QMenu>
+#include <QAction>
+#include <QFrame>
+#include <QPainter>
+#include <QPainterPath>
 #include <QPushButton>
-#include <QCheckBox>
 #include <QObject>
 #include <QTimer>
 #include <QSizePolicy>
@@ -53,10 +64,155 @@
 #endif
 #endif
 
-// UI functions now accessed through StreamUP::UIHelpers namespace
+using namespace StreamUP::UIStyles;
+namespace su = StreamUP::UIStyles;
 
 namespace StreamUP {
 namespace PluginManager {
+
+namespace {
+
+// ── Local table helpers (replacing the legacy ui-styles factory) ──────────────
+// The SoT has no styled-table factory; we build a QTableWidget with tableStyle()
+// + custom scrollbars and wrap it in a RoundedContainer (radius 18) so the table
+// corners clip cleanly. The container is tracked on a widget property so
+// GetTableContainerLocal() returns the same wrapper the table lives in.
+QTableWidget *MakeStyledTable(const QStringList &headers, QWidget *parent = nullptr)
+{
+	QTableWidget *table = new QTableWidget(parent);
+
+	table->setAlternatingRowColors(false);
+	table->setSelectionBehavior(QAbstractItemView::SelectRows);
+	table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+	table->setSortingEnabled(false);
+	table->setShowGrid(false);
+	table->setFrameShape(QFrame::NoFrame);
+	table->horizontalHeader()->setStretchLastSection(true);
+	table->verticalHeader()->setVisible(false);
+	table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+
+	table->setStyleSheet(su::tableStyle());
+	su::useScrollBars(table);
+
+	// Right-click → Copy / Copy Row (preserved from the legacy factory).
+	table->setContextMenuPolicy(Qt::CustomContextMenu);
+	QObject::connect(table, &QWidget::customContextMenuRequested, [table](const QPoint &pos) {
+		QTableWidgetItem *item = table->itemAt(pos);
+		if (!item)
+			return;
+		QMenu contextMenu(table);
+		contextMenu.setStyleSheet(su::menuStyle());
+		QAction *copyAction = contextMenu.addAction("Copy");
+		QObject::connect(copyAction, &QAction::triggered,
+				 [item]() { QApplication::clipboard()->setText(item->text()); });
+		QAction *copyRowAction = contextMenu.addAction("Copy Row");
+		QObject::connect(copyRowAction, &QAction::triggered, [table, item]() {
+			int row = item->row();
+			QStringList rowData;
+			for (int col = 0; col < table->columnCount(); ++col) {
+				QTableWidgetItem *cellItem = table->item(row, col);
+				rowData << (cellItem ? cellItem->text() : "");
+			}
+			QApplication::clipboard()->setText(rowData.join("\t"));
+		});
+		contextMenu.exec(table->mapToGlobal(pos));
+	});
+
+	if (!headers.isEmpty()) {
+		table->setColumnCount(headers.count());
+		table->setHorizontalHeaderLabels(headers);
+		table->horizontalHeader()->setSectionResizeMode(headers.count() - 1, QHeaderView::Stretch);
+	}
+
+	return table;
+}
+
+// Wrap (once) the table in a RoundedContainer(18) for corner clipping, caching
+// the container on the table so repeat calls return the same wrapper.
+QWidget *GetTableContainerLocal(QTableWidget *table)
+{
+	if (!table)
+		return table;
+	QVariant v = table->property("streamup_table_container");
+	if (v.isValid())
+		return static_cast<QWidget *>(v.value<void *>());
+
+	auto *container = new su::RoundedContainer(18, table->parentWidget());
+	auto *lay = new QVBoxLayout(container);
+	lay->setContentsMargins(S(1), S(1), S(1), S(1));
+	lay->setSpacing(0);
+
+	if (table->minimumHeight() > 0)
+		container->setMinimumHeight(table->minimumHeight());
+	if (table->maximumHeight() < QWIDGETSIZE_MAX)
+		container->setMaximumHeight(table->maximumHeight());
+	if (table->minimumWidth() > 0)
+		container->setMinimumWidth(table->minimumWidth());
+	container->setSizePolicy(table->sizePolicy());
+
+	table->setParent(container);
+	lay->addWidget(table);
+	table->setProperty("streamup_table_container", QVariant::fromValue(static_cast<QWidget *>(container)));
+	return container;
+}
+
+// Resize columns to their content (plus a little breathing room), then record
+// the full natural pixel width the table needs so the host window can size to
+// fit it. The last column stretches, so we give it a sensible minimum too and
+// fold that into the reported minimum width. The reported width is stashed on a
+// widget property ("streamup_table_natural_width") so the dialog can read the
+// widest table without re-measuring.
+void AutoResizeTableColumnsLocal(QTableWidget *table)
+{
+	table->resizeColumnsToContents();
+	for (int col = 0; col < table->columnCount() - 1; ++col)
+		table->setColumnWidth(col, table->columnWidth(col) + S(16));
+
+	int fixedColumnsWidth = 0;
+	for (int col = 0; col < table->columnCount() - 1; ++col)
+		fixedColumnsWidth += table->columnWidth(col);
+
+	// The stretchy last column also has natural content; honour the larger of a
+	// sensible minimum and its resized-to-content width so links aren't clipped.
+	const int lastCol = table->columnCount() - 1;
+	int lastColWidth = S(120);
+	if (lastCol >= 0)
+		lastColWidth = std::max(lastColWidth, table->columnWidth(lastCol) + S(16));
+
+	// Frame + a vertical scrollbar's worth of slack so the row never clips and a
+	// fallback scrollbar (if rows overflow) doesn't push columns off-screen.
+	const int chrome = S(Sizes::SCROLLBAR_SIZE) + S(8);
+	const int naturalWidth = fixedColumnsWidth + lastColWidth + chrome;
+
+	table->setMinimumWidth(naturalWidth);
+	table->setProperty("streamup_table_natural_width", naturalWidth);
+}
+
+void ApplyDialogTableSizingLocal(QTableWidget *table, int maxRows = 10)
+{
+	if (!table)
+		return;
+	const int kRowHeight = S(36);
+	table->verticalHeader()->setDefaultSectionSize(kRowHeight);
+	const int rowCount = table->rowCount();
+	const int visibleRows = std::min(rowCount, maxRows);
+	const int headerH = table->horizontalHeader()->sizeHint().height();
+	table->setFixedHeight(headerH + (kRowHeight * visibleRows) + S(6));
+	table->setVerticalScrollBarPolicy(rowCount > maxRows ? Qt::ScrollBarAsNeeded
+							     : Qt::ScrollBarAlwaysOff);
+}
+
+void HandleTableCellClickLocal(QTableWidget *table, int row, int column)
+{
+	QTableWidgetItem *item = table->item(row, column);
+	if (!item)
+		return;
+	QVariant urlData = item->data(Qt::UserRole);
+	if (urlData.isValid())
+		QDesktopServices::openUrl(QUrl(urlData.toString()));
+}
+
+} // namespace
 
 //-------------------TABLE WIDGET HELPERS-------------------
 QString ExtractDomainFromUrl(const QString& url) {
@@ -94,7 +250,7 @@ QTableWidget* CreateMissingPluginsTable(const std::map<std::string, std::string>
 		obs_module_text("UI.Label.WebsiteLink")
 	};
 	
-	QTableWidget* table = StreamUP::UIStyles::CreateStyledTable(headers);
+	QTableWidget* table = MakeStyledTable(headers);
 	table->setRowCount(static_cast<int>(missing_modules.size()));
 	
 	int row = 0;
@@ -140,7 +296,7 @@ QTableWidget* CreateMissingPluginsTable(const std::map<std::string, std::string>
 		row++;
 	}
 	
-	StreamUP::UIStyles::AutoResizeTableColumns(table);
+	AutoResizeTableColumnsLocal(table);
 	return table;
 }
 
@@ -153,7 +309,7 @@ QTableWidget* CreateUpdatesTable(const std::map<std::string, std::string>& versi
 		obs_module_text("UI.Label.WebsiteLink")
 	};
 	
-	QTableWidget* table = StreamUP::UIStyles::CreateStyledTable(headers);
+	QTableWidget* table = MakeStyledTable(headers);
 	table->setRowCount(static_cast<int>(version_mismatch_modules.size()));
 	
 	int row = 0;
@@ -200,7 +356,7 @@ QTableWidget* CreateUpdatesTable(const std::map<std::string, std::string>& versi
 		row++;
 	}
 	
-	StreamUP::UIStyles::AutoResizeTableColumns(table);
+	AutoResizeTableColumnsLocal(table);
 	return table;
 }
 
@@ -212,7 +368,7 @@ QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& fai
 		obs_module_text("UI.Label.WebsiteLink")
 	};
 
-	QTableWidget* table = StreamUP::UIStyles::CreateStyledTable(headers);
+	QTableWidget* table = MakeStyledTable(headers);
 	table->setRowCount(static_cast<int>(failed_modules.size()));
 
 	int row = 0;
@@ -278,7 +434,7 @@ QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& fai
 		row++;
 	}
 
-	StreamUP::UIStyles::AutoResizeTableColumns(table);
+	AutoResizeTableColumnsLocal(table);
 	return table;
 }
 
@@ -294,50 +450,48 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 	if (manuallyTriggered) {
 		StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
 			// Frameless toast card: ShadowDialog elevation shadow + rounded
-			// success-green RoundedContainer (fill only, no border stroke).
-			const int sm = StreamUP::UIStyles::ShadowDialog::kShadowMargin;
-			QDialog *toast = new StreamUP::UIStyles::ShadowDialog();
+			// success-green card (fill only, no border stroke). The SoT
+			// RoundedContainer now takes a fill colour, so the toast uses it
+			// directly with COLOR_SUCCESS.
+			const int sm = S(su::ShadowDialog::kShadowMargin);
+			QDialog *toast = new su::ShadowDialog();
 			toast->setWindowTitle(obs_module_text("App.Name"));
 			toast->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog | Qt::WindowStaysOnTopHint);
 			toast->setAttribute(Qt::WA_DeleteOnClose);
 			toast->setAttribute(Qt::WA_TranslucentBackground);
-			toast->setFixedSize(StreamUP::UIStyles::S(400) + 2 * sm, StreamUP::UIStyles::S(100) + 2 * sm);
+			toast->setFixedSize(S(400) + 2 * sm, S(100) + 2 * sm);
 
 			QVBoxLayout *outerLayout = new QVBoxLayout(toast);
 			outerLayout->setContentsMargins(sm, sm, sm, sm);
 			outerLayout->setSpacing(0);
 
-			auto *card = new StreamUP::UIStyles::RoundedContainer(14);
-			card->setFillColor(StreamUP::UIStyles::Colors::SUCCESS);
+			auto *card = new su::RoundedContainer(18, nullptr, QColor(Colors::COLOR_SUCCESS));
 			outerLayout->addWidget(card);
 
 			QVBoxLayout *toastLayout = new QVBoxLayout(card);
-			toastLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL,
-				StreamUP::UIStyles::Sizes::PADDING_MEDIUM,
-				StreamUP::UIStyles::Sizes::PADDING_XL,
-				StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
-			toastLayout->setSpacing(StreamUP::UIStyles::S(8));
-			
+			toastLayout->setContentsMargins(S(20), S(12), S(20), S(12));
+			toastLayout->setSpacing(S(8));
+
 			QLabel *messageLabel = new QLabel(obs_module_text("Plugin.Status.AllUpToDate"));
-			messageLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
+			messageLabel->setStyleSheet(scale_qss(QString(
 				"QLabel {"
 				"color: %2;"
 				"font-size: %1px;"
 				"font-weight: bold;"
 				"background: transparent;"
 				"border: none;"
-				"}").arg(StreamUP::UIStyles::Sizes::FONT_SIZE_MEDIUM).arg(StreamUP::UIStyles::Colors::BG_DARKEST)));
+				"}").arg(S(14)).arg(Colors::BG_DARKEST)));
 			messageLabel->setAlignment(Qt::AlignCenter);
 			toastLayout->addWidget(messageLabel);
 
 			QLabel *countdownLabel = new QLabel(obs_module_text("Plugin.Message.AutoClosing3"));
-			countdownLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
+			countdownLabel->setStyleSheet(scale_qss(QString(
 				"QLabel {"
 				"color: rgba(30, 30, 46, 0.75);"
 				"font-size: %1px;"
 				"background: transparent;"
 				"border: none;"
-				"}").arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)));
+				"}").arg(S(12))));
 			countdownLabel->setAlignment(Qt::AlignCenter);
 			toastLayout->addWidget(countdownLabel);
 			
@@ -389,29 +543,24 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			titleText = obs_module_text("Plugin.Status.FailedToLoadOnly");
 		}
 
-		QString prefixedTitle = QString::fromUtf8("StreamUP \xe2\x80\xa2 ") + titleText;
-		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(prefixedTitle);
+		// Branded custom window. Primary StreamUP surface → brandFooter=true.
+		// brandName "StreamUP" + the bare status title compose "StreamUP • <title>".
+		QWidget *parent = static_cast<QWidget *>(obs_frontend_get_main_window());
+		su::WindowShell shell = su::makeWindow(titleText, "v" PROJECT_VERSION, parent,
+						       /*brandFooter=*/true, "StreamUP");
+		QDialog *dialog = shell.dialog;
+		QVBoxLayout *dialogLayout = shell.content;
 
-		QVBoxLayout *dialogLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
+		// Header section — centered title + description in the content (the chrome
+		// titlebar already shows the composed title; this echoes it inside the body).
+		QWidget *headerWidget = new QWidget();
+		QVBoxLayout *headerLayout = new QVBoxLayout(headerWidget);
+		headerLayout->setContentsMargins(S(20), S(20), S(20), S(8));
+		headerLayout->setSpacing(S(4));
 
-		// Header section (same style as WebSocket Commands)
-		QWidget* headerWidget = new QWidget();
-		headerWidget->setObjectName("headerWidget");
-		headerWidget->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QWidget#headerWidget { background: %1; padding: %2px %3px %4px %3px; }")
-			.arg(StreamUP::UIStyles::Colors::BACKGROUND_CARD)
-			.arg(StreamUP::UIStyles::Sizes::PADDING_XL + StreamUP::UIStyles::Sizes::PADDING_MEDIUM) // More padding at top
-			.arg(StreamUP::UIStyles::Sizes::PADDING_XL)
-			.arg(StreamUP::UIStyles::Sizes::PADDING_XL))); // Standard padding at bottom
-		
-		QVBoxLayout* headerLayout = new QVBoxLayout(headerWidget);
-		headerLayout->setContentsMargins(0, 0, 0, 0);
-		
-		QLabel* titleLabel = StreamUP::UIStyles::CreateStyledTitle(titleText);
+		QLabel *titleLabel = su::makeLabel(titleText, 22, 700, Colors::TEXT_PRIMARY);
 		titleLabel->setAlignment(Qt::AlignCenter);
 		headerLayout->addWidget(titleLabel);
-		
-		// Add reduced spacing between title and description
-		headerLayout->addSpacing(-StreamUP::UIStyles::Sizes::SPACING_SMALL);
 
 		QString descText;
 		// Description should match the title context
@@ -424,120 +573,60 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		} else if (hasFailedToLoad) {
 			descText = obs_module_text("Plugin.Message.FailedToLoadDescription");
 		}
-		
-		QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(descText);
-		headerLayout->addWidget(subtitleLabel);
-		
-		dialogLayout->addWidget(headerWidget);
 
+		QLabel *subtitleLabel = su::makeLabel(descText, 13, 500, Colors::TEXT_SECONDARY);
+		subtitleLabel->setAlignment(Qt::AlignCenter);
+		subtitleLabel->setWordWrap(true);
+		headerLayout->addWidget(subtitleLabel);
+
+		dialogLayout->addWidget(headerWidget);
 
 		// Content area - direct layout without main scrolling
 		QVBoxLayout *contentLayout = new QVBoxLayout();
-		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
-			StreamUP::UIStyles::Sizes::PADDING_XL, 
-			StreamUP::UIStyles::Sizes::PADDING_XL + 5, 
-			StreamUP::UIStyles::Sizes::PADDING_XL);
-		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
-		
+		contentLayout->setContentsMargins(S(25), S(20), S(25), S(20));
+		contentLayout->setSpacing(S(20));
+
 		dialogLayout->addLayout(contentLayout);
 
-		if (hasMissing) {
-			// Create expandable GroupBox with table
-			QGroupBox *missingGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Plugin.Dialog.MissingGroup"), "error");
-			missingGroup->setMinimumWidth(StreamUP::UIStyles::S(500));
-			missingGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-			
-			QVBoxLayout *missingLayout = new QVBoxLayout(missingGroup);
-			missingLayout->setContentsMargins(StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8)); // Reduced top margin from 20 to 8
-			missingLayout->setSpacing(0); // Remove spacing around table
-			
-			// Create modern table widget
-			QTableWidget *missingTable = CreateMissingPluginsTable(missing_modules);
+		// Track the widest table so the window can size to fit its content
+		// (columns clip horizontally if the window is narrower than the table).
+		int widestTable = 0;
 
-			StreamUP::UIStyles::ApplyDialogTableSizing(missingTable);
+		// Section helper: accent sectionHeader + a plain widget holding the table
+		// (replaces the legacy CreateStyledGroupBox frame).
+		auto addTableSection = [&](const char *headerKey, QTableWidget *table) {
+			widestTable = std::max(widestTable,
+					       table->property("streamup_table_natural_width").toInt());
 
-			// Remove table border and background to blend with group box
-			missingTable->setStyleSheet(StreamUP::UIStyles::scale_qss(
-				missingTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET));
-			
-			// Connect click handler for website/download links
-			QObject::connect(missingTable, &QTableWidget::cellClicked, 
-							[missingTable](int row, int column) {
-				StreamUP::UIStyles::HandleTableCellClick(missingTable, row, column);
-			});
-			
-			missingLayout->addWidget(StreamUP::UIStyles::GetTableContainer(missingTable));
-			contentLayout->addWidget(missingGroup);
-		}
+			QWidget *section = new QWidget();
+			section->setMinimumWidth(S(500));
+			section->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+			QVBoxLayout *secLay = new QVBoxLayout(section);
+			secLay->setContentsMargins(S(8), S(8), S(8), S(8));
+			secLay->setSpacing(S(4));
+			secLay->addWidget(su::sectionHeader(obs_module_text(headerKey)));
 
-		if (hasUpdates) {
-			// Create expandable GroupBox with table
-			QGroupBox *updateGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Plugin.Dialog.UpdateGroup"), "warning");
-			updateGroup->setMinimumWidth(StreamUP::UIStyles::S(500));
-			updateGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-			
-			QVBoxLayout *updateLayout = new QVBoxLayout(updateGroup);
-			updateLayout->setContentsMargins(StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8)); // Reduced top margin from 20 to 8
-			updateLayout->setSpacing(0); // Remove spacing around table
-			
-			// Create modern table widget
-			QTableWidget *updateTable = CreateUpdatesTable(version_mismatch_modules);
+			ApplyDialogTableSizingLocal(table);
+			QObject::connect(table, &QTableWidget::cellClicked,
+					 [table](int row, int column) { HandleTableCellClickLocal(table, row, column); });
+			secLay->addWidget(GetTableContainerLocal(table));
+			contentLayout->addWidget(section);
+		};
 
-			StreamUP::UIStyles::ApplyDialogTableSizing(updateTable);
-
-			// Remove table border and background to blend with group box
-			updateTable->setStyleSheet(StreamUP::UIStyles::scale_qss(
-				updateTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET));
-			
-			// Connect click handler for website/download links
-			QObject::connect(updateTable, &QTableWidget::cellClicked, 
-							[updateTable](int row, int column) {
-				StreamUP::UIStyles::HandleTableCellClick(updateTable, row, column);
-			});
-			
-			updateLayout->addWidget(StreamUP::UIStyles::GetTableContainer(updateTable));
-			contentLayout->addWidget(updateGroup);
-		}
-
-		if (hasFailedToLoad) {
-			// Create expandable GroupBox with table for failed to load plugins
-			QGroupBox *failedGroup = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("Plugin.Dialog.FailedToLoadGroup"), "warning");
-			failedGroup->setMinimumWidth(StreamUP::UIStyles::S(500));
-			failedGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-
-			QVBoxLayout *failedLayout = new QVBoxLayout(failedGroup);
-			failedLayout->setContentsMargins(StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8));
-			failedLayout->setSpacing(0);
-
-			// Create modern table widget
-			QTableWidget *failedTable = CreateFailedToLoadPluginsTable(failed_to_load_modules);
-
-			StreamUP::UIStyles::ApplyDialogTableSizing(failedTable);
-
-			// Remove table border and background to blend with group box
-			failedTable->setStyleSheet(StreamUP::UIStyles::scale_qss(
-				failedTable->styleSheet() + StreamUP::UIStyles::TABLE_INLINE_STYLESHEET));
-
-			// Connect click handler for website/download links
-			QObject::connect(failedTable, &QTableWidget::cellClicked,
-							[failedTable](int row, int column) {
-				StreamUP::UIStyles::HandleTableCellClick(failedTable, row, column);
-			});
-
-			failedLayout->addWidget(StreamUP::UIStyles::GetTableContainer(failedTable));
-			contentLayout->addWidget(failedGroup);
-		}
-
-		// Content is now directly in the dialog layout
+		if (hasMissing)
+			addTableSection("Plugin.Dialog.MissingGroup", CreateMissingPluginsTable(missing_modules));
+		if (hasUpdates)
+			addTableSection("Plugin.Dialog.UpdateGroup", CreateUpdatesTable(version_mismatch_modules));
+		if (hasFailedToLoad)
+			addTableSection("Plugin.Dialog.FailedToLoadGroup", CreateFailedToLoadPluginsTable(failed_to_load_modules));
 
 		// Add warning message above buttons if there's a continue callback (meaning this is for install product)
 		if (continueCallback) {
-			// Add spacing before warning
-			dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+			dialogLayout->addSpacing(S(12));
 
 			QLabel *warningLabel = new QLabel("⚠️ " + QString(obs_module_text("Plugin.Dialog.WarningContinue")));
 			warningLabel->setWordWrap(true);
-			warningLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
+			warningLabel->setStyleSheet(scale_qss(QString(
 				"QLabel {"
 				"background: rgba(45, 55, 72, 0.8);"
 				"color: #fbbf24;"
@@ -548,41 +637,39 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 				"font-size: %5px;"
 				"line-height: 1.4;"
 				"}")
-				.arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS)
-				.arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
-				.arg(StreamUP::UIStyles::Sizes::SPACING_SMALL)
-				.arg(StreamUP::UIStyles::Sizes::PADDING_XL + 5)
-				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
+				.arg(S(6))
+				.arg(S(12))
+				.arg(S(8))
+				.arg(S(25))
+				.arg(Sizes::FONT_SIZE_SMALL)));
 			dialogLayout->addWidget(warningLabel);
 		}
 
 		// Add skip checkbox for startup checks (only if there are updates/failures and no missing plugins)
-		QCheckBox* skipCheckbox = nullptr;
+		IOSCheckBox *skipCheckbox = nullptr;
 		if (isStartupCheck && !hasMissing && (hasUpdates || hasFailedToLoad)) {
-			dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-
-			skipCheckbox = new QCheckBox(obs_module_text("Plugin.Dialog.SkipTheseUpdates"));
-
-			dialogLayout->addWidget(skipCheckbox);
+			dialogLayout->addSpacing(S(12));
+			skipCheckbox = new IOSCheckBox(obs_module_text("Plugin.Dialog.SkipTheseUpdates"));
+			QWidget *skipRow = new QWidget();
+			QHBoxLayout *skipLay = new QHBoxLayout(skipRow);
+			skipLay->setContentsMargins(S(25), 0, S(25), 0);
+			skipLay->addWidget(skipCheckbox);
+			skipLay->addStretch();
+			dialogLayout->addWidget(skipRow);
 		}
 
-		// Add styled buttons in footer
-		QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
-		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-		buttonLayout->addStretch();
-
-		// Add Continue Anyway button if callback is provided
+		// Action buttons → footer's right-anchored slot.
+		// Continue Anyway is a risky action → "primary"; OK is the neutral dismiss.
 		if (continueCallback) {
-			QPushButton *continueButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Message.ContinueAnyway"), "warning");
+			auto *continueButton = new su::PillButton(obs_module_text("UI.Message.ContinueAnyway"), "primary");
 			QObject::connect(continueButton, &QPushButton::clicked, [dialog, continueCallback]() {
 				dialog->close();
 				continueCallback();
 			});
-			buttonLayout->addWidget(continueButton);
+			shell.footerButtons->addWidget(continueButton);
 		}
 
-		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("UI.Button.OK"), "neutral");
+		auto *okButton = new su::PillButton(obs_module_text("UI.Button.OK"), continueCallback ? "outline" : "primary");
 		QObject::connect(okButton, &QPushButton::clicked, [dialog, skipCheckbox, version_mismatch_modules, failed_to_load_modules]() {
 			// Save skipped updates if checkbox is checked
 			if (skipCheckbox && skipCheckbox->isChecked()) {
@@ -603,12 +690,19 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			}
 			dialog->close();
 		});
-		buttonLayout->addWidget(okButton);
+		shell.footerButtons->addWidget(okButton);
 
-		footerLayout->addLayout(buttonLayout);
-		
-		// Apply auto-sizing with larger defaults for plugin tables
-		StreamUP::UIStyles::ApplyAutoSizing(dialog, 700, 1000, 150, 800);
+		// Size the window to fit its widest table so columns aren't clipped
+		// horizontally. The table sits inside: content margins (S(25)*2) +
+		// section margins (S(8)*2) + container border (S(1)*2). Clamp to a sane
+		// range so the window never opens too small to show its table, nor wider
+		// than the screen. A horizontal scrollbar remains only as a fallback.
+		const int sideChrome = 2 * (S(25) + S(8) + S(1));
+		int contentW = widestTable + sideChrome;
+		contentW = std::clamp(contentW, S(640), S(1100));
+		dialog->resize(contentW + 2 * S(su::ShadowDialog::kShadowMargin),
+			       S(620) + 2 * S(su::ShadowDialog::kShadowMargin));
+		dialog->show();
 	});
 }
 

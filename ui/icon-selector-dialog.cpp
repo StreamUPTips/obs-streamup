@@ -1,6 +1,9 @@
 #include "icon-selector-dialog.hpp"
 #include "ui-helpers.hpp"
-#include "ui-styles.hpp"
+#include <streamup/ui/window-chrome.hpp>
+#include <streamup/ui/pill-button.hpp>
+#include <streamup/ui/dialogs.hpp>
+#include "version.h"
 #include <QApplication>
 #include <QCoreApplication>
 #include <QStyle>
@@ -19,27 +22,34 @@
 #include <obs-module.h>
 #include <util/bmem.h>
 
+using namespace StreamUP::UIStyles;
+namespace su = StreamUP::UIStyles;
+
 namespace StreamUP {
 
 static const QString ICON_BUTTON_STYLESHEET = QString(
     "QToolButton { border: 2px solid transparent; border-radius: 4px; }"
     "QToolButton:checked { border: 2px solid %1; background-color: %2; }"
     "QToolButton:hover { border: 2px solid %3; background-color: %4; }"
-).arg(UIStyles::Colors::PRIMARY_COLOR,
-     UIStyles::Colors::PRIMARY_ALPHA_30,
-     UIStyles::Colors::PRIMARY_HOVER,
-     UIStyles::Colors::SURFACE_SUBTLE);
+).arg(Colors::PRIMARY_COLOR,
+     "rgba(0,118,223,0.3)",
+     Colors::PRIMARY_HOVER,
+     Colors::BORDER_SUBTLE);
 
 IconSelectorDialog::IconSelectorDialog(const QString& currentIcon,
                                       const QString& currentCustomIcon,
                                       bool useCustomIconFlag,
                                       QWidget* parent)
-    : UIStyles::ShadowDialog(parent)
+    : ShadowDialog(parent)
     , iconButtonGroup(new QButtonGroup(this))
 {
-    UIStyles::ApplyFramelessChrome(this, obs_module_text("IconSelector.Dialog.Title"));
+    WindowShell chrome = applyChrome(this, obs_module_text("IconSelector.Dialog.Title"),
+                                     "v" PROJECT_VERSION, /*brandFooter=*/false, "StreamUP");
+    chrome.content->setContentsMargins(S(20), S(16), S(20), S(16));
+    mainLayout = chrome.content;
+    footerButtons = chrome.footerButtons;
     setModal(true);
-    resize(700 + 2 * UIStyles::ShadowDialog::kShadowMargin, 600 + 2 * UIStyles::ShadowDialog::kShadowMargin);
+    resize(700 + 2 * ShadowDialog::kShadowMargin, 600 + 2 * ShadowDialog::kShadowMargin);
 
     // Determine the initial selected path
     if (useCustomIconFlag && !currentCustomIcon.isEmpty()) {
@@ -69,25 +79,17 @@ IconSelectorDialog::IconSelectorDialog(const QString& currentIcon,
 }
 
 void IconSelectorDialog::setupUI() {
-    mainLayout = UIStyles::GetDialogContentLayout(this);
-
     // Icon tabs
     setupIconTabs();
     mainLayout->addWidget(iconTabs);
 
-    // Dialog buttons in footer
-    QVBoxLayout *footerLayout = UIStyles::GetDialogFooterLayout(this);
-    buttonLayout = new QHBoxLayout();
-    buttonLayout->addStretch();
+    // Dialog buttons in footer (right-anchored action slot)
+    okButton = new PillButton(obs_module_text("UI.Button.OK"), "primary");
+    cancelButton = new PillButton(obs_module_text("UI.Button.Cancel"), "outline");
 
-    okButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.OK"), "info");
-    cancelButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
+    footerButtons->addWidget(cancelButton);
+    footerButtons->addWidget(okButton);
 
-    buttonLayout->addWidget(okButton);
-    buttonLayout->addWidget(cancelButton);
-
-    footerLayout->addLayout(buttonLayout);
-    
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
 }
@@ -120,7 +122,8 @@ void IconSelectorDialog::setupIconTabs() {
     QHBoxLayout* customPathLayout = new QHBoxLayout();
     customIconPath = new QLineEdit(customIconsWidget);
     customIconPath->setPlaceholderText(obs_module_text("IconSelector.Placeholder.Path"));
-    browseCustomButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.Browse"), "info");
+    customIconPath->setStyleSheet(lineEditStyle());
+    browseCustomButton = new PillButton(obs_module_text("UI.Button.Browse"), "primary");
 
     customPathLayout->addWidget(customIconPath);
     customPathLayout->addWidget(browseCustomButton);
@@ -569,7 +572,7 @@ void IconSelectorDialog::onBrowseCustomIcon() {
         if (!pixmap.isNull()) {
             saveCustomIcon(fileName); // Save to history
         } else {
-            QMessageBox::warning(this, obs_module_text("IconSelector.Error.InvalidImageTitle"), obs_module_text("IconSelector.Error.InvalidImage"));
+            su::info(this, obs_module_text("IconSelector.Error.InvalidImageTitle"), obs_module_text("IconSelector.Error.InvalidImage"));
         }
     }
 }

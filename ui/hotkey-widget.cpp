@@ -1,5 +1,5 @@
 #include "hotkey-widget.hpp"
-#include "ui-styles.hpp"
+#include <streamup/ui/gallery-style.hpp>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QKeySequence>
@@ -41,11 +41,11 @@ HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
         "}")
         .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
         .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)
-        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
-        .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
-        .arg(StreamUP::UIStyles::Colors::BACKGROUND_INPUT)
-        .arg(StreamUP::UIStyles::Colors::BORDER_LIGHT)
-        .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS)));
+        .arg(8)
+        .arg(12)
+        .arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
+        .arg(StreamUP::UIStyles::Colors::POPUP_BORDER)
+        .arg(6)));
     m_displayLabel->setAlignment(Qt::AlignCenter);
     
     // Icon-only set/clear buttons matching the OBS hotkey settings layout —
@@ -61,7 +61,7 @@ HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
         "}"
         "QPushButton:hover { background: %2; border: 1px solid %2; }")
         .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
-        .arg(StreamUP::UIStyles::Colors::HOVER_OVERLAY);
+        .arg(StreamUP::UIStyles::Colors::HOVER_ROW);
 
     m_recordButton = new QPushButton();
     m_recordButton->setIcon(QIcon(":/images/icons/ui/hotkey-set-light.svg"));
@@ -192,8 +192,8 @@ void HotkeyWidget::StartRecording()
     m_displayLabel->setText(obs_module_text("Hotkey.Widget.PressKeys"));
     m_displayLabel->setStyleSheet(m_displayLabel->styleSheet() +
         QString("background: %1; border-color: %2;")
-        .arg(StreamUP::UIStyles::Colors::WARNING)
-        .arg(StreamUP::UIStyles::Colors::WARNING));
+        .arg(StreamUP::UIStyles::Colors::COLOR_WARNING)
+        .arg(StreamUP::UIStyles::Colors::COLOR_WARNING));
 
     setFocus();
     grabKeyboard();
@@ -219,7 +219,7 @@ void HotkeyWidget::StopRecording()
         "}"
         "QPushButton:hover { background: %2; border: 1px solid %2; }")
         .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
-        .arg(StreamUP::UIStyles::Colors::HOVER_OVERLAY)));
+        .arg(StreamUP::UIStyles::Colors::HOVER_ROW)));
     
     // Create hotkey data from recorded key combination
     if (m_recordedKey != 0) {
@@ -248,11 +248,11 @@ void HotkeyWidget::UpdateDisplay()
         "}")
         .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
         .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)
-        .arg(StreamUP::UIStyles::Sizes::PADDING_SMALL)
-        .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
-        .arg(StreamUP::UIStyles::Colors::BACKGROUND_INPUT)
-        .arg(StreamUP::UIStyles::Colors::BORDER_LIGHT)
-        .arg(StreamUP::UIStyles::Sizes::BORDER_RADIUS);
+        .arg(8)
+        .arg(12)
+        .arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
+        .arg(StreamUP::UIStyles::Colors::POPUP_BORDER)
+        .arg(6);
     
     if (m_currentHotkeyData && obs_data_array_count(m_currentHotkeyData) > 0) {
         // Parse OBS hotkey data format: {"key": "OBS_KEY_F1", "shift": true, "control": false, ...}

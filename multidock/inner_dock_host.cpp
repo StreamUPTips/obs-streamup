@@ -3,7 +3,7 @@
 #include "multidock_dock.hpp"
 #include "add_dock_dialog.hpp"
 #include "persistence.hpp"
-#include "../ui/ui-styles.hpp"
+#include <streamup/ui/gallery-style.hpp>
 #include <obs-module.h>
 #include <QApplication>
 #include <QWidget>

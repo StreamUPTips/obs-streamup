@@ -17,7 +17,9 @@
 #include "ui/streamup-toolbar.hpp"
 #include "ui/settings-manager.hpp"
 #include "ui/ui-helpers.hpp"
-#include "ui/ui-styles.hpp"
+#include <streamup/ui/window-chrome.hpp>
+#include <streamup/ui/pill-button.hpp>
+#include <streamup/ui/labels.hpp>
 #include "ui/menu-manager.hpp"
 #include "ui/notification-manager.hpp"
 #include "ui/hotkey-manager.hpp"
@@ -58,6 +60,9 @@
 #include <QThread>
 
 
+using namespace StreamUP::UIStyles;
+namespace su = StreamUP::UIStyles;
+
 OBS_DECLARE_MODULE()
 OBS_MODULE_AUTHOR("Andilippi");
 OBS_MODULE_USE_DEFAULT_LOCALE("streamup", "en-US")
@@ -79,50 +84,66 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		QString howTo3Str = obs_module_text(how3);
 		QString howTo4Str = obs_module_text(how4);
 
-		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleStr);
-		QVBoxLayout *dialogLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
-
-		QHBoxLayout *buttonLayout = new QHBoxLayout();
-
-		StreamUP::UIHelpers::CreateButton(buttonLayout, obs_module_text("UI.Button.Cancel"), [dialog]() { dialog->close(); });
-
-		StreamUP::UIHelpers::CreateButton(buttonLayout, titleStr, [=]() {
-			buttonCallback();
-			if (notificationMessage) {
-				StreamUP::NotificationManager::SendInfoNotification(titleStr, obs_module_text(notificationMessage));
-			}
-			dialog->close();
-		});
+		// Branded custom window (primary StreamUP surface → brandFooter=true).
+		// applyChrome's content area has zero padding, so set our own margins.
+		QWidget *parentWidget = static_cast<QWidget *>(obs_frontend_get_main_window());
+		su::WindowShell shell = su::makeWindow(titleStr, "v" PROJECT_VERSION, parentWidget,
+						       /*brandFooter=*/true, "StreamUP");
+		QDialog *dialog = shell.dialog;
+		QVBoxLayout *dialogLayout = shell.content;
+		dialogLayout->setContentsMargins(S(20), S(16), S(20), S(16));
+		dialogLayout->setSpacing(S(8));
 
 		dialogLayout->addLayout(StreamUP::UIHelpers::AddIconAndText(QStyle::SP_MessageBoxInformation, infoText1));
-		dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+		dialogLayout->addSpacing(S(8));
 
 		QLabel *info2 = StreamUP::UIHelpers::CreateRichTextLabel(infoText2Str, false, true, Qt::AlignTop);
 		dialogLayout->addWidget(info2, 0, Qt::AlignTop);
-		dialogLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+		dialogLayout->addSpacing(S(8));
 
-		QGroupBox *info3Box = StreamUP::UIStyles::CreateStyledGroupBox(obs_module_text("UI.Message.HowToUse"), "info");
-		info3Box->setMinimumWidth(StreamUP::UIStyles::S(350)); // Keep specific width requirement for this dialog
-		QVBoxLayout *info3BoxLayout = StreamUP::UIHelpers::CreateVBoxLayout(info3Box);
+		// "How to use" section: accent sectionHeader + plain widget holding the
+		// rows (replaces the legacy CreateStyledGroupBox frame).
+		QWidget *info3Box = new QWidget();
+		info3Box->setMinimumWidth(S(350)); // Keep specific width requirement for this dialog
+		QVBoxLayout *info3BoxLayout = new QVBoxLayout(info3Box);
+		info3BoxLayout->setContentsMargins(0, 0, 0, 0);
+		info3BoxLayout->setSpacing(S(4));
+		info3BoxLayout->addWidget(su::sectionHeader(obs_module_text("UI.Message.HowToUse")));
 		QLabel *info3 = StreamUP::UIHelpers::CreateRichTextLabel(infoText3Str, false, true);
 		QLabel *howTo1 = StreamUP::UIHelpers::CreateRichTextLabel(howTo1Str, false, true);
 		QLabel *howTo2 = StreamUP::UIHelpers::CreateRichTextLabel(howTo2Str, false, true);
 		QLabel *howTo3 = StreamUP::UIHelpers::CreateRichTextLabel(howTo3Str, false, true);
 		QLabel *howTo4 = StreamUP::UIHelpers::CreateRichTextLabel(howTo4Str, false, true);
 		info3BoxLayout->addWidget(info3);
-		info3BoxLayout->addSpacing(StreamUP::UIStyles::S(5));
+		info3BoxLayout->addSpacing(S(5));
 		info3BoxLayout->addWidget(howTo1);
 		info3BoxLayout->addWidget(howTo2);
 		info3BoxLayout->addWidget(howTo3);
 		info3BoxLayout->addWidget(howTo4);
 
-		QPushButton *copyJsonButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WebSocket.Button.Copy"), "neutral");
+		auto *copyJsonButton = new su::PillButton(obs_module_text("WebSocket.Button.Copy"), "neutral");
 		copyJsonButton->setToolTip(obs_module_text("WebSocket.Button.CopyTooltip"));
 		QObject::connect(copyJsonButton, &QPushButton::clicked, [=]() { StreamUP::UIHelpers::CopyToClipboard(jsonString); });
-		info3BoxLayout->addWidget(copyJsonButton);
+		info3BoxLayout->addSpacing(S(8));
+		info3BoxLayout->addWidget(copyJsonButton, 0, Qt::AlignLeft);
 		dialogLayout->addWidget(info3Box);
 
-		StreamUP::UIStyles::GetDialogFooterLayout(dialog)->addLayout(buttonLayout);
+		// Action buttons → footer's right-anchored slot. Cancel (outline) on the
+		// left, the confirm action (primary, labelled with the dialog title) right.
+		auto *cancelButton = new su::PillButton(obs_module_text("UI.Button.Cancel"), "outline");
+		QObject::connect(cancelButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
+		shell.footerButtons->addWidget(cancelButton);
+
+		auto *confirmButton = new su::PillButton(titleStr, "primary");
+		QObject::connect(confirmButton, &QPushButton::clicked, [=]() {
+			buttonCallback();
+			if (notificationMessage) {
+				StreamUP::NotificationManager::SendInfoNotification(titleStr, obs_module_text(notificationMessage));
+			}
+			dialog->close();
+		});
+		shell.footerButtons->addWidget(confirmButton);
+
 		dialog->show();
 	});
 }

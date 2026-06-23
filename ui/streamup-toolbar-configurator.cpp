@@ -2,7 +2,14 @@
 #include "../utilities/debug-logger.hpp"
 #include "hotkey-button-config-dialog.hpp"
 #include "settings-manager.hpp"
-#include "ui-styles.hpp"
+#include <streamup/ui/window-chrome.hpp> // ShadowDialog, applyChrome, WindowShell
+#include <streamup/ui/pill-button.hpp>   // PillButton
+#include <streamup/ui/labels.hpp>        // dimLabelStyle, formLabelStyle
+#include <streamup/ui/mac-inputs.hpp>    // MacSpinBox
+#include <streamup/ui/ui-scrollbar.hpp>  // useScrollBars
+#include <streamup/ui/dialogs.hpp>       // confirm
+#include "version.h"                     // PROJECT_VERSION
+#include <QPointer>
 #include <obs-module.h>
 #include <QApplication>
 #include <QMimeData>
@@ -24,6 +31,8 @@
 #include <QJsonArray>
 #include <obs-frontend-api.h>
 
+using namespace StreamUP::UIStyles;
+
 namespace StreamUP {
 
 ToolbarConfigurator::ToolbarConfigurator(QWidget *parent)
@@ -32,10 +41,17 @@ ToolbarConfigurator::ToolbarConfigurator(QWidget *parent)
     // Register custom types for QVariant
     qRegisterMetaType<std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem>>();
 
-    UIStyles::ApplyFramelessChrome(this, obs_module_text("StreamUP.Toolbar.Configurator.Title"));
+    // Apply StreamUP dialog chrome (frameless window with custom title bar).
+    // brandFooter=true → primary configurator window (SoT brand line + taskbar button).
+    WindowShell chrome = applyChrome(this, obs_module_text("StreamUP.Toolbar.Configurator.Title"),
+                                     "v" PROJECT_VERSION, /*brandFooter=*/true, "StreamUP");
+    chromeContent = chrome.content;
+    chromeFooterButtons = chrome.footerButtons;
+    chromeContent->setContentsMargins(S(20), S(16), S(20), S(16));
+
     setModal(true);
-    resize(900 + 2 * UIStyles::ShadowDialog::kShadowMargin, 650 + 2 * UIStyles::ShadowDialog::kShadowMargin);
-    
+    resize(S(900) + 2 * S(ShadowDialog::kShadowMargin), S(650) + 2 * S(ShadowDialog::kShadowMargin));
+
     setupUI();
     
     // Load current configuration
@@ -51,8 +67,8 @@ ToolbarConfigurator::~ToolbarConfigurator() = default;
 
 void ToolbarConfigurator::setupUI()
 {
-    QVBoxLayout* mainLayout = UIStyles::GetDialogContentLayout(this);
-    
+    QVBoxLayout* mainLayout = chromeContent;
+
     // Create splitter for left and right panels
     mainSplitter = new QSplitter(Qt::Horizontal, this);
     // Style the splitter handle to use darkest color
@@ -73,7 +89,7 @@ void ToolbarConfigurator::setupUI()
     
     // Add heading to left panel
     QLabel* leftHeading = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AvailableItems")));
-    leftHeading->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetDescriptionLabelStyle()));
+    leftHeading->setStyleSheet(dimLabelStyle());
     leftLayout->addWidget(leftHeading);
     
     // Create tab widget
@@ -103,7 +119,7 @@ void ToolbarConfigurator::setupUI()
         "} "
         "QTabBar::tab:hover:!selected { "
 				 "    background-color: " +
-				 QString(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30) +
+				 QString("rgba(0,118,223,0.3)") +
 				 "; "
         "    color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
         "}"
@@ -140,7 +156,7 @@ void ToolbarConfigurator::setupUI()
         "} "
         "QTreeWidget::item:hover { "
 				      "    background-color: " +
-				      QString(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30) +
+				      QString("rgba(0,118,223,0.3)") +
 				      "; "
         "} "
         "QTreeWidget::item:selected { "
@@ -196,7 +212,7 @@ void ToolbarConfigurator::setupUI()
     
     addBuiltinButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddSelectedButton")));
     addBuiltinButton->setEnabled(false);
-    addBuiltinButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
+    addBuiltinButton->setStyleSheet(buttonStyle("primary"));
     builtinTabLayout->addWidget(addBuiltinButton, 0); // Don't stretch button
     
     itemTabWidget->addTab(builtinTab, "OBS");
@@ -231,7 +247,7 @@ void ToolbarConfigurator::setupUI()
         "} "
         "QTreeWidget::item:hover { "
 				   "    background-color: " +
-				   QString(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30) +
+				   QString("rgba(0,118,223,0.3)") +
 				   "; "
         "} "
         "QTreeWidget::item:selected { "
@@ -287,7 +303,7 @@ void ToolbarConfigurator::setupUI()
     
     addDockButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddSelectedDockButton")));
     addDockButton->setEnabled(false);
-    addDockButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
+    addDockButton->setStyleSheet(buttonStyle("primary"));
     dockTabLayout->addWidget(addDockButton, 0); // Don't stretch button
     
     itemTabWidget->addTab(dockTab, QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.StreamUPTab")));
@@ -313,7 +329,7 @@ void ToolbarConfigurator::setupUI()
     
     // Hotkey button section
     QLabel* hotkeyLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.HotkeyButtons")));
-    hotkeyLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetDescriptionLabelStyle()));
+    hotkeyLabel->setStyleSheet(dimLabelStyle());
     hotkeyContainerLayout->addWidget(hotkeyLabel);
     
     QLabel* hotkeyDescription = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.HotkeyDescription")));
@@ -322,7 +338,7 @@ void ToolbarConfigurator::setupUI()
     hotkeyContainerLayout->addWidget(hotkeyDescription);
     
     addHotkeyButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddHotkeyButton")));
-    addHotkeyButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
+    addHotkeyButton->setStyleSheet(buttonStyle("primary"));
     hotkeyContainerLayout->addWidget(addHotkeyButton);
     
     hotkeyContainerLayout->addStretch(); // Push content to top
@@ -352,30 +368,32 @@ void ToolbarConfigurator::setupUI()
     
     // Custom spacer section
     QLabel* spacerLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.CustomSpacer")));
-    spacerLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetDescriptionLabelStyle()));
+    spacerLabel->setStyleSheet(dimLabelStyle());
     spacerContainerLayout->addWidget(spacerLabel);
     
     QHBoxLayout* sizeLayout = new QHBoxLayout();
     sizeLayout->addWidget(new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.SizeLabel"))));
-    spacerSizeSpinBox = new QSpinBox();
+    MacSpinBox* spacerSpin = new MacSpinBox();
+    spacerSizeSpinBox = spacerSpin;
     spacerSizeSpinBox->setRange(5, 200);
     spacerSizeSpinBox->setValue(20);
-    spacerSizeSpinBox->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetSpinBoxStyle()));
+    spacerSpin->setOnCard(true);
+    spacerSpin->setFixedHeight(S(28));
     sizeLayout->addWidget(spacerSizeSpinBox);
     sizeLayout->addStretch();
     spacerContainerLayout->addLayout(sizeLayout);
     
     addCustomSpacerButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddCustomSpacer")));
-    addCustomSpacerButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
+    addCustomSpacerButton->setStyleSheet(buttonStyle("primary"));
     spacerContainerLayout->addWidget(addCustomSpacerButton);
     
     // Separator section
     QLabel* separatorLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.Separator")));
-    separatorLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetDescriptionLabelStyle()));
+    separatorLabel->setStyleSheet(dimLabelStyle());
     spacerContainerLayout->addWidget(separatorLabel);
     
     addSeparatorButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddSeparator")));
-    addSeparatorButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
+    addSeparatorButton->setStyleSheet(buttonStyle("primary"));
     spacerContainerLayout->addWidget(addSeparatorButton);
     
     spacerTabLayout->addWidget(spacerContainer);
@@ -392,56 +410,12 @@ void ToolbarConfigurator::setupUI()
     rightLayout->setSpacing(StreamUP::UIStyles::S(12));
     
     configLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.CurrentConfiguration")));
-    configLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetDescriptionLabelStyle() + "font-weight: bold;"));
+    configLabel->setStyleSheet(formLabelStyle());
     rightLayout->addWidget(configLabel);
     
     currentConfigList = new DraggableListWidget();
-    currentConfigList->setStyleSheet(StreamUP::UIStyles::scale_qss(
-        "QListWidget { "
-        "    border: none; "
-        "    border-radius: 12px; "
-        "    background-color: " + QString(StreamUP::UIStyles::Colors::BG_DARKEST) + "; "
-        "    color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
-        "    selection-background-color: transparent; "
-        "    selection-color: " + QString(StreamUP::UIStyles::Colors::TEXT_PRIMARY) + "; "
-        "    outline: none; "
-        "    padding: 8px; "
-        "    show-decoration-selected: 0; "
-        "} "
-        "QListWidget::item { "
-        "    padding: 6px 12px; "
-        "    margin: 2px 4px; "
-        "    border: none; "
-        "    border-radius: 14px; "
-        "    background-color: transparent; "
-        "} "
-        "QListWidget::item:selected, QListWidget::item:selected:active, QListWidget::item:selected:!active { "
-        "    background-color: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
-        "    border: none; "
-        "    outline: none; "
-        "} "
-        "QListWidget::item:hover { "
-				     "    background-color: " +
-				     QString(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30) +
-				     "; "
-        "} "
-        "QScrollBar:vertical { "
-        "    background: " + QString(StreamUP::UIStyles::Colors::BG_SECONDARY) + "; "
-        "    width: 6px; "
-        "    border-radius: 3px; "
-        "} "
-        "QScrollBar::handle:vertical { "
-        "    background: " + QString(StreamUP::UIStyles::Colors::PRIMARY_COLOR) + "; "
-        "    border-radius: 3px; "
-        "    min-height: 20px; "
-        "} "
-        "QScrollBar::handle:vertical:hover { "
-        "    background: " + QString(StreamUP::UIStyles::Colors::PRIMARY_HOVER) + "; "
-        "} "
-        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { "
-        "    height: 0px; "
-        "}"
-    ));
+    currentConfigList->setStyleSheet(listStyle());
+    useScrollBars(currentConfigList);
     rightLayout->addWidget(currentConfigList, 1); // Give list widget stretch priority
     
     // Add spacer to push buttons to bottom - matching left panel
@@ -452,23 +426,23 @@ void ToolbarConfigurator::setupUI()
     
     removeButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.Remove")));
     removeButton->setEnabled(false);
-    removeButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
+    removeButton->setStyleSheet(buttonStyle("primary"));
     configButtonsLayout->addWidget(removeButton);
     
     moveUpButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.MoveUp")));
     moveUpButton->setEnabled(false);
-    moveUpButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
+    moveUpButton->setStyleSheet(buttonStyle("primary"));
     configButtonsLayout->addWidget(moveUpButton);
     
     moveDownButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.MoveDown")));
     moveDownButton->setEnabled(false);
-    moveDownButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
+    moveDownButton->setStyleSheet(buttonStyle("primary"));
     configButtonsLayout->addWidget(moveDownButton);
     
     configButtonsLayout->addStretch();
     
     resetButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.ResetToDefault")));
-    resetButton->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetButtonStyle()));
+    resetButton->setStyleSheet(buttonStyle("danger"));
     configButtonsLayout->addWidget(resetButton);
     
     rightLayout->addLayout(configButtonsLayout);
@@ -479,18 +453,13 @@ void ToolbarConfigurator::setupUI()
     mainSplitter->setHandleWidth(12); // Add 12px gap between panels
     
     // === BOTTOM BUTTONS (in footer) ===
-    QVBoxLayout *footerLayout = UIStyles::GetDialogFooterLayout(this);
-    bottomButtonsLayout = new QHBoxLayout();
-    bottomButtonsLayout->addStretch();
-
-    saveButton = UIStyles::CreateStyledButton(QString::fromUtf8(obs_module_text("UI.Button.Save")), "info");
+    // Action buttons go in the footer's right-anchored slot, inline with the
+    // brand line (Cancel = outline on the left, primary on the right).
+    cancelButton = new PillButton(QString::fromUtf8(obs_module_text("UI.Button.Cancel")), "outline");
+    saveButton = new PillButton(QString::fromUtf8(obs_module_text("UI.Button.Save")), "primary");
     saveButton->setDefault(true);
-    bottomButtonsLayout->addWidget(saveButton);
-
-    cancelButton = UIStyles::CreateStyledButton(QString::fromUtf8(obs_module_text("UI.Button.Cancel")), "neutral");
-    bottomButtonsLayout->addWidget(cancelButton);
-
-    footerLayout->addLayout(bottomButtonsLayout);
+    chromeFooterButtons->addWidget(cancelButton);
+    chromeFooterButtons->addWidget(saveButton);
     
     // Connect signals
     connect(builtinButtonsList, &QTreeWidget::itemSelectionChanged, this, &ToolbarConfigurator::updateButtonStates);
@@ -1257,14 +1226,18 @@ void ToolbarConfigurator::onItemDoubleClicked(QListWidgetItem* listItem)
 
 void ToolbarConfigurator::onResetToDefault()
 {
-    int ret = QMessageBox::question(this, QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.ResetConfirmation")),
-                                    QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.ResetMessage")),
-                                    QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-    
-    if (ret == QMessageBox::Yes) {
-        config.setDefaultConfiguration();
-        populateCurrentConfiguration();
-    }
+    // Branded modeless confirm (replaces the synchronous QMessageBox::question).
+    // The post-"Yes" reset work runs in the onAccept callback; QPointer guards
+    // against the dialog being closed before the user confirms.
+    QPointer<ToolbarConfigurator> self(this);
+    confirm(this, QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.ResetConfirmation")),
+            QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.ResetMessage")),
+            QString::fromUtf8(obs_module_text("UI.Button.Reset")), "danger", [self]() {
+                if (!self)
+                    return;
+                self->config.setDefaultConfiguration();
+                self->populateCurrentConfiguration();
+            });
 }
 
 

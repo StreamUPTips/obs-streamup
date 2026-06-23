@@ -1,5 +1,8 @@
 #include "hotkey-selector-dialog.hpp"
-#include "ui-styles.hpp"
+#include <streamup/ui/window-chrome.hpp>
+#include <streamup/ui/pill-button.hpp>
+#include <streamup/ui/labels.hpp>
+#include "version.h"
 #include <QHeaderView>
 #include <QApplication>
 #include <QDebug>
@@ -7,22 +10,27 @@
 #include <obs-hotkey.h>
 #include <obs-module.h>
 
+using namespace StreamUP::UIStyles;
+
 namespace StreamUP {
 
 HotkeySelectorDialog::HotkeySelectorDialog(QWidget* parent)
-    : UIStyles::ShadowDialog(parent)
+    : ShadowDialog(parent)
 {
-    UIStyles::ApplyFramelessChrome(this, obs_module_text("HotkeySelector.Dialog.Title"));
+    WindowShell chrome = applyChrome(this, obs_module_text("HotkeySelector.Dialog.Title"),
+                                     "v" PROJECT_VERSION, /*brandFooter=*/false, "StreamUP");
+    chrome.content->setContentsMargins(S(20), S(16), S(20), S(16));
+    mainLayout = chrome.content;
+    footerButtons = chrome.footerButtons;
     setModal(true);
-    resize(800 + 2 * UIStyles::ShadowDialog::kShadowMargin, 600 + 2 * UIStyles::ShadowDialog::kShadowMargin);
+    resize(800 + 2 * ShadowDialog::kShadowMargin, 600 + 2 * ShadowDialog::kShadowMargin);
 
     setupUI();
     populateHotkeys();
 }
 
 void HotkeySelectorDialog::setupUI() {
-    mainLayout = UIStyles::GetDialogContentLayout(this);
-    
+
     // Main splitter
     mainSplitter = new QSplitter(Qt::Horizontal, this);
     mainLayout->addWidget(mainSplitter);
@@ -34,6 +42,7 @@ void HotkeySelectorDialog::setupUI() {
     // Search box
     searchBox = new QLineEdit(leftPanel);
     searchBox->setPlaceholderText(obs_module_text("HotkeySelector.Placeholder.Search"));
+    searchBox->setStyleSheet(lineEditStyle());
     leftLayout->addWidget(searchBox);
     connect(searchBox, &QLineEdit::textChanged, this, &HotkeySelectorDialog::onSearchTextChanged);
     
@@ -55,30 +64,30 @@ void HotkeySelectorDialog::setupUI() {
     rightPanel = new QWidget();
     rightLayout = new QVBoxLayout(rightPanel);
     
-    detailsGroup = new QGroupBox(obs_module_text("HotkeySelector.Group.Details"), rightPanel);
-    detailsGroup->setStyleSheet(StreamUP::UIStyles::scale_qss(UIStyles::GetGroupBoxStyle("", "")));
+    rightLayout->addWidget(sectionHeader(obs_module_text("HotkeySelector.Group.Details")));
+    detailsGroup = new QWidget(rightPanel);
     QVBoxLayout* detailsLayout = new QVBoxLayout(detailsGroup);
-    
+
     selectedHotkeyName = new QLabel(obs_module_text("HotkeySelector.Message.NoSelection"), detailsGroup);
-    selectedHotkeyName->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("font-weight: bold; font-size: %1px; color: %2;")
-        .arg(UIStyles::Sizes::FONT_SIZE_NORMAL)
-        .arg(UIStyles::Colors::TEXT_PRIMARY)));
+    selectedHotkeyName->setStyleSheet(scale_qss(QString("font-weight: bold; font-size: %1px; color: %2;")
+        .arg(Sizes::FONT_SIZE_NORMAL)
+        .arg(Colors::TEXT_PRIMARY)));
     detailsLayout->addWidget(selectedHotkeyName);
-    
+
     selectedHotkeyDescription = new QLabel("", detailsGroup);
     selectedHotkeyDescription->setWordWrap(true);
     detailsLayout->addWidget(selectedHotkeyDescription);
-    
+
     selectedHotkeyKeys = new QLabel("", detailsGroup);
-    selectedHotkeyKeys->setStyleSheet(QString("color: %1; font-family: monospace;").arg(UIStyles::Colors::PRIMARY_LIGHT));
+    selectedHotkeyKeys->setStyleSheet(QString("color: %1; font-family: monospace;").arg(Colors::PRIMARY_LIGHT));
     detailsLayout->addWidget(selectedHotkeyKeys);
-    
+
     selectedHotkeyHelp = new QTextEdit(detailsGroup);
-    selectedHotkeyHelp->setMaximumHeight(StreamUP::UIStyles::S(100));
+    selectedHotkeyHelp->setMaximumHeight(S(100));
     selectedHotkeyHelp->setReadOnly(true);
     selectedHotkeyHelp->setPlainText(obs_module_text("HotkeySelector.Help.SelectHotkey"));
     detailsLayout->addWidget(selectedHotkeyHelp);
-    
+
     rightLayout->addWidget(detailsGroup);
     rightLayout->addStretch();
     
@@ -88,21 +97,15 @@ void HotkeySelectorDialog::setupUI() {
     mainSplitter->setStretchFactor(0, 2); // Left panel gets more space
     mainSplitter->setStretchFactor(1, 1); // Right panel gets less space
     
-    // Dialog buttons in footer
-    QVBoxLayout *footerLayout = UIStyles::GetDialogFooterLayout(this);
-    buttonLayout = new QHBoxLayout();
-    buttonLayout->addStretch();
-
-    okButton = UIStyles::CreateStyledButton(obs_module_text("HotkeySelector.Button.Add"), "info");
-    cancelButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
+    // Dialog buttons in footer (right-anchored action slot)
+    okButton = new PillButton(obs_module_text("HotkeySelector.Button.Add"), "primary");
+    cancelButton = new PillButton(obs_module_text("UI.Button.Cancel"), "outline");
 
     okButton->setEnabled(false);
 
-    buttonLayout->addWidget(okButton);
-    buttonLayout->addWidget(cancelButton);
+    footerButtons->addWidget(cancelButton);
+    footerButtons->addWidget(okButton);
 
-    footerLayout->addLayout(buttonLayout);
-    
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
 }

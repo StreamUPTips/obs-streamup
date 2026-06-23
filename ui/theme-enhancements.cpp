@@ -1,5 +1,5 @@
 #include "theme-enhancements.hpp"
-#include "ui-styles.hpp"
+#include <streamup/ui/gallery-style.hpp>
 
 #include <obs-frontend-api.h>
 #include <util/config-file.h>

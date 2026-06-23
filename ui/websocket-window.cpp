@@ -1,6 +1,9 @@
 #include "websocket-window.hpp"
 #include "ui-helpers.hpp"
-#include "ui-styles.hpp"
+#include <streamup/ui/window-chrome.hpp> // ShadowDialog, makeWindow, WindowShell
+#include <streamup/ui/pill-button.hpp>   // PillButton
+#include <streamup/ui/labels.hpp>        // makeLabel, sectionHeader
+#include <streamup/ui/ui-scrollbar.hpp>  // useScrollBars
 #include "notification-manager.hpp"
 #include "settings-manager.hpp"
 #include "../version.h"
@@ -104,42 +107,54 @@ void ShowWebSocketWindow(bool showInternalTools)
 {
 	std::string dialogId = showInternalTools ? "websocket-internal" : "websocket-normal";
 	StreamUP::UIHelpers::ShowSingletonDialogOnUIThread(dialogId, [showInternalTools]() -> QDialog* {
-		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(obs_module_text("WebSocket.Window.Title"));
+		StreamUP::UIStyles::WindowShell shell =
+			StreamUP::UIStyles::makeWindow(obs_module_text("WebSocket.Window.Title"), "v" PROJECT_VERSION,
+						       nullptr, /*brandFooter=*/true, "StreamUP");
+		QDialog *dialog = shell.dialog;
 
 		// Start with compact size - will expand based on content
-		StreamUP::UIStyles::ResizeDialogCard(dialog, 700, 700);
+		dialog->resize(StreamUP::UIStyles::S(700) + 2 * StreamUP::UIStyles::S(StreamUP::UIStyles::ShadowDialog::kShadowMargin),
+			       StreamUP::UIStyles::S(700) + 2 * StreamUP::UIStyles::S(StreamUP::UIStyles::ShadowDialog::kShadowMargin));
 
-		QVBoxLayout *mainLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
+		QVBoxLayout *mainLayout = shell.content;
+		mainLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(16),
+					       StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(16));
 
 		// Modern unified content area with scroll - everything inside
-		QScrollArea *scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+		QScrollArea *scrollArea = new QScrollArea();
+		scrollArea->setWidgetResizable(true);
+		scrollArea->setFrameShape(QFrame::NoFrame);
+		StreamUP::UIStyles::useScrollBars(scrollArea);
 
 		QWidget *contentWidget = new QWidget();
 		contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
 		QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
-		contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
-						  StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
-		contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+		contentLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
+						  StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
+		contentLayout->setSpacing(StreamUP::UIStyles::S(20));
 
 		// Modern header inside scrollable area
 		QWidget *headerSection = new QWidget();
 		QVBoxLayout *headerLayout = new QVBoxLayout(headerSection);
 		headerLayout->setContentsMargins(0, 0, 0, 0);
-		headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+		headerLayout->setSpacing(StreamUP::UIStyles::S(8));
 
 		// Title with modern styling
-		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("WebSocket.Window.Header"));
+		QLabel *titleLabel = StreamUP::UIStyles::makeLabel(obs_module_text("WebSocket.Window.Header"), 22, 700,
+								   StreamUP::UIStyles::Colors::TEXT_PRIMARY);
 		titleLabel->setAlignment(Qt::AlignCenter);
 
 		// Description with modern styling
-		QLabel *subtitleLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("WebSocket.Window.Description"));
+		QLabel *subtitleLabel = StreamUP::UIStyles::makeLabel(obs_module_text("WebSocket.Window.Description"), 13, 500,
+								      StreamUP::UIStyles::Colors::TEXT_SECONDARY);
+		subtitleLabel->setWordWrap(true);
 		subtitleLabel->setAlignment(Qt::AlignCenter);
 
 		headerLayout->addWidget(titleLabel);
 		headerLayout->addWidget(subtitleLabel);
-		
+
 		contentLayout->addWidget(headerSection);
-		contentLayout->addSpacing(StreamUP::UIStyles::Sizes::SPACING_LARGE);
+		contentLayout->addSpacing(StreamUP::UIStyles::S(16));
 
 		// Group commands by category, filtering out internal tools if Shift is not held
 		QMap<QString, QList<WebSocketCommand>> commandsByCategory;
@@ -168,18 +183,18 @@ void ShowWebSocketWindow(bool showInternalTools)
 
 			// Section header with bottom divider — cleaner than a groupbox and
 			// reads as a proper section break
-			contentLayout->addWidget(StreamUP::UIStyles::CreateSectionHeader(category));
+			contentLayout->addWidget(StreamUP::UIStyles::sectionHeader(category));
 
 			// Commands container — rounded card so the section reads as a distinct panel
 			QFrame *categoryCard = new QFrame();
 			categoryCard->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 				"QFrame { background: %1; border-radius: %2px; border: 1px solid %3; }")
 				.arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-				.arg(StreamUP::UIStyles::Sizes::RADIUS_MD)
+				.arg(10)
 				.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)));
 			QVBoxLayout *categoryLayout = new QVBoxLayout(categoryCard);
-			categoryLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0,
-							   StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 0);
+			categoryLayout->setContentsMargins(StreamUP::UIStyles::S(12), 0,
+							   StreamUP::UIStyles::S(12), 0);
 			categoryLayout->setSpacing(0);
 
 			// Add commands for this category
@@ -215,18 +230,13 @@ void ShowWebSocketWindow(bool showInternalTools)
 		scrollArea->setWidget(contentWidget);
 		mainLayout->addWidget(scrollArea);
 
-		// Close button in footer
-		QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
-		QHBoxLayout *footerBtnLay = new QHBoxLayout();
-		QPushButton *closeButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("WebSocket.Button.Close"), "neutral");
+		// Close button in footer (right-anchored, inline with brand line)
+		QPushButton *closeButton = new StreamUP::UIStyles::PillButton(obs_module_text("WebSocket.Button.Close"), "outline");
 		QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
-		footerBtnLay->addStretch();
-		footerBtnLay->addWidget(closeButton);
-		footerBtnLay->addStretch();
-		footerLayout->addLayout(footerBtnLay);
+		shell.footerButtons->addWidget(closeButton);
 
-		// Apply consistent sizing for websocket window
-		StreamUP::UIStyles::ApplyConsistentSizing(dialog, 700, 1100, 500, 800);
+		// Sizing for websocket window (preferred width + reasonable height)
+		dialog->resize(StreamUP::UIStyles::S(700), StreamUP::UIStyles::S(700));
 		dialog->show();
 		return dialog;
 	});
@@ -242,9 +252,9 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 				      "}")));
 
 	QHBoxLayout *layout = new QHBoxLayout(widget);
-	layout->setContentsMargins(0, StreamUP::UIStyles::Sizes::PADDING_SMALL + 3, 0,
-				   StreamUP::UIStyles::Sizes::PADDING_SMALL + 3); // Add margin to layout instead
-	layout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
+	layout->setContentsMargins(0, StreamUP::UIStyles::S(8) + 3, 0,
+				   StreamUP::UIStyles::S(8) + 3); // Add margin to layout instead
+	layout->setSpacing(StreamUP::UIStyles::S(12));
 
 	// Command info section - use vertical layout but center it
 	QVBoxLayout *infoLayout = new QVBoxLayout();
@@ -296,14 +306,16 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 	buttonWrapperLayout->addStretch(); // Add stretch above
 
 	QHBoxLayout *buttonLayout = new QHBoxLayout();
-	buttonLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_SMALL);
+	buttonLayout->setSpacing(StreamUP::UIStyles::S(8));
 	buttonLayout->setContentsMargins(0, 0, 0, 0);
 
 	// OBS Raw copy button
 	QString obsRawJson =
 		QString(R"({"requestType":"CallVendorRequest","requestData":{"vendorName":"streamup","requestType":"%1","requestData":{}}})")
 			.arg(command);
-	QPushButton *obsRawBtn = StreamUP::UIStyles::CreateStyledButton("Raw", "info");
+	QPushButton *obsRawBtn = new QPushButton("Raw");
+	obsRawBtn->setCursor(Qt::PointingHandCursor);
+	obsRawBtn->setStyleSheet(StreamUP::UIStyles::buttonStyle("primary"));
 	obsRawBtn->setFixedSize(StreamUP::UIStyles::S(72), StreamUP::UIStyles::S(24));
 	obsRawBtn->setToolTip(obs_module_text("WebSocket.Button.OBSRaw.Tooltip"));
 	QObject::connect(obsRawBtn, &QPushButton::clicked, [obsRawBtn, obsRawJson]() {
@@ -315,16 +327,14 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 		obsRawBtn->setEnabled(false);
 
 		// Change to success style temporarily
-		obsRawBtn->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetButtonStyle(StreamUP::UIStyles::Colors::SUCCESS,
-									    StreamUP::UIStyles::Colors::SUCCESS_HOVER, 28)));
+		obsRawBtn->setStyleSheet(StreamUP::UIStyles::buttonStyle("success"));
 
 		// Restore button after 1 second
 		QTimer::singleShot(1000, [obsRawBtn, originalText]() {
 			obsRawBtn->setText(originalText);
 			obsRawBtn->setEnabled(true);
 			// Restore original blue style
-			obsRawBtn->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetButtonStyle(StreamUP::UIStyles::Colors::INFO,
-										    StreamUP::UIStyles::Colors::INFO_HOVER, 28)));
+			obsRawBtn->setStyleSheet(StreamUP::UIStyles::buttonStyle("primary"));
 		});
 	});
 
@@ -332,7 +342,9 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 	QString cphCommand =
 		QString(R"(CPH.ObsSendRaw("CallVendorRequest", "{\"vendorName\":\"streamup\",\"requestType\":\"%1\",\"requestData\":{}}", 0);)")
 			.arg(command);
-	QPushButton *cphBtn = StreamUP::UIStyles::CreateStyledButton("CPH", "info");
+	QPushButton *cphBtn = new QPushButton("CPH");
+	cphBtn->setCursor(Qt::PointingHandCursor);
+	cphBtn->setStyleSheet(StreamUP::UIStyles::buttonStyle("primary"));
 	cphBtn->setFixedSize(StreamUP::UIStyles::S(72), StreamUP::UIStyles::S(24));
 	cphBtn->setToolTip(obs_module_text("WebSocket.Button.CPH.Tooltip"));
 	QObject::connect(cphBtn, &QPushButton::clicked, [cphBtn, cphCommand]() {
@@ -344,16 +356,14 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 		cphBtn->setEnabled(false);
 
 		// Change to success style temporarily
-		cphBtn->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetButtonStyle(StreamUP::UIStyles::Colors::SUCCESS,
-									 StreamUP::UIStyles::Colors::SUCCESS_HOVER, 28)));
+		cphBtn->setStyleSheet(StreamUP::UIStyles::buttonStyle("success"));
 
 		// Restore button after 1 second
 		QTimer::singleShot(1000, [cphBtn, originalText]() {
 			cphBtn->setText(originalText);
 			cphBtn->setEnabled(true);
 			// Restore original blue style
-			cphBtn->setStyleSheet(StreamUP::UIStyles::scale_qss(StreamUP::UIStyles::GetButtonStyle(StreamUP::UIStyles::Colors::INFO,
-										 StreamUP::UIStyles::Colors::INFO_HOVER, 28)));
+			cphBtn->setStyleSheet(StreamUP::UIStyles::buttonStyle("primary"));
 		});
 	});
 

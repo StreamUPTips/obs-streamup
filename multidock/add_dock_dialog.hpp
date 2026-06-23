@@ -6,7 +6,7 @@
 #include <QDockWidget>
 #include <QPushButton>
 #include <QPointer>
-#include "../ui/ui-styles.hpp"
+#include <streamup/ui/window-chrome.hpp>
 
 namespace StreamUP {
 namespace MultiDock {
