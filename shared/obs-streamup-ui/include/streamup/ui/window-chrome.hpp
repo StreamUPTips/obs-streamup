@@ -44,6 +44,13 @@
 namespace StreamUP {
 namespace UIStyles {
 
+// Shared in-app feedback dialog (defined in src/feedback.cpp, compiled into
+// every plugin). The header feedback button falls back to this when a window
+// doesn't supply its own onFeedback handler, so feedback posts to the StreamUP
+// API instead of opening the website. Declared here so applyChrome can call it.
+void show_feedback_dialog(QWidget *parent, const QString &productName,
+			  const QString &productVersion);
+
 // Rounded fill-only card. Masked so child widgets with different backgrounds
 // (header/content) don't bleed past the rounded corners.
 class RoundedContainer : public QFrame {
@@ -314,8 +321,9 @@ struct WindowShell {
 // (e.g. "Settings"). Defaults to `title` when empty. A leading "StreamUP" in the
 // brand name links to streamup.tips; "Andi Stone" links to andistone.uk.
 // onFeedback: optional handler for the header feedback button. When clicked it
-// calls onFeedback if set; otherwise opens https://streamup.tips. Plugins with
-// their own feedback dialog pass a handler that opens it.
+// calls onFeedback if set; otherwise it opens the shared in-app feedback dialog
+// (show_feedback_dialog) keyed to this window's brandName + version. Plugins with
+// their own feedback dialog (Chat, ProText) pass a handler that opens theirs.
 // popup: true for transient SoT dialogs (confirm/prompt/info/confirmDiscard) —
 // they get NO taskbar button and NO feedback button. EVERY other custom window
 // (popup=false, the default) gets BOTH a Windows taskbar button/thumbnail and a
@@ -418,15 +426,19 @@ inline WindowShell applyChrome(ShadowDialog *dlg, const QString &title,
 	hl->addStretch();
 
 	// Feedback button — on every non-popup window, to the LEFT of the close
-	// button. Clicking calls onFeedback if supplied, else opens streamup.tips.
+	// button. Clicking calls onFeedback if supplied, otherwise opens the shared
+	// in-app feedback dialog (feature request / bug report / general feedback)
+	// keyed to this window's brand name + version. Plugins with their own
+	// feedback dialog (Chat, ProText) pass an onFeedback handler instead.
 	if (!popup) {
 		auto *feedback = new FeedbackButton(header);
-		QObject::connect(feedback, &QAbstractButton::clicked, dlg, [onFeedback]() {
-			if (onFeedback)
-				onFeedback();
-			else
-				QDesktopServices::openUrl(QUrl(QStringLiteral("https://streamup.tips")));
-		});
+		QObject::connect(feedback, &QAbstractButton::clicked, dlg,
+				 [onFeedback, dlg, brandName, version]() {
+					 if (onFeedback)
+						 onFeedback();
+					 else
+						 show_feedback_dialog(dlg, brandName, version);
+				 });
 		hl->addWidget(feedback, 0, Qt::AlignVCenter);
 	}
 

@@ -58,6 +58,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 target_sources(${PROJECT_NAME} PRIVATE
   "${STREAMUP_UI_DIR}/src/switch-button.cpp"
+  "${STREAMUP_UI_DIR}/src/feedback.cpp" # shared in-app feedback dialog
   "${STREAMUP_UI_DIR}/include/streamup/ui/switch-button.hpp" # Q_OBJECT -> AUTOMOC
   "${STREAMUP_UI_DIR}/include/streamup/ui/ios-checkbox.hpp"  # Q_OBJECT -> AUTOMOC
 )
