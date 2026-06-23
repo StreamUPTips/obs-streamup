@@ -1,3 +1,18 @@
+# StreamUP v2.2.4 - Patch Update
+
+## Improvements
+- **Fresh Look Across The Whole Plugin** - Every StreamUP window and dialog now shares one look. Rounded cards, soft shadows, matching pill buttons and dividers, consistent wherever you are in StreamUP.
+- **Windows Scale With Your Text Size** - Turn up the Windows "Make text bigger" or display scaling setting and StreamUP windows now grow to match instead of staying tiny. Much easier to read on high-DPI displays. No change at 100%.
+- **In-App Pop-Ups** - Confirmations, rename boxes and the colour picker are now styled in StreamUP instead of the plain OS dialogs, so they fit the rest of the UI.
+- **Built-In Colour Picker** - Picking a folder or scene colour in the Scene Organiser now uses a proper StreamUP picker with a colour square, hue strip, hex field and saved swatches.
+- **Clearer Buttons** - Buttons line up Cancel on the left, confirm on the right. Anything destructive, like removing a scene or resetting the toolbar, gets a red button so there are no surprises.
+- **Theme Preview Carousel** - Theme preview images now slide between shots instead of snapping, with rounded corners, arrows inside the image and dot markers along the bottom.
+
+## Bug Fixes
+- **Patch Notes Window** - The patch notes window stopped opening after the UI rework. Fixed, it shows and jumps to the front again.
+
+---
+
 # StreamUP v2.2.3 - Patch Update
 
 ## New Features
