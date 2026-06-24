@@ -135,11 +135,10 @@ void show_feedback_dialog(QWidget *parent, const QString &productName, const QSt
 
 	auto *dlg = new ShadowDialog(parent);
 	dlg->setAttribute(Qt::WA_DeleteOnClose);
+	// No feedback button on the feedback window itself (showFeedback=false).
 	WindowShell shell = applyChrome(dlg, QStringLiteral("Feedback"), productVersion,
 					/*brandFooter=*/true, brandName,
-					[dlg, brandName, productVersion]() {
-						show_feedback_dialog(dlg, brandName, productVersion);
-					});
+					/*onFeedback=*/{}, /*popup=*/false, /*showFeedback=*/false);
 
 	const int sm = S(ShadowDialog::kShadowMargin);
 	dlg->resize(S(520) + 2 * sm, S(540) + 2 * sm);

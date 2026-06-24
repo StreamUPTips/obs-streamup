@@ -333,7 +333,8 @@ struct WindowShell {
 inline WindowShell applyChrome(ShadowDialog *dlg, const QString &title,
 			       const QString &version = QString(), bool brandFooter = false,
 			       const QString &brandName = QString(),
-			       std::function<void()> onFeedback = {}, bool popup = false)
+			       std::function<void()> onFeedback = {}, bool popup = false,
+			       bool showFeedback = true)
 {
 	dlg->setWindowTitle(title);
 	dlg->setFont(brandFont());
@@ -425,12 +426,14 @@ inline WindowShell applyChrome(ShadowDialog *dlg, const QString &title,
 	hl->addWidget(titleLbl);
 	hl->addStretch();
 
-	// Feedback button — on every non-popup window, to the LEFT of the close
-	// button. Clicking calls onFeedback if supplied, otherwise opens the shared
-	// in-app feedback dialog (feature request / bug report / general feedback)
-	// keyed to this window's brand name + version. Plugins with their own
-	// feedback dialog (Chat, ProText) pass an onFeedback handler instead.
-	if (!popup) {
+	// Feedback button — on every non-popup window (unless showFeedback is false),
+	// to the LEFT of the close button. Clicking calls onFeedback if supplied,
+	// otherwise opens the shared in-app feedback dialog (feature request / bug
+	// report / general feedback) keyed to this window's brand name + version.
+	// Plugins with their own feedback dialog (Chat, ProText) pass an onFeedback
+	// handler instead. The feedback windows themselves pass showFeedback=false so
+	// they don't carry a feedback button that just reopens themselves.
+	if (!popup && showFeedback) {
 		auto *feedback = new FeedbackButton(header);
 		QObject::connect(feedback, &QAbstractButton::clicked, dlg,
 				 [onFeedback, dlg, brandName, version]() {
@@ -525,11 +528,12 @@ inline WindowShell applyChrome(ShadowDialog *dlg, const QString &title,
 inline WindowShell makeWindow(const QString &title, const QString &version,
 			      QWidget *parent = nullptr, bool brandFooter = true,
 			      const QString &brandName = QString(),
-			      std::function<void()> onFeedback = {}, bool popup = false)
+			      std::function<void()> onFeedback = {}, bool popup = false,
+			      bool showFeedback = true)
 {
 	auto *dlg = new ShadowDialog(parent);
 	dlg->setAttribute(Qt::WA_DeleteOnClose, true);
-	return applyChrome(dlg, title, version, brandFooter, brandName, onFeedback, popup);
+	return applyChrome(dlg, title, version, brandFooter, brandName, onFeedback, popup, showFeedback);
 }
 
 } // namespace UIStyles
