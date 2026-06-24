@@ -14,6 +14,7 @@
 #include <streamup/ui/ui-scrollbar.hpp>
 
 #include <QApplication>
+#include <QHash>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -92,6 +93,23 @@ static QByteArray escape_json_string(const QString &s)
 	return out;
 }
 
+// StreamUP product numbers (Notion Product Database). The shared feedback
+// dialog is keyed by the window's brand name, so map brand name -> number.
+// Returns an empty string for an unknown product (submission still attributed
+// by productName).
+static QString product_number_for(const QString &productName)
+{
+	static const QHash<QString, QString> kNumbers = {
+		{QStringLiteral("StreamUP"), QStringLiteral("obs001")},
+		{QStringLiteral("StreamUP Chapter Marker Manager"), QStringLiteral("obs002")},
+		{QStringLiteral("StreamUP ProText"), QStringLiteral("obs003")},
+		{QStringLiteral("StreamUP Source Explorer"), QStringLiteral("obs004")},
+		{QStringLiteral("StreamUP Hotkey Display"), QStringLiteral("obs005")},
+		{QStringLiteral("StreamUP Chat"), QStringLiteral("obs007")},
+	};
+	return kNumbers.value(productName);
+}
+
 static QByteArray build_feedback_json(const QString &name, const QString &description,
 				      const QString &type, const QString &productName,
 				      const QString &productVersion)
@@ -104,10 +122,9 @@ static QByteArray build_feedback_json(const QString &name, const QString &descri
 	json.append(escape_json_string(description));
 	json.append("\",\"productName\":\"");
 	json.append(escape_json_string(productName));
-	// productNumber is assigned per product in the feedback API; left blank here
-	// so the submission is attributed by productName.
-	json.append("\",\"productNumber\":\"\"");
-	json.append(",\"productVersion\":\"");
+	json.append("\",\"productNumber\":\"");
+	json.append(escape_json_string(product_number_for(productName)));
+	json.append("\",\"productVersion\":\"");
 	json.append(escape_json_string(productVersion));
 	json.append("\",\"type\":\"");
 	json.append(escape_json_string(type));
