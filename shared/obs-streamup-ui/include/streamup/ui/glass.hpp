@@ -21,6 +21,7 @@
 #include <QParallelAnimationGroup>
 #include <QPoint>
 #include <QEasingCurve>
+#include <QApplication>
 
 #include "gallery-style.hpp"
 
@@ -57,8 +58,15 @@ inline void animatePopupIn(QWidget *win)
 	grp->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
-// Re-runs the open animation every time the watched popup is shown (Qt may
-// recreate the native popup window between openings). No transparency/DWM.
+// Runs the open animation when the watched popup is shown. A single popup open
+// can deliver MORE THAN ONE Show event to the watched view — Qt re-shows /
+// repositions the popup window while it lays out, and the duplicate Show may
+// even resolve to a different window object. Without coalescing, each Show
+// restarts the tween, so the popup fades in, snaps back to transparent +
+// offset, and fades in again (the "opens twice" flash). We debounce on this
+// filter (a stable per-popup object, unlike the recreated window): the first
+// Show animates; further Shows within a short window are ignored. A genuine
+// re-open is always far enough apart to animate again. No transparency/DWM.
 class PopupAnimFilter : public QObject {
 public:
 	using QObject::QObject;
@@ -66,13 +74,42 @@ public:
 protected:
 	bool eventFilter(QObject *obj, QEvent *e) override
 	{
+		// Animate once per open: the first Show after each Hide. One open can
+		// deliver several Show events as the popup lays out — only the first
+		// runs the tween; the rest are ignored until the popup closes.
 		if (e->type() == QEvent::Show) {
-			if (auto *w = qobject_cast<QWidget *>(obj))
-				animatePopupIn(w->window());
+			if (auto *w = qobject_cast<QWidget *>(obj)) {
+				if (!m_open) {
+					m_open = true;
+					animatePopupIn(w->window());
+				}
+			}
+		} else if (e->type() == QEvent::Hide) {
+			m_open = false;
 		}
 		return QObject::eventFilter(obj, e);
 	}
+
+private:
+	bool m_open = false;
 };
+
+// We provide our own slide+fade for popups (animatePopupIn). Qt ALSO animates
+// combo/menu popups itself (the UI_AnimateCombo / UI_*Menu GUI effects, run
+// inside QComboBox::showPopup / QMenu::popup). Left on, the native effect plays
+// on top of ours — the popup slides+fades in, then fades AGAIN once it's fully
+// open. Turn the native popup effects off so only our animation plays. Global
+// + idempotent; safe to call from every makeComboAnimated/makeMenuAnimated.
+inline void disableNativePopupEffects()
+{
+	static bool done = false;
+	if (done)
+		return;
+	done = true;
+	QApplication::setEffectEnabled(Qt::UI_AnimateCombo, false);
+	QApplication::setEffectEnabled(Qt::UI_AnimateMenu, false);
+	QApplication::setEffectEnabled(Qt::UI_FadeMenu, false);
+}
 
 // Give a combo box's dropdown the slide+fade open animation, and remove the
 // popup frame so the QSS-rounded item view shows cleanly. Opaque (no glass).
@@ -82,6 +119,7 @@ inline void makeComboAnimated(QComboBox *combo)
 {
 	if (!combo)
 		return;
+	disableNativePopupEffects();
 	QAbstractItemView *v = combo->view();
 	if (auto *frame = qobject_cast<QFrame *>(v))
 		frame->setFrameShape(QFrame::NoFrame);
@@ -100,6 +138,7 @@ inline void makeMenuAnimated(QMenu *menu)
 {
 	if (!menu)
 		return;
+	disableNativePopupEffects();
 	if (menu->property("suPopupAnimated").toBool())
 		return;
 	menu->setProperty("suPopupAnimated", true);
