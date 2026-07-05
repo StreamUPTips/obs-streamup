@@ -106,6 +106,7 @@ static QString product_number_for(const QString &productName)
 		{QStringLiteral("StreamUP Source Explorer"), QStringLiteral("obs004")},
 		{QStringLiteral("StreamUP Hotkey Display"), QStringLiteral("obs005")},
 		{QStringLiteral("StreamUP Chat"), QStringLiteral("obs007")},
+		{QStringLiteral("StreamUP Test Card"), QStringLiteral("obs008")},
 	};
 	return kNumbers.value(productName);
 }
