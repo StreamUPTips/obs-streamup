@@ -59,7 +59,8 @@ static SceneItemLookup FindSceneItemFromRequest(obs_data_t *request_data,
 		return result;
 	}
 
-	result.sceneitem = obs_scene_find_source(scene, source_name);
+	// Use recursive lookup so sources nested inside groups are found (OBS treats groups as sub-scenes)
+	result.sceneitem = obs_scene_find_source_recursive(scene, source_name);
 	if (!result.sceneitem) {
 		obs_source_release(result.scene_source);
 		result.scene_source = nullptr;

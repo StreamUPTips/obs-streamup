@@ -1,4 +1,5 @@
 #include "theme-enhancements.hpp"
+#include <streamup/ui/gallery-style.hpp>
 
 #include <obs-frontend-api.h>
 #include <util/config-file.h>
@@ -274,7 +275,7 @@ void ColorPreviewFilter::applyPillStyle(QWidget* widget)
 
             // Set minimum width to fit hex color codes (#RRGGBB = 7 chars + padding)
             // Also remove max width constraint and ensure it can expand
-            label->setMinimumWidth(100);
+            label->setMinimumWidth(StreamUP::UIStyles::S(100));
             label->setMaximumWidth(QWIDGETSIZE_MAX);
 
             // Ensure the size policy allows horizontal expansion
@@ -293,7 +294,7 @@ void ColorPreviewFilter::applyPillStyle(QWidget* widget)
                 }
                 label->setStyleSheet(currentStyle + " " + pillStyle);
             } else {
-                label->setStyleSheet(pillStyle);
+                label->setStyleSheet(StreamUP::UIStyles::scale_qss(pillStyle));
             }
 
             // Clear recursion guard
@@ -512,7 +513,7 @@ void ApplyStatsWindowEnhancements(QWidget* statsWidget)
     QList<QScrollArea*> scrollAreas = statsWidget->findChildren<QScrollArea*>();
     for (QScrollArea* scrollArea : scrollAreas) {
         // Add margins around the scroll area for spacing from edges
-        scrollArea->setContentsMargins(12, 8, 12, 8);
+        scrollArea->setContentsMargins(StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(8));
 
         // Set object name so theme QSS can target it
         if (scrollArea->objectName().isEmpty()) {
@@ -599,7 +600,7 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
     if (centralWidget) {
         QLayout* layout = centralWidget->layout();
         if (layout) {
-            layout->setSpacing(7); // Gap between preview area and context bar
+            layout->setSpacing(StreamUP::UIStyles::S(7)); // Gap between preview area and context bar
             layout->setContentsMargins(0, 0, 0, 0);
         }
 
@@ -622,7 +623,7 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
                 previewLayout->setSpacing(0);
                 // Add padding for border visibility (left, top, right - no bottom)
                 // Use 6px to make rounded corners more prominent
-                previewLayout->setContentsMargins(6, 6, 6, 0);
+                previewLayout->setContentsMargins(StreamUP::UIStyles::S(6), StreamUP::UIStyles::S(6), StreamUP::UIStyles::S(6), 0);
             }
 
             // Find and adjust gridLayout inside previewContainer
@@ -632,7 +633,7 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
                 gridLayout->setSpacing(0);
                 // Add padding around the preview to create border effect
                 // Top: 6px to match outer 6px = 12px total (same as sides)
-                gridLayout->setContentsMargins(6, 6, 6, 0);
+                gridLayout->setContentsMargins(StreamUP::UIStyles::S(6), StreamUP::UIStyles::S(6), StreamUP::UIStyles::S(6), 0);
             }
 
             // Find previewXContainer (zoom controls bar) and minimize its spacing

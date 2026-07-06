@@ -3,7 +3,7 @@
 #include "multidock_dock.hpp"
 #include "add_dock_dialog.hpp"
 #include "persistence.hpp"
-#include "../ui/ui-styles.hpp"
+#include <streamup/ui/gallery-style.hpp>
 #include <obs-module.h>
 #include <QApplication>
 #include <QWidget>
@@ -59,11 +59,11 @@ void InnerDockHost::SetupDockOptions()
     setObjectName("InnerDockHost");
 
     // Set content margins to create gap between docks and edges
-    setContentsMargins(8, 8, 8, 8);
+    setContentsMargins(StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8));
 
     // Functional rule only: hide the per-dock float button (multi-dock owns
     // float state itself). All visual styling is left to the OBS theme.
-    setStyleSheet("QDockWidget::float-button { width: 0px; height: 0px; }");
+    setStyleSheet(StreamUP::UIStyles::scale_qss("QDockWidget::float-button { width: 0px; height: 0px; }"));
 }
 
 
@@ -398,10 +398,10 @@ void InnerDockHost::applyDockFeatures(bool locked)
     // Visual styling (background, border, radius) is owned by the OBS theme.
     QString closeButtonStyle = locked ? "width: 0px; height: 0px;" : "";
 
-    setStyleSheet(
+    setStyleSheet(StreamUP::UIStyles::scale_qss(
         "QDockWidget::close-button { " + closeButtonStyle + " }"
         "QDockWidget::float-button { width: 0px; height: 0px; }"
-    );
+    ));
 
     // Set dock options based on lock state
     if (locked) {

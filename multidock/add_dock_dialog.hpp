@@ -6,6 +6,7 @@
 #include <QDockWidget>
 #include <QPushButton>
 #include <QPointer>
+#include <streamup/ui/window-chrome.hpp>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -13,7 +14,7 @@ namespace MultiDock {
 /**
  * @brief Dialog for selecting an available dock to add to a MultiDock
  */
-class AddDockDialog : public QDialog
+class AddDockDialog : public UIStyles::ShadowDialog
 {
     Q_OBJECT
 

@@ -1,6 +1,12 @@
 #include "theme-window.hpp"
+#include <algorithm>
 #include "ui-helpers.hpp"
-#include "ui-styles.hpp" 
+#include <streamup/ui/window-chrome.hpp> // ShadowDialog, RoundedContainer, makeWindow, WindowShell
+#include <streamup/ui/pill-button.hpp>   // PillButton
+#include <streamup/ui/labels.hpp>        // makeLabel, sectionHeader
+#include <streamup/ui/ui-scrollbar.hpp>  // useScrollBars
+#include <streamup/ui/image-carousel.hpp> // su::ImageCarousel (SoT carousel look)
+#include <streamup/ui/mac-inputs.hpp>     // detail::drawChevron (SoT arrow glyph)
 #include "../utilities/error-handler.hpp"
 #include "../version.h"
 #include <obs-module.h>
@@ -32,199 +38,87 @@ namespace ThemeWindow {
 
 // Theme dialog is now managed by DialogManager in ui-helpers
 
-// Carousel widget for theme images
+// Carousel widget for theme images.
+//
+// Adopts the SoT ImageCarousel visual language (su::ImageCarousel in
+// image-carousel.hpp): a rounded-clipped image area, a slide-across transition,
+// custom-painted circular nav arrows, and accent dot indicators. The SoT widget
+// only paints gradient placeholder slides and exposes no API to feed it real
+// QPixmaps, so this consumer re-implements the same paint model but draws the
+// actual theme screenshots — preserving auto-advance, click-to-zoom and the real
+// preview images while matching the SoT carousel look.
 class ThemeImageCarousel : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit ThemeImageCarousel(QWidget* parent = nullptr) : QWidget(parent), currentIndex(0)
+    explicit ThemeImageCarousel(QWidget* parent = nullptr) : QWidget(parent)
     {
-        setFixedHeight(400);
+        setFixedHeight(StreamUP::UIStyles::S(400));
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        setupUI();
+        setCursor(Qt::PointingHandCursor);
+
         loadImages();
+
+        // Slide animation, mirroring su::ImageCarousel (280ms OutCubic).
+        m_anim = new QVariantAnimation(this);
+        m_anim->setDuration(280);
+        m_anim->setEasingCurve(QEasingCurve::OutCubic);
+        m_anim->setStartValue(0.0);
+        m_anim->setEndValue(1.0);
+        connect(m_anim, &QVariantAnimation::valueChanged, this,
+                [this](const QVariant& v) { m_t = v.toReal(); update(); });
+        connect(m_anim, &QVariantAnimation::finished, this, [this]() {
+            currentIndex = m_incoming;
+            m_animating = false;
+            update();
+        });
+
         setupTimer();
     }
 
 public slots:
-    void nextImage()
-    {
-        if (images.isEmpty()) return;
-        
-        currentIndex = (currentIndex + 1) % images.size();
-        updateImage();
-        updateDots();
-    }
-
-    void previousImage()
-    {
-        if (images.isEmpty()) return;
-        
-        currentIndex = (currentIndex - 1 + images.size()) % images.size();
-        updateImage();
-        updateDots();
-    }
+    void nextImage() { go(+1); }
+    void previousImage() { go(-1); }
 
 private slots:
-
     void goToImage(int index)
     {
-        if (index >= 0 && index < images.size()) {
-            currentIndex = index;
-            updateImage();
-            updateDots();
-        }
+        if (index >= 0 && index < images.size() && index != currentIndex)
+            go(index > currentIndex ? +1 : -1, index);
     }
 
 private:
-    void setupUI()
+    int count() const { return images.size(); }
+
+    void go(int dir, int explicitTarget = -1)
     {
-        QVBoxLayout* layout = new QVBoxLayout(this);
-        layout->setContentsMargins(0, 0, 0, 0);
-        layout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-
-        // Image container - full width to place buttons at edges
-        imageContainer = new QFrame();
-        imageContainer->setFixedHeight(350);
-        imageContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        imageContainer->setStyleSheet(QString(
-            "QFrame {"
-            "    background: transparent;"
-            "    border: none;"
-            "}"
-        ));
-
-        QHBoxLayout* containerLayout = new QHBoxLayout(imageContainer);
-        containerLayout->setContentsMargins(0, 0, 0, 0);
-        containerLayout->setSpacing(0);
-
-        // Navigation buttons (hidden - using external buttons instead)
-        prevButton = StreamUP::UIStyles::CreateStyledButton("❮", "neutral", 40);
-        prevButton->setFixedSize(40, 40);
-        prevButton->setVisible(false);
-        connect(prevButton, &QPushButton::clicked, this, &ThemeImageCarousel::previousImage);
-
-        nextButton = StreamUP::UIStyles::CreateStyledButton("❯", "neutral", 40);
-        nextButton->setFixedSize(40, 40);
-        nextButton->setVisible(false);
-        connect(nextButton, &QPushButton::clicked, this, &ThemeImageCarousel::nextImage);
-
-        // Image label centered without button constraints
-        imageLabel = new QLabel();
-        imageLabel->setAlignment(Qt::AlignCenter);
-        imageLabel->setScaledContents(false);
-        imageLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        imageLabel->setCursor(Qt::PointingHandCursor);
-        
-        // Connect click event for zooming
-        imageLabel->installEventFilter(this);
-
-        // Simple centered layout for image only
-        containerLayout->addWidget(imageLabel, 1, Qt::AlignCenter);
-
-        // Dots indicator - centered
-        dotsContainer = new QHBoxLayout();
-        dotsContainer->setContentsMargins(0, 0, 0, 0);
-        dotsContainer->setSpacing(8);
-        dotsContainer->addStretch(); // Add stretch before dots to center them
-
-        layout->addWidget(imageContainer);
-        layout->addLayout(dotsContainer);
-        layout->addStretch();
+        if (m_animating || images.size() < 2)
+            return;
+        m_dir = dir;
+        m_incoming = explicitTarget >= 0 ? explicitTarget
+                                         : (currentIndex + dir + count()) % count();
+        m_animating = true;
+        m_anim->stop();
+        m_anim->start();
     }
+
+    // Geometry — mirrors su::ImageCarousel.
+    QRectF imageRect() const { return QRectF(rect()).adjusted(0, 0, 0, -StreamUP::UIStyles::S(22)); }
+    qreal arrowR() const { return StreamUP::UIStyles::S(15); }
+    QPointF leftArrowC() const { return {imageRect().left() + StreamUP::UIStyles::S(24), imageRect().center().y()}; }
+    QPointF rightArrowC() const { return {imageRect().right() - StreamUP::UIStyles::S(24), imageRect().center().y()}; }
 
     void loadImages()
     {
         // Load theme images
         QStringList imageFiles = {"obs-theme-1.png", "obs-theme-2.png", "obs-theme-3.png", "obs-theme-4.png"};
-        
+
         for (const QString& fileName : imageFiles) {
             QString imagePath = QString(":/images/misc/%1").arg(fileName);
             QPixmap pixmap(imagePath);
-            
-            if (!pixmap.isNull()) {
-                // Load image at full quality - let the label handle scaling
+            if (!pixmap.isNull())
                 images.append(pixmap);
-            }
-        }
-
-        // Create dots for each image - small circles
-        for (int i = 0; i < images.size(); ++i) {
-            QPushButton* dot = new QPushButton();
-            dot->setText("");  // Ensure no text
-            dot->setFixedSize(10, 10);
-            dot->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-            dot->setFlat(true);
-            dot->setStyleSheet(QString(
-                "QPushButton {"
-                "    background-color: %1;"
-                "    border: none;"
-                "    border-radius: 5px;"
-                "    padding: 0px;"
-                "    margin: 0px;"
-                "}"
-                "QPushButton:hover {"
-                "    background-color: %2;"
-                "}"
-                "QPushButton:pressed {"
-                "    background-color: %3;"
-                "}"
-            ).arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)
-             .arg(StreamUP::UIStyles::Colors::PRIMARY_ALPHA_30)
-             .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR));
-            
-            connect(dot, &QPushButton::clicked, [this, i]() { goToImage(i); });
-            dots.append(dot);
-            dotsContainer->addWidget(dot);
-        }
-
-        dotsContainer->addStretch(); // Add stretch after dots to center them
-
-        if (!images.isEmpty()) {
-            updateImage();
-            updateDots();
-        }
-    }
-
-    void updateImage()
-    {
-        if (currentIndex < images.size()) {
-            // Scale image to fit the container while maintaining aspect ratio and quality
-            int availableWidth = imageContainer->width();
-            int availableHeight = imageContainer->height();
-            
-            QPixmap scaledPixmap = images[currentIndex].scaled(
-                QSize(availableWidth, availableHeight), 
-                Qt::KeepAspectRatio, 
-                Qt::SmoothTransformation
-            );
-            imageLabel->setPixmap(scaledPixmap);
-        }
-    }
-
-    void updateDots()
-    {
-        for (int i = 0; i < dots.size(); ++i) {
-            QString style = QString(
-                "QPushButton {"
-                "    background-color: %1;"
-                "    border: none;"
-                "    border-radius: 5px;"
-                "    padding: 0px;"
-                "    margin: 0px;"
-                "}"
-                "QPushButton:hover {"
-                "    background-color: %2;"
-                "}"
-                "QPushButton:pressed {"
-                "    background-color: %3;"
-                "}"
-            ).arg(i == currentIndex ? StreamUP::UIStyles::Colors::PRIMARY_COLOR : StreamUP::UIStyles::Colors::BORDER_SUBTLE)
-             .arg(StreamUP::UIStyles::Colors::PRIMARY_HOVER)
-             .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR);
-            
-            dots[i]->setStyleSheet(style);
         }
     }
 
@@ -235,7 +129,111 @@ private:
         autoAdvanceTimer->start(4000); // Auto-advance every 4 seconds
     }
 
+    // Draw one image slide, aspect-fit and centred inside r.
+    void drawSlide(QPainter& p, int idx, const QRectF& r)
+    {
+        // Dark backing so letterboxed margins read cleanly.
+        p.fillRect(r, QColor(StreamUP::UIStyles::Colors::BG_SECONDARY));
+        if (idx < 0 || idx >= images.size())
+            return;
+        const QPixmap& src = images[idx];
+        if (src.isNull())
+            return;
+        QSizeF fit = src.size().scaled(r.size().toSize(), Qt::KeepAspectRatio);
+        QRectF target(0, 0, fit.width(), fit.height());
+        target.moveCenter(r.center());
+        p.drawPixmap(target, src, QRectF(src.rect()));
+    }
+
+    void drawArrow(QPainter& p, const QPointF& c, bool left)
+    {
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(0, 0, 0, 110));
+        p.drawEllipse(c, arrowR(), arrowR());
+        p.save();
+        p.translate(c);
+        p.rotate(left ? 90.0 : -90.0); // drawChevron draws a down-chevron
+        QPen cp(QColor(255, 255, 255), std::max(1.4, StreamUP::UIStyles::S(2) * 0.85));
+        cp.setCapStyle(Qt::RoundCap);
+        cp.setJoinStyle(Qt::RoundJoin);
+        p.setPen(cp);
+        p.setBrush(Qt::NoBrush);
+        StreamUP::UIStyles::detail::drawChevron(p, QPointF(0, 0), StreamUP::UIStyles::S(8), /*up=*/false);
+        p.restore();
+    }
+
 protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        const QRectF ir = imageRect();
+
+        p.save();
+        QPainterPath clip;
+        clip.addRoundedRect(ir, StreamUP::UIStyles::S(12), StreamUP::UIStyles::S(12));
+        p.setClipPath(clip);
+        if (m_animating) {
+            drawSlide(p, currentIndex, ir.translated(-m_dir * m_t * ir.width(), 0));
+            drawSlide(p, m_incoming, ir.translated(m_dir * (1.0 - m_t) * ir.width(), 0));
+        } else {
+            drawSlide(p, currentIndex, ir);
+        }
+        p.restore();
+
+        if (images.size() > 1) {
+            drawArrow(p, leftArrowC(), /*left=*/true);
+            drawArrow(p, rightArrowC(), /*left=*/false);
+        }
+
+        // Accent dots.
+        const int n = count();
+        if (n > 1) {
+            const qreal dotY = ir.bottom() + StreamUP::UIStyles::S(13);
+            const qreal gap = StreamUP::UIStyles::S(16);
+            const qreal startX = width() / 2.0 - (n - 1) * gap / 2.0;
+            const int active = m_animating ? m_incoming : currentIndex;
+            for (int i = 0; i < n; ++i) {
+                p.setPen(Qt::NoPen);
+                p.setBrush(QColor(i == active ? StreamUP::UIStyles::Colors::PRIMARY_COLOR
+                                              : StreamUP::UIStyles::Colors::TEXT_MUTED));
+                const qreal rr = i == active ? StreamUP::UIStyles::S(4) : StreamUP::UIStyles::S(3);
+                p.drawEllipse(QPointF(startX + i * gap, dotY), rr, rr);
+            }
+        }
+    }
+
+    void mousePressEvent(QMouseEvent* e) override
+    {
+        const QPointF pos = e->position();
+        // Nav arrows.
+        if (images.size() > 1) {
+            if (QLineF(pos, leftArrowC()).length() <= arrowR() + StreamUP::UIStyles::S(3)) {
+                previousImage();
+                return;
+            }
+            if (QLineF(pos, rightArrowC()).length() <= arrowR() + StreamUP::UIStyles::S(3)) {
+                nextImage();
+                return;
+            }
+            // Dots.
+            const QRectF ir = imageRect();
+            const qreal dotY = ir.bottom() + StreamUP::UIStyles::S(13);
+            const qreal gap = StreamUP::UIStyles::S(16);
+            const qreal startX = width() / 2.0 - (count() - 1) * gap / 2.0;
+            for (int i = 0; i < count(); ++i) {
+                if (QLineF(pos, QPointF(startX + i * gap, dotY)).length() <= StreamUP::UIStyles::S(8)) {
+                    goToImage(i);
+                    return;
+                }
+            }
+        }
+        // Otherwise a click on the image opens the zoom view.
+        if (imageRect().contains(pos))
+            showZoomedImage();
+    }
+
     void enterEvent(QEnterEvent* event) override
     {
         autoAdvanceTimer->stop();
@@ -248,34 +246,28 @@ protected:
         QWidget::leaveEvent(event);
     }
 
-    void resizeEvent(QResizeEvent* event) override
-    {
-        QWidget::resizeEvent(event);
-        // Update image scaling when widget is resized
-        if (!images.isEmpty()) {
-            updateImage();
-        }
-    }
-
-
 private:
     void showZoomedImage()
     {
         if (currentIndex >= images.size()) return;
 
-        // Create modal zoom dialog
-        QDialog* zoomDialog = new QDialog(this->window());
+        // Create modal zoom dialog (frameless rounded card + elevation shadow)
+        const int sm = StreamUP::UIStyles::ShadowDialog::kShadowMargin;
+        QDialog* zoomDialog = new StreamUP::UIStyles::ShadowDialog(this->window());
         zoomDialog->setWindowTitle("Theme Preview - Full Size");
         zoomDialog->setModal(true);
-        zoomDialog->setStyleSheet(QString(
-            "QDialog {"
-            "    background: %1;"
-            "    color: white;"
-            "}"
-        ).arg(StreamUP::UIStyles::Colors::BG_DARKEST));
+        zoomDialog->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
+        zoomDialog->setAttribute(Qt::WA_TranslucentBackground);
 
-        QVBoxLayout* layout = new QVBoxLayout(zoomDialog);
-        layout->setContentsMargins(20, 20, 20, 20);
+        QVBoxLayout* outerLayout = new QVBoxLayout(zoomDialog);
+        outerLayout->setContentsMargins(sm, sm, sm, sm);
+        outerLayout->setSpacing(0);
+
+        auto* zoomCard = new StreamUP::UIStyles::RoundedContainer(14);
+        outerLayout->addWidget(zoomCard);
+
+        QVBoxLayout* layout = new QVBoxLayout(zoomCard);
+        layout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
 
         // Full-size image label with fixed container size
         QLabel* fullImageLabel = new QLabel();
@@ -291,20 +283,21 @@ private:
         fullImageLabel->setPixmap(scaledPixmap);
 
         // Close instruction
-        QLabel* instructionLabel = StreamUP::UIStyles::CreateStyledContent("Click anywhere or press ESC to close");
+        QLabel* instructionLabel = StreamUP::UIStyles::makeLabel("Click anywhere or press ESC to close", 14, 500,
+                                                                 StreamUP::UIStyles::Colors::TEXT_PRIMARY);
         instructionLabel->setAlignment(Qt::AlignCenter);
 
         layout->addWidget(fullImageLabel, 1);
-        layout->addSpacing(10);
+        layout->addSpacing(StreamUP::UIStyles::S(10));
         layout->addWidget(instructionLabel);
 
-        // Fixed dialog size
-        zoomDialog->setFixedSize(860, 720);
+        // Fixed dialog size (+ shadow margin)
+        zoomDialog->setFixedSize(StreamUP::UIStyles::S(860) + 2 * sm, StreamUP::UIStyles::S(720) + 2 * sm);
 
         // Center on screen
         zoomDialog->move(
-            (QApplication::primaryScreen()->geometry().width() - 860) / 2,
-            (QApplication::primaryScreen()->geometry().height() - 720) / 2
+            (QApplication::primaryScreen()->geometry().width() - (StreamUP::UIStyles::S(860) + 2 * sm)) / 2,
+            (QApplication::primaryScreen()->geometry().height() - (StreamUP::UIStyles::S(720) + 2 * sm)) / 2
         );
 
         // Install event filter for closing on click
@@ -321,21 +314,12 @@ private:
 
     bool eventFilter(QObject* obj, QEvent* event) override
     {
-        // Handle zoom dialog events
+        // Handle zoom dialog events (close on click or Esc).
         if (currentZoomDialog && (obj == currentZoomDialog || obj->parent() == currentZoomDialog)) {
-            if (event->type() == QEvent::MouseButtonPress || 
-                (event->type() == QEvent::KeyPress && 
+            if (event->type() == QEvent::MouseButtonPress ||
+                (event->type() == QEvent::KeyPress &&
                  static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape)) {
                 currentZoomDialog->accept();
-                return true;
-            }
-        }
-        
-        // Handle image label click for zoom
-        if (obj == imageLabel && event->type() == QEvent::MouseButtonPress) {
-            QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
-            if (mouseEvent->button() == Qt::LeftButton) {
-                showZoomedImage();
                 return true;
             }
         }
@@ -344,31 +328,37 @@ private:
 
 private:
     QList<QPixmap> images;
-    QList<QPushButton*> dots;
-    QLabel* imageLabel;
-    QFrame* imageContainer;
-    QPushButton* prevButton;
-    QPushButton* nextButton;
-    QHBoxLayout* dotsContainer;
-    QTimer* autoAdvanceTimer;
+    QTimer* autoAdvanceTimer = nullptr;
     QDialog* currentZoomDialog = nullptr;
-    int currentIndex;
+    int currentIndex = 0;
+
+    // Slide-transition state (mirrors su::ImageCarousel).
+    QVariantAnimation* m_anim = nullptr;
+    int m_incoming = 0;
+    int m_dir = 1;
+    bool m_animating = false;
+    qreal m_t = 0.0;
 };
 
 void CreateThemeDialog()
 {
     UIHelpers::ShowSingletonDialogOnUIThread("theme", []() -> QDialog* {
-        // Create modern unified dialog
-        QDialog* dialog = StreamUP::UIStyles::CreateStyledDialog("StreamUP \xe2\x80\xa2 Theme");
+        // Create modern unified dialog (StreamUP frameless custom window)
+        StreamUP::UIStyles::WindowShell shell =
+            StreamUP::UIStyles::makeWindow("Theme", "v" PROJECT_VERSION, nullptr,
+                                           /*brandFooter=*/true, "StreamUP");
+        QDialog* dialog = shell.dialog;
         dialog->setModal(false);
         dialog->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
-        
-        // Dialog will be managed by DialogManager
-        
-        QVBoxLayout* mainLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
+
+        QVBoxLayout* mainLayout = shell.content;
+        mainLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(16),
+                                       StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(16));
 
         // Modern unified content area with scroll - everything inside
-        QScrollArea* scrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+        QScrollArea* scrollArea = new QScrollArea();
+        scrollArea->setFrameShape(QFrame::NoFrame);
+        StreamUP::UIStyles::useScrollBars(scrollArea);
         scrollArea->setWidgetResizable(true); // Ensure this is set for proper alignment
         scrollArea->setAlignment(Qt::AlignTop | Qt::AlignHCenter); // Keep content top-aligned when shorter than viewport
         scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // Disable horizontal scrolling
@@ -376,20 +366,23 @@ void CreateThemeDialog()
         QWidget* contentWidget = new QWidget();
         contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
         contentWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        contentWidget->setMaximumWidth(900); // Match dialog width minus padding
+        contentWidget->setMaximumWidth(StreamUP::UIStyles::S(900)); // Match dialog width minus padding
         QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
-        contentLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL,
-                                          StreamUP::UIStyles::Sizes::PADDING_XL, StreamUP::UIStyles::Sizes::PADDING_XL);
-        contentLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_XL);
+        contentLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
+                                          StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
+        contentLayout->setSpacing(StreamUP::UIStyles::S(20));
 
         // Modern header inside scrollable area
         QWidget* headerSection = new QWidget();
         QVBoxLayout* headerLayout = new QVBoxLayout(headerSection);
         headerLayout->setContentsMargins(0, 0, 0, 0);
-        headerLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACE_8);
+        headerLayout->setSpacing(StreamUP::UIStyles::S(8));
 
         // Brief subtitle (title already in frameless chrome header)
-        QLabel* subtitleLabel = StreamUP::UIStyles::CreateStyledDescription("The cleanest OBS theme out there - available to all supporters of any tier");
+        QLabel* subtitleLabel = StreamUP::UIStyles::makeLabel(
+            "The cleanest OBS theme out there - available to all supporters of any tier", 13, 500,
+            StreamUP::UIStyles::Colors::TEXT_SECONDARY);
+        subtitleLabel->setWordWrap(true);
         subtitleLabel->setAlignment(Qt::AlignCenter);
 
         headerLayout->addWidget(subtitleLabel);
@@ -397,73 +390,56 @@ void CreateThemeDialog()
         contentLayout->addWidget(headerSection);
         
         // Description section
-        QGroupBox* descriptionGroup = StreamUP::UIStyles::CreateStyledGroupBox("About the StreamUP Theme", "info");
+        contentLayout->addWidget(StreamUP::UIStyles::sectionHeader("About the StreamUP Theme"));
+        QWidget* descriptionGroup = new QWidget();
         QVBoxLayout* descriptionLayout = new QVBoxLayout(descriptionGroup);
-        descriptionLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACE_12);
-        
-        QLabel* descriptionText = StreamUP::UIStyles::CreateStyledContent(
+        descriptionLayout->setContentsMargins(0, 0, 0, 0);
+        descriptionLayout->setSpacing(StreamUP::UIStyles::S(12));
+
+        QLabel* descriptionText = StreamUP::UIStyles::makeLabel(
             "The StreamUP OBS Theme is carefully crafted to provide the cleanest and most "
             "professional OBS Studio experience. This theme perfectly matches the StreamUP plugin's "
             "design language, creating a seamless and cohesive interface throughout OBS Studio. "
             "Featuring modern design elements, improved readability, and streamlined interfaces - "
-            "it's the perfect companion to your streaming setup."
-        );
+            "it's the perfect companion to your streaming setup.", 14, 500,
+            StreamUP::UIStyles::Colors::TEXT_PRIMARY);
         descriptionText->setWordWrap(true);
-        // Ensure text has transparent background
-        descriptionText->setStyleSheet(descriptionText->styleSheet() + " QLabel { background: transparent; }");
         descriptionLayout->addWidget(descriptionText);
-        
+
         contentLayout->addWidget(descriptionGroup);
-        
+
         // Theme images carousel section
-        QGroupBox* previewGroup = StreamUP::UIStyles::CreateStyledGroupBox("Theme Preview", "primary");
+        contentLayout->addWidget(StreamUP::UIStyles::sectionHeader("Theme Preview"));
+        QWidget* previewGroup = new QWidget();
         QVBoxLayout* previewLayout = new QVBoxLayout(previewGroup);
-        previewLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACE_12);
-        
-        // Create horizontal layout for buttons at group box edges
-        QHBoxLayout* carouselControlLayout = new QHBoxLayout();
-        carouselControlLayout->setContentsMargins(0, 0, 0, 0);
-        carouselControlLayout->setSpacing(0);
-        
-        // Create carousel without navigation buttons (we'll add them externally)
+        previewLayout->setContentsMargins(0, 0, 0, 0);
+        previewLayout->setSpacing(StreamUP::UIStyles::S(12));
+
+        // The SoT-styled carousel paints its own circular nav arrows + accent
+        // dots internally and slides between the real theme screenshots, so it
+        // fills the full preview width (no external pill buttons needed).
         ThemeImageCarousel* carousel = new ThemeImageCarousel();
-        
-        // Create external navigation buttons for group box edges
-        QPushButton* externalPrevButton = StreamUP::UIStyles::CreateStyledButton("❮", "neutral", 40);
-        externalPrevButton->setFixedSize(40, 40);
-        QPushButton* externalNextButton = StreamUP::UIStyles::CreateStyledButton("❯", "neutral", 40);
-        externalNextButton->setFixedSize(40, 40);
-        
-        // Connect external buttons to carousel methods
-        QObject::connect(externalPrevButton, &QPushButton::clicked, carousel, &ThemeImageCarousel::previousImage);
-        QObject::connect(externalNextButton, &QPushButton::clicked, carousel, &ThemeImageCarousel::nextImage);
-        
-        // Layout: button at edge - carousel - button at edge
-        carouselControlLayout->addWidget(externalPrevButton);
-        carouselControlLayout->addWidget(carousel, 1);
-        carouselControlLayout->addWidget(externalNextButton);
-        
-        previewLayout->addLayout(carouselControlLayout);
-        
+        previewLayout->addWidget(carousel);
+
         contentLayout->addWidget(previewGroup);
         
         // Access information section
-        QGroupBox* accessGroup = StreamUP::UIStyles::CreateStyledGroupBox("How to Get the Theme", "success");
+        contentLayout->addWidget(StreamUP::UIStyles::sectionHeader("How to Get the Theme"));
+        QWidget* accessGroup = new QWidget();
         QVBoxLayout* accessLayout = new QVBoxLayout(accessGroup);
-        accessLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACE_12);
-        
-        QLabel* accessText = StreamUP::UIStyles::CreateStyledContent(
+        accessLayout->setContentsMargins(0, 0, 0, 0);
+        accessLayout->setSpacing(StreamUP::UIStyles::S(12));
+
+        QLabel* accessText = StreamUP::UIStyles::makeLabel(
             "The StreamUP OBS Theme is available to all StreamUP supporters of any tier. "
             "Simply become a supporter and you'll gain access to download and use this "
-            "professional theme for your OBS Studio setup."
-        );
+            "professional theme for your OBS Studio setup.", 14, 500,
+            StreamUP::UIStyles::Colors::TEXT_PRIMARY);
         accessText->setWordWrap(true);
-        // Ensure text has transparent background
-        accessText->setStyleSheet(accessText->styleSheet() + " QLabel { background: transparent; }");
         accessLayout->addWidget(accessText);
-        
+
         // Support button
-        QPushButton* supportButton = StreamUP::UIStyles::CreateStyledButton("Become a Supporter", "primary");
+        QPushButton* supportButton = new StreamUP::UIStyles::PillButton("Become a Supporter", "primary");
         QObject::connect(supportButton, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.tips/premium"));
         });
@@ -474,25 +450,19 @@ void CreateThemeDialog()
         scrollArea->setWidget(contentWidget);
         mainLayout->addWidget(scrollArea);
 
-        // Action/close buttons in footer
-        QVBoxLayout* footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
-        QHBoxLayout* footerBtnLay = new QHBoxLayout();
-        QPushButton* visitButton = StreamUP::UIStyles::CreateStyledButton("Visit StreamUP.tips", "primary");
+        // Action/close buttons in footer (right-anchored, inline with brand line)
+        QPushButton* visitButton = new StreamUP::UIStyles::PillButton("Visit StreamUP.tips", "primary");
         QObject::connect(visitButton, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.tips/"));
         });
-        QPushButton* closeButton = StreamUP::UIStyles::CreateStyledButton("Close", "neutral");
+        QPushButton* closeButton = new StreamUP::UIStyles::PillButton("Close", "outline");
         QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
-        footerBtnLay->addStretch();
-        footerBtnLay->addWidget(visitButton);
-        footerBtnLay->addSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-        footerBtnLay->addWidget(closeButton);
-        footerLayout->addLayout(footerBtnLay);
-        footerLayout->addStretch();
-        
-        // Apply flexible sizing that fits content - made wider for carousel
-        StreamUP::UIStyles::ApplyDynamicSizing(dialog, 900, 1100, 700, 850);
-        
+        shell.footerButtons->addWidget(closeButton);
+        shell.footerButtons->addWidget(visitButton);
+
+        // Flexible sizing that fits content - made wider for carousel (preferred width + height)
+        dialog->resize(StreamUP::UIStyles::S(900), StreamUP::UIStyles::S(820));
+
         // Show dialog
         dialog->show();
         dialog->raise();

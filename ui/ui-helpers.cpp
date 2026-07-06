@@ -1,5 +1,8 @@
 #include "ui-helpers.hpp"
-#include "ui-styles.hpp"
+#include <streamup/ui/window-chrome.hpp>
+#include <streamup/ui/pill-button.hpp>
+#include <streamup/ui/labels.hpp>
+#include "version.h"
 #include "../core/streamup-common.hpp"
 #include "../utilities/debug-logger.hpp"
 #include <obs-module.h>
@@ -12,7 +15,6 @@
 #include <QAbstractButton>
 #include <QDesktopServices>
 #include <QUrl>
-#include <QGroupBox>
 #include <QGridLayout>
 #include <QObject>
 #include <QScreen>
@@ -22,6 +24,9 @@
 #include <QPalette>
 #include <QColor>
 #include <QVariant>
+
+using namespace StreamUP::UIStyles;
+namespace su = StreamUP::UIStyles;
 
 
 // Forward declarations for functions from main streamup.cpp
@@ -185,75 +190,45 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		QString infoText2Str = obs_module_text(infoText2);
 		QString infoText3Str = obs_module_text(infoText3);
 
-		QDialog *dialog = StreamUP::UIStyles::CreateStyledDialog(titleStr);
-		QVBoxLayout *dialogLayout = StreamUP::UIStyles::GetDialogContentLayout(dialog);
+		// Branded custom window (secondary popup → brandFooter=false). Replaces the
+		// legacy CreateStyledDialog factory + group-box message block.
+		QWidget *parent = static_cast<QWidget *>(obs_frontend_get_main_window());
+		su::WindowShell shell = su::makeWindow(titleStr, "v" PROJECT_VERSION, parent,
+						       /*brandFooter=*/false, "StreamUP");
+		shell.content->setContentsMargins(S(20), S(16), S(20), S(16));
+		shell.content->setSpacing(S(12));
 
-		// Add styled title
-		QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(titleStr);
-		dialogLayout->addWidget(titleLabel);
-
-		// Create styled message group
-		QGroupBox *messageGroup = StreamUP::UIStyles::CreateStyledGroupBox("", "info");
-		QVBoxLayout *messageLayout = new QVBoxLayout(messageGroup);
-		messageLayout->setContentsMargins(StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
-			StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
-			StreamUP::UIStyles::Sizes::PADDING_MEDIUM, 
-			StreamUP::UIStyles::Sizes::PADDING_MEDIUM);
-		messageLayout->setSpacing(StreamUP::UIStyles::Sizes::SPACING_MEDIUM);
-		
-		// First info text (main message)
+		// First info text (main message) — emphasised
 		QLabel *info1 = CreateRichTextLabel(infoText1Str, false, true, Qt::AlignCenter);
-		info1->setStyleSheet(QString(
-			"QLabel {"
-			"color: %1;"
-			"font-size: %2px;"
-			"font-weight: bold;"
-			"background: transparent;"
-			"border: none;"
-			"}").arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-			   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL));
-		messageLayout->addWidget(info1);
+		info1->setStyleSheet(scale_qss(QString(
+			"QLabel{color:%1;font-size:%2px;font-weight:bold;background:transparent;border:none;}")
+			.arg(Colors::TEXT_SECONDARY)
+			.arg(Sizes::FONT_SIZE_NORMAL)));
+		shell.content->addWidget(info1);
 
 		// Second info text
 		QLabel *info2 = CreateRichTextLabel(infoText2Str, false, true, Qt::AlignCenter);
-		info2->setStyleSheet(QString(
-			"QLabel {"
-			"color: %1;"
-			"font-size: %2px;"
-			"background: transparent;"
-			"border: none;"
-			"}").arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-			   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
-		messageLayout->addWidget(info2);
+		info2->setStyleSheet(scale_qss(QString(
+			"QLabel{color:%1;font-size:%2px;background:transparent;border:none;}")
+			.arg(Colors::TEXT_MUTED)
+			.arg(Sizes::FONT_SIZE_SMALL)));
+		shell.content->addWidget(info2);
 
 		// Third info text
 		QLabel *info3 = CreateRichTextLabel(infoText3Str, false, true, Qt::AlignCenter);
-		info3->setStyleSheet(QString(
-			"QLabel {"
-			"color: %1;"
-			"font-size: %2px;"
-			"background: transparent;"
-			"border: none;"
-			"}").arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-			   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL));
-		messageLayout->addWidget(info3);
-		
-		dialogLayout->addWidget(messageGroup);
+		info3->setStyleSheet(scale_qss(QString(
+			"QLabel{color:%1;font-size:%2px;background:transparent;border:none;}")
+			.arg(Colors::TEXT_MUTED)
+			.arg(Sizes::FONT_SIZE_SMALL)));
+		shell.content->addWidget(info3);
 
-		// Add styled button to footer
-		QVBoxLayout *footerLayout = StreamUP::UIStyles::GetDialogFooterLayout(dialog);
-		QHBoxLayout *buttonLayout = new QHBoxLayout();
-		buttonLayout->addStretch();
+		// OK button — right-anchored action slot in the footer.
+		auto *okButton = new su::PillButton(obs_module_text("OK"), "primary");
+		QObject::connect(okButton, &QPushButton::clicked, shell.dialog, &QDialog::close);
+		shell.footerButtons->addWidget(okButton);
 
-		QPushButton *okButton = StreamUP::UIStyles::CreateStyledButton(obs_module_text("OK"), "info");
-		QObject::connect(okButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
-		buttonLayout->addWidget(okButton);
-		buttonLayout->addStretch();
-
-		footerLayout->addLayout(buttonLayout);
-		
-		// Apply auto-sizing
-		StreamUP::UIStyles::ApplyAutoSizing(dialog, 450, 600, 350, 500);
+		shell.dialog->resize(S(450), S(360));
+		shell.dialog->show();
 	});
 }
 
@@ -275,10 +250,10 @@ QLabel *CreateRichTextLabel(const QString &text, bool bold, bool wrap, Qt::Align
 			"border-radius: %2px;"
 			"padding: %3px;"
 			"border: 1px solid %4;"
-		).arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
-		 .arg(StreamUP::UIStyles::Sizes::RADIUS_MD)
-		 .arg(StreamUP::UIStyles::Sizes::PADDING_MEDIUM)
-		 .arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE);
+		).arg(Colors::BG_SECONDARY)
+		 .arg(S(10))
+		 .arg(S(12))
+		 .arg(Colors::BORDER_SUBTLE);
 	} else {
 		styleSheet = "QLabel {";
 	}
@@ -307,8 +282,8 @@ QLabel *CreateIconLabel(const QStyle::StandardPixmap &iconName)
 #else
 	int pixmapSize = 64;
 #endif
-	icon->setPixmap(QApplication::style()->standardIcon(iconName).pixmap(pixmapSize, pixmapSize));
-	icon->setStyleSheet("padding-top: 3px;");
+	icon->setPixmap(QApplication::style()->standardIcon(iconName).pixmap(StreamUP::UIStyles::S(pixmapSize), StreamUP::UIStyles::S(pixmapSize)));
+	icon->setStyleSheet(StreamUP::UIStyles::scale_qss("padding-top: 3px;"));
 	return icon;
 }
 
@@ -320,7 +295,7 @@ QHBoxLayout *AddIconAndText(const QStyle::StandardPixmap &iconText, const char *
 
 	QHBoxLayout *iconTextLayout = new QHBoxLayout();
 	iconTextLayout->addWidget(icon, 0, Qt::AlignTop);
-	iconTextLayout->addSpacing(10);
+	iconTextLayout->addSpacing(StreamUP::UIStyles::S(10));
 	text->setWordWrap(true);
 	iconTextLayout->addWidget(text, 1);
 
@@ -330,7 +305,7 @@ QHBoxLayout *AddIconAndText(const QStyle::StandardPixmap &iconText, const char *
 QVBoxLayout *CreateVBoxLayout(QWidget *parent)
 {
 	QVBoxLayout *layout = new QVBoxLayout(parent);
-	layout->setContentsMargins(20, 15, 20, 10);
+	layout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(15), StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(10));
 	return layout;
 }
 
@@ -346,7 +321,7 @@ void CreateLabelWithLink(QLayout *layout, const QString &text, const QString &ur
 
 void CreateButton(QLayout *layout, const QString &text, const std::function<void()> &onClick)
 {
-	QPushButton *button = StreamUP::UIStyles::CreateStyledButton(text, "neutral");
+	auto *button = new su::PillButton(text, "neutral");
 	QObject::connect(button, &QPushButton::clicked, onClick);
 	layout->addWidget(button);
 }

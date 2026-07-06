@@ -271,7 +271,7 @@ void HotkeyCopyShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 	}
 
 	obs_scene_t *scene = obs_scene_from_source(current_scene);
-	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, selected_source_name);
+	obs_sceneitem_t *scene_item = obs_scene_find_source_recursive(scene, selected_source_name);
 	if (!scene_item) {
 		obs_source_release(current_scene);
 		StreamUP::NotificationManager::SendWarningNotification("Copy Show Transition", "Source not found in scene");
@@ -324,7 +324,7 @@ void HotkeyCopyHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 	}
 
 	obs_scene_t *scene = obs_scene_from_source(current_scene);
-	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, selected_source_name);
+	obs_sceneitem_t *scene_item = obs_scene_find_source_recursive(scene, selected_source_name);
 	if (!scene_item) {
 		obs_source_release(current_scene);
 		StreamUP::NotificationManager::SendWarningNotification("Copy Hide Transition", "Source not found in scene");
@@ -382,7 +382,7 @@ void HotkeyPasteShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 	}
 
 	obs_scene_t *scene = obs_scene_from_source(current_scene);
-	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, selected_source_name);
+	obs_sceneitem_t *scene_item = obs_scene_find_source_recursive(scene, selected_source_name);
 	if (!scene_item) {
 		obs_source_release(current_scene);
 		StreamUP::NotificationManager::SendWarningNotification("Paste Show Transition", "Source not found in scene");
@@ -443,7 +443,7 @@ void HotkeyPasteHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 	}
 
 	obs_scene_t *scene = obs_scene_from_source(current_scene);
-	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, selected_source_name);
+	obs_sceneitem_t *scene_item = obs_scene_find_source_recursive(scene, selected_source_name);
 	if (!scene_item) {
 		obs_source_release(current_scene);
 		StreamUP::NotificationManager::SendWarningNotification("Paste Hide Transition", "Source not found in scene");

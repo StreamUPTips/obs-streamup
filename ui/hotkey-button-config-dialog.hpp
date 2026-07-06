@@ -7,15 +7,16 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QGroupBox>
 #include <QRadioButton>
 #include <QButtonGroup>
 #include "streamup-toolbar-config.hpp"
 #include "obs-hotkey-manager.hpp"
+#include <streamup/ui/window-chrome.hpp>
+#include <streamup/ui/pill-button.hpp>
 
 namespace StreamUP {
 
-class HotkeyButtonConfigDialog : public QDialog {
+class HotkeyButtonConfigDialog : public StreamUP::UIStyles::ShadowDialog {
     Q_OBJECT
 
 public:
@@ -37,34 +38,35 @@ private:
     void setExistingItem(std::shared_ptr<StreamUP::ToolbarConfig::HotkeyButtonItem> item);
     
     // UI Components
-    QVBoxLayout* mainLayout;
+    QVBoxLayout* mainLayout;        // chrome.content
+    QHBoxLayout* footerButtons;     // chrome.footerButtons (right-anchored action slot)
     
     // Hotkey selection section
-    QGroupBox* hotkeyGroup;
+    QWidget* hotkeyGroup;
     QFormLayout* hotkeyFormLayout;
     QLabel* selectedHotkeyLabel;
     QLabel* hotkeyDescriptionLabel;
-    QPushButton* selectHotkeyButton;
-    
+    StreamUP::UIStyles::PillButton* selectHotkeyButton;
+
     // Icon selection section
-    QGroupBox* iconGroup;
+    QWidget* iconGroup;
     QVBoxLayout* iconLayout;
 
     QHBoxLayout* iconPreviewLayout;
     QLabel* iconPreviewLabel;
     QLabel* iconPreview;
-    QPushButton* selectIconButton;
-    
+    StreamUP::UIStyles::PillButton* selectIconButton;
+
     // Button customization section
-    QGroupBox* customizationGroup;
+    QWidget* customizationGroup;
     QFormLayout* customizationLayout;
     QLineEdit* buttonTextEdit;
     QLineEdit* tooltipEdit;
-    
+
     // Dialog buttons
     QHBoxLayout* buttonLayout;
-    QPushButton* okButton;
-    QPushButton* cancelButton;
+    StreamUP::UIStyles::PillButton* okButton;
+    StreamUP::UIStyles::PillButton* cancelButton;
     
     // Data
     StreamUP::HotkeyInfo selectedHotkey;

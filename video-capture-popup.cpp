@@ -1,6 +1,7 @@
 #include "video-capture-popup.hpp"
 #include "core/source-manager.hpp"
-#include "ui/ui-styles.hpp"
+#include <streamup/ui/gallery-style.hpp>
+#include <streamup/ui/pill-button.hpp>
 #include "ui/ui-helpers.hpp"
 #include <QIcon>
 #include <QApplication>
@@ -10,16 +11,21 @@
 #include <QPainterPath>
 #include <obs-module.h>
 
-VideoCapturePopup::VideoCapturePopup(QWidget *parent) 
+namespace su = StreamUP::UIStyles;
+
+VideoCapturePopup::VideoCapturePopup(QWidget *parent)
 	: QWidget(parent), isProcessing(false)
 {
 	setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
 	setAttribute(Qt::WA_TranslucentBackground);
 	
-	// Create buttons using standardized squircle style to match dock buttons
-	activateButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
-	deactivateButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
-	refreshButton = StreamUP::UIStyles::CreateStyledSquircleButton("", "neutral", 28);
+	// Icon-only buttons. The legacy CreateStyledSquircleButton made a small square
+	// neutral button that honoured setIcon(); replaced with neutral su::PillButton
+	// (each carries a distinct themed SVG via setLeadingIcon — there is no built-in
+	// IconButton glyph for activate/deactivate, only refresh).
+	activateButton = new su::PillButton("", "neutral");
+	deactivateButton = new su::PillButton("", "neutral");
+	refreshButton = new su::PillButton("", "neutral");
 	
 	// Apply theme-aware icons
 	applyFileIconToButton(activateButton, StreamUP::UIHelpers::GetThemedIconPath("video-capture-device-activate"));
@@ -28,7 +34,7 @@ VideoCapturePopup::VideoCapturePopup(QWidget *parent)
 	
 	// Set button properties for standardized squircle style
 	auto setButtonProperties = [](QPushButton *button) {
-		button->setIconSize(QSize(16, 16));  // Match dock button icon size
+		button->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));  // Match dock button icon size
 		// Size is set by CreateStyledSquircleButton, don't override
 	};
 	
@@ -43,8 +49,8 @@ VideoCapturePopup::VideoCapturePopup(QWidget *parent)
 	
 	// Create horizontal layout
 	layout = new QHBoxLayout(this);
-	layout->setContentsMargins(5, 5, 5, 5);
-	layout->setSpacing(2);
+	layout->setContentsMargins(StreamUP::UIStyles::S(5), StreamUP::UIStyles::S(5), StreamUP::UIStyles::S(5), StreamUP::UIStyles::S(5));
+	layout->setSpacing(StreamUP::UIStyles::S(2));
 	
 	layout->addWidget(activateButton);
 	layout->addWidget(deactivateButton);
@@ -164,7 +170,13 @@ void VideoCapturePopup::onRefreshClicked()
 
 void VideoCapturePopup::applyFileIconToButton(QPushButton *button, const QString &filePath)
 {
-	button->setIcon(QIcon(filePath));
+	// PillButton renders a leading icon (its paint ignores the base QPushButton
+	// icon), so route the themed SVG through setLeadingIcon to keep it visible.
+	if (auto *pill = dynamic_cast<su::PillButton *>(button)) {
+		pill->setLeadingIcon(QIcon(filePath), 16);
+	} else {
+		button->setIcon(QIcon(filePath));
+	}
 }
 
 bool VideoCapturePopup::eventFilter(QObject *obj, QEvent *event)
@@ -214,10 +226,10 @@ void VideoCapturePopup::paintEvent(QPaintEvent *event)
 	setMask(mask);
 	
 	// Fill background
-	painter.fillPath(path, QColor(StreamUP::UIStyles::Colors::BACKGROUND_CARD));
-	
+	painter.fillPath(path, QColor(StreamUP::UIStyles::Colors::BG_PRIMARY));
+
 	// Draw border with smooth pen
-	QPen pen(QColor(StreamUP::UIStyles::Colors::BACKGROUND_HOVER), 1);
+	QPen pen(QColor(StreamUP::UIStyles::Colors::BG_TERTIARY), 1);
 	pen.setStyle(Qt::SolidLine);
 	pen.setCapStyle(Qt::RoundCap);
 	pen.setJoinStyle(Qt::RoundJoin);

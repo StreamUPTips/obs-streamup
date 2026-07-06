@@ -101,6 +101,9 @@ public:
     // Public methods for keyboard shortcuts
     void triggerRename();
     void triggerRemove();
+    // Activate (go-live/transition to) the currently selected scene — bound to
+    // the Enter/Return key in the tree view.
+    void triggerActivateSelectedScene();
 
 private:
     void setupUI();
@@ -127,6 +130,8 @@ private:
     void updateLockActionStates();
     void updateActiveSceneHighlight();
     void updateActiveSceneHighlightRecursive(QStandardItem *parent, const QString &activeSceneName, const QString &previewSceneName = QString());
+    // Moves the tree selection (preview/blue indicator) to a scene by name.
+    void selectSceneByName(const QString &sceneName);
     void onSetCustomColorClicked();
     void onClearCustomColorClicked();
     void updateTreeViewStylesheet();

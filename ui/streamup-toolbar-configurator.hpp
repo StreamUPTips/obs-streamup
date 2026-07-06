@@ -18,6 +18,7 @@
 #include <QTabWidget>
 #include <QMetaType>
 #include "streamup-toolbar-config.hpp"
+#include <streamup/ui/window-chrome.hpp> // ShadowDialog
 
 QT_BEGIN_NAMESPACE
 QT_END_NAMESPACE
@@ -32,7 +33,7 @@ namespace StreamUP {
 
 class DraggableListWidget;
 
-class ToolbarConfigurator : public QDialog {
+class ToolbarConfigurator : public UIStyles::ShadowDialog {
     Q_OBJECT
 
 public:
@@ -72,6 +73,10 @@ private:
     void addItemToList(std::shared_ptr<ToolbarConfig::ToolbarItem> item, int indentLevel, std::shared_ptr<ToolbarConfig::GroupItem> parentGroup = nullptr, int positionInGroup = -1);
     
     // UI Components
+    // Chrome layouts captured from applyChrome() (content area + right-anchored
+    // footer button slot) — threaded into setupUI().
+    QVBoxLayout* chromeContent = nullptr;
+    QHBoxLayout* chromeFooterButtons = nullptr;
     QSplitter* mainSplitter;
     
     // Left panel - Available items
@@ -105,8 +110,7 @@ private:
     QPushButton* moveDownButton;
     QPushButton* resetButton;
     
-    // Bottom buttons
-    QHBoxLayout* bottomButtonsLayout;
+    // Bottom buttons (PillButton; QPushButton* keeps the &QPushButton::clicked connects valid)
     QPushButton* saveButton;
     QPushButton* cancelButton;
     

@@ -11,15 +11,16 @@
 #include <QFileDialog>
 #include <QTabWidget>
 #include <QLineEdit>
-#include <QGroupBox>
 #include <QButtonGroup>
 #include <QRadioButton>
 #include <QDir>
 #include <QIcon>
+#include <streamup/ui/window-chrome.hpp>
+#include <streamup/ui/pill-button.hpp>
 
 namespace StreamUP {
 
-class IconSelectorDialog : public QDialog {
+class IconSelectorDialog : public StreamUP::UIStyles::ShadowDialog {
     Q_OBJECT
 
 public:
@@ -50,7 +51,8 @@ private:
     QString getOBSThemeIconPath(const QString& iconName);
     
     // UI Components
-    QVBoxLayout* mainLayout;
+    QVBoxLayout* mainLayout;        // chrome.content
+    QHBoxLayout* footerButtons;     // chrome.footerButtons (right-anchored action slot)
     QTabWidget* iconTabs;
     QScrollArea* obsScrollArea;
     QScrollArea* commonScrollArea;
@@ -63,12 +65,12 @@ private:
     QGridLayout* customIconsLayout;
 
     // Custom tab components
-    QPushButton* browseCustomButton;
+    StreamUP::UIStyles::PillButton* browseCustomButton;
     QLineEdit* customIconPath;
-    
+
     QHBoxLayout* buttonLayout;
-    QPushButton* okButton;
-    QPushButton* cancelButton;
+    StreamUP::UIStyles::PillButton* okButton;
+    StreamUP::UIStyles::PillButton* cancelButton;
     
     QButtonGroup* iconButtonGroup;
 

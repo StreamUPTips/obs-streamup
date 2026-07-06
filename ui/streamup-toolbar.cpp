@@ -3,7 +3,6 @@
 #include "streamup-toolbar-configurator.hpp"
 #include "dock/streamup-dock.hpp"
 #include "../video-capture-popup.hpp"
-#include "ui-styles.hpp"
 #include "ui-helpers.hpp"
 #include "settings-manager.hpp"
 #include "obs-hotkey-manager.hpp"
@@ -19,10 +18,12 @@
 #include <QPushButton>
 #include <QContextMenuEvent>
 #include <QMenu>
-#include <QMessageBox>
+#include <streamup/ui/dialogs.hpp>
 #include <QFile>
 #include <QTimer>
 #include <util/config-file.h>
+
+namespace su = StreamUP::UIStyles;
 
 StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent),
 	iconUpdateTimer(nullptr), m_updateBatchTimer(nullptr), streamButton(nullptr),
@@ -859,7 +860,7 @@ void StreamUPToolbar::updateLayoutOrientation()
 			mainLayout->setContentsMargins(0, 0, 0, 0);
 			// No alignment needed for horizontal layout (default is fine)
 		}
-		mainLayout->setSpacing(1);
+		mainLayout->setSpacing(StreamUP::UIStyles::S(1));
 
 		// Re-add widgets with proper orientation handling, including StreamUP button positioning
 		QWidget* streamupButton = nullptr;
@@ -1084,7 +1085,7 @@ void StreamUPToolbar::setupDynamicUI()
 	centralWidget->setObjectName("StreamUPToolbarCentralWidget");
 	mainLayout = new QHBoxLayout(centralWidget);
 	mainLayout->setContentsMargins(0, 0, 0, 0);
-	mainLayout->setSpacing(1);
+	mainLayout->setSpacing(StreamUP::UIStyles::S(1));
 	
 	// Clear existing buttons and properly clean up old references
 	dynamicButtons.clear();
@@ -1581,11 +1582,11 @@ void StreamUPToolbar::executeDockAction(const QString& actionType)
 	
 	StreamUPDock* dock = mainWindow->findChild<StreamUPDock*>();
 	if (!dock) {
-		QMessageBox::warning(this, QString::fromUtf8(obs_module_text("Dock.Title")),
+		su::info(this, QString::fromUtf8(obs_module_text("Dock.Title")),
 			QString::fromUtf8(obs_module_text("StreamUP.Toolbar.DockNotAvailable")));
 		return;
 	}
-	
+
 	// Call the appropriate dock function based on action type
 	if (actionType == "lock_all_sources") {
 		dock->ButtonToggleLockAllSources();
@@ -1612,7 +1613,7 @@ void StreamUPToolbar::executeDockAction(const QString& actionType)
 	} else if (actionType == "toggle_visibility_selected_sources") {
 		dock->ButtonToggleVisibilitySelectedSources();
 	} else {
-		QMessageBox::warning(this, QString::fromUtf8(obs_module_text("StreamUP.Toolbar.UnknownAction")),
+		su::info(this, QString::fromUtf8(obs_module_text("StreamUP.Toolbar.UnknownAction")),
 			QString("Unknown dock action: %1").arg(actionType));
 	}
 }
@@ -1625,11 +1626,11 @@ void StreamUPToolbar::executeDockActionWithButton(const QString& actionType, QTo
 	
 	StreamUPDock* dock = mainWindow->findChild<StreamUPDock*>();
 	if (!dock) {
-		QMessageBox::warning(this, QString::fromUtf8(obs_module_text("Dock.Title")),
+		su::info(this, QString::fromUtf8(obs_module_text("Dock.Title")),
 			QString::fromUtf8(obs_module_text("StreamUP.Toolbar.DockNotAvailable")));
 		return;
 	}
-	
+
 	// Special handling for video_capture to position popup relative to toolbar button
 	if (actionType == "video_capture") {
 		// Check if there's already an open popup and close it

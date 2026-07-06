@@ -2,33 +2,46 @@
 #include "hotkey-selector-dialog.hpp"
 #include "icon-selector-dialog.hpp"
 #include "ui-helpers.hpp"
-#include "ui-styles.hpp"
+#include <streamup/ui/window-chrome.hpp>
+#include <streamup/ui/pill-button.hpp>
+#include <streamup/ui/labels.hpp>
+#include "version.h"
 #include <QMessageBox>
 #include <QUuid>
 #include <QFileInfo>
 #include <obs-module.h>
 
+using namespace StreamUP::UIStyles;
+
 namespace StreamUP {
 
 HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(QWidget* parent)
-    : QDialog(parent)
+    : ShadowDialog(parent)
     , isEditMode(false)
 {
-    UIStyles::ApplyFramelessChrome(this, obs_module_text("HotkeyButton.Dialog.AddTitle"));
+    WindowShell chrome = applyChrome(this, obs_module_text("HotkeyButton.Dialog.AddTitle"),
+                                     "v" PROJECT_VERSION, /*brandFooter=*/false, "StreamUP");
+    chrome.content->setContentsMargins(S(20), S(16), S(20), S(16));
+    mainLayout = chrome.content;
+    footerButtons = chrome.footerButtons;
     setModal(true);
-    resize(500, 400);
+    resize(500 + 2 * ShadowDialog::kShadowMargin, 400 + 2 * ShadowDialog::kShadowMargin);
 
     setupUI();
     validateInput();
 }
 
 HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(std::shared_ptr<StreamUP::ToolbarConfig::HotkeyButtonItem> existingItem, QWidget* parent)
-    : QDialog(parent)
+    : ShadowDialog(parent)
     , isEditMode(true)
 {
-    UIStyles::ApplyFramelessChrome(this, obs_module_text("HotkeyButton.Dialog.EditTitle"));
+    WindowShell chrome = applyChrome(this, obs_module_text("HotkeyButton.Dialog.EditTitle"),
+                                     "v" PROJECT_VERSION, /*brandFooter=*/false, "StreamUP");
+    chrome.content->setContentsMargins(S(20), S(16), S(20), S(16));
+    mainLayout = chrome.content;
+    footerButtons = chrome.footerButtons;
     setModal(true);
-    resize(500, 400);
+    resize(500 + 2 * ShadowDialog::kShadowMargin, 400 + 2 * ShadowDialog::kShadowMargin);
 
     setupUI();
     setExistingItem(existingItem);
@@ -36,45 +49,43 @@ HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(std::shared_ptr<StreamUP::Too
 }
 
 void HotkeyButtonConfigDialog::setupUI() {
-    mainLayout = UIStyles::GetDialogContentLayout(this);
-    
-    // Hotkey selection section
-    hotkeyGroup = new QGroupBox(obs_module_text("HotkeyButton.Group.Hotkey"), this);
-    hotkeyGroup->setStyleSheet(UIStyles::GetGroupBoxStyle("", ""));
+    // Hotkey selection section (sectionHeader + plain QWidget section — no group frame)
+    mainLayout->addWidget(sectionHeader(obs_module_text("HotkeyButton.Group.Hotkey")));
+    hotkeyGroup = new QWidget(this);
     hotkeyFormLayout = new QFormLayout(hotkeyGroup);
-    
+
     selectedHotkeyLabel = new QLabel(obs_module_text("HotkeyButton.Message.NoSelection"), hotkeyGroup);
-    selectedHotkeyLabel->setStyleSheet(QString("color: %1; font-style: italic;").arg(UIStyles::Colors::TEXT_MUTED));
+    selectedHotkeyLabel->setStyleSheet(QString("color: %1; font-style: italic;").arg(Colors::TEXT_MUTED));
 
     hotkeyDescriptionLabel = new QLabel("", hotkeyGroup);
     hotkeyDescriptionLabel->setWordWrap(true);
-    hotkeyDescriptionLabel->setStyleSheet(QString("color: %1;").arg(UIStyles::Colors::TEXT_PRIMARY));
-    
-    selectHotkeyButton = UIStyles::CreateStyledButton(obs_module_text("HotkeyButton.Button.SelectHotkey"), "info");
-    
+    hotkeyDescriptionLabel->setStyleSheet(QString("color: %1;").arg(Colors::TEXT_PRIMARY));
+
+    selectHotkeyButton = new PillButton(obs_module_text("HotkeyButton.Button.SelectHotkey"), "primary");
+
     hotkeyFormLayout->addRow(QString(obs_module_text("HotkeyButton.Label.Selected")), selectedHotkeyLabel);
     hotkeyFormLayout->addRow(QString(obs_module_text("HotkeyButton.Label.Description")), hotkeyDescriptionLabel);
     hotkeyFormLayout->addRow("", selectHotkeyButton);
-    
+
     mainLayout->addWidget(hotkeyGroup);
-    
+
     connect(selectHotkeyButton, &QPushButton::clicked, this, &HotkeyButtonConfigDialog::onSelectHotkeyClicked);
-    
+
     // Icon selection section
-    iconGroup = new QGroupBox(obs_module_text("HotkeyButton.Group.Icon"), this);
-    iconGroup->setStyleSheet(UIStyles::GetGroupBoxStyle("", ""));
+    mainLayout->addWidget(sectionHeader(obs_module_text("HotkeyButton.Group.Icon")));
+    iconGroup = new QWidget(this);
     iconLayout = new QVBoxLayout(iconGroup);
 
     // Icon preview section
     iconPreviewLayout = new QHBoxLayout();
     iconPreviewLabel = new QLabel(obs_module_text("HotkeyButton.Label.Preview"), iconGroup);
     iconPreview = new QLabel(iconGroup);
-    iconPreview->setFixedSize(32, 32);
-    iconPreview->setStyleSheet(QString("border: 1px solid %1;").arg(UIStyles::Colors::BORDER_MEDIUM));
+    iconPreview->setFixedSize(S(32), S(32));
+    iconPreview->setStyleSheet(scale_qss(QString("border: 1px solid %1;").arg(Colors::POPUP_BORDER)));
     iconPreview->setAlignment(Qt::AlignCenter);
     iconPreview->setScaledContents(true);
 
-    selectIconButton = UIStyles::CreateStyledButton(obs_module_text("HotkeyButton.Button.SelectIcon"), "info");
+    selectIconButton = new PillButton(obs_module_text("HotkeyButton.Button.SelectIcon"), "primary");
 
     iconPreviewLayout->addWidget(iconPreviewLabel);
     iconPreviewLayout->addWidget(iconPreview);
@@ -86,43 +97,40 @@ void HotkeyButtonConfigDialog::setupUI() {
     mainLayout->addWidget(iconGroup);
 
     connect(selectIconButton, &QPushButton::clicked, this, &HotkeyButtonConfigDialog::onSelectIconClicked);
-    
+
     // Button customization section
-    customizationGroup = new QGroupBox(obs_module_text("HotkeyButton.Group.Customization"), this);
-    customizationGroup->setStyleSheet(UIStyles::GetGroupBoxStyle("", ""));
+    mainLayout->addWidget(sectionHeader(obs_module_text("HotkeyButton.Group.Customization")));
+    customizationGroup = new QWidget(this);
     customizationLayout = new QFormLayout(customizationGroup);
-    
+
     buttonTextEdit = new QLineEdit(customizationGroup);
     buttonTextEdit->setPlaceholderText(obs_module_text("HotkeyButton.Placeholder.ButtonText"));
-    
+    buttonTextEdit->setStyleSheet(lineEditStyle());
+
     tooltipEdit = new QLineEdit(customizationGroup);
     tooltipEdit->setPlaceholderText(obs_module_text("HotkeyButton.Placeholder.Tooltip"));
-    
+    tooltipEdit->setStyleSheet(lineEditStyle());
+
     customizationLayout->addRow(obs_module_text("HotkeyButton.Label.ButtonText"), buttonTextEdit);
     customizationLayout->addRow(obs_module_text("HotkeyButton.Label.Tooltip"), tooltipEdit);
-    
-    mainLayout->addWidget(customizationGroup);
-    
-    // Dialog buttons in footer
-    QVBoxLayout *footerLayout = UIStyles::GetDialogFooterLayout(this);
-    buttonLayout = new QHBoxLayout();
-    buttonLayout->addStretch();
 
-    okButton = UIStyles::CreateStyledButton(
-        isEditMode ? obs_module_text("HotkeyButton.Button.Update") : obs_module_text("HotkeyButton.Button.Add"), "info");
-    cancelButton = UIStyles::CreateStyledButton(obs_module_text("UI.Button.Cancel"), "neutral");
+    mainLayout->addWidget(customizationGroup);
+
+    // Dialog buttons in footer (right-anchored action slot)
+    okButton = new PillButton(
+        isEditMode ? obs_module_text("HotkeyButton.Button.Update") : obs_module_text("HotkeyButton.Button.Add"),
+        "primary");
+    cancelButton = new PillButton(obs_module_text("UI.Button.Cancel"), "outline");
 
     okButton->setDefault(true);
     okButton->setEnabled(false);
 
-    buttonLayout->addWidget(okButton);
-    buttonLayout->addWidget(cancelButton);
+    footerButtons->addWidget(cancelButton);
+    footerButtons->addWidget(okButton);
 
-    footerLayout->addLayout(buttonLayout);
-    
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
-    
+
     // Initial validation
     validateInput();
 }
