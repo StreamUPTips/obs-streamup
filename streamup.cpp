@@ -210,7 +210,8 @@ void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 	}
 
 	obs_scene_t *scene = obs_scene_from_source(scene_source);
-	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, source_name);
+	// Use recursive lookup so sources nested inside groups are found (OBS treats groups as sub-scenes)
+	obs_sceneitem_t *scene_item = obs_scene_find_source_recursive(scene, source_name);
 	if (!scene_item) {
 		obs_data_set_string(response_data, "error", "Source not found in scene.");
 		obs_data_set_bool(response_data, "success", false);
@@ -313,7 +314,8 @@ void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 	}
 
 	obs_scene_t *scene = obs_scene_from_source(scene_source);
-	obs_sceneitem_t *scene_item = obs_scene_find_source(scene, source_name);
+	// Use recursive lookup so sources nested inside groups are found (OBS treats groups as sub-scenes)
+	obs_sceneitem_t *scene_item = obs_scene_find_source_recursive(scene, source_name);
 	if (!scene_item) {
 		obs_data_set_string(response_data, "error", "Source not found in scene.");
 		obs_data_set_bool(response_data, "success", false);
