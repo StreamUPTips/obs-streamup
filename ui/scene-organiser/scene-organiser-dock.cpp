@@ -37,12 +37,19 @@
 #include <QDir>
 #include <QDateTime>
 #include <util/platform.h>
+#include <functional>
 
 namespace su = StreamUP::UIStyles;
 using namespace StreamUP::UIStyles;
 
 namespace StreamUP {
 namespace SceneOrganiser {
+
+// Data role marking the scene item that is currently LIVE on program.
+// Painted by CustomColorDelegate as a distinct green "on air" indicator that is
+// independent of the tree's normal (blue) selection. UserRole+1 is the custom
+// colour, UserRole+100 is the creation timestamp, so +2 is free.
+static constexpr int ProgramSceneRole = Qt::UserRole + 2;
 
 // Optimized theme icon cache
 static QHash<QString, QIcon> s_themeIconCache;
@@ -322,7 +329,8 @@ void SceneOrganiserDock::setupUI()
 
     // Apply initial item height setting
     StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-    int iconSize = (32 * settings.sceneOrganiserItemHeight) / 100;
+    // Match OBS's native Sources/Scenes tree: icons roughly the height of the row text (~16px at 100%)
+    int iconSize = (16 * settings.sceneOrganiserItemHeight) / 100;
     m_treeView->setIconSize(QSize(iconSize, iconSize));
 
     // Apply initial font size based on height setting
@@ -1975,8 +1983,8 @@ void SceneOrganiserDock::onSettingsChanged()
         StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 
         // Calculate icon size based on height percentage (50-200% range)
-        // Base icon size is 32px at 100%
-        int iconSize = (32 * settings.sceneOrganiserItemHeight) / 100;
+        // Match OBS's native Sources/Scenes tree: icons roughly the height of the row text (~16px at 100%)
+        int iconSize = (16 * settings.sceneOrganiserItemHeight) / 100;
         m_treeView->setIconSize(QSize(iconSize, iconSize));
 
         // Calculate and apply font size based on height percentage
@@ -2053,7 +2061,8 @@ void SceneOrganiserDock::updateActiveSceneHighlight()
     }
 
     // If in studio mode, also get the preview scene
-    if (obs_frontend_preview_program_mode_active()) {
+    const bool studioMode = obs_frontend_preview_program_mode_active();
+    if (studioMode) {
         obs_source_t *preview_scene = obs_frontend_get_current_preview_scene();
         if (preview_scene) {
             preview_scene_name = QString::fromUtf8(obs_source_get_name(preview_scene));
@@ -2061,8 +2070,25 @@ void SceneOrganiserDock::updateActiveSceneHighlight()
         }
     }
 
-    // Update all scene items in the tree
+    // Mark the LIVE program scene throughout the tree with the dedicated
+    // ProgramSceneRole. The CustomColorDelegate paints these items with a
+    // distinct green "on air" indicator that is INDEPENDENT of the tree's
+    // normal (blue) selection. This tracks the real program scene no matter
+    // how it changed (Stream Deck, hotkey, websocket, OBS scene list, etc.).
     updateActiveSceneHighlightRecursive(m_model->invisibleRootItem(), current_scene_name, preview_scene_name);
+
+    // In studio mode, keep the tree SELECTION (blue preview indicator) in sync
+    // with OBS' current preview scene, so external preview changes are
+    // reflected. Outside studio mode the selection is left entirely to the user
+    // (clicks + arrow keys) and is never moved by program changes.
+    if (studioMode && !preview_scene_name.isEmpty()) {
+        selectSceneByName(preview_scene_name);
+    }
+
+    // Repaint so the program indicator refreshes immediately.
+    if (m_treeView->viewport()) {
+        m_treeView->viewport()->update();
+    }
 
     QString debugMsg = QString("Updated active scene highlight - Program: %1").arg(current_scene_name);
     if (!preview_scene_name.isEmpty()) {
@@ -2071,13 +2097,125 @@ void SceneOrganiserDock::updateActiveSceneHighlight()
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "ActiveScene", debugMsg.toUtf8().constData());
 }
 
+// Walks the tree and sets ProgramSceneRole=true on the scene item matching the
+// live program scene, clearing it on every other scene item. Does NOT touch
+// selection.
 void SceneOrganiserDock::updateActiveSceneHighlightRecursive(QStandardItem *parent, const QString &activeSceneName, const QString &previewSceneName)
 {
-    // DISABLED - No custom styling at all
-    // Just let OBS theme handle everything
-    Q_UNUSED(parent);
-    Q_UNUSED(activeSceneName);
     Q_UNUSED(previewSceneName);
+
+    if (!parent) {
+        return;
+    }
+
+    for (int i = 0; i < parent->rowCount(); ++i) {
+        QStandardItem *item = parent->child(i);
+        if (!item) {
+            continue;
+        }
+
+        if (item->type() == SceneTreeItem::UserType + 2) {
+            const bool isProgram = !activeSceneName.isEmpty() && item->text() == activeSceneName;
+            // Only write when the state actually changes to avoid needless
+            // dataChanged/repaint churn.
+            if (item->data(ProgramSceneRole).toBool() != isProgram) {
+                item->setData(isProgram, ProgramSceneRole);
+            }
+        }
+
+        // Recurse into folders.
+        if (item->rowCount() > 0) {
+            updateActiveSceneHighlightRecursive(item, activeSceneName, previewSceneName);
+        }
+    }
+}
+
+// Moves the tree selection (blue preview/selected indicator) to the named
+// scene. Programmatic selection only updates toolbar button state
+// (onSceneSelectionChanged); it does NOT switch OBS scenes, so there is no
+// feedback loop back to OBS.
+void SceneOrganiserDock::selectSceneByName(const QString &sceneName)
+{
+    if (!m_model || !m_treeView || !m_proxyModel || sceneName.isEmpty()) {
+        return;
+    }
+
+    QStandardItem *match = nullptr;
+    std::function<void(QStandardItem *)> findItem = [&](QStandardItem *parent) {
+        if (!parent || match) {
+            return;
+        }
+        for (int i = 0; i < parent->rowCount(); ++i) {
+            QStandardItem *item = parent->child(i);
+            if (!item) {
+                continue;
+            }
+            if (item->type() == SceneTreeItem::UserType + 2 && item->text() == sceneName) {
+                match = item;
+                return;
+            }
+            if (item->rowCount() > 0) {
+                findItem(item);
+            }
+        }
+    };
+    findItem(m_model->invisibleRootItem());
+
+    if (!match) {
+        return;
+    }
+
+    QModelIndex proxyIndex = m_proxyModel->mapFromSource(match->index());
+    if (!proxyIndex.isValid()) {
+        return; // e.g. filtered out by the search box
+    }
+
+    QItemSelectionModel *selModel = m_treeView->selectionModel();
+    if (selModel && selModel->currentIndex() != proxyIndex) {
+        selModel->setCurrentIndex(
+            proxyIndex,
+            QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    }
+}
+
+// Activates the currently selected scene (bound to Enter/Return in the tree).
+// Studio mode: set it as preview and trigger the preview->program transition
+// (matching OBS' own behaviour). Non-studio mode: set it as the current
+// program scene. Arrow keys keep moving selection only; Enter is what commits.
+void SceneOrganiserDock::triggerActivateSelectedScene()
+{
+    if (!m_model || !m_treeView || !m_proxyModel) {
+        return;
+    }
+
+    QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
+    if (selected.isEmpty()) {
+        return;
+    }
+
+    QModelIndex sourceIndex = m_proxyModel->mapToSource(selected.first());
+    QStandardItem *item = m_model->itemFromIndex(sourceIndex);
+    if (!item || item->type() != SceneTreeItem::UserType + 2) {
+        return; // only scenes can be activated (folders ignored)
+    }
+
+    obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
+    if (!source) {
+        return;
+    }
+
+    if (obs_frontend_preview_program_mode_active()) {
+        obs_frontend_set_current_preview_scene(source);
+        obs_frontend_preview_program_trigger_transition();
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Activate",
+            QString("Enter: transitioned '%1' to program").arg(item->text()).toUtf8().constData());
+    } else {
+        obs_frontend_set_current_scene(source);
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Activate",
+            QString("Enter: set program scene to '%1'").arg(item->text()).toUtf8().constData());
+    }
+
+    obs_source_release(source);
 }
 
 void SceneOrganiserDock::updateAllItemIcons(QStandardItem *parent)
@@ -4312,9 +4450,17 @@ void SceneTreeView::keyPressEvent(QKeyEvent *event)
         dock->triggerRename();
         event->accept();
         return;
+    } else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+        // Enter/Return activates the selected scene (go live / transition).
+        // Arrow keys are intentionally NOT intercepted below so they keep
+        // moving the selection (preview) only, without switching program.
+        dock->triggerActivateSelectedScene();
+        event->accept();
+        return;
     }
 
-    // Let the parent handle other keys
+    // Let the parent handle other keys (including Up/Down arrows, which move
+    // selection only and never change the program scene).
     QTreeView::keyPressEvent(event);
 }
 
@@ -4529,27 +4675,34 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
         return;
     }
 
+    // Is this the LIVE program scene? The program indicator is a dedicated
+    // green "on air" highlight that is INDEPENDENT of selection and takes
+    // precedence over any custom colour while the scene is live.
+    const bool isProgram = item->data(ProgramSceneRole).toBool();
+
     // Check if this item has a custom color
     QVariant colorData = item->data(Qt::UserRole + 1);
-    if (!colorData.isValid()) {
-        // No custom color, use default painting
+    QColor customColor = colorData.isValid() ? colorData.value<QColor>() : QColor();
+
+    if (!isProgram && !customColor.isValid()) {
+        // No program indicator and no custom color: use default painting so the
+        // native (blue) selection highlight shows the preview/selected scene.
         QStyledItemDelegate::paint(painter, option, index);
         return;
     }
 
-    QColor customColor = colorData.value<QColor>();
-    if (!customColor.isValid()) {
-        // Invalid color, use default painting
-        QStyledItemDelegate::paint(painter, option, index);
-        return;
-    }
+    // Base colour: the live program scene is always green (distinct from the
+    // blue selection); otherwise fall back to the item's custom colour.
+    QColor baseColor = isProgram ? QColor(Colors::COLOR_SUCCESS) : customColor;
 
-    // Calculate the appropriate background color based on state
-    QColor bgColor = customColor;
+    // Calculate the appropriate background color based on state. A program scene
+    // that is also selected stays green (a brighter selection-variant of green)
+    // so it never gets confused with the blue preview/selection indicator.
+    QColor bgColor = baseColor;
     if (option.state & QStyle::State_Selected) {
-        bgColor = m_dock->getSelectionColor(customColor);
+        bgColor = m_dock->getSelectionColor(baseColor);
     } else if (option.state & QStyle::State_MouseOver) {
-        bgColor = m_dock->getHoverColor(customColor);
+        bgColor = m_dock->getHoverColor(baseColor);
     }
 
     // Calculate contrasting text color
