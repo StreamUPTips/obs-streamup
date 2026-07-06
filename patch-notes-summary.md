@@ -7,9 +7,12 @@
 - **Built-In Colour Picker** - Picking a folder or scene colour in the Scene Organiser now uses a proper StreamUP picker with a colour square, hue strip, hex field and saved swatches.
 - **Clearer Buttons** - Buttons line up Cancel on the left, confirm on the right. Anything destructive, like removing a scene or resetting the toolbar, gets a red button so there are no surprises.
 - **Theme Preview Carousel** - Theme preview images now slide between shots instead of snapping, with rounded corners, arrows inside the image and dot markers along the bottom.
+- **Live Scene Highlight In The Scene Organiser** - The Scene Organiser now always highlights whatever scene is live on stream, so you can tell at a glance what is actually going out. In Studio Mode your selected preview scene shows in a different colour, and you can move up and down with the arrow keys then press Enter to cut to it.
+- **Smaller Scene Organiser Icons** - The scene and source icons in the Scene Organiser were bigger than the ones in the normal OBS list. They match now, so the panel sits alongside OBS a bit more naturally.
 
 ## Bug Fixes
 - **Patch Notes Window** - The patch notes window stopped opening after the UI rework. Fixed, it shows and jumps to the front again.
+- **Transitions Find Sources Inside Groups** - The show and hide transition tools, and a few source settings, could not find a source if it lived inside a group. They look inside groups properly now.
 
 ---
 
