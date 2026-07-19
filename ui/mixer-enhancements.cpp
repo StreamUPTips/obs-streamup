@@ -21,6 +21,9 @@
 #include <QSizePolicy>
 #include <QToolBar>
 #include <QPushButton>
+#include <QPainter>
+#include <QPixmap>
+#include <QIcon>
 
 #include <utility>
 
@@ -288,7 +291,10 @@ protected:
                         QString fullName = m_cachedName;
                         if (needsLookup || m_cachedName.isEmpty()) {
                             fullName = GetFullSourceName(currentText);
-                            if (!fullName.isEmpty()) {
+                            // Only cache a resolved name; a failed or ambiguous
+                            // lookup returns the elided text unchanged, and
+                            // caching that would pin a wrong label forever
+                            if (!fullName.isEmpty() && fullName != currentText) {
                                 m_cachedName = fullName;
                             }
                         }
@@ -321,8 +327,6 @@ private:
  */
 static QString GetFullSourceName(const QString& elidedText)
 {
-    QString fullName;
-
     // Remove the elide character (…) and get the prefix/suffix
     QString searchText = elidedText;
     int elidePos = searchText.indexOf(QChar(0x2026)); // Unicode ellipsis
@@ -342,41 +346,149 @@ static QString GetFullSourceName(const QString& elidedText)
         return elidedText;
     }
 
-    // Enumerate all sources
+    // Enumerate all sources, matching on both prefix and suffix and counting
+    // matches. Sources like "[AUD] AG08 Ch. 1/2" often share an elided prefix,
+    // so a prefix-only first match would relabel every strip to the same name.
+    struct MatchData {
+        QString prefix;
+        QString suffix;
+        QString match;
+        int count = 0;
+    };
+
     auto enumSources = [](void* param, obs_source_t* source) -> bool {
         if (!source) return true;
 
-        auto* data = static_cast<std::pair<QString, QString*>*>(param);
-        const QString& searchPrefix = data->first;
-        QString* result = data->second;
+        auto* data = static_cast<MatchData*>(param);
 
         const char* name = obs_source_get_name(source);
         if (!name) return true;
 
         QString sourceName = QString::fromUtf8(name);
 
-        // Check if this source name starts with our prefix
-        if (sourceName.startsWith(searchPrefix)) {
-            *result = sourceName;
-            return false; // Stop enumeration
+        if (sourceName.startsWith(data->prefix) && sourceName.endsWith(data->suffix)) {
+            data->match = sourceName;
+            data->count++;
         }
 
         return true;
     };
 
-    std::pair<QString, QString*> data{prefix, &fullName};
+    MatchData data{prefix, suffix, QString(), 0};
     obs_enum_sources(enumSources, &data);
 
-    // If not found in regular sources, try scene sources (which can also appear in mixer)
-    if (fullName.isEmpty()) {
-        obs_enum_scenes(enumSources, &data);
-    }
+    // Scene sources can also appear in the mixer
+    obs_enum_scenes(enumSources, &data);
 
-    if (fullName.isEmpty()) {
+    // Only trust an unambiguous match; otherwise leave OBS's eliding alone
+    if (data.count != 1) {
         return elidedText;
     }
 
-    return fullName;
+    return data.match;
+}
+
+/**
+ * @brief Re-tint a mixer button's icon to match its palette text colour
+ *
+ * OBS core's VolumeControl::updateButtons() sets raw black resource SVGs on
+ * both the mute and monitor buttons on every state refresh, but idian only
+ * re-tints the button whose state class actually changed. Clicking one button
+ * therefore leaves the other button's freshly-set icon black until a hover
+ * re-tints it. This recolours the icon ourselves (same composition approach
+ * as idian's recolorPixmap, reimplemented locally so we don't depend on
+ * idian headers).
+ */
+static void TintButtonIcon(QAbstractButton* button)
+{
+    if (!button) {
+        return;
+    }
+
+    QIcon icon = button->icon();
+    if (icon.isNull()) {
+        return;
+    }
+
+    // No work if this icon is already the one we tinted
+    qint64 key = icon.cacheKey();
+    if (key == button->property("streamup_tint_key").toLongLong()) {
+        return;
+    }
+
+    QPixmap pixmap = icon.pixmap(button->iconSize(), button->devicePixelRatioF());
+    if (pixmap.isNull()) {
+        // Nothing to tint; remember the key so we don't retry every paint
+        button->setProperty("streamup_tint_key", key);
+        return;
+    }
+
+    QColor color = button->palette().color(QPalette::ButtonText);
+
+    QPainter painter(&pixmap);
+    painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    painter.fillRect(pixmap.rect(), color);
+    painter.end();
+
+    button->setIcon(QIcon(pixmap));
+
+    // setIcon() creates a new icon with a new cacheKey; store the post-tint
+    // key so the next paint sees a match and does no work
+    button->setProperty("streamup_tint_key", button->icon().cacheKey());
+}
+
+/**
+ * @brief Event filter that re-tints mute/monitor icons whenever OBS replaces them
+ */
+class IconTintFilter : public QObject {
+public:
+    explicit IconTintFilter(QObject* parent = nullptr) : QObject(parent) {}
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() == QEvent::Paint) {
+            QAbstractButton* button = qobject_cast<QAbstractButton*>(watched);
+            if (button && !button->icon().isNull() &&
+                button->icon().cacheKey() != button->property("streamup_tint_key").toLongLong()) {
+                // Defer the re-tint out of the paint event; TintButtonIcon's
+                // key comparison guards against re-entry
+                QPointer<QAbstractButton> guard(button);
+                QTimer::singleShot(0, this, [guard]() {
+                    TintButtonIcon(guard);
+                });
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+};
+
+/**
+ * @brief Install icon tint watchers on the mute/monitor buttons of a VolumeControl
+ */
+static void InstallIconTintWatchers(QWidget* volumeControl)
+{
+    QList<QAbstractButton*> buttons = volumeControl->findChildren<QAbstractButton*>();
+
+    for (QAbstractButton* button : buttons) {
+        // idian stores style classes as a space-separated "class" property
+        QStringList classes = button->property("class").toString().split(' ');
+        if (!classes.contains("btn-mute") && !classes.contains("btn-monitor")) {
+            continue;
+        }
+
+        // Skip if already processed
+        if (button->property("streamup_tintwatch").toBool()) {
+            continue;
+        }
+
+        IconTintFilter* filter = new IconTintFilter(button);
+        button->installEventFilter(filter);
+        button->setProperty("streamup_tintwatch", true);
+
+        // Tint whatever icon is currently set
+        TintButtonIcon(button);
+    }
 }
 
 /**
@@ -438,8 +550,10 @@ static void EnableMultiLineName(QWidget* volumeControl)
                 button->setMinimumHeight(StreamUP::UIStyles::S(32));
 
                 // Install event filter to maintain our changes after OBS re-elides
-                // Filter caches the name to avoid expensive lookups
-                VolumeNameFilter* filter = new VolumeNameFilter(nameLabel, fullName, button);
+                // Filter caches the name to avoid expensive lookups; seed the
+                // cache only when the lookup actually resolved a full name
+                QString cacheSeed = (fullName != currentText) ? fullName : QString();
+                VolumeNameFilter* filter = new VolumeNameFilter(nameLabel, cacheSeed, button);
                 button->installEventFilter(filter);
 
                 button->setProperty("streamup_multiline", true);
@@ -494,6 +608,9 @@ void EnhanceVolumeControl(QWidget* volumeControl)
 
     // Enable multi-line source names
     EnableMultiLineName(volumeControl);
+
+    // Keep mute/monitor icons tinted after OBS replaces them
+    InstallIconTintWatchers(volumeControl);
 }
 
 void RefreshMixerEnhancements()
