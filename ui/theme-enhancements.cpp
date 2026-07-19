@@ -860,6 +860,15 @@ void ApplyAdvAudioEnhancements(QWidget* advAudioDialog)
         }
     }
 
+    // OBS 32.2: the Audio Monitoring header (label_6) can land in a grid
+    // column narrower than its text and get clipped to "Audio M...".
+    // Hold the label open to its own text width; C++ so no stylesheet
+    // cascade can lose it.
+    if (QLabel* monitoringHeader = advAudioDialog->findChild<QLabel*>("label_6")) {
+        int w = monitoringHeader->fontMetrics().horizontalAdvance(monitoringHeader->text()) + 12;
+        monitoringHeader->setMinimumWidth(w);
+    }
+
     advAudioDialog->setProperty("streamup_advadio_enhanced", true);
 }
 
