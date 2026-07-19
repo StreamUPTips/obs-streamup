@@ -410,10 +410,25 @@ static void TintButtonIcon(QAbstractButton* button)
         return;
     }
 
-    // No work if this icon is already the one we tinted
+    // No work if this icon is already the one we tinted. Checked-state icon
+    // swaps below still participate in this guard: the swapped icon is set
+    // via setIcon(), so its post-tint cacheKey is what gets stored, and core
+    // replacing the icon on the next state refresh produces a fresh key.
     qint64 key = icon.cacheKey();
     if (key == button->property("streamup_tint_key").toLongLong()) {
         return;
+    }
+
+    // Core uses the same audio.svg glyph for muted and unmuted; show a proper
+    // muted-speaker glyph when the mute button is checked. Leave mute-warning
+    // alone (core already sets the warning glyph) and never swap the monitor
+    // button (its headphone icons already differ per state).
+    QStringList classes = button->property("class").toString().split(' ');
+    if (classes.contains("btn-mute") && !classes.contains("mute-warning") && button->isChecked()) {
+        QIcon muteIcon(":/res/images/mute.svg");
+        if (!muteIcon.isNull()) {
+            icon = muteIcon;
+        }
     }
 
     QPixmap pixmap = icon.pixmap(button->iconSize(), button->devicePixelRatioF());
