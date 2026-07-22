@@ -7,6 +7,7 @@
 #include "core/streamup-common.hpp"
 #include "core/plugin-state.hpp"
 #include "core/plugin-manager.hpp"
+#include "core/source-manager.hpp"
 #include "integrations/websocket-api.hpp"
 #include "utilities/path-utils.hpp"
 #include "utilities/debug-logger.hpp"
@@ -352,6 +353,111 @@ void SetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, 
 //--------------------WEBSOCKET VENDOR REQUESTS--------------------
 obs_websocket_vendor vendor = nullptr;
 
+//--------------------SELECTION CHANGED EVENT--------------------
+// Emits vendor event "SelectionChanged" { "selectedSource": "<name>" | "None" }
+// whenever the selected source in the current scene changes, so external tools
+// (Streamer.bot / Stream Deck) can react instantly with no polling. Selection is
+// the only source state with no built-in OBS event (lock/visibility already have
+// SceneItemLockStateChanged / SceneItemEnableStateChanged).
+static obs_source_t *g_streamup_sel_scene = nullptr; // hooked scene (owns a +1 ref)
+
+static void StreamUpEmitSelectionChanged()
+{
+	if (!vendor)
+		return;
+	int count = StreamUP::SourceManager::GetSelectedSourceCount();
+	const char *sel = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
+	obs_data_t *d = obs_data_create();
+	obs_data_set_int(d, "count", count);
+	if (count == 1 && sel && *sel)
+		obs_data_set_string(d, "selectedSource", sel);
+	else if (count > 1)
+		obs_data_set_string(d, "selectedSource", "Multiple");
+	else
+		obs_data_set_string(d, "selectedSource", "None");
+	obs_websocket_vendor_emit_event(vendor, "SelectionChanged", d);
+	obs_data_release(d);
+}
+
+static void StreamUpOnItemSelect(void *, calldata_t *)
+{
+	StreamUpEmitSelectionChanged();
+}
+
+// Emits vendor event "SourceStateChanged" carrying the aggregate lock state
+// (current scene + all scenes) and the selected source's visibility, so a
+// Stream Deck key can stay in sync when a source is (un)locked or shown/hidden
+// directly in OBS. Fires on the current scene's item_locked / item_visible.
+static void StreamUpEmitSourceStateChanged()
+{
+	if (!vendor)
+		return;
+	obs_data_t *d = obs_data_create();
+	obs_data_set_bool(d, "allLocked", StreamUP::SourceManager::AreAllSourcesLockedInAllScenes());
+	obs_data_set_bool(d, "currentSceneLocked", StreamUP::SourceManager::AreAllSourcesLockedInCurrentScene());
+	obs_data_set_bool(d, "selectedVisible", StreamUP::SourceManager::CheckIfAnySelectedVisible());
+	obs_data_set_int(d, "selectionCount", StreamUP::SourceManager::GetSelectedSourceCount());
+	obs_websocket_vendor_emit_event(vendor, "SourceStateChanged", d);
+	obs_data_release(d);
+}
+
+static void StreamUpOnItemState(void *, calldata_t *)
+{
+	StreamUpEmitSourceStateChanged();
+}
+
+static void StreamUpHookSelectionScene()
+{
+	// Unhook the previously-hooked scene, if any.
+	if (g_streamup_sel_scene) {
+		signal_handler_t *osh = obs_source_get_signal_handler(g_streamup_sel_scene);
+		signal_handler_disconnect(osh, "item_select", StreamUpOnItemSelect, nullptr);
+		signal_handler_disconnect(osh, "item_deselect", StreamUpOnItemSelect, nullptr);
+		signal_handler_disconnect(osh, "item_locked", StreamUpOnItemState, nullptr);
+		signal_handler_disconnect(osh, "item_visible", StreamUpOnItemState, nullptr);
+		obs_source_release(g_streamup_sel_scene);
+		g_streamup_sel_scene = nullptr;
+	}
+	// Hook the current scene (obs_frontend_get_current_scene returns a new ref we keep).
+	obs_source_t *scene = obs_frontend_get_current_scene();
+	if (scene) {
+		signal_handler_t *sh = obs_source_get_signal_handler(scene);
+		signal_handler_connect(sh, "item_select", StreamUpOnItemSelect, nullptr);
+		signal_handler_connect(sh, "item_deselect", StreamUpOnItemSelect, nullptr);
+		signal_handler_connect(sh, "item_locked", StreamUpOnItemState, nullptr);
+		signal_handler_connect(sh, "item_visible", StreamUpOnItemState, nullptr);
+		g_streamup_sel_scene = scene;
+	}
+}
+
+static void StreamUpSelectionFrontendEvent(enum obs_frontend_event event, void *)
+{
+	switch (event) {
+	case OBS_FRONTEND_EVENT_FINISHED_LOADING: // initial hook once OBS is up
+	case OBS_FRONTEND_EVENT_SCENE_CHANGED:     // re-hook + report on scene switch
+		StreamUpHookSelectionScene();
+		StreamUpEmitSelectionChanged();
+		StreamUpEmitSourceStateChanged();
+		break;
+	default:
+		break;
+	}
+}
+
+static void StreamUpSelectionCleanup()
+{
+	obs_frontend_remove_event_callback(StreamUpSelectionFrontendEvent, nullptr);
+	if (g_streamup_sel_scene) {
+		signal_handler_t *osh = obs_source_get_signal_handler(g_streamup_sel_scene);
+		signal_handler_disconnect(osh, "item_select", StreamUpOnItemSelect, nullptr);
+		signal_handler_disconnect(osh, "item_deselect", StreamUpOnItemSelect, nullptr);
+		signal_handler_disconnect(osh, "item_locked", StreamUpOnItemState, nullptr);
+		signal_handler_disconnect(osh, "item_visible", StreamUpOnItemState, nullptr);
+		obs_source_release(g_streamup_sel_scene);
+		g_streamup_sel_scene = nullptr;
+	}
+}
+
 void SettingsDialog()
 {
 	// Settings dialog functionality moved to StreamUP::SettingsManager module
@@ -380,6 +486,9 @@ static void RegisterWebsocketRequests()
 	// Source management
 	obs_websocket_vendor_register_request(vendor, "ToggleLockAllSources", StreamUP::WebSocketAPI::WebsocketRequestLockAllSources, nullptr);
 	obs_websocket_vendor_register_request(vendor, "ToggleLockCurrentSceneSources", StreamUP::WebSocketAPI::WebsocketRequestLockCurrentSources, nullptr);
+	obs_websocket_vendor_register_request(vendor, "GetAllSourcesLocked", StreamUP::WebSocketAPI::WebsocketRequestGetAllSourcesLocked, nullptr);
+	obs_websocket_vendor_register_request(vendor, "GetCurrentSceneSourcesLocked", StreamUP::WebSocketAPI::WebsocketRequestGetCurrentSceneSourcesLocked, nullptr);
+	obs_websocket_vendor_register_request(vendor, "GetSelectedVisibility", StreamUP::WebSocketAPI::WebsocketRequestGetSelectedVisibility, nullptr);
 	obs_websocket_vendor_register_request(vendor, "RefreshAudioMonitoring", StreamUP::WebSocketAPI::WebsocketRequestRefreshAudioMonitoring, nullptr);
 	obs_websocket_vendor_register_request(vendor, "RefreshBrowserSources", StreamUP::WebSocketAPI::WebsocketRequestRefreshBrowserSources, nullptr);
 	obs_websocket_vendor_register_request(vendor, "GetSelectedSource", StreamUP::WebSocketAPI::WebsocketRequestGetCurrentSelectedSource, nullptr);
@@ -921,6 +1030,15 @@ static void OnOBSShutdown(enum obs_frontend_event event, void *private_data)
 		StreamUP::SettingsManager::UpdateSettings(currentSettings);
 
 		StreamUP::DebugLogger::LogInfo("Plugin", "Settings saved successfully on shutdown");
+
+		// Release the hooked selection scene NOW, while OBS core still owns the
+		// scene and its signal handlers are valid. Doing this in
+		// obs_module_unload (which also calls StreamUpSelectionCleanup) is too
+		// late: by then OBS has freed its scenes, so releasing our leftover ref
+		// destroys a half-freed source and fires signals into freed handlers —
+		// an access violation on shutdown. Cleanup is idempotent (it nulls the
+		// pointer), so the unload-time call becomes a safe no-op.
+		StreamUpSelectionCleanup();
 	}
 }
 
@@ -1085,6 +1203,10 @@ void obs_module_post_load(void)
 		obs_frontend_add_event_callback(OnOBSShutdown, nullptr);
 		blog(LOG_INFO, "[StreamUP] Post-load step 3/3: OBS shutdown callback registered");
 
+		// Register selection-changed watcher (emits the "SelectionChanged" vendor event)
+		obs_frontend_add_event_callback(StreamUpSelectionFrontendEvent, nullptr);
+		blog(LOG_INFO, "[StreamUP] Post-load: SelectionChanged watcher registered");
+
 		blog(LOG_INFO, "[StreamUP] Post-load initialization completed successfully");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Post-load initialization completed");
 	} catch (const std::exception& e) {
@@ -1107,6 +1229,9 @@ void obs_module_unload()
 		blog(LOG_INFO, "[StreamUP] Unload step 1/8: Removing shutdown event callback");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Removing shutdown event callback");
 		obs_frontend_remove_event_callback(OnOBSShutdown, nullptr);
+
+		// Remove the selection-changed watcher and release its hooked scene
+		StreamUpSelectionCleanup();
 
 		blog(LOG_INFO, "[StreamUP] Unload step 2/8: Removing save callback for hotkeys");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Removing save callback for hotkeys");

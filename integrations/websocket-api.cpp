@@ -174,6 +174,32 @@ void WebsocketRequestLockCurrentSources(obs_data_t *request_data, obs_data_t *re
 	obs_data_set_bool(response_data, "lockState", lockState);
 }
 
+// Read-only lock-state getters so a Stream Deck key can stay in sync after a
+// source is (un)locked in OBS directly, without toggling anything.
+void WebsocketRequestGetAllSourcesLocked(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+	obs_data_set_bool(response_data, "lockState", StreamUP::SourceManager::AreAllSourcesLockedInAllScenes());
+}
+
+void WebsocketRequestGetCurrentSceneSourcesLocked(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+	obs_data_set_bool(response_data, "lockState", StreamUP::SourceManager::AreAllSourcesLockedInCurrentScene());
+}
+
+// Read-only visibility of the current selection, so a Stream Deck key can show an
+// eye / eye-off state that stays in sync when visibility changes in OBS directly.
+void WebsocketRequestGetSelectedVisibility(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+	obs_data_set_int(response_data, "count", StreamUP::SourceManager::GetSelectedSourceCount());
+	obs_data_set_bool(response_data, "visible", StreamUP::SourceManager::CheckIfAnySelectedVisible());
+}
+
 void WebsocketRequestRefreshAudioMonitoring(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
 	UNUSED_PARAMETER(request_data);
@@ -207,9 +233,13 @@ void WebsocketRequestGetCurrentSelectedSource(obs_data_t *request_data, obs_data
 	UNUSED_PARAMETER(request_data);
 	UNUSED_PARAMETER(private_data);
 
+	int count = StreamUP::SourceManager::GetSelectedSourceCount();
 	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
-	if (selected_source_name) {
+	obs_data_set_int(response_data, "count", count);
+	if (count == 1 && selected_source_name) {
 		obs_data_set_string(response_data, "selectedSource", selected_source_name);
+	} else if (count > 1) {
+		obs_data_set_string(response_data, "selectedSource", "Multiple");
 	} else {
 		StreamUP::DebugLogger::LogDebug("WebSocket", "Source Selection", "No selected source");
 		obs_data_set_string(response_data, "selectedSource", "None");
@@ -792,7 +822,7 @@ void WebsocketGroupSelectedSources(obs_data_t *request_data, obs_data_t *respons
 	bool success = StreamUP::SourceManager::GroupSelectedSources(false);
 	obs_data_set_bool(response_data, "success", success);
 	if (!success) {
-		obs_data_set_string(response_data, "error", "Failed to group selected sources. Ensure at least 2 sources are selected.");
+		obs_data_set_string(response_data, "error", "Failed to group selected sources. Ensure at least one source is selected.");
 	}
 }
 
@@ -803,7 +833,12 @@ void WebsocketToggleVisibilitySelectedSources(obs_data_t *request_data, obs_data
 
 	bool success = StreamUP::SourceManager::ToggleVisibilitySelectedSources(false);
 	obs_data_set_bool(response_data, "success", success);
-	if (!success) {
+	if (success) {
+		// Report the resulting state so a Stream Deck key can flash Visible / Hidden.
+		bool visible = StreamUP::SourceManager::CheckIfAnySelectedVisible();
+		obs_data_set_bool(response_data, "visible", visible);
+		obs_data_set_int(response_data, "count", StreamUP::SourceManager::GetSelectedSourceCount());
+	} else {
 		obs_data_set_string(response_data, "error", "Failed to toggle visibility. Ensure sources are selected.");
 	}
 }

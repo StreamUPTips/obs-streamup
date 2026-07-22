@@ -155,6 +155,27 @@ std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath);
  */
 std::vector<std::string> SearchFailedToLoadModulesInLogFile(const char *logPath);
 
+/**
+ * Details about why a module failed to load, harvested from the OBS log.
+ * The OBS log already records both the module's on-disk path and (usually) the
+ * reason it wouldn't load on the line right before "Module '...' not loaded" -
+ * this struct just surfaces what would otherwise be discarded.
+ */
+struct ModuleLoadFailure {
+	std::string modulePath;      // path as written in the log (may be relative)
+	std::string absoluteFolder;  // resolved folder containing the module (for "Open Folder")
+	std::string reason;          // best-effort human-readable reason (empty if none found)
+};
+
+/**
+ * Parse the most recent OBS log for modules that failed to load, capturing the
+ * module's folder path and the failure reason for each. Keyed by the module's
+ * base name (no extension) so it lines up with SearchFailedToLoadModulesInLogFile.
+ * @param logPath Path to the OBS log directory
+ * @return std::map moduleName -> ModuleLoadFailure
+ */
+std::map<std::string, ModuleLoadFailure> GetModuleLoadFailures(const char *logPath);
+
 } // namespace PluginManager
 } // namespace StreamUP
 

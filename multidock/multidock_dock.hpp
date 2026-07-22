@@ -2,6 +2,7 @@
 #define STREAMUP_MULTIDOCK_DOCK_HPP
 
 #include <QFrame>
+#include <QStringList>
 
 class QVBoxLayout;
 class QAction;
@@ -66,6 +67,20 @@ public:
      */
     void UpdateToolbarState();
 
+    /**
+     * @brief Dock IDs that were saved but have not yet been restored this
+     *        session (e.g. their source dock loaded late or not at all).
+     *        These must be preserved on save so a late-loading dock is never
+     *        permanently dropped from persistent storage.
+     */
+    QStringList GetUnresolvedDockIds() const { return m_unresolvedDockIds; }
+
+    /**
+     * @brief Mark a previously-unresolved dock ID as now restored, so it is
+     *        no longer force-preserved on save.
+     */
+    void MarkDockResolved(const QString& dockId);
+
     // No slots needed - we save on OBS shutdown
 
 private:
@@ -80,6 +95,10 @@ private:
     QAction* m_addDockAction;
     QCheckBox* m_lockCheckbox;
     bool m_docksLocked;
+
+    // Saved dock IDs not yet restored this session; preserved on save so a
+    // late-loading (or temporarily absent) dock is never erased from config.
+    QStringList m_unresolvedDockIds;
 };
 
 } // namespace MultiDock

@@ -365,7 +365,8 @@ QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& fai
 		obs_module_text("UI.Label.PluginName"),
 		obs_module_text("UI.Label.Status"),
 		obs_module_text("UI.Label.DownloadLink"),
-		obs_module_text("UI.Label.WebsiteLink")
+		obs_module_text("UI.Label.WebsiteLink"),
+		obs_module_text("UI.Label.PluginFolder")
 	};
 
 	QTableWidget* table = MakeStyledTable(headers);
@@ -373,6 +374,14 @@ QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& fai
 
 	int row = 0;
 	const auto& allPlugins = StreamUP::GetAllPlugins();
+
+	// Pull the on-disk folder + failure reason for each failed module straight
+	// from the OBS log (the same log the failed-modules list came from).
+	std::map<std::string, ModuleLoadFailure> loadFailures;
+	if (char *logPath = StreamUP::PathUtils::GetOBSLogPath()) {
+		loadFailures = GetModuleLoadFailures(logPath);
+		bfree(logPath);
+	}
 
 	for (const auto& module_name : failed_modules) {
 		// Try to find this module in the API plugins by matching moduleName
@@ -393,9 +402,17 @@ QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& fai
 		QString displayName = found_in_api ? QString::fromStdString(plugin_name) : QString::fromStdString(module_name);
 		table->setItem(row, 0, new QTableWidgetItem(displayName));
 
-		// Status column - Failed to Load
+		// Look up the folder + reason harvested from the log for this module.
+		auto failureIt = loadFailures.find(module_name);
+		const ModuleLoadFailure *failure = (failureIt != loadFailures.end()) ? &failureIt->second : nullptr;
+
+		// Status column - Failed to Load. If we found a reason in the log, show
+		// it on hover so people can see WHY it wouldn't load.
 		QTableWidgetItem* statusItem = new QTableWidgetItem("⚠️ " + QString(obs_module_text("Plugin.Status.FailedToLoad")));
 		statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_WARNING)); // Orange/amber color for warning
+		if (failure && !failure->reason.empty())
+			statusItem->setToolTip(QString(obs_module_text("Plugin.Message.FailReasonPrefix")) + " " +
+					       QString::fromStdString(failure->reason));
 		table->setItem(row, 1, statusItem);
 
 		if (found_in_api && plugin_info) {
@@ -429,6 +446,24 @@ QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& fai
 			forumItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 			forumItem->setData(Qt::UserRole, obsForumUrl);
 			table->setItem(row, 3, forumItem);
+		}
+
+		// Open Folder column - reveal the folder the failed module lives in so
+		// people can remove/replace an unsupported plugin. The generic cell-click
+		// handler opens whatever URL sits in Qt::UserRole, so we store the folder
+		// as a file:// URL. Falls back to a muted "Unknown" when the log didn't
+		// give us a resolvable path.
+		if (failure && !failure->absoluteFolder.empty()) {
+			QTableWidgetItem* folderItem = new QTableWidgetItem(obs_module_text("UI.Button.OpenFolder"));
+			folderItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
+			QString folderUrl = QUrl::fromLocalFile(QString::fromStdString(failure->absoluteFolder)).toString();
+			folderItem->setData(Qt::UserRole, folderUrl);
+			folderItem->setToolTip(QString::fromStdString(failure->absoluteFolder));
+			table->setItem(row, 4, folderItem);
+		} else {
+			QTableWidgetItem* unknownItem = new QTableWidgetItem(obs_module_text("UI.Label.Unknown"));
+			unknownItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
+			table->setItem(row, 4, unknownItem);
 		}
 
 		row++;
@@ -1933,6 +1968,108 @@ std::vector<std::string> SearchFailedToLoadModulesInLogFile(const char *logPath)
 	});
 
 	return failed_modules;
+}
+
+std::map<std::string, ModuleLoadFailure> GetModuleLoadFailures(const char *logPath)
+{
+	std::map<std::string, ModuleLoadFailure> failures;
+
+	if (!logPath) {
+		StreamUP::DebugLogger::LogError("PluginManager", "GetModuleLoadFailures: logPath is null");
+		return failures;
+	}
+
+	std::string filepath;
+	try {
+		filepath = StreamUP::PathUtils::GetMostRecentTxtFile(logPath);
+	} catch (const std::exception &e) {
+		StreamUP::DebugLogger::LogErrorFormat("PluginManager", "GetModuleLoadFailures: %s", e.what());
+		return failures;
+	}
+
+	if (filepath.empty())
+		return failures;
+
+	FILE *file = fopen(filepath.c_str(), "r");
+	if (!file)
+		return failures;
+
+	// Read the whole log into lines so we can look backwards from a
+	// "not loaded" line to the reason line that precedes it.
+	std::vector<std::string> lines;
+	char buf[1024];
+	while (fgets(buf, sizeof(buf), file) != NULL) {
+		std::string l(buf);
+		while (!l.empty() && (l.back() == '\n' || l.back() == '\r'))
+			l.pop_back();
+		lines.push_back(std::move(l));
+	}
+	fclose(file);
+
+	static const std::regex module_not_loaded_regex("Module '([^']+)' not loaded");
+
+	for (size_t i = 0; i < lines.size(); ++i) {
+		std::smatch match;
+		if (!std::regex_search(lines[i], match, module_not_loaded_regex) || match.size() <= 1)
+			continue;
+
+		const std::string full_path = match[1].str();
+
+		// File name with extension (used to match the reason line) and the
+		// base name (used as the map key, matching the failed-modules list).
+		size_t last_slash = full_path.find_last_of("/\\");
+		std::string file_name = (last_slash != std::string::npos) ? full_path.substr(last_slash + 1) : full_path;
+		std::string module_name = file_name;
+		size_t ext_pos = module_name.find_last_of('.');
+		if (ext_pos != std::string::npos)
+			module_name = module_name.substr(0, ext_pos);
+
+		if (failures.find(module_name) != failures.end())
+			continue; // first occurrence wins
+
+		ModuleLoadFailure info;
+		info.modulePath = full_path;
+
+		// Resolve the containing folder to an absolute path for "Open Folder".
+		// The path in the log is relative to OBS's working directory, which is
+		// also our process CWD, so os_get_abs_path_ptr resolves it correctly.
+		std::string folder = (last_slash != std::string::npos) ? full_path.substr(0, last_slash) : ".";
+		char *abs = os_get_abs_path_ptr(folder.c_str());
+		if (abs) {
+			info.absoluteFolder = abs;
+			bfree(abs);
+		}
+
+		// Look back a handful of lines for the reason. OBS typically logs the
+		// underlying loader error (os_dlopen / LoadLibrary / incompatible) on a
+		// nearby line that mentions the same module file. Take the text after
+		// the last ": " on that line as the human-readable reason.
+		const size_t kLookback = 15;
+		size_t start = (i > kLookback) ? i - kLookback : 0;
+		for (size_t j = i; j-- > start;) {
+			const std::string &prev = lines[j];
+			bool mentions_module = prev.find(file_name) != std::string::npos;
+			bool looks_like_reason = prev.find("os_dlopen") != std::string::npos ||
+						 prev.find("LoadLibrary") != std::string::npos ||
+						 prev.find("dlopen") != std::string::npos ||
+						 prev.find("incompatible") != std::string::npos ||
+						 prev.find("Failed to load") != std::string::npos;
+			if (!(mentions_module && looks_like_reason))
+				continue;
+
+			size_t colon = prev.rfind(": ");
+			std::string reason = (colon != std::string::npos) ? prev.substr(colon + 2) : prev;
+			// Trim leading log-level prefixes if we fell back to the whole line.
+			if (!reason.empty()) {
+				info.reason = reason;
+				break;
+			}
+		}
+
+		failures.emplace(std::move(module_name), std::move(info));
+	}
+
+	return failures;
 }
 
 } // namespace PluginManager

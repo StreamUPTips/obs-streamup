@@ -1,3 +1,25 @@
+# StreamUP v2.2.5 - Next Update (Unreleased)
+
+## New Features
+- **Open Folder On Failed Plugins** - When a plugin fails to load, the check dialog now has an Open Folder button that jumps straight to that plugin's folder so you can remove or replace it. Hover the plugin's status to see the reason it wouldn't load, pulled from your OBS log.
+- **Custom Source Icon For Adjustment Layer** - On OBS 32.2 and newer, the Adjustment Layer shows its own icon in the Add Source list and the audio mixer instead of the generic colour icon. Older OBS versions keep the default icon.
+- **Read Source State Over WebSocket** - New WebSocket requests to read back whether sources are locked, either every source or just the current scene, and whether the selected source is visible. Handy for Stream Deck and Streamer.bot setups so a button can stay in sync with what is actually happening in OBS.
+
+## Improvements
+- **Mixer Mute Button** - The mute button now shows a muted speaker glyph when a source is muted, so you can tell muted from live at a glance.
+- **Resizable Windows** - StreamUP windows now resize. Grab any edge or corner and drag. The smaller windows also open a bit taller by default, so there is less squinting to read through them.
+- **Group A Single Source** - Grouping used to need at least two sources selected. OBS is happy to group just one, so now StreamUP is too.
+
+## Bug Fixes
+- **Mixer Strip Names** - Fixed strips relabelling to the wrong source name when two sources shared the same prefix. Full names now only apply on a unique match, otherwise OBS keeps its usual shortened name.
+- **Mixer Button Icons On OBS 32.2** - OBS 32.2 was flashing raw black icons on the mixer buttons. They now re-tint to the theme colour whenever the icon changes.
+- **Audio Monitoring Header** - The Audio Monitoring header was clipping its text. It now holds open to fit the full label.
+- **Twitch Dock Leaving The MultiDock** - If a docked panel loaded late, like the Twitch info dock, StreamUP could drop it from your MultiDock on the next restart. It now holds onto docks it has not seen yet and keeps trying to restore them, so they stop disappearing.
+- **Crash When Closing OBS** - Fixed a crash that could happen as OBS shut down, caused by StreamUP letting go of a scene it was watching a little too late in the process.
+- **Wizard Save & Continue Button** - The Save & Continue button was showing a double ampersand, "Save && Continue". Sorted properly this time. The button paints its own text, so it never needed the ampersand doubling from before.
+
+---
+
 # StreamUP v2.2.4 - Patch Update
 
 ## Improvements

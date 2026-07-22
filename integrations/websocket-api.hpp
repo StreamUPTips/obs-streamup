@@ -48,6 +48,9 @@ void WebsocketRequestLockAllSources(obs_data_t *request_data, obs_data_t *respon
  * @param private_data Private data (unused)
  */
 void WebsocketRequestLockCurrentSources(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+void WebsocketRequestGetAllSourcesLocked(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+void WebsocketRequestGetCurrentSceneSourcesLocked(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+void WebsocketRequestGetSelectedVisibility(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 
 /**
  * Refresh audio monitoring for all sources

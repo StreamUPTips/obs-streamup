@@ -430,6 +430,25 @@ const char *GetSelectedSourceFromCurrentScene()
 	return nullptr; // No source or multiple sources selected
 }
 
+// Count the selected scene items in the current scene (0, 1, or many)
+int GetSelectedSourceCount()
+{
+	obs_source_t *current_scene_source = obs_frontend_get_current_scene();
+	if (!current_scene_source) {
+		return 0;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(current_scene_source);
+	obs_source_release(current_scene_source);
+	if (!scene) {
+		return 0;
+	}
+
+	SceneFindBoxData data;
+	obs_scene_enum_items(scene, FindSelected, &data);
+	return static_cast<int>(data.sceneItems.size());
+}
+
 // Convenience functions for checking lock status (used by dock widget)
 bool AreAllSourcesLockedInCurrentScene()
 {
@@ -786,13 +805,8 @@ bool GroupSelectedSources(bool sendNotification)
 		return false;
 	}
 
-	if (data.sceneItems.size() < 2) {
-		obs_source_release(current_scene);
-		if (sendNotification) {
-			StreamUP::NotificationManager::SendWarningNotification("Group Sources", "At least 2 sources must be selected");
-		}
-		return false;
-	}
+	// OBS itself allows grouping a single selected source, so we do too (empty is
+	// already handled above).
 
 	// Create a unique group name
 	QString baseName = "Group";

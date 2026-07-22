@@ -122,15 +122,111 @@ inline RoundedContainer *makeTableCard(TableT *table, int radius = Sizes::RADIUS
 class ShadowDialog : public QDialog {
 public:
 	static constexpr int kShadowMargin = 20;
+	// Thickness (design px) of the grab zone along each card edge for resizing.
+	static constexpr int kResizeGrip = 8;
 	explicit ShadowDialog(QWidget *parent = nullptr) : QDialog(parent)
 	{
 		// Qt::Window (not Qt::Dialog) so each custom window is a real top-level
 		// window OBS can show in the taskbar (see makeWindow's WS_EX_APPWINDOW).
 		setWindowFlags(Qt::FramelessWindowHint | Qt::Window);
 		setAttribute(Qt::WA_TranslucentBackground, true);
+		// Track the mouse so the resize cursor updates as it nears an edge
+		// (used by the non-Windows startSystemResize fallback below).
+		setMouseTracking(true);
 	}
 
+	// Let individual windows opt out of resizing (e.g. tiny fixed popups).
+	// Resizable by default so the whole catalogue gains it for free.
+	void setResizable(bool on) { m_resizable = on; }
+	bool resizable() const { return m_resizable; }
+
 protected:
+	// Which card edges (if any) the point p is within grabbing distance of.
+	// p is in dialog-local coords. Only the visible card border counts — the
+	// transparent shadow margin around it is excluded so far-out clicks don't
+	// grab a resize.
+	Qt::Edges edgesAt(const QPoint &p) const
+	{
+		const int sm = S(kShadowMargin);
+		const int grip = S(kResizeGrip);
+		const QRect card = rect().adjusted(sm, sm, -sm, -sm);
+		// Ignore points well outside the card (in the shadow) so only the
+		// border ring is interactive.
+		if (p.x() < card.left() - grip || p.x() > card.right() + grip ||
+		    p.y() < card.top() - grip || p.y() > card.bottom() + grip)
+			return {};
+		Qt::Edges e;
+		if (p.x() <= card.left() + grip) e |= Qt::LeftEdge;
+		if (p.x() >= card.right() - grip) e |= Qt::RightEdge;
+		if (p.y() <= card.top() + grip) e |= Qt::TopEdge;
+		if (p.y() >= card.bottom() - grip) e |= Qt::BottomEdge;
+		return e;
+	}
+
+#ifdef Q_OS_WIN
+	// Hit-test the resize border at the native level. Returning HTLEFT/HTTOP/…
+	// lets Windows perform the resize (and swap in the correct sizing cursor)
+	// even though child widgets fill the card — child mouse events never see
+	// these because the hit-test resolves them to the non-client area first.
+	bool nativeEvent(const QByteArray &type, void *message, qintptr *result) override
+	{
+		if (m_resizable) {
+			MSG *msg = static_cast<MSG *>(message);
+			if (msg && msg->message == WM_NCHITTEST) {
+				const QPoint gp(static_cast<short>(LOWORD(msg->lParam)),
+						static_cast<short>(HIWORD(msg->lParam)));
+				const Qt::Edges e = edgesAt(mapFromGlobal(gp));
+				LRESULT ht = 0;
+				if (e == (Qt::TopEdge | Qt::LeftEdge)) ht = HTTOPLEFT;
+				else if (e == (Qt::TopEdge | Qt::RightEdge)) ht = HTTOPRIGHT;
+				else if (e == (Qt::BottomEdge | Qt::LeftEdge)) ht = HTBOTTOMLEFT;
+				else if (e == (Qt::BottomEdge | Qt::RightEdge)) ht = HTBOTTOMRIGHT;
+				else if (e & Qt::LeftEdge) ht = HTLEFT;
+				else if (e & Qt::RightEdge) ht = HTRIGHT;
+				else if (e & Qt::TopEdge) ht = HTTOP;
+				else if (e & Qt::BottomEdge) ht = HTBOTTOM;
+				if (ht) { *result = ht; return true; }
+			}
+		}
+		return QDialog::nativeEvent(type, message, result);
+	}
+#else
+	// Non-Windows fallback: start a system resize from the compositor when the
+	// press lands on an edge, and reflect the edge as a sizing cursor.
+	void mousePressEvent(QMouseEvent *e) override
+	{
+		if (m_resizable && e->button() == Qt::LeftButton) {
+			const Qt::Edges edges = edgesAt(e->pos());
+			if (edges) {
+				if (QWindow *w = windowHandle()) {
+					w->startSystemResize(edges);
+					return;
+				}
+			}
+		}
+		QDialog::mousePressEvent(e);
+	}
+	void mouseMoveEvent(QMouseEvent *e) override
+	{
+		if (m_resizable && !(e->buttons() & Qt::LeftButton)) {
+			const Qt::Edges edges = edgesAt(e->pos());
+			if (edges == (Qt::TopEdge | Qt::LeftEdge) ||
+			    edges == (Qt::BottomEdge | Qt::RightEdge))
+				setCursor(Qt::SizeFDiagCursor);
+			else if (edges == (Qt::TopEdge | Qt::RightEdge) ||
+				 edges == (Qt::BottomEdge | Qt::LeftEdge))
+				setCursor(Qt::SizeBDiagCursor);
+			else if (edges & (Qt::LeftEdge | Qt::RightEdge))
+				setCursor(Qt::SizeHorCursor);
+			else if (edges & (Qt::TopEdge | Qt::BottomEdge))
+				setCursor(Qt::SizeVerCursor);
+			else
+				unsetCursor();
+		}
+		QDialog::mouseMoveEvent(e);
+	}
+#endif
+
 	void paintEvent(QPaintEvent *) override
 	{
 		QPainter p(this);
@@ -150,6 +246,9 @@ protected:
 			p.drawRoundedRect(card.adjusted(-i, -i + 2, i, i + 2), radius + i, radius + i);
 		}
 	}
+
+private:
+	bool m_resizable = true;
 };
 
 #ifdef Q_OS_WIN
@@ -338,6 +437,16 @@ inline WindowShell applyChrome(ShadowDialog *dlg, const QString &title,
 {
 	dlg->setWindowTitle(title);
 	dlg->setFont(brandFont());
+
+	// Real plugin windows are resizable (drag any edge/corner); only transient
+	// popups (confirm/prompt/info) stay a fixed compact size. A minimum floor
+	// keeps a dragged window from collapsing below something usable — and lifts
+	// the historically-cramped small windows to a comfortable default height.
+	dlg->setResizable(!popup);
+	if (!popup) {
+		const int mm = S(ShadowDialog::kShadowMargin);
+		dlg->setMinimumSize(S(420) + 2 * mm, S(360) + 2 * mm);
+	}
 
 #ifdef Q_OS_WIN
 	// Every non-popup window gets its own taskbar button + hover thumbnail in the
