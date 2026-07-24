@@ -327,14 +327,16 @@ void SceneOrganiserDock::setupUI()
     m_treeView->setRootIsDecorated(true);
     m_treeView->setExpandsOnDoubleClick(false);
 
-    // Apply initial item height setting
+    // Apply initial item height setting. sceneOrganiserItemHeight is now an absolute
+    // row height in pixels (19-48, default 24 = native OBS row). The delegate's
+    // sizeHint() enforces the row height; icon and font are derived from it so the
+    // row scales as a whole (previously only the icon grew past a certain point).
     StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-    // Match OBS's native Sources/Scenes tree: icons roughly the height of the row text (~16px at 100%)
-    int iconSize = (16 * settings.sceneOrganiserItemHeight) / 100;
+    int rowHeight = settings.sceneOrganiserItemHeight;
+    int iconSize = std::max(10, rowHeight - 8);   // 24px row -> 16px icon (matches native)
     m_treeView->setIconSize(QSize(iconSize, iconSize));
 
-    // Apply initial font size based on height setting
-    int fontSize = std::max(8, (11 * settings.sceneOrganiserItemHeight) / 100);
+    int fontSize = std::max(8, (11 * rowHeight) / 24);  // 24px row -> 11pt (matches native)
     QFont font = m_treeView->font();
     font.setPointSize(fontSize);
     m_treeView->setFont(font);
@@ -1190,21 +1192,10 @@ void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
         }
     }
 
-    // Check if this is a second click on the same already-selected item for renaming
-    if (m_lastClickedIndex.isValid() && m_lastClickedIndex == index) {
-        if (item->type() == SceneTreeItem::UserType + 2 || item->type() == SceneFolderItem::UserType + 1) {
-            // Start inline editing (but only if we're not doing single-click switching for scenes)
-            // In studio mode, never allow rename on second click since single-click has special meaning
-            if (!obs_frontend_preview_program_mode_active() &&
-                !(settings.sceneOrganiserSwitchMode == StreamUP::SettingsManager::SceneSwitchMode::SingleClick &&
-                  item->type() == SceneTreeItem::UserType + 2)) {
-                m_treeView->edit(index);
-            }
-        }
-    }
-
-    // Update the last clicked index
-    m_lastClickedIndex = index;
+    // Rename is intentionally NOT triggered by left-click. It was previously
+    // started on a "second click on the same item", but that fired accidentally
+    // during double-click scene switching. Rename is now only available via F2
+    // or the right-click context menu > Rename.
 }
 
 void SceneOrganiserDock::onItemDoubleClicked(const QModelIndex &index)
@@ -1982,19 +1973,20 @@ void SceneOrganiserDock::onSettingsChanged()
     if (m_treeView) {
         StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 
-        // Calculate icon size based on height percentage (50-200% range)
-        // Match OBS's native Sources/Scenes tree: icons roughly the height of the row text (~16px at 100%)
-        int iconSize = (16 * settings.sceneOrganiserItemHeight) / 100;
+        // Item height is an absolute row height in pixels (19-48, default 24).
+        // Derive icon + font from it; the delegate's sizeHint() enforces the row height.
+        int rowHeight = settings.sceneOrganiserItemHeight;
+        int iconSize = std::max(10, rowHeight - 8);   // 24px row -> 16px icon
         m_treeView->setIconSize(QSize(iconSize, iconSize));
 
-        // Calculate and apply font size based on height percentage
-        // Base font size is 11px at 100%, with a minimum of 8px
-        int fontSize = std::max(8, (11 * settings.sceneOrganiserItemHeight) / 100);
+        int fontSize = std::max(8, (11 * rowHeight) / 24);  // 24px row -> 11pt
         QFont font = m_treeView->font();
         font.setPointSize(fontSize);
         m_treeView->setFont(font);
 
-        // Force a viewport update to reflect height changes
+        // Row height comes from the delegate's sizeHint, which Qt caches, so force a
+        // relayout for the new height to take effect, then repaint.
+        m_treeView->doItemsLayout();
         m_treeView->viewport()->update();
     }
 }
@@ -4736,6 +4728,22 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
     modifiedOption.state &= ~QStyle::State_HasFocus;
 
     QStyledItemDelegate::paint(painter, modifiedOption, index);
+}
+
+QSize StreamUP::SceneOrganiser::CustomColorDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    // Enforce an explicit, absolute row height (in pixels) from the setting so the
+    // whole row scales - not just the icon. Without this the row height is only the
+    // implicit max(icon, text) height, which stops tracking once the icon dominates.
+    QSize size = QStyledItemDelegate::sizeHint(option, index);
+    int rowHeight = StreamUP::SettingsManager::GetCurrentSettings().sceneOrganiserItemHeight;
+    if (rowHeight < 19) {
+        rowHeight = 24;
+    } else if (rowHeight > 48) {
+        rowHeight = 48;
+    }
+    size.setHeight(rowHeight);
+    return size;
 }
 
 #include "scene-organiser-dock.moc"

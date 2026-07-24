@@ -368,7 +368,7 @@ obs_data_t *LoadSettings()
 		obs_data_set_bool(data, "scene_organiser_remember_folder_state", true);
 		obs_data_set_bool(data, "scene_organiser_disable_preview_switching_in_studio_mode", false);
 		obs_data_set_bool(data, "scene_organiser_disable_transition_in_studio_mode", false);
-		obs_data_set_int(data, "scene_organiser_item_height", 50);
+		obs_data_set_int(data, "scene_organiser_item_height_px", 24);
 		obs_data_set_string(data, "scene_organiser_switch_mode", "single_click");
 		obs_data_set_string(data, "scene_organiser_sort_method", "none");
 		obs_data_set_string(data, "toolbar_position", "top");
@@ -460,12 +460,14 @@ PluginSettings GetCurrentSettings()
 		settings.sceneOrganiserDisableTransitionInStudioMode = false;
 	}
 	settings.sceneOrganiserSwitchToNewScene = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_switch_to_new_scene", false);
-	settings.sceneOrganiserItemHeight = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "scene_organiser_item_height", 50);
-	// Ensure the height is within valid range (10-200%)
-	if (settings.sceneOrganiserItemHeight < 10) {
-		settings.sceneOrganiserItemHeight = 50;
-	} else if (settings.sceneOrganiserItemHeight > 200) {
-		settings.sceneOrganiserItemHeight = 200;
+	// Item height is now an absolute row height in pixels (was a 10-200% multiplier).
+	// New key so legacy percentage values are ignored and everyone gets the native default.
+	settings.sceneOrganiserItemHeight = StreamUP::OBSDataHelpers::GetIntWithDefault(data, "scene_organiser_item_height_px", 24);
+	// Clamp to valid pixel range: 19px (~old 80%) .. 48px (~old 200%), default 24px = native OBS row
+	if (settings.sceneOrganiserItemHeight < 19) {
+		settings.sceneOrganiserItemHeight = 24;
+	} else if (settings.sceneOrganiserItemHeight > 48) {
+		settings.sceneOrganiserItemHeight = 48;
 	}
 
 		// Load scene sort method setting (default to none if not set)
@@ -583,7 +585,7 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "scene_organiser_disable_preview_switching_in_studio_mode", settings.sceneOrganiserDisablePreviewSwitchingInStudioMode);
 	obs_data_set_bool(data, "scene_organiser_disable_transition_in_studio_mode", settings.sceneOrganiserDisableTransitionInStudioMode);
 	obs_data_set_bool(data, "scene_organiser_switch_to_new_scene", settings.sceneOrganiserSwitchToNewScene);
-	obs_data_set_int(data, "scene_organiser_item_height", settings.sceneOrganiserItemHeight);
+	obs_data_set_int(data, "scene_organiser_item_height_px", settings.sceneOrganiserItemHeight);
 
 	// Save scene sort method setting
 	const char *sortMethodStr;
@@ -1401,15 +1403,15 @@ void ShowSettingsDialog(int tabIndex)
 		itemHeightLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.ItemHeightDesc"));
 
 		QSlider *itemHeightSlider = new QSlider(Qt::Horizontal);
-		itemHeightSlider->setMinimum(10);
-		itemHeightSlider->setMaximum(200);
+		itemHeightSlider->setMinimum(19);
+		itemHeightSlider->setMaximum(48);
 		itemHeightSlider->setValue(currentSettings.sceneOrganiserItemHeight);
 		itemHeightSlider->setTickPosition(QSlider::TicksBelow);
-		itemHeightSlider->setTickInterval(10);
+		itemHeightSlider->setTickInterval(5);
 		itemHeightSlider->setToolTip(obs_module_text("SceneOrganiser.Settings.ItemHeightDesc"));
 		itemHeightSlider->setMaximumWidth(StreamUP::UIStyles::S(200));
 
-		QLabel *itemHeightValueLabel = new QLabel(QString::number(currentSettings.sceneOrganiserItemHeight) + "%");
+		QLabel *itemHeightValueLabel = new QLabel(QString::number(currentSettings.sceneOrganiserItemHeight) + "px");
 		itemHeightValueLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent; min-width: 40px;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
@@ -1419,7 +1421,7 @@ void ShowSettingsDialog(int tabIndex)
 			PluginSettings settings = GetCurrentSettings();
 			settings.sceneOrganiserItemHeight = value;
 			UpdateSettings(settings);
-			itemHeightValueLabel->setText(QString::number(value) + "%");
+			itemHeightValueLabel->setText(QString::number(value) + "px");
 			StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
 		});
 

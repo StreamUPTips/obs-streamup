@@ -8,6 +8,7 @@
 #include "http-client.hpp"
 #include <sstream>
 #include <algorithm>
+#include <cstdlib>
 #include "../ui/ui-helpers.hpp"
 #include <streamup/ui/window-chrome.hpp>
 #include <streamup/ui/pill-button.hpp>
@@ -32,6 +33,9 @@
 #include <QHeaderView>
 #include <QUrl>
 #include <QDesktopServices>
+#include <QProcess>
+#include <QDir>
+#include <QFileInfo>
 #include <QApplication>
 #include <QClipboard>
 #include <QMenu>
@@ -202,11 +206,39 @@ void ApplyDialogTableSizingLocal(QTableWidget *table, int maxRows = 10)
 							     : Qt::ScrollBarAlwaysOff);
 }
 
+// Reveal a file in the OS file manager with the file itself selected/highlighted
+// (not just its containing folder opened). Falls back to opening the folder when
+// the platform can't select a file.
+void RevealFileInFileManager(const QString &filePath)
+{
+#if defined(_WIN32)
+	// explorer /select,"C:\path\to\module.dll" — highlights the file.
+	QStringList args{QStringLiteral("/select,") +
+			 QDir::toNativeSeparators(filePath)};
+	if (QProcess::startDetached(QStringLiteral("explorer.exe"), args))
+		return;
+#elif defined(__APPLE__)
+	QStringList args{QStringLiteral("-R"), filePath};
+	if (QProcess::startDetached(QStringLiteral("open"), args))
+		return;
+#endif
+	// Fallback (Linux, or if the reveal command failed): open the folder.
+	QDesktopServices::openUrl(
+		QUrl::fromLocalFile(QFileInfo(filePath).absolutePath()));
+}
+
 void HandleTableCellClickLocal(QTableWidget *table, int row, int column)
 {
 	QTableWidgetItem *item = table->item(row, column);
 	if (!item)
 		return;
+	// If this cell carries a module file path, highlight that file in the file
+	// manager instead of merely opening the folder.
+	QVariant fileData = item->data(Qt::UserRole + 1);
+	if (fileData.isValid() && !fileData.toString().isEmpty()) {
+		RevealFileInFileManager(fileData.toString());
+		return;
+	}
 	QVariant urlData = item->data(Qt::UserRole);
 	if (urlData.isValid())
 		QDesktopServices::openUrl(QUrl(urlData.toString()));
@@ -458,6 +490,12 @@ QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& fai
 			folderItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 			QString folderUrl = QUrl::fromLocalFile(QString::fromStdString(failure->absoluteFolder)).toString();
 			folderItem->setData(Qt::UserRole, folderUrl);
+			// Prefer highlighting the actual module file when we resolved it, so
+			// the failed plugin is selected in the file manager, not just its
+			// folder opened. The click handler special-cases this role.
+			if (!failure->absoluteModulePath.empty())
+				folderItem->setData(Qt::UserRole + 1,
+						    QString::fromStdString(failure->absoluteModulePath));
 			folderItem->setToolTip(QString::fromStdString(failure->absoluteFolder));
 			table->setItem(row, 4, folderItem);
 		} else {
@@ -768,6 +806,33 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 
 		if (installed_version != required_version && VersionUtils::IsVersionLessThan(installed_version, required_version)) {
 			version_mismatch_modules.emplace(plugin_name, installed_version);
+		}
+	}
+
+	// DEV ONLY: set env STREAMUP_FAKE_UPDATES=1 to inject a few real plugins as "outdated" so the
+	// update dialog can be screenshotted for marketing. No effect unless the env var is present, so
+	// it can never reach real users. Uses real entries from allPlugins (needs valid version + URLs).
+	if (std::getenv("STREAMUP_FAKE_UPDATES")) {
+		auto prevVersion = [](std::string v) -> std::string {
+			std::vector<int> parts;
+			std::stringstream ss(v);
+			std::string tok;
+			while (std::getline(ss, tok, '.')) {
+				try { parts.push_back(std::stoi(tok)); } catch (...) { parts.push_back(0); }
+			}
+			if (parts.empty()) return "0.0.0";
+			for (int i = static_cast<int>(parts.size()) - 1; i >= 0; --i) {
+				if (parts[i] > 0) { parts[i]--; for (size_t j = i + 1; j < parts.size(); ++j) parts[j] = 0; break; }
+			}
+			std::string out;
+			for (size_t i = 0; i < parts.size(); ++i) { if (i) out += "."; out += std::to_string(parts[i]); }
+			return out;
+		};
+		int fakeCount = 0;
+		for (const auto &kv : allPlugins) {
+			if (fakeCount >= 6) break;
+			version_mismatch_modules[kv.first] = prevVersion(kv.second.version);
+			fakeCount++;
 		}
 	}
 
@@ -1602,6 +1667,34 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 		}
 	}
 
+	// DEV ONLY: STREAMUP_FAKE_UPDATES=1 injects the first ~6 real plugins as "outdated" so the
+	// update dialog can be screenshotted for marketing. No effect unless the env var is set, so it
+	// can never reach real users. Build target `streamup`, launch the dev OBS with the env var, open
+	// StreamUP -> Check for OBS Plugin Updates, screenshot the dialog.
+	if (std::getenv("STREAMUP_FAKE_UPDATES")) {
+		auto prevVersion = [](std::string v) -> std::string {
+			std::vector<int> parts;
+			std::stringstream ss(v);
+			std::string tok;
+			while (std::getline(ss, tok, '.')) {
+				try { parts.push_back(std::stoi(tok)); } catch (...) { parts.push_back(0); }
+			}
+			if (parts.empty()) return "0.0.0";
+			for (int i = static_cast<int>(parts.size()) - 1; i >= 0; --i) {
+				if (parts[i] > 0) { parts[i]--; for (size_t j = i + 1; j < parts.size(); ++j) parts[j] = 0; break; }
+			}
+			std::string out;
+			for (size_t i = 0; i < parts.size(); ++i) { if (i) out += "."; out += std::to_string(parts[i]); }
+			return out;
+		};
+		int fakeCount = 0;
+		for (const auto &kv : StreamUP::GetAllPlugins()) {
+			if (fakeCount >= 6) break;
+			version_mismatch_modules[kv.first] = prevVersion(kv.second.version);
+			fakeCount++;
+		}
+	}
+
 	// Get all installed plugins for cache
 	std::vector<std::pair<std::string, std::string>> installedPlugins = GetInstalledPlugins();
 
@@ -2038,6 +2131,14 @@ std::map<std::string, ModuleLoadFailure> GetModuleLoadFailures(const char *logPa
 		if (abs) {
 			info.absoluteFolder = abs;
 			bfree(abs);
+		}
+
+		// Resolve the module file itself to an absolute path so the file
+		// manager can highlight/select it (not just open its folder).
+		char *absFile = os_get_abs_path_ptr(full_path.c_str());
+		if (absFile) {
+			info.absoluteModulePath = absFile;
+			bfree(absFile);
 		}
 
 		// Look back a handful of lines for the reason. OBS typically logs the

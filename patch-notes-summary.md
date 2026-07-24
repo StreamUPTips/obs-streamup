@@ -1,7 +1,7 @@
 # StreamUP v2.2.5 - Next Update (Unreleased)
 
 ## New Features
-- **Open Folder On Failed Plugins** - When a plugin fails to load, the check dialog now has an Open Folder button that jumps straight to that plugin's folder so you can remove or replace it. Hover the plugin's status to see the reason it wouldn't load, pulled from your OBS log.
+- **Open Folder On Failed Plugins** - When a plugin fails to load, the check dialog gets an Open Folder button that opens the folder with the module file highlighted, so you can remove or replace it. Hover the plugin's status to see why it wouldn't load, pulled from your OBS log.
 - **Custom Source Icon For Adjustment Layer** - On OBS 32.2 and newer, the Adjustment Layer shows its own icon in the Add Source list and the audio mixer instead of the generic colour icon. Older OBS versions keep the default icon.
 - **Read Source State Over WebSocket** - New WebSocket requests to read back whether sources are locked, either every source or just the current scene, and whether the selected source is visible. Handy for Stream Deck and Streamer.bot setups so a button can stay in sync with what is actually happening in OBS.
 
@@ -17,6 +17,7 @@
 - **Twitch Dock Leaving The MultiDock** - If a docked panel loaded late, like the Twitch info dock, StreamUP could drop it from your MultiDock on the next restart. It now holds onto docks it has not seen yet and keeps trying to restore them, so they stop disappearing.
 - **Crash When Closing OBS** - Fixed a crash that could happen as OBS shut down, caused by StreamUP letting go of a scene it was watching a little too late in the process.
 - **Wizard Save & Continue Button** - The Save & Continue button was showing a double ampersand, "Save && Continue". Sorted properly this time. The button paints its own text, so it never needed the ampersand doubling from before.
+- **Scene Organiser Rename On Click** - In double-click switch mode a click could accidentally start renaming a scene. Renaming is now F2 or right-click, Rename. Never a click.
 
 ---
 

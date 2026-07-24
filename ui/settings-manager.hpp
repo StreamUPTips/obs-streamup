@@ -155,7 +155,7 @@ struct PluginSettings {
     bool sceneOrganiserDisablePreviewSwitchingInStudioMode; // Disable preview switching (single-click) when in studio mode
     bool sceneOrganiserDisableTransitionInStudioMode; // Disable transition trigger (double-click) when in studio mode
     bool sceneOrganiserSwitchToNewScene; // Switch to a newly created scene (preview only when studio mode is active)
-    int sceneOrganiserItemHeight; // Height multiplier percentage (10-200, default 50)
+    int sceneOrganiserItemHeight; // Row height in pixels (19-48, default 24 = native OBS row)
     SceneSwitchMode sceneOrganiserSwitchMode;
     SceneSortMethod sceneOrganiserSortMethod;
     ToolbarPosition toolbarPosition;
@@ -165,7 +165,7 @@ struct PluginSettings {
     bool moduleSetupComplete;       // Legacy wizard sentinel (kept for compat)
     std::string wizardVersionShown; // PROJECT_VERSION when the wizard last ran. Drives the upgrader prompt.
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(50), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), moduleSetupComplete(false), wizardVersionShown() {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), moduleSetupComplete(false), wizardVersionShown() {}
 };
 
 /**

@@ -164,6 +164,7 @@ std::vector<std::string> SearchFailedToLoadModulesInLogFile(const char *logPath)
 struct ModuleLoadFailure {
 	std::string modulePath;      // path as written in the log (may be relative)
 	std::string absoluteFolder;  // resolved folder containing the module (for "Open Folder")
+	std::string absoluteModulePath; // resolved absolute path to the module file (for reveal/select)
 	std::string reason;          // best-effort human-readable reason (empty if none found)
 };
 
