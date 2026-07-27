@@ -30,8 +30,9 @@ void PluginsUpToDateOutput(bool manuallyTriggered);
  * @param failed_to_load_modules Vector of module names that failed to load
  * @param continueCallback Optional callback to execute when "Continue Anyway" is pressed
  * @param isStartupCheck Whether this is being shown during startup check (shows skip checkbox)
+ * @param disabled_modules Map of plugins switched off in OBS's own plugin manager (name -> true if blocked by safe mode)
  */
-void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback = nullptr, bool isStartupCheck = false);
+void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback = nullptr, bool isStartupCheck = false, const std::map<std::string, bool>& disabled_modules = std::map<std::string, bool>());
 
 //-------------------PLUGIN UPDATE FUNCTIONS-------------------
 /**
@@ -176,6 +177,16 @@ struct ModuleLoadFailure {
  * @return std::map moduleName -> ModuleLoadFailure
  */
 std::map<std::string, ModuleLoadFailure> GetModuleLoadFailures(const char *logPath);
+
+/**
+ * Search the most recent OBS log for modules OBS refused to load because they
+ * are switched off - either toggled off by the user in OBS's own plugin manager
+ * or held back by safe mode. Such a module never logs its version line, so
+ * without this it would be misreported as "missing".
+ * @param logPath Path to the OBS log directory
+ * @return std::map moduleName (base name, no extension) -> true if blocked by safe mode
+ */
+std::map<std::string, bool> SearchDisabledModulesInLogFile(const char *logPath);
 
 } // namespace PluginManager
 } // namespace StreamUP

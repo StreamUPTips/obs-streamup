@@ -172,12 +172,39 @@ void StreamUPToolbar::updateButtonVisibility()
 	// Pause button visibility is handled in updateRecordButton based on recording state and pausability
 }
 
+bool StreamUPToolbar::invokeMainWindowAction(const char *slotName)
+{
+	// Route start/stop through OBS's own action slots rather than calling
+	// obs_frontend_*_start/stop directly. Those slots own all of the pre-flight
+	// UI: the "Are you sure you want to start/stop streaming?" confirmations
+	// (BasicWindow/WarnBeforeStartingStream, WarnBeforeStoppingStream,
+	// WarnBeforeStoppingRecord), the no-sources check, stream settings
+	// validation, the bandwidth-test prompt and the YouTube broadcast flow.
+	// The frontend API sits below all of that, which is why the toolbar used
+	// to bypass the confirmation dialogs entirely.
+	QMainWindow *mainWindow = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	if (!mainWindow) {
+		return false;
+	}
+
+	// The slots are private, but the meta-object system does not enforce
+	// access control, so invoking them by name works. Direct connection keeps
+	// the modal dialog synchronous, exactly as OBS's own controls dock does.
+	// If a future OBS release renames them, invokeMethod returns false and we
+	// fall back to the plain frontend call.
+	return QMetaObject::invokeMethod(mainWindow, slotName, Qt::DirectConnection);
+}
+
 void StreamUPToolbar::onStreamButtonClicked()
 {
-	if (obs_frontend_streaming_active()) {
-		obs_frontend_streaming_stop();
-	} else {
-		obs_frontend_streaming_start();
+	if (!invokeMainWindowAction("StreamActionTriggered")) {
+		StreamUP::DebugLogger::LogDebug("Toolbar", "Stream Button Clicked",
+						"StreamActionTriggered unavailable, using frontend API fallback");
+		if (obs_frontend_streaming_active()) {
+			obs_frontend_streaming_stop();
+		} else {
+			obs_frontend_streaming_start();
+		}
 	}
 	updateStreamButton();
 }
@@ -186,10 +213,14 @@ void StreamUPToolbar::onRecordButtonClicked()
 {
 	StreamUP::DebugLogger::LogDebug("Toolbar", "Record Button Clicked", "Button click handler triggered");
 
-	if (obs_frontend_recording_active()) {
-		obs_frontend_recording_stop();
-	} else {
-		obs_frontend_recording_start();
+	if (!invokeMainWindowAction("RecordActionTriggered")) {
+		StreamUP::DebugLogger::LogDebug("Toolbar", "Record Button Clicked",
+						"RecordActionTriggered unavailable, using frontend API fallback");
+		if (obs_frontend_recording_active()) {
+			obs_frontend_recording_stop();
+		} else {
+			obs_frontend_recording_start();
+		}
 	}
 	updateRecordButton();
 }

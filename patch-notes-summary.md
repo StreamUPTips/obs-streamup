@@ -3,6 +3,7 @@
 ## New Features
 - **Open Folder On Failed Plugins** - When a plugin fails to load, the check dialog gets an Open Folder button that opens the folder with the module file highlighted, so you can remove or replace it. Hover the plugin's status to see why it wouldn't load, pulled from your OBS log.
 - **Custom Source Icon For Adjustment Layer** - On OBS 32.2 and newer, the Adjustment Layer shows its own icon in the Add Source list and the audio mixer instead of the generic colour icon. Older OBS versions keep the default icon.
+- **Spot Switched-Off Plugins** - The plugin check now notices when a plugin is installed but switched off, either turned off in OBS's own Plugin Manager or blocked because OBS is in Safe Mode. They used to show up as missing, sending you off to download something you already had. They now get their own section telling you where to switch them back on. A required plugin being off always shows, even if you have skipped other reminders.
 - **Read Source State Over WebSocket** - New WebSocket requests to read back whether sources are locked, either every source or just the current scene, and whether the selected source is visible. Handy for Stream Deck and Streamer.bot setups so a button can stay in sync with what is actually happening in OBS.
 
 ## Improvements

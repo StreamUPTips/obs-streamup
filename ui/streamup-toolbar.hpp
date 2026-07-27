@@ -72,6 +72,11 @@ private:
     bool isReplayBufferAvailable();
     bool isRecordingPausable();
 
+    // Invokes an OBSBasic action slot by name so the toolbar inherits OBS's
+    // own confirmation dialogs and pre-flight checks. Returns false if the
+    // slot could not be found.
+    bool invokeMainWindowAction(const char* slotName);
+
     // Theme-aware icon helper
     QString getThemedIconPath(const QString& iconName);
 
