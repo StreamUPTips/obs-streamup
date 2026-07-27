@@ -18,6 +18,8 @@
 #include <QPainterPath>
 #include <QPaintEvent>
 #include <QResizeEvent>
+#include <QShowEvent>
+#include <QScreen>
 #include <QMouseEvent>
 #include <QWindow>
 #include <QDesktopServices>
@@ -72,6 +74,16 @@ public:
 	}
 	QColor fillColor() const { return m_fill; }
 
+	// Recompute the rounded clip mask without waiting for a resize. Needed
+	// after the window moves to another screen: the mask is re-applied against
+	// the (possibly recreated) native surface, otherwise a stale region can
+	// clip the card away entirely.
+	void refreshMask()
+	{
+		applyMask();
+		update();
+	}
+
 protected:
 	// m_radius is a DESIGN value; scale it by the OS text size so the painted
 	// card corners match the header/footer/badge QSS radii (which scale_qss
@@ -87,14 +99,19 @@ protected:
 	}
 	void resizeEvent(QResizeEvent *e) override
 	{
-		const int r = S(m_radius);
-		QPainterPath path;
-		path.addRoundedRect(QRectF(rect()), r, r);
-		setMask(QRegion(path.toFillPolygon().toPolygon()));
+		applyMask();
 		QFrame::resizeEvent(e);
 	}
 
 private:
+	void applyMask()
+	{
+		const int r = S(m_radius);
+		QPainterPath path;
+		path.addRoundedRect(QRectF(rect()), r, r);
+		setMask(QRegion(path.toFillPolygon().toPolygon()));
+	}
+
 	int m_radius;
 	QColor m_fill;
 };
@@ -135,12 +152,49 @@ public:
 		setMouseTracking(true);
 	}
 
+	// Rebuild the rounded clip masks and repaint the whole window NOW.
+	// Dragging a frameless + translucent window onto another screen happens
+	// inside Windows' modal move loop, and the platform layer can swap this
+	// window's backing surface mid-drag. The new surface starts empty and the
+	// queued repaint doesn't land until the loop exits — so the window reads as
+	// vanished until the mouse is released. Forcing an immediate repaint (and
+	// re-applying the card masks against the new surface) puts it straight back.
+	void refreshSurface()
+	{
+		// dynamic_cast, not findChildren<RoundedContainer*> — RoundedContainer
+		// has no Q_OBJECT of its own, so findChildren would match every QFrame
+		// and hand back bogus pointers.
+		const QList<QWidget *> kids = findChildren<QWidget *>();
+		for (QWidget *w : kids) {
+			if (auto *c = dynamic_cast<RoundedContainer *>(w))
+				c->refreshMask();
+			else
+				w->update();
+		}
+		repaint();
+	}
+
 	// Let individual windows opt out of resizing (e.g. tiny fixed popups).
 	// Resizable by default so the whole catalogue gains it for free.
 	void setResizable(bool on) { m_resizable = on; }
 	bool resizable() const { return m_resizable; }
 
 protected:
+	// Hook the window's screenChanged signal once it has a real QWindow (only
+	// exists after the first show). Every hop to another monitor then refreshes
+	// the surface instead of leaving a blank window until the drag ends.
+	void showEvent(QShowEvent *e) override
+	{
+		QDialog::showEvent(e);
+		if (!m_screenHooked) {
+			if (QWindow *w = windowHandle()) {
+				m_screenHooked = true;
+				QObject::connect(w, &QWindow::screenChanged, this,
+						 [this](QScreen *) { refreshSurface(); });
+			}
+		}
+	}
+
 	// Which card edges (if any) the point p is within grabbing distance of.
 	// p is in dialog-local coords. Only the visible card border counts — the
 	// transparent shadow margin around it is excluded so far-out clicks don't
@@ -186,6 +240,18 @@ protected:
 				else if (e & Qt::TopEdge) ht = HTTOP;
 				else if (e & Qt::BottomEdge) ht = HTBOTTOM;
 				if (ht) { *result = ht; return true; }
+			}
+		}
+		// Belt and braces for the cross-screen drag: repaint once the move loop
+		// ends and on a resolution/DPI change, in case the surface was swapped
+		// without QWindow::screenChanged firing.
+		if (MSG *msg = static_cast<MSG *>(message)) {
+			if (msg->message == WM_EXITSIZEMOVE ||
+			    msg->message == WM_DISPLAYCHANGE ||
+			    msg->message == WM_DPICHANGED) {
+				const bool handled = QDialog::nativeEvent(type, message, result);
+				refreshSurface();
+				return handled;
 			}
 		}
 		return QDialog::nativeEvent(type, message, result);
@@ -249,6 +315,7 @@ protected:
 
 private:
 	bool m_resizable = true;
+	bool m_screenHooked = false;
 };
 
 #ifdef Q_OS_WIN

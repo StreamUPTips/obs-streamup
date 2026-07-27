@@ -12,6 +12,8 @@
 - **Group A Single Source** - Grouping used to need at least two sources selected. OBS is happy to group just one, so now StreamUP is too.
 
 ## Bug Fixes
+- **Windows Going Blank Between Monitors** - Dragging a StreamUP window from one screen to another could leave it blank until you let go of the mouse. It now repaints as it crosses, so it stays visible the whole way.
+- **Enter In Pop-Ups** - Pressing Enter in a StreamUP confirmation box used to trigger Cancel, because that is where the keyboard focus landed. Enter now does the thing you actually asked for.
 - **Mixer Strip Names** - Fixed strips relabelling to the wrong source name when two sources shared the same prefix. Full names now only apply on a unique match, otherwise OBS keeps its usual shortened name.
 - **Mixer Button Icons On OBS 32.2** - OBS 32.2 was flashing raw black icons on the mixer buttons. They now re-tint to the theme colour whenever the icon changes.
 - **Audio Monitoring Header** - The Audio Monitoring header was clipping its text. It now holds open to fit the full label.
