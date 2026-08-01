@@ -247,6 +247,53 @@ void AddCompatiblePluginRow(QTableWidget *table, const std::string &pluginName, 
 	table->setItem(row, 4, websiteItem);
 }
 
+// Helper function to add a row for a plugin we know about but can't version check
+void AddUncheckablePluginRow(QTableWidget *table, const std::string &pluginName, const std::string &reason)
+{
+	const auto &allPlugins = StreamUP::GetAllPlugins();
+	auto it = allPlugins.find(pluginName);
+
+	int row = table->rowCount();
+	table->insertRow(row);
+
+	// Status column - in our database, but no version to compare against
+	QTableWidgetItem *statusItem = new QTableWidgetItem(obs_module_text("Settings.Plugin.StatusNotChecked"));
+	statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_WARNING));
+
+	// Spell out why on hover, so nobody waits on an update prompt that will
+	// never arrive for this plugin.
+	QString tooltip = obs_module_text("Settings.Plugin.StatusNotCheckedTooltip");
+	if (!reason.empty()) {
+		tooltip += "\n\n" + QString::fromStdString(reason);
+	}
+	statusItem->setToolTip(tooltip);
+	table->setItem(row, 0, statusItem);
+
+	// Plugin Name column
+	table->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(pluginName)));
+
+	// Module Name column
+	QString moduleName = "N/A";
+	if (it != allPlugins.end() && !it->second.moduleName.empty()) {
+		moduleName = QString::fromStdString(it->second.moduleName);
+	}
+	table->setItem(row, 2, new QTableWidgetItem(moduleName));
+
+	// Version column - the plugin never logs one, so we have nothing to show
+	QTableWidgetItem *versionItem = new QTableWidgetItem(obs_module_text("Settings.Plugin.VersionUnknown"));
+	versionItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
+	versionItem->setToolTip(tooltip);
+	table->setItem(row, 3, versionItem);
+
+	// Website column - we still know where to get it, so keep the link
+	QString forumLink = StreamUP::PluginManager::GetPluginForumLink(pluginName);
+	QString domainName = ExtractDomain(forumLink);
+	QTableWidgetItem *websiteItem = new QTableWidgetItem(domainName);
+	websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::PRIMARY_COLOR));
+	websiteItem->setData(Qt::UserRole, forumLink);
+	table->setItem(row, 4, websiteItem);
+}
+
 // Helper function to add incompatible plugin row
 void AddIncompatiblePluginRow(QTableWidget *table, const std::string &moduleName)
 {
@@ -2484,6 +2531,11 @@ void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponen
 		AddCompatiblePluginRow(pluginTable, plugin.first, plugin.second);
 	}
 
+	// Add plugins we know about but can't version check
+	for (const auto &plugin : StreamUP::PluginManager::GetUncheckablePlugins()) {
+		AddUncheckablePluginRow(pluginTable, plugin.first, plugin.second);
+	}
+
 	// Add incompatible plugins
 	char *filePath = StreamUP::PathUtils::GetOBSLogPath();
 	std::vector<std::string> incompatibleModules = StreamUP::PluginManager::SearchLoadedModulesInLogFile(filePath);
@@ -2616,6 +2668,11 @@ void ShowInstalledPluginsPage(QWidget *parentWidget)
 		// Add compatible plugins
 		for (const auto &plugin : installedPlugins) {
 			AddCompatiblePluginRow(pluginTable, plugin.first, plugin.second);
+		}
+
+		// Add plugins we know about but can't version check
+		for (const auto &plugin : StreamUP::PluginManager::GetUncheckablePlugins()) {
+			AddUncheckablePluginRow(pluginTable, plugin.first, plugin.second);
 		}
 
 		// Add incompatible plugins

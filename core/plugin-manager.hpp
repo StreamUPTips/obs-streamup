@@ -85,6 +85,38 @@ std::string SearchThemeFileForVersion(const char *search);
  */
 std::vector<std::pair<std::string, std::string>> GetInstalledPlugins();
 
+//-------------------UPDATE-CHECK ELIGIBILITY-------------------
+/**
+ * Whether a plugin's search string opts it out of version checking.
+ *
+ * True for the explicit "[ignore]" marker, and also for an empty search
+ * string. Empty must never reach the log scan: std::string::find("") matches
+ * at every byte of the log, so a blank field would report whatever number the
+ * version regex hit first rather than finding nothing.
+ *
+ * @param searchString The plugin's search string from the database
+ * @return bool True if the plugin cannot or should not be version checked
+ */
+bool IsUpdateCheckSkipped(const std::string &searchString);
+
+/**
+ * Human-readable reason a plugin is skipped, for display in the UI.
+ * Returns the text following "[ignore]" in the search string, or an empty
+ * string if no reason was given.
+ * @param searchString The plugin's search string from the database
+ * @return std::string The reason text, trimmed
+ */
+std::string GetUpdateCheckSkipReason(const std::string &searchString);
+
+/**
+ * Plugins that are in our database and loaded in OBS, but that cannot have
+ * their version checked (see IsUpdateCheckSkipped). Without this they show in
+ * neither the compatible nor the incompatible list, so they'd silently vanish
+ * from the Installed Plugins table.
+ * @return std::vector of (plugin name, reason) pairs
+ */
+std::vector<std::pair<std::string, std::string>> GetUncheckablePlugins();
+
 //-------------------EFFICIENT CACHING FUNCTIONS-------------------
 /**
  * Perform plugin check once and cache results for future use
@@ -143,7 +175,16 @@ QString GetPluginForumLink(const std::string &pluginName);
 QString GetPluginPlatformURL(const std::string &pluginName);
 
 /**
+ * Every third-party module in the log's "Loaded Modules:" section, whether or
+ * not we have a database entry for it. Excludes modules that ship with OBS.
+ * @param logPath Path to the OBS log directory
+ * @return std::vector List of loaded module names
+ */
+std::vector<std::string> GetLoadedModuleNamesFromLog(const char *logPath);
+
+/**
  * Search for loaded modules in OBS log files (excludes default OBS modules)
+ * Narrows GetLoadedModuleNamesFromLog to modules with no database entry.
  * @param logPath Path to the OBS log directory
  * @return std::vector List of non-standard loaded module names
  */

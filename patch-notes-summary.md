@@ -22,6 +22,7 @@
 - **Crash When Closing OBS** - Fixed a crash that could happen as OBS shut down, caused by StreamUP letting go of a scene it was watching a little too late in the process.
 - **Wizard Save & Continue Button** - The Save & Continue button was showing a double ampersand, "Save && Continue". Sorted properly this time. The button paints its own text, so it never needed the ampersand doubling from before.
 - **Scene Organiser Rename On Click** - In double-click switch mode a click could accidentally start renaming a scene. Renaming is now F2 or right-click, Rename. Never a click.
+- **Plugins That Never Report A Version** - Some plugins never print their version to the OBS log, so there is nothing for us to compare against. They used to just vanish from the Installed Plugins list, which made it look like you had not installed them. They now show as "Not checked", with a hover telling you why and pointing you at the plugin's own page. The download link still works, you just will not get an update prompt for those ones.
 
 ---
 

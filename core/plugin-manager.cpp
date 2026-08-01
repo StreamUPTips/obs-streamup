@@ -1037,7 +1037,7 @@ bool CheckrequiredOBSPluginsWithoutUI(bool isLoadStreamUpFile)
 		const std::string &required_version = plugin_info.version;
 		const std::string &search_string = plugin_info.searchString;
 
-		if (search_string.find("[ignore]") != std::string::npos) {
+		if (IsUpdateCheckSkipped(search_string)) {
 			continue;
 		}
 
@@ -1092,7 +1092,7 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 		const std::string &required_version = plugin_info.version;
 		const std::string &search_string = plugin_info.searchString;
 
-		if (search_string.find("[ignore]") != std::string::npos) {
+		if (IsUpdateCheckSkipped(search_string)) {
 			continue; // Skip to the next iteration
 		}
 
@@ -1473,6 +1473,84 @@ std::string SearchThemeFileForVersion(const char *search)
 	return ""; // Theme file not found or version not found
 }
 
+//-------------------UPDATE-CHECK ELIGIBILITY-------------------
+static const char *kIgnoreMarker = "[ignore]";
+
+bool IsUpdateCheckSkipped(const std::string &searchString)
+{
+	// An empty search string is treated the same as an explicit [ignore].
+	// find("") matches at position 0 of the log and again at every byte after
+	// it, so letting a blank field through to the scan below doesn't find
+	// nothing - it finds the first number anywhere in the log and reports it as
+	// the installed version.
+	if (searchString.empty()) {
+		return true;
+	}
+
+	return searchString.find(kIgnoreMarker) != std::string::npos;
+}
+
+std::string GetUpdateCheckSkipReason(const std::string &searchString)
+{
+	size_t marker = searchString.find(kIgnoreMarker);
+	if (marker == std::string::npos) {
+		return "";
+	}
+
+	std::string reason = searchString.substr(marker + strlen(kIgnoreMarker));
+	size_t first = reason.find_first_not_of(" \t\r\n");
+	if (first == std::string::npos) {
+		return "";
+	}
+	size_t last = reason.find_last_not_of(" \t\r\n");
+
+	return reason.substr(first, last - first + 1);
+}
+
+std::vector<std::pair<std::string, std::string>> GetUncheckablePlugins()
+{
+	std::vector<std::pair<std::string, std::string>> uncheckable;
+
+	char *filepath = StreamUP::PathUtils::GetOBSLogPath();
+	if (filepath == nullptr) {
+		return uncheckable;
+	}
+
+	std::vector<std::string> loadedModules = GetLoadedModuleNamesFromLog(filepath);
+	bfree(filepath);
+
+	if (loadedModules.empty()) {
+		return uncheckable;
+	}
+
+	std::unordered_set<std::string> loaded(loadedModules.begin(), loadedModules.end());
+
+	for (const auto &module : StreamUP::GetAllPlugins()) {
+		const StreamUP::PluginInfo &info = module.second;
+
+		if (!IsUpdateCheckSkipped(info.searchString)) {
+			continue;
+		}
+
+		// Only surface plugins the user actually has loaded. Theme entries have
+		// no module to match against, so they're left to the theme check.
+		if (info.moduleName.empty() || loaded.find(info.moduleName) == loaded.end()) {
+			continue;
+		}
+
+		uncheckable.emplace_back(module.first, GetUpdateCheckSkipReason(info.searchString));
+	}
+
+	std::sort(uncheckable.begin(), uncheckable.end(),
+		  [](const std::pair<std::string, std::string> &a, const std::pair<std::string, std::string> &b) {
+			  return std::lexicographical_compare(
+				  a.first.begin(), a.first.end(), b.first.begin(), b.first.end(),
+				  [](char c1, char c2) { return std::tolower(c1) < std::tolower(c2); });
+		  });
+
+	return uncheckable;
+}
+
 std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 {
 	std::vector<std::pair<std::string, std::string>> installedPlugins;
@@ -1516,6 +1594,11 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 		const StreamUP::PluginInfo &plugin_info = module.second;
 		const std::string &search_string = plugin_info.searchString;
 
+		// The other three scan loops guard on this; this one didn't. These
+		// plugins are reported separately by GetUncheckablePlugins().
+		if (IsUpdateCheckSkipped(search_string)) {
+			continue;
+		}
 
 		std::string installed_version;
 		// Check if this is a theme entry (special handling)
@@ -1690,7 +1773,7 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 		const std::string &required_version = plugin_info.version;
 		const std::string &search_string = plugin_info.searchString;
 
-		if (search_string.find("[ignore]") != std::string::npos) {
+		if (IsUpdateCheckSkipped(search_string)) {
 			continue;
 		}
 
@@ -2082,19 +2165,17 @@ QString GetPluginPlatformURL(const std::string &pluginName)
 	return QString::fromStdString(url);
 }
 
-std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath)
+std::vector<std::string> GetLoadedModuleNamesFromLog(const char *logPath)
 {
-	std::unordered_set<std::string> ignoreModules = {"obs-websocket",      "coreaudio-encoder", "decklink-captions",
-									 "decklink-output-ui", "frontend-tools",    "image-source",
-									 "obs-browser",        "obs-ffmpeg",        "obs-filters",
-									 "obs-outputs",        "obs-qsv11",         "obs-text",
-									 "obs-transitions",    "obs-vst",           "obs-x264",
-									 "rtmp-services",      "text-freetype2",    "vlc-video",
-									 "win-capture",        "win-dshow",         "win-wasapi",
-									 "mac-avcapture",      "mac-capture",       "mac-syphon",
-									 "mac-videotoolbox",   "mac-virtualcam",    "linux-v4l2",
-									 "linux-pulseaudio",   "linux-pipewire",    "linux-jack",
-									 "linux-capture",      "linux-source",      "obs-libfdk"};
+	// OBS's own modules. They ship with OBS, so they're never ours to track.
+	static const std::unordered_set<std::string> builtInModules = {
+		"obs-websocket",    "coreaudio-encoder", "decklink-captions", "decklink-output-ui", "frontend-tools",
+		"image-source",     "obs-browser",       "obs-ffmpeg",        "obs-filters",        "obs-outputs",
+		"obs-qsv11",        "obs-text",          "obs-transitions",   "obs-vst",            "obs-x264",
+		"rtmp-services",    "text-freetype2",    "vlc-video",         "win-capture",        "win-dshow",
+		"win-wasapi",       "mac-avcapture",     "mac-capture",       "mac-syphon",         "mac-videotoolbox",
+		"mac-virtualcam",   "linux-v4l2",        "linux-pulseaudio",  "linux-pipewire",     "linux-jack",
+		"linux-capture",    "linux-source",      "obs-libfdk"};
 
 	std::string filepath = StreamUP::PathUtils::GetMostRecentTxtFile(logPath);
 	FILE *file = fopen(filepath.c_str(), "r");
@@ -2129,18 +2210,8 @@ std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath)
 					str_line = str_line.substr(0, suffix_pos);
 				}
 
-				if (ignoreModules.find(str_line) == ignoreModules.end()) {
-					bool foundInApi = false;
-					const auto& allPlugins = StreamUP::GetAllPlugins();
-					for (const auto &pair : allPlugins) {
-						if (pair.second.moduleName == str_line) {
-							foundInApi = true;
-							break;
-						}
-					}
-					if (!foundInApi) {
-						collected_modules.push_back(str_line);
-					}
+				if (builtInModules.find(str_line) == builtInModules.end()) {
+					collected_modules.push_back(str_line);
 				}
 			}
 		}
@@ -2154,6 +2225,27 @@ std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath)
 			return std::tolower(char1) < std::tolower(char2);
 		});
 	});
+
+	return collected_modules;
+}
+
+std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath)
+{
+	std::vector<std::string> collected_modules = GetLoadedModuleNamesFromLog(logPath);
+
+	// Keep only modules we have no database entry for - those are the ones we
+	// can say nothing at all about.
+	const auto &allPlugins = StreamUP::GetAllPlugins();
+	collected_modules.erase(std::remove_if(collected_modules.begin(), collected_modules.end(),
+					       [&allPlugins](const std::string &moduleName) {
+						       for (const auto &pair : allPlugins) {
+							       if (pair.second.moduleName == moduleName) {
+								       return true;
+							       }
+						       }
+						       return false;
+					       }),
+				collected_modules.end());
 
 	return collected_modules;
 }
