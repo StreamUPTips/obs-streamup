@@ -15,6 +15,7 @@
 // UI modules
 #include "ui/dock/streamup-dock.hpp"
 #include "ui/scene-organiser/scene-organiser-dock.hpp"
+#include "ui/scene-organiser/scene-canvas.hpp"
 #include "ui/streamup-toolbar.hpp"
 #include "ui/settings-manager.hpp"
 #include "ui/ui-helpers.hpp"
@@ -614,6 +615,15 @@ static void LoadStreamUPDock()
 
 // Global Scene Organiser dock instance
 static StreamUP::SceneOrganiser::SceneOrganiserDock* globalSceneOrganiserNormal = nullptr;
+// The Vertical dock only exists while Aitum's vertical canvas does. It is
+// created when the canvas turns up (at load, or later via CANVAS_ADDED) and
+// torn down when the canvas goes away, so people who do not run the Vertical
+// Canvas plugin never see an empty dock.
+static StreamUP::SceneOrganiser::SceneOrganiserDock* globalSceneOrganiserVertical = nullptr;
+static const char *const kVerticalDockId = "StreamUPSceneOrganiserVertical";
+// Set once OBS has finished loading. A dock created after that point never
+// receives FINISHED_LOADING itself, so it has to be told to run its initial load.
+static bool s_obsFinishedLoading = false;
 
 static void LoadSceneOrganiserDocks()
 {
@@ -665,6 +675,93 @@ static void LoadSceneOrganiserDocks()
 
 	obs_frontend_pop_ui_translation();
 	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Scene Organiser dock creation completed");
+}
+
+// Create the Vertical Scene Organiser dock, if Aitum's vertical canvas is
+// present and we have not already made one. Safe to call repeatedly.
+static void CreateVerticalSceneOrganiserDock()
+{
+	if (globalSceneOrganiserVertical)
+		return;
+	if (!StreamUP::SceneOrganiser::Canvas::VerticalAvailable())
+		return;
+
+	const auto main_window = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	if (!main_window)
+		return;
+
+	obs_frontend_push_ui_translation(obs_module_get_string);
+
+	try {
+		globalSceneOrganiserVertical = new StreamUP::SceneOrganiser::SceneOrganiserDock(
+			StreamUP::SceneOrganiser::CanvasType::Vertical, main_window);
+	} catch (const std::exception &e) {
+		blog(LOG_ERROR, "[StreamUP] Failed to create Vertical Scene Organiser: %s", e.what());
+		obs_frontend_pop_ui_translation();
+		return;
+	} catch (...) {
+		blog(LOG_ERROR, "[StreamUP] Failed to create Vertical Scene Organiser");
+		obs_frontend_pop_ui_translation();
+		return;
+	}
+
+	const QString verticalTitle = QString::fromUtf8(obs_module_text("SceneOrganiser.Label.VerticalCanvas"));
+	obs_frontend_add_dock_by_id(kVerticalDockId, verticalTitle.toUtf8().constData(), globalSceneOrganiserVertical);
+
+	obs_frontend_pop_ui_translation();
+
+	// A scene collection restores its canvases without raising CANVAS_ADDED
+	// (only runtime creation does), so this dock is usually built from the
+	// FINISHED_LOADING handler below - i.e. while that event is being
+	// dispatched, which its own callback registered too late to receive. Same
+	// for a canvas created mid-session. Without this kick the dock never loads
+	// its config or scenes and stays permanently empty, and because the canvas
+	// signal handlers gate on m_initialLoadComplete, new vertical scenes never
+	// appear either.
+	if (s_obsFinishedLoading)
+		globalSceneOrganiserVertical->performInitialLoad();
+
+	blog(LOG_INFO, "[StreamUP] Vertical Scene Organiser dock added");
+}
+
+// Remove the Vertical dock when its canvas disappears. obs_frontend_remove_dock
+// deletes the widget, so just drop our pointer afterwards.
+static void DestroyVerticalSceneOrganiserDock()
+{
+	if (!globalSceneOrganiserVertical)
+		return;
+
+	obs_frontend_remove_dock(kVerticalDockId);
+	globalSceneOrganiserVertical = nullptr;
+	blog(LOG_INFO, "[StreamUP] Vertical Scene Organiser dock removed");
+}
+
+// Canvas come-and-go. Aitum registers its canvas during its own load, which can
+// land either side of ours, so we check on CANVAS_ADDED and again once OBS has
+// finished loading.
+static void OnCanvasChanged(enum obs_frontend_event event, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+
+	switch (event) {
+	case OBS_FRONTEND_EVENT_CANVAS_ADDED:
+		CreateVerticalSceneOrganiserDock();
+		break;
+	case OBS_FRONTEND_EVENT_EXIT:
+		// Drop the dock while the canvas is still alive and OBS is still on the
+		// UI thread. Waiting for the widget's destructor means racing canvas
+		// teardown to disconnect our signal handlers.
+		DestroyVerticalSceneOrganiserDock();
+		break;
+	case OBS_FRONTEND_EVENT_CANVAS_REMOVED:
+		// The removed canvas is not named in the event, so just re-check
+		// whether ours is still there.
+		if (!StreamUP::SceneOrganiser::Canvas::VerticalAvailable())
+			DestroyVerticalSceneOrganiserDock();
+		break;
+	default:
+		break;
+	}
 }
 
 // Function to apply scene organiser visibility changes
@@ -1087,8 +1184,15 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 	if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
 		StreamUP::DebugLogger::LogInfo("Plugin", "OBS finished loading, initializing plugin data...");
 
+		// Docks created from here on have missed this event and must be kicked.
+		s_obsFinishedLoading = true;
+
 		// Apply style overrides to OBS native docks
 		ApplyOBSDockStyleOverrides();
+
+		// Aitum's vertical canvas may already exist by now (its plugin can
+		// load before ours), in which case no CANVAS_ADDED ever reaches us.
+		CreateVerticalSceneOrganiserDock();
 
 		// Mixer, studio mode, and theme polish always run. Each Apply*
 		// function self-gates on whether a StreamUP OBS theme is currently
@@ -1195,6 +1299,7 @@ void obs_module_post_load(void)
 		blog(LOG_INFO, "[StreamUP] Post-load step 2/3: Registering OBS finished loading callback");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Post Load", "Registering OBS finished loading callback");
 		obs_frontend_add_event_callback(OnOBSFinishedLoading, nullptr);
+		obs_frontend_add_event_callback(OnCanvasChanged, nullptr);
 		blog(LOG_INFO, "[StreamUP] Post-load step 2/3: OBS finished loading callback registered");
 
 		// Register callback for OBS shutdown to save settings

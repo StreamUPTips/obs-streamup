@@ -1,4 +1,5 @@
 #include "scene-organiser-dock.hpp"
+#include "scene-canvas.hpp"
 #include <streamup/ui/dialogs.hpp>
 #include <streamup/ui/color-picker.hpp>
 #include <streamup/ui/window-chrome.hpp>
@@ -21,6 +22,8 @@
 #include <QToolBar>
 #include <QToolButton>
 #include <QAction>
+#include <QWidgetAction>
+#include <QGridLayout>
 #include <QKeyEvent>
 #include <QPointer>
 #include <QPainter>
@@ -44,6 +47,37 @@ using namespace StreamUP::UIStyles;
 
 namespace StreamUP {
 namespace SceneOrganiser {
+
+// Studio mode's preview/program pair belongs to the MAIN canvas only. Aitum's
+// vertical canvas has no preview side, so a vertical dock always acts live: no
+// preview staging, no transition trigger, just switch the scene.
+// Folder layout lives in a per-canvas file. Scene names are only unique within
+// a canvas, so a shared file would merge a main "Intro" with a vertical "Intro".
+// The main canvas keeps its historic filename so existing layouts still load.
+static inline QString sceneTreeFileName(CanvasType type)
+{
+    return (type == CanvasType::Vertical) ? QStringLiteral("scene_tree_vertical.json")
+                                          : QStringLiteral("scene_tree_normal.json");
+}
+
+static inline bool studioModeFor(CanvasType type)
+{
+    return type == CanvasType::Normal && obs_frontend_preview_program_mode_active();
+}
+
+
+// The eight preset colours OBS offers in its native Sources > Set Colour menu,
+// at the same 33% alpha (see OBSBasic::AddBackgroundColorMenu). Matched exactly
+// so a scene coloured here reads the same as a source coloured there.
+static const QList<QColor> &PresetColors()
+{
+    static const QList<QColor> presets = {
+        QColor(255, 68, 68, 84),   QColor(255, 255, 68, 84), QColor(68, 255, 68, 84),
+        QColor(68, 255, 255, 84),  QColor(68, 68, 255, 84),  QColor(255, 68, 255, 84),
+        QColor(68, 68, 68, 84),    QColor(255, 255, 255, 84),
+    };
+    return presets;
+}
 
 // Data role marking the scene item that is currently LIVE on program.
 // Painted by CustomColorDelegate as a distinct green "on air" indicator that is
@@ -198,8 +232,10 @@ SceneOrganiserDock::SceneOrganiserDock(CanvasType canvasType, QWidget *parent)
 {
     s_dockInstances.append(this);
 
-    // Set configuration key
-    m_configKey = "scene_organiser_normal";
+    // Set configuration key. Per canvas, so the Normal and Vertical docks keep
+    // their own lock state, hidden scenes and folder expansion.
+    m_configKey = (m_canvasType == CanvasType::Vertical) ? "scene_organiser_vertical"
+                                                         : "scene_organiser_normal";
 
     // Initialize optimized update system
     m_updateBatchTimer->setSingleShot(true);
@@ -241,6 +277,7 @@ SceneOrganiserDock::~SceneOrganiserDock()
 {
     // Remove frontend event callback to prevent use-after-free
     obs_frontend_remove_event_callback(onFrontendEvent, this);
+    disconnectCanvasSignals();
 
     // Clean up copy filters source
     if (m_copyFiltersSource) {
@@ -572,8 +609,10 @@ void SceneOrganiserDock::setupContextMenu()
     m_deleteFolderAction->setShortcut(QKeySequence(Qt::Key_Delete));
 
     m_folderContextMenu->addSeparator();
-    m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.SetColor"), this, &SceneOrganiserDock::onSetCustomColorClicked);
-    m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ClearColor"), this, &SceneOrganiserDock::onClearCustomColorClicked);
+    // One submenu instance serves both context menus; both act on
+    // m_currentContextItem, which is set before either menu is exec'd.
+    m_colorMenu = createColorSubmenu();
+    m_folderContextMenu->addMenu(m_colorMenu);
     m_folderContextMenu->addSeparator();
     m_folderToggleIconsAction = m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
     m_folderToggleIconsAction->setCheckable(true);
@@ -677,8 +716,7 @@ void SceneOrganiserDock::setupContextMenu()
 
     // Custom actions
     m_sceneContextMenu->addSeparator();
-    m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.SetColor"), this, &SceneOrganiserDock::onSetCustomColorClicked);
-    m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ClearColor"), this, &SceneOrganiserDock::onClearCustomColorClicked);
+    m_sceneContextMenu->addMenu(m_colorMenu);
     m_sceneContextMenu->addSeparator();
     m_sceneToggleIconsAction = m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
     m_sceneToggleIconsAction->setCheckable(true);
@@ -772,6 +810,95 @@ void SceneOrganiserDock::setupContextMenu()
 void SceneOrganiserDock::setupObsSignals()
 {
     obs_frontend_add_event_callback(onFrontendEvent, this);
+    connectCanvasSignals();
+}
+
+// Canvas scenes are invisible to the frontend's scene events: adding a scene on
+// Aitum's canvas raises no SCENE_LIST_CHANGED, and switching it raises no
+// SCENE_CHANGED. The canvas has its own signal handler, so the vertical dock
+// listens there and refreshes off the same code paths the frontend events use.
+void SceneOrganiserDock::connectCanvasSignals()
+{
+    if (m_canvasType != CanvasType::Vertical || m_weakCanvas)
+        return;
+
+    obs_canvas_t *canvas = Canvas::Acquire(m_canvasType);
+    if (!canvas)
+        return;
+
+    signal_handler_t *sh = obs_canvas_get_signal_handler(canvas);
+    if (sh) {
+        signal_handler_connect(sh, "source_add", OnCanvasSourceAdded, this);
+        signal_handler_connect(sh, "source_remove", OnCanvasSourceRemoved, this);
+        signal_handler_connect(sh, "source_rename", OnCanvasSourceRenamed, this);
+        signal_handler_connect(sh, "channel_change", OnCanvasChannelChanged, this);
+        // Weak, so a canvas torn down before this dock cannot keep it alive.
+        m_weakCanvas = obs_canvas_get_weak_canvas(canvas);
+    }
+    obs_canvas_release(canvas);
+}
+
+void SceneOrganiserDock::disconnectCanvasSignals()
+{
+    if (!m_weakCanvas)
+        return;
+
+    // The canvas may already be gone, in which case its signal handler went with
+    // it and there is nothing to disconnect.
+    if (obs_canvas_t *canvas = obs_weak_canvas_get_canvas(m_weakCanvas)) {
+        if (signal_handler_t *sh = obs_canvas_get_signal_handler(canvas)) {
+            signal_handler_disconnect(sh, "source_add", OnCanvasSourceAdded, this);
+            signal_handler_disconnect(sh, "source_remove", OnCanvasSourceRemoved, this);
+            signal_handler_disconnect(sh, "source_rename", OnCanvasSourceRenamed, this);
+            signal_handler_disconnect(sh, "channel_change", OnCanvasChannelChanged, this);
+        }
+        obs_canvas_release(canvas);
+    }
+
+    obs_weak_canvas_release(m_weakCanvas);
+    m_weakCanvas = nullptr;
+}
+
+// Signal callbacks arrive on OBS threads, never the UI thread, so every one of
+// these hops to the dock's thread before touching the model or widgets.
+void SceneOrganiserDock::OnCanvasSourceAdded(void *data, calldata_t *)
+{
+    auto *dock = static_cast<SceneOrganiserDock *>(data);
+    QMetaObject::invokeMethod(dock, [dock]() {
+        if (!dock->m_initialLoadComplete)
+            return;
+        dock->refreshSceneList();
+    }, Qt::QueuedConnection);
+}
+
+void SceneOrganiserDock::OnCanvasSourceRemoved(void *data, calldata_t *)
+{
+    auto *dock = static_cast<SceneOrganiserDock *>(data);
+    QMetaObject::invokeMethod(dock, [dock]() {
+        if (!dock->m_initialLoadComplete)
+            return;
+        dock->refreshSceneList();
+    }, Qt::QueuedConnection);
+}
+
+void SceneOrganiserDock::OnCanvasSourceRenamed(void *data, calldata_t *)
+{
+    auto *dock = static_cast<SceneOrganiserDock *>(data);
+    QMetaObject::invokeMethod(dock, [dock]() {
+        if (!dock->m_initialLoadComplete)
+            return;
+        dock->refreshSceneList();
+    }, Qt::QueuedConnection);
+}
+
+void SceneOrganiserDock::OnCanvasChannelChanged(void *data, calldata_t *)
+{
+    auto *dock = static_cast<SceneOrganiserDock *>(data);
+    QMetaObject::invokeMethod(dock, [dock]() {
+        if (!dock->m_initialLoadComplete)
+            return;
+        dock->updateActiveSceneHighlight();
+    }, Qt::QueuedConnection);
 }
 
 void SceneOrganiserDock::setupSearchBar()
@@ -1162,7 +1289,7 @@ void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
     StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 
     // Check if studio mode is active - it overrides normal click behavior
-    if (obs_frontend_preview_program_mode_active() && item->type() == SceneTreeItem::UserType + 2) {
+    if (studioModeFor(m_canvasType) && item->type() == SceneTreeItem::UserType + 2) {
         // Check if preview switching is disabled in studio mode
         if (settings.sceneOrganiserDisablePreviewSwitchingInStudioMode) {
             // Preview switching is disabled in studio mode, do nothing
@@ -1170,7 +1297,7 @@ void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
                 QString("Single-click: Preview switching disabled in studio mode").toUtf8().constData());
         } else {
             // Studio mode: single-click always sets preview scene
-            obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
+            obs_source_t *source = Canvas::FindScene(m_canvasType, item->text().toUtf8().constData());
             if (source) {
                 obs_frontend_set_current_preview_scene(source);
                 StreamUP::DebugLogger::LogDebug("SceneOrganiser", "StudioMode",
@@ -1184,9 +1311,9 @@ void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
         if (settings.sceneOrganiserSwitchMode == StreamUP::SettingsManager::SceneSwitchMode::SingleClick &&
             item->type() == SceneTreeItem::UserType + 2) {
             // Switch to scene on single-click
-            obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
+            obs_source_t *source = Canvas::FindScene(m_canvasType, item->text().toUtf8().constData());
             if (source) {
-                obs_frontend_set_current_scene(source);
+                Canvas::SetCurrentScene(m_canvasType, source);
                 obs_source_release(source);
             }
         }
@@ -1207,7 +1334,7 @@ void SceneOrganiserDock::onItemDoubleClicked(const QModelIndex &index)
     }
 
     // Check if studio mode is active - it overrides normal double-click behavior
-    if (obs_frontend_preview_program_mode_active() && item->type() == SceneTreeItem::UserType + 2) {
+    if (studioModeFor(m_canvasType) && item->type() == SceneTreeItem::UserType + 2) {
         // Check if scene switching is disabled in studio mode
         StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
         if (settings.sceneOrganiserDisableTransitionInStudioMode) {
@@ -1216,7 +1343,7 @@ void SceneOrganiserDock::onItemDoubleClicked(const QModelIndex &index)
                 QString("Double-click: Transition disabled in studio mode").toUtf8().constData());
         } else {
             // Studio mode: double-click transitions preview to program (goes live)
-            obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
+            obs_source_t *source = Canvas::FindScene(m_canvasType, item->text().toUtf8().constData());
             if (source) {
                 // First set as preview, then trigger transition
                 obs_frontend_set_current_preview_scene(source);
@@ -1233,9 +1360,9 @@ void SceneOrganiserDock::onItemDoubleClicked(const QModelIndex &index)
         // Only switch to scene on double-click if double-click mode is enabled
         if (settings.sceneOrganiserSwitchMode == StreamUP::SettingsManager::SceneSwitchMode::DoubleClick) {
             // Switch to scene on double-click
-            obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
+            obs_source_t *source = Canvas::FindScene(m_canvasType, item->text().toUtf8().constData());
             if (source) {
-                obs_frontend_set_current_scene(source);
+                Canvas::SetCurrentScene(m_canvasType, source);
                 obs_source_release(source);
             }
         }
@@ -1279,7 +1406,7 @@ void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelInd
 
     // Update dynamic menu states
     QString sceneName = m_currentContextItem->text();
-    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    obs_source_t *source = Canvas::FindScene(m_canvasType, sceneName.toUtf8().constData());
 
     // Populate projector menu with current monitors
     populateProjectorMenu();
@@ -1362,7 +1489,7 @@ void SceneOrganiserDock::onCreateSceneClicked()
             if (sceneName.isEmpty()) return;
 
             // Create a new scene in OBS
-            obs_scene_t *scene = obs_scene_create(sceneName.toUtf8().constData());
+            obs_scene_t *scene = Canvas::CreateScene(self->GetCanvasType(), sceneName.toUtf8().constData());
             if (scene) {
                 obs_source_t *scene_source = obs_scene_get_source(scene);
 
@@ -1372,10 +1499,10 @@ void SceneOrganiserDock::onCreateSceneClicked()
                 StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
                 if (settings.sceneOrganiserSwitchToNewScene) {
                     // In studio mode, only ever set the preview — never push the new scene to program
-                    if (obs_frontend_preview_program_mode_active()) {
+                    if (studioModeFor(self->GetCanvasType())) {
                         obs_frontend_set_current_preview_scene(scene_source);
                     } else {
-                        obs_frontend_set_current_scene(scene_source);
+                        Canvas::SetCurrentScene(self->GetCanvasType(), scene_source);
                     }
                 }
 
@@ -1424,7 +1551,7 @@ void SceneOrganiserDock::onRemoveClicked()
 
             if (isScene) {
                 // Delete the actual scene from OBS
-                obs_source_t *source = obs_get_source_by_name(itemName.toUtf8().constData());
+                obs_source_t *source = Canvas::FindScene(self->GetCanvasType(), itemName.toUtf8().constData());
                 if (source) {
                     // Before removing from OBS, clean up our tracking and UI
                     if (item->type() == SceneTreeItem::UserType + 2) {
@@ -1477,7 +1604,7 @@ void SceneOrganiserDock::onFiltersClicked()
     if (!item || item->type() != SceneTreeItem::UserType + 2) return;
 
     QString sceneName = item->text();
-    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    obs_source_t *source = Canvas::FindScene(m_canvasType, sceneName.toUtf8().constData());
     if (source) {
         // Open scene filters using OBS frontend API
         obs_frontend_open_source_filters(source);
@@ -1626,6 +1753,130 @@ void SceneOrganiserDock::onToggleIconsClicked()
     NotifySceneOrganiserIconsChanged();
 }
 
+// Builds the "Set Colour" submenu in the shape of OBS' native Sources menu:
+// a checkable Clear entry, a checkable Custom Colour entry, then a grid of the
+// eight preset swatches. Check state is refreshed on every show from the
+// context item's stored colour, so no extra preset index has to be persisted.
+QMenu *SceneOrganiserDock::createColorSubmenu()
+{
+    QMenu *menu = new QMenu(obs_module_text("SceneOrganiser.Action.SetColor"), this);
+
+    m_colorClearAction = menu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Clear"), -1),
+                                        this, &SceneOrganiserDock::onClearCustomColorClicked);
+    m_colorClearAction->setCheckable(true);
+
+    m_colorCustomAction = menu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("CustomColor"), -1),
+                                          this, &SceneOrganiserDock::onSetCustomColorClicked);
+    m_colorCustomAction->setCheckable(true);
+
+    menu->addSeparator();
+
+    // Swatch grid (4x2, matching the native menu's layout).
+    QWidget *swatchWidget = new QWidget(menu);
+    QGridLayout *grid = new QGridLayout(swatchWidget);
+    grid->setContentsMargins(su::S(8), su::S(4), su::S(8), su::S(8));
+    grid->setSpacing(su::S(4));
+
+    const QList<QColor> &presets = PresetColors();
+    m_colorSwatchButtons.clear();
+    for (int i = 0; i < presets.size(); ++i) {
+        QPushButton *swatch = new QPushButton(swatchWidget);
+        swatch->setFlat(true);
+        swatch->setFixedSize(su::S(26), su::S(22));
+        swatch->setCursor(Qt::PointingHandCursor);
+        // Index is 0-based here; applyPresetColor takes the same 0-based index.
+        connect(swatch, &QPushButton::clicked, this, [this, i]() { applyPresetColor(i); });
+        grid->addWidget(swatch, i / 4, i % 4);
+        m_colorSwatchButtons.append(swatch);
+    }
+
+    QWidgetAction *swatchAction = new QWidgetAction(menu);
+    swatchAction->setDefaultWidget(swatchWidget);
+    menu->addAction(swatchAction);
+
+    connect(menu, &QMenu::aboutToShow, this, &SceneOrganiserDock::refreshColorMenuState);
+
+    return menu;
+}
+
+// Reflects the context item's current colour: Clear ticked when there is none,
+// the matching swatch outlined when it is one of the presets, otherwise Custom
+// Colour ticked.
+void SceneOrganiserDock::refreshColorMenuState()
+{
+    QColor current;
+    if (m_currentContextItem) {
+        QVariant colorData = m_currentContextItem->data(Qt::UserRole + 1);
+        if (colorData.isValid()) {
+            current = colorData.value<QColor>();
+        }
+    }
+
+    const QList<QColor> &presets = PresetColors();
+    int matchedPreset = -1;
+    if (current.isValid()) {
+        for (int i = 0; i < presets.size(); ++i) {
+            if (presets[i] == current) {
+                matchedPreset = i;
+                break;
+            }
+        }
+    }
+
+    if (m_colorClearAction) {
+        m_colorClearAction->setChecked(!current.isValid());
+    }
+    if (m_colorCustomAction) {
+        m_colorCustomAction->setChecked(current.isValid() && matchedPreset < 0);
+    }
+
+    for (int i = 0; i < m_colorSwatchButtons.size() && i < presets.size(); ++i) {
+        const QColor &c = presets[i];
+        // The swatch is drawn at the preset's own alpha so it previews exactly
+        // how the row will look; the selected one gets the native black outline.
+        const QString border = (i == matchedPreset) ? QStringLiteral("2px solid black")
+                                                    : QStringLiteral("1px solid rgba(0,0,0,60)");
+        m_colorSwatchButtons[i]->setStyleSheet(
+            QString("QPushButton{background-color:rgba(%1,%2,%3,%4);border:%5;border-radius:%6px;}")
+                .arg(c.red())
+                .arg(c.green())
+                .arg(c.blue())
+                .arg(c.alpha())
+                .arg(border)
+                .arg(su::S(3)));
+    }
+}
+
+// Applies one of the eight preset colours to the context item and closes the
+// menus, mirroring the native behaviour of clicking a swatch.
+void SceneOrganiserDock::applyPresetColor(int presetIndex)
+{
+    const QList<QColor> &presets = PresetColors();
+    if (!m_currentContextItem || presetIndex < 0 || presetIndex >= presets.size()) {
+        return;
+    }
+
+    const QColor color = presets[presetIndex];
+    m_currentContextItem->setData(color, Qt::UserRole + 1);
+    applyCustomColorToItem(m_currentContextItem, color);
+    m_saveTimer->start();
+    forceTreeViewRepaint();
+
+    if (m_colorMenu) {
+        m_colorMenu->hide();
+    }
+    if (m_folderContextMenu) {
+        m_folderContextMenu->hide();
+    }
+    if (m_sceneContextMenu) {
+        m_sceneContextMenu->hide();
+    }
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "CustomColor",
+        QString("Set preset colour %1 for item '%2': %3")
+        .arg(presetIndex + 1).arg(m_currentContextItem->text(), color.name(QColor::HexArgb)).toUtf8().constData());
+}
+
 void SceneOrganiserDock::onSetCustomColorClicked()
 {
     if (!m_currentContextItem) {
@@ -1668,6 +1919,7 @@ void SceneOrganiserDock::onSetCustomColorClicked()
 
                     // Apply the color immediately
                     self->applyCustomColorToItem(item, selectedColor);
+                    self->forceTreeViewRepaint();
 
                     // Save configuration
                     self->m_saveTimer->start();
@@ -1680,6 +1932,12 @@ void SceneOrganiserDock::onSetCustomColorClicked()
         }
         dlg->close();
     });
+
+    // makeWindow() only BUILDS the shell - it does not show it. Without this the
+    // "Set Colour" action did nothing at all (the dialog is WA_DeleteOnClose and
+    // unreferenced, so it was created and immediately discarded).
+    sh.dialog->resize(su::S(360), su::S(420));
+    sh.dialog->show();
 }
 
 void SceneOrganiserDock::onClearCustomColorClicked()
@@ -1693,6 +1951,7 @@ void SceneOrganiserDock::onClearCustomColorClicked()
 
     // Clear the color styling
     clearCustomColorFromItem(m_currentContextItem);
+    forceTreeViewRepaint();
 
     // Save configuration
     m_saveTimer->start();
@@ -2046,14 +2305,14 @@ void SceneOrganiserDock::updateActiveSceneHighlight()
     QString preview_scene_name;
 
     // Get the current active (program) scene from OBS
-    obs_source_t *current_scene = obs_frontend_get_current_scene();
+    obs_source_t *current_scene = Canvas::GetCurrentScene(m_canvasType);
     if (current_scene) {
         current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
         obs_source_release(current_scene);
     }
 
     // If in studio mode, also get the preview scene
-    const bool studioMode = obs_frontend_preview_program_mode_active();
+    const bool studioMode = studioModeFor(m_canvasType);
     if (studioMode) {
         obs_source_t *preview_scene = obs_frontend_get_current_preview_scene();
         if (preview_scene) {
@@ -2191,18 +2450,18 @@ void SceneOrganiserDock::triggerActivateSelectedScene()
         return; // only scenes can be activated (folders ignored)
     }
 
-    obs_source_t *source = obs_get_source_by_name(item->text().toUtf8().constData());
+    obs_source_t *source = Canvas::FindScene(m_canvasType, item->text().toUtf8().constData());
     if (!source) {
         return;
     }
 
-    if (obs_frontend_preview_program_mode_active()) {
+    if (studioModeFor(m_canvasType)) {
         obs_frontend_set_current_preview_scene(source);
         obs_frontend_preview_program_trigger_transition();
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Activate",
             QString("Enter: transitioned '%1' to program").arg(item->text()).toUtf8().constData());
     } else {
-        obs_frontend_set_current_scene(source);
+        Canvas::SetCurrentScene(m_canvasType, source);
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Activate",
             QString("Enter: set program scene to '%1'").arg(item->text()).toUtf8().constData());
     }
@@ -2234,31 +2493,47 @@ void SceneOrganiserDock::updateAllItemIcons(QStandardItem *parent)
     }
 }
 
+// The one-time load: config, saved folder tree, scenes, colours, then enable
+// saves. Normally driven by FINISHED_LOADING, but a dock created AFTER that
+// event has already fired (the Vertical dock, which only exists once its canvas
+// does) never sees it and has to be kicked directly - see
+// CreateVerticalSceneOrganiserDock(). Guarded so a dock that gets both a direct
+// kick and the event does not load twice.
+void SceneOrganiserDock::performInitialLoad()
+{
+    if (m_initialLoadStarted) {
+        return;
+    }
+    m_initialLoadStarted = true;
+
+    QTimer::singleShot(100, this, [this]() {
+        LoadConfiguration();
+        m_model->loadSceneTree();
+        refreshSceneList();
+        applyAllCustomColors();
+
+        // Restore folder expansion state after tree is fully loaded
+        // and mark initial load as complete to allow saves
+        QTimer::singleShot(500, this, [this]() {
+            StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+            if (settings.sceneOrganiserRememberFolderState) {
+                restoreFolderExpansionState();
+            }
+            // Mark initial load as complete - saves are now allowed
+            m_initialLoadComplete = true;
+            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Init",
+                "Initial load complete - saves now enabled");
+        });
+    });
+}
+
 void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *private_data)
 {
     auto dock = static_cast<SceneOrganiserDock*>(private_data);
 
     switch (event) {
     case OBS_FRONTEND_EVENT_FINISHED_LOADING:
-        QTimer::singleShot(100, dock, [dock]() {
-            dock->LoadConfiguration();
-            dock->m_model->loadSceneTree();
-            dock->refreshSceneList();
-            dock->applyAllCustomColors();
-
-            // Restore folder expansion state after tree is fully loaded
-            // and mark initial load as complete to allow saves
-            QTimer::singleShot(500, dock, [dock]() {
-                StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-                if (settings.sceneOrganiserRememberFolderState) {
-                    dock->restoreFolderExpansionState();
-                }
-                // Mark initial load as complete - saves are now allowed
-                dock->m_initialLoadComplete = true;
-                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Init",
-                    "Initial load complete - saves now enabled");
-            });
-        });
+        dock->performInitialLoad();
         break;
     case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
         // Skip during scene collection changes to avoid accessing stale scene data
@@ -2840,7 +3115,7 @@ void SceneOrganiserDock::onDuplicateSceneClicked()
     if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
 
     QString currentSceneName = m_currentContextItem->text();
-    obs_source_t *currentSource = obs_get_source_by_name(currentSceneName.toUtf8().constData());
+    obs_source_t *currentSource = Canvas::FindScene(m_canvasType, currentSceneName.toUtf8().constData());
     if (!currentSource) return;
 
     obs_scene_t *currentScene = obs_scene_from_source(currentSource);
@@ -2854,7 +3129,7 @@ void SceneOrganiserDock::onDuplicateSceneClicked()
     int i = 2;
     QString newName = format.arg(i);
     obs_source_t *existing = nullptr;
-    while ((existing = obs_get_source_by_name(newName.toUtf8().constData())) != nullptr) {
+    while ((existing = Canvas::FindScene(m_canvasType, newName.toUtf8().constData())) != nullptr) {
         obs_source_release(existing);
         newName = format.arg(++i);
     }
@@ -2863,7 +3138,16 @@ void SceneOrganiserDock::onDuplicateSceneClicked()
     obs_scene_t *duplicatedScene = obs_scene_duplicate(currentScene, newName.toUtf8().constData(), OBS_SCENE_DUP_REFS);
     if (duplicatedScene) {
         obs_source_t *newSource = obs_scene_get_source(duplicatedScene);
-        obs_frontend_set_current_scene(newSource);
+
+        // obs_scene_duplicate always creates on the main canvas, so a vertical
+        // duplicate has to be moved across or it would land in the wrong dock.
+        if (m_canvasType == CanvasType::Vertical) {
+            if (obs_canvas_t *canvas = Canvas::Acquire(m_canvasType)) {
+                obs_canvas_move_scene(duplicatedScene, canvas);
+                obs_canvas_release(canvas);
+            }
+        }
+        Canvas::SetCurrentScene(m_canvasType, newSource);
 
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Duplication",
             QString("Duplicated scene '%1' to '%2'").arg(currentSceneName, newName).toUtf8().constData());
@@ -2878,7 +3162,7 @@ void SceneOrganiserDock::onDeleteSceneClicked()
     if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
 
     QString sceneName = m_currentContextItem->text();
-    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    obs_source_t *source = Canvas::FindScene(m_canvasType, sceneName.toUtf8().constData());
     if (!source) return;
     // The confirm dialog is modeless; don't hold the source ref across it.
     // Re-acquire by name inside the accept callback instead.
@@ -2892,7 +3176,7 @@ void SceneOrganiserDock::onDeleteSceneClicked()
         "danger",
         [self, sceneName]() {
             if (!self) return;
-            obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+            obs_source_t *source = Canvas::FindScene(self->GetCanvasType(), sceneName.toUtf8().constData());
             if (!source) return;
             obs_source_remove(source);
             StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Deletion",
@@ -3008,7 +3292,7 @@ void SceneOrganiserDock::onCopyFiltersClicked()
     if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
 
     QString sceneName = m_currentContextItem->text();
-    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    obs_source_t *source = Canvas::FindScene(m_canvasType, sceneName.toUtf8().constData());
     if (!source) return;
 
     // Release previous copy source if any
@@ -3030,7 +3314,7 @@ void SceneOrganiserDock::onPasteFiltersClicked()
     if (!m_copyFiltersSource || obs_weak_source_expired(m_copyFiltersSource)) return;
 
     QString targetSceneName = m_currentContextItem->text();
-    obs_source_t *targetSource = obs_get_source_by_name(targetSceneName.toUtf8().constData());
+    obs_source_t *targetSource = Canvas::FindScene(m_canvasType, targetSceneName.toUtf8().constData());
     obs_source_t *sourceSource = obs_weak_source_get_source(m_copyFiltersSource);
 
     if (!targetSource || !sourceSource) {
@@ -3054,7 +3338,7 @@ void SceneOrganiserDock::onSceneFiltersClicked()
     if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
 
     QString sceneName = m_currentContextItem->text();
-    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    obs_source_t *source = Canvas::FindScene(m_canvasType, sceneName.toUtf8().constData());
     if (!source) return;
 
     obs_frontend_open_source_filters(source);
@@ -3066,7 +3350,7 @@ void SceneOrganiserDock::onScreenshotSceneClicked()
     if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
 
     QString sceneName = m_currentContextItem->text();
-    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    obs_source_t *source = Canvas::FindScene(m_canvasType, sceneName.toUtf8().constData());
     if (!source) return;
 
     obs_frontend_take_source_screenshot(source);
@@ -3081,7 +3365,7 @@ void SceneOrganiserDock::onShowInMultiviewClicked()
     if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
 
     QString sceneName = m_currentContextItem->text();
-    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    obs_source_t *source = Canvas::FindScene(m_canvasType, sceneName.toUtf8().constData());
     if (!source) return;
 
     obs_data_t *privateSettings = obs_source_get_private_settings(source);
@@ -3123,7 +3407,7 @@ void SceneOrganiserDock::onOpenProjectorWindowClicked()
     if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
 
     QString sceneName = m_currentContextItem->text();
-    obs_source_t *source = obs_get_source_by_name(sceneName.toUtf8().constData());
+    obs_source_t *source = Canvas::FindScene(m_canvasType, sceneName.toUtf8().constData());
     if (!source) return;
 
     obs_frontend_open_projector("Scene", -1, nullptr, obs_source_get_name(source));
@@ -3329,7 +3613,7 @@ bool SceneTreeModel::setData(const QModelIndex &index, const QVariant &value, in
 
     if (item->type() == SceneTreeItem::UserType + 2) {
         // Scene item - rename in OBS
-        obs_source_t *source = obs_get_source_by_name(oldName.toUtf8().constData());
+        obs_source_t *source = Canvas::FindScene(m_canvasType, oldName.toUtf8().constData());
         if (source) {
             obs_source_set_name(source, newName.toUtf8().constData());
             obs_source_release(source);
@@ -3498,7 +3782,7 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
                 .arg(newItem->text()).arg(reinterpret_cast<uintptr_t>(newItem)).toUtf8().constData());
 
             // Check if this is the active scene and mark it for immediate update
-            obs_source_t *current_scene = obs_frontend_get_current_scene();
+            obs_source_t *current_scene = Canvas::GetCurrentScene(m_canvasType);
             if (current_scene) {
                 QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
                 if (newItem->text() == current_scene_name) {
@@ -3532,17 +3816,18 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
 
 void SceneTreeModel::updateTree(const QModelIndex &selectedIndex)
 {
-    // Get all scenes from OBS
-    struct obs_frontend_source_list scene_list = {};
-    obs_frontend_get_scenes(&scene_list);
+    // Get the scenes on this dock's canvas. obs_frontend_get_scenes only ever
+    // returns main-canvas scenes, so a vertical dock has to go through the
+    // canvas API to see anything at all.
+    std::vector<obs_source_t *> scene_list = Canvas::GetScenes(m_canvasType);
 
     source_map_t new_scene_tree;
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "UpdateTree",
-        QString("Processing %1 scenes from OBS").arg(scene_list.sources.num).toUtf8().constData());
+        QString("Processing %1 scenes from OBS").arg(scene_list.size()).toUtf8().constData());
 
-    for (size_t i = 0; i < scene_list.sources.num; i++) {
-        obs_source_t *source = scene_list.sources.array[i];
+    for (size_t i = 0; i < scene_list.size(); i++) {
+        obs_source_t *source = scene_list[i];
         if (!source) continue;
 
         obs_scene_t *scene = obs_scene_from_source(source);
@@ -3631,7 +3916,7 @@ void SceneTreeModel::updateTree(const QModelIndex &selectedIndex)
     // Update our scene tree
     m_scenesInTree = std::move(new_scene_tree);
 
-    obs_frontend_source_list_free(&scene_list);
+    Canvas::ReleaseScenes(scene_list);
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "UpdateTree",
         QString("Tree updated - %1 scenes tracked").arg(m_scenesInTree.size()).toUtf8().constData());
@@ -3649,8 +3934,9 @@ bool SceneTreeModel::isValidSceneForCanvas(obs_scene_t *scene)
     const char *scene_name = obs_source_get_name(source);
     if (!scene_name) return false;
 
-    // All scenes are valid for normal canvas
-    return true;
+    // Only show scenes that live on this dock's canvas, so vertical scenes stay
+    // out of the Normal dock and main scenes stay out of the Vertical one.
+    return Canvas::SceneBelongsTo(m_canvasType, source);
 }
 
 
@@ -3924,7 +4210,7 @@ void SceneTreeModel::saveSceneTree()
     }
 
     QString configDir = QString::fromUtf8(configPath);
-    QString configFile = configDir + "/scene_tree_normal.json";
+    QString configFile = configDir + "/" + sceneTreeFileName(m_canvasType);
     QString sceneCollectionName = QString::fromUtf8(scene_collection);
 
     bfree(configPath);
@@ -3963,7 +4249,7 @@ void SceneTreeModel::loadSceneTree()
     }
 
     QString configDir = QString::fromUtf8(configPath);
-    QString configFile = configDir + "/scene_tree_normal.json";
+    QString configFile = configDir + "/" + sceneTreeFileName(m_canvasType);
     QString sceneCollectionName = QString::fromUtf8(scene_collection);
 
     bfree(configPath);
@@ -4021,7 +4307,7 @@ bool SceneTreeModel::migrateFromOriginalPlugin(const QString &originalConfigPath
     }
 
     QString configDir = QString::fromUtf8(configPath);
-    QString configFile = configDir + "/scene_tree_normal.json";
+    QString configFile = configDir + "/" + sceneTreeFileName(m_canvasType);
     bfree(configPath);
 
     // Load existing data (if any) to preserve what we have
@@ -4205,7 +4491,7 @@ bool SceneTreeModel::migrateCurrentCollection()
     }
 
     QString configDir = QString::fromUtf8(our_config_path);
-    QString configFile = configDir + "/scene_tree_normal.json";
+    QString configFile = configDir + "/" + sceneTreeFileName(m_canvasType);
     bfree(our_config_path);
 
     // Load existing data to preserve other collections
@@ -4267,7 +4553,8 @@ obs_data_array_t *SceneTreeModel::createFolderArray(QStandardItem &parent)
             QVariant colorData = child->data(Qt::UserRole + 1);
             if (colorData.isValid()) {
                 QColor color = colorData.value<QColor>();
-                obs_data_set_string(item_data, "custom_color", color.name().toUtf8().constData());
+                // HexArgb: the preset colours carry alpha, which QColor::name() would drop.
+                obs_data_set_string(item_data, "custom_color", color.name(QColor::HexArgb).toUtf8().constData());
             }
 
             // Recursively save children
@@ -4284,7 +4571,8 @@ obs_data_array_t *SceneTreeModel::createFolderArray(QStandardItem &parent)
             QVariant colorData = child->data(Qt::UserRole + 1);
             if (colorData.isValid()) {
                 QColor color = colorData.value<QColor>();
-                obs_data_set_string(item_data, "custom_color", color.name().toUtf8().constData());
+                // HexArgb: the preset colours carry alpha, which QColor::name() would drop.
+                obs_data_set_string(item_data, "custom_color", color.name(QColor::HexArgb).toUtf8().constData());
             }
         }
 
@@ -4338,7 +4626,7 @@ void SceneTreeModel::loadFolderArray(obs_data_array_t *folder_array, QStandardIt
         } else if (itemType == "scene") {
             // Create placeholder for scene - will be filled by updateTree
             // Find the actual scene source
-            obs_source_t *source = obs_get_source_by_name(name);
+            obs_source_t *source = Canvas::FindScene(m_canvasType, name);
             if (source) {
                 obs_weak_source_t *weak = obs_source_get_weak_source(source);
                 QStandardItem *sceneItem = new SceneTreeItem(itemName, weak);
@@ -4533,7 +4821,7 @@ void SceneTreeItem::updateIcon()
         setIcon(sceneIcon);
 
         // Could add special styling for current scene in the future
-        // obs_source_t *current_scene = obs_frontend_get_current_scene();
+        // obs_source_t *current_scene = Canvas::GetCurrentScene(m_canvasType);
         // obs_source_t *this_scene = obs_weak_source_get_source(m_weakSource);
         // if (current_scene && this_scene && obs_source_get_ref(current_scene) == obs_source_get_ref(this_scene)) {
         //     // Current scene - could use different color or styling

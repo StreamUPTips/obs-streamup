@@ -35,8 +35,13 @@ class SceneTreeView;
 class SceneOrganiserDock;
 class CustomColorDelegate;
 
+// Which canvas a dock is bound to. Normal is OBS's main canvas; Vertical is the
+// canvas Aitum's Vertical Canvas plugin registers with the frontend (OBS 32.2+).
+// The dock is otherwise identical for both, everything canvas-specific goes
+// through scene-canvas.hpp.
 enum class CanvasType {
-    Normal
+    Normal,
+    Vertical
 };
 
 class SceneOrganiserDock : public QFrame {
@@ -104,6 +109,10 @@ public:
     // Activate (go-live/transition to) the currently selected scene — bound to
     // the Enter/Return key in the tree view.
     void triggerActivateSelectedScene();
+    // Runs the one-time load (config, folder tree, scenes, colours). Normally
+    // driven by FINISHED_LOADING; public so a dock created after that event has
+    // fired can be kicked directly. Idempotent.
+    void performInitialLoad();
 
 private:
     void setupUI();
@@ -134,6 +143,11 @@ private:
     void selectSceneByName(const QString &sceneName);
     void onSetCustomColorClicked();
     void onClearCustomColorClicked();
+    // "Set Colour" submenu, mimicking OBS' native Sources menu: Clear, Custom
+    // Colour, then the same eight preset swatches OBS offers.
+    QMenu *createColorSubmenu();
+    void refreshColorMenuState();
+    void applyPresetColor(int presetIndex);
     void updateTreeViewStylesheet();
     void onToggleLockClicked();
     void setLocked(bool locked);
@@ -158,6 +172,16 @@ public:
 
     // Data members
     CanvasType m_canvasType;
+    // Vertical dock only: the canvas we are mirroring, held weakly, plus the
+    // signal wiring. Canvas scenes never raise the frontend's SCENE_LIST_CHANGED
+    // event, so the vertical dock listens to the canvas itself instead.
+    obs_weak_canvas_t *m_weakCanvas = nullptr;
+    void connectCanvasSignals();
+    void disconnectCanvasSignals();
+    static void OnCanvasSourceAdded(void *data, calldata_t *cd);
+    static void OnCanvasSourceRemoved(void *data, calldata_t *cd);
+    static void OnCanvasSourceRenamed(void *data, calldata_t *cd);
+    static void OnCanvasChannelChanged(void *data, calldata_t *cd);
     QVBoxLayout *m_mainLayout;
     SceneTreeView *m_treeView;
     SceneTreeModel *m_model;
@@ -194,6 +218,13 @@ public:
     QMenu *m_sceneOrderMenu;
     QMenu *m_sceneProjectorMenu;
 
+    // "Set Colour" submenu, shared by the folder and scene context menus (both
+    // act on m_currentContextItem, so one instance serves both).
+    QMenu *m_colorMenu = nullptr;
+    QAction *m_colorClearAction = nullptr;
+    QAction *m_colorCustomAction = nullptr;
+    QList<QPushButton *> m_colorSwatchButtons;
+
     // Toggle actions (for checkmarks)
     QAction *m_folderToggleIconsAction;
     QAction *m_sceneToggleIconsAction;
@@ -229,6 +260,9 @@ public:
 
     // Initial load state - prevents saving until first load completes
     bool m_initialLoadComplete;
+    // Whether performInitialLoad() has already been kicked off, so a dock that
+    // receives both a direct kick and FINISHED_LOADING only loads once.
+    bool m_initialLoadStarted = false;
 
     // Expand/collapse state management
     bool m_allExpanded;
