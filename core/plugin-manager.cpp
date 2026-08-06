@@ -37,6 +37,8 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QApplication>
+#include <QGuiApplication>
+#include <QScreen>
 #include <QClipboard>
 #include <QMenu>
 #include <QAction>
@@ -872,6 +874,11 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		});
 		shell.footerButtons->addWidget(okButton);
 
+		// Pool any spare height at the bottom. Without this the layout shares it
+		// out between the header, the sections and the tables, which is why a
+		// single-row dialog used to open with big gaps down the middle.
+		dialogLayout->addStretch();
+
 		// Size the window to fit its widest table so columns aren't clipped
 		// horizontally. The table sits inside: content margins (S(25)*2) +
 		// section margins (S(8)*2) + container border (S(1)*2). Clamp to a sane
@@ -880,8 +887,17 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		const int sideChrome = 2 * (S(25) + S(8) + S(1));
 		int contentW = widestTable + sideChrome;
 		contentW = std::clamp(contentW, S(640), S(1100));
-		dialog->resize(contentW + 2 * S(su::ShadowDialog::kShadowMargin),
-			       S(620) + 2 * S(su::ShadowDialog::kShadowMargin));
+
+		// Height follows the content instead of a fixed S(620): one plugin gets a
+		// short window, a long list gets a tall one. Clamped to 85% of the screen
+		// so a big list can't open taller than the display.
+		const int shadow = 2 * S(su::ShadowDialog::kShadowMargin);
+		dialog->resize(contentW + shadow, S(620) + shadow);
+		int wantedH = dialog->sizeHint().height();
+		int maxH = shadow + S(620);
+		if (QScreen *screen = parent && parent->screen() ? parent->screen() : QGuiApplication::primaryScreen())
+			maxH = static_cast<int>(screen->availableGeometry().height() * 0.85);
+		dialog->resize(contentW + shadow, std::clamp(wantedH, dialog->minimumHeight(), maxH));
 		dialog->show();
 	});
 }

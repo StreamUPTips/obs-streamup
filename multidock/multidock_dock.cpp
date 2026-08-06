@@ -80,8 +80,12 @@ void MultiDockDock::SetupUi()
     
     // No auto-save - we save on OBS shutdown
     
-    // Set minimum size to ensure usability
-    setMinimumSize(StreamUP::UIStyles::S(400), StreamUP::UIStyles::S(300));
+    // Keep the floor low so the dock can be dragged narrow. 400x300 was wide
+    // enough that the MultiDock refused to shrink to a sensible sidebar width,
+    // especially at 125% scaling where it became 500px. The contained docks
+    // still contribute their own minimums, so anything genuinely too small to
+    // use is still prevented by its content.
+    setMinimumSize(StreamUP::UIStyles::S(120), StreamUP::UIStyles::S(120));
 
     // Let OBS theme handle all styling
     setFrameStyle(QFrame::NoFrame);

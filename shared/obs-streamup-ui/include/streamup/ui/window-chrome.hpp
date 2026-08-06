@@ -179,12 +179,36 @@ public:
 	void setResizable(bool on) { m_resizable = on; }
 	bool resizable() const { return m_resizable; }
 
+	// Preferred opening size for windows that never call resize() themselves.
+	// Applied once, on the first show, and only as a grow: a window that sized
+	// itself before being shown keeps the size it asked for. This is what stops
+	// a small dialog (a single field and two buttons) from being inflated to a
+	// tall window with its widgets spread down the middle.
+	void setPreferredOpeningSize(const QSize &size) { m_openingSize = size; }
+
 protected:
 	// Hook the window's screenChanged signal once it has a real QWindow (only
 	// exists after the first show). Every hop to another monitor then refreshes
 	// the surface instead of leaving a blank window until the drag ends.
+	// A resize that lands before the first show is the window sizing itself
+	// (the resize() call that usually follows applyChrome), not the user
+	// dragging an edge. Remember it so the opening size below defers to it.
+	void resizeEvent(QResizeEvent *e) override
+	{
+		if (!m_shownOnce)
+			m_selfSized = true;
+		QDialog::resizeEvent(e);
+	}
+
 	void showEvent(QShowEvent *e) override
 	{
+		if (!m_shownOnce) {
+			m_shownOnce = true;
+			if (!m_selfSized && m_openingSize.isValid()) {
+				resize(qMax(width(), m_openingSize.width()),
+				       qMax(height(), m_openingSize.height()));
+			}
+		}
 		QDialog::showEvent(e);
 		if (!m_screenHooked) {
 			if (QWindow *w = windowHandle()) {
@@ -316,6 +340,9 @@ protected:
 private:
 	bool m_resizable = true;
 	bool m_screenHooked = false;
+	bool m_shownOnce = false;
+	bool m_selfSized = false;
+	QSize m_openingSize;
 };
 
 #ifdef Q_OS_WIN
@@ -506,13 +533,18 @@ inline WindowShell applyChrome(ShadowDialog *dlg, const QString &title,
 	dlg->setFont(brandFont());
 
 	// Real plugin windows are resizable (drag any edge/corner); only transient
-	// popups (confirm/prompt/info) stay a fixed compact size. A minimum floor
-	// keeps a dragged window from collapsing below something usable — and lifts
-	// the historically-cramped small windows to a comfortable default height.
+	// popups (confirm/prompt/info) stay a fixed compact size.
+	//
+	// Sizing is two separate things, and conflating them used to inflate small
+	// windows: the minimum is a collapse guard (kept low so a one-field dialog
+	// can actually be small), while 420x360 is only the OPENING size, applied
+	// on first show to windows that never size themselves. A window that calls
+	// resize() keeps exactly what it asked for.
 	dlg->setResizable(!popup);
 	if (!popup) {
 		const int mm = S(ShadowDialog::kShadowMargin);
-		dlg->setMinimumSize(S(420) + 2 * mm, S(360) + 2 * mm);
+		dlg->setMinimumSize(S(260) + 2 * mm, S(160) + 2 * mm);
+		dlg->setPreferredOpeningSize(QSize(S(420) + 2 * mm, S(360) + 2 * mm));
 	}
 
 #ifdef Q_OS_WIN
