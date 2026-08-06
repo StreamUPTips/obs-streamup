@@ -12,6 +12,7 @@
 #include <obs.h>
 #include <obs-frontend-api.h>
 #include "streamup-toolbar-config.hpp"
+#include "settings-manager.hpp"
 
 class StreamUPToolbar : public QToolBar {
     Q_OBJECT
@@ -25,6 +26,7 @@ public:
     void refreshFromConfiguration();
     void updateButtonSizes();  // Update button and icon sizes without rebuilding
     void refreshSizeClass();   // Re-read toolbar size setting and re-polish styles
+    void refreshAlignment();   // Re-read toolbar alignment setting and re-lay out
 
 private slots:
     void onStreamButtonClicked();
@@ -65,6 +67,9 @@ private:
     void updateButtonVisibility();
     void updateIconsForTheme();
     void updateLayoutOrientation();
+    // Current alignment tier from settings (Start / Centre / End)
+    StreamUP::SettingsManager::ToolbarAlignment currentAlignment() const;
+
     QFrame* createSeparator();
     QFrame* createHorizontalSeparator();
     

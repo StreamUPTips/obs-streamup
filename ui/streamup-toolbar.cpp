@@ -911,6 +911,12 @@ void StreamUPToolbar::updateLayoutOrientation()
 			}
 		}
 		
+		// Leading stretch for centre/end alignment (mirrors setupDynamicUI)
+		const auto alignment = currentAlignment();
+		if (alignment != StreamUP::SettingsManager::ToolbarAlignment::Start) {
+			mainLayout->addStretch();
+		}
+
 		// Add main widgets first
 		for (int i = 0; i < mainWidgets.size(); ++i) {
 			QWidget* widget = mainWidgets[i];
@@ -971,9 +977,12 @@ void StreamUPToolbar::updateLayoutOrientation()
 			}
 		}
 		
-		// Add spacer (stretch) to push StreamUP button to the end
-		mainLayout->addStretch();
-		
+		// Add spacer (stretch) to push StreamUP button to the end. Skipped for
+		// End alignment so the run stays anchored against that button.
+		if (alignment != StreamUP::SettingsManager::ToolbarAlignment::End) {
+			mainLayout->addStretch();
+		}
+
 		// Add StreamUP button at the end (right side for horizontal, bottom for vertical)
 		if (streamupButton) {
 			if (shouldBeVertical) {
@@ -993,6 +1002,18 @@ void StreamUPToolbar::updateToolbarSizeConstraints()
 	// No custom size constraints — let OBS theme CSS handle all sizing
 	setMinimumSize(0, 0);
 	setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+}
+
+StreamUP::SettingsManager::ToolbarAlignment StreamUPToolbar::currentAlignment() const
+{
+	return StreamUP::SettingsManager::GetCurrentSettings().toolbarAlignment;
+}
+
+void StreamUPToolbar::refreshAlignment()
+{
+	// Alignment is expressed purely as stretch items around the button run, so
+	// a full rebuild is the cheapest correct way to re-apply it.
+	refreshFromConfiguration();
 }
 
 void StreamUPToolbar::applySizeClass()
@@ -1179,7 +1200,14 @@ void StreamUPToolbar::setupDynamicUI()
 	// Create widgets from configuration in two passes to ensure proper positioning
 	// Get flattened items (ignoring groups since they're just for UI organization)
 	auto flattenedItems = toolbarConfig.getFlattenedItems();
-	
+
+	// Leading stretch pushes the button run away from the start of the toolbar
+	// for centre/end alignment. Start alignment keeps the legacy behaviour.
+	const auto alignment = currentAlignment();
+	if (alignment != StreamUP::SettingsManager::ToolbarAlignment::Start) {
+		mainLayout->addStretch();
+	}
+
 	// First pass: Add all items that are NOT StreamUP settings buttons
 	for (const auto& item : flattenedItems) {
 		if (!item->visible) continue;
@@ -1212,6 +1240,9 @@ void StreamUPToolbar::setupDynamicUI()
 			// Create a fixed-size spacer widget with orientation-aware dimensions
 			QWidget* spacerWidget = new QWidget(centralWidget);
 			spacerWidget->setProperty("class", "toolbar-spacer");
+			// Orientation rebuilds identify spacers by objectName, and item ids
+			// are always "spacer_<timestamp>"
+			spacerWidget->setObjectName(spacerItem->id);
 
 			// Set dimensions based on current toolbar orientation
 			QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
@@ -1303,10 +1334,18 @@ void StreamUPToolbar::setupDynamicUI()
 			}
 		}
 	}
+	// With End alignment the run already sits against the settings buttons, so
+	// the usual push-right stretch would re-centre it — skip it there.
 	if (hasStreamUPSettings) {
+		if (alignment != StreamUP::SettingsManager::ToolbarAlignment::End) {
+			mainLayout->addStretch();
+		}
+	} else if (alignment != StreamUP::SettingsManager::ToolbarAlignment::End) {
+		// No settings button to anchor the far end — add the trailing stretch
+		// ourselves so buttons keep their natural size instead of expanding.
 		mainLayout->addStretch();
 	}
-	
+
 	// Second pass: Add StreamUP settings buttons (they go on the right)
 	for (const auto& item : flattenedItems) {
 		if (!item->visible) continue;

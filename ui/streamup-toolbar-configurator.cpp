@@ -1,6 +1,7 @@
 #include "streamup-toolbar-configurator.hpp"
 #include "../utilities/debug-logger.hpp"
 #include "hotkey-button-config-dialog.hpp"
+#include "streamup-toolbar.hpp"
 #include "settings-manager.hpp"
 #include <streamup/ui/window-chrome.hpp> // ShadowDialog, applyChrome, WindowShell
 #include <streamup/ui/pill-button.hpp>   // PillButton
@@ -56,7 +57,10 @@ ToolbarConfigurator::ToolbarConfigurator(QWidget *parent)
     
     // Load current configuration
     config.loadFromSettings();
-    
+
+    // Keep a snapshot so live previews can be rolled back if the user cancels
+    originalConfigJson = config.toJson();
+
     populateBuiltinButtonsList();
     populateDockButtonsList();
     populateCurrentConfiguration();
@@ -382,7 +386,14 @@ void ToolbarConfigurator::setupUI()
     sizeLayout->addWidget(spacerSizeSpinBox);
     sizeLayout->addStretch();
     spacerContainerLayout->addLayout(sizeLayout);
-    
+
+    // Live-edit hint: when a spacer is selected on the right the spin box edits
+    // that spacer directly (and the list preview updates as you drag).
+    spacerEditHint = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.SpacerHintNew")));
+    spacerEditHint->setWordWrap(true);
+    spacerEditHint->setStyleSheet(StreamUP::UIStyles::scale_qss("QLabel { color: " + QString(StreamUP::UIStyles::Colors::TEXT_SECONDARY) + "; font-size: 12px; }"));
+    spacerContainerLayout->addWidget(spacerEditHint);
+
     addCustomSpacerButton = new QPushButton(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.AddCustomSpacer")));
     addCustomSpacerButton->setStyleSheet(buttonStyle("primary"));
     spacerContainerLayout->addWidget(addCustomSpacerButton);
@@ -415,6 +426,8 @@ void ToolbarConfigurator::setupUI()
     
     currentConfigList = new DraggableListWidget();
     currentConfigList->setStyleSheet(listStyle());
+    // Wide icon slot so spacer rows can draw a to-scale preview bar
+    currentConfigList->setIconSize(QSize(210, S(14)));
     useScrollBars(currentConfigList);
     rightLayout->addWidget(currentConfigList, 1); // Give list widget stretch priority
     
@@ -461,6 +474,9 @@ void ToolbarConfigurator::setupUI()
     chromeFooterButtons->addWidget(cancelButton);
     chromeFooterButtons->addWidget(saveButton);
     
+    // Any rejection path (Cancel button, Esc, window close) rolls back the live preview
+    connect(this, &QDialog::rejected, this, &ToolbarConfigurator::restoreOriginalConfiguration);
+
     // Connect signals
     connect(builtinButtonsList, &QTreeWidget::itemSelectionChanged, this, &ToolbarConfigurator::updateButtonStates);
     connect(builtinButtonsList, &QTreeWidget::itemDoubleClicked, this, &ToolbarConfigurator::onBuiltinItemDoubleClicked);
@@ -952,7 +968,13 @@ QListWidgetItem* ToolbarConfigurator::createConfigurationItem(std::shared_ptr<To
     }
     case ToolbarConfig::ItemType::CustomSpacer: {
         auto spacerItem = std::static_pointer_cast<ToolbarConfig::CustomSpacerItem>(item);
-        displayText = QString("%1%2 ↔️ Spacer (%3px) ↔️").arg(indent).arg(enabledDot).arg(spacerItem->size);
+        displayText = QString("%1%2 ↔️ Spacer (%3px)").arg(indent).arg(enabledDot).arg(spacerItem->size);
+        // Draw the spacer at its real pixel width so its size is visible while editing.
+        // UserRole+3 records how far the decoration pushes the text across so the
+        // enable/disable dot hit test below stays accurate.
+        QPixmap preview = makeSpacerPreview(spacerItem->size);
+        listItem->setIcon(QIcon(preview));
+        listItem->setData(Qt::UserRole + 3, preview.width());
         break;
     }
     case ToolbarConfig::ItemType::DockButton: {
@@ -1088,9 +1110,18 @@ void ToolbarConfigurator::onAddCustomSpacer()
     
     config.addItem(spacerItem);
     populateCurrentConfiguration();
-    
-    // Reset form to defaults
-    clearSpacerForm();
+
+    // Select the new spacer so the size spin box immediately edits it live
+    for (int i = 0; i < currentConfigList->count(); ++i) {
+        QListWidgetItem* listItem = currentConfigList->item(i);
+        auto data = listItem->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+        if (data && data->id == id) {
+            currentConfigList->setCurrentRow(i);
+            break;
+        }
+    }
+
+    applyLivePreview();
 }
 
 void ToolbarConfigurator::onRemoveItem()
@@ -1165,7 +1196,90 @@ void ToolbarConfigurator::onMoveDown()
 
 void ToolbarConfigurator::onItemSelectionChanged()
 {
+    syncSpacerEditor();
     updateButtonStates();
+}
+
+QPixmap ToolbarConfigurator::makeSpacerPreview(int size)
+{
+    // A to-scale bar: the filled region is exactly `size` pixels wide, with end
+    // caps so a 5px spacer is still visible.
+    const int height = S(14);
+    QPixmap pixmap(qMax(1, size), height);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+
+    QColor fill(StreamUP::UIStyles::Colors::PRIMARY_COLOR);
+    fill.setAlpha(90);
+    painter.fillRect(pixmap.rect(), fill);
+
+    QColor cap(StreamUP::UIStyles::Colors::PRIMARY_COLOR);
+    painter.fillRect(0, 0, 1, height, cap);
+    painter.fillRect(pixmap.width() - 1, 0, 1, height, cap);
+    painter.end();
+
+    return pixmap;
+}
+
+void ToolbarConfigurator::syncSpacerEditor()
+{
+    // Bind the size spin box to the selected spacer (if any) so it can be
+    // resized in place instead of being deleted and re-added.
+    std::shared_ptr<ToolbarConfig::CustomSpacerItem> spacerItem;
+    if (QListWidgetItem* selected = currentConfigList->currentItem()) {
+        auto item = selected->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>();
+        if (item && item->type == ToolbarConfig::ItemType::CustomSpacer) {
+            spacerItem = std::static_pointer_cast<ToolbarConfig::CustomSpacerItem>(item);
+        }
+    }
+
+    if (spacerItem) {
+        editingSpacerId = spacerItem->id;
+        const QSignalBlocker blocker(spacerSizeSpinBox);
+        spacerSizeSpinBox->setValue(spacerItem->size);
+        if (spacerEditHint) {
+            spacerEditHint->setText(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.SpacerHintEditing")));
+        }
+    } else {
+        editingSpacerId.clear();
+        if (spacerEditHint) {
+            spacerEditHint->setText(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.SpacerHintNew")));
+        }
+    }
+}
+
+void ToolbarConfigurator::refreshSpacerRow(QListWidgetItem* listItem, std::shared_ptr<ToolbarConfig::CustomSpacerItem> spacerItem)
+{
+    if (!listItem || !spacerItem) return;
+
+    // Preserve the existing indentation/dot prefix, only redo the label + preview
+    QString indent;
+    const QString text = listItem->text();
+    for (const QChar& c : text) {
+        if (c != ' ') break;
+        indent.append(c);
+    }
+    const QString enabledDot = spacerItem->visible ? QString::fromUtf8("🔵") : QString::fromUtf8("⚫");
+
+    listItem->setText(QString("%1%2 ↔️ Spacer (%3px)").arg(indent).arg(enabledDot).arg(spacerItem->size));
+    QPixmap preview = makeSpacerPreview(spacerItem->size);
+    listItem->setIcon(QIcon(preview));
+    listItem->setData(Qt::UserRole + 3, preview.width());
+}
+
+void ToolbarConfigurator::applyLivePreview()
+{
+    // Push the working configuration to the live toolbar so size changes are
+    // visible while editing. Cancel restores the snapshot taken at open.
+    config.saveToSettings();
+
+    QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
+    if (!mainWindow) return;
+    if (StreamUPToolbar* toolbar = mainWindow->findChild<StreamUPToolbar*>()) {
+        toolbar->refreshFromConfiguration();
+    }
 }
 
 void ToolbarConfigurator::onItemClicked(QListWidgetItem* listItem)
@@ -1199,8 +1313,11 @@ void ToolbarConfigurator::onItemClicked(QListWidgetItem* listItem)
             }
         }
     }
-    // Check if click was in the blue dot area (first ~25 pixels) for non-group items
-    else if (item->type != ToolbarConfig::ItemType::Group && clickPos.x() - itemRect.x() <= 25) {
+    // Check if click was in the blue dot area (first ~25 pixels) for non-group items.
+    // Spacer rows carry a preview pixmap ahead of the text, so shift the hit zone.
+    else if (int dotOffset = listItem->data(Qt::UserRole + 3).toInt();
+             item->type != ToolbarConfig::ItemType::Group &&
+             clickPos.x() - itemRect.x() >= dotOffset && clickPos.x() - itemRect.x() <= dotOffset + 25) {
         // Toggle visibility
         item->visible = !item->visible;
         
@@ -1249,7 +1366,23 @@ void ToolbarConfigurator::onSave()
 
 void ToolbarConfigurator::onCancel()
 {
-    reject(); // Close dialog with rejected result
+    reject(); // Rollback happens in the rejected() handler (also covers Esc / window close)
+}
+
+void ToolbarConfigurator::restoreOriginalConfiguration()
+{
+    // Live previews wrote the working config to settings, so restore the
+    // snapshot taken when the dialog opened.
+    ToolbarConfig::ToolbarConfiguration restored;
+    restored.fromJson(originalConfigJson);
+    restored.saveToSettings();
+
+    QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
+    if (mainWindow) {
+        if (StreamUPToolbar* toolbar = mainWindow->findChild<StreamUPToolbar*>()) {
+            toolbar->refreshFromConfiguration();
+        }
+    }
 }
 
 
@@ -1261,7 +1394,24 @@ void ToolbarConfigurator::clearSpacerForm()
 
 void ToolbarConfigurator::onSpacerSettingsChanged()
 {
-    // No validation needed for spacer settings - all values are valid
+    // With a spacer selected the spin box edits that spacer live: update the
+    // model, redraw its row preview, and push the change to the real toolbar.
+    // With nothing selected the value is just the size for the next new spacer.
+    if (editingSpacerId.isEmpty()) return;
+
+    QListWidgetItem* selected = currentConfigList->currentItem();
+    auto item = selected ? selected->data(Qt::UserRole).value<std::shared_ptr<ToolbarConfig::ToolbarItem>>()
+                         : config.findItem(editingSpacerId);
+    if (!item || item->id != editingSpacerId || item->type != ToolbarConfig::ItemType::CustomSpacer) {
+        editingSpacerId.clear();
+        return;
+    }
+
+    auto spacerItem = std::static_pointer_cast<ToolbarConfig::CustomSpacerItem>(item);
+    spacerItem->size = spacerSizeSpinBox->value();
+
+    refreshSpacerRow(currentConfigList->currentItem(), spacerItem);
+    applyLivePreview();
 }
 
 void ToolbarConfigurator::onAddHotkeyButton()

@@ -17,6 +17,8 @@
 #include <QSplitter>
 #include <QTabWidget>
 #include <QMetaType>
+#include <QPixmap>
+#include <QJsonObject>
 #include "streamup-toolbar-config.hpp"
 #include <streamup/ui/window-chrome.hpp> // ShadowDialog
 
@@ -61,6 +63,14 @@ private slots:
 
 private:
     void setupUI();
+    // Live spacer editing: keeps the size spin box bound to whichever spacer is
+    // selected in the current-configuration list, so its size can be changed
+    // without deleting and re-adding it.
+    void syncSpacerEditor();
+    void refreshSpacerRow(QListWidgetItem* listItem, std::shared_ptr<ToolbarConfig::CustomSpacerItem> spacerItem);
+    void applyLivePreview();
+    void restoreOriginalConfiguration();
+    static QPixmap makeSpacerPreview(int size);
     void populateBuiltinButtonsList();
     void populateDockButtonsList();
     void populateCurrentConfiguration();
@@ -94,6 +104,7 @@ private:
     
     QSpinBox* spacerSizeSpinBox;
     QPushButton* addCustomSpacerButton;
+    QLabel* spacerEditHint = nullptr;   // Tells the user which spacer the spin box is editing
     
     QPushButton* addSeparatorButton;
     
@@ -116,6 +127,12 @@ private:
     
     // Data
     ToolbarConfig::ToolbarConfiguration config;
+
+    // Id of the spacer currently bound to the size spin box (empty = none)
+    QString editingSpacerId;
+    // Snapshot of the saved configuration when the dialog opened, so live
+    // previews pushed to the real toolbar can be rolled back on Cancel.
+    QJsonObject originalConfigJson;
 };
 
 // Custom list widget that supports drag and drop reordering
