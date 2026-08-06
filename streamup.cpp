@@ -8,6 +8,9 @@
 #include "core/plugin-state.hpp"
 #include "core/plugin-manager.hpp"
 #include "core/source-manager.hpp"
+#include "core/backup-manager.hpp"
+#include "core/restore-manager.hpp"
+#include "ui/restore-dialog.hpp"
 #include "integrations/websocket-api.hpp"
 #include "utilities/path-utils.hpp"
 #include "utilities/debug-logger.hpp"
@@ -505,6 +508,10 @@ static void RegisterWebsocketRequests()
 	obs_websocket_vendor_register_request(vendor, "GetVLCCurrentFile", StreamUP::WebSocketAPI::WebsocketRequestVLCGetCurrentFile, nullptr);
 	obs_websocket_vendor_register_request(vendor, "LoadStreamUpFile", StreamUP::WebSocketAPI::WebsocketLoadStreamupFile, nullptr);
 	
+	// Backup
+	obs_websocket_vendor_register_request(vendor, "CreateBackup", StreamUP::WebSocketAPI::WebsocketRequestCreateBackup, nullptr);
+	obs_websocket_vendor_register_request(vendor, "GetBackupInfo", StreamUP::WebSocketAPI::WebsocketRequestGetBackupInfo, nullptr);
+
 	// Source properties
 	obs_websocket_vendor_register_request(vendor, "GetBlendingMethod", StreamUP::WebSocketAPI::WebsocketRequestGetBlendingMethod, nullptr);
 	obs_websocket_vendor_register_request(vendor, "SetBlendingMethod", StreamUP::WebSocketAPI::WebsocketRequestSetBlendingMethod, nullptr);
@@ -778,6 +785,7 @@ static StreamUPToolbar* globalToolbar = nullptr;
 void ApplyToolbarVisibility();
 void ApplyToolbarPosition();
 void ApplyToolbarSize();
+void ApplyToolbarAlignment();
 
 static void LoadStreamUPToolbar()
 {
@@ -874,6 +882,13 @@ void ApplyToolbarSize()
 	}
 }
 
+void ApplyToolbarAlignment()
+{
+	if (globalToolbar) {
+		globalToolbar->refreshAlignment();
+	}
+}
+
 void ApplyToolbarPosition()
 {
 	if (globalToolbar) {
@@ -934,6 +949,12 @@ void ApplyToolbarPosition()
 bool obs_module_load()
 {
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
+
+	// Before anything else: finish or confirm a restore staged in a previous
+	// session. Module load happens before OBS reads scene collections
+	// (OBSBasic::OBSInit loads modules at line ~1056, scene collections at
+	// ~1120), so this is the last safe moment to put files right.
+	StreamUP::Restore::VerifyPending();
 #ifdef _WIN32
 	blog(LOG_INFO, "[StreamUP] Platform: Windows");
 #elif defined(__APPLE__)
@@ -1187,6 +1208,15 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 		// Docks created from here on have missed this event and must be kicked.
 		s_obsFinishedLoading = true;
 
+		// If a restore was applied during the last shutdown, say so now that
+		// there is a window to say it in. Shows once, then marks itself seen.
+		StreamUP::Restore::ShowAppliedReportIfAny();
+
+		// Resolve and cache where OBS keeps its config while the frontend API
+		// is still up. The automatic backup runs inside obs_shutdown, by which
+		// point that API is gone and nothing can be resolved from scratch.
+		StreamUP::Backup::ResolveLocations();
+
 		// Apply style overrides to OBS native docks
 		ApplyOBSDockStyleOverrides();
 
@@ -1373,6 +1403,23 @@ void obs_module_unload()
 		blog(LOG_INFO, "[StreamUP] Unload step 8/8: Cleaning up settings cache");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up settings cache");
 		StreamUP::SettingsManager::CleanupSettingsCache();
+
+		// A staged restore is applied HERE, last thing, and deliberately so.
+		// obs_module_unload runs inside obs_shutdown(), which is after OBS has
+		// written its scene collection and configs from memory. Applying any
+		// earlier means OBS overwrites the restored files on the way out. See
+		// backup-design.md, "How restore works".
+		if (StreamUP::Restore::HasPending()) {
+			blog(LOG_INFO, "[StreamUP] Applying staged restore during shutdown");
+			StreamUP::Restore::ApplyPending();
+		} else {
+			// Automatic backup runs in the same window and for the same
+			// reason: OBS has finished writing, so this captures the session
+			// that just ended. Skipped when a restore was applied above,
+			// since that path already took its own safety backup and the
+			// config on disk is no longer what this session was using.
+			StreamUP::Backup::RunAutomaticBackupIfDue();
+		}
 
 		blog(LOG_INFO, "[StreamUP] Plugin unload completed successfully");
 		StreamUP::DebugLogger::LogInfo("Plugin", "Plugin unload completed successfully");

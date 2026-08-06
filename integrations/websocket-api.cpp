@@ -6,9 +6,13 @@
 #include "source-manager.hpp"
 #include "file-manager.hpp"
 #include "../ui/hotkey-manager.hpp"
+#include "../ui/settings-manager.hpp"
+#include "backup-manager.hpp"
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <util/platform.h>
+#include <QDir>
+#include <QFileInfo>
 #include <QString>
 
 // Forward declarations for functions from main streamup.cpp
@@ -841,6 +845,86 @@ void WebsocketToggleVisibilitySelectedSources(obs_data_t *request_data, obs_data
 	} else {
 		obs_data_set_string(response_data, "error", "Failed to toggle visibility. Ensure sources are selected.");
 	}
+}
+
+
+//-------------------BACKUP-------------------
+void WebsocketRequestCreateBackup(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+
+	// Optional overrides; every one has a sensible default so a bare request
+	// from a Stream Deck button just works.
+	StreamUP::Backup::Options options;
+	if (obs_data_has_user_value(request_data, "includeCredentials"))
+		options.includeCredentials = obs_data_get_bool(request_data, "includeCredentials");
+	if (obs_data_has_user_value(request_data, "collectMedia"))
+		options.collectMedia = obs_data_get_bool(request_data, "collectMedia");
+
+	// Default to the configured backup folder with a timestamped name, so the
+	// caller does not have to know or invent a path.
+	QString path = QString::fromUtf8(obs_data_get_string(request_data, "filePath"));
+	if (path.isEmpty()) {
+		const QString folder = StreamUP::Backup::ResolveBackupFolder();
+		if (folder.isEmpty()) {
+			obs_data_set_bool(response_data, "success", false);
+			obs_data_set_string(response_data, "error", "Could not work out where to save the backup");
+			return;
+		}
+		QDir().mkpath(folder);
+		path = QDir(folder).filePath(StreamUP::Backup::SuggestedFileName());
+	}
+
+	const StreamUP::Backup::Result result = StreamUP::Backup::CreateBackup(path, options);
+	obs_data_set_bool(response_data, "success", result.success);
+	if (!result.success) {
+		obs_data_set_string(response_data, "error", result.error.toUtf8().constData());
+		return;
+	}
+
+	obs_data_set_string(response_data, "filePath", result.archivePath.toUtf8().constData());
+	obs_data_set_int(response_data, "fileCount", result.fileCount);
+	obs_data_set_int(response_data, "sizeBytes", result.archiveBytes);
+	obs_data_set_bool(response_data, "credentialsIncluded", result.credentialsIncluded);
+	// The audit is the useful part for automation: a scene pointing at a file
+	// that no longer exists is a broken source, and this is how a dashboard
+	// would notice.
+	obs_data_set_int(response_data, "mediaReferenced", result.mediaReferenced);
+	obs_data_set_int(response_data, "mediaMissing", result.mediaMissing);
+	obs_data_set_int(response_data, "largeFilesSkipped", result.skippedLargeFiles.size());
+}
+
+void WebsocketRequestGetBackupInfo(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+
+	const StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+	const QString folder = StreamUP::Backup::ResolveBackupFolder();
+
+	obs_data_set_bool(response_data, "automaticEnabled", settings.backupAutomatic);
+	obs_data_set_int(response_data, "keepCount", settings.backupKeepCount);
+	obs_data_set_string(response_data, "folder", folder.toUtf8().constData());
+	obs_data_set_string(response_data, "lastAutomaticDate", settings.backupLastAutoDate.c_str());
+
+	// List what is actually there, newest first, so a caller can show or pick.
+	obs_data_array_t *backups = obs_data_array_create();
+	const QFileInfoList files =
+		QDir(folder).entryInfoList({QStringLiteral("*.zip")}, QDir::Files, QDir::Time);
+	for (const QFileInfo &info : files) {
+		obs_data_t *entry = obs_data_create();
+		obs_data_set_string(entry, "fileName", info.fileName().toUtf8().constData());
+		obs_data_set_string(entry, "filePath", info.absoluteFilePath().toUtf8().constData());
+		obs_data_set_int(entry, "sizeBytes", info.size());
+		obs_data_set_string(entry, "modified",
+				    info.lastModified().toString(Qt::ISODate).toUtf8().constData());
+		obs_data_array_push_back(backups, entry);
+		obs_data_release(entry);
+	}
+	obs_data_set_array(response_data, "backups", backups);
+	obs_data_array_release(backups);
+
+	obs_data_set_bool(response_data, "success", true);
 }
 
 } // namespace WebSocketAPI

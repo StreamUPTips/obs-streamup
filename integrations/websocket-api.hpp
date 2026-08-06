@@ -307,6 +307,26 @@ void WebsocketGroupSelectedSources(obs_data_t *request_data, obs_data_t *respons
  */
 void WebsocketToggleVisibilitySelectedSources(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 
+
+//-------------------BACKUP-------------------
+/**
+ * Create a backup of the whole OBS setup.
+ * Optional request fields: filePath (defaults to the configured backup folder),
+ * includeCredentials (default false), collectMedia (default false).
+ * @param request_data Request data from WebSocket
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketRequestCreateBackup(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Report backup settings and list the backups that exist, newest first.
+ * @param request_data Request data from WebSocket
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketRequestGetBackupInfo(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
 } // namespace WebSocketAPI
 } // namespace StreamUP
 

@@ -37,6 +37,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE Qt::Core Qt::Widgets Qt::Svg)
 find_package(CURL REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE CURL::libcurl)
 
+# ZLIB backs the backup archive writer (libobs already requires it)
+find_package(ZLIB REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE ZLIB::ZLIB)
+
 # Set include directories for the plugin
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -107,12 +111,20 @@ target_sources(${PROJECT_NAME} PRIVATE
   core/file-manager.hpp
   core/file-manager.cpp
   core/plugin-manager.hpp
-  core/plugin-manager.cpp)
+  core/plugin-manager.cpp
+  core/backup-manager.hpp
+  core/backup-manager.cpp
+  core/restore-manager.hpp
+  core/restore-manager.cpp)
 
 # Utilities module files
 target_sources(${PROJECT_NAME} PRIVATE
   utilities/path-utils.hpp
   utilities/path-utils.cpp
+  utilities/zip-writer.hpp
+  utilities/zip-writer.cpp
+  utilities/zip-reader.hpp
+  utilities/zip-reader.cpp
   utilities/string-utils.hpp
   utilities/string-utils.cpp
   utilities/version-utils.hpp
@@ -145,6 +157,10 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/menu-manager.cpp
   ui/settings-manager.hpp
   ui/settings-manager.cpp
+  ui/backup-dialog.hpp
+  ui/backup-dialog.cpp
+  ui/restore-dialog.hpp
+  ui/restore-dialog.cpp
   ui/notification-manager.hpp
   ui/notification-manager.cpp
   ui/splash-screen.hpp
@@ -229,11 +245,19 @@ source_group("Core" FILES
   core/file-manager.hpp
   core/file-manager.cpp
   core/plugin-manager.hpp
-  core/plugin-manager.cpp)
+  core/plugin-manager.cpp
+  core/backup-manager.hpp
+  core/backup-manager.cpp
+  core/restore-manager.hpp
+  core/restore-manager.cpp)
 
 source_group("Utilities" FILES
   utilities/path-utils.hpp
   utilities/path-utils.cpp
+  utilities/zip-writer.hpp
+  utilities/zip-writer.cpp
+  utilities/zip-reader.hpp
+  utilities/zip-reader.cpp
   utilities/string-utils.hpp
   utilities/string-utils.cpp
   utilities/version-utils.hpp
@@ -264,6 +288,10 @@ source_group("UI" FILES
   ui/menu-manager.cpp
   ui/settings-manager.hpp
   ui/settings-manager.cpp
+  ui/backup-dialog.hpp
+  ui/backup-dialog.cpp
+  ui/restore-dialog.hpp
+  ui/restore-dialog.cpp
   ui/notification-manager.hpp
   ui/notification-manager.cpp
   ui/splash-screen.hpp

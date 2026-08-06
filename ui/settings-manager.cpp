@@ -1,4 +1,8 @@
 #include "settings-manager.hpp"
+#include "backup-dialog.hpp"
+#include "restore-dialog.hpp"
+#include "../core/backup-manager.hpp"
+#include <streamup/ui/section-card.hpp>
 #include <algorithm>
 #include "../utilities/debug-logger.hpp"
 #include "../utilities/path-utils.hpp"
@@ -348,6 +352,7 @@ static void LoadModuleSettings(obs_data_t *data, ModuleSettings &out)
 
     out.toolbar = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "toolbar", true);
     out.multiDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "multi_dock", true);
+    out.backup = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "backup", true);
     out.hotkeys = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "hotkeys", true);
     out.sceneOrganiser = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "scene_organiser", true);
     out.streamupDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "streamup_dock", true);
@@ -365,6 +370,7 @@ static void SaveModuleSettings(obs_data_t *data, const ModuleSettings &in)
     obs_data_t *modulesData = obs_data_create();
     obs_data_set_bool(modulesData, "toolbar", in.toolbar);
     obs_data_set_bool(modulesData, "multi_dock", in.multiDock);
+    obs_data_set_bool(modulesData, "backup", in.backup);
     obs_data_set_bool(modulesData, "hotkeys", in.hotkeys);
     obs_data_set_bool(modulesData, "scene_organiser", in.sceneOrganiser);
     obs_data_set_bool(modulesData, "streamup_dock", in.streamupDock);
@@ -420,6 +426,9 @@ obs_data_t *LoadSettings()
 		obs_data_set_string(data, "scene_organiser_sort_method", "none");
 		obs_data_set_string(data, "toolbar_position", "top");
 		obs_data_set_string(data, "toolbar_size", "medium");
+		obs_data_set_string(data, "toolbar_alignment", "start");
+		obs_data_set_bool(data, "backup_automatic", true);
+		obs_data_set_int(data, "backup_keep_count", 10);
 
 		// Set default dock tool settings
 		obs_data_t *dockData = obs_data_create();
@@ -585,6 +594,26 @@ PluginSettings GetCurrentSettings()
 			settings.toolbarSize = ToolbarSize::Medium;
 		}
 
+		// Load toolbar alignment (default to start = legacy left/top alignment)
+		const char *alignStr = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "toolbar_alignment", "start");
+		if (alignStr && strcmp(alignStr, "centre") == 0) {
+			settings.toolbarAlignment = ToolbarAlignment::Centre;
+		} else if (alignStr && strcmp(alignStr, "end") == 0) {
+			settings.toolbarAlignment = ToolbarAlignment::End;
+		} else {
+			settings.toolbarAlignment = ToolbarAlignment::Start;
+		}
+
+		// Automatic backup settings
+		settings.backupAutomatic = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "backup_automatic", true);
+		settings.backupKeepCount = (int)obs_data_get_int(data, "backup_keep_count");
+		if (settings.backupKeepCount <= 0)
+			settings.backupKeepCount = 10;
+		const char *backupDir = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "backup_location", "");
+		settings.backupLocation = backupDir ? backupDir : "";
+		const char *lastAuto = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "backup_last_auto", "");
+		settings.backupLastAutoDate = lastAuto ? lastAuto : "";
+
 		// Load module enable/disable settings
 		LoadModuleSettings(data, settings.modules);
 		settings.moduleSetupComplete = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "module_setup_complete", false);
@@ -706,6 +735,28 @@ void UpdateSettings(const PluginSettings &settings)
 	// Drop the legacy pixel-size key once the new setting takes over so
 	// the migration path runs only on the first upgraded launch.
 	obs_data_unset_user_value(data, "toolbar_icon_size");
+
+	// Save toolbar alignment
+	const char *alignKey;
+	switch (settings.toolbarAlignment) {
+	case ToolbarAlignment::Centre:
+		alignKey = "centre";
+		break;
+	case ToolbarAlignment::End:
+		alignKey = "end";
+		break;
+	case ToolbarAlignment::Start:
+	default:
+		alignKey = "start";
+		break;
+	}
+	obs_data_set_string(data, "toolbar_alignment", alignKey);
+
+	// Automatic backup settings
+	obs_data_set_bool(data, "backup_automatic", settings.backupAutomatic);
+	obs_data_set_int(data, "backup_keep_count", settings.backupKeepCount);
+	obs_data_set_string(data, "backup_location", settings.backupLocation.c_str());
+	obs_data_set_string(data, "backup_last_auto", settings.backupLastAutoDate.c_str());
 
 	// Save dock tool settings
 	obs_data_t *dockData = obs_data_create();
@@ -852,7 +903,8 @@ void ShowSettingsDialog(int tabIndex)
 			obs_module_text("Settings.Group.PluginManagement"),
 			obs_module_text("Settings.Group.Hotkeys"),
 			obs_module_text("Settings.Group.DockConfig"),
-			obs_module_text("Settings.Group.Plugins")
+			obs_module_text("Settings.Group.Plugins"),
+			obs_module_text("Settings.Group.Backup")
 		};
 
 		for (const QString &category : categories) {
@@ -878,6 +930,7 @@ void ShowSettingsDialog(int tabIndex)
 			setEnabled(2, dimSettings.modules.sceneOrganiser); // Scene Organiser
 			setEnabled(4, dimSettings.modules.hotkeys);        // Hotkeys
 			setEnabled(5, dimSettings.modules.streamupDock);   // Dock Configuration
+			setEnabled(7, dimSettings.modules.backup);         // Backup
 		}
 
 		categoryList->setCurrentRow(tabIndex);
@@ -1215,6 +1268,49 @@ void ShowSettingsDialog(int tabIndex)
 		toolbarSizeLayout->addStretch();
 		toolbarSizeLayout->addWidget(sizeComboBox);
 		toolbarLayout->addLayout(toolbarSizeLayout);
+
+		// Toolbar alignment (Start / Centre / End) — where the button run sits
+		// along the toolbar's main axis. The StreamUP settings button stays
+		// pinned to the far end regardless.
+		QHBoxLayout *toolbarAlignLayout = new QHBoxLayout();
+
+		QLabel *toolbarAlignLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarAlignment"));
+		toolbarAlignLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+								   .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+								   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
+		toolbarAlignLabel->setToolTip(obs_module_text("StreamUP.Settings.ToolbarAlignmentDesc"));
+
+		QComboBox *alignComboBox = new StreamUP::UIStyles::MacComboBox();
+		static_cast<StreamUP::UIStyles::MacComboBox *>(alignComboBox)->setOnCard(true);
+		alignComboBox->addItem(obs_module_text("StreamUP.Settings.ToolbarAlignment.Start"),
+				       static_cast<int>(ToolbarAlignment::Start));
+		alignComboBox->addItem(obs_module_text("StreamUP.Settings.ToolbarAlignment.Centre"),
+				       static_cast<int>(ToolbarAlignment::Centre));
+		alignComboBox->addItem(obs_module_text("StreamUP.Settings.ToolbarAlignment.End"),
+				       static_cast<int>(ToolbarAlignment::End));
+
+		alignComboBox->setCurrentIndex(static_cast<int>(currentSettings.toolbarAlignment));
+		alignComboBox->setStyleSheet(StreamUP::UIStyles::comboStyle(true));
+		alignComboBox->setFixedHeight(StreamUP::UIStyles::S(28));
+		StreamUP::UIStyles::makeComboAnimated(alignComboBox);
+		StreamUP::UIStyles::useScrollBars(alignComboBox->view());
+		alignComboBox->setMinimumWidth(StreamUP::UIStyles::S(100));
+		alignComboBox->setMaximumWidth(StreamUP::UIStyles::S(150));
+		alignComboBox->setToolTip(obs_module_text("StreamUP.Settings.ToolbarAlignmentDesc"));
+
+		QObject::connect(alignComboBox, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+				 [](int index) {
+					 if (index < 0) return;
+					 PluginSettings updated = GetCurrentSettings();
+					 updated.toolbarAlignment = static_cast<ToolbarAlignment>(index);
+					 UpdateSettings(updated);
+					 ApplyToolbarAlignment();
+				 });
+
+		toolbarAlignLayout->addWidget(toolbarAlignLabel);
+		toolbarAlignLayout->addStretch();
+		toolbarAlignLayout->addWidget(alignComboBox);
+		toolbarLayout->addLayout(toolbarAlignLayout);
 
 	// Add spacing between sections
 	toolbarLayout->addSpacing(StreamUP::UIStyles::S(16));
@@ -2322,84 +2418,217 @@ void ShowSettingsDialog(int tabIndex)
 			parent->addWidget(card);
 		};
 
-		// Interface plugins section
-		modulesContentLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("Plugins.Section.UI")));
-		QWidget *uiGroup = new QWidget();
-		uiGroup->setStyleSheet(QString("background: transparent;"));
-		QVBoxLayout *uiGroupLayout = StreamUP::UIHelpers::CreateVBoxLayout(uiGroup);
-		// Stack the per-setting cards flush to the content edge with an even gap.
-		uiGroupLayout->setContentsMargins(0, StreamUP::UIStyles::S(4), 0, StreamUP::UIStyles::S(4));
-		uiGroupLayout->setSpacing(StreamUP::UIStyles::S(12));
+		// Grouped by what each one gives you, not by how it is implemented.
+		// "Interface" and "System" said nothing useful: Backup and the
+		// Adjustment Layer are neither, and a user picking what to switch on
+		// cares about what appears in OBS, not which half of the plugin it
+		// lives in.
+		auto beginGroup = [&](const char *headerKey) {
+			modulesContentLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text(headerKey)));
+			QWidget *group = new QWidget();
+			group->setStyleSheet(QString("background: transparent;"));
+			QVBoxLayout *layout = StreamUP::UIHelpers::CreateVBoxLayout(group);
+			// Stack the per-setting cards flush to the content edge with an even gap.
+			layout->setContentsMargins(0, StreamUP::UIStyles::S(4), 0, StreamUP::UIStyles::S(4));
+			layout->setSpacing(StreamUP::UIStyles::S(12));
+			modulesContentLayout->addWidget(group);
+			return layout;
+		};
 
-		addModuleRow(uiGroupLayout, "Plugins.Toolbar.Title", "Plugins.Toolbar.Description",
-			[](const PluginSettings &s) { return s.modules.toolbar; },
-			[](PluginSettings &s, bool v) { s.modules.toolbar = v; },
-			false, nullptr,
-			[]() { ApplyToolbarVisibility(); });
+		// ── Docks and panels ─────────────────────────────────────────────
+		QVBoxLayout *docksLayout = beginGroup("Plugins.Section.Docks");
 
-		addModuleRow(uiGroupLayout, "Plugins.MultiDock.Title", "Plugins.MultiDock.Description",
-			[](const PluginSettings &s) { return s.modules.multiDock; },
-			[](PluginSettings &s, bool v) { s.modules.multiDock = v; },
-			false, nullptr,
-			[]() { StreamUP::SettingsManager::PluginSettings ps = GetCurrentSettings();
-			       StreamUP::MultiDock::MultiDockManager::SetGlobalEnabled(ps.modules.multiDock); });
-
-		addModuleRow(uiGroupLayout, "Plugins.SceneOrganiser.Title", "Plugins.SceneOrganiser.Description",
+		addModuleRow(docksLayout, "Plugins.SceneOrganiser.Title", "Plugins.SceneOrganiser.Description",
 			[](const PluginSettings &s) { return s.modules.sceneOrganiser; },
 			[](PluginSettings &s, bool v) { s.modules.sceneOrganiser = v; },
 			true,
 			[](const AppliedModuleSnapshot &a) { return a.sceneOrganiser; },
 			nullptr);
 
-		addModuleRow(uiGroupLayout, "Plugins.StreamupDock.Title", "Plugins.StreamupDock.Description",
+		addModuleRow(docksLayout, "Plugins.StreamupDock.Title", "Plugins.StreamupDock.Description",
 			[](const PluginSettings &s) { return s.modules.streamupDock; },
 			[](PluginSettings &s, bool v) { s.modules.streamupDock = v; },
 			true,
 			[](const AppliedModuleSnapshot &a) { return a.streamupDock; },
 			nullptr);
 
-		// StreamUP OBS Theme Enhancements have no toggle. Mixer, studio
-		// mode and theme polish all self-gate on whether a StreamUP theme
-		// is currently active — they're already inert on any other theme,
-		// and they're part of what makes the StreamUP theme look right when
-		// it is active. So they always run.
+		addModuleRow(docksLayout, "Plugins.MultiDock.Title", "Plugins.MultiDock.Description",
+			[](const PluginSettings &s) { return s.modules.multiDock; },
+			[](PluginSettings &s, bool v) { s.modules.multiDock = v; },
+			false, nullptr,
+			[]() { StreamUP::SettingsManager::PluginSettings ps = GetCurrentSettings();
+			       StreamUP::MultiDock::MultiDockManager::SetGlobalEnabled(ps.modules.multiDock); });
 
-		modulesContentLayout->addWidget(uiGroup);
+		// ── Ways to control OBS ──────────────────────────────────────────
+		QVBoxLayout *controlsLayout = beginGroup("Plugins.Section.Controls");
 
-		// System plugins section
-		modulesContentLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("Plugins.Section.System")));
-		QWidget *sysGroup = new QWidget();
-		sysGroup->setStyleSheet(QString("background: transparent;"));
-		QVBoxLayout *sysGroupLayout = StreamUP::UIHelpers::CreateVBoxLayout(sysGroup);
-		// Stack the per-setting cards flush to the content edge with an even gap.
-		sysGroupLayout->setContentsMargins(0, StreamUP::UIStyles::S(4), 0, StreamUP::UIStyles::S(4));
-		sysGroupLayout->setSpacing(StreamUP::UIStyles::S(12));
+		addModuleRow(controlsLayout, "Plugins.Toolbar.Title", "Plugins.Toolbar.Description",
+			[](const PluginSettings &s) { return s.modules.toolbar; },
+			[](PluginSettings &s, bool v) { s.modules.toolbar = v; },
+			false, nullptr,
+			[]() { ApplyToolbarVisibility(); });
 
-		addModuleRow(sysGroupLayout, "Plugins.Hotkeys.Title", "Plugins.Hotkeys.Description",
+		addModuleRow(controlsLayout, "Plugins.Hotkeys.Title", "Plugins.Hotkeys.Description",
 			[](const PluginSettings &s) { return s.modules.hotkeys; },
 			[](PluginSettings &s, bool v) { s.modules.hotkeys = v; },
 			false, nullptr,
 			[]() { StreamUP::SettingsManager::PluginSettings ps = GetCurrentSettings();
 			       StreamUP::HotkeyManager::SetHotkeyGroupEnabled(ps.modules.hotkeys); });
 
-		// WebSocket API toggle deliberately omitted — the vendor is always
-		// registered. It powers Streamer.Bot, custom scripts, and OBS Raw
-		// integrations, stays idle until something connects, and removing it
-		// breaks more workflows than it saves resources.
+		// ── Tools and sources ────────────────────────────────────────────
+		QVBoxLayout *toolsLayout = beginGroup("Plugins.Section.Tools");
 
-		addModuleRow(sysGroupLayout, "Plugins.AdjustmentLayer.Title", "Plugins.AdjustmentLayer.Description",
+		addModuleRow(toolsLayout, "Plugins.Backup.Title", "Plugins.Backup.Description",
+			[](const PluginSettings &s) { return s.modules.backup; },
+			[](PluginSettings &s, bool v) { s.modules.backup = v; },
+			false, nullptr, nullptr);
+
+		addModuleRow(toolsLayout, "Plugins.AdjustmentLayer.Title", "Plugins.AdjustmentLayer.Description",
 			[](const PluginSettings &s) { return s.modules.adjustmentLayerSource; },
 			[](PluginSettings &s, bool v) { s.modules.adjustmentLayerSource = v; },
 			true,
 			[](const AppliedModuleSnapshot &a) { return a.adjustmentLayerSource; },
 			nullptr);
 
-		modulesContentLayout->addWidget(sysGroup);
+		// Two things deliberately have no toggle here:
+		//
+		// The WebSocket API vendor is always registered. It powers Streamer.Bot,
+		// custom scripts and OBS Raw integrations, stays idle until something
+		// connects, and removing it breaks more workflows than it saves.
+		//
+		// Mixer, studio mode and theme polish always run. Each self-gates on
+		// whether a StreamUP theme is active, so they are already inert on any
+		// other theme, and they are what makes the StreamUP theme look right
+		// when it is.
 		modulesContentLayout->addStretch();
 
 		modulesScrollArea->setWidget(modulesContentContainer);
 		modulesPageLayout->addWidget(modulesScrollArea);
 		stackedWidget->addWidget(modulesPage);
+
+		// ── 8. Backup page ───────────────────────────────────────────────
+		QWidget *backupPage = new QWidget();
+		QVBoxLayout *backupPageLayout = new QVBoxLayout(backupPage);
+		backupPageLayout->setContentsMargins(0, 0, 0, 0);
+		backupPageLayout->setSpacing(StreamUP::UIStyles::S(10));
+
+		const PluginSettings backupSettings = GetCurrentSettings();
+
+		// Automatic backups
+		QVBoxLayout *autoCard =
+			StreamUP::UIStyles::sectionCard(backupPageLayout, obs_module_text("Settings.Backup.Section.Automatic"));
+		StreamUP::UIStyles::cardText(autoCard, obs_module_text("Settings.Backup.Automatic.Desc"),
+					     StreamUP::UIStyles::Colors::TEXT_SECONDARY);
+
+		QHBoxLayout *autoRow = new QHBoxLayout();
+		QLabel *autoLabel = new QLabel(obs_module_text("Settings.Backup.Automatic"));
+		autoLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(
+			QString("color: %1; font-size: %2px; background: transparent;")
+				.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
+		StreamUP::UIStyles::SwitchButton *autoSwitch =
+			StreamUP::UIStyles::CreateStyledSwitch("", backupSettings.backupAutomatic);
+		QObject::connect(autoSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
+			PluginSettings s = GetCurrentSettings();
+			s.backupAutomatic = checked;
+			UpdateSettings(s);
+		});
+		autoRow->addWidget(autoLabel);
+		autoRow->addStretch();
+		autoRow->addWidget(autoSwitch);
+		autoCard->addLayout(autoRow);
+
+		// How many to keep
+		QHBoxLayout *keepRow = new QHBoxLayout();
+		QLabel *keepLabel = new QLabel(obs_module_text("Settings.Backup.Keep"));
+		keepLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(
+			QString("color: %1; font-size: %2px; background: transparent;")
+				.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
+		StreamUP::UIStyles::MacSpinBox *keepSpin = new StreamUP::UIStyles::MacSpinBox();
+		keepSpin->setRange(1, 100);
+		keepSpin->setValue(backupSettings.backupKeepCount);
+		keepSpin->setOnCard(true);
+		keepSpin->setFixedHeight(StreamUP::UIStyles::S(28));
+		QObject::connect(keepSpin, QOverload<int>::of(&QSpinBox::valueChanged), [](int value) {
+			PluginSettings s = GetCurrentSettings();
+			s.backupKeepCount = value;
+			UpdateSettings(s);
+		});
+		keepRow->addWidget(keepLabel);
+		keepRow->addStretch();
+		keepRow->addWidget(keepSpin);
+		autoCard->addLayout(keepRow);
+
+		// Where they go
+		QVBoxLayout *locationCard =
+			StreamUP::UIStyles::sectionCard(backupPageLayout, obs_module_text("Settings.Backup.Section.Location"));
+		StreamUP::UIStyles::cardText(locationCard, obs_module_text("Settings.Backup.Location.Desc"),
+					     StreamUP::UIStyles::Colors::TEXT_SECONDARY);
+
+		QLabel *pathLabel = new QLabel(StreamUP::Backup::ResolveBackupFolder());
+		pathLabel->setWordWrap(true);
+		pathLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(
+			QString("color: %1; font-size: 12px; background: transparent;")
+				.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)));
+		locationCard->addWidget(pathLabel);
+
+		QHBoxLayout *pathButtons = new QHBoxLayout();
+		pathButtons->addStretch();
+		QPushButton *chooseButton =
+			new StreamUP::UIStyles::PillButton(obs_module_text("Settings.Backup.Choose"), "neutral");
+		QPushButton *defaultButton =
+			new StreamUP::UIStyles::PillButton(obs_module_text("Settings.Backup.UseDefault"), "outline");
+		QPushButton *openButton =
+			new StreamUP::UIStyles::PillButton(obs_module_text("Settings.Backup.OpenFolder"), "outline");
+		pathButtons->addWidget(openButton);
+		pathButtons->addWidget(defaultButton);
+		pathButtons->addWidget(chooseButton);
+		locationCard->addLayout(pathButtons);
+
+		QObject::connect(chooseButton, &QPushButton::clicked, [pathLabel, dialog]() {
+			const QString picked = QFileDialog::getExistingDirectory(
+				dialog, obs_module_text("Settings.Backup.ChooseTitle"),
+				StreamUP::Backup::ResolveBackupFolder());
+			if (picked.isEmpty())
+				return;
+			PluginSettings s = GetCurrentSettings();
+			s.backupLocation = picked.toStdString();
+			UpdateSettings(s);
+			pathLabel->setText(StreamUP::Backup::ResolveBackupFolder());
+		});
+
+		QObject::connect(defaultButton, &QPushButton::clicked, [pathLabel]() {
+			PluginSettings s = GetCurrentSettings();
+			s.backupLocation.clear();
+			UpdateSettings(s);
+			pathLabel->setText(StreamUP::Backup::ResolveBackupFolder());
+		});
+
+		QObject::connect(openButton, &QPushButton::clicked, []() {
+			const QString folder = StreamUP::Backup::ResolveBackupFolder();
+			QDir().mkpath(folder); // opening a folder that does not exist yet is a dead end
+			QDesktopServices::openUrl(QUrl::fromLocalFile(folder));
+		});
+
+		// Manual actions, so the whole feature is reachable from one place
+		QVBoxLayout *manualCard =
+			StreamUP::UIStyles::sectionCard(backupPageLayout, obs_module_text("Settings.Backup.Section.Manual"));
+		QHBoxLayout *manualButtons = new QHBoxLayout();
+		manualButtons->addStretch();
+		QPushButton *backupNowButton =
+			new StreamUP::UIStyles::PillButton(obs_module_text("Settings.Backup.BackupNow"), "primary");
+		QPushButton *restoreButton =
+			new StreamUP::UIStyles::PillButton(obs_module_text("Settings.Backup.Restore"), "outline");
+		manualButtons->addWidget(restoreButton);
+		manualButtons->addWidget(backupNowButton);
+		manualCard->addLayout(manualButtons);
+
+		QObject::connect(backupNowButton, &QPushButton::clicked, []() { StreamUP::Backup::ShowCreateBackupDialog(); });
+		QObject::connect(restoreButton, &QPushButton::clicked, []() { StreamUP::Restore::ShowRestoreDialog(); });
+
+		backupPageLayout->addStretch();
+		stackedWidget->addWidget(backupPage);
 
 		// Set initial banner state based on current dirty chips
 		refreshBanner();

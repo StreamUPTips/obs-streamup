@@ -50,6 +50,7 @@ struct ModuleSettings {
     bool toolbar;
     bool multiDock;
     bool hotkeys;
+    bool backup;
 
     // Hard toggles — require an OBS restart to apply (no unregister API in OBS)
     bool sceneOrganiser;
@@ -64,6 +65,7 @@ struct ModuleSettings {
         toolbar(true),
         multiDock(true),
         hotkeys(true),
+        backup(true),
         sceneOrganiser(true),
         streamupDock(true),
         mixerEnhancements(true),
@@ -122,6 +124,19 @@ enum class ToolbarSize {
 };
 
 /**
+ * @brief Toolbar button alignment options
+ *
+ * Controls where the toolbar's button run sits along the toolbar's main axis
+ * (horizontally when docked top/bottom, vertically when docked left/right).
+ * The StreamUP settings button always stays pinned to the far end.
+ */
+enum class ToolbarAlignment {
+    Start,  // Left (horizontal) / Top (vertical) — legacy behaviour
+    Centre,
+    End     // Right (horizontal) / Bottom (vertical)
+};
+
+/**
  * @brief Scene switching click mode options
  */
 enum class SceneSwitchMode {
@@ -161,11 +176,20 @@ struct PluginSettings {
     ToolbarPosition toolbarPosition;
     DockToolSettings dockTools;
     ToolbarSize toolbarSize;        // Size tier — actual pixel sizing comes from the OBS theme via [size="..."] selectors
+    ToolbarAlignment toolbarAlignment; // Where the button run sits along the toolbar's main axis
+
+    // Automatic backups. Written during shutdown, after OBS has saved its final
+    // state, and limited to one a day so closing OBS repeatedly does not fill
+    // the folder. Empty backupLocation means the default beside the OBS config.
+    bool backupAutomatic;
+    int backupKeepCount;              // how many automatic backups to keep
+    std::string backupLocation;       // override folder, empty = default
+    std::string backupLastAutoDate;   // yyyy-MM-dd of the last automatic backup
     ModuleSettings modules;
     bool moduleSetupComplete;       // Legacy wizard sentinel (kept for compat)
     std::string wizardVersionShown; // PROJECT_VERSION when the wizard last ran. Drives the upgrader prompt.
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), moduleSetupComplete(false), wizardVersionShown() {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), toolbarAlignment(ToolbarAlignment::Start), backupAutomatic(true), backupKeepCount(10), backupLocation(), backupLastAutoDate(), moduleSetupComplete(false), wizardVersionShown() {}
 };
 
 /**
@@ -204,8 +228,26 @@ void InitializeSettingsSystem();
 void ShowSettingsDialog();
 
 /**
+ * @brief Settings dialog tab indices.
+ *
+ * The sidebar is built from a fixed list, so these indices are positional.
+ * Named here so callers do not pass bare numbers that silently point at the
+ * wrong page if the list ever changes; add new pages at the end.
+ */
+enum SettingsTab {
+    SettingsTabGeneral = 0,
+    SettingsTabToolbar = 1,
+    SettingsTabSceneOrganiser = 2,
+    SettingsTabPluginManagement = 3,
+    SettingsTabHotkeys = 4,
+    SettingsTabDockConfig = 5,
+    SettingsTabPlugins = 6,
+    SettingsTabBackup = 7,
+};
+
+/**
  * @brief Show the settings dialog window with a specific tab selected
- * @param tabIndex The index of the tab to open (0=General, 1=Toolbar Settings, etc.)
+ * @param tabIndex The index of the tab to open, see SettingsTab
  */
 void ShowSettingsDialog(int tabIndex);
 
@@ -340,3 +382,4 @@ bool HasAnyExistingSettings();
 extern void ApplyToolbarVisibility();
 extern void ApplyToolbarPosition();
 extern void ApplyToolbarSize();
+extern void ApplyToolbarAlignment();
