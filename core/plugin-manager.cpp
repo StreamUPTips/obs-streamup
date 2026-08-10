@@ -1,5 +1,5 @@
 #include "plugin-manager.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "streamup-common.hpp"
 #include "plugin-state.hpp"
 #include "string-utils.hpp"
@@ -108,10 +108,10 @@ QTableWidget *MakeStyledTable(const QStringList &headers, QWidget *parent = null
 			return;
 		QMenu contextMenu(table);
 		contextMenu.setStyleSheet(su::menuStyle());
-		QAction *copyAction = contextMenu.addAction("Copy");
+		QAction *copyAction = contextMenu.addAction(obs_module_text("UI.Button.Copy"));
 		QObject::connect(copyAction, &QAction::triggered,
 				 [item]() { QApplication::clipboard()->setText(item->text()); });
-		QAction *copyRowAction = contextMenu.addAction("Copy Row");
+		QAction *copyRowAction = contextMenu.addAction(obs_module_text("UI.Button.CopyRow"));
 		QObject::connect(copyRowAction, &QAction::triggered, [table, item]() {
 			int row = item->row();
 			QStringList rowData;

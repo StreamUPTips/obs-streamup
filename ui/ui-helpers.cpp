@@ -4,7 +4,7 @@
 #include <streamup/ui/labels.hpp>
 #include "version.h"
 #include "../core/streamup-common.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <util/platform.h>

@@ -6,7 +6,7 @@
 #include <streamup/ui/pill-button.hpp>
 #include "../ui-helpers.hpp"
 #include "../settings-manager.hpp"
-#include "../../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "../../utilities/obs-data-helpers.hpp"
 #include "../../utilities/path-utils.hpp"
 #include "../../core/plugin-manager.hpp"
@@ -446,7 +446,7 @@ void SceneOrganiserDock::createBottomToolbar()
     addButton->setObjectName("SceneOrganiserAddButton");
     addButton->setProperty("themeID", "addIconSmall");
     addButton->setProperty("class", "icon-plus");
-    addButton->setToolTip("Add folder or create scene");
+    addButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.Add"));
 
     // Create a menu for the add button (shown on click, no arrow indicator)
     QMenu *addMenu = new QMenu(this);
@@ -535,7 +535,7 @@ void SceneOrganiserDock::createBottomToolbar()
     lockCheckbox->setObjectName("SceneOrganiserLockCheckbox");
     lockCheckbox->setProperty("class", "checkbox-icon indicator-lock");
     lockCheckbox->setChecked(false); // Start unlocked
-    lockCheckbox->setToolTip("Scene organizer is unlocked (click to lock)");
+    lockCheckbox->setToolTip(obs_module_text("SceneOrganiser.Tooltip.Unlocked"));
     lockCheckbox->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(lockCheckbox, &QCheckBox::toggled, this, &SceneOrganiserDock::onToggleLockClicked);
     rightButtonsLayout->addWidget(lockCheckbox);
@@ -561,7 +561,7 @@ void SceneOrganiserDock::createBottomToolbar()
     settingsButton->setObjectName("SceneOrganiserSettingsButton");
     settingsButton->setProperty("themeID", "configIconSmall");
     settingsButton->setProperty("class", "icon-gear");
-    settingsButton->setToolTip("Open StreamUP settings for Scene Organiser");
+    settingsButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.Settings"));
     connect(settingsButton, &QToolButton::clicked, this, &SceneOrganiserDock::onSettingsClicked);
     m_toolbar->addWidget(settingsButton);
 
@@ -686,8 +686,8 @@ void SceneOrganiserDock::setupContextMenu()
     m_deleteSceneAction->setShortcut(QKeySequence(Qt::Key_Delete));
 
     // Scene visibility actions
-    m_hideSceneAction = m_sceneContextMenu->addAction("Hide Scene", this, &SceneOrganiserDock::onHideSceneClicked);
-    m_showSceneAction = m_sceneContextMenu->addAction("Show Scene", this, &SceneOrganiserDock::onShowSceneClicked);
+    m_hideSceneAction = m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.HideScene"), this, &SceneOrganiserDock::onHideSceneClicked);
+    m_showSceneAction = m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ShowScene"), this, &SceneOrganiserDock::onShowSceneClicked);
 
     // Order submenu
     m_sceneContextMenu->addSeparator();
@@ -2131,7 +2131,8 @@ void SceneOrganiserDock::setLocked(bool locked)
         m_lockButton->blockSignals(true);
         m_lockButton->setChecked(m_isLocked);
         m_lockButton->blockSignals(false);
-        m_lockButton->setToolTip(m_isLocked ? "Scene organizer is locked (click to unlock)" : "Scene organizer is unlocked (click to lock)");
+        m_lockButton->setToolTip(m_isLocked ? obs_module_text("SceneOrganiser.Tooltip.Locked")
+                                                : obs_module_text("SceneOrganiser.Tooltip.Unlocked"));
     }
 
     // Update UI enabled state
@@ -3523,13 +3524,16 @@ void SceneOrganiserDock::populateProjectorMenu()
 
         if (screens.size() > 1) {
             // Multiple monitors - show monitor number and name
-            monitorText = QString("Monitor %1").arg(i + 1);
             if (!screen->name().isEmpty()) {
-                monitorText += QString(" (%1)").arg(screen->name());
+                monitorText = QString(obs_module_text("SceneOrganiser.Projector.MonitorNamed"))
+                                      .arg(i + 1)
+                                      .arg(screen->name());
+            } else {
+                monitorText = QString(obs_module_text("SceneOrganiser.Projector.Monitor")).arg(i + 1);
             }
         } else {
             // Single monitor - just show "Fullscreen"
-            monitorText = "Fullscreen";
+            monitorText = obs_module_text("SceneOrganiser.Projector.Fullscreen");
         }
 
         QAction *monitorAction = new QAction(monitorText, m_sceneProjectorMenu);

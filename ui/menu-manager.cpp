@@ -1,5 +1,5 @@
 #include "menu-manager.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include <obs.h>
 #include "source-manager.hpp"
 #include "file-manager.hpp"

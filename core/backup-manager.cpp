@@ -1,7 +1,7 @@
 #include "backup-manager.hpp"
 
 #include "../ui/settings-manager.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "../utilities/zip-writer.hpp"
 #include "version.h"
 

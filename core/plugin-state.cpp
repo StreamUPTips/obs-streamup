@@ -1,5 +1,5 @@
 #include "plugin-state.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include <obs-module.h>
 
 namespace StreamUP {

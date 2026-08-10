@@ -4,7 +4,7 @@
 #include "../core/backup-manager.hpp"
 #include <streamup/ui/section-card.hpp>
 #include <algorithm>
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "../utilities/path-utils.hpp"
 #include "ui-helpers.hpp"
 #include <streamup/ui/window-chrome.hpp> // ShadowDialog, RoundedContainer, makeWindow, WindowShell
@@ -1185,7 +1185,7 @@ void ShowSettingsDialog(int tabIndex)
 		toolbarPositionLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
 							    .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							    .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-		toolbarPositionLabel->setToolTip("Choose where to place the toolbar in OBS");
+		toolbarPositionLabel->setToolTip(obs_module_text("StreamUP.Settings.ToolbarPositionTooltip"));
 
 		// Get current toolbar position
 		PluginSettings currentSettings = GetCurrentSettings();
@@ -1193,10 +1193,14 @@ void ShowSettingsDialog(int tabIndex)
 		// Create combobox for position selection (MacComboBox = custom-painted field)
 		QComboBox *positionComboBox = new StreamUP::UIStyles::MacComboBox();
 		static_cast<StreamUP::UIStyles::MacComboBox *>(positionComboBox)->setOnCard(true);
-		positionComboBox->addItem("Top", static_cast<int>(ToolbarPosition::Top));
-		positionComboBox->addItem("Bottom", static_cast<int>(ToolbarPosition::Bottom));
-		positionComboBox->addItem("Left", static_cast<int>(ToolbarPosition::Left));
-		positionComboBox->addItem("Right", static_cast<int>(ToolbarPosition::Right));
+		positionComboBox->addItem(obs_module_text("StreamUP.Settings.ToolbarPosition.Top"),
+					  static_cast<int>(ToolbarPosition::Top));
+		positionComboBox->addItem(obs_module_text("StreamUP.Settings.ToolbarPosition.Bottom"),
+					  static_cast<int>(ToolbarPosition::Bottom));
+		positionComboBox->addItem(obs_module_text("StreamUP.Settings.ToolbarPosition.Left"),
+					  static_cast<int>(ToolbarPosition::Left));
+		positionComboBox->addItem(obs_module_text("StreamUP.Settings.ToolbarPosition.Right"),
+					  static_cast<int>(ToolbarPosition::Right));
 
 		// Set current selection
 		int currentIndex = static_cast<int>(currentSettings.toolbarPosition);
@@ -1209,7 +1213,7 @@ void ShowSettingsDialog(int tabIndex)
 		StreamUP::UIStyles::useScrollBars(positionComboBox->view());
 		positionComboBox->setMinimumWidth(StreamUP::UIStyles::S(100));
 		positionComboBox->setMaximumWidth(StreamUP::UIStyles::S(150));
-		positionComboBox->setToolTip("Choose toolbar position: Top, Bottom, Left, or Right");
+		positionComboBox->setToolTip(obs_module_text("StreamUP.Settings.ToolbarPositionComboTooltip"));
 
 		// Connect combobox selection change
 		QObject::connect(positionComboBox, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
@@ -1322,10 +1326,10 @@ void ShowSettingsDialog(int tabIndex)
 		configureToolbarLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
 							    .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							    .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-		configureToolbarLabel->setToolTip("Customize toolbar buttons and layout");
+		configureToolbarLabel->setToolTip(obs_module_text("StreamUP.Settings.ConfigureToolbarTooltip"));
 
 		QPushButton *configureToolbarButton = new StreamUP::UIStyles::PillButton(obs_module_text("StreamUP.Settings.ConfigureToolbar"), "neutral");
-		configureToolbarButton->setToolTip("Open toolbar configuration dialog");
+		configureToolbarButton->setToolTip(obs_module_text("StreamUP.Settings.ConfigureToolbarButtonTooltip"));
 		
 		QObject::connect(configureToolbarButton, &QPushButton::clicked, [dialog]() {
 			// Find the toolbar widget and open its configurator

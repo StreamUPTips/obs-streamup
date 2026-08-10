@@ -2,6 +2,7 @@
 #define STREAMUP_DEBUG_LOGGER_HPP
 
 #include <obs.h>
+#include <functional>
 #include <string>
 
 namespace StreamUP {
@@ -80,6 +81,45 @@ void SetInitializationComplete(bool completed);
  * @return True if initialization is complete, false during startup
  */
 bool IsInitializationComplete();
+
+/**
+ * @brief Set the bracketed prefix every line is tagged with
+ *
+ * This is what makes the logger shareable: each plugin owns its own name in the
+ * OBS log, so the reader can tell which StreamUP module wrote a line. Call it
+ * once from obs_module_load, before anything logs. Defaults to "[StreamUP]".
+ *
+ * @param prefix The prefix, brackets included (e.g. "[StreamUP Source Explorer]")
+ */
+void SetLogPrefix(const char* prefix);
+
+/**
+ * @brief Point the debug gate at the plugin's own settings
+ *
+ * Plugins disagree about where the "debug logging" toggle lives: the main
+ * StreamUP plugin reads it from SettingsManager, the smaller ones just keep a
+ * flag. Rather than hardcode either, the gate is a predicate the plugin sets.
+ * An empty predicate restores the built-in flag driven by
+ * SetDebugLoggingEnabled.
+ *
+ * The predicate is called on whatever thread logs, so it must be thread-safe.
+ *
+ * @param predicate Returns true while debug messages should be written
+ */
+void SetDebugLoggingPredicate(std::function<bool()> predicate);
+
+/**
+ * @brief Enable or disable debug logging at runtime
+ *
+ * Drives the built-in flag, which is only consulted while no predicate is set.
+ */
+void SetDebugLoggingEnabled(bool enabled);
+
+/**
+ * @brief Check if debug logging is currently enabled
+ * @return The predicate's answer if one is set, otherwise the built-in flag
+ */
+bool IsDebugLoggingEnabled();
 
 } // namespace DebugLogger
 } // namespace StreamUP

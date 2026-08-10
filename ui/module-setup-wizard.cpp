@@ -1,7 +1,7 @@
 #include "module-setup-wizard.hpp"
 #include "settings-manager.hpp"
 #include "ui-helpers.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "../version.h"
 
 #include <streamup/ui/window-chrome.hpp>

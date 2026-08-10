@@ -1,5 +1,5 @@
 #include "streamup-toolbar.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "streamup-toolbar-configurator.hpp"
 #include "dock/streamup-dock.hpp"
 #include "../video-capture-popup.hpp"
@@ -321,7 +321,8 @@ void StreamUPToolbar::updateStreamButton()
 		streamButton->setChecked(streaming);
 		QString iconName = streaming ? "streaming" : "streaming-inactive";
 		streamButton->setIcon(getCachedIcon(iconName));
-		streamButton->setToolTip(streaming ? "Stop Streaming" : "Start Streaming");
+		streamButton->setToolTip(streaming ? obs_module_text("Toolbar.Tooltip.StopStreaming")
+					     : obs_module_text("Toolbar.Tooltip.StartStreaming"));
 
 		// Debug: Log the checked state
 		StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Stream Button",
@@ -339,7 +340,8 @@ void StreamUPToolbar::updateRecordButton()
 		recordButton->setChecked(recording);
 		QString iconName = recording ? "record-on" : "record-off";
 		recordButton->setIcon(getCachedIcon(iconName));
-		recordButton->setToolTip(recording ? "Stop Recording" : "Start Recording");
+		recordButton->setToolTip(recording ? obs_module_text("Toolbar.Tooltip.StopRecording")
+					     : obs_module_text("Toolbar.Tooltip.StartRecording"));
 
 		// Debug: Log the checked state
 		StreamUP::DebugLogger::LogDebugFormat("Toolbar", "Record Button",
@@ -369,7 +371,8 @@ void StreamUPToolbar::updatePauseButton()
 		pauseButton->setEnabled(recording);
 		pauseButton->setChecked(paused);
 		pauseButton->setIcon(getCachedIcon("pause"));
-		pauseButton->setToolTip(paused ? "Resume Recording" : "Pause Recording");
+		pauseButton->setToolTip(paused ? obs_module_text("Toolbar.Tooltip.ResumeRecording")
+					  : obs_module_text("Toolbar.Tooltip.PauseRecording"));
 	}
 }
 
@@ -380,7 +383,8 @@ void StreamUPToolbar::updateReplayBufferButton()
 		replayBufferButton->setChecked(active);
 		QString iconName = active ? "replay-buffer-on" : "replay-buffer-off";
 		replayBufferButton->setIcon(getCachedIcon(iconName));
-		replayBufferButton->setToolTip(active ? "Stop Replay Buffer" : "Start Replay Buffer");
+		replayBufferButton->setToolTip(active ? obs_module_text("Toolbar.Tooltip.StopReplayBuffer")
+					  : obs_module_text("Toolbar.Tooltip.StartReplayBuffer"));
 
 		// Control save replay button visibility based on replay buffer state
 		if (saveReplayButton) {
@@ -413,7 +417,8 @@ void StreamUPToolbar::updateVirtualCameraButton()
 	if (virtualCameraButton) {
 		bool active = obs_frontend_virtualcam_active();
 		virtualCameraButton->setChecked(active);
-		virtualCameraButton->setToolTip(active ? "Stop Virtual Camera" : "Start Virtual Camera");
+		virtualCameraButton->setToolTip(active ? obs_module_text("Toolbar.Tooltip.StopVirtualCamera")
+					  : obs_module_text("Toolbar.Tooltip.StartVirtualCamera"));
 	}
 }
 
@@ -422,7 +427,8 @@ void StreamUPToolbar::updateStudioModeButton()
 	if (studioModeButton) {
 		bool active = obs_frontend_preview_program_mode_active();
 		studioModeButton->setChecked(active);
-		studioModeButton->setToolTip(active ? "Disable Studio Mode" : "Enable Studio Mode");
+		studioModeButton->setToolTip(active ? obs_module_text("Toolbar.Tooltip.DisableStudioMode")
+					  : obs_module_text("Toolbar.Tooltip.EnableStudioMode"));
 	}
 }
 
@@ -623,14 +629,16 @@ void StreamUPToolbar::updateButtonStatesEfficiently()
 		streamButton->setChecked(streaming);
 		QString iconName = streaming ? "streaming" : "streaming-inactive";
 		streamButton->setIcon(getCachedIcon(iconName));
-		streamButton->setToolTip(streaming ? "Stop Streaming" : "Start Streaming");
+		streamButton->setToolTip(streaming ? obs_module_text("Toolbar.Tooltip.StopStreaming")
+					     : obs_module_text("Toolbar.Tooltip.StartStreaming"));
 	}
 
 	if (recordButton) {
 		recordButton->setChecked(recording);
 		QString iconName = recording ? "record-on" : "record-off";
 		recordButton->setIcon(getCachedIcon(iconName));
-		recordButton->setToolTip(recording ? "Stop Recording" : "Start Recording");
+		recordButton->setToolTip(recording ? obs_module_text("Toolbar.Tooltip.StopRecording")
+					     : obs_module_text("Toolbar.Tooltip.StartRecording"));
 	}
 
 	if (pauseButton) {
@@ -639,14 +647,16 @@ void StreamUPToolbar::updateButtonStatesEfficiently()
 		pauseButton->setEnabled(canPause);
 		pauseButton->setChecked(paused);
 		pauseButton->setIcon(getCachedIcon("pause"));
-		pauseButton->setToolTip(paused ? "Resume Recording" : "Pause Recording");
+		pauseButton->setToolTip(paused ? obs_module_text("Toolbar.Tooltip.ResumeRecording")
+					  : obs_module_text("Toolbar.Tooltip.PauseRecording"));
 	}
 
 	if (replayBufferButton) {
 		replayBufferButton->setChecked(replayActive);
 		QString iconName = replayActive ? "replay-buffer-on" : "replay-buffer-off";
 		replayBufferButton->setIcon(getCachedIcon(iconName));
-		replayBufferButton->setToolTip(replayActive ? "Stop Replay Buffer" : "Start Replay Buffer");
+		replayBufferButton->setToolTip(replayActive ? obs_module_text("Toolbar.Tooltip.StopReplayBuffer")
+						: obs_module_text("Toolbar.Tooltip.StartReplayBuffer"));
 	}
 
 	if (saveReplayButton) {
@@ -658,13 +668,15 @@ void StreamUPToolbar::updateButtonStatesEfficiently()
 	if (virtualCameraButton) {
 		virtualCameraButton->setChecked(vcamActive);
 		virtualCameraButton->setIcon(getCachedIcon("virtual-camera"));
-		virtualCameraButton->setToolTip(vcamActive ? "Stop Virtual Camera" : "Start Virtual Camera");
+		virtualCameraButton->setToolTip(vcamActive ? obs_module_text("Toolbar.Tooltip.StopVirtualCamera")
+					       : obs_module_text("Toolbar.Tooltip.StartVirtualCamera"));
 	}
 
 	if (studioModeButton) {
 		studioModeButton->setChecked(studioMode);
 		studioModeButton->setIcon(getCachedIcon("studio-mode"));
-		studioModeButton->setToolTip(studioMode ? "Disable Studio Mode" : "Enable Studio Mode");
+		studioModeButton->setToolTip(studioMode ? obs_module_text("Toolbar.Tooltip.DisableStudioMode")
+					       : obs_module_text("Toolbar.Tooltip.EnableStudioMode"));
 	}
 
 	StreamUP::DebugLogger::LogDebug("Toolbar", "Batch Update", "Completed efficient button state update");
@@ -1284,7 +1296,7 @@ void StreamUPToolbar::setupDynamicUI()
 							newPauseButton->setProperty("buttonType", "streamup-button");
 							newPauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newPauseButton->setIcon(getCachedIcon("pause"));
-							newPauseButton->setToolTip("Pause Recording");
+							newPauseButton->setToolTip(obs_module_text("Toolbar.Tooltip.PauseRecording"));
 							newPauseButton->setCheckable(true);
 							// Start hidden - will be shown when recording is active and pausable
 							newPauseButton->setVisible(false);
@@ -1304,7 +1316,7 @@ void StreamUPToolbar::setupDynamicUI()
 							newSaveReplayButton->setProperty("buttonType", "streamup-button");
 							newSaveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
 							newSaveReplayButton->setIcon(getCachedIcon("save-replay"));
-							newSaveReplayButton->setToolTip("Save Replay");
+							newSaveReplayButton->setToolTip(obs_module_text("Toolbar.Tooltip.SaveReplay"));
 							newSaveReplayButton->setCheckable(false);
 							// Start hidden - will be shown when replay buffer is active
 							newSaveReplayButton->setVisible(false);

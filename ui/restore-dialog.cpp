@@ -2,7 +2,7 @@
 
 #include "../core/backup-manager.hpp"
 #include "../core/restore-manager.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "backup-ui-common.hpp"
 #include <streamup/ui/section-card.hpp>
 #include "version.h"

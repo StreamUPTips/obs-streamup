@@ -1,7 +1,7 @@
 #include "backup-dialog.hpp"
 
 #include "../core/backup-manager.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "backup-ui-common.hpp"
 #include "version.h"
 

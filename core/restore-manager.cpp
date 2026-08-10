@@ -1,6 +1,6 @@
 #include "restore-manager.hpp"
 
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "../utilities/zip-reader.hpp"
 #include "backup-manager.hpp"
 #include "../ui/settings-manager.hpp"

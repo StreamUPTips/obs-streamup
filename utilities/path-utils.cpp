@@ -1,5 +1,5 @@
 #include "path-utils.hpp"
-#include "debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include <filesystem>
 #include <QDir>
 #include <QFileInfo>

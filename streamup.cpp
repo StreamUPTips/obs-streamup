@@ -13,7 +13,7 @@
 #include "ui/restore-dialog.hpp"
 #include "integrations/websocket-api.hpp"
 #include "utilities/path-utils.hpp"
-#include "utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 
 // UI modules
 #include "ui/dock/streamup-dock.hpp"
@@ -949,6 +949,13 @@ void ApplyToolbarPosition()
 bool obs_module_load()
 {
 	blog(LOG_INFO, "[StreamUP] loaded version %s", PROJECT_VERSION);
+
+	// The logger is shared across the StreamUP plugins and defaults to its own
+	// built-in debug flag. This plugin owns the user-facing toggle, so point the
+	// gate at SettingsManager instead. The prefix already defaults to
+	// "[StreamUP]", which is what we want here.
+	StreamUP::DebugLogger::SetDebugLoggingPredicate(
+		[]() { return StreamUP::SettingsManager::IsDebugLoggingEnabled(); });
 
 	// Before anything else: finish or confirm a restore staged in a previous
 	// session. Module load happens before OBS reads scene collections

@@ -1,5 +1,5 @@
 #include "multidock_manager.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "multidock_dock.hpp"
 #include "inner_dock_host.hpp"
 #include "multidock_utils.hpp"

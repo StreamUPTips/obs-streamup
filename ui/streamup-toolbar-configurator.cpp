@@ -1,5 +1,5 @@
 #include "streamup-toolbar-configurator.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "hotkey-button-config-dialog.hpp"
 #include "streamup-toolbar.hpp"
 #include "settings-manager.hpp"

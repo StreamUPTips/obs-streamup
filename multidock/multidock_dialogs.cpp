@@ -1,5 +1,5 @@
 #include "multidock_dialogs.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "multidock_utils.hpp"
 #include "multidock_manager.hpp"
 #include "multidock_dock.hpp"

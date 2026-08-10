@@ -321,6 +321,8 @@ When you install a StreamUP product, the plugin checks whether any text sources 
 
 ## Build
 
+Requires OBS Studio 31.1 or newer.
+
 **In-tree build:**
 1. Set up OBS Studio: https://obsproject.com/wiki/Install-Instructions
 2. Check out this repo to `frontend/plugins/obs-streamup`

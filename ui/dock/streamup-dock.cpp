@@ -1,5 +1,5 @@
 #include "../../core/source-manager.hpp"
-#include "../../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "streamup-dock.hpp"
 #include "../../ui_StreamUPDock.h"
 #include "../../flow-layout.hpp"

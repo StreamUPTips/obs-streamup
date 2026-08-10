@@ -1,5 +1,5 @@
 #include "multidock_dock.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "inner_dock_host.hpp"
 #include "persistence.hpp"
 #include "multidock_utils.hpp"
@@ -162,7 +162,7 @@ void MultiDockDock::LoadState()
     m_docksLocked = locked;
     if (m_lockCheckbox) {
         m_lockCheckbox->setChecked(locked);
-        m_lockCheckbox->setToolTip(locked ? "Docks are locked (click to unlock)" : "Docks are unlocked (click to lock)");
+        m_lockCheckbox->setToolTip(locked ? obs_module_text("MultiDock.Tooltip.Locked") : obs_module_text("MultiDock.Tooltip.Unlocked"));
     }
     m_innerHost->SetDocksLocked(locked);
     
@@ -270,7 +270,7 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
         addButton->setProperty("class", "icon-plus");
         addButton->setProperty("themeID", "addIconSmall");
     }
-    addDockAction->setToolTip("Add an OBS dock to this MultiDock");
+    addDockAction->setToolTip(obs_module_text("MultiDock.Tooltip.AddDock"));
     connect(addDockAction, &QAction::triggered, [this]() {
         if (m_innerHost) {
             m_innerHost->ShowAddDockDialog();
@@ -281,11 +281,11 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
     QCheckBox* lockCheckbox = new QCheckBox(this);
     lockCheckbox->setProperty("class", "checkbox-icon indicator-lock");
     lockCheckbox->setChecked(false); // Start unlocked
-    lockCheckbox->setToolTip("Docks are unlocked (click to lock)");
+    lockCheckbox->setToolTip(obs_module_text("MultiDock.Tooltip.Unlocked"));
 
     connect(lockCheckbox, &QCheckBox::toggled, [this, lockCheckbox](bool checked) {
         m_docksLocked = checked;
-        lockCheckbox->setToolTip(m_docksLocked ? "Docks are locked (click to unlock)" : "Docks are unlocked (click to lock)");
+        lockCheckbox->setToolTip(m_docksLocked ? obs_module_text("MultiDock.Tooltip.Locked") : obs_module_text("MultiDock.Tooltip.Unlocked"));
 
         if (m_innerHost) {
             m_innerHost->SetDocksLocked(m_docksLocked);

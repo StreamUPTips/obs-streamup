@@ -1,5 +1,5 @@
 #include "websocket-api.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "streamup-common.hpp"
 #include "../version.h"
 #include "plugin-manager.hpp"

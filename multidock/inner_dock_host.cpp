@@ -1,5 +1,5 @@
 #include "inner_dock_host.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "multidock_dock.hpp"
 #include "add_dock_dialog.hpp"
 #include "persistence.hpp"

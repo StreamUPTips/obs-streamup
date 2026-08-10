@@ -67,6 +67,21 @@ target_sources(${PROJECT_NAME} PRIVATE
   "${STREAMUP_UI_DIR}/include/streamup/ui/ios-checkbox.hpp"  # Q_OBJECT -> AUTOMOC
 )
 
+# Shared StreamUP utilities (debug logger + undo/redo helpers), vendored under
+# shared/obs-streamup-utils/. Compiled directly into the plugin for the same
+# reason as the UI library above: no shared sub-target, no cross-plugin link.
+# The logger's prefix and its "is debug logging on" gate are set at module load,
+# so each plugin logs under its own name and reads its own toggle.
+set(STREAMUP_UTILS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shared/obs-streamup-utils")
+target_include_directories(${PROJECT_NAME} PRIVATE
+  "${STREAMUP_UTILS_DIR}/include"
+)
+target_sources(${PROJECT_NAME} PRIVATE
+  "${STREAMUP_UTILS_DIR}/src/debug-logger.cpp"
+  "${STREAMUP_UTILS_DIR}/include/streamup/debug-logger.hpp"
+  "${STREAMUP_UTILS_DIR}/include/streamup/undo-helpers.hpp"
+)
+
 if((OS_LINUX OR OS_FREEBSD OR OS_OPENBSD) AND Qt_VERSION VERSION_LESS "6.9.0")
 	target_link_libraries(${PROJECT_NAME} PRIVATE Qt::GuiPrivate)
 endif()
@@ -135,10 +150,7 @@ target_sources(${PROJECT_NAME} PRIVATE
   utilities/error-handler.hpp
   utilities/error-handler.cpp
   utilities/obs-data-helpers.hpp
-  utilities/obs-data-helpers.cpp
-  utilities/debug-logger.hpp
-  utilities/debug-logger.cpp
-  utilities/undo-helpers.hpp)
+  utilities/obs-data-helpers.cpp)
 
 # Sources module files (Adjustment Layer)
 target_sources(${PROJECT_NAME} PRIVATE
@@ -269,9 +281,9 @@ source_group("Utilities" FILES
   utilities/error-handler.cpp
   utilities/obs-data-helpers.hpp
   utilities/obs-data-helpers.cpp
-  utilities/debug-logger.hpp
-  utilities/debug-logger.cpp
-  utilities/undo-helpers.hpp)
+  "${STREAMUP_UTILS_DIR}/include/streamup/debug-logger.hpp"
+  "${STREAMUP_UTILS_DIR}/src/debug-logger.cpp"
+  "${STREAMUP_UTILS_DIR}/include/streamup/undo-helpers.hpp")
 
 source_group("Sources" FILES
   sources/adjustment-layer.hpp
