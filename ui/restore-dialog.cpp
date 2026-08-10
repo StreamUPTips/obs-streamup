@@ -98,6 +98,15 @@ void ShowAppliedReportIfAny()
 		failed->addWidget(cardList(report.failures, 140));
 	}
 
+	// The theme is the visible part of a restore, so a restore that landed
+	// correctly but shows the old theme reads as a failure. Say plainly that one
+	// more restart finishes it, rather than leaving people to restart until it
+	// happens to look right.
+	if (report.themeNeedsRestart) {
+		QVBoxLayout *theme = sectionCard(layout, obs_module_text("Restore.Report.Section.Theme"));
+		cardText(theme, obs_module_text("Restore.Report.ThemeExplain"), Colors::COLOR_WARNING, CardText::kBody);
+	}
+
 	if (!report.safetyBackup.isEmpty()) {
 		QVBoxLayout *safety = sectionCard(layout, obs_module_text("Restore.Report.Section.Safety"));
 		cardText(safety, QString(obs_module_text("Restore.Report.SafetyExplain"))
@@ -316,6 +325,75 @@ void ShowRestoreDialog()
 	areaToggle(obs_module_text("Restore.Area.ObsSettings"), &selection->obsSettings, true);
 	if (info.mediaFiles > 0)
 		areaToggle(obs_module_text("Restore.Tab.Media"), &selection->media, true);
+
+	// ── Media: where it goes, and what points at it ────────────────────
+	// Only worth showing when the backup actually carries media. Without it
+	// there is nothing to place and nothing to re-point.
+	if (info.mediaFiles > 0) {
+		QVBoxLayout *mediaCard = sectionCard(leftColumn, obs_module_text("Restore.Section.Media"));
+		cardText(mediaCard, obs_module_text("Restore.Media.Hint"), Colors::TEXT_SECONDARY, CardText::kCaption);
+
+		auto *modePicker = new su::SegmentedControl(QStringList{obs_module_text("Restore.Media.Mode.Smart"),
+									obs_module_text("Restore.Media.Mode.All"),
+									obs_module_text("Restore.Media.Mode.Keep")});
+		mediaCard->addWidget(modePicker);
+
+		QLabel *modeHelp = cardText(mediaCard, obs_module_text("Restore.Media.ModeDesc.Smart"),
+					    Colors::TEXT_SECONDARY, CardText::kCaption);
+
+		// "Only what is missing" is the default rather than "all": most restores
+		// happen on the machine the backup came from, where re-pointing every
+		// source at a fresh copy would quietly orphan the library the user
+		// actually works in.
+		selection->mediaPaths = MediaPaths::RepointMissingOnly;
+
+		// Where the media lands. Shown for every mode, since the files are
+		// unpacked either way and knowing where they went is the point.
+		const QString defaultFolder = DefaultMediaFolder();
+		auto *folderLabel = cardText(mediaCard, defaultFolder, Colors::TEXT_PRIMARY, CardText::kCaption);
+		folderLabel->setWordWrap(true);
+
+		auto *folderRow = new QHBoxLayout();
+		folderRow->setContentsMargins(0, S(4), 0, 0);
+		folderRow->setSpacing(S(8));
+		auto *chooseButton = new su::PillButton(obs_module_text("Restore.Media.Choose"), "outline");
+		auto *defaultButton = new su::PillButton(obs_module_text("Restore.Media.UseDefault"), "outline");
+		folderRow->addWidget(chooseButton);
+		folderRow->addWidget(defaultButton);
+		folderRow->addStretch();
+		mediaCard->addLayout(folderRow);
+
+		modePicker->onChanged([selection, modeHelp](int index) {
+			switch (index) {
+			case 1:
+				selection->mediaPaths = MediaPaths::RepointAll;
+				modeHelp->setText(obs_module_text("Restore.Media.ModeDesc.All"));
+				break;
+			case 2:
+				selection->mediaPaths = MediaPaths::KeepOriginal;
+				modeHelp->setText(obs_module_text("Restore.Media.ModeDesc.Keep"));
+				break;
+			default:
+				selection->mediaPaths = MediaPaths::RepointMissingOnly;
+				modeHelp->setText(obs_module_text("Restore.Media.ModeDesc.Smart"));
+				break;
+			}
+		});
+
+		QObject::connect(chooseButton, &QPushButton::clicked, dialog, [=]() {
+			const QString start = selection->mediaFolder.isEmpty() ? defaultFolder : selection->mediaFolder;
+			const QString chosen = QFileDialog::getExistingDirectory(
+				dialog, obs_module_text("Restore.Media.ChooseTitle"), start);
+			if (chosen.isEmpty())
+				return;
+			selection->mediaFolder = QDir::cleanPath(chosen);
+			folderLabel->setText(selection->mediaFolder);
+		});
+		QObject::connect(defaultButton, &QPushButton::clicked, dialog, [=]() {
+			selection->mediaFolder.clear();
+			folderLabel->setText(defaultFolder);
+		});
+	}
 
 	// ── Anything worth knowing before committing ───────────────────────
 	const bool hasWarnings = !info.pluginGaps.isEmpty() || info.layoutDiffers;

@@ -212,6 +212,49 @@ void collectDir(const QString &rootDir, const QString &relativePrefix, const QSt
 }
 
 /**
+ * Which folder inside media/ a referenced file belongs in.
+ *
+ * A collected backup is also how someone moves a setup to another machine, so
+ * the media folder is something they will open and work in rather than an
+ * opaque blob. Sorting by kind means the images sit with the images and an
+ * overlay pack's html and css stay together, instead of ninety hashed folders
+ * in one list. The category is part of the archive path and the manifest
+ * records the full path per file, so restore keeps working unchanged and older
+ * backups (which have no category folder) still restore.
+ */
+QString mediaCategory(const QString &sourcePath)
+{
+	const QString suffix = QFileInfo(sourcePath).suffix().toLower();
+
+	static const QStringList images = {"png",  "jpg", "jpeg", "gif", "bmp", "webp",
+					   "tga", "tiff", "tif",  "jxr", "psd", "svg"};
+	static const QStringList video = {"mp4", "mov", "mkv", "webm", "avi", "flv", "m4v", "mpg", "mpeg", "wmv", "ts"};
+	static const QStringList audio = {"wav", "mp3", "ogg", "flac", "aac", "m4a", "opus", "wma", "aiff"};
+	static const QStringList fonts = {"ttf", "otf", "ttc", "woff", "woff2"};
+	static const QStringList web = {"html", "htm", "css", "js", "json", "wasm"};
+	static const QStringList shaders = {"shader", "effect", "hlsl", "glsl", "fx"};
+	static const QStringList luts = {"cube", "3dl", "lut"};
+
+	if (images.contains(suffix))
+		return QStringLiteral("images");
+	if (video.contains(suffix))
+		return QStringLiteral("video");
+	if (audio.contains(suffix))
+		return QStringLiteral("audio");
+	if (fonts.contains(suffix))
+		return QStringLiteral("fonts");
+	if (shaders.contains(suffix))
+		return QStringLiteral("shaders");
+	if (luts.contains(suffix))
+		return QStringLiteral("luts");
+	// Checked after shaders and LUTs on purpose: an overlay pack's .json is web
+	// content, but a shader's .effect is not, and the specific lists win.
+	if (web.contains(suffix))
+		return QStringLiteral("web");
+	return QStringLiteral("other");
+}
+
+/**
  * Where a referenced media file lands inside the archive.
  *
  * Flattening to media/<filename> collides: overlay packs are full of files
@@ -226,7 +269,8 @@ QString mediaArchiveName(const QString &sourcePath)
 {
 	const QByteArray digest =
 		QCryptographicHash::hash(sourcePath.toUtf8(), QCryptographicHash::Sha1).toHex().left(10);
-	return QStringLiteral("media/%1/%2").arg(QString::fromLatin1(digest), QFileInfo(sourcePath).fileName());
+	return QStringLiteral("media/%1/%2/%3")
+		.arg(mediaCategory(sourcePath), QString::fromLatin1(digest), QFileInfo(sourcePath).fileName());
 }
 
 /** Pull every path-looking value out of a scene collection JSON tree. */

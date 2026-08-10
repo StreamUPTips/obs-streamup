@@ -173,7 +173,96 @@ QString restoredMediaRoot(const Backup::Locations &loc)
 	return loc.configDir + QStringLiteral("/streamup-restored-media");
 }
 
+/**
+ * Is this entry one OBS reads before plugins load?
+ *
+ * user.ini holds the theme name and global.ini the appearance-adjacent settings,
+ * and the themes themselves have to be on disk for FindThemes() to see them.
+ * All three are read in OBSApp::InitTheme, well before loadAppModules, so they
+ * are written first during apply and are the ones worth warning about when they
+ * only land on the load-time catch-up pass.
+ */
+/**
+ * Log which theme the restored user.ini asks for and whether a theme with that
+ * id can be found, matching how OBS looks: the install's data themes folder and
+ * the user themes folder. When this line says "not found", the next launch will
+ * fall back to the default theme, which is exactly the symptom people report as
+ * "the theme did not come back".
+ */
+void logRestoredTheme()
+{
+	const Backup::Locations loc = Backup::ResolveLocations();
+	if (!loc.valid())
+		return;
+
+	QFile userIni(loc.configDir + QStringLiteral("/user.ini"));
+	if (!userIni.open(QIODevice::ReadOnly))
+		return;
+	const QString contents = QString::fromUtf8(userIni.readAll());
+	userIni.close();
+
+	// Small enough to read by hand, and config_t is not safe to open here:
+	// this runs during obs_shutdown.
+	QString theme;
+	for (const QString &line : contents.split(QLatin1Char('\n'))) {
+		const QString trimmed = line.trimmed();
+		if (trimmed.startsWith(QStringLiteral("Theme="), Qt::CaseInsensitive)) {
+			theme = trimmed.mid(6).trimmed();
+			break;
+		}
+	}
+	if (theme.isEmpty())
+		return;
+
+	bool found = false;
+	const QStringList filters = {QStringLiteral("*.obt"), QStringLiteral("*.ovt")};
+	QStringList searchDirs;
+	if (!loc.themesDir.isEmpty())
+		searchDirs << loc.themesDir;
+	if (!loc.installDir.isEmpty())
+		searchDirs << loc.installDir + QStringLiteral("/data/obs-studio/themes");
+
+	for (const QString &dir : searchDirs) {
+		for (const QFileInfo &file : QDir(dir).entryInfoList(filters, QDir::Files)) {
+			QFile themeFile(file.absoluteFilePath());
+			if (!themeFile.open(QIODevice::ReadOnly))
+				continue;
+			// The id lives in the theme's metadata header, near the top.
+			const QString head = QString::fromUtf8(themeFile.read(4096));
+			themeFile.close();
+			if (head.contains(theme)) {
+				found = true;
+				break;
+			}
+		}
+		if (found)
+			break;
+	}
+
+	if (found)
+		StreamUP::DebugLogger::LogInfoFormat("Restore", "Restored theme is \"%s\", found on disk",
+						     theme.toUtf8().constData());
+	else
+		StreamUP::DebugLogger::LogWarningFormat(
+			"Restore", "Restored theme is \"%s\" but no theme file with that id was found in %s",
+			theme.toUtf8().constData(), searchDirs.join(QStringLiteral(", ")).toUtf8().constData());
+}
+
+bool isAppearanceEntry(const QString &archivePath)
+{
+	return archivePath == QStringLiteral("config/user.ini") || archivePath == QStringLiteral("config/global.ini") ||
+	       archivePath.startsWith(QStringLiteral("themes/"));
+}
+
 } // namespace
+
+QString DefaultMediaFolder()
+{
+	const Backup::Locations loc = Backup::ResolveLocations();
+	if (!loc.valid())
+		return {};
+	return QDir::cleanPath(restoredMediaRoot(loc));
+}
 
 Inspection Inspect(const QString &archivePath)
 {
@@ -348,7 +437,13 @@ bool Stage(const QString &archivePath, QString *error, QString *safetyBackupPath
 		return reportError(reader.lastError());
 
 	const QJsonObject manifest = QJsonDocument::fromJson(reader.readFile(kManifestName)).object();
-	const QString mediaRoot = restoredMediaRoot(loc);
+
+	// The chosen folder, or the default beside the config. Picking one is how a
+	// backup becomes a setup that runs from a different drive on the new
+	// machine rather than out of the OBS config folder.
+	const QString mediaRoot = selection.mediaFolder.isEmpty()
+					  ? restoredMediaRoot(loc)
+					  : QDir::cleanPath(QDir::fromNativeSeparators(selection.mediaFolder));
 
 	QJsonArray plan;
 	int staged = 0;
@@ -398,6 +493,7 @@ bool Stage(const QString &archivePath, QString *error, QString *safetyBackupPath
 	// scenes point at the files we are about to lay down, rather than at
 	// wherever they lived on the machine the backup came from.
 	int rewritten = 0;
+	int keptInPlace = 0;
 	const QJsonArray media = manifest.value(QStringLiteral("media")).toArray();
 	QHash<QString, QString> pathMap;
 	for (const QJsonValue &value : media) {
@@ -405,7 +501,20 @@ bool Stage(const QString &archivePath, QString *error, QString *safetyBackupPath
 		const QString archivePathForMedia = entry.value(QStringLiteral("archive_path")).toString();
 		if (archivePathForMedia.isEmpty())
 			continue; // referenced but not collected, leave the path alone
+		if (selection.mediaPaths == MediaPaths::KeepOriginal)
+			continue;
+
 		const QString original = entry.value(QStringLiteral("path")).toString();
+
+		// Restoring onto the machine the backup came from: a file that is still
+		// sitting where the scene expects it should keep pointing there, so the
+		// setup carries on using the real library rather than a copy inside the
+		// OBS config folder that then drifts from it.
+		if (selection.mediaPaths == MediaPaths::RepointMissingOnly && QFileInfo::exists(original)) {
+			keptInPlace++;
+			continue;
+		}
+
 		const QString restored =
 			mediaRoot + QStringLiteral("/") + archivePathForMedia.mid(QStringLiteral("media/").size());
 		pathMap.insert(original, QDir::cleanPath(restored));
@@ -427,11 +536,32 @@ bool Stage(const QString &archivePath, QString *error, QString *safetyBackupPath
 
 			bool touched = false;
 			for (auto it = pathMap.constBegin(); it != pathMap.constEnd(); ++it) {
-				// Scene JSON stores paths with forward slashes, and so do we.
-				const QString from = QString(it.key()).replace(QLatin1Char('\\'), QLatin1Char('/'));
-				const QString to = QString(it.value()).replace(QLatin1Char('\\'), QLatin1Char('/'));
-				if (contents.contains(from)) {
-					contents.replace(from, to);
+				// Scene JSON usually stores forward slashes, but not always:
+				// some plugins write native Windows paths, which land in the
+				// JSON as escaped backslashes. Both forms have to be replaced
+				// or the source keeps its dead path and the restore looks
+				// like it did nothing.
+				const QString fromSlash = QString(it.key()).replace(QLatin1Char('\\'), QLatin1Char('/'));
+				const QString toSlash = QString(it.value()).replace(QLatin1Char('\\'), QLatin1Char('/'));
+				const QString fromEscaped =
+					QString(fromSlash).replace(QLatin1Char('/'), QStringLiteral("\\\\"));
+				const QString toEscaped =
+					QString(toSlash).replace(QLatin1Char('/'), QStringLiteral("\\\\"));
+
+				// Windows paths differ in case between what a plugin wrote and
+				// what the manifest recorded far more often than they differ
+				// in substance, so matching is case-insensitive there.
+#ifdef _WIN32
+				const Qt::CaseSensitivity cs = Qt::CaseInsensitive;
+#else
+				const Qt::CaseSensitivity cs = Qt::CaseSensitive;
+#endif
+				if (contents.contains(fromSlash, cs)) {
+					contents.replace(fromSlash, toSlash, cs);
+					touched = true;
+				}
+				if (contents.contains(fromEscaped, cs)) {
+					contents.replace(fromEscaped, toEscaped, cs);
 					touched = true;
 				}
 			}
@@ -459,6 +589,13 @@ bool Stage(const QString &archivePath, QString *error, QString *safetyBackupPath
 	journal[QStringLiteral("source_archive")] = archivePath;
 	journal[QStringLiteral("safety_backup")] = safetyPath;
 	journal[QStringLiteral("media_paths_rewritten")] = rewritten;
+	journal[QStringLiteral("media_paths_kept")] = keptInPlace;
+	journal[QStringLiteral("media_folder")] = QDir::cleanPath(mediaRoot);
+	journal[QStringLiteral("media_mode")] = selection.mediaPaths == MediaPaths::KeepOriginal
+							? QStringLiteral("keep")
+						: selection.mediaPaths == MediaPaths::RepointMissingOnly
+							? QStringLiteral("repoint-missing")
+							: QStringLiteral("repoint-all");
 	journal[QStringLiteral("partial")] = !selection.everything();
 	if (!selection.everything()) {
 		QJsonObject picked;
@@ -478,6 +615,9 @@ bool Stage(const QString &archivePath, QString *error, QString *safetyBackupPath
 
 	StreamUP::DebugLogger::LogInfoFormat("Restore", "Staged %d files%s (%d scene collections had media paths rewritten)",
 					     staged, selection.everything() ? "" : " [partial restore]", rewritten);
+	StreamUP::DebugLogger::LogInfoFormat("Restore", "Media: %s, %d files left on their original paths, folder %s",
+					     journal.value(QStringLiteral("media_mode")).toString().toUtf8().constData(),
+					     keptInPlace, QDir::cleanPath(mediaRoot).toUtf8().constData());
 	return true;
 }
 
@@ -492,18 +632,43 @@ void CancelPending()
 	StreamUP::DebugLogger::LogInfo("Restore", "Pending restore cancelled");
 }
 
-void ApplyPending()
+/**
+ * @param lateCatchUp true when this is the module-load pass finishing a restore
+ *        the shutdown pass could not complete. OBS has already chosen its theme
+ *        by then, so anything appearance-related written here needs one more
+ *        restart to be seen, and the user is told so rather than left guessing.
+ */
+static void applyPendingInternal(bool lateCatchUp)
 {
 	if (!HasPending())
 		return;
 
 	const QJsonObject journal = readJson(journalPath());
-	const QJsonArray files = journal.value(QStringLiteral("files")).toArray();
+	QJsonArray files = journal.value(QStringLiteral("files")).toArray();
 	if (files.isEmpty())
 		return;
 
-	StreamUP::DebugLogger::LogInfoFormat("Restore", "Applying staged restore of %d files", files.size());
+	// Appearance files first. OBS reads user.ini and scans the themes folder in
+	// InitTheme(), before it loads a single plugin, so these are the entries
+	// with the least room for a retry: if they are not down by the end of the
+	// shutdown pass, the theme is a launch behind. Writing them before the
+	// thousand plugin_config files keeps them out of the range where a late
+	// failure can push them onto the catch-up pass.
+	QJsonArray ordered;
+	for (const QJsonValue &value : files) {
+		if (isAppearanceEntry(value.toObject().value(QStringLiteral("archive")).toString()))
+			ordered.append(value);
+	}
+	for (const QJsonValue &value : files) {
+		if (!isAppearanceEntry(value.toObject().value(QStringLiteral("archive")).toString()))
+			ordered.append(value);
+	}
+	files = ordered;
 
+	StreamUP::DebugLogger::LogInfoFormat("Restore", "Applying staged restore of %d files%s", files.size(),
+					     lateCatchUp ? " (catching up at startup)" : "");
+
+	int appearanceWritten = 0;
 	int applied = 0;
 	int alreadyInPlace = 0;
 	int failed = 0;
@@ -515,6 +680,7 @@ void ApplyPending()
 		const QString staged = item.value(QStringLiteral("staged")).toString();
 		const QString target = item.value(QStringLiteral("target")).toString();
 		const QString expected = item.value(QStringLiteral("sha1")).toString();
+		const bool appearance = isAppearanceEntry(item.value(QStringLiteral("archive")).toString());
 		if (staged.isEmpty() || target.isEmpty())
 			continue;
 
@@ -561,6 +727,8 @@ void ApplyPending()
 		QFile incomingFile(incoming);
 		if (incomingFile.rename(target)) {
 			applied++;
+			if (appearance)
+				appearanceWritten++;
 			continue;
 		}
 
@@ -571,6 +739,8 @@ void ApplyPending()
 		if (QFile::copy(staged, target)) {
 			QFile::remove(incoming);
 			applied++;
+			if (appearance)
+				appearanceWritten++;
 			continue;
 		}
 
@@ -597,7 +767,16 @@ void ApplyPending()
 	result[QStringLiteral("safety_backup")] = journal.value(QStringLiteral("safety_backup"));
 	result[QStringLiteral("failures")] = failureList;
 	result[QStringLiteral("reported")] = false; // the UI shows this once on next launch
+
+	// Only true when appearance files landed on the catch-up pass: OBS chose its
+	// theme before we ran, so it is showing the old one until the next launch.
+	result[QStringLiteral("theme_needs_restart")] = (lateCatchUp && appearanceWritten > 0);
 	writeJson(lastResultPath(), result);
+
+	// Say what the restored setup asks for and whether it is actually there. A
+	// theme that silently falls back is otherwise indistinguishable from a
+	// restore that did not run.
+	logRestoredTheme();
 
 	StreamUP::DebugLogger::LogInfoFormat("Restore", "Restored %d files, %d already correct, %d failed (of %lld)",
 					     applied, alreadyInPlace, failed, (long long)files.size());
@@ -608,14 +787,21 @@ void ApplyPending()
 		removeDirectory(stagingRoot());
 }
 
+void ApplyPending()
+{
+	applyPendingInternal(/*lateCatchUp=*/false);
+}
+
 void VerifyPending()
 {
 	// Runs at module load, before OBS reads scene collections, so anything
-	// still outstanding can be put right before it matters.
+	// still outstanding can be put right before it matters. Appearance is the
+	// exception: the theme was chosen before we were loaded, so anything
+	// written here shows up one launch later and the report says so.
 	if (HasPending()) {
 		StreamUP::DebugLogger::LogWarning("Restore",
 						  "A staged restore was not fully applied, finishing it now");
-		ApplyPending();
+		applyPendingInternal(/*lateCatchUp=*/true);
 		return;
 	}
 
@@ -650,6 +836,7 @@ AppliedReport ReadAppliedReport()
 	report.appliedAt = result.value(QStringLiteral("applied_at")).toString();
 	report.sourceArchive = result.value(QStringLiteral("source_archive")).toString();
 	report.safetyBackup = result.value(QStringLiteral("safety_backup")).toString();
+	report.themeNeedsRestart = result.value(QStringLiteral("theme_needs_restart")).toBool();
 	for (const QJsonValue &value : result.value(QStringLiteral("failures")).toArray())
 		report.failures << value.toString();
 	return report;

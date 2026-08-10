@@ -229,6 +229,64 @@ is no StreamUP menu to restore from. Restoring *forward* into a newer OBS is fin
 rather than anything the backup format can solve. Worth knowing before telling anyone to use a
 backup to downgrade.
 
+## Collected media is a folder people open
+
+`media/<hash>/<file>` was collision-proof but unreadable: ninety hashed folders in a
+flat list. Collected media is now `media/<category>/<hash>/<file>`, with categories
+`images`, `video`, `audio`, `fonts`, `shaders`, `luts`, `web` and `other`, chosen by
+extension. The hash layer stays, because that is what stops six different `index.html`
+files landing on one entry. Restore maps anything under `media/` by suffix, so backups
+made before this still restore unchanged.
+
+This matters for the case the feature is really for: collect media, take the archive to
+another machine, and the result is a sorted media library plus a setup that points at it.
+
+### Where it lands, and what points at it
+
+Restore has three media modes:
+
+| Mode | What it does | When |
+|---|---|---|
+| Only what is missing *(default)* | Sources whose file is still on this machine keep their path; missing ones are re-pointed at the restored copy | Restoring onto the same machine |
+| All media | Every collected source is re-pointed at the restored media folder | Moving to a different machine |
+| Leave paths alone | Media is unpacked, no scene paths change | Putting files back by hand |
+
+The default is deliberately not "all": most restores happen on the machine the backup came
+from, and re-pointing everything there orphans the media library the user actually works in
+while the scenes quietly start using a copy.
+
+The destination folder is selectable, defaulting to `<config>/streamup-restored-media`.
+Pointing it at the drive the setup will live on is the difference between a restored setup
+and a restored setup that runs from inside the OBS config folder.
+
+Path rewriting also handles native Windows paths (escaped backslashes in the scene JSON, not
+just forward slashes) and matches case-insensitively on Windows. Both were real misses: a
+plugin that writes `D:\Streaming\...` was left with a dead path by a rewrite that only looked
+for `D:/Streaming/...`.
+
+## Why the theme took two restarts
+
+Apply runs at `obs_module_unload`, and anything that fails there is retried by `VerifyPending`
+at `obs_module_load`. That retry is too late for appearance. OBS order:
+
+1. `InitTheme()` — `FindThemes()`, then reads `user.ini` `[Appearance] Theme`
+   (`frontend/OBSApp_Themes.cpp:1073-1111`)
+2. `loadAppModules()` — our `obs_module_load`
+
+So `user.ini`, `global.ini` or a `themes/*.obt` that only lands on the catch-up pass is a
+launch behind, and OBS has already fallen back to the default theme. Three changes:
+
+- Apply writes appearance entries **first**, ahead of the thousand `plugin_config` files, so
+  they are never the ones a late failure pushes onto the catch-up pass.
+- When the catch-up pass does write appearance files, the report says so: "restart once more
+  and your theme will be back", instead of the user restarting until it looks right.
+- Apply logs the theme id from the restored `user.ini` and whether a theme file with that id
+  exists in either themes folder. A theme falling back is otherwise indistinguishable in the
+  log from a restore that did not run.
+
+There is no plugin API to set the theme live (`OBSApp::SetTheme` is frontend-internal), so a
+prompted single restart is the honest ceiling here.
+
 ## Still to do
 
 Nothing outstanding on backup and restore.

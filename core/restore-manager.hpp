@@ -67,6 +67,20 @@ using ProgressCallback = std::function<bool(const QString &, int, int)>;
  * settings and themes as well. Anything left out is simply not staged, so the
  * live copy is untouched.
  */
+/** What a restore does with the paths a scene collection points at. */
+enum class MediaPaths {
+	// Point every collected source at the restored media folder. Right for a
+	// move to another machine, where the original paths do not exist.
+	RepointAll,
+	// Leave the paths alone. Right when the media is already on this machine
+	// where it always was and only the scene collection was lost.
+	KeepOriginal,
+	// Keep the original path where the file is really there, re-point the rest.
+	// The common case after a partial loss, and the safest default when
+	// restoring onto the machine the backup came from.
+	RepointMissingOnly,
+};
+
 struct Selection {
 	bool sceneCollections = true;
 	bool profiles = true;
@@ -78,6 +92,12 @@ struct Selection {
 	// When non-empty, only these scene collections are restored (by name,
 	// without the .json). Ignored unless sceneCollections is on.
 	QStringList onlyCollections;
+
+	// What to do with media paths, and where collected media lands. An empty
+	// folder means the default beside the OBS config; setting one lets a
+	// restored setup put its media on the drive it is going to live on.
+	MediaPaths mediaPaths = MediaPaths::RepointAll;
+	QString mediaFolder;
 
 	bool everything() const
 	{
@@ -95,6 +115,9 @@ struct Selection {
  */
 bool Stage(const QString &archivePath, QString *error, QString *safetyBackupPath,
 	   ProgressCallback progress = nullptr, const Selection &selection = Selection());
+
+/** Where collected media goes when no folder is chosen. */
+QString DefaultMediaFolder();
 
 /** Is a staged restore waiting to be applied? */
 bool HasPending();
@@ -129,6 +152,12 @@ struct AppliedReport {
 	QString sourceArchive;
 	QString safetyBackup;
 	QStringList failures; // file paths that could not be written
+
+	// OBS picks its theme in InitTheme(), which runs before plugins load, so
+	// anything appearance-related written by the load-time catch-up pass is a
+	// launch too late to be seen. When that happens the user is told to restart
+	// once more rather than being left to work it out.
+	bool themeNeedsRestart = false;
 };
 
 /** Read the report left by the last apply, if there is one. */
