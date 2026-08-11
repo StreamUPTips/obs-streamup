@@ -12,10 +12,6 @@ namespace DebugLogger {
 // Thread-safe initialization tracking
 static std::atomic<bool> initializationComplete{false};
 
-// The built-in debug toggle, used by plugins that have no settings store of
-// their own to read the flag from.
-static std::atomic<bool> debugLoggingEnabled{false};
-
 // The prefix and the debug gate are both set once at module load and read from
 // every logging thread afterwards, so a plain mutex around the swap is enough:
 // it never contends in practice, and it keeps a half-written std::function or
@@ -177,11 +173,6 @@ void SetDebugLoggingPredicate(std::function<bool()> predicate)
     debugPredicate = std::move(predicate);
 }
 
-void SetDebugLoggingEnabled(bool enabled)
-{
-    debugLoggingEnabled.store(enabled);
-}
-
 bool IsDebugLoggingEnabled()
 {
     // Copy the predicate out before calling it, so it is never invoked with the
@@ -192,7 +183,9 @@ bool IsDebugLoggingEnabled()
         std::lock_guard<std::mutex> lock(configMutex);
         predicate = debugPredicate;
     }
-    return predicate ? predicate() : debugLoggingEnabled.load();
+    // No predicate means the plugin never wired up a debug toggle, so there is
+    // nobody to have turned debug output on: stay quiet.
+    return predicate ? predicate() : false;
 }
 
 } // namespace DebugLogger

@@ -96,11 +96,15 @@ void SetLogPrefix(const char* prefix);
 /**
  * @brief Point the debug gate at the plugin's own settings
  *
- * Plugins disagree about where the "debug logging" toggle lives: the main
- * StreamUP plugin reads it from SettingsManager, the smaller ones just keep a
- * flag. Rather than hardcode either, the gate is a predicate the plugin sets.
- * An empty predicate restores the built-in flag driven by
- * SetDebugLoggingEnabled.
+ * Plugins disagree about where the "debug logging" toggle lives, so the logger
+ * refuses to own that decision: the gate is a single predicate the plugin
+ * installs, once, from obs_module_load. The main StreamUP plugin points it at
+ * its SettingsManager toggle.
+ *
+ * A plugin that never calls this gets no debug output at all, which is the
+ * intended default: debug lines are noise in the OBS log until someone has
+ * deliberately asked for them, and a plugin with no user-facing toggle has no
+ * way for anyone to ask.
  *
  * The predicate is called on whatever thread logs, so it must be thread-safe.
  *
@@ -109,15 +113,8 @@ void SetLogPrefix(const char* prefix);
 void SetDebugLoggingPredicate(std::function<bool()> predicate);
 
 /**
- * @brief Enable or disable debug logging at runtime
- *
- * Drives the built-in flag, which is only consulted while no predicate is set.
- */
-void SetDebugLoggingEnabled(bool enabled);
-
-/**
  * @brief Check if debug logging is currently enabled
- * @return The predicate's answer if one is set, otherwise the built-in flag
+ * @return The predicate's answer, or false while no predicate is set
  */
 bool IsDebugLoggingEnabled();
 
