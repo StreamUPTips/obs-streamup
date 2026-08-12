@@ -153,6 +153,9 @@ private:
     void setLocked(bool locked);
     void updateUIEnabledState();
     void populateProjectorMenu();
+    // Rebuilt every time the menu opens: the transition list and the scene's
+    // stored override can both change between one right click and the next.
+    void populateTransitionOverrideMenu(obs_source_t *sceneSource);
 
 public:
     // Color helper methods (public for CustomColorDelegate access)
@@ -217,6 +220,7 @@ public:
     QMenu *m_backgroundContextMenu;
     QMenu *m_sceneOrderMenu;
     QMenu *m_sceneProjectorMenu;
+    QMenu *m_sceneTransitionMenu = nullptr;
 
     // "Set Colour" submenu, shared by the folder and scene context menus (both
     // act on m_currentContextItem, so one instance serves both).
@@ -371,6 +375,10 @@ protected:
     void dropEvent(QDropEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    // The view fills the whole row with the theme's selection colour before the
+    // delegate runs. Rows the delegate colours itself opt out of that fill.
+    void drawRow(QPainter *painter, const QStyleOptionViewItem &option,
+                 const QModelIndex &index) const override;
 
 private:
     void setupView();

@@ -23,6 +23,7 @@
 #include <QToolButton>
 #include <QAction>
 #include <QWidgetAction>
+#include <QSpinBox>
 #include <QGridLayout>
 #include <QKeyEvent>
 #include <QPointer>
@@ -704,6 +705,15 @@ void SceneOrganiserDock::setupContextMenu()
     // We'll populate projector options dynamically when the menu is shown
     m_sceneProjectorMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Projector.Window"), -1), this, &SceneOrganiserDock::onOpenProjectorWindowClicked);
     m_sceneContextMenu->addMenu(m_sceneProjectorMenu);
+
+    // Transition override, matching the scene list in OBS itself. Main canvas
+    // only: the vertical canvas runs its scene switches through Aitum's own
+    // transition, which does not read these settings, so offering it there
+    // would be a control that quietly does nothing.
+    if (m_canvasType == CanvasType::Normal) {
+        m_sceneTransitionMenu = new QMenu(QString::fromUtf8(obs_frontend_get_locale_string("TransitionOverride"), -1), this);
+        m_sceneContextMenu->addMenu(m_sceneTransitionMenu);
+    }
 
     // Additional OBS actions
     m_sceneContextMenu->addSeparator();
@@ -1411,6 +1421,9 @@ void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelInd
     // Populate projector menu with current monitors
     populateProjectorMenu();
 
+    // Transition override follows whichever scene was right clicked
+    populateTransitionOverrideMenu(source);
+
     // Enable/disable "Paste Filters" based on whether we have copied filters
     QList<QAction*> actions = m_sceneContextMenu->actions();
     for (QAction *action : actions) {
@@ -1966,12 +1979,19 @@ void SceneOrganiserDock::applyCustomColorToItem(QStandardItem *item, const QColo
         return;
     }
 
-    // Set background color
-    item->setData(QBrush(color), Qt::BackgroundRole);
-
-    // Calculate and set contrasting text color
-    QColor textColor = getContrastTextColor(color);
-    item->setData(QBrush(textColor), Qt::ForegroundRole);
+    // The colour itself lives on UserRole + 1; CustomColorDelegate reads it there
+    // and paints the row. Nothing is set on Qt::BackgroundRole on purpose.
+    //
+    // Setting it as well would paint the colour twice: the style fills the whole
+    // row square with the role brush, then the delegate draws its inset rounded
+    // pill on top, leaving a darker border of the same colour around every
+    // coloured row. Qt::ForegroundRole is the same story for the text — it is
+    // reapplied inside QStyledItemDelegate::initStyleOption, which runs after the
+    // delegate has set its own palette and so silently wins.
+    //
+    // These clears matter for items coloured by an earlier version of the plugin.
+    item->setData(QVariant(), Qt::BackgroundRole);
+    item->setData(QVariant(), Qt::ForegroundRole);
 }
 
 void SceneOrganiserDock::clearCustomColorFromItem(QStandardItem *item)
@@ -3503,6 +3523,91 @@ void SceneOrganiserDock::onSceneMoveToBottomClicked()
     }
 }
 
+void SceneOrganiserDock::populateTransitionOverrideMenu(obs_source_t *sceneSource)
+{
+    if (!m_sceneTransitionMenu) {
+        return;
+    }
+
+    // Rebuilt from scratch each time. Transitions can be added or renamed while
+    // the dock is open, and the tick has to follow whichever scene was clicked.
+    m_sceneTransitionMenu->clear();
+
+    if (!sceneSource) {
+        m_sceneTransitionMenu->setEnabled(false);
+        return;
+    }
+    m_sceneTransitionMenu->setEnabled(true);
+
+    // OBS keeps the override on the scene's own private settings, and that is
+    // where its transition code reads it back from. Using the same keys and the
+    // same 300ms default means an override set here shows up in the OBS scene
+    // list, and one set there shows up with a tick in here.
+    obs_data_t *privateSettings = obs_source_get_private_settings(sceneSource);
+    obs_data_set_default_int(privateSettings, "transition_duration", 300);
+    const QString currentTransition = QString::fromUtf8(obs_data_get_string(privateSettings, "transition"));
+    const int currentDuration = static_cast<int>(obs_data_get_int(privateSettings, "transition_duration"));
+    obs_data_release(privateSettings);
+
+    const QString sceneName = QString::fromUtf8(obs_source_get_name(sceneSource));
+    QPointer<SceneOrganiserDock> self(this);
+
+    // The scene is looked up again when an action fires rather than captured
+    // here. The menu outlives this call, and the scene can be renamed or deleted
+    // in between, so holding a source pointer would be holding a stale one.
+    auto setOverride = [self, sceneName](const QString &transitionName) {
+        if (!self) return;
+        obs_source_t *scene = Canvas::FindScene(self->GetCanvasType(), sceneName.toUtf8().constData());
+        if (!scene) return;
+        obs_data_t *settings = obs_source_get_private_settings(scene);
+        obs_data_set_string(settings, "transition", transitionName.toUtf8().constData());
+        obs_data_release(settings);
+        obs_source_release(scene);
+    };
+
+    // An empty transition name is how OBS records "no override".
+    QAction *noneAction = m_sceneTransitionMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("None"), -1));
+    noneAction->setCheckable(true);
+    noneAction->setChecked(currentTransition.isEmpty());
+    connect(noneAction, &QAction::triggered, this, [setOverride]() { setOverride(QString()); });
+
+    struct obs_frontend_source_list transitions = {};
+    obs_frontend_get_transitions(&transitions);
+    for (size_t i = 0; i < transitions.sources.num; i++) {
+        const char *name = obs_source_get_name(transitions.sources.array[i]);
+        if (!name) continue;
+
+        const QString transitionName = QString::fromUtf8(name);
+        QAction *action = m_sceneTransitionMenu->addAction(transitionName);
+        action->setCheckable(true);
+        action->setChecked(transitionName == currentTransition);
+        connect(action, &QAction::triggered, this, [setOverride, transitionName]() { setOverride(transitionName); });
+    }
+    obs_frontend_source_list_free(&transitions);
+
+    // Duration sits in the menu as a spin box, the same as it does in OBS.
+    QSpinBox *duration = new QSpinBox(m_sceneTransitionMenu);
+    duration->setMinimum(50);
+    duration->setMaximum(20000);
+    duration->setSingleStep(50);
+    duration->setSuffix(" ms");
+    duration->setValue(currentDuration);
+    connect(duration, &QSpinBox::valueChanged, this, [self, sceneName](int value) {
+        if (!self) return;
+        obs_source_t *scene = Canvas::FindScene(self->GetCanvasType(), sceneName.toUtf8().constData());
+        if (!scene) return;
+        obs_data_t *settings = obs_source_get_private_settings(scene);
+        obs_data_set_int(settings, "transition_duration", value);
+        obs_data_release(settings);
+        obs_source_release(scene);
+    });
+
+    QWidgetAction *durationAction = new QWidgetAction(m_sceneTransitionMenu);
+    durationAction->setDefaultWidget(duration);
+    m_sceneTransitionMenu->addSeparator();
+    m_sceneTransitionMenu->addAction(durationAction);
+}
+
 void SceneOrganiserDock::populateProjectorMenu()
 {
     if (!m_sceneProjectorMenu) return;
@@ -4708,6 +4813,31 @@ void SceneTreeView::contextMenuEvent(QContextMenuEvent *event)
     event->accept();
 }
 
+void SceneTreeView::drawRow(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    // QTreeView fills the whole row with the theme's selection colour (via
+    // PE_PanelItemViewRow) before the delegate gets a look in. On a row that
+    // CustomColorDelegate paints itself, that fill is a second background behind
+    // the delegate's rounded pill — the darker band around a coloured row.
+    //
+    // The delegate's own copy of the state was already cleared, which is why an
+    // unselected coloured row looked right and only the selected one did not:
+    // this fill happens a level above the delegate and needed clearing too.
+    const bool hasCustomColour = index.data(Qt::UserRole + 1).isValid();
+    const bool isProgram = index.data(ProgramSceneRole).toBool();
+
+    if (!hasCustomColour && !isProgram) {
+        // Plain rows keep the native selection highlight.
+        QTreeView::drawRow(painter, option, index);
+        return;
+    }
+
+    QStyleOptionViewItem opt = option;
+    opt.state &= ~QStyle::State_Selected;
+    opt.state &= ~QStyle::State_MouseOver;
+    QTreeView::drawRow(painter, opt, index);
+}
+
 void SceneTreeView::keyPressEvent(QKeyEvent *event)
 {
     // Find the parent dock for all hotkey actions
@@ -5006,6 +5136,12 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
     painter->setBrush(bgColor);
     painter->drawRoundedRect(rect, 4, 4);
 
+    // No selection outline. One was tried here, drawn in the contrast colour so
+    // it would read on light and dark rows alike, but on a bright row that means
+    // a dark ring, which looks exactly like the row has been painted twice —
+    // the very artefact this delegate exists to avoid. Selection is carried by
+    // the brightened fill alone.
+
     painter->restore();
 
     // Now let the base class paint the content (icon, text) with custom text color
@@ -5019,6 +5155,16 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
     // Draw without focus rect to avoid visual artifacts
     modifiedOption.state &= ~QStyle::State_HasFocus;
 
+    // The background above is the finished article: bgColor already accounts for
+    // selection and hover. Leaving those flags set makes the style paint the
+    // theme's own highlight over the top, which washes a coloured row out into a
+    // blue-tinted blend and draws the theme's selection border around it.
+    // Clearing them is what keeps a selected green scene green.
+    modifiedOption.state &= ~QStyle::State_Selected;
+    modifiedOption.state &= ~QStyle::State_MouseOver;
+
+    // With State_Selected gone the style reads text from the Text role rather
+    // than HighlightedText, so both are already pointed at the contrast colour.
     QStyledItemDelegate::paint(painter, modifiedOption, index);
 }
 
