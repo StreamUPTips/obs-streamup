@@ -201,8 +201,13 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/streamup-toolbar.cpp
   ui/streamup-toolbar-config.hpp
   ui/streamup-toolbar-config.cpp
-  ui/streamup-toolbar-configurator.hpp
-  ui/streamup-toolbar-configurator.cpp
+  ui/streamup-toolbar-geometry.hpp
+  ui/streamup-toolbar-builder.hpp
+  ui/streamup-toolbar-builder.cpp
+  ui/streamup-toolbar-editor.hpp
+  ui/streamup-toolbar-editor.cpp
+  ui/streamup-toolbar-edit-panel.hpp
+  ui/streamup-toolbar-edit-panel.cpp
   ui/obs-hotkey-manager.hpp
   ui/obs-hotkey-manager.cpp
   ui/icon-selector-dialog.hpp
@@ -210,7 +215,11 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/hotkey-selector-dialog.hpp
   ui/hotkey-selector-dialog.cpp
   ui/hotkey-button-config-dialog.hpp
-  ui/hotkey-button-config-dialog.cpp)
+  ui/hotkey-button-config-dialog.cpp
+  ui/websocket-button-config-dialog.hpp
+  ui/websocket-button-config-dialog.cpp
+  ui/streamup-toolbar-response-popover.hpp
+  ui/streamup-toolbar-response-popover.cpp)
 
 # Integrations module files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -336,8 +345,13 @@ source_group("UI\\Toolbar" FILES
   ui/streamup-toolbar.cpp
   ui/streamup-toolbar-config.hpp
   ui/streamup-toolbar-config.cpp
-  ui/streamup-toolbar-configurator.hpp
-  ui/streamup-toolbar-configurator.cpp
+  ui/streamup-toolbar-geometry.hpp
+  ui/streamup-toolbar-builder.hpp
+  ui/streamup-toolbar-builder.cpp
+  ui/streamup-toolbar-editor.hpp
+  ui/streamup-toolbar-editor.cpp
+  ui/streamup-toolbar-edit-panel.hpp
+  ui/streamup-toolbar-edit-panel.cpp
   ui/obs-hotkey-manager.hpp
   ui/obs-hotkey-manager.cpp
   ui/icon-selector-dialog.hpp
@@ -345,7 +359,11 @@ source_group("UI\\Toolbar" FILES
   ui/hotkey-selector-dialog.hpp
   ui/hotkey-selector-dialog.cpp
   ui/hotkey-button-config-dialog.hpp
-  ui/hotkey-button-config-dialog.cpp)
+  ui/hotkey-button-config-dialog.cpp
+  ui/websocket-button-config-dialog.hpp
+  ui/websocket-button-config-dialog.cpp
+  ui/streamup-toolbar-response-popover.hpp
+  ui/streamup-toolbar-response-popover.cpp)
 
 source_group("Integrations" FILES
   integrations/websocket-api.hpp

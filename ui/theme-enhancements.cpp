@@ -14,6 +14,7 @@
 #include <QHBoxLayout>
 #include <QScrollArea>
 #include <QStatusBar>
+#include <QStyle>
 #include <QApplication>
 #include <QComboBox>
 #include <QHeaderView>
@@ -38,6 +39,68 @@ static const int COLOR_PREVIEW_RADIUS = 10;
 static ColorPreviewFilter* g_colorFilter = nullptr;
 static AppWidgetFilter* g_appFilter = nullptr;
 
+// The window inset that keeps docks off the window edge, so their rounded
+// corners are visible. The StreamUP toolbar is the exception: it lives in the
+// toolbar area, outside the docks, and a toolbar wants to sit hard against the
+// edge it is docked to. Anything else and you are throwing the mouse at a strip
+// of blank window rather than at the button.
+//
+// So the edge the toolbar is docked to loses its inset, and the toolbar supplies
+// its own gap on the inward-facing side (see the per-position margins in the
+// theme). Nothing is docked at that edge except the toolbar, so nothing else
+// goes flush as a side effect.
+static const int kWindowInset = 9;
+static Qt::ToolBarArea g_toolbarEdge = Qt::NoToolBarArea;
+
+static void applyMainWindowMargins(QMainWindow* mainWindow)
+{
+    if (!mainWindow) return;
+
+    QStatusBar* statusBar = mainWindow->statusBar();
+    const bool statusBarVisible = statusBar && statusBar->isVisible();
+
+    int left = kWindowInset;
+    int right = kWindowInset;
+    int top = 0;
+    int bottom = statusBarVisible ? 0 : kWindowInset;
+
+    switch (g_toolbarEdge) {
+    case Qt::LeftToolBarArea:
+        left = 0;
+        break;
+    case Qt::RightToolBarArea:
+        right = 0;
+        break;
+    case Qt::TopToolBarArea:
+        top = 0; // already 0, stated so the intent survives a future change
+        break;
+    case Qt::BottomToolBarArea:
+        // Only drop the bottom inset if the status bar is not the thing down
+        // there; otherwise the toolbar is not against the window edge anyway.
+        if (!statusBarVisible)
+            bottom = 0;
+        break;
+    default:
+        break;
+    }
+
+    mainWindow->setContentsMargins(left, top, right, bottom);
+
+    // The status bar carries a 10px top margin so it floats clear of the docks
+    // above it. With the toolbar docked along the bottom that margin lands
+    // between the toolbar and the status bar, which reads as the toolbar having
+    // far more space below it than above. The theme collapses it when this
+    // property is set.
+    if (QStatusBar* bar = mainWindow->statusBar()) {
+        const bool toolbarAbove = (g_toolbarEdge == Qt::BottomToolBarArea);
+        if (bar->property("streamupToolbarAbove").toBool() != toolbarAbove) {
+            bar->setProperty("streamupToolbarAbove", toolbarAbove);
+            bar->style()->unpolish(bar);
+            bar->style()->polish(bar);
+        }
+    }
+}
+
 // Status bar visibility filter
 class StatusBarFilter : public QObject {
 public:
@@ -48,12 +111,11 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override
     {
         if (event->type() == QEvent::Show || event->type() == QEvent::Hide) {
-            // Status bar visibility changed - update padding
-            QWidget* statusBar = qobject_cast<QWidget*>(watched);
-            if (statusBar && m_mainWindow) {
-                bool visible = (event->type() == QEvent::Show);
-                int bottomPadding = visible ? 0 : 9;
-                m_mainWindow->setContentsMargins(9, 0, 9, bottomPadding);
+            // Status bar visibility changed, so the bottom inset changes with it.
+            // Routed through the shared helper so this cannot undo the toolbar
+            // edge, which is what a straight setContentsMargins call here did.
+            if (qobject_cast<QWidget*>(watched) && m_mainWindow) {
+                applyMainWindowMargins(m_mainWindow);
             }
         }
         return QObject::eventFilter(watched, event);
@@ -567,6 +629,24 @@ void ApplyStatsWindowEnhancements(QWidget* statsWidget)
  * This creates space between the docks and the window edges so
  * the rounded corners of the docks are fully visible.
  */
+void SetToolbarDockedEdge(Qt::ToolBarArea area)
+{
+    if (g_toolbarEdge == area) {
+        return;
+    }
+    g_toolbarEdge = area;
+
+    // Re-apply straight away rather than waiting for the next padding pass:
+    // this is called when the user drags the toolbar to a different edge, and
+    // the inset has to move with it.
+    if (!IsUsingStreamUPTheme()) {
+        return;
+    }
+    if (QMainWindow* mainWindow = qobject_cast<QMainWindow*>((QWidget*)obs_frontend_get_main_window())) {
+        applyMainWindowMargins(mainWindow);
+    }
+}
+
 void ApplyMainWindowPadding(QMainWindow* mainWindow)
 {
     if (!mainWindow) return;
@@ -581,15 +661,12 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
         return;
     }
 
-    // Find the status bar
-    QStatusBar* statusBar = mainWindow->statusBar();
-    bool statusBarVisible = statusBar && statusBar->isVisible();
-    int bottomPadding = statusBarVisible ? 0 : 9;
-
-    // Set content margins on the main window edges (9px to match dock gaps)
-    mainWindow->setContentsMargins(9, 0, 9, bottomPadding);
+    // Set content margins on the main window edges (9px to match dock gaps),
+    // minus the edge the StreamUP toolbar is docked to.
+    applyMainWindowMargins(mainWindow);
 
     // Install event filter on status bar to watch for visibility changes
+    QStatusBar* statusBar = mainWindow->statusBar();
     if (statusBar && !g_statusBarFilter) {
         g_statusBarFilter = new StatusBarFilter(mainWindow);
         statusBar->installEventFilter(g_statusBarFilter);

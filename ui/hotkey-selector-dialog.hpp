@@ -38,7 +38,9 @@ private:
     void updateHotkeyDetails();
     QTreeWidgetItem* createCategoryItem(const QString& categoryName);
     QTreeWidgetItem* createHotkeyItem(const StreamUP::HotkeyInfo& hotkey, QTreeWidgetItem* parent);
-    QString getHotkeyKeybinding(const QString& hotkeyName);
+    // Takes the info, not the name: bindings are keyed by hotkey id, and names
+    // are shared across sources.
+    QString getHotkeyKeybinding(const StreamUP::HotkeyInfo& hotkey);
     
     // UI Components
     QVBoxLayout* mainLayout;        // chrome.content

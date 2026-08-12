@@ -12,7 +12,12 @@
 #include <obs.h>
 #include <obs-frontend-api.h>
 #include "streamup-toolbar-config.hpp"
+#include "streamup-toolbar-editor.hpp"
 #include "settings-manager.hpp"
+
+namespace StreamUP {
+class ToolbarEditPanel;
+}
 
 class StreamUPToolbar : public QToolBar {
     Q_OBJECT
@@ -28,6 +33,12 @@ public:
     void refreshSizeClass();   // Re-read toolbar size setting and re-polish styles
     void refreshAlignment();   // Re-read toolbar alignment setting and re-lay out
 
+    // Edit mode turns the bar itself into the editing surface: the live run is
+    // swapped for a ToolbarEditor and swapped back when you finish. There is
+    // only ever one laid-out run, so nothing can drift out of step with it.
+    void setEditMode(bool enabled);
+    bool isEditModeActive() const { return editModeActive; }
+
 private slots:
     void onStreamButtonClicked();
     void onRecordButtonClicked();
@@ -39,16 +50,16 @@ private slots:
     void onStudioModeButtonClicked();
     void onSettingsButtonClicked();
     void onStreamUPSettingsButtonClicked();
-    void onConfigureToolbarClicked();
+    void onEditToolbarClicked();
     void onToolbarSettingsClicked();
     void onDockButtonClicked();
     void onHotkeyButtonClicked();
+    void onWebSocketButtonClicked();
 
 private:
     void setupDynamicUI();
     void clearLayout();
     QToolButton* createButtonFromConfig(std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem> item);
-    QFrame* createSeparatorFromConfig(bool isVertical);
     void executeDockAction(const QString& actionType);
     void executeDockActionWithButton(const QString& actionType, QToolButton* button);
     void showToolbarContextMenu(const QPoint& position);
@@ -67,11 +78,22 @@ private:
     void updateButtonVisibility();
     void updateIconsForTheme();
     void updateLayoutOrientation();
+    // Driven by QToolBar::orientationChanged, which carries the new orientation.
+    // toolBarArea() is not reliably updated at that moment.
+    void onOrientationChanged(bool vertical);
+    void repositionEditPanel();
+    // Tells the theme which window edge the toolbar is docked to, so the main
+    // window's inset can be dropped on that side.
+    void reportDockedEdge();
+
+    // True when the toolbar is (or is about to be) docked to the left or right
+    // edge. Falls back to the saved position setting while the toolbar has not
+    // yet been handed to the main window, which is the case for the whole of
+    // the constructor, where toolBarArea() cannot answer for us.
+    bool isVerticalOrientation() const;
     // Current alignment tier from settings (Start / Centre / End)
     StreamUP::SettingsManager::ToolbarAlignment currentAlignment() const;
 
-    QFrame* createSeparator();
-    QFrame* createHorizontalSeparator();
     
     // Helper functions to check button availability
     bool isReplayBufferAvailable();
@@ -146,8 +168,12 @@ private:
     StreamUP::ToolbarConfig::ToolbarConfiguration toolbarConfig;
     QMap<QString, QToolButton*> dynamicButtons; // Maps item ID to button
     QMenu* contextMenu;
-    QAction* configureAction;
+    QAction* editToolbarAction = nullptr;
     QAction* toolbarSettingsAction;
+
+    StreamUP::ToolbarEditor* editor = nullptr;
+    StreamUP::ToolbarEditPanel* editPanel = nullptr;
+    bool editModeActive = false;
 
 protected:
     void contextMenuEvent(QContextMenuEvent* event) override;

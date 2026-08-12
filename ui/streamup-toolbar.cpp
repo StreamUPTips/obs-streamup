@@ -1,11 +1,17 @@
 #include "streamup-toolbar.hpp"
 #include <streamup/debug-logger.hpp>
-#include "streamup-toolbar-configurator.hpp"
+#include "streamup-toolbar-edit-panel.hpp"
 #include "dock/streamup-dock.hpp"
 #include "../video-capture-popup.hpp"
 #include "ui-helpers.hpp"
 #include "settings-manager.hpp"
+#include "streamup-toolbar-builder.hpp"
+#include "streamup-toolbar-response-popover.hpp"
+#include "theme-enhancements.hpp"
 #include "obs-hotkey-manager.hpp"
+#include "../obs-websocket-api.h"
+#include <QGuiApplication>
+#include <QScreen>
 #include <QStyle>
 #include <obs-module.h>
 #include <QIcon>
@@ -30,10 +36,14 @@ StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent),
 	recordButton(nullptr), pauseButton(nullptr), replayBufferButton(nullptr),
 	saveReplayButton(nullptr), virtualCameraButton(nullptr), virtualCameraConfigButton(nullptr),
 	studioModeButton(nullptr), settingsButton(nullptr), streamUPSettingsButton(nullptr),
-	centralWidget(nullptr), mainLayout(nullptr), contextMenu(nullptr), configureAction(nullptr)
+	centralWidget(nullptr), mainLayout(nullptr), contextMenu(nullptr)
 {
 	setObjectName("StreamUPToolbar");
 	setWindowTitle(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Title")));
+
+	// Once the main window has handed the toolbar its dock area, tell the theme
+	// which edge to drop its inset on.
+	QTimer::singleShot(0, this, [this]() { reportDockedEdge(); });
 
 	// Initialize optimized update system
 	m_updateBatchTimer = new QTimer(this);
@@ -44,17 +54,39 @@ StreamUPToolbar::StreamUPToolbar(QWidget *parent) : QToolBar(parent),
 	// Setup context menu
 	contextMenu = new QMenu(this);
 	contextMenu->setObjectName("StreamUPToolbarContextMenu");
-	configureAction = contextMenu->addAction(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Configurator.Title")));
-	configureAction->setObjectName("StreamUPToolbarConfigureAction");
-	connect(configureAction, &QAction::triggered, this, &StreamUPToolbar::onConfigureToolbarClicked);
+	// Configuring the toolbar and editing it are the same act now, so there is
+	// one entry rather than two that did nearly the same thing.
+	editToolbarAction = contextMenu->addAction(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.EditMode")));
+	editToolbarAction->setObjectName("StreamUPToolbarEditAction");
+	editToolbarAction->setCheckable(true);
+	connect(editToolbarAction, &QAction::triggered, this, &StreamUPToolbar::onEditToolbarClicked);
 
 	toolbarSettingsAction = contextMenu->addAction(QString::fromUtf8(obs_module_text("StreamUP.Settings.ToolbarSettings")));
 	toolbarSettingsAction->setObjectName("StreamUPToolbarSettingsAction");
 	connect(toolbarSettingsAction, &QAction::triggered, this, &StreamUPToolbar::onToolbarSettingsClicked);
 
+	// Qt is the authority on which way the run flows once we are docked, and it
+	// knows before toolBarArea() will answer. Without this the only thing that
+	// re-laid the toolbar out was a manual save from the configurator.
+	connect(this, &QToolBar::orientationChanged, this, [this](Qt::Orientation orientation) {
+		onOrientationChanged(orientation == Qt::Vertical);
+	});
+
 	// Load configuration and setup UI
 	toolbarConfig.loadFromSettings();
 	setupDynamicUI();
+
+	// An old configuration was carried across to the new format. Say so once,
+	// after OBS has finished putting its window together, since a dialog
+	// raised from a constructor has nothing to sit on top of yet.
+	if (toolbarConfig.consumeMigrationNotice()) {
+		QTimer::singleShot(2000, this, []() {
+			QWidget *mainWindow = static_cast<QWidget *>(obs_frontend_get_main_window());
+			StreamUP::UIStyles::info(mainWindow,
+						 QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Upgrade.Title")),
+						 QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Upgrade.Message")));
+		});
+	}
 
 	// Preload commonly used icons for better performance
 	preloadCommonIcons();
@@ -86,27 +118,26 @@ StreamUPToolbar::~StreamUPToolbar()
 	clearStyleSheetCache();
 }
 
-QFrame* StreamUPToolbar::createSeparator()
+bool StreamUPToolbar::isVerticalOrientation() const
 {
-	QFrame* separator = new QFrame();
-	separator->setProperty("class", "toolbar-separator");
-	separator->setFrameShape(QFrame::NoFrame);
-	separator->setFixedWidth(1);
-	// Height determined by CSS / layout stretch
-	return separator;
+	// Once the main window owns us, its answer is authoritative.
+	if (QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent())) {
+		Qt::ToolBarArea area = mainWindow->toolBarArea(this);
+		if (area == Qt::LeftToolBarArea || area == Qt::RightToolBarArea)
+			return true;
+		if (area == Qt::TopToolBarArea || area == Qt::BottomToolBarArea)
+			return false;
+		// NoToolBarArea: added but not yet placed. Fall through to settings.
+	}
+
+	// Constructed but not yet added, which is how the toolbar is always built:
+	// setupDynamicUI() runs before LoadStreamUPToolbar() calls addToolBar().
+	// Assuming horizontal here is what left side-docked spacers with a fixed
+	// width and a zero-height hint, so they rendered as nothing.
+	StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+	return settings.toolbarPosition == StreamUP::SettingsManager::ToolbarPosition::Left ||
+	       settings.toolbarPosition == StreamUP::SettingsManager::ToolbarPosition::Right;
 }
-
-QFrame* StreamUPToolbar::createHorizontalSeparator()
-{
-	QFrame* separator = new QFrame();
-	separator->setProperty("class", "toolbar-separator");
-	separator->setFrameShape(QFrame::NoFrame);
-	separator->setFixedHeight(1);
-	// Width determined by CSS / layout stretch
-	return separator;
-} 
-
-// Old setupUI function removed - now using setupDynamicUI() for configuration-based toolbar
 
 void StreamUPToolbar::updateToolbarStyling()
 {
@@ -114,11 +145,11 @@ void StreamUPToolbar::updateToolbarStyling()
 	// active OBS theme paint everything (idle, hover, checked, pressed).
 	//
 	// Theme hooks exposed for OBS theme files to target:
-	//   QToolBar#StreamUPToolbar             — floating
+	//   QToolBar#StreamUPToolbar             - floating
 	//   QToolBar#StreamUPToolbar-{Top,Bottom,Left,Right}
 	//   QToolBar[toolbarPosition="{top|bottom|left|right|floating}"]
-	//   QToolButton[buttonType="streamup-button"]            — every dynamic button
-	//   QToolButton#{streamButton,recordButton,...}{-Top|...} — per-action selectors
+	//   QToolButton[buttonType="streamup-button"]            - every dynamic button
+	//   QToolButton#{streamButton,recordButton,...}{-Top|...} - per-action selectors
 	//
 	// Calling clear here so any previously set fallback (older builds, or
 	// re-application via theme reload) is removed.
@@ -504,6 +535,10 @@ void StreamUPToolbar::updateDockButtonIcons()
 
 void StreamUPToolbar::updateAllButtons()
 {
+	// The live buttons do not exist while the editor is on the bar.
+	if (editModeActive)
+		return;
+
 	// Use the new efficient batched update system
 	updateButtonStatesEfficiently();
 
@@ -594,6 +629,9 @@ void StreamUPToolbar::preloadCommonIcons()
 
 void StreamUPToolbar::scheduleUpdate()
 {
+	if (editModeActive)
+		return;
+
 	if (!m_updatesPending) {
 		m_updatesPending = true;
 		m_updateBatchTimer->start();
@@ -602,6 +640,9 @@ void StreamUPToolbar::scheduleUpdate()
 
 void StreamUPToolbar::processBatchedUpdates()
 {
+	if (editModeActive)
+		return;
+
 	if (!m_updatesPending) {
 		return;
 	}
@@ -685,6 +726,9 @@ void StreamUPToolbar::updateButtonStatesEfficiently()
 
 void StreamUPToolbar::updateIconsForTheme()
 {
+	if (editModeActive)
+		return;
+
 	StreamUP::DebugLogger::LogDebug("Toolbar", "Theme Update", "Updating icons for theme change");
 
 	// Update buttons with fresh themed icons - all StreamUP toolbar buttons use custom icons
@@ -827,6 +871,13 @@ void StreamUPToolbar::updatePositionAwareTheme()
 		streamUPSettingsButton->setProperty("buttonType", "streamup-button");
 	}
 
+	// This is the one place that always runs when the position changes, whether
+	// that came from the settings, a theme refresh or an orientation flip, so
+	// the window inset is told from here. Hanging it off orientationChanged
+	// alone missed left to right and top to bottom, where the position moves
+	// but the orientation does not, and the inset stayed on the old edge.
+	StreamUP::ThemeEnhancements::SetToolbarDockedEdge(currentArea);
+
 	// Update layout orientation before applying theme
 	updateLayoutOrientation();
 
@@ -843,170 +894,170 @@ void StreamUPToolbar::updatePositionAwareTheme()
 	applySizeClass();
 }
 
+void StreamUPToolbar::onEditToolbarClicked()
+{
+	setEditMode(!editModeActive);
+}
+
+void StreamUPToolbar::setEditMode(bool enabled)
+{
+	if (editModeActive == enabled)
+		return;
+
+	editModeActive = enabled;
+	if (editToolbarAction)
+		editToolbarAction->setChecked(enabled);
+
+	if (!enabled) {
+		if (editPanel) {
+			editPanel->close();
+			editPanel->deleteLater();
+			editPanel = nullptr;
+		}
+		editor = nullptr; // owned by the toolbar's action, cleared by clear()
+
+		// Whatever the dragging produced is the configuration now.
+		toolbarConfig.saveToSettings();
+		refreshFromConfiguration();
+		return;
+	}
+
+	// Swap the live run for the editable one. Only one run exists at a time,
+	// so there is no preview to fall out of step with the real thing.
+	clear();
+	centralWidget = nullptr;
+	mainLayout = nullptr;
+	dynamicButtons.clear();
+
+	// clear() destroyed every button, so the cached pointers are dangling.
+	// An OBS frontend event arriving mid-edit would walk freed memory.
+	streamButton = nullptr;
+	recordButton = nullptr;
+	pauseButton = nullptr;
+	replayBufferButton = nullptr;
+	saveReplayButton = nullptr;
+	virtualCameraButton = nullptr;
+	virtualCameraConfigButton = nullptr;
+	studioModeButton = nullptr;
+	settingsButton = nullptr;
+	streamUPSettingsButton = nullptr;
+
+	editor = new StreamUP::ToolbarEditor(this);
+	editor->setAxis(StreamUP::ToolbarGeom::Axis(isVerticalOrientation()));
+	editor->setAlignment(currentAlignment());
+	editor->setConfiguration(&toolbarConfig);
+	addWidget(editor);
+
+	editPanel = new StreamUP::ToolbarEditPanel(editor, this);
+	connect(editPanel, &StreamUP::ToolbarEditPanel::doneRequested, this, [this]() { setEditMode(false); });
+	connect(editPanel, &StreamUP::ToolbarEditPanel::configurationChanged, this, [this]() {
+		// Held in memory until edit mode ends, so a session of dragging is one
+		// write rather than one per gesture.
+	});
+	connect(editPanel, &StreamUP::ToolbarEditPanel::resetRequested, this, [this]() {
+		toolbarConfig.setDefaultConfiguration();
+		if (editor)
+			editor->rebuild();
+	});
+	connect(editPanel, &StreamUP::ToolbarEditPanel::itemCreated, this,
+		[this](std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem> item) {
+			if (!item)
+				return;
+			toolbarConfig.addItem(item);
+			if (editor) {
+				editor->rebuild();
+				editor->setSelectedItemId(item->id);
+			}
+		});
+
+	repositionEditPanel();
+
+	editPanel->show();
+	editPanel->raise();
+}
+
+// The main window carries a 9px inset so docks sit off the window edge. The
+// toolbar wants the opposite on the edge it is docked to, so the theme is told
+// where we are and drops the inset on that side only.
+void StreamUPToolbar::reportDockedEdge()
+{
+	QMainWindow *mainWindow = qobject_cast<QMainWindow *>(parentWidget());
+	if (!mainWindow) {
+		StreamUP::ThemeEnhancements::SetToolbarDockedEdge(Qt::NoToolBarArea);
+		return;
+	}
+	StreamUP::ThemeEnhancements::SetToolbarDockedEdge(isFloating() ? Qt::NoToolBarArea
+								      : mainWindow->toolBarArea(this));
+}
+
+void StreamUPToolbar::onOrientationChanged(bool vertical)
+{
+	// While editing, the bar is showing the editor rather than a live run, so
+	// the editor is what has to turn. Re-laying it out here rather than waiting
+	// for edit mode to be toggled off and on again.
+	if (editModeActive) {
+		if (editor)
+			editor->setAxis(StreamUP::ToolbarGeom::Axis(vertical));
+		repositionEditPanel();
+		return;
+	}
+
+	updateLayoutOrientation();
+}
+
+void StreamUPToolbar::repositionEditPanel()
+{
+	if (!editPanel)
+		return;
+
+	// Sit beside the bar rather than wherever the window manager would drop it,
+	// and stay on screen when the toolbar is near an edge.
+	editPanel->adjustSize();
+	const QRect barRect(mapToGlobal(QPoint(0, 0)), size());
+	QScreen *scr = QGuiApplication::screenAt(barRect.center());
+	const QRect screen = scr ? scr->availableGeometry() : QGuiApplication::primaryScreen()->availableGeometry();
+	const QSize panelSize = editPanel->sizeHint();
+	const int gap = StreamUP::UIStyles::S(12);
+
+	QPoint where = isVerticalOrientation() ? QPoint(barRect.right() + gap, barRect.top())
+					       : QPoint(barRect.left(), barRect.bottom() + gap);
+	where.setX(qBound(screen.left(), where.x(), screen.right() - panelSize.width()));
+	where.setY(qBound(screen.top(), where.y(), screen.bottom() - panelSize.height()));
+	editPanel->move(where);
+}
+
 void StreamUPToolbar::updateLayoutOrientation()
 {
 	if (!centralWidget || !mainLayout) {
 		StreamUP::DebugLogger::LogWarning("Toolbar", "Layout: Cannot update layout orientation - missing central widget or layout");
 		return;
 	}
-	
-	// Get current toolbar position from the main window
-	QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
-	if (!mainWindow) {
-		StreamUP::DebugLogger::LogWarning("Toolbar", "Layout: Unable to get main window for layout orientation update");
+
+	// Where the toolbar is, or where the settings say it is headed while the
+	// main window has not taken ownership yet. Bailing out in that second case
+	// (as this used to) left a side-docked toolbar laid out horizontally.
+	const bool shouldBeVertical = isVerticalOrientation();
+
+	if (editModeActive)
 		return;
-	}
-	
-	Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
-	bool shouldBeVertical = (currentArea == Qt::LeftToolBarArea || currentArea == Qt::RightToolBarArea);
-	bool currentlyVertical = (mainLayout->direction() == QBoxLayout::TopToBottom || mainLayout->direction() == QBoxLayout::BottomToTop);
-	
-	// Only rebuild layout if orientation needs to change
-	if (shouldBeVertical != currentlyVertical) {
-		
-		// Store all current widgets in order with their types
-		QList<QWidget*> widgets;
-		QList<QString> widgetTypes; // "separator", "spacer", "button", or "other"
-		
-		// Extract widgets from current layout
-		while (mainLayout->count() > 0) {
-			QLayoutItem* item = mainLayout->takeAt(0);
-			if (item->widget()) {
-				QWidget* widget = item->widget();
-				widgets.append(widget);
-				
-				// Determine widget type for proper handling during rebuild
-				QFrame* frame = qobject_cast<QFrame*>(widget);
-				if (frame && frame->property("class").toString() == "toolbar-separator") {
-					widgetTypes.append("separator");
-				} else if (widget->objectName().contains("spacer")) {
-					widgetTypes.append("spacer");
-				} else if (qobject_cast<QToolButton*>(widget)) {
-					widgetTypes.append("button");
-				} else {
-					widgetTypes.append("other");
-				}
-			}
-			delete item;
-		}
-		
-		// Delete the old layout and create a new one with correct orientation
-		delete mainLayout;
-		if (shouldBeVertical) {
-			mainLayout = new QVBoxLayout(centralWidget);
-			setOrientation(Qt::Vertical);
-			mainLayout->setContentsMargins(0, 0, 0, 0);
-			mainLayout->setAlignment(Qt::AlignHCenter); // Center widgets horizontally
-		} else {
-			mainLayout = new QHBoxLayout(centralWidget);
-			setOrientation(Qt::Horizontal);
-			mainLayout->setContentsMargins(0, 0, 0, 0);
-			// No alignment needed for horizontal layout (default is fine)
-		}
-		mainLayout->setSpacing(StreamUP::UIStyles::S(1));
 
-		// Re-add widgets with proper orientation handling, including StreamUP button positioning
-		QWidget* streamupButton = nullptr;
-		QList<QWidget*> mainWidgets;
-		QList<QString> mainWidgetTypes;
-		
-		// Separate StreamUP button from main widgets
-		for (int i = 0; i < widgets.size(); ++i) {
-			QWidget* widget = widgets[i];
-			
-			// Check if this is the StreamUP settings button
-			if (widget == streamUPSettingsButton) {
-				streamupButton = widget;
-			} else {
-				mainWidgets.append(widget);
-				mainWidgetTypes.append(widgetTypes[i]);
-			}
-		}
-		
-		// Leading stretch for centre/end alignment (mirrors setupDynamicUI)
-		const auto alignment = currentAlignment();
-		if (alignment != StreamUP::SettingsManager::ToolbarAlignment::Start) {
-			mainLayout->addStretch();
-		}
+	const bool currentlyVertical =
+		(mainLayout->direction() == QBoxLayout::TopToBottom || mainLayout->direction() == QBoxLayout::BottomToTop);
 
-		// Add main widgets first
-		for (int i = 0; i < mainWidgets.size(); ++i) {
-			QWidget* widget = mainWidgets[i];
-			QString widgetType = mainWidgetTypes[i];
-			
-			if (widgetType == "separator") {
-				// Replace separator with correct orientation
-				widget->deleteLater(); // Delete the old separator
+	if (shouldBeVertical == currentlyVertical)
+		return;
 
-				// Add new separator with correct orientation
-				QFrame* separator;
-				if (shouldBeVertical) {
-					separator = createHorizontalSeparator();
-					mainLayout->addWidget(separator, 0, Qt::AlignHCenter);
-				} else {
-					separator = createSeparator();
-					mainLayout->addWidget(separator);
-				}
-			} else if (widgetType == "spacer") {
-				// Update spacer dimensions for new orientation
-				// Extract the spacer size from the old dimensions and apply to new orientation
-				QSize oldSize = widget->size();
-				int spacerSize;
-				if (currentlyVertical) {
-					// Was vertical, spacer size was the height
-					spacerSize = oldSize.height();
-				} else {
-					// Was horizontal, spacer size was the width
-					spacerSize = oldSize.width();
-				}
-
-				// Apply new dimensions based on new orientation
-				// Clear old fixed dimensions
-				widget->setMinimumSize(0, 0);
-				widget->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
-
-				if (shouldBeVertical) {
-					// Now vertical, spacer size becomes the height
-					widget->setFixedHeight(spacerSize);
-				} else {
-					// Now horizontal, spacer size becomes the width
-					widget->setFixedWidth(spacerSize);
-				}
-
-				// Re-add the spacer widget
-				if (shouldBeVertical) {
-					mainLayout->addWidget(widget, 0, Qt::AlignHCenter);
-				} else {
-					mainLayout->addWidget(widget);
-				}
-			} else {
-				// Re-add other widgets (buttons, etc.)
-				if (shouldBeVertical) {
-					mainLayout->addWidget(widget, 0, Qt::AlignHCenter);
-				} else {
-					mainLayout->addWidget(widget);
-				}
-			}
-		}
-		
-		// Add spacer (stretch) to push StreamUP button to the end. Skipped for
-		// End alignment so the run stays anchored against that button.
-		if (alignment != StreamUP::SettingsManager::ToolbarAlignment::End) {
-			mainLayout->addStretch();
-		}
-
-		// Add StreamUP button at the end (right side for horizontal, bottom for vertical)
-		if (streamupButton) {
-			if (shouldBeVertical) {
-				mainLayout->addWidget(streamupButton, 0, Qt::AlignHCenter);
-			} else {
-				mainLayout->addWidget(streamupButton);
-			}
-		}
-
-		// Update size constraints after orientation change
-		updateToolbarSizeConstraints();
-	}
+	// Rebuild from the configuration rather than shuffling the existing widgets
+	// about. The old rebuild re-derived each spacer's size from its rendered
+	// geometry, which reads as nothing on an axis the previous orientation left
+	// free, so spacers collapsed every time the toolbar changed edge.
+	//
+	// setupDynamicUI() calls setOrientation(), which re-enters here through
+	// QToolBar::orientationChanged. That pass finds the layout already matching
+	// and returns at the check above.
+	setupDynamicUI();
+	updateAllButtons();
+	updateIconsForTheme();
 }
 
 void StreamUPToolbar::updateToolbarSizeConstraints()
@@ -1131,8 +1182,12 @@ void StreamUPToolbar::setupDynamicUI()
 	// Set basic toolbar properties like obs-toolbar
 	setMovable(false);
 	setFloatable(false);
-	setOrientation(Qt::Horizontal);
-	
+	// Build straight into the orientation we are headed for. Starting
+	// horizontal and flipping afterwards meant every side-docked launch went
+	// through a rebuild before it had ever been laid out.
+	const bool buildVertical = isVerticalOrientation();
+	setOrientation(buildVertical ? Qt::Vertical : Qt::Horizontal);
+
 	// Clear existing toolbar contents
 	clear();
 	
@@ -1144,246 +1199,68 @@ void StreamUPToolbar::setupDynamicUI()
 		mainLayout = nullptr;
 	}
 	
-	// Create a new central widget with horizontal layout (will be changed to vertical if needed)
-	centralWidget = new QWidget(this);
-	centralWidget->setObjectName("StreamUPToolbarCentralWidget");
-	mainLayout = new QHBoxLayout(centralWidget);
-	mainLayout->setContentsMargins(0, 0, 0, 0);
-	mainLayout->setSpacing(StreamUP::UIStyles::S(1));
-	
-	// Clear existing buttons and properly clean up old references
-	dynamicButtons.clear();
-	
-	// Delete old button instances if they exist (more aggressive cleanup)
-	if (pauseButton) {
-		pauseButton->setParent(nullptr);
-		pauseButton->deleteLater();
-	}
-	if (saveReplayButton) {
-		saveReplayButton->setParent(nullptr);
-		saveReplayButton->deleteLater();
-	}
-	
-	// Also delete all other button references to ensure clean slate
-	if (streamButton) {
-		streamButton->setParent(nullptr);
-		streamButton->deleteLater();
-	}
-	if (recordButton) {
-		recordButton->setParent(nullptr);
-		recordButton->deleteLater();
-	}
-	if (replayBufferButton) {
-		replayBufferButton->setParent(nullptr);
-		replayBufferButton->deleteLater();
-	}
-	if (virtualCameraButton) {
-		virtualCameraButton->setParent(nullptr);
-		virtualCameraButton->deleteLater();
-	}
-	if (virtualCameraConfigButton) {
-		virtualCameraConfigButton->setParent(nullptr);
-		virtualCameraConfigButton->deleteLater();
-	}
-	if (studioModeButton) {
-		studioModeButton->setParent(nullptr);
-		studioModeButton->deleteLater();
-	}
-	if (settingsButton) {
-		settingsButton->setParent(nullptr);
-		settingsButton->deleteLater();
-	}
-	if (streamUPSettingsButton) {
-		streamUPSettingsButton->setParent(nullptr);
-		streamUPSettingsButton->deleteLater();
-	}
-	
-	streamButton = nullptr;
-	recordButton = nullptr;
-	pauseButton = nullptr;
-	replayBufferButton = nullptr;
-	saveReplayButton = nullptr;
-	virtualCameraButton = nullptr;
-	virtualCameraConfigButton = nullptr;
-	studioModeButton = nullptr;
-	settingsButton = nullptr;
-	streamUPSettingsButton = nullptr;
-	
-	// Create widgets from configuration in two passes to ensure proper positioning
-	// Get flattened items (ignoring groups since they're just for UI organization)
-	auto flattenedItems = toolbarConfig.getFlattenedItems();
+	// Build the run through the shared builder, so the live toolbar and the
+	// configurator's preview are laid out by the same code and cannot disagree
+	// about orientation, alignment or spacer sizing.
+	StreamUP::ToolbarBuild::Options buildOpts;
+	buildOpts.axis = StreamUP::ToolbarGeom::Axis(buildVertical);
+	buildOpts.alignment = currentAlignment();
+	buildOpts.spacing = StreamUP::UIStyles::S(1);
 
-	// Leading stretch pushes the button run away from the start of the toolbar
-	// for centre/end alignment. Start alignment keeps the legacy behaviour.
-	const auto alignment = currentAlignment();
-	if (alignment != StreamUP::SettingsManager::ToolbarAlignment::Start) {
-		mainLayout->addStretch();
-	}
-
-	// First pass: Add all items that are NOT StreamUP settings buttons
-	for (const auto& item : flattenedItems) {
-		if (!item->visible) continue;
-		
-		// Skip StreamUP settings buttons in first pass
-		bool isStreamUPSettings = false;
-		if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
-			if (auto buttonItem = std::dynamic_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item)) {
-				isStreamUPSettings = (buttonItem->buttonType == "streamup_settings");
-			}
-		}
-		if (isStreamUPSettings) continue;
-
-		if (item->type == StreamUP::ToolbarConfig::ItemType::Separator) {
-			// Check current toolbar orientation to create separator with correct orientation
-			QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
-			bool isVertical = false;
-			if (mainWindow) {
-				Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
-				isVertical = (currentArea == Qt::LeftToolBarArea || currentArea == Qt::RightToolBarArea);
-			}
-			QFrame* separator = createSeparatorFromConfig(isVertical);
-			if (isVertical) {
-				mainLayout->addWidget(separator, 0, Qt::AlignHCenter);
-			} else {
-				mainLayout->addWidget(separator);
-			}
-		} else if (item->type == StreamUP::ToolbarConfig::ItemType::CustomSpacer) {
-			auto spacerItem = std::static_pointer_cast<StreamUP::ToolbarConfig::CustomSpacerItem>(item);
-			// Create a fixed-size spacer widget with orientation-aware dimensions
-			QWidget* spacerWidget = new QWidget(centralWidget);
-			spacerWidget->setProperty("class", "toolbar-spacer");
-			// Orientation rebuilds identify spacers by objectName, and item ids
-			// are always "spacer_<timestamp>"
-			spacerWidget->setObjectName(spacerItem->id);
-
-			// Set dimensions based on current toolbar orientation
-			QMainWindow* mainWindow = qobject_cast<QMainWindow*>(parent());
-			if (mainWindow) {
-				Qt::ToolBarArea currentArea = mainWindow->toolBarArea(this);
-				bool isVertical = (currentArea == Qt::LeftToolBarArea || currentArea == Qt::RightToolBarArea);
-
-				if (isVertical) {
-					// For vertical toolbar, spacer height should be the configured size
-					spacerWidget->setFixedHeight(spacerItem->size);
-				} else {
-					// For horizontal toolbar, spacer width should be the configured size
-					spacerWidget->setFixedWidth(spacerItem->size);
-				}
-			} else {
-				// Fallback to horizontal orientation if can't determine position
-				spacerWidget->setFixedWidth(spacerItem->size);
-			}
-
-			spacerWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
-			mainLayout->addWidget(spacerWidget);
-		} else {
-			QToolButton* button = createButtonFromConfig(item);
-			if (button) {
-				button->setObjectName(item->id);
-				dynamicButtons[item->id] = button;
-				mainLayout->addWidget(button);
-				
-				// Check if this button needs companion buttons (pause/save_replay)
-				if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
-					auto buttonItem = std::dynamic_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item);
-					if (buttonItem) {
-						// Add pause button immediately after record button
-						if (buttonItem->buttonType == "record") {
-							// Create new pause button for this position
-							QToolButton* newPauseButton = new QToolButton(centralWidget);
-							newPauseButton->setObjectName("pauseButton");
-							newPauseButton->setProperty("class", "streamup-toolbar-button");
-							newPauseButton->setProperty("buttonType", "streamup-button");
-							newPauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-							newPauseButton->setIcon(getCachedIcon("pause"));
-							newPauseButton->setToolTip(obs_module_text("Toolbar.Tooltip.PauseRecording"));
-							newPauseButton->setCheckable(true);
-							// Start hidden - will be shown when recording is active and pausable
-							newPauseButton->setVisible(false);
-							connect(newPauseButton, &QToolButton::clicked, this, &StreamUPToolbar::onPauseButtonClicked);
-
-							// Replace the old pause button reference
-							pauseButton = newPauseButton;
-							recordButton = button;
-							mainLayout->addWidget(pauseButton);
-						}
-						// Add save_replay button immediately after replay_buffer button
-						else if (buttonItem->buttonType == "replay_buffer") {
-							// Create new save_replay button for this position
-							QToolButton* newSaveReplayButton = new QToolButton(centralWidget);
-							newSaveReplayButton->setObjectName("saveReplayButton");
-							newSaveReplayButton->setProperty("class", "streamup-toolbar-button");
-							newSaveReplayButton->setProperty("buttonType", "streamup-button");
-							newSaveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-							newSaveReplayButton->setIcon(getCachedIcon("save-replay"));
-							newSaveReplayButton->setToolTip(obs_module_text("Toolbar.Tooltip.SaveReplay"));
-							newSaveReplayButton->setCheckable(false);
-							// Start hidden - will be shown when replay buffer is active
-							newSaveReplayButton->setVisible(false);
-							connect(newSaveReplayButton, &QToolButton::clicked, this, &StreamUPToolbar::onSaveReplayButtonClicked);
-
-							// Replace the old save replay button reference
-							saveReplayButton = newSaveReplayButton;
-							replayBufferButton = button;
-							mainLayout->addWidget(saveReplayButton);
-						}
-					}
-				}
-			}
-		}
-	}
-	
-	// Add stretch to push StreamUP settings buttons to the right
-	bool hasStreamUPSettings = false;
-	for (const auto& item : flattenedItems) {
-		if (!item->visible) continue;
-		if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
-			if (auto buttonItem = std::dynamic_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item)) {
-				if (buttonItem->buttonType == "streamup_settings") {
-					hasStreamUPSettings = true;
-					break;
-				}
-			}
-		}
-	}
-	// With End alignment the run already sits against the settings buttons, so
-	// the usual push-right stretch would re-centre it — skip it there.
-	if (hasStreamUPSettings) {
-		if (alignment != StreamUP::SettingsManager::ToolbarAlignment::End) {
-			mainLayout->addStretch();
-		}
-	} else if (alignment != StreamUP::SettingsManager::ToolbarAlignment::End) {
-		// No settings button to anchor the far end — add the trailing stretch
-		// ourselves so buttons keep their natural size instead of expanding.
-		mainLayout->addStretch();
-	}
-
-	// Second pass: Add StreamUP settings buttons (they go on the right)
-	for (const auto& item : flattenedItems) {
-		if (!item->visible) continue;
-		
-		// Only process StreamUP settings buttons in second pass
-		bool isStreamUPSettings = false;
-		if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
-			if (auto buttonItem = std::dynamic_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item)) {
-				isStreamUPSettings = (buttonItem->buttonType == "streamup_settings");
-			}
-		}
-		if (!isStreamUPSettings) continue;
-		
+	auto makeWidgets = [this](const std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem>& item) -> QList<QWidget*> {
+		QList<QWidget*> widgets;
 		QToolButton* button = createButtonFromConfig(item);
-		if (button) {
-			button->setObjectName(item->id);
-			dynamicButtons[item->id] = button;
-			mainLayout->addWidget(button);
+		if (!button)
+			return widgets;
+
+		button->setObjectName(item->id);
+		dynamicButtons[item->id] = button;
+		widgets.append(button);
+
+		// Some buttons bring a companion that sits immediately after them and
+		// stays hidden until it applies.
+		if (item->type == StreamUP::ToolbarConfig::ItemType::Button) {
+			auto buttonItem = std::dynamic_pointer_cast<StreamUP::ToolbarConfig::ButtonItem>(item);
+			if (buttonItem && buttonItem->buttonType == "record") {
+				QToolButton* newPauseButton = new QToolButton(centralWidget);
+				newPauseButton->setObjectName("pauseButton");
+				newPauseButton->setProperty("class", "streamup-toolbar-button");
+				newPauseButton->setProperty("buttonType", "streamup-button");
+				newPauseButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+				newPauseButton->setIcon(getCachedIcon("pause"));
+				newPauseButton->setToolTip(obs_module_text("Toolbar.Tooltip.PauseRecording"));
+				newPauseButton->setCheckable(true);
+				newPauseButton->setVisible(false);
+				connect(newPauseButton, &QToolButton::clicked, this, &StreamUPToolbar::onPauseButtonClicked);
+				pauseButton = newPauseButton;
+				recordButton = button;
+				widgets.append(newPauseButton);
+			} else if (buttonItem && buttonItem->buttonType == "replay_buffer") {
+				QToolButton* newSaveReplayButton = new QToolButton(centralWidget);
+				newSaveReplayButton->setObjectName("saveReplayButton");
+				newSaveReplayButton->setProperty("class", "streamup-toolbar-button");
+				newSaveReplayButton->setProperty("buttonType", "streamup-button");
+				newSaveReplayButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+				newSaveReplayButton->setIcon(getCachedIcon("save-replay"));
+				newSaveReplayButton->setToolTip(obs_module_text("Toolbar.Tooltip.SaveReplay"));
+				newSaveReplayButton->setCheckable(false);
+				newSaveReplayButton->setVisible(false);
+				connect(newSaveReplayButton, &QToolButton::clicked, this, &StreamUPToolbar::onSaveReplayButtonClicked);
+				saveReplayButton = newSaveReplayButton;
+				replayBufferButton = button;
+				widgets.append(newSaveReplayButton);
+			}
 		}
-	}
+
+		return widgets;
+	};
+
+	auto built = StreamUP::ToolbarBuild::build(toolbarConfig, buildOpts, this, makeWidgets);
+	centralWidget = built.container;
+	mainLayout = built.layout;
 
 	// Add the central widget to toolbar
 	addWidget(centralWidget);
-
-	// Update layout orientation based on current position
-	updateLayoutOrientation();
 
 	// Update toolbar size constraints based on icon size and orientation
 	updateToolbarSizeConstraints();
@@ -1525,26 +1402,117 @@ QToolButton* StreamUPToolbar::createButtonFromConfig(std::shared_ptr<StreamUP::T
 		
 		// Store hotkey name in button's property
 		button->setProperty("hotkeyName", hotkeyItem->hotkeyName);
+		button->setProperty("hotkeyContext", hotkeyItem->hotkeyContext);
 		connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onHotkeyButtonClicked);
+	} else if (item->type == StreamUP::ToolbarConfig::ItemType::WebSocketButton) {
+		auto wsItem = std::static_pointer_cast<StreamUP::ToolbarConfig::WebSocketButtonItem>(item);
+
+		button->setIcon(StreamUP::ToolbarBuild::iconForItem(item));
+		button->setToolTip(wsItem->tooltip.isEmpty()
+					   ? StreamUP::ToolbarBuild::labelForItem(item)
+					   : wsItem->tooltip);
+		button->setCheckable(false);
+		button->setProperty("websocketItemId", wsItem->id);
+		connect(button, &QToolButton::clicked, this, &StreamUPToolbar::onWebSocketButtonClicked);
 	}
-	
+
+	// Nothing resolved to an icon, so show the label instead. An icon-only
+	// button with a null icon is an invisible square on the bar.
+	if (button->icon().isNull()) {
+		const QString label = StreamUP::ToolbarBuild::labelForItem(item);
+		if (!label.isEmpty()) {
+			button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+			button->setText(label);
+		}
+	}
+
 	return button;
 }
 
-QFrame* StreamUPToolbar::createSeparatorFromConfig(bool isVertical)
+void StreamUPToolbar::onWebSocketButtonClicked()
 {
-	QFrame* separator = new QFrame();
-	separator->setProperty("class", "toolbar-separator");
-	separator->setFrameShape(QFrame::NoFrame);
+	QToolButton* button = qobject_cast<QToolButton*>(sender());
+	if (!button)
+		return;
 
-	if (isVertical) {
-		separator->setFixedHeight(1);
-		// Width stretches with layout
-	} else {
-		separator->setFixedWidth(1);
-		// Height stretches with layout
+	const QString itemId = button->property("websocketItemId").toString();
+	auto item = toolbarConfig.findItem(itemId);
+	auto wsItem = std::dynamic_pointer_cast<StreamUP::ToolbarConfig::WebSocketButtonItem>(item);
+	if (!wsItem || wsItem->requestType.isEmpty())
+		return;
+
+	// The arguments are stored as JSON text so the item stays serialisable.
+	// obs_data_create_from_json returns null on malformed input, which the call
+	// below treats as no arguments rather than refusing to fire.
+	obs_data_t* requestData = nullptr;
+	if (!wsItem->requestData.trimmed().isEmpty()) {
+		requestData = obs_data_create_from_json(wsItem->requestData.toUtf8().constData());
+		if (!requestData) {
+			StreamUP::DebugLogger::LogWarning(
+				"Toolbar", "WebSocket button has request data that is not valid JSON, sending none");
+		}
 	}
-	return separator;
+
+	using Source = StreamUP::ToolbarConfig::WebSocketButtonItem::Source;
+	obs_websocket_request_response* response = nullptr;
+
+	if (wsItem->source == Source::ObsWebSocket) {
+		response = obs_websocket_call_request(wsItem->requestType.toUtf8().constData(), requestData);
+	} else {
+		// A vendor request goes through obs-websocket's own CallVendorRequest,
+		// which takes the vendor and the real request nested inside it.
+		const QString vendor = (wsItem->source == Source::StreamUP) ? QStringLiteral("streamup")
+									    : wsItem->vendorName;
+		if (vendor.isEmpty()) {
+			obs_data_release(requestData);
+			return;
+		}
+
+		obs_data_t* wrapper = obs_data_create();
+		obs_data_set_string(wrapper, "vendorName", vendor.toUtf8().constData());
+		obs_data_set_string(wrapper, "requestType", wsItem->requestType.toUtf8().constData());
+		if (requestData)
+			obs_data_set_obj(wrapper, "requestData", requestData);
+		response = obs_websocket_call_request("CallVendorRequest", wrapper);
+		obs_data_release(wrapper);
+	}
+
+	obs_data_release(requestData);
+
+	if (response) {
+		const QString responseJson =
+			response->response_data ? QString::fromUtf8(response->response_data) : QString();
+
+		QString errorText;
+		if (response->status_code != 100) {
+			StreamUP::DebugLogger::LogWarningFormat(
+				"Toolbar", "WebSocket request '%s' failed with status %d: %s",
+				wsItem->requestType.toUtf8().constData(), response->status_code,
+				response->comment ? response->comment : "no detail");
+
+			errorText = QString(obs_module_text("StreamUP.Toolbar.WebSocket.Response.Failed"))
+					    .arg(response->status_code)
+					    .arg(response->comment ? QString::fromUtf8(response->comment)
+								   : QString(obs_module_text(
+									     "StreamUP.Toolbar.WebSocket.Response.NoDetail")));
+		}
+
+		// Read everything off the response before freeing it — response_data and
+		// comment are bfree'd inside the call below.
+		obs_websocket_request_response_free(response);
+
+		// A request that returns data is worth seeing; one that returns nothing
+		// and succeeded is not worth a popover interrupting a live stream.
+		const bool hasData = !responseJson.trimmed().isEmpty() && responseJson.trimmed() != "{}";
+		if (hasData || !errorText.isEmpty())
+			StreamUP::showWebSocketResponsePopover(button, wsItem->requestType, responseJson, errorText);
+	} else {
+		// Null means obs-websocket is not loaded at all.
+		StreamUP::DebugLogger::LogWarning("Toolbar",
+						  "WebSocket request could not be sent, obs-websocket is not available");
+		StreamUP::showWebSocketResponsePopover(button, wsItem->requestType, QString(),
+						       obs_module_text("StreamUP.Toolbar.WebSocket.Response.Unavailable"));
+	}
 }
 
 void StreamUPToolbar::updateButtonSizes()
@@ -1608,14 +1576,6 @@ void StreamUPToolbar::clearLayout()
 	dynamicButtons.clear();
 }
 
-void StreamUPToolbar::onConfigureToolbarClicked()
-{
-	StreamUP::ToolbarConfigurator configurator(this);
-	if (configurator.exec() == QDialog::Accepted) {
-		refreshFromConfiguration();
-	}
-}
-
 void StreamUPToolbar::onToolbarSettingsClicked()
 {
 	// Open StreamUP Settings on the Toolbar Settings tab (index 1)
@@ -1648,8 +1608,10 @@ void StreamUPToolbar::onHotkeyButtonClicked()
 		return;
 	}
 	
-	// Trigger the OBS hotkey
-	bool success = StreamUP::OBSHotkeyManager::triggerHotkey(hotkeyName);
+	// The context names the source that registered it, so a mute button fires
+	// the right camera rather than whichever source enumerated first.
+	const QString hotkeyContext = button->property("hotkeyContext").toString();
+	bool success = StreamUP::OBSHotkeyManager::triggerHotkey(hotkeyName, hotkeyContext);
 	if (!success) {
 		qWarning() << "[StreamUP] Failed to trigger hotkey:" << hotkeyName;
 	}

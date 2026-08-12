@@ -24,7 +24,6 @@
 #include "dock/streamup-dock.hpp"
 #include "scene-organiser/scene-organiser-dock.hpp"
 #include "streamup-toolbar.hpp"
-#include "streamup-toolbar-configurator.hpp"
 #include "../multidock/multidock_manager.hpp"
 #include <obs-module.h>
 #include <obs-data.h>
@@ -1337,10 +1336,12 @@ void ShowSettingsDialog(int tabIndex)
 			if (mainWindow) {
 				StreamUPToolbar* toolbar = mainWindow->findChild<StreamUPToolbar*>();
 				if (toolbar) {
-					StreamUP::ToolbarConfigurator configurator(dialog);
-					if (configurator.exec() == QDialog::Accepted) {
-						toolbar->refreshFromConfiguration();
-					}
+					// Editing happens on the bar itself now, so the settings
+					// window gets out of the way rather than stacking a dialog
+					// over the thing being edited.
+					if (dialog)
+						dialog->accept();
+					toolbar->setEditMode(true);
 				}
 			}
 		});

@@ -16,7 +16,8 @@ struct HotkeyInfo {
     QString description;    // Display description (e.g., "Start Streaming")
     obs_hotkey_id id;      // Hotkey ID for triggering
     obs_hotkey_registerer_t registererType; // Frontend, Source, etc.
-    QString context;       // Context name for source/output hotkeys (empty for frontend)
+    QString context;       // Name of the source that registered it (empty for frontend)
+    QString contextType;   // Source id of that source, e.g. "wasapi_input_capture"
     bool isEnabled;        // Whether the hotkey is currently enabled
     
     HotkeyInfo() : id(OBS_INVALID_HOTKEY_ID), registererType(OBS_HOTKEY_REGISTERER_FRONTEND), isEnabled(false) {}
@@ -35,6 +36,8 @@ public:
     
     // Trigger a hotkey by name
     static bool triggerHotkey(const QString& hotkeyName);
+    // Disambiguated by the name of the source that registered it.
+    static bool triggerHotkey(const QString& hotkeyName, const QString& context);
     
     // Trigger a hotkey by ID
     static bool triggerHotkeyById(obs_hotkey_id hotkeyId);
@@ -51,11 +54,17 @@ public:
     // Get categorized hotkeys for UI display
     static QMap<QString, QList<HotkeyInfo>> getCategorizedHotkeys();
 
+    // Row text for a hotkey. Adds the source name when the category does not
+    // already carry it, so flat lists (scenes, groups) stay distinguishable.
+    static QString displayLabel(const HotkeyInfo& info);
+
 private:
     // Internal helper functions
     static obs_hotkey_t* findHotkeyByName(const QString& hotkeyName);
     static QString formatHotkeyDescription(obs_hotkey_t* hotkey);
-    static QString getHotkeyCategory(const QString& hotkeyName);
+    // Takes the whole info, not just the name: source hotkeys share names
+    // across sources and can only be told apart by their registerer.
+    static QString getHotkeyCategory(const HotkeyInfo& info);
     
     // Static enumeration callback
     static bool enumerationCallback(void* data, obs_hotkey_id id, obs_hotkey_t* hotkey);

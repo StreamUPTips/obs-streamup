@@ -20,6 +20,23 @@ bool OBSHotkeyManager::enumerationCallback(void* data, obs_hotkey_id id, obs_hot
         QString qDescription = QString::fromUtf8(description);
         
         HotkeyInfo info(qName, qDescription, id, registererType);
+
+        // Every audio source registers hotkeys with identical names
+        // ("libobs.mute" and friends), so the name alone cannot tell them
+        // apart. The registerer can, and it is only reachable here.
+        if (registererType == OBS_HOTKEY_REGISTERER_SOURCE) {
+            auto* weakSource = static_cast<obs_weak_source_t*>(obs_hotkey_get_registerer(hotkey));
+            if (weakSource) {
+                if (obs_source_t* source = obs_weak_source_get_source(weakSource)) {
+                    const char* sourceName = obs_source_get_name(source);
+                    const char* sourceId = obs_source_get_id(source);
+                    info.context = sourceName ? QString::fromUtf8(sourceName) : QString();
+                    info.contextType = sourceId ? QString::fromUtf8(sourceId) : QString();
+                    obs_source_release(source);
+                }
+            }
+        }
+
         hotkeyList->append(info);
     }
     
@@ -46,14 +63,24 @@ QList<HotkeyInfo> OBSHotkeyManager::getFrontendHotkeys() {
 }
 
 bool OBSHotkeyManager::triggerHotkey(const QString& hotkeyName) {
-    obs_hotkey_t* hotkey = findHotkeyByName(hotkeyName);
-    if (!hotkey) {
-        qWarning() << "[StreamUP] Hotkey not found:" << hotkeyName;
-        return false;
+    return triggerHotkey(hotkeyName, QString());
+}
+
+bool OBSHotkeyManager::triggerHotkey(const QString& hotkeyName, const QString& context) {
+    // Match on the registering source as well as the name where we have one.
+    // Without it, a button meant to mute one camera fires whichever source's
+    // "libobs.mute" happens to enumerate first.
+    const QList<HotkeyInfo> hotkeys = getAvailableHotkeys();
+    for (const auto& info : hotkeys) {
+        if (info.name != hotkeyName)
+            continue;
+        if (!context.isEmpty() && info.context != context)
+            continue;
+        return triggerHotkeyById(info.id);
     }
-    
-    obs_hotkey_id id = obs_hotkey_get_id(hotkey);
-    return triggerHotkeyById(id);
+
+    qWarning() << "[StreamUP] Hotkey not found:" << hotkeyName << "context:" << context;
+    return false;
 }
 
 bool OBSHotkeyManager::triggerHotkeyById(obs_hotkey_id hotkeyId) {
@@ -173,7 +200,7 @@ QMap<QString, QList<HotkeyInfo>> OBSHotkeyManager::getCategorizedHotkeys() {
     QMap<QString, QList<HotkeyInfo>> categorized;
     
     for (const auto& hotkey : allHotkeys) {
-        QString category = getHotkeyCategory(hotkey.name);
+        QString category = getHotkeyCategory(hotkey);
         categorized[category].append(hotkey);
     }
     
@@ -213,7 +240,57 @@ QString OBSHotkeyManager::formatHotkeyDescription(obs_hotkey_t* hotkey) {
     return description ? QString::fromUtf8(description) : QString();
 }
 
-QString OBSHotkeyManager::getHotkeyCategory(const QString& hotkeyName) {
+QString OBSHotkeyManager::displayLabel(const HotkeyInfo& info) {
+    // Where the category already names the source, the plain description is
+    // enough ("Mute" under "[CAM] Main"). Scenes and groups are listed flat,
+    // so the row has to carry the name or you get a wall of "Switch to scene".
+    if (info.registererType == OBS_HOTKEY_REGISTERER_SOURCE && !info.context.isEmpty() &&
+        (info.contextType == "scene" || info.contextType == "group")) {
+        return QString("%1 — %2").arg(info.context, info.description);
+    }
+    return info.description;
+}
+
+QString OBSHotkeyManager::getHotkeyCategory(const HotkeyInfo& info) {
+    const QString& hotkeyName = info.name;
+
+    // Source-registered hotkeys are categorised by their source first, before
+    // any name-prefix rules. OBS registers the scene switch hotkey on the scene
+    // itself under the name "OBSBasic.SelectScene", so a name-first test threw
+    // every scene into one bucket where they were indistinguishable.
+    if (info.registererType == OBS_HOTKEY_REGISTERER_SOURCE) {
+        // The source is carried on the info, captured while the hotkey was in
+        // hand. Looking it up again by name put every source's Mute under
+        // whichever source enumerated first.
+        const QString displayName = info.context.isEmpty() ? QStringLiteral("Unnamed Source") : info.context;
+        const QString sourceType = info.contextType;
+
+        // Scenes get one flat list rather than a group per scene: each scene
+        // has a single hotkey, so a group would be a header with one child.
+        // The scene name goes on the row itself (see displayLabel).
+        if (sourceType == "scene") {
+            return QStringLiteral("Scenes");
+        }
+        if (sourceType == "group") {
+            return QStringLiteral("Groups");
+        }
+        if (sourceType.contains("audio") || sourceType.startsWith("wasapi_") || sourceType.startsWith("pulse_") ||
+            sourceType.startsWith("alsa_") || sourceType.startsWith("coreaudio_")) {
+            return QString("Sources › Audio › %1").arg(displayName);
+        }
+        if (sourceType.contains("video") || sourceType == "dshow_input" || sourceType == "v4l2_input" ||
+            sourceType == "av_capture_input" || sourceType == "image_source" || sourceType == "slideshow") {
+            return QString("Sources › Video › %1").arg(displayName);
+        }
+        if (sourceType == "browser_source") {
+            return QString("Sources › Browser › %1").arg(displayName);
+        }
+        if (sourceType.contains("text")) {
+            return QString("Sources › Text › %1").arg(displayName);
+        }
+        return QString("Sources › Other › %1").arg(displayName);
+    }
+
     if (hotkeyName.startsWith("OBSBasic.")) {
         if (hotkeyName.contains("Stream")) {
             return "General › Streaming";
@@ -227,78 +304,19 @@ QString OBSHotkeyManager::getHotkeyCategory(const QString& hotkeyName) {
             return "General › Studio Mode";
         } else if (hotkeyName.contains("Scene") || hotkeyName.contains("Transition")) {
             return "General › Scenes";
-        } else {
-            return "General › Other";
         }
-    } else if (hotkeyName.startsWith("streamup_")) {
-        return "Plugins › StreamUP";
-    } else if (hotkeyName.startsWith("libobs.")) {
-        // Get source-specific information from the hotkey
-        obs_hotkey_t* hotkey = findHotkeyByName(hotkeyName);
-        if (hotkey) {
-            // Get the registerer (source) information
-            obs_hotkey_registerer_t registerer_type = obs_hotkey_get_registerer_type(hotkey);
-            
-            if (registerer_type == OBS_HOTKEY_REGISTERER_SOURCE) {
-                // Get the source name for source-specific hotkeys
-                obs_weak_source_t* weak_source = static_cast<obs_weak_source_t*>(obs_hotkey_get_registerer(hotkey));
-                if (weak_source) {
-                    obs_source_t* source = obs_weak_source_get_source(weak_source);
-                    if (source) {
-                        const char* sourceName = obs_source_get_name(source);
-                        const char* sourceId = obs_source_get_id(source);
-                        
-                        QString displayName = sourceName ? QString::fromUtf8(sourceName) : "Unnamed Source";
-                        QString sourceType = sourceId ? QString::fromUtf8(sourceId) : "";
-                        
-                        obs_source_release(source);
-                        
-                        // Categorize by source type
-                        if (sourceType.contains("audio") || sourceType == "wasapi_input_capture" || 
-                            sourceType == "wasapi_output_capture" || sourceType == "pulse_input_capture" ||
-                            sourceType == "pulse_output_capture" || sourceType == "alsa_input_capture" ||
-                            sourceType == "alsa_output_capture" || sourceType == "coreaudio_input_capture" ||
-                            sourceType == "coreaudio_output_capture") {
-                            return QString("Sources › Audio › %1").arg(displayName);
-                        } else if (sourceType.contains("video") || sourceType == "dshow_input" ||
-                                   sourceType == "v4l2_input" || sourceType == "av_capture_input" ||
-                                   sourceType == "image_source" || sourceType == "slideshow") {
-                            return QString("Sources › Video › %1").arg(displayName);
-                        } else if (sourceType == "browser_source") {
-                            return QString("Sources › Browser › %1").arg(displayName);
-                        } else if (sourceType.contains("text") || sourceType == "text_gdiplus" ||
-                                   sourceType == "text_ft2_source") {
-                            return QString("Sources › Text › %1").arg(displayName);
-                        } else if (sourceType.contains("scene") || sourceType == "scene") {
-                            return QString("Sources › Scene › %1").arg(displayName);
-                        } else {
-                            return QString("Sources › Other › %1").arg(displayName);
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Fallback categorization for libobs hotkeys
-        if (hotkeyName.contains("mute") || hotkeyName.contains("audio")) {
-            return "Sources › Audio › Unknown";
-        } else if (hotkeyName.contains("scene")) {
-            return "Sources › Scene › Unknown";
-        } else {
-            return "Sources › Other › Unknown";
-        }
-    } else {
-        // Plugin or other hotkeys - try to identify the plugin
-        if (hotkeyName.contains("obs-websocket")) {
-            return "Plugins › obs-websocket";
-        } else if (hotkeyName.contains("advanced-scene-switcher")) {
-            return "Plugins › Advanced Scene Switcher";
-        } else if (hotkeyName.contains("source-record")) {
-            return "Plugins › Source Record";
-        } else {
-            return "Plugins › Other";
-        }
+        return "General › Other";
     }
+
+    if (hotkeyName.startsWith("streamup_")) {
+        return "Plugins › StreamUP";
+    }
+
+    if (hotkeyName.startsWith("libobs.")) {
+        return "Sources › Other";
+    }
+
+    return "Plugins › Other";
 }
 
 } // namespace StreamUP
