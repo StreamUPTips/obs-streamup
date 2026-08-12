@@ -1127,6 +1127,10 @@ void StreamUPToolbar::applySizeClass()
 		}
 	}
 
+	// The polish above re-reads QToolBar's layout margin from the style, so the
+	// pinned margin has to go back on after it.
+	applyLayoutMargins();
+
 	// THEN set iconSize at the Qt level so themes without per-size selectors
 	// (Aitum, Yami, System) still differentiate the tiers. The pixel values
 	// here match what StreamUP.obt declares per tier so behavior is consistent
@@ -1167,6 +1171,24 @@ void StreamUPToolbar::applySizeClass()
 	}
 	updateGeometry();
 	update();
+}
+
+// QToolBar's own layout carries a margin from the style, and the stylesheet
+// cannot reach it: with the theme's padding at zero the bar still measured 8px
+// clear of the buttons on every side. That is a fixed 16px of chrome across the
+// bar, which swamps the size tiers. Small to large only moves the buttons by
+// 10px, so the bar went 35 to 45 and read as barely responding.
+//
+// Pinned here instead, so the bar is the buttons plus a deliberate margin and
+// the tiers actually show. Re-applied after every polish, because polishing a
+// QToolBar re-reads the margin from the style and puts it back.
+void StreamUPToolbar::applyLayoutMargins()
+{
+	static constexpr int kBarMarginPx = 3;
+	if (QLayout *l = layout()) {
+		const int m = StreamUP::UIStyles::S(kBarMarginPx);
+		l->setContentsMargins(m, m, m, m);
+	}
 }
 
 void StreamUPToolbar::refreshSizeClass()
@@ -1258,6 +1280,8 @@ void StreamUPToolbar::setupDynamicUI()
 	auto built = StreamUP::ToolbarBuild::build(toolbarConfig, buildOpts, this, makeWidgets);
 	centralWidget = built.container;
 	mainLayout = built.layout;
+
+	applyLayoutMargins();
 
 	// Add the central widget to toolbar
 	addWidget(centralWidget);

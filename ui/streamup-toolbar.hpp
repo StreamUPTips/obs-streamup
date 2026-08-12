@@ -4,6 +4,7 @@
 #include <QToolButton>
 #include <QFrame>
 #include <QBoxLayout>
+#include <QMargins>
 #include <QMenu>
 #include <QAction>
 #include <QHash>
@@ -85,6 +86,8 @@ private:
     // Tells the theme which window edge the toolbar is docked to, so the main
     // window's inset can be dropped on that side.
     void reportDockedEdge();
+    // Pins QToolBar's own layout margin, which the stylesheet cannot reach.
+    void applyLayoutMargins();
 
     // True when the toolbar is (or is about to be) docked to the left or right
     // edge. Falls back to the saved position setting while the toolbar has not
