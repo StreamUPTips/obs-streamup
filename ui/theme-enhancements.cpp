@@ -86,19 +86,13 @@ static void applyMainWindowMargins(QMainWindow* mainWindow)
 
     mainWindow->setContentsMargins(left, top, right, bottom);
 
-    // The status bar carries a 10px top margin so it floats clear of the docks
-    // above it. With the toolbar docked along the bottom that margin lands
-    // between the toolbar and the status bar, which reads as the toolbar having
-    // far more space below it than above. The theme collapses it when this
-    // property is set.
-    if (QStatusBar* bar = mainWindow->statusBar()) {
-        const bool toolbarAbove = (g_toolbarEdge == Qt::BottomToolBarArea);
-        if (bar->property("streamupToolbarAbove").toBool() != toolbarAbove) {
-            bar->setProperty("streamupToolbarAbove", toolbarAbove);
-            bar->style()->unpolish(bar);
-            bar->style()->polish(bar);
-        }
-    }
+    // NOTE: there was an attempt here to collapse the status bar's 10px top
+    // margin when the toolbar is docked along the bottom, so the toolbar did not
+    // read as bottom heavy. It was reverted: it clipped the status bar's own
+    // contents off the bottom of the window. The cause was never pinned down,
+    // and it is either the reduced margin exposing an undersized min-height in
+    // the theme, or the unpolish/polish that applied the property losing the
+    // status bar's layout sizing. Measure before trying again.
 }
 
 // Status bar visibility filter
