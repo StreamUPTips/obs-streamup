@@ -305,7 +305,7 @@ void walkForPaths(const QJsonValue &value, const QString &collection, QList<Medi
 		}
 	} else if (value.isArray()) {
 		const QJsonArray arr = value.toArray();
-		for (const QJsonValue &child : arr)
+		for (const QJsonValue child : arr)
 			walkForPaths(child, collection, out, seen);
 	}
 }

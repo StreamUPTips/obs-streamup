@@ -350,7 +350,7 @@ Inspection Inspect(const QString &archivePath)
 		&installed);
 
 	const QJsonArray plugins = manifest.value(QStringLiteral("plugins")).toArray();
-	for (const QJsonValue &value : plugins) {
+	for (const QJsonValue value : plugins) {
 		const QJsonObject plugin = value.toObject();
 		const QString fileName = plugin.value(QStringLiteral("file")).toString();
 		if (fileName.isEmpty() || installed.contains(fileName))
@@ -496,7 +496,7 @@ bool Stage(const QString &archivePath, QString *error, QString *safetyBackupPath
 	int keptInPlace = 0;
 	const QJsonArray media = manifest.value(QStringLiteral("media")).toArray();
 	QHash<QString, QString> pathMap;
-	for (const QJsonValue &value : media) {
+	for (const QJsonValue value : media) {
 		const QJsonObject entry = value.toObject();
 		const QString archivePathForMedia = entry.value(QStringLiteral("archive_path")).toString();
 		if (archivePathForMedia.isEmpty())
@@ -521,7 +521,7 @@ bool Stage(const QString &archivePath, QString *error, QString *safetyBackupPath
 	}
 
 	if (!pathMap.isEmpty()) {
-		for (const QJsonValue &value : plan) {
+		for (const QJsonValue value : plan) {
 			const QJsonObject item = value.toObject();
 			const QString name = item.value(QStringLiteral("archive")).toString();
 			if (!name.startsWith(QStringLiteral("config/basic/scenes/")))
@@ -577,7 +577,7 @@ bool Stage(const QString &archivePath, QString *error, QString *safetyBackupPath
 	// Recompute checksums for anything rewritten, so verification compares
 	// against what will actually be written.
 	QJsonArray finalPlan;
-	for (const QJsonValue &value : plan) {
+	for (const QJsonValue value : plan) {
 		QJsonObject item = value.toObject();
 		item[QStringLiteral("sha1")] = sha1Of(item.value(QStringLiteral("staged")).toString());
 		finalPlan.append(item);
@@ -655,11 +655,11 @@ static void applyPendingInternal(bool lateCatchUp)
 	// thousand plugin_config files keeps them out of the range where a late
 	// failure can push them onto the catch-up pass.
 	QJsonArray ordered;
-	for (const QJsonValue &value : files) {
+	for (const QJsonValue value : files) {
 		if (isAppearanceEntry(value.toObject().value(QStringLiteral("archive")).toString()))
 			ordered.append(value);
 	}
-	for (const QJsonValue &value : files) {
+	for (const QJsonValue value : files) {
 		if (!isAppearanceEntry(value.toObject().value(QStringLiteral("archive")).toString()))
 			ordered.append(value);
 	}
@@ -675,7 +675,7 @@ static void applyPendingInternal(bool lateCatchUp)
 	int loggedFailures = 0;
 	QJsonArray failureList;
 
-	for (const QJsonValue &value : files) {
+	for (const QJsonValue value : files) {
 		const QJsonObject item = value.toObject();
 		const QString staged = item.value(QStringLiteral("staged")).toString();
 		const QString target = item.value(QStringLiteral("target")).toString();
@@ -837,7 +837,7 @@ AppliedReport ReadAppliedReport()
 	report.sourceArchive = result.value(QStringLiteral("source_archive")).toString();
 	report.safetyBackup = result.value(QStringLiteral("safety_backup")).toString();
 	report.themeNeedsRestart = result.value(QStringLiteral("theme_needs_restart")).toBool();
-	for (const QJsonValue &value : result.value(QStringLiteral("failures")).toArray())
+	for (const QJsonValue value : result.value(QStringLiteral("failures")).toArray())
 		report.failures << value.toString();
 	return report;
 }
