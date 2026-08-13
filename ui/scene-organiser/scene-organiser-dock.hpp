@@ -179,6 +179,14 @@ public:
     // signal wiring. Canvas scenes never raise the frontend's SCENE_LIST_CHANGED
     // event, so the vertical dock listens to the canvas itself instead.
     obs_weak_canvas_t *m_weakCanvas = nullptr;
+
+    // Aitum drives its switching through its own transition, which sits on the
+    // canvas channel and never changes, so the canvas raises no channel_change
+    // when the live scene changes. Nothing tells us, so the vertical dock asks.
+    // Vertical dock only; the main canvas has real frontend events.
+    QTimer *m_verticalSceneWatch = nullptr;
+    QString m_lastVerticalScene;
+    void watchVerticalCurrentScene();
     void connectCanvasSignals();
     void disconnectCanvasSignals();
     static void OnCanvasSourceAdded(void *data, calldata_t *cd);

@@ -821,6 +821,41 @@ void SceneOrganiserDock::setupObsSignals()
 {
     obs_frontend_add_event_callback(onFrontendEvent, this);
     connectCanvasSignals();
+    watchVerticalCurrentScene();
+}
+
+// The canvas signals below cover scenes being added, removed and renamed, but
+// not the live scene changing: Aitum switches through its own transition, which
+// stays put on the canvas channel, so channel_change never fires and the green
+// on-air marker sat on whichever scene was live when the dock loaded.
+//
+// There is no signal to connect to and no proc to subscribe with, so this asks.
+// One call a second, only while a vertical dock exists, and the tree is only
+// touched when the answer actually changes.
+void SceneOrganiserDock::watchVerticalCurrentScene()
+{
+    if (m_canvasType != CanvasType::Vertical || m_verticalSceneWatch)
+        return;
+
+    m_verticalSceneWatch = new QTimer(this);
+    m_verticalSceneWatch->setInterval(1000);
+    connect(m_verticalSceneWatch, &QTimer::timeout, this, [this]() {
+        if (!m_initialLoadComplete)
+            return;
+
+        QString name;
+        if (obs_source_t *current = Canvas::GetCurrentScene(m_canvasType)) {
+            name = QString::fromUtf8(obs_source_get_name(current));
+            obs_source_release(current);
+        }
+
+        if (name == m_lastVerticalScene)
+            return;
+
+        m_lastVerticalScene = name;
+        updateActiveSceneHighlight();
+    });
+    m_verticalSceneWatch->start();
 }
 
 // Canvas scenes are invisible to the frontend's scene events: adding a scene on
