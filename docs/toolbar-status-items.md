@@ -76,6 +76,23 @@ row of icon-then-value would either force the bar wide or clip. `240.00` becomes
 `240`, `6000 kb/s` becomes `6000k`, and each message has its own shorter wording
 rather than being elided.
 
+## Running out of room
+
+A readout that grows has to take the space from somewhere. If the bar is full,
+and particularly if a wide spacer has pushed a group of readouts to the far end,
+the growth used to come out of the right-hand edge, which meant the last item
+was clipped.
+
+Spacers give ground instead. A spacer asks for its configured length and keeps
+it while there is room, and shrinks toward zero when there is not, so a growing
+value, a narrowed window or a bigger font eats into the empty gap rather than
+into the items. A group pushed to the right by a spacer therefore grows
+leftwards. The gap is the only thing on the bar that can afford to lose space,
+which is what makes it the right thing to take it from.
+
+Nothing else in the run can shrink: buttons hold their size hint, and a
+readout's value is pinned. So the order is always spacers first, then nothing.
+
 ## In the editor
 
 The editor builds the real readout rather than a button with the item's name on

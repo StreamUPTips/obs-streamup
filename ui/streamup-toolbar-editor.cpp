@@ -32,7 +32,10 @@ constexpr int kSpacerGripBand = 6;
 // which is not something anyone can reasonably be asked to click.
 constexpr int kMinGrabThickness = 14;
 constexpr int kSpacerMin = 5;
-constexpr int kSpacerMax = 200;
+// No practical ceiling: a spacer is how you push a group to the far end of
+// a wide bar, and 200px did not reach. It is bounded only by something a
+// drag cannot run away with.
+constexpr int kSpacerMax = 4000;
 constexpr int kDefaultSpacerSize = 20;
 
 const char *const kDescriptorSeparator = "separator";

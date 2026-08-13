@@ -35,6 +35,35 @@ bool fillsAcross(ToolbarConfig::ItemType type)
 	return type == ToolbarConfig::ItemType::Separator || type == ToolbarConfig::ItemType::CustomSpacer;
 }
 
+// A spacer asks for its configured length and settles for less.
+//
+// A plain QWidget has no size hint, so a layout has nothing to ask for and a
+// policy of Maximum would resolve its preferred length to zero. The hint is the
+// whole mechanism: the layout hands the spacer its full size while there is
+// room, and takes the difference back out of it when there is not, before it
+// starts clipping anything that cannot shrink.
+class SpacerWidget : public QWidget {
+public:
+	SpacerWidget(int size, const ToolbarGeom::Axis &axis, QWidget *parent)
+		: QWidget(parent), size_(size), axis_(axis)
+	{
+	}
+
+	void setSpacerSize(int size, const ToolbarGeom::Axis &axis)
+	{
+		size_ = size;
+		axis_ = axis;
+		updateGeometry();
+	}
+
+	QSize sizeHint() const override { return axis_.size(size_, 0); }
+	QSize minimumSizeHint() const override { return QSize(0, 0); }
+
+private:
+	int size_ = 0;
+	ToolbarGeom::Axis axis_{false};
+};
+
 } // namespace
 
 void applySpacerSize(QWidget *spacer, int size, const ToolbarGeom::Axis &axis)
@@ -49,18 +78,38 @@ void applySpacerSize(QWidget *spacer, int size, const ToolbarGeom::Axis &axis)
 	spacer->setMinimumSize(0, 0);
 	spacer->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
 
-	// Pinned along, filling across. Both axes are always written.
+	// The requested length along the flow, and no more. What it is NOT is a
+	// floor: a spacer that could not give ground was the only thing standing
+	// between a bar that had run out of room and one that clipped its last
+	// item. A readout that grows, a narrowed window or a bigger font now takes
+	// the space it needs out of the empty gap, which is what the gap is for,
+	// and the items keep their size.
+	//
+	// Filling across is unchanged, and is the rule that stops a spacer
+	// vanishing on a side-docked bar.
 	if (axis.vertical()) {
-		spacer->setFixedHeight(size);
+		spacer->setMaximumHeight(size);
 	} else {
-		spacer->setFixedWidth(size);
+		spacer->setMaximumWidth(size);
 	}
-	spacer->setSizePolicy(axis.policy(QSizePolicy::Fixed, QSizePolicy::Expanding));
+	// Preferred, not Fixed and not Maximum. Fixed cannot give ground, which is
+	// the bug. Maximum treats the hint as a ceiling and gave the spacer nothing
+	// at all here. Preferred asks for the hint, keeps it while there is room,
+	// and shrinks toward zero when there is not. Growing past the hint is
+	// prevented by the cap set above, and by the alignment stretches, which are
+	// Expanding and take any genuine slack first.
+	spacer->setSizePolicy(axis.policy(QSizePolicy::Preferred, QSizePolicy::Expanding));
+
+	// The hint is what the layout actually asks for, so it has to move with the
+	// size. Without this a spacer resized mid-drag keeps asking for its old
+	// length and only the cap changes.
+	if (auto *sized = dynamic_cast<SpacerWidget *>(spacer))
+		sized->setSpacerSize(size, axis);
 }
 
 QWidget *createSpacer(const QString &id, int size, const ToolbarGeom::Axis &axis, QWidget *parent)
 {
-	QWidget *spacer = new QWidget(parent);
+	QWidget *spacer = new SpacerWidget(size, axis, parent);
 	spacer->setProperty("class", "toolbar-spacer");
 	spacer->setObjectName(id);
 	spacer->setProperty(kItemIdProperty, id);

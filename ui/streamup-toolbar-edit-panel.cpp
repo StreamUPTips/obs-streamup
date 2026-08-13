@@ -216,7 +216,7 @@ void ToolbarEditPanel::buildUi()
 	sizeLayout->addWidget(sizeLabel, 1);
 	sizeSpin_ = new UIStyles::MacSpinBox(sizeRow_);
 	sizeSpin_->setOnCard(true);
-	sizeSpin_->setRange(5, 200);
+	sizeSpin_->setRange(5, 4000);
 	sizeSpin_->setSuffix(QStringLiteral(" px"));
 	sizeLayout->addWidget(sizeSpin_);
 	body->addWidget(sizeRow_);
