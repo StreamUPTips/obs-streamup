@@ -64,6 +64,14 @@ QWidget *createSpacer(const QString &id, int size, const ToolbarGeom::Axis &axis
 QFrame *createSeparator(const QString &id, const ToolbarGeom::Axis &axis, QWidget *parent);
 
 // Shared so nothing can disagree about what an item looks like or is called.
+// Writes an explicit minimum on everything that is not furniture, so the run
+// can only lose space where losing it is harmless: the spacers.
+//
+// Call this AFTER the theme has styled the run. A button's size hint before
+// then is a few pixels, and pinning that produces a bar of hairlines you cannot
+// click, which is exactly the bug this guards against.
+void pinNaturalMinimums(const Result &result, const ToolbarGeom::Axis &axis);
+
 QIcon iconForItem(const std::shared_ptr<ToolbarConfig::ToolbarItem> &item);
 QString labelForItem(const std::shared_ptr<ToolbarConfig::ToolbarItem> &item);
 

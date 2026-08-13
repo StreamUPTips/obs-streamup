@@ -90,8 +90,22 @@ into the items. A group pushed to the right by a spacer therefore grows
 leftwards. The gap is the only thing on the bar that can afford to lose space,
 which is what makes it the right thing to take it from.
 
-Nothing else in the run can shrink: buttons hold their size hint, and a
-readout's value is pinned. So the order is always spacers first, then nothing.
+Nothing else in the run is allowed to shrink, and making that true took more
+than a size policy. The OBS theme sets `min-width: 4px` on toolbar buttons, and
+a stylesheet minimum outranks the one a size policy implies, so Qt would squash
+every button down to 4px and take only part of the slack out of the spacers. A
+2000px spacer left a row of unclickable slivers with the StreamUP button, which
+is placed last, pushed off the end entirely.
+
+So `pinNaturalMinimums()` writes an explicit minimum on everything that is not
+furniture, which is the one thing the stylesheet does not override. It runs
+after the theme has styled the run, because a button's size hint before that is
+a few pixels and pinning it early produces the same row of hairlines by a
+different route.
+
+The editor does the same, where it matters more: a run squashed to slivers is
+one you cannot select, drag or drop onto, so a wide spacer would lock you out of
+your own toolbar.
 
 ## In the editor
 

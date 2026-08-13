@@ -163,8 +163,19 @@ void ToolbarEditor::rebuild()
 	hostLayout_->addWidget(content_);
 	content_->show();
 
-	// Geometry is not settled until the layout has run.
-	QMetaObject::invokeMethod(this, [this]() { captureSlots(); }, Qt::QueuedConnection);
+	// Same pinning as the live bar, and for the same reason with more at stake:
+	// a run squashed to hairlines in here is one you cannot select, drag or
+	// drop onto, so a wide spacer would lock you out of your own toolbar.
+	// Before the slots are captured, since it changes their geometry.
+	QMetaObject::invokeMethod(
+		this,
+		[this, placed = built.placed]() {
+			ToolbarBuild::Result styled;
+			styled.placed = placed;
+			ToolbarBuild::pinNaturalMinimums(styled, axis_);
+			captureSlots();
+		},
+		Qt::QueuedConnection);
 	update();
 }
 

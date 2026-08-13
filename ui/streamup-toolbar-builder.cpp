@@ -161,6 +161,31 @@ Result build(const ToolbarConfig::ToolbarConfiguration &config, const Options &o
 		if (fillsAcross(type)) {
 			result.layout->addWidget(w);
 		} else {
+			// Everything that is not furniture is pinned at its natural size.
+			//
+			// A QToolButton will shrink without being asked, so when the run
+			// was longer than the bar Qt squeezed the buttons rather than the
+			// empty gap: icons collapsed to slivers you could not aim at, and
+			// the StreamUP button, which is placed last, was pushed off the end
+			// entirely. Pinning them leaves the spacers as the only thing on the
+			// bar that can give up space, which is the whole point of a spacer.
+			//
+			// This matters most in the editor, where a bar you cannot hit is a
+			// bar you cannot rearrange or add to.
+			//
+			// Minimum, not Fixed. Fixed pins the widget at the size hint it has
+			// when the run is laid out, and the run is built before the theme
+			// has styled the buttons, so every one of them locked at its
+			// unstyled hint and came out a hairline. Minimum says the hint is a
+			// floor: it can still grow into its real styled size, it just
+			// cannot be squeezed below it.
+			//
+			// The policy is not enough on its own. The OBS theme sets
+			// min-width: 4px on toolbar buttons, and a stylesheet minimum wins
+			// over one implied by a size policy, so Qt was still free to squash
+			// a button to 4px and did. pinNaturalMinimums() below writes an
+			// explicit minimum once the theme has had its say.
+			w->setSizePolicy(axis.policy(QSizePolicy::Minimum, QSizePolicy::Preferred));
 			result.layout->addWidget(w, 0, axis.vertical() ? Qt::AlignHCenter : Qt::AlignVCenter);
 		}
 		result.placed.append({id, w});
@@ -220,6 +245,41 @@ Result build(const ToolbarConfig::ToolbarConfiguration &config, const Options &o
 		placeFromFactory(item);
 
 	return result;
+}
+
+void pinNaturalMinimums(const Result &result, const ToolbarGeom::Axis &axis)
+{
+	// Called once the theme has styled the run, because a button's size hint is
+	// next to nothing before that and pinning early is how you get a bar of
+	// hairlines.
+	//
+	// Why this exists at all: the theme sets min-width: 4px on toolbar buttons.
+	// A stylesheet minimum outranks the one a size policy implies, so when the
+	// run was longer than the bar Qt happily squashed every button to 4px and
+	// took only part of the slack out of the spacers. An explicit minimum is
+	// the one thing the stylesheet does not override, so the spacers are left
+	// as the only thing that can give.
+	for (const auto &entry : result.placed) {
+		QWidget *w = entry.second;
+		if (!w)
+			continue;
+
+		// Furniture is what we want to be squeezable, so it is skipped: a
+		// spacer giving up its space is the entire mechanism.
+		if (w->property(kSpacerSizeProperty).isValid())
+			continue;
+		if (qobject_cast<QFrame *>(w) && w->property("class").toString() == QLatin1String("toolbar-separator"))
+			continue;
+
+		const QSize hint = w->sizeHint();
+		if (!hint.isValid())
+			continue;
+
+		if (axis.vertical())
+			w->setMinimumHeight(hint.height());
+		else
+			w->setMinimumWidth(hint.width());
+	}
 }
 
 QIcon iconForItem(const std::shared_ptr<ToolbarConfig::ToolbarItem> &item)

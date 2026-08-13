@@ -1313,6 +1313,17 @@ void StreamUPToolbar::setupDynamicUI()
 	// toolbar before applying size, otherwise the theme's
 	// `QToolBar#StreamUPToolbar-Top[size="..."]` selectors don't match.
 
+	// Pin natural minimums once the theme has styled the run, so a bar that is
+	// too short loses space out of its spacers rather than squashing every
+	// button to the 4px the theme allows.
+	QMetaObject::invokeMethod(
+		this, [this, placed = built.placed, buildVertical]() {
+			StreamUP::ToolbarBuild::Result styled;
+			styled.placed = placed;
+			StreamUP::ToolbarBuild::pinNaturalMinimums(styled, StreamUP::ToolbarGeom::Axis(buildVertical));
+		},
+		Qt::QueuedConnection);
+
 	// Clear flag and update buttons now that reconstruction is complete
 	isReconstructingUI = false;
 	updateAllButtons();
