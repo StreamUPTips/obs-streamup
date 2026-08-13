@@ -1,4 +1,5 @@
 #include "streamup-toolbar-status.hpp"
+#include "../streamup.hpp"
 
 #include <obs-module.h>
 
@@ -211,23 +212,22 @@ void Monitor::addObserver()
 	if (!cpuInfo_)
 		cpuInfo_ = os_cpu_usage_info_start();
 
+	// Registering a frontend callback during module load is the supported
+	// pattern and is safe. Asking the frontend anything is not: the toolbar is
+	// built from inside obs_init_module, where the frontend API does not exist
+	// yet. Everything else here waits for OBS to say it has finished loading.
 	if (!eventCallbackAdded_) {
 		obs_frontend_add_event_callback(OnFrontendEvent, this);
 		eventCallbackAdded_ = true;
 	}
 
-	// A status item added part way through a stream should not report zero
-	// until the next start event, which may never come.
-	if (obs_frontend_recording_active() && !recordTime_.running) {
-		recordTime_.start();
-		if (obs_frontend_recording_paused())
-			recordTime_.pause();
-	}
-	if (obs_frontend_streaming_active() && !streamTime_.running)
-		streamTime_.start();
-
 	timer_.start();
-	tick();
+
+	// A status item created after startup has already missed FINISHED_LOADING,
+	// so it catches up here instead of waiting for an event that has been and
+	// gone.
+	if (ObsFinishedLoading())
+		syncToRunningOutputs();
 }
 
 void Monitor::removeObserver()
@@ -253,6 +253,12 @@ void Monitor::OnFrontendEvent(enum obs_frontend_event event, void *data)
 void Monitor::handleFrontendEvent(enum obs_frontend_event event)
 {
 	switch (event) {
+	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
+		// The first moment it is legal to ask the frontend anything. Items
+		// built during module load have been showing their startup values
+		// until now.
+		syncToRunningOutputs();
+		break;
 	case OBS_FRONTEND_EVENT_RECORDING_STARTED:
 		recordTime_.start();
 		recordRate_.reset();
@@ -314,8 +320,28 @@ void Monitor::setMessage(MessageId id)
 	messageAge_.restart();
 }
 
+// Adopts whatever OBS is already doing, so an item added part way through a
+// recording does not read zero until the next start event, which may never come.
+void Monitor::syncToRunningOutputs()
+{
+	if (obs_frontend_recording_active() && !recordTime_.running) {
+		recordTime_.start();
+		if (obs_frontend_recording_paused())
+			recordTime_.pause();
+	}
+	if (obs_frontend_streaming_active() && !streamTime_.running)
+		streamTime_.start();
+
+	tick();
+}
+
 void Monitor::tick()
 {
+	// The timer cannot fire before the Qt event loop runs, but OBS pumps events
+	// during startup, so this is not a guarantee on its own.
+	if (!ObsFinishedLoading())
+		return;
+
 	const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
 
 	if (cpuInfo_)

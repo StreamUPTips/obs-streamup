@@ -81,6 +81,7 @@ private:
 	~Monitor() override;
 
 	void tick();
+	void syncToRunningOutputs();
 	void handleFrontendEvent(enum obs_frontend_event event);
 	static void OnFrontendEvent(enum obs_frontend_event event, void *data);
 

@@ -632,6 +632,13 @@ static const char *const kVerticalDockId = "StreamUPSceneOrganiserVertical";
 // receives FINISHED_LOADING itself, so it has to be told to run its initial load.
 static bool s_obsFinishedLoading = false;
 
+namespace StreamUP {
+bool ObsFinishedLoading()
+{
+	return s_obsFinishedLoading;
+}
+} // namespace StreamUP
+
 static void LoadSceneOrganiserDocks()
 {
 	blog(LOG_INFO, "[StreamUP] LoadSceneOrganiserDocks: Starting Scene Organiser dock creation");
