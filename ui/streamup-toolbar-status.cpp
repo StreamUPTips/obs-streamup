@@ -23,7 +23,7 @@ constexpr qint64 kMessageHoldMs = 8000;
 constexpr int kOverloadWindowTicks = 5;
 constexpr double kOverloadSkipRatio = 0.05;
 
-QString tr(const char *key)
+QString moduleText(const char *key)
 {
 	return QString::fromUtf8(obs_module_text(key));
 }
@@ -77,21 +77,21 @@ QString kindDisplayName(Kind kind)
 {
 	switch (kind) {
 	case Kind::Cpu:
-		return tr("StreamUP.Toolbar.Status.Cpu");
+		return moduleText("StreamUP.Toolbar.Status.Cpu");
 	case Kind::Fps:
-		return tr("StreamUP.Toolbar.Status.Fps");
+		return moduleText("StreamUP.Toolbar.Status.Fps");
 	case Kind::FramesDropped:
-		return tr("StreamUP.Toolbar.Status.FramesDropped");
+		return moduleText("StreamUP.Toolbar.Status.FramesDropped");
 	case Kind::RecordTime:
-		return tr("StreamUP.Toolbar.Status.RecordTime");
+		return moduleText("StreamUP.Toolbar.Status.RecordTime");
 	case Kind::StreamTime:
-		return tr("StreamUP.Toolbar.Status.StreamTime");
+		return moduleText("StreamUP.Toolbar.Status.StreamTime");
 	case Kind::StreamBitrate:
-		return tr("StreamUP.Toolbar.Status.StreamBitrate");
+		return moduleText("StreamUP.Toolbar.Status.StreamBitrate");
 	case Kind::RecordBitrate:
-		return tr("StreamUP.Toolbar.Status.RecordBitrate");
+		return moduleText("StreamUP.Toolbar.Status.RecordBitrate");
 	case Kind::Message:
-		return tr("StreamUP.Toolbar.Status.Message");
+		return moduleText("StreamUP.Toolbar.Status.Message");
 	}
 	return QString();
 }
@@ -404,22 +404,22 @@ QString Monitor::messageText(MessageId id, bool compact) const
 	case MessageId::None:
 		return QString();
 	case MessageId::RecordingStarted:
-		return tr(compact ? "StreamUP.Toolbar.Status.Msg.RecordingStarted.Short"
+		return moduleText(compact ? "StreamUP.Toolbar.Status.Msg.RecordingStarted.Short"
 				  : "StreamUP.Toolbar.Status.Msg.RecordingStarted");
 	case MessageId::RecordingStopped:
-		return tr(compact ? "StreamUP.Toolbar.Status.Msg.RecordingStopped.Short"
+		return moduleText(compact ? "StreamUP.Toolbar.Status.Msg.RecordingStopped.Short"
 				  : "StreamUP.Toolbar.Status.Msg.RecordingStopped");
 	case MessageId::RecordingPaused:
-		return tr(compact ? "StreamUP.Toolbar.Status.Msg.RecordingPaused.Short"
+		return moduleText(compact ? "StreamUP.Toolbar.Status.Msg.RecordingPaused.Short"
 				  : "StreamUP.Toolbar.Status.Msg.RecordingPaused");
 	case MessageId::StreamingStarted:
-		return tr(compact ? "StreamUP.Toolbar.Status.Msg.StreamingStarted.Short"
+		return moduleText(compact ? "StreamUP.Toolbar.Status.Msg.StreamingStarted.Short"
 				  : "StreamUP.Toolbar.Status.Msg.StreamingStarted");
 	case MessageId::StreamingStopped:
-		return tr(compact ? "StreamUP.Toolbar.Status.Msg.StreamingStopped.Short"
+		return moduleText(compact ? "StreamUP.Toolbar.Status.Msg.StreamingStopped.Short"
 				  : "StreamUP.Toolbar.Status.Msg.StreamingStopped");
 	case MessageId::EncodingOverloaded:
-		return tr(compact ? "StreamUP.Toolbar.Status.Msg.Overloaded.Short"
+		return moduleText(compact ? "StreamUP.Toolbar.Status.Msg.Overloaded.Short"
 				  : "StreamUP.Toolbar.Status.Msg.Overloaded");
 	}
 	return QString();
@@ -432,11 +432,11 @@ QString Monitor::text(Kind kind, bool compact, bool showLabel, bool showHours) c
 
 	switch (kind) {
 	case Kind::Cpu:
-		label = tr("StreamUP.Toolbar.Status.Cpu.Prefix");
+		label = moduleText("StreamUP.Toolbar.Status.Cpu.Prefix");
 		value = QStringLiteral("%1%").arg(cpuPercent_, 0, 'f', compact ? 0 : 1);
 		break;
 	case Kind::Fps:
-		label = tr("StreamUP.Toolbar.Status.Fps.Prefix");
+		label = moduleText("StreamUP.Toolbar.Status.Fps.Prefix");
 		value = compact ? QString::number(fps_, 'f', 0) : QStringLiteral("%1 FPS").arg(fps_, 0, 'f', 2);
 		break;
 	case Kind::FramesDropped: {
@@ -444,25 +444,25 @@ QString Monitor::text(Kind kind, bool compact, bool showLabel, bool showHours) c
 		const double percent = totalFrames_ > 0
 					       ? (static_cast<double>(laggedFrames_) / static_cast<double>(totalFrames_)) * 100.0
 					       : 0.0;
-		label = tr("StreamUP.Toolbar.Status.FramesDropped.Prefix");
+		label = moduleText("StreamUP.Toolbar.Status.FramesDropped.Prefix");
 		value = compact ? QStringLiteral("%1").arg(laggedFrames_)
 				: QStringLiteral("%1 (%2%)").arg(laggedFrames_).arg(percent, 0, 'f', 1);
 		break;
 	}
 	case Kind::RecordTime:
-		label = tr("StreamUP.Toolbar.Status.RecordTime.Prefix");
+		label = moduleText("StreamUP.Toolbar.Status.RecordTime.Prefix");
 		value = durationText(recordTime_.ms(), showHours);
 		break;
 	case Kind::StreamTime:
-		label = tr("StreamUP.Toolbar.Status.StreamTime.Prefix");
+		label = moduleText("StreamUP.Toolbar.Status.StreamTime.Prefix");
 		value = durationText(streamTime_.ms(), showHours);
 		break;
 	case Kind::StreamBitrate:
-		label = tr("StreamUP.Toolbar.Status.StreamBitrate.Prefix");
+		label = moduleText("StreamUP.Toolbar.Status.StreamBitrate.Prefix");
 		value = bitrateText(streamRate_.kbps, compact);
 		break;
 	case Kind::RecordBitrate:
-		label = tr("StreamUP.Toolbar.Status.RecordBitrate.Prefix");
+		label = moduleText("StreamUP.Toolbar.Status.RecordBitrate.Prefix");
 		value = bitrateText(recordRate_.kbps, compact);
 		break;
 	case Kind::Message:
@@ -483,29 +483,29 @@ QString Monitor::widestText(Kind kind, bool compact, bool showLabel, bool showHo
 
 	switch (kind) {
 	case Kind::Cpu:
-		label = tr("StreamUP.Toolbar.Status.Cpu.Prefix");
+		label = moduleText("StreamUP.Toolbar.Status.Cpu.Prefix");
 		value = compact ? QStringLiteral("100%") : QStringLiteral("100.0%");
 		break;
 	case Kind::Fps:
-		label = tr("StreamUP.Toolbar.Status.Fps.Prefix");
+		label = moduleText("StreamUP.Toolbar.Status.Fps.Prefix");
 		value = compact ? QStringLiteral("240") : QStringLiteral("240.00 FPS");
 		break;
 	case Kind::FramesDropped:
-		label = tr("StreamUP.Toolbar.Status.FramesDropped.Prefix");
+		label = moduleText("StreamUP.Toolbar.Status.FramesDropped.Prefix");
 		value = compact ? QStringLiteral("88888") : QStringLiteral("88888 (100.0%)");
 		break;
 	case Kind::RecordTime:
 	case Kind::StreamTime:
-		label = kind == Kind::RecordTime ? tr("StreamUP.Toolbar.Status.RecordTime.Prefix")
-						 : tr("StreamUP.Toolbar.Status.StreamTime.Prefix");
+		label = kind == Kind::RecordTime ? moduleText("StreamUP.Toolbar.Status.RecordTime.Prefix")
+						 : moduleText("StreamUP.Toolbar.Status.StreamTime.Prefix");
 		// Always measured at the hours form. A stream that ticks over an hour
 		// must not widen the bar and shove everything along at that moment.
 		value = QStringLiteral("88:88:88");
 		break;
 	case Kind::StreamBitrate:
 	case Kind::RecordBitrate:
-		label = kind == Kind::StreamBitrate ? tr("StreamUP.Toolbar.Status.StreamBitrate.Prefix")
-						    : tr("StreamUP.Toolbar.Status.RecordBitrate.Prefix");
+		label = kind == Kind::StreamBitrate ? moduleText("StreamUP.Toolbar.Status.StreamBitrate.Prefix")
+						    : moduleText("StreamUP.Toolbar.Status.RecordBitrate.Prefix");
 		value = compact ? QStringLiteral("88888k") : QStringLiteral("88888 kb/s");
 		break;
 	case Kind::Message: {
