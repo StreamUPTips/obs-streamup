@@ -1,3 +1,11 @@
+# StreamUP v2.3.1 - Patch Update
+
+## Bug Fixes
+- **A New Vertical Scene Would Not Switch** - Make a scene in the Vertical Scene Organiser, click it, and nothing happened. We were asking Aitum to do the switch and taking its reply as a job done, but that reply only says the request arrived. Aitum checks the name against a list it builds from its own add button, so a scene added any other way is a stranger to it and the switch quietly goes nowhere. We check whether the scene actually changed now, and do it ourselves when it has not. The scene was being created properly all along, and still shows up in Aitum's own dock after a restart.
+- **The Green Live Marker Did Not Follow The Vertical Canvas** - Switch scenes on the vertical canvas and the Scene Organiser kept the on air marker on whatever was live when it loaded. Aitum runs its switching through its own transition, which sits on the canvas and never moves, so nothing is ever raised to say the live scene changed. The dock now checks for itself once a second, and only redraws when the answer is different.
+
+---
+
 # StreamUP v2.3.0 - Feature Update
 
 ## New Features

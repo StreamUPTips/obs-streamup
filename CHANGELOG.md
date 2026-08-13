@@ -2,6 +2,15 @@
 
 ---
 
+## v2.3.1 (13 Aug '26)
+**Patch Focus:** Vertical canvas fixes
+
+### Bug Fixes
+- A scene created in the Vertical Scene Organiser could not be switched to by clicking it. We asked Aitum to do the switch and took its answer as done, but the answer only tells you the request arrived, not that anything happened. Aitum matches the name against a list it builds from its own add button, so a scene added any other way is unknown to it and the switch is quietly dropped. We check the result now, and switch the scene ourselves when Aitum has not. The scene was always created properly, and still turns up in Aitum's own dock after a restart
+- The green on air marker in the Vertical Scene Organiser stayed on whichever scene was live when the dock loaded. Aitum switches through its own transition, which sits on the canvas and never moves, so nothing was ever raised to say the scene had changed. The vertical dock now checks for itself, once a second, and only redraws when the answer changes
+
+---
+
 ## v2.3.0 (13 Aug '26)
 **Patch Focus:** Backup and restore, the status bar on your toolbar, vertical canvas Scene Organiser, plugin check improvements
 
