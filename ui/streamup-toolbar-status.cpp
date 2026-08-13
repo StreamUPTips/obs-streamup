@@ -1,9 +1,13 @@
 #include "streamup-toolbar-status.hpp"
 #include "../streamup.hpp"
+#include "ui-helpers.hpp"
 
 #include <obs-module.h>
 
+#include <QBoxLayout>
 #include <QDateTime>
+#include <QEvent>
+#include <QIcon>
 #include <QFontMetrics>
 #include <QStyle>
 
@@ -95,6 +99,29 @@ QString kindDisplayName(Kind kind)
 		return moduleText("StreamUP.Toolbar.Status.Message");
 	}
 	return QString();
+}
+
+QString kindIconName(Kind kind)
+{
+	switch (kind) {
+	case Kind::Cpu:
+		return QStringLiteral("status-cpu");
+	case Kind::Fps:
+		return QStringLiteral("status-fps");
+	case Kind::FramesDropped:
+		return QStringLiteral("status-dropped");
+	case Kind::RecordTime:
+		return QStringLiteral("status-record-time");
+	case Kind::StreamTime:
+		return QStringLiteral("status-stream-time");
+	case Kind::StreamBitrate:
+		return QStringLiteral("status-stream-bitrate");
+	case Kind::RecordBitrate:
+		return QStringLiteral("status-record-bitrate");
+	case Kind::Message:
+		return QStringLiteral("status-message");
+	}
+	return QStringLiteral("status-message");
 }
 
 bool kindIsDuration(Kind kind)
@@ -451,89 +478,54 @@ QString Monitor::messageText(MessageId id, bool compact) const
 	return QString();
 }
 
-QString Monitor::text(Kind kind, bool compact, bool showLabel, bool showHours) const
+QString Monitor::text(Kind kind, bool compact, bool showHours) const
 {
-	QString label;
-	QString value;
-
 	switch (kind) {
 	case Kind::Cpu:
-		label = moduleText("StreamUP.Toolbar.Status.Cpu.Prefix");
-		value = QStringLiteral("%1%").arg(cpuPercent_, 0, 'f', compact ? 0 : 1);
-		break;
+		return QStringLiteral("%1%").arg(cpuPercent_, 0, 'f', compact ? 0 : 1);
 	case Kind::Fps:
-		label = moduleText("StreamUP.Toolbar.Status.Fps.Prefix");
-		value = compact ? QString::number(fps_, 'f', 0) : QStringLiteral("%1 FPS").arg(fps_, 0, 'f', 2);
-		break;
+		return QString::number(fps_, 'f', compact ? 0 : 2);
 	case Kind::FramesDropped: {
 		// Rendering lag, which is what OBS's "missed frames" readout counts.
 		const double percent = totalFrames_ > 0
 					       ? (static_cast<double>(laggedFrames_) / static_cast<double>(totalFrames_)) * 100.0
 					       : 0.0;
-		label = moduleText("StreamUP.Toolbar.Status.FramesDropped.Prefix");
-		value = compact ? QStringLiteral("%1").arg(laggedFrames_)
-				: QStringLiteral("%1 (%2%)").arg(laggedFrames_).arg(percent, 0, 'f', 1);
-		break;
+		return compact ? QStringLiteral("%1").arg(laggedFrames_)
+			       : QStringLiteral("%1 (%2%)").arg(laggedFrames_).arg(percent, 0, 'f', 1);
 	}
 	case Kind::RecordTime:
-		label = moduleText("StreamUP.Toolbar.Status.RecordTime.Prefix");
-		value = durationText(recordTime_.ms(), showHours);
-		break;
+		return durationText(recordTime_.ms(), showHours);
 	case Kind::StreamTime:
-		label = moduleText("StreamUP.Toolbar.Status.StreamTime.Prefix");
-		value = durationText(streamTime_.ms(), showHours);
-		break;
+		return durationText(streamTime_.ms(), showHours);
 	case Kind::StreamBitrate:
-		label = moduleText("StreamUP.Toolbar.Status.StreamBitrate.Prefix");
-		value = bitrateText(streamRate_.kbps, compact);
-		break;
+		return bitrateText(streamRate_.kbps, compact);
 	case Kind::RecordBitrate:
-		label = moduleText("StreamUP.Toolbar.Status.RecordBitrate.Prefix");
-		value = bitrateText(recordRate_.kbps, compact);
-		break;
+		return bitrateText(recordRate_.kbps, compact);
 	case Kind::Message:
-		// A message carries its own wording, so a prefix in front of it would
-		// read as "Status: Recording stopped".
 		return messageText(message_, compact);
 	}
-
-	if (!showLabel || label.isEmpty())
-		return value;
-	return QStringLiteral("%1 %2").arg(label, value);
+	return QString();
 }
 
-QString Monitor::widestText(Kind kind, bool compact, bool showLabel, bool showHours) const
+QString Monitor::widestText(Kind kind, bool compact, bool showHours) const
 {
-	QString label;
-	QString value;
+	Q_UNUSED(showHours)
 
 	switch (kind) {
 	case Kind::Cpu:
-		label = moduleText("StreamUP.Toolbar.Status.Cpu.Prefix");
-		value = compact ? QStringLiteral("100%") : QStringLiteral("100.0%");
-		break;
+		return compact ? QStringLiteral("100%") : QStringLiteral("100.0%");
 	case Kind::Fps:
-		label = moduleText("StreamUP.Toolbar.Status.Fps.Prefix");
-		value = compact ? QStringLiteral("240") : QStringLiteral("240.00 FPS");
-		break;
+		return compact ? QStringLiteral("240") : QStringLiteral("240.00");
 	case Kind::FramesDropped:
-		label = moduleText("StreamUP.Toolbar.Status.FramesDropped.Prefix");
-		value = compact ? QStringLiteral("88888") : QStringLiteral("88888 (100.0%)");
-		break;
+		return compact ? QStringLiteral("88888") : QStringLiteral("88888 (100.0%)");
 	case Kind::RecordTime:
 	case Kind::StreamTime:
-		label = kind == Kind::RecordTime ? moduleText("StreamUP.Toolbar.Status.RecordTime.Prefix")
-						 : moduleText("StreamUP.Toolbar.Status.StreamTime.Prefix");
 		// Always measured at the hours form. A stream that ticks over an hour
 		// must not widen the bar and shove everything along at that moment.
-		value = QStringLiteral("88:88:88");
-		break;
+		return QStringLiteral("88:88:88");
 	case Kind::StreamBitrate:
 	case Kind::RecordBitrate:
-		label = kind == Kind::StreamBitrate ? moduleText("StreamUP.Toolbar.Status.StreamBitrate.Prefix")
-						    : moduleText("StreamUP.Toolbar.Status.RecordBitrate.Prefix");
-		value = compact ? QStringLiteral("88888k") : QStringLiteral("88888 kb/s");
-		break;
+		return compact ? QStringLiteral("88888k") : QStringLiteral("88888 kb/s");
 	case Kind::Message: {
 		// The longest of the set, since any of them can appear.
 		QString widest;
@@ -545,12 +537,7 @@ QString Monitor::widestText(Kind kind, bool compact, bool showLabel, bool showHo
 		return widest;
 	}
 	}
-
-	Q_UNUSED(showHours)
-
-	if (!showLabel || label.isEmpty())
-		return value;
-	return QStringLiteral("%1 %2").arg(label, value);
+	return QString();
 }
 
 bool Monitor::isAlerting(Kind kind) const
@@ -571,11 +558,26 @@ bool Monitor::isAlerting(Kind kind) const
 // ---------------------------------------------------------------------------
 // StatusWidget
 
-StatusWidget::StatusWidget(Kind kind, bool compact, bool showLabel, bool showHours, QWidget *parent)
-	: QLabel(parent),
+namespace {
+
+// Breathing room either side of the value. The pinned width is measured from a
+// string, and a string measured to the pixel clips the moment the theme adds a
+// margin, a bold weight or a wider font. The first cut of this used one average
+// character width and lost the edge of every readout.
+constexpr int kValuePaddingPx = 10;
+
+// The icon sits at the toolbar's own icon size where it can, but a status item
+// is text-height furniture, so it is capped to something that reads next to a
+// number rather than dwarfing it.
+constexpr int kIconPx = 14;
+
+} // namespace
+
+StatusWidget::StatusWidget(Kind kind, bool vertical, bool showIcon, bool showHours, QWidget *parent)
+	: QWidget(parent),
 	  kind_(kind),
-	  compact_(compact),
-	  showLabel_(showLabel),
+	  vertical_(vertical),
+	  showIcon_(showIcon),
 	  showHours_(showHours)
 {
 	// Styled by the theme through the class property, like every other item
@@ -583,14 +585,33 @@ StatusWidget::StatusWidget(Kind kind, bool compact, bool showLabel, bool showHou
 	setProperty("class", "streamup-toolbar-status");
 	setProperty("statusKind", kindKey(kind));
 	setProperty("alerting", false);
-	setAlignment(Qt::AlignCenter);
-	setTextInteractionFlags(Qt::NoTextInteraction);
 	setFocusPolicy(Qt::NoFocus);
+
+	// With an icon instead of a word, this is the only thing that says what
+	// the number is.
+	setToolTip(kindDisplayName(kind));
+
+	// Stacked when the bar runs down the side, in a row when it runs across.
+	auto *layout = new QBoxLayout(vertical_ ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight, this);
+	layout->setContentsMargins(0, 0, 0, 0);
+	layout->setSpacing(vertical_ ? 0 : 4);
+
+	icon_ = new QLabel(this);
+	icon_->setAlignment(Qt::AlignCenter);
+	icon_->setFixedSize(kIconPx, kIconPx);
+	icon_->setPixmap(QIcon(UIHelpers::GetThemedIconPath(kindIconName(kind))).pixmap(kIconPx, kIconPx));
+	icon_->setVisible(showIcon_);
+	layout->addWidget(icon_, 0, Qt::AlignCenter);
+
+	value_ = new QLabel(this);
+	value_->setAlignment(Qt::AlignCenter);
+	value_->setTextInteractionFlags(Qt::NoTextInteraction);
+	layout->addWidget(value_, 0, Qt::AlignCenter);
 
 	Monitor::instance().addObserver();
 	connect(&Monitor::instance(), &Monitor::updated, this, &StatusWidget::refresh);
 
-	applyFixedWidth();
+	applyPinnedSize();
 	refresh();
 }
 
@@ -599,24 +620,53 @@ StatusWidget::~StatusWidget()
 	Monitor::instance().removeObserver();
 }
 
-void StatusWidget::applyFixedWidth()
+void StatusWidget::showEvent(QShowEvent *event)
 {
-	const QString widest = Monitor::instance().widestText(kind_, compact_, showLabel_, showHours_);
+	QWidget::showEvent(event);
+	// The theme's font is only certain once the widget has been polished, and
+	// the width is measured from it.
+	applyPinnedSize();
+}
+
+void StatusWidget::changeEvent(QEvent *event)
+{
+	QWidget::changeEvent(event);
+	if (event->type() == QEvent::FontChange || event->type() == QEvent::StyleChange)
+		applyPinnedSize();
+}
+
+void StatusWidget::applyPinnedSize()
+{
+	if (!value_)
+		return;
+
+	const QString widest = Monitor::instance().widestText(kind_, vertical_, showHours_);
 
 	// A message item with nothing to say would pin itself to zero and never
 	// grow, so an empty widest reading keeps the widget flexible instead.
 	if (widest.isEmpty()) {
-		setMinimumWidth(0);
-		setMaximumWidth(QWIDGETSIZE_MAX);
+		value_->setMinimumWidth(0);
+		value_->setMaximumWidth(QWIDGETSIZE_MAX);
 		return;
 	}
 
-	setFixedWidth(fontMetrics().horizontalAdvance(widest) + fontMetrics().averageCharWidth());
+	// Measured on the label's own font, not the parent's: the theme styles the
+	// label, and measuring the wrong font is how text ends up clipped.
+	const int textWidth = value_->fontMetrics().horizontalAdvance(widest) + kValuePaddingPx;
+	value_->setFixedWidth(textWidth);
 }
 
 void StatusWidget::refresh()
 {
-	setText(Monitor::instance().text(kind_, compact_, showLabel_, showHours_));
+	const QString text = Monitor::instance().text(kind_, vertical_, showHours_);
+	value_->setText(text);
+
+	// Messages are transient. Every other readout always has a value, but this
+	// one is empty most of the time, and an icon sitting over nothing is dead
+	// space on a bar where space is the whole problem. It takes its slot when
+	// there is something to say and gives it back afterwards.
+	if (kind_ == Kind::Message)
+		setVisible(!text.isEmpty());
 
 	const bool alerting = Monitor::instance().isAlerting(kind_);
 	if (alerting == alerting_)

@@ -31,24 +31,47 @@ The wording is StreamUP's own and will not be character-identical to what OBS
 shows. Encoding overload is judged over a five second window rather than a
 single tick, so one bad second during a scene change does not light it up.
 
+## Icons, not words
+
+Each readout is an icon and a value, the way the OBS status bar reads. Writing
+the name out in front of every number (`CPU 11.4% FPS 60.00 REC 00:00`) filled
+the bar with words and left no room for the numbers.
+
+The icon is the only thing naming the readout, so every item carries a tooltip
+with its full name.
+
 ## Settings per item
 
-- **Show label** turns `CPU 11.4%` into `11.4%`.
+- **Show icon** drops the icon and leaves the bare value, for anyone who knows
+  what their own bar says.
 - **Always show hours** applies to the two durations, so a recording reads
   `00:04:12` from the start rather than switching from `04:12` to `01:00:00`
   when it passes an hour.
 
 ## Width and orientation
 
-Each item is pinned to the width of the widest value it can ever show. Without
-that the whole run reflows every second and the bar visibly jitters while you
-stream. The durations are always measured at the hours form for the same
-reason: crossing an hour must not shove everything along the bar.
+Each item's value is pinned to the width of the widest reading it can ever
+show. Without that the whole run reflows every second and the bar visibly
+jitters while you stream. The durations are always measured at the hours form
+for the same reason: crossing an hour must not shove everything along the bar.
 
-On a left or right docked toolbar every item switches to a compact form, since
-`60.00 FPS` does not fit a bar the width of a button. `240.00 FPS` becomes
-`240`, `6000 kb/s` becomes `6000k`, and each message has its own shorter
-wording rather than being elided.
+The pin is measured from the value label's own font once the widget has been
+polished, with padding either side. Measuring the parent's font, or measuring
+to the pixel, clips the edge of every readout the moment the theme applies a
+margin or a heavier weight.
+
+On a left or right docked toolbar each item stacks, icon above value, and
+switches to a compact form. A side-docked bar is only as wide as a button, so a
+row of icon-then-value would either force the bar wide or clip. `240.00` becomes
+`240`, `6000 kb/s` becomes `6000k`, and each message has its own shorter wording
+rather than being elided.
+
+## The message item takes no room when it is quiet
+
+Every other readout always has a value. The message is empty most of the time,
+and an icon sitting over nothing is dead space on a bar where space is the whole
+problem, so the item takes its slot when there is something to say and gives it
+back afterwards.
 
 ## Updating
 

@@ -161,7 +161,7 @@ public:
 class StatusItem : public ToolbarItem {
 public:
     QString kind = QStringLiteral("cpu"); // see ToolbarStatus::kindKey
-    bool showLabel = true;                // "CPU: 11%" rather than "11%"
+    bool showIcon = true;                 // an icon in front of the value
     bool showHours = false;               // durations show hours under an hour
 
     StatusItem(const QString& itemId, const QString& statusKind)

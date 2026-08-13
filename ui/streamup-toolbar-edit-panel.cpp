@@ -234,16 +234,16 @@ void ToolbarEditPanel::buildUi()
 	// Status readouts carry their own two settings. Both rebuild the item
 	// rather than poking the live widget, because the pinned width has to be
 	// recalculated from the new wording or the bar jitters again.
-	showLabelCheck_ = new UIStyles::IOSCheckBox(
-		QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.StatusShowLabel")), propertiesBody_);
-	body->addWidget(showLabelCheck_);
-	connect(showLabelCheck_, &QCheckBox::toggled, this, [this](bool on) {
+	showIconCheck_ = new UIStyles::IOSCheckBox(
+		QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.StatusShowIcon")), propertiesBody_);
+	body->addWidget(showIconCheck_);
+	connect(showIconCheck_, &QCheckBox::toggled, this, [this](bool on) {
 		if (!editor_)
 			return;
 		auto item = std::dynamic_pointer_cast<ToolbarConfig::StatusItem>(editor_->selectedItem());
-		if (!item || item->showLabel == on)
+		if (!item || item->showIcon == on)
 			return;
-		item->showLabel = on;
+		item->showIcon = on;
 		editor_->rebuild();
 		emit configurationChanged();
 	});
@@ -383,10 +383,10 @@ void ToolbarEditPanel::onSelectionChanged(const QString &itemId)
 	}
 
 	auto status = std::dynamic_pointer_cast<ToolbarConfig::StatusItem>(item);
-	showLabelCheck_->setVisible(status != nullptr);
+	showIconCheck_->setVisible(status != nullptr);
 	if (status) {
-		QSignalBlocker blocker(showLabelCheck_);
-		showLabelCheck_->setChecked(status->showLabel);
+		QSignalBlocker blocker(showIconCheck_);
+		showIconCheck_->setChecked(status->showIcon);
 	}
 
 	// Hours only mean anything on a duration. A CPU readout offering it would

@@ -1,6 +1,24 @@
 <RCC>
 	<qresource prefix="/">
 		<!-- UI Icons -->
+		<!-- Toolbar Status Item Icons -->
+		<file>images/icons/ui/status-cpu-light.svg</file>
+		<file>images/icons/ui/status-cpu-dark.svg</file>
+		<file>images/icons/ui/status-fps-light.svg</file>
+		<file>images/icons/ui/status-fps-dark.svg</file>
+		<file>images/icons/ui/status-dropped-light.svg</file>
+		<file>images/icons/ui/status-dropped-dark.svg</file>
+		<file>images/icons/ui/status-record-time-light.svg</file>
+		<file>images/icons/ui/status-record-time-dark.svg</file>
+		<file>images/icons/ui/status-stream-time-light.svg</file>
+		<file>images/icons/ui/status-stream-time-dark.svg</file>
+		<file>images/icons/ui/status-stream-bitrate-light.svg</file>
+		<file>images/icons/ui/status-stream-bitrate-dark.svg</file>
+		<file>images/icons/ui/status-record-bitrate-light.svg</file>
+		<file>images/icons/ui/status-record-bitrate-dark.svg</file>
+		<file>images/icons/ui/status-message-light.svg</file>
+		<file>images/icons/ui/status-message-dark.svg</file>
+
 		<!-- Streaming Icons -->
 		<file>images/icons/ui/streaming-inactive-light.svg</file>
 		<file>images/icons/ui/streaming-inactive-dark.svg</file>

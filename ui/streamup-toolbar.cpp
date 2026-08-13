@@ -1243,7 +1243,7 @@ void StreamUPToolbar::setupDynamicUI()
 				return widgets;
 
 			auto* readout = new StreamUP::ToolbarStatus::StatusWidget(
-				kind, buildVertical, statusItem->showLabel, statusItem->showHours, centralWidget);
+				kind, buildVertical, statusItem->showIcon, statusItem->showHours, centralWidget);
 			readout->setObjectName(item->id);
 			widgets.append(readout);
 			return widgets;

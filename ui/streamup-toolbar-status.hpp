@@ -42,8 +42,13 @@ QString kindKey(Kind kind);
 bool kindFromKey(const QString &key, Kind &out);
 QStringList allKindKeys();
 
-// Localised name for the palette, the editor and the item's own label.
+// Localised name for the palette, the editor, and the item's tooltip. With an
+// icon rather than a word in front of the value, the tooltip is the only thing
+// naming the readout, so every item gets one.
 QString kindDisplayName(Kind kind);
+
+// Themed icon base name, resolved through UIHelpers::GetThemedIconPath.
+QString kindIconName(Kind kind);
 
 // Whether this kind offers the "show hours under an hour" setting.
 bool kindIsDuration(Kind kind);
@@ -60,14 +65,15 @@ public:
 	void addObserver();
 	void removeObserver();
 
-	// The current reading. compact is the side-docked form, which has to fit
-	// a bar only as wide as a button.
-	QString text(Kind kind, bool compact, bool showLabel, bool showHours) const;
+	// The current reading, value only. What it is a reading of is carried by
+	// the icon beside it. compact is the side-docked form, which has to fit a
+	// bar only as wide as a button.
+	QString text(Kind kind, bool compact, bool showHours) const;
 
 	// The widest reading this kind can produce, used to pin the item's width.
 	// Without this every item reflows the whole run once a second and the bar
 	// visibly jitters while you stream.
-	QString widestText(Kind kind, bool compact, bool showLabel, bool showHours) const;
+	QString widestText(Kind kind, bool compact, bool showHours) const;
 
 	// True when the value is one OBS would colour red. The item turns this
 	// into a Qt property for the theme rather than painting a colour itself.
@@ -155,25 +161,39 @@ private:
 	QElapsedTimer messageAge_;
 };
 
-// One readout on the toolbar. Subscribes to the Monitor, keeps a pinned width,
-// and goes quiet while the toolbar is being edited.
-class StatusWidget : public QLabel {
+// One readout on the toolbar: an icon and a value, the way the OBS status bar
+// reads. Subscribes to the Monitor and keeps a pinned size.
+//
+// Laid out along the bar when the toolbar runs horizontally, and stacked with
+// the icon above the value when it is docked left or right. A side-docked bar
+// is only as wide as a button, so a row would either force the whole bar wide
+// or clip.
+class StatusWidget : public QWidget {
 	Q_OBJECT
 
 public:
-	StatusWidget(Kind kind, bool compact, bool showLabel, bool showHours, QWidget *parent = nullptr);
+	StatusWidget(Kind kind, bool vertical, bool showIcon, bool showHours, QWidget *parent = nullptr);
 	~StatusWidget() override;
 
 	void refresh();
 
+protected:
+	// The theme sets the font, and it is not final until the widget has been
+	// polished, so the pinned width is taken once it is.
+	void showEvent(QShowEvent *event) override;
+	void changeEvent(QEvent *event) override;
+
 private:
-	void applyFixedWidth();
+	void applyPinnedSize();
 
 	Kind kind_;
-	bool compact_;
-	bool showLabel_;
+	bool vertical_;
+	bool showIcon_;
 	bool showHours_;
 	bool alerting_ = false;
+
+	QLabel *icon_ = nullptr;
+	QLabel *value_ = nullptr;
 };
 
 } // namespace ToolbarStatus

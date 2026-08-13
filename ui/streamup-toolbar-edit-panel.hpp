@@ -81,7 +81,7 @@ private:
 	QCheckBox *visibleCheck_ = nullptr;
 	QWidget *sizeRow_ = nullptr;
 	UIStyles::MacSpinBox *sizeSpin_ = nullptr;
-	QCheckBox *showLabelCheck_ = nullptr;
+	QCheckBox *showIconCheck_ = nullptr;
 	QCheckBox *showHoursCheck_ = nullptr;
 	QWidget *removeRow_ = nullptr;
 

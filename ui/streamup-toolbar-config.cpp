@@ -239,7 +239,7 @@ void WebSocketButtonItem::fromJson(const QJsonObject& json) {
 QJsonObject StatusItem::toJson() const {
     QJsonObject obj = ToolbarItem::toJson();
     obj["kind"] = kind;
-    obj["showLabel"] = showLabel;
+    obj["showIcon"] = showIcon;
     obj["showHours"] = showHours;
     return obj;
 }
@@ -247,7 +247,7 @@ QJsonObject StatusItem::toJson() const {
 void StatusItem::fromJson(const QJsonObject& json) {
     ToolbarItem::fromJson(json);
     kind = json["kind"].toString();
-    showLabel = json["showLabel"].toBool(true);
+    showIcon = json["showIcon"].toBool(true);
     showHours = json["showHours"].toBool(false);
 }
 
