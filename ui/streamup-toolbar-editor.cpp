@@ -115,6 +115,21 @@ void ToolbarEditor::rebuild()
 	// fire. The editor takes every mouse event before a child could see one,
 	// but a button with no slot attached cannot misbehave even if that failed.
 	auto makeWidgets = [this](const std::shared_ptr<ToolbarConfig::ToolbarItem> &item) -> QList<QWidget *> {
+		// A status readout is not a button and never was. Rendering it as one
+		// meant editing a bar of elided names, "Fr...te" where a frame rate was
+		// going to be, so you could not see what you were arranging. It builds
+		// the real readout instead, which is inert here like everything else.
+		if (item->type == ToolbarConfig::ItemType::StatusItem) {
+			auto status = std::static_pointer_cast<ToolbarConfig::StatusItem>(item);
+			ToolbarStatus::Kind kind;
+			if (ToolbarStatus::kindFromKey(status->kind, kind)) {
+				auto *readout = new ToolbarStatus::StatusWidget(kind, axis_.vertical(), status->showIcon,
+										status->showHours, true, this);
+				readout->setAttribute(Qt::WA_TransparentForMouseEvents);
+				return {readout};
+			}
+		}
+
 		QToolButton *button = new QToolButton(this);
 		button->setProperty("class", "streamup-toolbar-button");
 		button->setProperty("buttonType", "streamup-button");

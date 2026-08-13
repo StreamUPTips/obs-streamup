@@ -76,6 +76,18 @@ row of icon-then-value would either force the bar wide or clip. `240.00` becomes
 `240`, `6000 kb/s` becomes `6000k`, and each message has its own shorter wording
 rather than being elided.
 
+## In the editor
+
+The editor builds the real readout rather than a button with the item's name on
+it. Every other toolbar item is a button, so the editor's inert lookalike is a
+button too, and a status item rendered that way came out as a row of elided
+names: `Fr...te` where a frame rate was going to be. You cannot arrange a bar
+you cannot read.
+
+The preview is inert like everything else in the editor, and the message item
+shows a sample rather than hiding itself, since an invisible item cannot be
+selected, moved or removed.
+
 ## The message item takes no room when it is quiet
 
 Every other readout always has a value. The message is empty most of the time,

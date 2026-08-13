@@ -172,7 +172,11 @@ class StatusWidget : public QWidget {
 	Q_OBJECT
 
 public:
-	StatusWidget(Kind kind, bool vertical, bool showIcon, bool showHours, QWidget *parent = nullptr);
+	// preview builds the editor's stand-in: it reads live like the real thing,
+	// but the message item shows a sample and never hides itself, because an
+	// item that vanishes in the editor cannot be selected, moved or removed.
+	StatusWidget(Kind kind, bool vertical, bool showIcon, bool showHours, bool preview = false,
+		     QWidget *parent = nullptr);
 	~StatusWidget() override;
 
 	void refresh();
@@ -190,6 +194,7 @@ private:
 	bool vertical_;
 	bool showIcon_;
 	bool showHours_;
+	bool preview_ = false;
 	bool alerting_ = false;
 
 	// Current pinned width of the value. Only ever grows, so a clock passing an

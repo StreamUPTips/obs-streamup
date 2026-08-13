@@ -569,11 +569,17 @@ bool Monitor::isAlerting(Kind kind) const
 
 namespace {
 
-// Breathing room either side of the value. The pinned width is measured from a
-// string, and a string measured to the pixel clips the moment the theme adds a
-// margin, a bold weight or a wider font. The first cut of this used one average
-// character width and lost the edge of every readout.
-constexpr int kValuePaddingPx = 10;
+// Slack on the measured text width, so a string measured to the pixel does not
+// clip on a heavier weight or a wider font. Kept small: this is anti-clipping
+// insurance, not spacing. It used to be wide enough to double as padding, which
+// left every value floating in its slot. Space between items is the item's own
+// margin below, where it is even on both sides.
+constexpr int kValueSlackPx = 3;
+
+// Even margin either side of an item, so a separator dropped between two of
+// them sits in the middle of a gap rather than up against an icon.
+constexpr int kItemMarginPx = 6;
+constexpr int kItemMarginVerticalPx = 3;
 
 // The icon sits at the toolbar's own icon size where it can, but a status item
 // is text-height furniture, so it is capped to something that reads next to a
@@ -582,12 +588,13 @@ constexpr int kIconPx = 14;
 
 } // namespace
 
-StatusWidget::StatusWidget(Kind kind, bool vertical, bool showIcon, bool showHours, QWidget *parent)
+StatusWidget::StatusWidget(Kind kind, bool vertical, bool showIcon, bool showHours, bool preview, QWidget *parent)
 	: QWidget(parent),
 	  kind_(kind),
 	  vertical_(vertical),
 	  showIcon_(showIcon),
-	  showHours_(showHours)
+	  showHours_(showHours),
+	  preview_(preview)
 {
 	// Styled by the theme through the class property, like every other item
 	// on the bar. Nothing here hardcodes a colour.
@@ -602,7 +609,12 @@ StatusWidget::StatusWidget(Kind kind, bool vertical, bool showIcon, bool showHou
 
 	// Stacked when the bar runs down the side, in a row when it runs across.
 	auto *layout = new QBoxLayout(vertical_ ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight, this);
-	layout->setContentsMargins(0, 0, 0, 0);
+	// Even on both sides. Uneven margins are what made a separator dropped
+	// between two readouts sit hard against the icon on one side.
+	if (vertical_)
+		layout->setContentsMargins(0, kItemMarginVerticalPx, 0, kItemMarginVerticalPx);
+	else
+		layout->setContentsMargins(kItemMarginPx, 0, kItemMarginPx, 0);
 	layout->setSpacing(vertical_ ? 0 : 4);
 
 	icon_ = new QLabel(this);
@@ -667,12 +679,12 @@ void StatusWidget::applyPinnedSize()
 	// Measured on the label's own font, not the parent's: the theme styles the
 	// label, and measuring the wrong font is how text ends up clipped.
 	const QFontMetrics metrics = value_->fontMetrics();
-	int width = metrics.horizontalAdvance(widest) + kValuePaddingPx;
+	int width = metrics.horizontalAdvance(widest) + kValueSlackPx;
 
 	// The reserved reading is what a value normally fits inside, not a promise.
 	// A recording passing an hour, or a frame counter going further than anyone
 	// expected, must widen the slot rather than lose the end of the number.
-	width = qMax(width, metrics.horizontalAdvance(value_->text()) + kValuePaddingPx);
+	width = qMax(width, metrics.horizontalAdvance(value_->text()) + kValueSlackPx);
 
 	// Grow only. Shrinking back the moment a value gets shorter is the jitter
 	// this whole mechanism exists to prevent.
@@ -687,14 +699,22 @@ void StatusWidget::applyPinnedSize()
 
 void StatusWidget::refresh()
 {
-	const QString text = Monitor::instance().text(kind_, vertical_, showHours_);
+	QString text = Monitor::instance().text(kind_, vertical_, showHours_);
+
+	// In the editor an empty message would be an invisible item: nothing to
+	// click, nothing to drag, no way to remove it. It shows a sample of what it
+	// will look like instead, which is the point of a preview.
+	if (preview_ && kind_ == Kind::Message && text.isEmpty())
+		text = moduleText(vertical_ ? "StreamUP.Toolbar.Status.Msg.RecordingStarted.Short"
+					    : "StreamUP.Toolbar.Status.Msg.RecordingStarted");
+
 	value_->setText(text);
 
 	// Messages are transient. Every other readout always has a value, but this
 	// one is empty most of the time, and an icon sitting over nothing is dead
 	// space on a bar where space is the whole problem. It takes its slot when
 	// there is something to say and gives it back afterwards.
-	if (kind_ == Kind::Message)
+	if (kind_ == Kind::Message && !preview_)
 		setVisible(!text.isEmpty());
 
 	// Catches the value outgrowing its slot, which for a clock happens exactly
