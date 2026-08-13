@@ -118,6 +118,22 @@ obs_source_t *GetCurrentScene(CanvasType type)
 	if (type != CanvasType::Vertical)
 		return obs_frontend_get_current_scene();
 
+	// What is actually on the canvas wins, when it is readable. Aitum puts its
+	// transition on channel 0 while it drives the switching, and a transition
+	// cannot tell us which scene it landed on, so that case falls through to
+	// asking Aitum. But when the channel holds a scene outright, something set
+	// it directly (including our own fallback in SetCurrentScene below), and
+	// Aitum's idea of "current" would be out of date.
+	if (obs_canvas_t *canvas = Acquire(type)) {
+		obs_source_t *channel = obs_canvas_get_channel(canvas, 0);
+		obs_canvas_release(canvas);
+		if (channel) {
+			if (obs_source_get_type(channel) == OBS_SOURCE_TYPE_SCENE)
+				return channel;
+			obs_source_release(channel);
+		}
+	}
+
 	// Ask Aitum which scene it considers live. It tracks its own "current"
 	// separately from the canvas channel while a transition is running, so its
 	// answer is the accurate one.
@@ -174,8 +190,23 @@ void SetCurrentScene(CanvasType type, obs_source_t *scene)
 		calldata_set_string(&cd, "scene", name);
 		const bool handled = proc_handler_call(ph, "aitum_vertical_switch_scene", &cd);
 		calldata_free(&cd);
-		if (handled)
-			return; // Aitum ran the switch through its own transition
+
+		// "Handled" only means the proc existed, not that it did anything.
+		// Aitum matches the name against its own list of scenes, and that list
+		// is not rebuilt when a scene is added to the canvas by anything other
+		// than its own button, so a scene made here is unknown to it until OBS
+		// restarts. The call then returns true having switched nothing, and
+		// clicking the new scene did nothing at all. Check the result rather
+		// than trusting it.
+		if (handled) {
+			obs_source_t *now = GetCurrentScene(type);
+			const char *nowName = now ? obs_source_get_name(now) : nullptr;
+			const bool switched = nowName && strcmp(nowName, name) == 0;
+			if (now)
+				obs_source_release(now);
+			if (switched)
+				return; // Aitum ran the switch through its own transition
+		}
 	}
 
 	// No proc handler (older Aitum build, or the plugin went away mid-session).
