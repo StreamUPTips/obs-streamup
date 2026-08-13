@@ -532,8 +532,6 @@ QString Monitor::text(Kind kind, bool compact, bool showHours) const
 
 QString Monitor::widestText(Kind kind, bool compact, bool showHours) const
 {
-	Q_UNUSED(showHours)
-
 	switch (kind) {
 	case Kind::Cpu:
 		return compact ? QStringLiteral("100%") : QStringLiteral("100.0%");
@@ -570,11 +568,6 @@ QString Monitor::widestText(Kind kind, bool compact, bool showHours) const
 	}
 	}
 	return QString();
-}
-
-bool Monitor::canReset(Kind kind) const
-{
-	return kindIsResettable(kind);
 }
 
 void Monitor::resetCounters(Kind kind)
@@ -754,7 +747,7 @@ void StatusWidget::applyPinnedSize()
 void StatusWidget::contextMenuEvent(QContextMenuEvent *event)
 {
 	// A preview in the editor is scenery, and the editor owns every click there.
-	if (preview_ || !Monitor::instance().canReset(kind_)) {
+	if (preview_ || !kindIsResettable(kind_)) {
 		// Ignoring it lets the event reach the toolbar, so right clicking a
 		// readout still opens the toolbar's own menu rather than doing nothing.
 		event->ignore();

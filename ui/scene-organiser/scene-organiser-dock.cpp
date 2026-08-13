@@ -4656,7 +4656,11 @@ obs_data_array_t *SceneTreeModel::createFolderArray(QStandardItem &parent)
             // This is a folder
             obs_data_set_string(item_data, "name", child->text().toUtf8().constData());
             obs_data_set_string(item_data, "type", "folder");
-            obs_data_set_bool(item_data, "expanded", true); // TODO: Track expansion state
+            // Written for the format's sake and never read back: folders always
+            // open expanded. Restoring the real state would mean asking the view,
+            // which the model has no handle on. Not a TODO until someone asks for
+            // collapsed folders to stay collapsed.
+            obs_data_set_bool(item_data, "expanded", true);
 
             // Save custom color if set
             QVariant colorData = child->data(Qt::UserRole + 1);

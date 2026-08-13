@@ -170,9 +170,7 @@ void ToolbarEditor::rebuild()
 	QMetaObject::invokeMethod(
 		this,
 		[this, placed = built.placed]() {
-			ToolbarBuild::Result styled;
-			styled.placed = placed;
-			ToolbarBuild::pinNaturalMinimums(styled, axis_);
+			ToolbarBuild::pinNaturalMinimums(placed, axis_);
 			captureSlots();
 		},
 		Qt::QueuedConnection);

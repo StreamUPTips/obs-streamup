@@ -297,7 +297,7 @@ Result build(const ToolbarConfig::ToolbarConfiguration &config, const Options &o
 	return result;
 }
 
-void pinNaturalMinimums(const Result &result, const ToolbarGeom::Axis &axis)
+void pinNaturalMinimums(const QList<QPair<QString, QWidget *>> &placed, const ToolbarGeom::Axis &axis)
 {
 	// Called once the theme has styled the run, because a button's size hint is
 	// next to nothing before that and pinning early is how you get a bar of
@@ -309,7 +309,7 @@ void pinNaturalMinimums(const Result &result, const ToolbarGeom::Axis &axis)
 	// took only part of the slack out of the spacers. An explicit minimum is
 	// the one thing the stylesheet does not override, so the spacers are left
 	// as the only thing that can give.
-	for (const auto &entry : result.placed) {
+	for (const auto &entry : placed) {
 		QWidget *w = entry.second;
 		if (!w)
 			continue;

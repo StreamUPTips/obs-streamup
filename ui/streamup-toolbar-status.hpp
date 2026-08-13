@@ -89,7 +89,6 @@ public:
 	// since they belong to OBS: this records where they were and reports the
 	// difference, which is what "since I last looked" means.
 	void resetCounters(Kind kind);
-	bool canReset(Kind kind) const;
 
 signals:
 	void updated();

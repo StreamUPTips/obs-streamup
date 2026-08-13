@@ -72,7 +72,7 @@ QFrame *createSeparator(const QString &id, const ToolbarGeom::Axis &axis, QWidge
 // Call this AFTER the theme has styled the run. A button's size hint before
 // then is a few pixels, and pinning that produces a bar of hairlines you cannot
 // click, which is exactly the bug this guards against.
-void pinNaturalMinimums(const Result &result, const ToolbarGeom::Axis &axis);
+void pinNaturalMinimums(const QList<QPair<QString, QWidget *>> &placed, const ToolbarGeom::Axis &axis);
 
 QIcon iconForItem(const std::shared_ptr<ToolbarConfig::ToolbarItem> &item);
 QString labelForItem(const std::shared_ptr<ToolbarConfig::ToolbarItem> &item);

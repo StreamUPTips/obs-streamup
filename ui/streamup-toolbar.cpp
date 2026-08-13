@@ -1317,10 +1317,9 @@ void StreamUPToolbar::setupDynamicUI()
 	// too short loses space out of its spacers rather than squashing every
 	// button to the 4px the theme allows.
 	QMetaObject::invokeMethod(
-		this, [this, placed = built.placed, buildVertical]() {
-			StreamUP::ToolbarBuild::Result styled;
-			styled.placed = placed;
-			StreamUP::ToolbarBuild::pinNaturalMinimums(styled, StreamUP::ToolbarGeom::Axis(buildVertical));
+		this,
+		[placed = built.placed, buildVertical]() {
+			StreamUP::ToolbarBuild::pinNaturalMinimums(placed, StreamUP::ToolbarGeom::Axis(buildVertical));
 		},
 		Qt::QueuedConnection);
 
