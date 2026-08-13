@@ -192,6 +192,10 @@ private:
 	bool showHours_;
 	bool alerting_ = false;
 
+	// Current pinned width of the value. Only ever grows, so a clock passing an
+	// hour widens its slot once and nothing shrinks back a second later.
+	int pinnedWidth_ = 0;
+
 	QLabel *icon_ = nullptr;
 	QLabel *value_ = nullptr;
 };

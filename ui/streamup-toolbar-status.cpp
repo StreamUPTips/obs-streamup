@@ -517,15 +517,24 @@ QString Monitor::widestText(Kind kind, bool compact, bool showHours) const
 	case Kind::Fps:
 		return compact ? QStringLiteral("240") : QStringLiteral("240.00");
 	case Kind::FramesDropped:
-		return compact ? QStringLiteral("88888") : QStringLiteral("88888 (100.0%)");
+		// A realistic reading, not the worst case. Reserving room for 88888
+		// frames at 100% left a hole in the bar that nobody's numbers ever
+		// filled. Anything bigger widens the slot when it turns up.
+		return compact ? QStringLiteral("888") : QStringLiteral("888 (8.8%)");
 	case Kind::RecordTime:
 	case Kind::StreamTime:
-		// Always measured at the hours form. A stream that ticks over an hour
-		// must not widen the bar and shove everything along at that moment.
-		return QStringLiteral("88:88:88");
+		// Reserving the hours form from the start costs a wide, mostly empty
+		// box all session. Reserving the minutes form and growing once, at the
+		// hour mark, costs a single reflow per stream. The width only ever
+		// grows (see StatusWidget::applyPinnedSize), so it cannot oscillate at
+		// the boundary. Asking for hours pins it wide from the start, for
+		// anyone who would rather it never moved.
+		return showHours ? QStringLiteral("88:88:88") : QStringLiteral("88:88");
 	case Kind::StreamBitrate:
 	case Kind::RecordBitrate:
-		return compact ? QStringLiteral("88888k") : QStringLiteral("88888 kb/s");
+		// Four digits covers the bitrates people actually stream and record at.
+		// A higher one widens the slot once and stays there.
+		return compact ? QStringLiteral("8888k") : QStringLiteral("8888 kb/s");
 	case Kind::Message: {
 		// The longest of the set, since any of them can appear.
 		QString widest;
@@ -604,9 +613,14 @@ StatusWidget::StatusWidget(Kind kind, bool vertical, bool showIcon, bool showHou
 	layout->addWidget(icon_, 0, Qt::AlignCenter);
 
 	value_ = new QLabel(this);
-	value_->setAlignment(Qt::AlignCenter);
+	// Along the bar the value reads as a pair with its icon, so it sits against
+	// it and any reserved slack falls to the right. Centring it inside a box
+	// sized for the widest possible reading opens a gap on both sides and the
+	// number drifts away from the icon that names it. Stacked, the value is
+	// under its icon and centring is what lines the column up.
+	value_->setAlignment(vertical_ ? Qt::AlignCenter : (Qt::AlignLeft | Qt::AlignVCenter));
 	value_->setTextInteractionFlags(Qt::NoTextInteraction);
-	layout->addWidget(value_, 0, Qt::AlignCenter);
+	layout->addWidget(value_, 0, vertical_ ? Qt::AlignCenter : Qt::AlignVCenter);
 
 	Monitor::instance().addObserver();
 	connect(&Monitor::instance(), &Monitor::updated, this, &StatusWidget::refresh);
@@ -652,8 +666,23 @@ void StatusWidget::applyPinnedSize()
 
 	// Measured on the label's own font, not the parent's: the theme styles the
 	// label, and measuring the wrong font is how text ends up clipped.
-	const int textWidth = value_->fontMetrics().horizontalAdvance(widest) + kValuePaddingPx;
-	value_->setFixedWidth(textWidth);
+	const QFontMetrics metrics = value_->fontMetrics();
+	int width = metrics.horizontalAdvance(widest) + kValuePaddingPx;
+
+	// The reserved reading is what a value normally fits inside, not a promise.
+	// A recording passing an hour, or a frame counter going further than anyone
+	// expected, must widen the slot rather than lose the end of the number.
+	width = qMax(width, metrics.horizontalAdvance(value_->text()) + kValuePaddingPx);
+
+	// Grow only. Shrinking back the moment a value gets shorter is the jitter
+	// this whole mechanism exists to prevent.
+	width = qMax(width, pinnedWidth_);
+
+	if (width == pinnedWidth_)
+		return;
+
+	pinnedWidth_ = width;
+	value_->setFixedWidth(width);
 }
 
 void StatusWidget::refresh()
@@ -667,6 +696,10 @@ void StatusWidget::refresh()
 	// there is something to say and gives it back afterwards.
 	if (kind_ == Kind::Message)
 		setVisible(!text.isEmpty());
+
+	// Catches the value outgrowing its slot, which for a clock happens exactly
+	// once, when it passes an hour.
+	applyPinnedSize();
 
 	const bool alerting = Monitor::instance().isAlerting(kind_);
 	if (alerting == alerting_)

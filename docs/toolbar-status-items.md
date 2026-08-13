@@ -50,10 +50,20 @@ with its full name.
 
 ## Width and orientation
 
-Each item's value is pinned to the width of the widest reading it can ever
-show. Without that the whole run reflows every second and the bar visibly
-jitters while you stream. The durations are always measured at the hours form
-for the same reason: crossing an hour must not shove everything along the bar.
+Each item's value is pinned to the width of a realistic reading, not the worst
+case, and the pin only ever grows. Without a pin at all the whole run reflows
+every second and the bar visibly jitters while you stream. Pinned to the worst
+case instead, every item carried a hole that nobody's numbers ever filled: room
+for 88888 dropped frames at 100%, or a five figure bitrate.
+
+So a value that outgrows its slot widens it, once, and it stays widened. For a
+clock that happens exactly once, when it passes an hour and `59:59` becomes
+`01:00:00`. Turning on **Always show hours** pins it at the hours width from the
+start, for anyone who would rather it never moved at all.
+
+Along the bar, the value sits hard against its icon and any slack falls to the
+right, so the number stays with the icon that names it. Centring it in the
+reserved slot pushed the two apart and left a gap on both sides.
 
 The pin is measured from the value label's own font once the widget has been
 polished, with padding either side. Measuring the parent's font, or measuring
