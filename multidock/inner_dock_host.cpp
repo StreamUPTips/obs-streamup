@@ -1,5 +1,5 @@
 #include "inner_dock_host.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "multidock_dock.hpp"
 #include "add_dock_dialog.hpp"
 #include "persistence.hpp"
@@ -130,6 +130,12 @@ void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)
         dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
     }
     
+    // Relax the captured dock's own minimum while it lives in the MultiDock.
+    // A single wide dock (Twitch chat is the usual culprit) would otherwise set
+    // the floor for the whole MultiDock and stop it being dragged narrow. The
+    // original constraints are restored in RemoveDock.
+    dock->setMinimumSize(StreamUP::UIStyles::S(80), StreamUP::UIStyles::S(80));
+
     // Make dock fill available space
     dock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     if (dock->widget()) {

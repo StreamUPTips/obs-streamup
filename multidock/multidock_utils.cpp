@@ -1,5 +1,5 @@
 #include "multidock_utils.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <QCryptographicHash>

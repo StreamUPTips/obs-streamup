@@ -254,7 +254,7 @@ private:
         // Create modal zoom dialog (frameless rounded card + elevation shadow)
         const int sm = StreamUP::UIStyles::ShadowDialog::kShadowMargin;
         QDialog* zoomDialog = new StreamUP::UIStyles::ShadowDialog(this->window());
-        zoomDialog->setWindowTitle("Theme Preview - Full Size");
+        zoomDialog->setWindowTitle(obs_module_text("StreamUP.ThemeWindow.PreviewTitle"));
         zoomDialog->setModal(true);
         zoomDialog->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
         zoomDialog->setAttribute(Qt::WA_TranslucentBackground);

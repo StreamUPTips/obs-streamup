@@ -1,5 +1,5 @@
 #include "multidock_dialogs.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "multidock_utils.hpp"
 #include "multidock_manager.hpp"
 #include "multidock_dock.hpp"
@@ -48,6 +48,11 @@ static QString ShowCreateMultiDockDialog(QWidget* parent, QListWidget* listWidge
     nameEdit->setStyleSheet(lineEditStyle());
     nameEdit->setFixedHeight(S(28));
     layout->addWidget(nameEdit);
+
+    // Collect any spare height at the bottom so the label and field stay
+    // together at the top instead of drifting apart when the window is taller
+    // than its content.
+    layout->addStretch();
 
     // Buttons — right-anchored in the footer (Cancel outline left, primary right).
     PillButton* createButton = new PillButton(obs_module_text("MultiDock.Button.Create"), "primary");

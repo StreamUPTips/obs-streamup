@@ -123,7 +123,7 @@ private:
     QHash<QString, QPointer<MultiDockDock>> m_multiDocks;
     QHash<QString, MultiDockInfo> m_persistentInfo; // Maintains info even after widgets are destroyed
     QStringList m_pendingRetryIds; // MultiDocks that need retry restoration
-    bool m_hasRetriedRestoration; // Track if we've already done the delayed retry
+    int m_retryAttempts; // Number of delayed retry passes performed so far
     
     static MultiDockManager* s_instance;
 };

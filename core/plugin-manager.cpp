@@ -1,5 +1,5 @@
 #include "plugin-manager.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "streamup-common.hpp"
 #include "plugin-state.hpp"
 #include "string-utils.hpp"
@@ -8,6 +8,7 @@
 #include "http-client.hpp"
 #include <sstream>
 #include <algorithm>
+#include <cstdlib>
 #include "../ui/ui-helpers.hpp"
 #include <streamup/ui/window-chrome.hpp>
 #include <streamup/ui/pill-button.hpp>
@@ -32,7 +33,12 @@
 #include <QHeaderView>
 #include <QUrl>
 #include <QDesktopServices>
+#include <QProcess>
+#include <QDir>
+#include <QFileInfo>
 #include <QApplication>
+#include <QGuiApplication>
+#include <QScreen>
 #include <QClipboard>
 #include <QMenu>
 #include <QAction>
@@ -102,10 +108,10 @@ QTableWidget *MakeStyledTable(const QStringList &headers, QWidget *parent = null
 			return;
 		QMenu contextMenu(table);
 		contextMenu.setStyleSheet(su::menuStyle());
-		QAction *copyAction = contextMenu.addAction("Copy");
+		QAction *copyAction = contextMenu.addAction(obs_module_text("UI.Button.Copy"));
 		QObject::connect(copyAction, &QAction::triggered,
 				 [item]() { QApplication::clipboard()->setText(item->text()); });
-		QAction *copyRowAction = contextMenu.addAction("Copy Row");
+		QAction *copyRowAction = contextMenu.addAction(obs_module_text("UI.Button.CopyRow"));
 		QObject::connect(copyRowAction, &QAction::triggered, [table, item]() {
 			int row = item->row();
 			QStringList rowData;
@@ -202,17 +208,85 @@ void ApplyDialogTableSizingLocal(QTableWidget *table, int maxRows = 10)
 							     : Qt::ScrollBarAlwaysOff);
 }
 
+// Reveal a file in the OS file manager with the file itself selected/highlighted
+// (not just its containing folder opened). Falls back to opening the folder when
+// the platform can't select a file.
+void RevealFileInFileManager(const QString &filePath)
+{
+#if defined(_WIN32)
+	// explorer /select,"C:\path\to\module.dll" — highlights the file.
+	QStringList args{QStringLiteral("/select,") +
+			 QDir::toNativeSeparators(filePath)};
+	if (QProcess::startDetached(QStringLiteral("explorer.exe"), args))
+		return;
+#elif defined(__APPLE__)
+	QStringList args{QStringLiteral("-R"), filePath};
+	if (QProcess::startDetached(QStringLiteral("open"), args))
+		return;
+#endif
+	// Fallback (Linux, or if the reveal command failed): open the folder.
+	QDesktopServices::openUrl(
+		QUrl::fromLocalFile(QFileInfo(filePath).absolutePath()));
+}
+
 void HandleTableCellClickLocal(QTableWidget *table, int row, int column)
 {
 	QTableWidgetItem *item = table->item(row, column);
 	if (!item)
 		return;
+	// If this cell carries a module file path, highlight that file in the file
+	// manager instead of merely opening the folder.
+	QVariant fileData = item->data(Qt::UserRole + 1);
+	if (fileData.isValid() && !fileData.toString().isEmpty()) {
+		RevealFileInFileManager(fileData.toString());
+		return;
+	}
 	QVariant urlData = item->data(Qt::UserRole);
 	if (urlData.isValid())
 		QDesktopServices::openUrl(QUrl(urlData.toString()));
 }
 
 } // namespace
+
+// Turn raw module names OBS said it skipped into the plugin names we know,
+// dropping them out of the missing/outdated buckets on the way: a plugin that's
+// installed but switched off needs a toggle, not a download, so reporting it as
+// missing sends people after the wrong fix.
+// @param requiredOnly Consider only required plugins (startup/required checks).
+static std::map<std::string, bool> ResolveDisabledPlugins(const std::map<std::string, bool> &disabledModules,
+							  std::map<std::string, std::string> &missing_modules,
+							  std::map<std::string, std::string> &outdated_modules,
+							  bool requiredOnly)
+{
+	std::map<std::string, bool> resolved;
+	if (disabledModules.empty())
+		return resolved;
+
+	const auto &plugins = requiredOnly ? StreamUP::GetRequiredPlugins() : StreamUP::GetAllPlugins();
+	for (const auto &plugin : plugins) {
+		const std::string &plugin_name = plugin.first;
+		const std::string &module_name = plugin.second.moduleName;
+		if (module_name.empty())
+			continue;
+
+		auto it = disabledModules.find(module_name);
+		if (it == disabledModules.end())
+			continue;
+
+		resolved.emplace(plugin_name, it->second);
+		missing_modules.erase(plugin_name);
+		outdated_modules.erase(plugin_name);
+	}
+
+	return resolved;
+}
+
+static std::map<std::string, bool> ResolveDisabledRequiredPlugins(const std::map<std::string, bool> &disabledModules,
+								  std::map<std::string, std::string> &missing_modules,
+								  std::map<std::string, std::string> &outdated_modules)
+{
+	return ResolveDisabledPlugins(disabledModules, missing_modules, outdated_modules, /*requiredOnly=*/true);
+}
 
 //-------------------TABLE WIDGET HELPERS-------------------
 QString ExtractDomainFromUrl(const QString& url) {
@@ -360,12 +434,72 @@ QTableWidget* CreateUpdatesTable(const std::map<std::string, std::string>& versi
 	return table;
 }
 
+// Plugins OBS found on disk but never loaded because they're switched off. The
+// fix isn't a download, it's a toggle in OBS, so this table explains where.
+QTableWidget* CreateDisabledPluginsTable(const std::map<std::string, bool>& disabled_modules) {
+	QStringList headers = {
+		obs_module_text("UI.Label.PluginName"),
+		obs_module_text("UI.Label.Status"),
+		obs_module_text("UI.Label.HowToFix"),
+		obs_module_text("UI.Label.WebsiteLink")
+	};
+
+	QTableWidget* table = MakeStyledTable(headers);
+	table->setRowCount(static_cast<int>(disabled_modules.size()));
+
+	int row = 0;
+	const auto& allPlugins = StreamUP::GetAllPlugins();
+
+	for (const auto& module : disabled_modules) {
+		const std::string& plugin_name = module.first;
+		const bool safeMode = module.second;
+
+		// Plugin Name column
+		table->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(plugin_name)));
+
+		// Status column - why OBS skipped it
+		QTableWidgetItem* statusItem = new QTableWidgetItem(
+			"🚫 " + QString(obs_module_text(safeMode ? "Plugin.Status.DisabledSafeMode"
+								: "Plugin.Status.Disabled")));
+		statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_WARNING));
+		table->setItem(row, 1, statusItem);
+
+		// How to Fix column - the toggle that brings it back
+		QTableWidgetItem* fixItem = new QTableWidgetItem(
+			obs_module_text(safeMode ? "Plugin.Message.DisabledSafeModeFix"
+						 : "Plugin.Message.DisabledFix"));
+		fixItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_SECONDARY));
+		fixItem->setToolTip(fixItem->text());
+		table->setItem(row, 2, fixItem);
+
+		// Website Link column - show domain name when we know the plugin
+		auto it = allPlugins.find(plugin_name);
+		if (it != allPlugins.end() && !it->second.generalURL.empty()) {
+			QString domainName = ExtractDomainFromUrl(QString::fromStdString(it->second.generalURL));
+			QTableWidgetItem* websiteItem = new QTableWidgetItem(domainName);
+			websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
+			websiteItem->setData(Qt::UserRole, QString::fromStdString(it->second.generalURL));
+			table->setItem(row, 3, websiteItem);
+		} else {
+			QTableWidgetItem* unknownItem = new QTableWidgetItem(obs_module_text("UI.Label.Unknown"));
+			unknownItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
+			table->setItem(row, 3, unknownItem);
+		}
+
+		row++;
+	}
+
+	AutoResizeTableColumnsLocal(table);
+	return table;
+}
+
 QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& failed_modules) {
 	QStringList headers = {
 		obs_module_text("UI.Label.PluginName"),
 		obs_module_text("UI.Label.Status"),
 		obs_module_text("UI.Label.DownloadLink"),
-		obs_module_text("UI.Label.WebsiteLink")
+		obs_module_text("UI.Label.WebsiteLink"),
+		obs_module_text("UI.Label.PluginFolder")
 	};
 
 	QTableWidget* table = MakeStyledTable(headers);
@@ -373,6 +507,14 @@ QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& fai
 
 	int row = 0;
 	const auto& allPlugins = StreamUP::GetAllPlugins();
+
+	// Pull the on-disk folder + failure reason for each failed module straight
+	// from the OBS log (the same log the failed-modules list came from).
+	std::map<std::string, ModuleLoadFailure> loadFailures;
+	if (char *logPath = StreamUP::PathUtils::GetOBSLogPath()) {
+		loadFailures = GetModuleLoadFailures(logPath);
+		bfree(logPath);
+	}
 
 	for (const auto& module_name : failed_modules) {
 		// Try to find this module in the API plugins by matching moduleName
@@ -393,9 +535,17 @@ QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& fai
 		QString displayName = found_in_api ? QString::fromStdString(plugin_name) : QString::fromStdString(module_name);
 		table->setItem(row, 0, new QTableWidgetItem(displayName));
 
-		// Status column - Failed to Load
+		// Look up the folder + reason harvested from the log for this module.
+		auto failureIt = loadFailures.find(module_name);
+		const ModuleLoadFailure *failure = (failureIt != loadFailures.end()) ? &failureIt->second : nullptr;
+
+		// Status column - Failed to Load. If we found a reason in the log, show
+		// it on hover so people can see WHY it wouldn't load.
 		QTableWidgetItem* statusItem = new QTableWidgetItem("⚠️ " + QString(obs_module_text("Plugin.Status.FailedToLoad")));
 		statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_WARNING)); // Orange/amber color for warning
+		if (failure && !failure->reason.empty())
+			statusItem->setToolTip(QString(obs_module_text("Plugin.Message.FailReasonPrefix")) + " " +
+					       QString::fromStdString(failure->reason));
 		table->setItem(row, 1, statusItem);
 
 		if (found_in_api && plugin_info) {
@@ -429,6 +579,30 @@ QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& fai
 			forumItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 			forumItem->setData(Qt::UserRole, obsForumUrl);
 			table->setItem(row, 3, forumItem);
+		}
+
+		// Open Folder column - reveal the folder the failed module lives in so
+		// people can remove/replace an unsupported plugin. The generic cell-click
+		// handler opens whatever URL sits in Qt::UserRole, so we store the folder
+		// as a file:// URL. Falls back to a muted "Unknown" when the log didn't
+		// give us a resolvable path.
+		if (failure && !failure->absoluteFolder.empty()) {
+			QTableWidgetItem* folderItem = new QTableWidgetItem(obs_module_text("UI.Button.OpenFolder"));
+			folderItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
+			QString folderUrl = QUrl::fromLocalFile(QString::fromStdString(failure->absoluteFolder)).toString();
+			folderItem->setData(Qt::UserRole, folderUrl);
+			// Prefer highlighting the actual module file when we resolved it, so
+			// the failed plugin is selected in the file manager, not just its
+			// folder opened. The click handler special-cases this role.
+			if (!failure->absoluteModulePath.empty())
+				folderItem->setData(Qt::UserRole + 1,
+						    QString::fromStdString(failure->absoluteModulePath));
+			folderItem->setToolTip(QString::fromStdString(failure->absoluteFolder));
+			table->setItem(row, 4, folderItem);
+		} else {
+			QTableWidgetItem* unknownItem = new QTableWidgetItem(obs_module_text("UI.Label.Unknown"));
+			unknownItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
+			table->setItem(row, 4, unknownItem);
 		}
 
 		row++;
@@ -516,13 +690,14 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 	}
 }
 
-void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback, bool isStartupCheck)
+void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback, bool isStartupCheck, const std::map<std::string, bool>& disabled_modules)
 {
-	StreamUP::UIHelpers::ShowDialogOnUIThread([missing_modules, version_mismatch_modules, failed_to_load_modules, continueCallback, isStartupCheck]() {
+	StreamUP::UIHelpers::ShowDialogOnUIThread([missing_modules, version_mismatch_modules, failed_to_load_modules, continueCallback, isStartupCheck, disabled_modules]() {
 		// Create styled dialog with dynamic title
 		bool hasMissing = !missing_modules.empty();
 		bool hasUpdates = !version_mismatch_modules.empty();
 		bool hasFailedToLoad = !failed_to_load_modules.empty();
+		bool hasDisabled = !disabled_modules.empty();
 
 		QString titleText;
 		// Prioritize title based on what issues exist
@@ -541,6 +716,9 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		} else if (hasFailedToLoad) {
 			// Only failed to load (no missing, no updates)
 			titleText = obs_module_text("Plugin.Status.FailedToLoadOnly");
+		} else if (hasDisabled) {
+			// Only switched-off plugins
+			titleText = obs_module_text("Plugin.Status.DisabledOnly");
 		}
 
 		// Branded custom window. Primary StreamUP surface → brandFooter=true.
@@ -572,6 +750,8 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			descText = obs_module_text("Plugin.Message.UpdatesAvailable");
 		} else if (hasFailedToLoad) {
 			descText = obs_module_text("Plugin.Message.FailedToLoadDescription");
+		} else if (hasDisabled) {
+			descText = obs_module_text("Plugin.Message.DisabledDescription");
 		}
 
 		QLabel *subtitleLabel = su::makeLabel(descText, 13, 500, Colors::TEXT_SECONDARY);
@@ -619,6 +799,8 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			addTableSection("Plugin.Dialog.UpdateGroup", CreateUpdatesTable(version_mismatch_modules));
 		if (hasFailedToLoad)
 			addTableSection("Plugin.Dialog.FailedToLoadGroup", CreateFailedToLoadPluginsTable(failed_to_load_modules));
+		if (hasDisabled)
+			addTableSection("Plugin.Dialog.DisabledGroup", CreateDisabledPluginsTable(disabled_modules));
 
 		// Add warning message above buttons if there's a continue callback (meaning this is for install product)
 		if (continueCallback) {
@@ -692,6 +874,11 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		});
 		shell.footerButtons->addWidget(okButton);
 
+		// Pool any spare height at the bottom. Without this the layout shares it
+		// out between the header, the sections and the tables, which is why a
+		// single-row dialog used to open with big gaps down the middle.
+		dialogLayout->addStretch();
+
 		// Size the window to fit its widest table so columns aren't clipped
 		// horizontally. The table sits inside: content margins (S(25)*2) +
 		// section margins (S(8)*2) + container border (S(1)*2). Clamp to a sane
@@ -700,8 +887,17 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		const int sideChrome = 2 * (S(25) + S(8) + S(1));
 		int contentW = widestTable + sideChrome;
 		contentW = std::clamp(contentW, S(640), S(1100));
-		dialog->resize(contentW + 2 * S(su::ShadowDialog::kShadowMargin),
-			       S(620) + 2 * S(su::ShadowDialog::kShadowMargin));
+
+		// Height follows the content instead of a fixed S(620): one plugin gets a
+		// short window, a long list gets a tall one. Clamped to 85% of the screen
+		// so a big list can't open taller than the display.
+		const int shadow = 2 * S(su::ShadowDialog::kShadowMargin);
+		dialog->resize(contentW + shadow, S(620) + shadow);
+		int wantedH = dialog->sizeHint().height();
+		int maxH = shadow + S(620);
+		if (QScreen *screen = parent && parent->screen() ? parent->screen() : QGuiApplication::primaryScreen())
+			maxH = static_cast<int>(screen->availableGeometry().height() * 0.85);
+		dialog->resize(contentW + shadow, std::clamp(wantedH, dialog->minimumHeight(), maxH));
 		dialog->show();
 	});
 }
@@ -733,6 +929,33 @@ void CheckAllPluginsForUpdates(bool manuallyTriggered)
 
 		if (installed_version != required_version && VersionUtils::IsVersionLessThan(installed_version, required_version)) {
 			version_mismatch_modules.emplace(plugin_name, installed_version);
+		}
+	}
+
+	// DEV ONLY: set env STREAMUP_FAKE_UPDATES=1 to inject a few real plugins as "outdated" so the
+	// update dialog can be screenshotted for marketing. No effect unless the env var is present, so
+	// it can never reach real users. Uses real entries from allPlugins (needs valid version + URLs).
+	if (std::getenv("STREAMUP_FAKE_UPDATES")) {
+		auto prevVersion = [](std::string v) -> std::string {
+			std::vector<int> parts;
+			std::stringstream ss(v);
+			std::string tok;
+			while (std::getline(ss, tok, '.')) {
+				try { parts.push_back(std::stoi(tok)); } catch (...) { parts.push_back(0); }
+			}
+			if (parts.empty()) return "0.0.0";
+			for (int i = static_cast<int>(parts.size()) - 1; i >= 0; --i) {
+				if (parts[i] > 0) { parts[i]--; for (size_t j = i + 1; j < parts.size(); ++j) parts[j] = 0; break; }
+			}
+			std::string out;
+			for (size_t i = 0; i < parts.size(); ++i) { if (i) out += "."; out += std::to_string(parts[i]); }
+			return out;
+		};
+		int fakeCount = 0;
+		for (const auto &kv : allPlugins) {
+			if (fakeCount >= 6) break;
+			version_mismatch_modules[kv.first] = prevVersion(kv.second.version);
+			fakeCount++;
 		}
 	}
 
@@ -830,7 +1053,7 @@ bool CheckrequiredOBSPluginsWithoutUI(bool isLoadStreamUpFile)
 		const std::string &required_version = plugin_info.version;
 		const std::string &search_string = plugin_info.searchString;
 
-		if (search_string.find("[ignore]") != std::string::npos) {
+		if (IsUpdateCheckSkipped(search_string)) {
 			continue;
 		}
 
@@ -852,9 +1075,16 @@ bool CheckrequiredOBSPluginsWithoutUI(bool isLoadStreamUpFile)
 		}
 	}
 
+	// A required plugin that's installed but switched off in OBS reads as
+	// "missing" above (it never logs a version), so fold it in as its own
+	// failure - it's still a required plugin that isn't working.
+	std::map<std::string, bool> disabled_plugins =
+		ResolveDisabledRequiredPlugins(SearchDisabledModulesInLogFile(filepath), missing_modules,
+					       version_mismatch_modules);
+
 	bfree(filepath);
 
-	return missing_modules.empty() && version_mismatch_modules.empty();
+	return missing_modules.empty() && version_mismatch_modules.empty() && disabled_plugins.empty();
 }
 
 bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
@@ -878,7 +1108,7 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 		const std::string &required_version = plugin_info.version;
 		const std::string &search_string = plugin_info.searchString;
 
-		if (search_string.find("[ignore]") != std::string::npos) {
+		if (IsUpdateCheckSkipped(search_string)) {
 			continue; // Skip to the next iteration
 		}
 
@@ -900,14 +1130,21 @@ bool CheckrequiredOBSPlugins(bool isLoadStreamUpFile)
 		}
 	}
 
+	// Fold switched-off required plugins into their own bucket (see above).
+	std::map<std::string, bool> disabled_plugins =
+		ResolveDisabledRequiredPlugins(SearchDisabledModulesInLogFile(filepath), missing_modules,
+					       version_mismatch_modules);
+
 	bfree(filepath);
 
 	bool hasUpdates = !version_mismatch_modules.empty();
 	bool hasMissingPlugins = !missing_modules.empty();
+	bool hasDisabledPlugins = !disabled_plugins.empty();
 
-	if (hasUpdates || hasMissingPlugins) {
+	if (hasUpdates || hasMissingPlugins || hasDisabledPlugins) {
 		std::vector<std::string> empty_failed_modules;
-		PluginsHaveIssue(missing_modules, version_mismatch_modules, empty_failed_modules, nullptr);
+		PluginsHaveIssue(missing_modules, version_mismatch_modules, empty_failed_modules, nullptr, false,
+				 disabled_plugins);
 
 		missing_modules.clear();
 		version_mismatch_modules.clear();
@@ -1252,6 +1489,84 @@ std::string SearchThemeFileForVersion(const char *search)
 	return ""; // Theme file not found or version not found
 }
 
+//-------------------UPDATE-CHECK ELIGIBILITY-------------------
+static const char *kIgnoreMarker = "[ignore]";
+
+bool IsUpdateCheckSkipped(const std::string &searchString)
+{
+	// An empty search string is treated the same as an explicit [ignore].
+	// find("") matches at position 0 of the log and again at every byte after
+	// it, so letting a blank field through to the scan below doesn't find
+	// nothing - it finds the first number anywhere in the log and reports it as
+	// the installed version.
+	if (searchString.empty()) {
+		return true;
+	}
+
+	return searchString.find(kIgnoreMarker) != std::string::npos;
+}
+
+std::string GetUpdateCheckSkipReason(const std::string &searchString)
+{
+	size_t marker = searchString.find(kIgnoreMarker);
+	if (marker == std::string::npos) {
+		return "";
+	}
+
+	std::string reason = searchString.substr(marker + strlen(kIgnoreMarker));
+	size_t first = reason.find_first_not_of(" \t\r\n");
+	if (first == std::string::npos) {
+		return "";
+	}
+	size_t last = reason.find_last_not_of(" \t\r\n");
+
+	return reason.substr(first, last - first + 1);
+}
+
+std::vector<std::pair<std::string, std::string>> GetUncheckablePlugins()
+{
+	std::vector<std::pair<std::string, std::string>> uncheckable;
+
+	char *filepath = StreamUP::PathUtils::GetOBSLogPath();
+	if (filepath == nullptr) {
+		return uncheckable;
+	}
+
+	std::vector<std::string> loadedModules = GetLoadedModuleNamesFromLog(filepath);
+	bfree(filepath);
+
+	if (loadedModules.empty()) {
+		return uncheckable;
+	}
+
+	std::unordered_set<std::string> loaded(loadedModules.begin(), loadedModules.end());
+
+	for (const auto &module : StreamUP::GetAllPlugins()) {
+		const StreamUP::PluginInfo &info = module.second;
+
+		if (!IsUpdateCheckSkipped(info.searchString)) {
+			continue;
+		}
+
+		// Only surface plugins the user actually has loaded. Theme entries have
+		// no module to match against, so they're left to the theme check.
+		if (info.moduleName.empty() || loaded.find(info.moduleName) == loaded.end()) {
+			continue;
+		}
+
+		uncheckable.emplace_back(module.first, GetUpdateCheckSkipReason(info.searchString));
+	}
+
+	std::sort(uncheckable.begin(), uncheckable.end(),
+		  [](const std::pair<std::string, std::string> &a, const std::pair<std::string, std::string> &b) {
+			  return std::lexicographical_compare(
+				  a.first.begin(), a.first.end(), b.first.begin(), b.first.end(),
+				  [](char c1, char c2) { return std::tolower(c1) < std::tolower(c2); });
+		  });
+
+	return uncheckable;
+}
+
 std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 {
 	std::vector<std::pair<std::string, std::string>> installedPlugins;
@@ -1295,6 +1610,11 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 		const StreamUP::PluginInfo &plugin_info = module.second;
 		const std::string &search_string = plugin_info.searchString;
 
+		// The other three scan loops guard on this; this one didn't. These
+		// plugins are reported separately by GetUncheckablePlugins().
+		if (IsUpdateCheckSkipped(search_string)) {
+			continue;
+		}
 
 		std::string installed_version;
 		// Check if this is a theme entry (special handling)
@@ -1449,6 +1769,11 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 	// Get failed to load plugins BEFORE freeing filepath
 	std::vector<std::string> failedToLoad = SearchFailedToLoadModulesInLogFile(filepath);
 
+	// Modules OBS skipped because they're switched off (plugin manager or safe
+	// mode). These never log a version line, so they'd otherwise be reported as
+	// missing - resolved to friendly plugin names below.
+	std::map<std::string, bool> disabledModules = SearchDisabledModulesInLogFile(filepath);
+
 	bfree(filepath);
 
 	// Support 4-digit (x.y.z.w), 3-digit (x.y.z), 2-digit (x.y), and single (x) version formats
@@ -1464,7 +1789,7 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 		const std::string &required_version = plugin_info.version;
 		const std::string &search_string = plugin_info.searchString;
 
-		if (search_string.find("[ignore]") != std::string::npos) {
+		if (IsUpdateCheckSkipped(search_string)) {
 			continue;
 		}
 
@@ -1567,6 +1892,41 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 		}
 	}
 
+	// DEV ONLY: STREAMUP_FAKE_UPDATES=1 injects the first ~6 real plugins as "outdated" so the
+	// update dialog can be screenshotted for marketing. No effect unless the env var is set, so it
+	// can never reach real users. Build target `streamup`, launch the dev OBS with the env var, open
+	// StreamUP -> Check for OBS Plugin Updates, screenshot the dialog.
+	if (std::getenv("STREAMUP_FAKE_UPDATES")) {
+		auto prevVersion = [](std::string v) -> std::string {
+			std::vector<int> parts;
+			std::stringstream ss(v);
+			std::string tok;
+			while (std::getline(ss, tok, '.')) {
+				try { parts.push_back(std::stoi(tok)); } catch (...) { parts.push_back(0); }
+			}
+			if (parts.empty()) return "0.0.0";
+			for (int i = static_cast<int>(parts.size()) - 1; i >= 0; --i) {
+				if (parts[i] > 0) { parts[i]--; for (size_t j = i + 1; j < parts.size(); ++j) parts[j] = 0; break; }
+			}
+			std::string out;
+			for (size_t i = 0; i < parts.size(); ++i) { if (i) out += "."; out += std::to_string(parts[i]); }
+			return out;
+		};
+		int fakeCount = 0;
+		for (const auto &kv : StreamUP::GetAllPlugins()) {
+			if (fakeCount >= 6) break;
+			version_mismatch_modules[kv.first] = prevVersion(kv.second.version);
+			fakeCount++;
+		}
+	}
+
+	// Resolve the skipped module names to the plugin names we know about. A
+	// plugin the user switched off is installed but inert, so report it as
+	// disabled rather than leaving it in the missing/outdated buckets where the
+	// suggested fix (download it again) wouldn't help.
+	std::map<std::string, bool> disabled_plugins = ResolveDisabledPlugins(
+		disabledModules, missing_modules, version_mismatch_modules, /*requiredOnly=*/false);
+
 	// Get all installed plugins for cache
 	std::vector<std::pair<std::string, std::string>> installedPlugins = GetInstalledPlugins();
 
@@ -1576,7 +1936,16 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 	results.outdatedPlugins = std::move(version_mismatch_modules);
 	results.installedPlugins = std::move(installedPlugins);
 	results.failedToLoadPlugins = std::move(failedToLoad);
-	results.allRequiredUpToDate = results.missingPlugins.empty() && results.outdatedPlugins.empty();
+	results.disabledPlugins = std::move(disabled_plugins);
+	// A required plugin that's switched off is just as broken as a missing one.
+	bool anyRequiredDisabled = false;
+	for (const auto &plugin : results.disabledPlugins) {
+		if (StreamUP::GetRequiredPlugins().count(plugin.first)) {
+			anyRequiredDisabled = true;
+			break;
+		}
+	}
+	results.allRequiredUpToDate = results.missingPlugins.empty() && results.outdatedPlugins.empty() && !anyRequiredDisabled;
 
 	StreamUP::PluginState::Instance().SetPluginStatus(results);
 }
@@ -1635,7 +2004,16 @@ void ShowCachedPluginIssuesDialog(std::function<void()> continueCallback)
 		}
 	}
 
-	if (filteredMissing.empty() && filteredOutdated.empty() && filteredFailedToLoad.empty()) {
+	// Filter switched-off plugins to the required ones - a non-required plugin
+	// the user deliberately turned off isn't this dialog's business.
+	std::map<std::string, bool> filteredDisabled;
+	for (const auto& plugin : status.disabledPlugins) {
+		if (requiredPlugins.find(plugin.first) != requiredPlugins.end()) {
+			filteredDisabled[plugin.first] = plugin.second;
+		}
+	}
+
+	if (filteredMissing.empty() && filteredOutdated.empty() && filteredFailedToLoad.empty() && filteredDisabled.empty()) {
 		// If there's a continue callback, it means this was called from "Install a product"
 		// flow, so we should execute the callback instead of showing the up-to-date popup
 		if (continueCallback) {
@@ -1647,7 +2025,7 @@ void ShowCachedPluginIssuesDialog(std::function<void()> continueCallback)
 	}
 
 	// Use modern table display for filtered results (only required plugins)
-	PluginsHaveIssue(filteredMissing, filteredOutdated, filteredFailedToLoad, continueCallback);
+	PluginsHaveIssue(filteredMissing, filteredOutdated, filteredFailedToLoad, continueCallback, false, filteredDisabled);
 }
 
 void ShowCachedPluginUpdatesDialog()
@@ -1670,14 +2048,16 @@ void ShowCachedPluginUpdatesDialog()
 		outFile.close();
 	}
 	
-	if (status.outdatedPlugins.empty() && status.failedToLoadPlugins.empty()) {
+	if (status.outdatedPlugins.empty() && status.failedToLoadPlugins.empty() && status.disabledPlugins.empty()) {
 		PluginsUpToDateOutput(true);
 		return;
 	}
 
-	// Use modern table display for cached results
+	// Use modern table display for cached results. A manual check reports every
+	// switched-off plugin, required or not - the user asked.
 	std::map<std::string, std::string> empty_missing_modules;
-	PluginsHaveIssue(empty_missing_modules, status.outdatedPlugins, status.failedToLoadPlugins, nullptr);
+	PluginsHaveIssue(empty_missing_modules, status.outdatedPlugins, status.failedToLoadPlugins, nullptr, false,
+			 status.disabledPlugins);
 }
 
 void ShowCachedPluginUpdatesDialogSilent()
@@ -1700,7 +2080,18 @@ void ShowCachedPluginUpdatesDialogSilent()
 		outFile.close();
 	}
 
-	if (status.outdatedPlugins.empty() && status.failedToLoadPlugins.empty()) {
+	// Only a *required* plugin being switched off is worth interrupting startup
+	// for. Anything else the user turned off deliberately is their business, and
+	// still shows up in a manual check.
+	std::map<std::string, bool> requiredDisabled;
+	const auto& requiredPluginsForDisabled = StreamUP::GetRequiredPlugins();
+	for (const auto& plugin : status.disabledPlugins) {
+		if (requiredPluginsForDisabled.find(plugin.first) != requiredPluginsForDisabled.end()) {
+			requiredDisabled[plugin.first] = plugin.second;
+		}
+	}
+
+	if (status.outdatedPlugins.empty() && status.failedToLoadPlugins.empty() && requiredDisabled.empty()) {
 		// No updates - clear any previously skipped updates
 		StreamUP::SettingsManager::ClearSkippedUpdates();
 		return; // Silent success - don't show any dialog
@@ -1718,8 +2109,10 @@ void ShowCachedPluginUpdatesDialogSilent()
 		}
 	}
 
-	// Check if these updates were skipped by the user (comparing required versions)
-	if (StreamUP::SettingsManager::AreUpdatesSkipped(currentRequiredVersions, status.failedToLoadPlugins)) {
+	// Check if these updates were skipped by the user (comparing required versions).
+	// A required plugin being switched off isn't skippable - it always shows.
+	if (requiredDisabled.empty() &&
+	    StreamUP::SettingsManager::AreUpdatesSkipped(currentRequiredVersions, status.failedToLoadPlugins)) {
 		return; // User chose to skip these updates - don't show dialog
 	}
 
@@ -1737,7 +2130,8 @@ void ShowCachedPluginUpdatesDialogSilent()
 
 	// Use modern table display for cached results
 	std::map<std::string, std::string> empty_missing_modules;
-	PluginsHaveIssue(empty_missing_modules, status.outdatedPlugins, status.failedToLoadPlugins, nullptr, true);
+	PluginsHaveIssue(empty_missing_modules, status.outdatedPlugins, status.failedToLoadPlugins, nullptr, true,
+			 requiredDisabled);
 }
 
 void InvalidatePluginCache()
@@ -1787,19 +2181,17 @@ QString GetPluginPlatformURL(const std::string &pluginName)
 	return QString::fromStdString(url);
 }
 
-std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath)
+std::vector<std::string> GetLoadedModuleNamesFromLog(const char *logPath)
 {
-	std::unordered_set<std::string> ignoreModules = {"obs-websocket",      "coreaudio-encoder", "decklink-captions",
-									 "decklink-output-ui", "frontend-tools",    "image-source",
-									 "obs-browser",        "obs-ffmpeg",        "obs-filters",
-									 "obs-outputs",        "obs-qsv11",         "obs-text",
-									 "obs-transitions",    "obs-vst",           "obs-x264",
-									 "rtmp-services",      "text-freetype2",    "vlc-video",
-									 "win-capture",        "win-dshow",         "win-wasapi",
-									 "mac-avcapture",      "mac-capture",       "mac-syphon",
-									 "mac-videotoolbox",   "mac-virtualcam",    "linux-v4l2",
-									 "linux-pulseaudio",   "linux-pipewire",    "linux-jack",
-									 "linux-capture",      "linux-source",      "obs-libfdk"};
+	// OBS's own modules. They ship with OBS, so they're never ours to track.
+	static const std::unordered_set<std::string> builtInModules = {
+		"obs-websocket",    "coreaudio-encoder", "decklink-captions", "decklink-output-ui", "frontend-tools",
+		"image-source",     "obs-browser",       "obs-ffmpeg",        "obs-filters",        "obs-outputs",
+		"obs-qsv11",        "obs-text",          "obs-transitions",   "obs-vst",            "obs-x264",
+		"rtmp-services",    "text-freetype2",    "vlc-video",         "win-capture",        "win-dshow",
+		"win-wasapi",       "mac-avcapture",     "mac-capture",       "mac-syphon",         "mac-videotoolbox",
+		"mac-virtualcam",   "linux-v4l2",        "linux-pulseaudio",  "linux-pipewire",     "linux-jack",
+		"linux-capture",    "linux-source",      "obs-libfdk"};
 
 	std::string filepath = StreamUP::PathUtils::GetMostRecentTxtFile(logPath);
 	FILE *file = fopen(filepath.c_str(), "r");
@@ -1834,18 +2226,8 @@ std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath)
 					str_line = str_line.substr(0, suffix_pos);
 				}
 
-				if (ignoreModules.find(str_line) == ignoreModules.end()) {
-					bool foundInApi = false;
-					const auto& allPlugins = StreamUP::GetAllPlugins();
-					for (const auto &pair : allPlugins) {
-						if (pair.second.moduleName == str_line) {
-							foundInApi = true;
-							break;
-						}
-					}
-					if (!foundInApi) {
-						collected_modules.push_back(str_line);
-					}
+				if (builtInModules.find(str_line) == builtInModules.end()) {
+					collected_modules.push_back(str_line);
 				}
 			}
 		}
@@ -1859,6 +2241,27 @@ std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath)
 			return std::tolower(char1) < std::tolower(char2);
 		});
 	});
+
+	return collected_modules;
+}
+
+std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath)
+{
+	std::vector<std::string> collected_modules = GetLoadedModuleNamesFromLog(logPath);
+
+	// Keep only modules we have no database entry for - those are the ones we
+	// can say nothing at all about.
+	const auto &allPlugins = StreamUP::GetAllPlugins();
+	collected_modules.erase(std::remove_if(collected_modules.begin(), collected_modules.end(),
+					       [&allPlugins](const std::string &moduleName) {
+						       for (const auto &pair : allPlugins) {
+							       if (pair.second.moduleName == moduleName) {
+								       return true;
+							       }
+						       }
+						       return false;
+					       }),
+				collected_modules.end());
 
 	return collected_modules;
 }
@@ -1933,6 +2336,191 @@ std::vector<std::string> SearchFailedToLoadModulesInLogFile(const char *logPath)
 	});
 
 	return failed_modules;
+}
+
+std::map<std::string, bool> SearchDisabledModulesInLogFile(const char *logPath)
+{
+	std::map<std::string, bool> disabled_modules;
+
+	if (!logPath) {
+		StreamUP::DebugLogger::LogError("PluginManager", "SearchDisabledModulesInLogFile: logPath is null");
+		return disabled_modules;
+	}
+
+	std::string filepath;
+	try {
+		filepath = StreamUP::PathUtils::GetMostRecentTxtFile(logPath);
+	} catch (const std::exception &e) {
+		StreamUP::DebugLogger::LogErrorFormat("PluginManager", "SearchDisabledModulesInLogFile: %s", e.what());
+		return disabled_modules;
+	}
+
+	if (filepath.empty())
+		return disabled_modules;
+
+	FILE *file = fopen(filepath.c_str(), "r");
+	if (!file)
+		return disabled_modules;
+
+	// libobs logs one of these when it skips a module it found on disk:
+	//   Skipping module 'name', is disabled       <- switched off in the plugin manager
+	//   Skipping module 'name', not on safe list  <- held back because OBS is in safe mode
+	// The name is the module's base name, matching PluginInfo::moduleName.
+	static const std::regex disabled_regex("Skipping module '([^']+)', is disabled");
+	static const std::regex safe_mode_regex("Skipping module '([^']+)', not on safe list");
+
+	char line[512];
+	while (fgets(line, sizeof(line), file) != NULL) {
+		std::string str_line(line);
+		std::smatch match;
+
+		bool safeMode = false;
+		if (std::regex_search(str_line, match, disabled_regex)) {
+			safeMode = false;
+		} else if (std::regex_search(str_line, match, safe_mode_regex)) {
+			safeMode = true;
+		} else {
+			continue;
+		}
+
+		if (match.size() <= 1)
+			continue;
+
+		std::string module_name = match[1].str();
+
+		// The safe-list line carries the module name, but be tolerant of a
+		// full path turning up here and strip it down to the base name.
+		size_t last_slash = module_name.find_last_of("/\\");
+		if (last_slash != std::string::npos)
+			module_name = module_name.substr(last_slash + 1);
+		size_t ext_pos = module_name.find_last_of('.');
+		if (ext_pos != std::string::npos)
+			module_name = module_name.substr(0, ext_pos);
+
+		if (module_name.empty())
+			continue;
+
+		// First occurrence wins, but a safe-mode block is the more useful
+		// explanation, so let it upgrade an earlier plain "disabled" entry.
+		auto it = disabled_modules.find(module_name);
+		if (it == disabled_modules.end())
+			disabled_modules.emplace(std::move(module_name), safeMode);
+		else if (safeMode)
+			it->second = true;
+	}
+
+	fclose(file);
+	return disabled_modules;
+}
+
+std::map<std::string, ModuleLoadFailure> GetModuleLoadFailures(const char *logPath)
+{
+	std::map<std::string, ModuleLoadFailure> failures;
+
+	if (!logPath) {
+		StreamUP::DebugLogger::LogError("PluginManager", "GetModuleLoadFailures: logPath is null");
+		return failures;
+	}
+
+	std::string filepath;
+	try {
+		filepath = StreamUP::PathUtils::GetMostRecentTxtFile(logPath);
+	} catch (const std::exception &e) {
+		StreamUP::DebugLogger::LogErrorFormat("PluginManager", "GetModuleLoadFailures: %s", e.what());
+		return failures;
+	}
+
+	if (filepath.empty())
+		return failures;
+
+	FILE *file = fopen(filepath.c_str(), "r");
+	if (!file)
+		return failures;
+
+	// Read the whole log into lines so we can look backwards from a
+	// "not loaded" line to the reason line that precedes it.
+	std::vector<std::string> lines;
+	char buf[1024];
+	while (fgets(buf, sizeof(buf), file) != NULL) {
+		std::string l(buf);
+		while (!l.empty() && (l.back() == '\n' || l.back() == '\r'))
+			l.pop_back();
+		lines.push_back(std::move(l));
+	}
+	fclose(file);
+
+	static const std::regex module_not_loaded_regex("Module '([^']+)' not loaded");
+
+	for (size_t i = 0; i < lines.size(); ++i) {
+		std::smatch match;
+		if (!std::regex_search(lines[i], match, module_not_loaded_regex) || match.size() <= 1)
+			continue;
+
+		const std::string full_path = match[1].str();
+
+		// File name with extension (used to match the reason line) and the
+		// base name (used as the map key, matching the failed-modules list).
+		size_t last_slash = full_path.find_last_of("/\\");
+		std::string file_name = (last_slash != std::string::npos) ? full_path.substr(last_slash + 1) : full_path;
+		std::string module_name = file_name;
+		size_t ext_pos = module_name.find_last_of('.');
+		if (ext_pos != std::string::npos)
+			module_name = module_name.substr(0, ext_pos);
+
+		if (failures.find(module_name) != failures.end())
+			continue; // first occurrence wins
+
+		ModuleLoadFailure info;
+		info.modulePath = full_path;
+
+		// Resolve the containing folder to an absolute path for "Open Folder".
+		// The path in the log is relative to OBS's working directory, which is
+		// also our process CWD, so os_get_abs_path_ptr resolves it correctly.
+		std::string folder = (last_slash != std::string::npos) ? full_path.substr(0, last_slash) : ".";
+		char *abs = os_get_abs_path_ptr(folder.c_str());
+		if (abs) {
+			info.absoluteFolder = abs;
+			bfree(abs);
+		}
+
+		// Resolve the module file itself to an absolute path so the file
+		// manager can highlight/select it (not just open its folder).
+		char *absFile = os_get_abs_path_ptr(full_path.c_str());
+		if (absFile) {
+			info.absoluteModulePath = absFile;
+			bfree(absFile);
+		}
+
+		// Look back a handful of lines for the reason. OBS typically logs the
+		// underlying loader error (os_dlopen / LoadLibrary / incompatible) on a
+		// nearby line that mentions the same module file. Take the text after
+		// the last ": " on that line as the human-readable reason.
+		const size_t kLookback = 15;
+		size_t start = (i > kLookback) ? i - kLookback : 0;
+		for (size_t j = i; j-- > start;) {
+			const std::string &prev = lines[j];
+			bool mentions_module = prev.find(file_name) != std::string::npos;
+			bool looks_like_reason = prev.find("os_dlopen") != std::string::npos ||
+						 prev.find("LoadLibrary") != std::string::npos ||
+						 prev.find("dlopen") != std::string::npos ||
+						 prev.find("incompatible") != std::string::npos ||
+						 prev.find("Failed to load") != std::string::npos;
+			if (!(mentions_module && looks_like_reason))
+				continue;
+
+			size_t colon = prev.rfind(": ");
+			std::string reason = (colon != std::string::npos) ? prev.substr(colon + 2) : prev;
+			// Trim leading log-level prefixes if we fell back to the whole line.
+			if (!reason.empty()) {
+				info.reason = reason;
+				break;
+			}
+		}
+
+		failures.emplace(std::move(module_name), std::move(info));
+	}
+
+	return failures;
 }
 
 } // namespace PluginManager

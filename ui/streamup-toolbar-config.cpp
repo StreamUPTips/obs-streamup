@@ -1,5 +1,6 @@
 #include "streamup-toolbar-config.hpp"
 #include "settings-manager.hpp"
+#include "streamup-toolbar-status.hpp"
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -58,14 +59,14 @@ void SeparatorItem::fromJson(const QJsonObject& json) {
 QJsonObject CustomSpacerItem::toJson() const {
     QJsonObject obj = ToolbarItem::toJson();
     obj["size"] = size;
-    obj["isStretch"] = isStretch;
+    obj["flexible"] = flexible;
     return obj;
 }
 
 void CustomSpacerItem::fromJson(const QJsonObject& json) {
     ToolbarItem::fromJson(json);
     size = json["size"].toInt(20);
-    isStretch = json["isStretch"].toBool(false);
+    flexible = json["flexible"].toBool(false);
 }
 
 // DockButtonItem implementation
@@ -90,6 +91,7 @@ void DockButtonItem::fromJson(const QJsonObject& json) {
 QJsonObject HotkeyButtonItem::toJson() const {
     QJsonObject obj = ToolbarItem::toJson();
     obj["hotkeyName"] = hotkeyName;
+    obj["hotkeyContext"] = hotkeyContext;
     obj["displayName"] = displayName;
     obj["iconPath"] = iconPath;
     obj["customIconPath"] = customIconPath;
@@ -101,6 +103,7 @@ QJsonObject HotkeyButtonItem::toJson() const {
 void HotkeyButtonItem::fromJson(const QJsonObject& json) {
     ToolbarItem::fromJson(json);
     hotkeyName = json["hotkeyName"].toString();
+    hotkeyContext = json["hotkeyContext"].toString();
     displayName = json["displayName"].toString();
     iconPath = json["iconPath"].toString();
     customIconPath = json["customIconPath"].toString();
@@ -108,114 +111,214 @@ void HotkeyButtonItem::fromJson(const QJsonObject& json) {
     useCustomIcon = json["useCustomIcon"].toBool(false);
 }
 
-// GroupItem implementation
-QJsonObject GroupItem::toJson() const {
-    QJsonObject obj = ToolbarItem::toJson();
-    obj["name"] = name;
-    obj["expanded"] = expanded;
-    
-    QJsonArray childArray;
-    for (const auto& child : childItems) {
-        childArray.append(child->toJson());
+namespace {
+
+// Key used to remember whether the "toolbar editor was upgraded" notice has been
+// shown. Kept in the same settings blob as the configuration so it survives a
+// restart and only ever fires once per user.
+constexpr const char* kUpgradeNoticeShownKey = "toolbar_upgrade_notice_shown";
+
+// Version 1 stored ItemType as a raw enum index that included Group at 4, so a
+// legacy HotkeyButton came through as 5. Anything unrecognised is dropped.
+enum class LegacyItemType { Button = 0, Separator = 1, CustomSpacer = 2, DockButton = 3, Group = 4, HotkeyButton = 5 };
+
+std::shared_ptr<ToolbarItem> createItem(ItemType type, const QJsonObject& json) {
+    const QString id = json["id"].toString();
+
+    std::shared_ptr<ToolbarItem> item;
+    switch (type) {
+    case ItemType::Button:
+        // pause and save_replay are auto-managed companions of record and
+        // replay_buffer, so an explicit item for either is no longer valid.
+        if (const QString buttonType = json["buttonType"].toString();
+            buttonType == "pause" || buttonType == "save_replay") {
+            return nullptr;
+        }
+        item = std::make_shared<ButtonItem>(id, json["buttonType"].toString());
+        break;
+    case ItemType::Separator:
+        item = std::make_shared<SeparatorItem>(id);
+        break;
+    case ItemType::CustomSpacer:
+        item = std::make_shared<CustomSpacerItem>(id, json["size"].toInt(20));
+        break;
+    case ItemType::DockButton:
+        item = std::make_shared<DockButtonItem>(id, json["dockButtonType"].toString(), json["name"].toString());
+        break;
+    case ItemType::HotkeyButton:
+        item = std::make_shared<HotkeyButtonItem>(id, json["hotkeyName"].toString(), json["displayName"].toString());
+        break;
+    case ItemType::WebSocketButton:
+        item = std::make_shared<WebSocketButtonItem>(id, json["requestType"].toString());
+        break;
+    case ItemType::StatusItem: {
+        // A kind this build does not know about is dropped rather than shown as
+        // an empty readout that never updates.
+        const QString kind = json["kind"].toString();
+        ToolbarStatus::Kind parsed;
+        if (!ToolbarStatus::kindFromKey(kind, parsed)) {
+            return nullptr;
+        }
+        item = std::make_shared<StatusItem>(id, kind);
+        break;
     }
-    obj["childItems"] = childArray;
-    
+    }
+
+    if (item) {
+        item->fromJson(json);
+    }
+    return item;
+}
+
+// Appends the version 1 array to target, expanding groups in place so their
+// children keep the order the user arranged them in.
+void migrateLegacyItems(const QJsonArray& array, QList<std::shared_ptr<ToolbarItem>>& target) {
+    for (const auto value : array) {
+        const QJsonObject itemObj = value.toObject();
+
+        switch (static_cast<LegacyItemType>(itemObj["type"].toInt(-1))) {
+        case LegacyItemType::Group:
+            migrateLegacyItems(itemObj["childItems"].toArray(), target);
+            continue;
+        case LegacyItemType::Button:
+            if (auto item = createItem(ItemType::Button, itemObj)) target.append(item);
+            continue;
+        case LegacyItemType::Separator:
+            if (auto item = createItem(ItemType::Separator, itemObj)) target.append(item);
+            continue;
+        case LegacyItemType::CustomSpacer:
+            if (auto item = createItem(ItemType::CustomSpacer, itemObj)) target.append(item);
+            continue;
+        case LegacyItemType::DockButton:
+            if (auto item = createItem(ItemType::DockButton, itemObj)) target.append(item);
+            continue;
+        case LegacyItemType::HotkeyButton:
+            if (auto item = createItem(ItemType::HotkeyButton, itemObj)) target.append(item);
+            continue;
+        default:
+            // A type this build no longer knows about, so there is nothing to map it to.
+            continue;
+        }
+    }
+}
+
+} // namespace
+
+// ToolbarConfiguration implementation
+QJsonObject WebSocketButtonItem::toJson() const {
+    QJsonObject obj = ToolbarItem::toJson();
+    obj["source"] = static_cast<int>(source);
+    obj["requestType"] = requestType;
+    obj["vendorName"] = vendorName;
+    obj["requestData"] = requestData;
+    obj["displayName"] = displayName;
+    obj["iconPath"] = iconPath;
+    obj["customIconPath"] = customIconPath;
+    obj["tooltip"] = tooltip;
+    obj["useCustomIcon"] = useCustomIcon;
     return obj;
 }
 
-void GroupItem::fromJson(const QJsonObject& json) {
+void WebSocketButtonItem::fromJson(const QJsonObject& json) {
     ToolbarItem::fromJson(json);
-    name = json["name"].toString();
-    expanded = json["expanded"].toBool(true);
-    
-    childItems.clear();
-    QJsonArray childArray = json["childItems"].toArray();
-    
-    for (const auto childValue : childArray) {
-        QJsonObject childObj = childValue.toObject();
-        ItemType childType = static_cast<ItemType>(childObj["type"].toInt());
-        
-        std::shared_ptr<ToolbarItem> childItem;
-        switch (childType) {
-            case ItemType::Button:
-                childItem = std::make_shared<ButtonItem>("", "");
-                break;
-            case ItemType::Separator:
-                childItem = std::make_shared<SeparatorItem>("");
-                break;
-            case ItemType::CustomSpacer:
-                childItem = std::make_shared<CustomSpacerItem>("", 20);
-                break;
-            case ItemType::DockButton:
-                childItem = std::make_shared<DockButtonItem>("", "", "");
-                break;
-            case ItemType::Group:
-                childItem = std::make_shared<GroupItem>("", "");
-                break;
-            case ItemType::HotkeyButton:
-                childItem = std::make_shared<HotkeyButtonItem>("", "", "");
-                break;
-        }
-        
-        if (childItem) {
-            childItem->fromJson(childObj);
-            childItems.append(childItem);
-        }
-    }
+    // Range-checked: a stored value outside the enum would otherwise be cast
+    // into a source that does not exist.
+    const int rawSource = json["source"].toInt(static_cast<int>(Source::ObsWebSocket));
+    source = (rawSource >= static_cast<int>(Source::ObsWebSocket) && rawSource <= static_cast<int>(Source::Vendor))
+                     ? static_cast<Source>(rawSource)
+                     : Source::ObsWebSocket;
+    requestType = json["requestType"].toString();
+    vendorName = json["vendorName"].toString();
+    requestData = json["requestData"].toString();
+    displayName = json["displayName"].toString();
+    iconPath = json["iconPath"].toString();
+    customIconPath = json["customIconPath"].toString();
+    tooltip = json["tooltip"].toString();
+    useCustomIcon = json["useCustomIcon"].toBool();
 }
 
-void GroupItem::addChild(std::shared_ptr<ToolbarItem> child) {
-    if (child) {
-        childItems.append(child);
-    }
+// StatusItem implementation
+QJsonObject StatusItem::toJson() const {
+    QJsonObject obj = ToolbarItem::toJson();
+    obj["kind"] = kind;
+    obj["showIcon"] = showIcon;
+    obj["showHours"] = showHours;
+    return obj;
 }
 
-void GroupItem::removeChild(const QString& childId) {
-    for (int i = 0; i < childItems.size(); ++i) {
-        if (childItems[i]->id == childId) {
-            childItems.removeAt(i);
-            break;
-        }
-    }
+void StatusItem::fromJson(const QJsonObject& json) {
+    ToolbarItem::fromJson(json);
+    kind = json["kind"].toString();
+    showIcon = json["showIcon"].toBool(true);
+    showHours = json["showHours"].toBool(false);
 }
 
-void GroupItem::moveChild(int fromIndex, int toIndex) {
-    if (fromIndex >= 0 && fromIndex < childItems.size() && 
-        toIndex >= 0 && toIndex < childItems.size() && 
-        fromIndex != toIndex) {
-        
-        auto item = childItems.takeAt(fromIndex);
-        childItems.insert(toIndex, item);
-    }
+// Mirrors the registration list in streamup.cpp. It is kept by hand because
+// obs-websocket cannot be asked what a vendor has registered, so there is no
+// way to derive it at runtime.
+QStringList streamUPVendorRequests() {
+    static const QStringList requests = {
+        "ActivateAllVideoCaptureDevices",
+        "CheckRequiredPlugins",
+        "CopyHideTransition",
+        "CopyShowTransition",
+        "CreateBackup",
+        "DeactivateAllVideoCaptureDevices",
+        "GetAllSourcesLocked",
+        "GetBackupInfo",
+        "GetBlendingMethod",
+        "GetCurrentSceneSourcesLocked",
+        "GetDeinterlacing",
+        "GetDownmixMono",
+        "GetHideTransition",
+        "GetPluginVersion",
+        "GetRecordingOutputPath",
+        "GetScaleFiltering",
+        "GetSelectedSource",
+        "GetSelectedVisibility",
+        "GetShowTransition",
+        "GetStreamBitrate",
+        "GetVLCCurrentFile",
+        "GroupSelectedSources",
+        "LoadStreamUpFile",
+        "OpenSceneFilters",
+        "OpenSourceFilters",
+        "OpenSourceInteraction",
+        "OpenSourceProperties",
+        "PasteHideTransition",
+        "PasteShowTransition",
+        "RefreshAllVideoCaptureDevices",
+        "RefreshAudioMonitoring",
+        "RefreshBrowserSources",
+        "SetBlendingMethod",
+        "SetDeinterlacing",
+        "SetDownmixMono",
+        "SetHideTransition",
+        "SetScaleFiltering",
+        "SetShowTransition",
+        "ToggleLockAllSources",
+        "ToggleLockCurrentSceneSources",
+        "ToggleVisibilitySelectedSources",
+        "getBitrate",
+        "getCurrentSource",
+        "getHideTransition",
+        "getOutputFilePath",
+        "getShowTransition",
+        "loadStreamupFile",
+        "openSceneFilters",
+        "openSourceFilters",
+        "openSourceInteract",
+        "openSourceProperties",
+        "setHideTransition",
+        "setShowTransition",
+        "toggleLockAllSources",
+        "toggleLockCurrentSources",
+        "version",
+        "vlcGetCurrentFile",
+    };
+    return requests;
 }
 
-std::shared_ptr<ToolbarItem> GroupItem::findChild(const QString& childId) const {
-    for (const auto& child : childItems) {
-        if (child->id == childId) {
-            return child;
-        }
-        // Recursively search in nested groups
-        if (child->type == ItemType::Group) {
-            auto groupChild = std::static_pointer_cast<GroupItem>(child);
-            auto found = groupChild->findChild(childId);
-            if (found) {
-                return found;
-            }
-        }
-    }
-    return nullptr;
-}
-
-int GroupItem::getChildIndex(const QString& childId) const {
-    for (int i = 0; i < childItems.size(); ++i) {
-        if (childItems[i]->id == childId) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-// ToolbarConfiguration implementation
 bool ToolbarConfiguration::saveToSettings() const {
     obs_data_t* settings = StreamUP::SettingsManager::LoadSettings();
     if (!settings) {
@@ -278,12 +381,45 @@ bool ToolbarConfiguration::loadFromSettings() {
     }
     
     fromJson(doc.object());
-    
+
+    if (migratedOnLoad) {
+        // Write the upgraded blob straight back so the migration runs once, and arm
+        // the notice so the user is told their layout was carried over.
+        obs_data_t* noticeSettings = StreamUP::SettingsManager::LoadSettings();
+        if (noticeSettings) {
+            obs_data_set_bool(noticeSettings, kUpgradeNoticeShownKey, false);
+            StreamUP::SettingsManager::SaveSettings(noticeSettings);
+            obs_data_release(noticeSettings);
+        }
+
+        saveToSettings();
+        return true;
+    }
+
     // Update cache state
     lastLoadedJsonString = currentJsonString;
     configCacheValid = true;
-    
+
     return true;
+}
+
+bool ToolbarConfiguration::consumeMigrationNotice() {
+    obs_data_t* settings = StreamUP::SettingsManager::LoadSettings();
+    if (!settings) {
+        return false;
+    }
+
+    // Only an explicit false counts: absence means there was nothing to migrate.
+    const bool pending = obs_data_has_user_value(settings, kUpgradeNoticeShownKey) &&
+                         !obs_data_get_bool(settings, kUpgradeNoticeShownKey);
+
+    if (pending) {
+        obs_data_set_bool(settings, kUpgradeNoticeShownKey, true);
+        StreamUP::SettingsManager::SaveSettings(settings);
+    }
+
+    obs_data_release(settings);
+    return pending;
 }
 
 void ToolbarConfiguration::invalidateCache() const {
@@ -300,92 +436,33 @@ QJsonObject ToolbarConfiguration::toJson() const {
     }
     
     obj["items"] = itemsArray;
-    obj["version"] = 1;
+    obj["version"] = kConfigurationVersion;
     return obj;
 }
 
 void ToolbarConfiguration::fromJson(const QJsonObject& json) {
     items.clear();
-    
-    QJsonArray itemsArray = json["items"].toArray();
+    migratedOnLoad = false;
+
+    const QJsonArray itemsArray = json["items"].toArray();
+
+    // A missing version means the blob predates versioning entirely.
+    if (json["version"].toInt(0) < kConfigurationVersion) {
+        migratedOnLoad = true;
+        migrateLegacyItems(itemsArray, items);
+        return;
+    }
+
+
     for (const auto value : itemsArray) {
-        QJsonObject itemObj = value.toObject();
-        ItemType type = static_cast<ItemType>(itemObj["type"].toInt());
-        QString id = itemObj["id"].toString();
-        
-        std::shared_ptr<ToolbarItem> item;
-        
-        switch (type) {
-        case ItemType::Button: {
-            QString buttonType = itemObj["buttonType"].toString();
-            
-            // Filter out old explicit pause/save_replay items - they are now auto-managed
-            if (buttonType == "pause" || buttonType == "save_replay") {
-                qInfo() << "[StreamUP] Filtering out old explicit" << buttonType << "button - now auto-managed by parent button";
-                continue; // Skip this item
-            }
-            
-            auto buttonItem = std::make_shared<ButtonItem>(id, buttonType);
-            buttonItem->fromJson(itemObj);
-            item = buttonItem;
-            break;
-        }
-        case ItemType::Separator: {
-            auto separatorItem = std::make_shared<SeparatorItem>(id);
-            separatorItem->fromJson(itemObj);
-            item = separatorItem;
-            break;
-        }
-        case ItemType::CustomSpacer: {
-            int size = itemObj["size"].toInt(20);
-            auto spacerItem = std::make_shared<CustomSpacerItem>(id, size);
-            spacerItem->fromJson(itemObj);
-            item = spacerItem;
-            break;
-        }
-        case ItemType::DockButton: {
-            QString dockType = itemObj["dockButtonType"].toString();
-            QString name = itemObj["name"].toString();
-            auto dockItem = std::make_shared<DockButtonItem>(id, dockType, name);
-            dockItem->fromJson(itemObj);
-            item = dockItem;
-            break;
-        }
-        case ItemType::Group: {
-            QString name = itemObj["name"].toString();
-            auto groupItem = std::make_shared<GroupItem>(id, name);
-            groupItem->fromJson(itemObj);
+        const QJsonObject itemObj = value.toObject();
+        const int rawType = itemObj["type"].toInt(-1);
 
-            // Flatten legacy group contents into the top-level item list while preserving order
-            QList<std::shared_ptr<ToolbarItem>> pending = groupItem->childItems;
-            while (!pending.isEmpty()) {
-                auto current = pending.takeFirst();
-                if (!current) {
-                    continue;
-                }
+        if (rawType < static_cast<int>(ItemType::Button) || rawType > static_cast<int>(kLastItemType)) {
+            continue;
+        }
 
-                if (current->type == ItemType::Group) {
-                    auto nestedGroup = std::static_pointer_cast<GroupItem>(current);
-                    for (int i = 0; i < nestedGroup->childItems.size(); ++i) {
-                        pending.insert(i, nestedGroup->childItems[i]);
-                    }
-                } else {
-                    items.append(current);
-                }
-            }
-            continue; // Skip adding the group wrapper itself
-        }
-        case ItemType::HotkeyButton: {
-            QString hotkeyName = itemObj["hotkeyName"].toString();
-            QString displayName = itemObj["displayName"].toString();
-            auto hotkeyItem = std::make_shared<HotkeyButtonItem>(id, hotkeyName, displayName);
-            hotkeyItem->fromJson(itemObj);
-            item = hotkeyItem;
-            break;
-        }
-        }
-        
-        if (item) {
+        if (auto item = createItem(static_cast<ItemType>(rawType), itemObj)) {
             items.append(item);
         }
     }
@@ -464,17 +541,15 @@ int ToolbarConfiguration::getItemIndex(const QString& id) const {
 
 QList<std::shared_ptr<ToolbarItem>> ToolbarConfiguration::getFlattenedItems() const {
     QList<std::shared_ptr<ToolbarItem>> result;
-    
+    result.reserve(items.size());
+
     for (const auto& item : items) {
-        if (item->type == ItemType::Group) {
-            auto group = std::static_pointer_cast<GroupItem>(item);
-            // Add all child items from the group (but not the group itself)
-            result.append(group->childItems);
-        } else {
+        // Guard against a null slipping in from a partially parsed configuration.
+        if (item) {
             result.append(item);
         }
     }
-    
+
     return result;
 }
 

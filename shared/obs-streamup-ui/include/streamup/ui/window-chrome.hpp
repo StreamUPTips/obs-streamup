@@ -18,6 +18,8 @@
 #include <QPainterPath>
 #include <QPaintEvent>
 #include <QResizeEvent>
+#include <QShowEvent>
+#include <QScreen>
 #include <QMouseEvent>
 #include <QWindow>
 #include <QDesktopServices>
@@ -72,6 +74,16 @@ public:
 	}
 	QColor fillColor() const { return m_fill; }
 
+	// Recompute the rounded clip mask without waiting for a resize. Needed
+	// after the window moves to another screen: the mask is re-applied against
+	// the (possibly recreated) native surface, otherwise a stale region can
+	// clip the card away entirely.
+	void refreshMask()
+	{
+		applyMask();
+		update();
+	}
+
 protected:
 	// m_radius is a DESIGN value; scale it by the OS text size so the painted
 	// card corners match the header/footer/badge QSS radii (which scale_qss
@@ -87,14 +99,19 @@ protected:
 	}
 	void resizeEvent(QResizeEvent *e) override
 	{
-		const int r = S(m_radius);
-		QPainterPath path;
-		path.addRoundedRect(QRectF(rect()), r, r);
-		setMask(QRegion(path.toFillPolygon().toPolygon()));
+		applyMask();
 		QFrame::resizeEvent(e);
 	}
 
 private:
+	void applyMask()
+	{
+		const int r = S(m_radius);
+		QPainterPath path;
+		path.addRoundedRect(QRectF(rect()), r, r);
+		setMask(QRegion(path.toFillPolygon().toPolygon()));
+	}
+
 	int m_radius;
 	QColor m_fill;
 };
@@ -122,15 +139,184 @@ inline RoundedContainer *makeTableCard(TableT *table, int radius = Sizes::RADIUS
 class ShadowDialog : public QDialog {
 public:
 	static constexpr int kShadowMargin = 20;
+	// Thickness (design px) of the grab zone along each card edge for resizing.
+	static constexpr int kResizeGrip = 8;
 	explicit ShadowDialog(QWidget *parent = nullptr) : QDialog(parent)
 	{
 		// Qt::Window (not Qt::Dialog) so each custom window is a real top-level
 		// window OBS can show in the taskbar (see makeWindow's WS_EX_APPWINDOW).
 		setWindowFlags(Qt::FramelessWindowHint | Qt::Window);
 		setAttribute(Qt::WA_TranslucentBackground, true);
+		// Track the mouse so the resize cursor updates as it nears an edge
+		// (used by the non-Windows startSystemResize fallback below).
+		setMouseTracking(true);
 	}
 
+	// Rebuild the rounded clip masks and repaint the whole window NOW.
+	// Dragging a frameless + translucent window onto another screen happens
+	// inside Windows' modal move loop, and the platform layer can swap this
+	// window's backing surface mid-drag. The new surface starts empty and the
+	// queued repaint doesn't land until the loop exits — so the window reads as
+	// vanished until the mouse is released. Forcing an immediate repaint (and
+	// re-applying the card masks against the new surface) puts it straight back.
+	void refreshSurface()
+	{
+		// dynamic_cast, not findChildren<RoundedContainer*> — RoundedContainer
+		// has no Q_OBJECT of its own, so findChildren would match every QFrame
+		// and hand back bogus pointers.
+		const QList<QWidget *> kids = findChildren<QWidget *>();
+		for (QWidget *w : kids) {
+			if (auto *c = dynamic_cast<RoundedContainer *>(w))
+				c->refreshMask();
+			else
+				w->update();
+		}
+		repaint();
+	}
+
+	// Let individual windows opt out of resizing (e.g. tiny fixed popups).
+	// Resizable by default so the whole catalogue gains it for free.
+	void setResizable(bool on) { m_resizable = on; }
+	bool resizable() const { return m_resizable; }
+
+	// Preferred opening size for windows that never call resize() themselves.
+	// Applied once, on the first show, and only as a grow: a window that sized
+	// itself before being shown keeps the size it asked for. This is what stops
+	// a small dialog (a single field and two buttons) from being inflated to a
+	// tall window with its widgets spread down the middle.
+	void setPreferredOpeningSize(const QSize &size) { m_openingSize = size; }
+
 protected:
+	// Hook the window's screenChanged signal once it has a real QWindow (only
+	// exists after the first show). Every hop to another monitor then refreshes
+	// the surface instead of leaving a blank window until the drag ends.
+	// A resize that lands before the first show is the window sizing itself
+	// (the resize() call that usually follows applyChrome), not the user
+	// dragging an edge. Remember it so the opening size below defers to it.
+	void resizeEvent(QResizeEvent *e) override
+	{
+		if (!m_shownOnce)
+			m_selfSized = true;
+		QDialog::resizeEvent(e);
+	}
+
+	void showEvent(QShowEvent *e) override
+	{
+		if (!m_shownOnce) {
+			m_shownOnce = true;
+			if (!m_selfSized && m_openingSize.isValid()) {
+				resize(qMax(width(), m_openingSize.width()),
+				       qMax(height(), m_openingSize.height()));
+			}
+		}
+		QDialog::showEvent(e);
+		if (!m_screenHooked) {
+			if (QWindow *w = windowHandle()) {
+				m_screenHooked = true;
+				QObject::connect(w, &QWindow::screenChanged, this,
+						 [this](QScreen *) { refreshSurface(); });
+			}
+		}
+	}
+
+	// Which card edges (if any) the point p is within grabbing distance of.
+	// p is in dialog-local coords. Only the visible card border counts — the
+	// transparent shadow margin around it is excluded so far-out clicks don't
+	// grab a resize.
+	Qt::Edges edgesAt(const QPoint &p) const
+	{
+		const int sm = S(kShadowMargin);
+		const int grip = S(kResizeGrip);
+		const QRect card = rect().adjusted(sm, sm, -sm, -sm);
+		// Ignore points well outside the card (in the shadow) so only the
+		// border ring is interactive.
+		if (p.x() < card.left() - grip || p.x() > card.right() + grip ||
+		    p.y() < card.top() - grip || p.y() > card.bottom() + grip)
+			return {};
+		Qt::Edges e;
+		if (p.x() <= card.left() + grip) e |= Qt::LeftEdge;
+		if (p.x() >= card.right() - grip) e |= Qt::RightEdge;
+		if (p.y() <= card.top() + grip) e |= Qt::TopEdge;
+		if (p.y() >= card.bottom() - grip) e |= Qt::BottomEdge;
+		return e;
+	}
+
+#ifdef Q_OS_WIN
+	// Hit-test the resize border at the native level. Returning HTLEFT/HTTOP/…
+	// lets Windows perform the resize (and swap in the correct sizing cursor)
+	// even though child widgets fill the card — child mouse events never see
+	// these because the hit-test resolves them to the non-client area first.
+	bool nativeEvent(const QByteArray &type, void *message, qintptr *result) override
+	{
+		if (m_resizable) {
+			MSG *msg = static_cast<MSG *>(message);
+			if (msg && msg->message == WM_NCHITTEST) {
+				const QPoint gp(static_cast<short>(LOWORD(msg->lParam)),
+						static_cast<short>(HIWORD(msg->lParam)));
+				const Qt::Edges e = edgesAt(mapFromGlobal(gp));
+				LRESULT ht = 0;
+				if (e == (Qt::TopEdge | Qt::LeftEdge)) ht = HTTOPLEFT;
+				else if (e == (Qt::TopEdge | Qt::RightEdge)) ht = HTTOPRIGHT;
+				else if (e == (Qt::BottomEdge | Qt::LeftEdge)) ht = HTBOTTOMLEFT;
+				else if (e == (Qt::BottomEdge | Qt::RightEdge)) ht = HTBOTTOMRIGHT;
+				else if (e & Qt::LeftEdge) ht = HTLEFT;
+				else if (e & Qt::RightEdge) ht = HTRIGHT;
+				else if (e & Qt::TopEdge) ht = HTTOP;
+				else if (e & Qt::BottomEdge) ht = HTBOTTOM;
+				if (ht) { *result = ht; return true; }
+			}
+		}
+		// Belt and braces for the cross-screen drag: repaint once the move loop
+		// ends and on a resolution/DPI change, in case the surface was swapped
+		// without QWindow::screenChanged firing.
+		if (MSG *msg = static_cast<MSG *>(message)) {
+			if (msg->message == WM_EXITSIZEMOVE ||
+			    msg->message == WM_DISPLAYCHANGE ||
+			    msg->message == WM_DPICHANGED) {
+				const bool handled = QDialog::nativeEvent(type, message, result);
+				refreshSurface();
+				return handled;
+			}
+		}
+		return QDialog::nativeEvent(type, message, result);
+	}
+#else
+	// Non-Windows fallback: start a system resize from the compositor when the
+	// press lands on an edge, and reflect the edge as a sizing cursor.
+	void mousePressEvent(QMouseEvent *e) override
+	{
+		if (m_resizable && e->button() == Qt::LeftButton) {
+			const Qt::Edges edges = edgesAt(e->pos());
+			if (edges) {
+				if (QWindow *w = windowHandle()) {
+					w->startSystemResize(edges);
+					return;
+				}
+			}
+		}
+		QDialog::mousePressEvent(e);
+	}
+	void mouseMoveEvent(QMouseEvent *e) override
+	{
+		if (m_resizable && !(e->buttons() & Qt::LeftButton)) {
+			const Qt::Edges edges = edgesAt(e->pos());
+			if (edges == (Qt::TopEdge | Qt::LeftEdge) ||
+			    edges == (Qt::BottomEdge | Qt::RightEdge))
+				setCursor(Qt::SizeFDiagCursor);
+			else if (edges == (Qt::TopEdge | Qt::RightEdge) ||
+				 edges == (Qt::BottomEdge | Qt::LeftEdge))
+				setCursor(Qt::SizeBDiagCursor);
+			else if (edges & (Qt::LeftEdge | Qt::RightEdge))
+				setCursor(Qt::SizeHorCursor);
+			else if (edges & (Qt::TopEdge | Qt::BottomEdge))
+				setCursor(Qt::SizeVerCursor);
+			else
+				unsetCursor();
+		}
+		QDialog::mouseMoveEvent(e);
+	}
+#endif
+
 	void paintEvent(QPaintEvent *) override
 	{
 		QPainter p(this);
@@ -150,6 +336,13 @@ protected:
 			p.drawRoundedRect(card.adjusted(-i, -i + 2, i, i + 2), radius + i, radius + i);
 		}
 	}
+
+private:
+	bool m_resizable = true;
+	bool m_screenHooked = false;
+	bool m_shownOnce = false;
+	bool m_selfSized = false;
+	QSize m_openingSize;
 };
 
 #ifdef Q_OS_WIN
@@ -338,6 +531,21 @@ inline WindowShell applyChrome(ShadowDialog *dlg, const QString &title,
 {
 	dlg->setWindowTitle(title);
 	dlg->setFont(brandFont());
+
+	// Real plugin windows are resizable (drag any edge/corner); only transient
+	// popups (confirm/prompt/info) stay a fixed compact size.
+	//
+	// Sizing is two separate things, and conflating them used to inflate small
+	// windows: the minimum is a collapse guard (kept low so a one-field dialog
+	// can actually be small), while 420x360 is only the OPENING size, applied
+	// on first show to windows that never size themselves. A window that calls
+	// resize() keeps exactly what it asked for.
+	dlg->setResizable(!popup);
+	if (!popup) {
+		const int mm = S(ShadowDialog::kShadowMargin);
+		dlg->setMinimumSize(S(260) + 2 * mm, S(160) + 2 * mm);
+		dlg->setPreferredOpeningSize(QSize(S(420) + 2 * mm, S(360) + 2 * mm));
+	}
 
 #ifdef Q_OS_WIN
 	// Every non-popup window gets its own taskbar button + hover thumbnail in the

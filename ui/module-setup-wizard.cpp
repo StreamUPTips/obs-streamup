@@ -1,7 +1,7 @@
 #include "module-setup-wizard.hpp"
 #include "settings-manager.hpp"
 #include "ui-helpers.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "../version.h"
 
 #include <streamup/ui/window-chrome.hpp>
@@ -163,56 +163,78 @@ void Show(std::function<void()> onFinished)
 
 		using Mod = StreamUP::SettingsManager::ModuleSettings;
 
-		// Interface plugins section (header + plain section widget — no group frame).
-		QWidget *uiSection = new QWidget();
-		QVBoxLayout *uiLayout = new QVBoxLayout(uiSection);
-		uiLayout->setContentsMargins(0, 0, 0, 0);
-		uiLayout->setSpacing(0);
-
+		// The wizard groups modules exactly like Settings > Plugins does, and
+		// carries the same rows. Someone who picks here and later revisits the
+		// settings page should recognise the same three headings in the same
+		// order, with nothing appearing in one place but not the other.
 		auto rows = std::make_shared<std::vector<PluginRow>>();
-		// Interface plugins (no theme enhancements row — those always run
-		// and self-gate on whether a StreamUP theme is active).
-		rows->push_back({"Plugins.Toolbar.Title",       "Plugins.Toolbar.Description",
-		                 [](const Mod &m){ return m.toolbar; },
-		                 [](Mod &m, bool v){ m.toolbar = v; }, nullptr});
-		rows->push_back({"Plugins.MultiDock.Title",     "Plugins.MultiDock.Description",
-		                 [](const Mod &m){ return m.multiDock; },
-		                 [](Mod &m, bool v){ m.multiDock = v; }, nullptr});
+
+		// Each section is a header plus a plain widget — no group frame, the
+		// header does the separating.
+		struct Section {
+			const char *headerKey;
+			QVBoxLayout *layout;
+			size_t endRow; // one past the last row belonging to this section
+		};
+		std::vector<Section> sections;
+
+		auto beginSection = [&](const char *headerKey) {
+			QWidget *widget = new QWidget();
+			QVBoxLayout *layout = new QVBoxLayout(widget);
+			layout->setContentsMargins(0, 0, 0, 0);
+			layout->setSpacing(0);
+			contentLayout->addWidget(sectionHeader(obs_module_text(headerKey)));
+			contentLayout->addWidget(widget);
+			sections.push_back({headerKey, layout, 0});
+		};
+		auto endSection = [&]() { sections.back().endRow = rows->size(); };
+
+		// ── Docks and panels ─────────────────────────────────────────────
+		beginSection("Plugins.Section.Docks");
 		rows->push_back({"Plugins.SceneOrganiser.Title","Plugins.SceneOrganiser.Description",
 		                 [](const Mod &m){ return m.sceneOrganiser; },
 		                 [](Mod &m, bool v){ m.sceneOrganiser = v; }, nullptr});
 		rows->push_back({"Plugins.StreamupDock.Title",  "Plugins.StreamupDock.Description",
 		                 [](const Mod &m){ return m.streamupDock; },
 		                 [](Mod &m, bool v){ m.streamupDock = v; }, nullptr});
-		const size_t uiRowCount = rows->size();
+		rows->push_back({"Plugins.MultiDock.Title",     "Plugins.MultiDock.Description",
+		                 [](const Mod &m){ return m.multiDock; },
+		                 [](Mod &m, bool v){ m.multiDock = v; }, nullptr});
+		endSection();
 
-		// System plugins section (header + plain section widget — no group frame).
-		QWidget *sysSection = new QWidget();
-		QVBoxLayout *sysLayout = new QVBoxLayout(sysSection);
-		sysLayout->setContentsMargins(0, 0, 0, 0);
-		sysLayout->setSpacing(0);
-
-		rows->push_back({"Plugins.Hotkeys.Title",         "Plugins.Hotkeys.Description",
+		// ── Ways to control OBS ──────────────────────────────────────────
+		// No theme enhancements row: those always run and self-gate on
+		// whether a StreamUP theme is active. No WebSocket row either, the
+		// vendor is always registered.
+		beginSection("Plugins.Section.Controls");
+		rows->push_back({"Plugins.Toolbar.Title",       "Plugins.Toolbar.Description",
+		                 [](const Mod &m){ return m.toolbar; },
+		                 [](Mod &m, bool v){ m.toolbar = v; }, nullptr});
+		rows->push_back({"Plugins.Hotkeys.Title",       "Plugins.Hotkeys.Description",
 		                 [](const Mod &m){ return m.hotkeys; },
 		                 [](Mod &m, bool v){ m.hotkeys = v; }, nullptr});
-		// WebSocket API toggle deliberately omitted — vendor is always registered.
+		endSection();
+
+		// ── Tools and sources ────────────────────────────────────────────
+		beginSection("Plugins.Section.Tools");
+		rows->push_back({"Plugins.Backup.Title",        "Plugins.Backup.Description",
+		                 [](const Mod &m){ return m.backup; },
+		                 [](Mod &m, bool v){ m.backup = v; }, nullptr});
 		rows->push_back({"Plugins.AdjustmentLayer.Title", "Plugins.AdjustmentLayer.Description",
 		                 [](const Mod &m){ return m.adjustmentLayerSource; },
 		                 [](Mod &m, bool v){ m.adjustmentLayerSource = v; }, nullptr});
+		endSection();
 
-		const size_t total = rows->size();
-		for (size_t i = 0; i < total; ++i) {
-			QVBoxLayout *target = (i < uiRowCount) ? uiLayout : sysLayout;
-			// Add a divider after every row except the last in each section,
-			// so the group-box edge handles the closing separation.
-			bool isLastInSection = (i == uiRowCount - 1) || (i == total - 1);
-			AddRow(target, (*rows)[i], draft, !isLastInSection);
+		size_t rowIndex = 0;
+		for (const Section &section : sections) {
+			for (; rowIndex < section.endRow; ++rowIndex) {
+				// Divider after every row except the last in the section,
+				// where the next header does the separating.
+				bool isLastInSection = (rowIndex + 1 == section.endRow);
+				AddRow(section.layout, (*rows)[rowIndex], draft, !isLastInSection);
+			}
 		}
 
-		contentLayout->addWidget(sectionHeader(obs_module_text("Plugins.Section.UI")));
-		contentLayout->addWidget(uiSection);
-		contentLayout->addWidget(sectionHeader(obs_module_text("Plugins.Section.System")));
-		contentLayout->addWidget(sysSection);
 		contentLayout->addStretch();
 
 		scrollArea->setWidget(contentContainer);

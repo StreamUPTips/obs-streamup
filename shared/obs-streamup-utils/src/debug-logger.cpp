@@ -1,9 +1,10 @@
-#include "debug-logger.hpp"
-#include "../ui/settings-manager.hpp"
+#include <streamup/debug-logger.hpp>
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 #include <memory>
 #include <atomic>
+#include <mutex>
 
 namespace StreamUP {
 namespace DebugLogger {
@@ -11,18 +12,32 @@ namespace DebugLogger {
 // Thread-safe initialization tracking
 static std::atomic<bool> initializationComplete{false};
 
+// The prefix and the debug gate are both set once at module load and read from
+// every logging thread afterwards, so a plain mutex around the swap is enough:
+// it never contends in practice, and it keeps a half-written std::function or
+// std::string from being read mid-assignment.
+static std::mutex configMutex;
+static std::string logPrefix = "[StreamUP]";
+static std::function<bool()> debugPredicate;
+
+static std::string Prefix()
+{
+    std::lock_guard<std::mutex> lock(configMutex);
+    return logPrefix;
+}
+
 static std::string FormatMessage(const char* feature, const char* operation, const char* message)
 {
     if (operation && strlen(operation) > 0) {
-        return std::string("[StreamUP] [") + feature + "] " + operation + ": " + message;
+        return Prefix() + " [" + feature + "] " + operation + ": " + message;
     } else {
-        return std::string("[StreamUP] [") + feature + "] " + message;
+        return Prefix() + " [" + feature + "] " + message;
     }
 }
 
 static std::string FormatMessageSimple(const char* feature, const char* message)
 {
-    return std::string("[StreamUP] [") + feature + "] " + message;
+    return Prefix() + " [" + feature + "] " + message;
 }
 
 // Helper function to reduce code duplication for formatted logging
@@ -49,7 +64,7 @@ void LogDebug(const char* feature, const char* operation, const char* message)
 {
     // During initialization, always log debug messages to avoid mutex deadlock
     // After initialization, respect the user's debug logging setting
-    if (!initializationComplete.load() || StreamUP::SettingsManager::IsDebugLoggingEnabled()) {
+    if (!initializationComplete.load() || IsDebugLoggingEnabled()) {
         std::string formatted = FormatMessage(feature, operation, message);
         blog(LOG_DEBUG, "%s", formatted.c_str());
     }
@@ -59,7 +74,7 @@ void LogDebugFormat(const char* feature, const char* operation, const char* form
 {
     // During initialization, always log debug messages to avoid mutex deadlock
     // After initialization, respect the user's debug logging setting
-    if (!initializationComplete.load() || StreamUP::SettingsManager::IsDebugLoggingEnabled()) {
+    if (!initializationComplete.load() || IsDebugLoggingEnabled()) {
         va_list args;
         va_start(args, format);
 
@@ -141,6 +156,36 @@ void SetInitializationComplete(bool completed)
 bool IsInitializationComplete()
 {
     return initializationComplete.load();
+}
+
+void SetLogPrefix(const char* prefix)
+{
+    if (!prefix || !*prefix) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(configMutex);
+    logPrefix = prefix;
+}
+
+void SetDebugLoggingPredicate(std::function<bool()> predicate)
+{
+    std::lock_guard<std::mutex> lock(configMutex);
+    debugPredicate = std::move(predicate);
+}
+
+bool IsDebugLoggingEnabled()
+{
+    // Copy the predicate out before calling it, so it is never invoked with the
+    // config lock held: the main plugin's predicate reads SettingsManager,
+    // which takes locks of its own.
+    std::function<bool()> predicate;
+    {
+        std::lock_guard<std::mutex> lock(configMutex);
+        predicate = debugPredicate;
+    }
+    // No predicate means the plugin never wired up a debug toggle, so there is
+    // nobody to have turned debug output on: stay quiet.
+    return predicate ? predicate() : false;
 }
 
 } // namespace DebugLogger

@@ -1,5 +1,5 @@
 #include "multidock_manager.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "multidock_dock.hpp"
 #include "inner_dock_host.hpp"
 #include "multidock_utils.hpp"
@@ -17,7 +17,7 @@ MultiDockManager* MultiDockManager::s_instance = nullptr;
 
 MultiDockManager::MultiDockManager(QObject* parent)
     : QObject(parent)
-    , m_hasRetriedRestoration(false)
+    , m_retryAttempts(0)
 {
     // Register for OBS frontend events to save state more reliably
     obs_frontend_add_event_callback(OnFrontendEvent, this);
@@ -62,9 +62,11 @@ void MultiDockManager::OnFrontendEvent(enum obs_frontend_event event, void *priv
         manager->SaveAllMultiDocks();
         break;
     case OBS_FRONTEND_EVENT_FINISHED_LOADING:
-        // Retry failed restorations after all plugins have loaded
-        if (!manager->m_hasRetriedRestoration && !manager->m_pendingRetryIds.isEmpty()) {
-            // Use a timer to ensure all dock widgets are fully initialized
+        // Retry failed restorations after all plugins have loaded. Docks that
+        // spin up late (e.g. the OBS Twitch/browser CEF docks) may not exist
+        // at the first pass, so RetryFailedRestorations reschedules itself
+        // until everything is restored or the attempt budget is exhausted.
+        if (!manager->m_pendingRetryIds.isEmpty()) {
             QTimer::singleShot(2000, manager, &MultiDockManager::RetryFailedRestorations);
         }
         break;
@@ -351,14 +353,17 @@ void MultiDockManager::SaveAllMultiDocks()
 
 void MultiDockManager::RetryFailedRestorations()
 {
-    if (m_hasRetriedRestoration) {
-        return; // Already retried once
-    }
-    
-    m_hasRetriedRestoration = true;
-    
-    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Starting retry restoration for %d MultiDocks after OBS finished loading",
-         m_pendingRetryIds.size());
+    // Bound how many delayed passes we make so a dock that never loads doesn't
+    // schedule timers forever. Late-loading CEF docks (Twitch info/chat) are
+    // typically up within a few seconds, so a handful of spaced retries covers
+    // them without permanently dropping the dock from config in the meantime.
+    static const int kMaxRetryAttempts = 8;
+    static const int kRetryIntervalMs = 2000;
+
+    m_retryAttempts++;
+
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Retry restoration pass %d for %d MultiDocks",
+         m_retryAttempts, m_pendingRetryIds.size());
     
     QMainWindow* mainWindow = GetObsMainWindow();
     if (!mainWindow) {
@@ -431,6 +436,7 @@ void MultiDockManager::RetryFailedRestorations()
             if (availableDockMap.contains(dockId)) {
                 QDockWidget* dock = availableDockMap[dockId];
                 multiDock->GetInnerHost()->AddDock(dock);
+                multiDock->MarkDockResolved(dockId);
                 successfulRetries++;
                 StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Successfully restored dock '%s' during retry",
                      dock->windowTitle().toUtf8().constData());
@@ -447,11 +453,31 @@ void MultiDockManager::RetryFailedRestorations()
         totalSuccessfulRetries += successfulRetries;
     }
 
-    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Retry restoration completed: %d/%d dock restorations successful",
-         totalSuccessfulRetries, totalRetryAttempts);
-    
-    // Clear the retry list
-    m_pendingRetryIds.clear();
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Retry restoration pass %d completed: %d/%d dock restorations successful",
+         m_retryAttempts, totalSuccessfulRetries, totalRetryAttempts);
+
+    // Recompute which MultiDocks still have unresolved docks. Only those with
+    // outstanding IDs stay on the retry list.
+    QStringList stillPending;
+    for (const QString& multiDockId : m_pendingRetryIds) {
+        MultiDockDock* multiDock = GetMultiDock(multiDockId);
+        if (multiDock && !multiDock->GetUnresolvedDockIds().isEmpty()) {
+            stillPending.append(multiDockId);
+        }
+    }
+    m_pendingRetryIds = stillPending;
+
+    // Reschedule another pass if work remains and we still have attempts left;
+    // the unresolved IDs are preserved in config regardless, so nothing is lost
+    // if a dock simply never loads.
+    if (!m_pendingRetryIds.isEmpty() && m_retryAttempts < kMaxRetryAttempts) {
+        StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "%d MultiDock(s) still awaiting late docks; scheduling retry pass %d",
+             m_pendingRetryIds.size(), m_retryAttempts + 1);
+        QTimer::singleShot(kRetryIntervalMs, this, &MultiDockManager::RetryFailedRestorations);
+    } else if (!m_pendingRetryIds.isEmpty()) {
+        StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Retry budget exhausted with %d MultiDock(s) still missing docks; IDs preserved for next launch",
+             m_pendingRetryIds.size());
+    }
 }
 
 void MultiDockManager::OnMultiDockDestroyed(QObject* obj)

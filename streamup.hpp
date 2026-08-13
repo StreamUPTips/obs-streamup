@@ -23,4 +23,18 @@
 //   StreamUP::HotkeyManager::RegisterHotkeys()
 //   StreamUP::UIHelpers::ShowDialogOnUIThread()
 
+namespace StreamUP {
+
+// True once OBS has emitted FINISHED_LOADING.
+//
+// Modules are loaded from inside OBSBasic::OBSInit, so anything constructed at
+// load time runs before the frontend API exists. Calling obs_frontend_* from
+// there is an access violation, not a null return. Anything built during module
+// load that wants to talk to the frontend must check this first, and anything
+// built after that point has already missed the event and can only find out by
+// asking.
+bool ObsFinishedLoading();
+
+} // namespace StreamUP
+
 #endif

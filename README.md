@@ -122,7 +122,12 @@ A proper replacement for the OBS scene list. Drag and drop scene management with
 - Create a scene inside it
 - Move Up, Down, To Top, or To Bottom
 
+### Live scene and Studio Mode
+- Always highlights the live scene so you can see what's on air at a glance.
+- In Studio Mode the preview scene shows in a different colour. Move it up and down with the arrow keys and press Enter to cut it to program, so you can drive a show from the keyboard.
+
 ### Extras
+- Built-in colour picker for both folder and scene colours, so you can pick any shade without leaving OBS.
 - Hide scenes you don't need to see to keep your workspace tidy.
 - SceneTree importer. If you're coming from the old DigitOtter SceneTree plugin, one click brings your layout over.
 
@@ -315,6 +320,8 @@ When you install a StreamUP product, the plugin checks whether any text sources 
 ---
 
 ## Build
+
+Requires OBS Studio 31.1 or newer.
 
 **In-tree build:**
 1. Set up OBS Studio: https://obsproject.com/wiki/Install-Instructions

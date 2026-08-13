@@ -64,6 +64,12 @@ inline ShadowDialog *confirm(QWidget *parent, const QString &title, const QStrin
 	PillButton *cancel = nullptr, *accept = nullptr;
 	detail::addDialogButtons(shell.footerButtons, cancel, accept, acceptText, acceptVariant);
 
+	// Enter confirms: without an explicit default the dialog routes Return
+	// to the first autoDefault button, which is Cancel.
+	cancel->setAutoDefault(false);
+	accept->setAutoDefault(true);
+	accept->setDefault(true);
+
 	QObject::connect(cancel, &QPushButton::clicked, shell.dialog, &QDialog::close);
 	QObject::connect(accept, &QPushButton::clicked, shell.dialog, [dlg = shell.dialog, onAccept]() {
 		if (onAccept)
@@ -73,6 +79,7 @@ inline ShadowDialog *confirm(QWidget *parent, const QString &title, const QStrin
 
 	shell.dialog->resize(S(380), S(190));
 	shell.dialog->show();
+	accept->setFocus();
 	return shell.dialog;
 }
 

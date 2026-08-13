@@ -1,5 +1,5 @@
 #include "source-manager.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "streamup-common.hpp"
 #include "error-handler.hpp"
 #include <obs-module.h>
@@ -69,8 +69,8 @@ bool RefreshAudioMonitoring(void *data, obs_source_t *source)
 void RefreshAudioMonitoringDialog()
 {
 	CreateToolDialog(
-		"RefreshAudioMonitoringInfo1", "RefreshAudioMonitoringInfo2", "RefreshAudioMonitoringInfo3",
-		"RefreshAudioMonitoring", []() { obs_enum_sources(RefreshAudioMonitoring, nullptr); },
+		"Feature.AudioMonitoring.Info1", "Feature.AudioMonitoring.Info2", "Feature.AudioMonitoring.Info3",
+		"Feature.AudioMonitoring.Title", []() { obs_enum_sources(RefreshAudioMonitoring, nullptr); },
 		R"(
                     {
                         "requestType": "CallVendorRequest",
@@ -80,8 +80,8 @@ void RefreshAudioMonitoringDialog()
                             "requestData": null
                         }
                     })",
-		"RefreshAudioMonitoringHowTo1", "RefreshAudioMonitoringHowTo2", "RefreshAudioMonitoringHowTo3",
-		"RefreshAudioMonitoringHowTo4", "RefreshAudioMonitoringNotification");
+		"Feature.AudioMonitoring.HowTo1", "Feature.AudioMonitoring.HowTo2", "Feature.AudioMonitoring.HowTo3",
+		"Feature.AudioMonitoring.HowTo4", "Feature.AudioMonitoring.Notification");
 }
 
 //-------------------BROWSER SOURCE FUNCTIONS-------------------
@@ -113,7 +113,8 @@ bool RefreshBrowserSources(void *data, obs_source_t *source)
 void RefreshBrowserSourcesDialog()
 {
 	CreateToolDialog(
-		"RefreshBrowserSourcesInfo1", "RefreshBrowserSourcesInfo2", "RefreshBrowserSourcesInfo3", "RefreshBrowserSources",
+		"Feature.BrowserSources.Info1", "Feature.BrowserSources.Info2", "Feature.BrowserSources.Info3",
+		"Feature.BrowserSources.Title",
 		[]() { obs_enum_sources(RefreshBrowserSources, nullptr); },
 		R"(
                     {
@@ -124,8 +125,8 @@ void RefreshBrowserSourcesDialog()
                             "requestData": null
                         }
                     })",
-		"RefreshBrowserSourcesHowTo1", "RefreshBrowserSourcesHowTo2", "RefreshBrowserSourcesHowTo3",
-		"RefreshBrowserSourcesHowTo4", "RefreshBrowserSourcesNotification");
+		"Feature.BrowserSources.HowTo1", "Feature.BrowserSources.HowTo2", "Feature.BrowserSources.HowTo3",
+		"Feature.BrowserSources.HowTo4", "Feature.BrowserSources.Notification");
 }
 
 //-------------------SELECTED SOURCE FUNCTIONS-------------------
@@ -258,11 +259,11 @@ bool ToggleLockSourcesInCurrentScene(bool sendNotification)
 
 	if (sendNotification) {
 		if (any_unlocked) {
-			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("SourceLockSystem"),
-					     obs_module_text("LockedCurrentSources"));
+			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Feature.SourceLock.Title"),
+					     obs_module_text("Feature.SourceLock.Current.NotifyLocked"));
 		} else {
-			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("SourceLockSystem"),
-					     obs_module_text("UnlockedCurrentSources"));
+			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Feature.SourceLock.Title"),
+					     obs_module_text("Feature.SourceLock.Current.NotifyUnlocked"));
 		}
 	}
 
@@ -349,11 +350,11 @@ bool ToggleLockAllSources(bool sendNotification)
 
 	if (sendNotification) {
 		if (data.any_unlocked) {
-			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("SourceLockSystem"),
-					     obs_module_text("LockedAllSources"));
+			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Feature.SourceLock.Title"),
+					     obs_module_text("Feature.SourceLock.All.NotifyLocked"));
 		} else {
-			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("SourceLockSystem"),
-					     obs_module_text("UnlockedAllSources"));
+			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Feature.SourceLock.Title"),
+					     obs_module_text("Feature.SourceLock.All.NotifyUnlocked"));
 		}
 	}
 
@@ -363,7 +364,8 @@ bool ToggleLockAllSources(bool sendNotification)
 void LockAllSourcesDialog()
 {
 	CreateToolDialog(
-		"LockAllSourcesInfo1", "LockAllSourcesInfo2", "LockAllSourcesInfo3", "LockAllSources",
+		"Feature.SourceLock.All.Info1", "Feature.SourceLock.All.Info2", "Feature.SourceLock.All.Info3",
+		"Feature.SourceLock.All.Title",
 		[]() { ToggleLockAllSources(); },
 		R"(
                     {
@@ -374,13 +376,15 @@ void LockAllSourcesDialog()
                             "requestData": null
                         }
                     })",
-		"LockAllSourcesHowTo1", "LockAllSourcesHowTo2", "LockAllSourcesHowTo3", "LockAllSourcesHowTo4", NULL);
+		"Feature.SourceLock.All.HowTo1", "Feature.SourceLock.All.HowTo2", "Feature.SourceLock.All.HowTo3",
+		"Feature.SourceLock.All.HowTo4", NULL);
 }
 
 void LockAllCurrentSourcesDialog()
 {
 	CreateToolDialog(
-		"LockAllCurrentSourcesInfo1", "LockAllCurrentSourcesInfo2", "LockAllCurrentSourcesInfo3", "LockAllCurrentSources",
+		"Feature.SourceLock.Current.Info1", "Feature.SourceLock.Current.Info2", "Feature.SourceLock.Current.Info3",
+		"Feature.SourceLock.Current.Title",
 		[]() { ToggleLockSourcesInCurrentScene(); },
 		R"(
                     {
@@ -391,8 +395,8 @@ void LockAllCurrentSourcesDialog()
                             "requestData": null
                         }
                     })",
-		"LockAllCurrentSourcesHowTo1", "LockAllCurrentSourcesHowTo2", "LockAllCurrentSourcesHowTo3",
-		"LockAllCurrentSourcesHowTo4", NULL);
+		"Feature.SourceLock.Current.HowTo1", "Feature.SourceLock.Current.HowTo2", "Feature.SourceLock.Current.HowTo3",
+		"Feature.SourceLock.Current.HowTo4", NULL);
 }
 
 //-------------------ADDITIONAL HELPER FUNCTIONS-------------------
@@ -428,6 +432,25 @@ const char *GetSelectedSourceFromCurrentScene()
 	}
 
 	return nullptr; // No source or multiple sources selected
+}
+
+// Count the selected scene items in the current scene (0, 1, or many)
+int GetSelectedSourceCount()
+{
+	obs_source_t *current_scene_source = obs_frontend_get_current_scene();
+	if (!current_scene_source) {
+		return 0;
+	}
+
+	obs_scene_t *scene = obs_scene_from_source(current_scene_source);
+	obs_source_release(current_scene_source);
+	if (!scene) {
+		return 0;
+	}
+
+	SceneFindBoxData data;
+	obs_scene_enum_items(scene, FindSelected, &data);
+	return static_cast<int>(data.sceneItems.size());
 }
 
 // Convenience functions for checking lock status (used by dock widget)
@@ -531,14 +554,14 @@ bool ActivateAllVideoCaptureDevices(bool sendNotification)
 	if (sendNotification) {
 		QString message;
 		if (activated_count > 0) {
-			message = QString("Activated %1 video capture device(s)").arg(activated_count);
-			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
+			message = QString(obs_module_text("Feature.VideoCapture.Activate.NotifyActivated")).arg(activated_count);
+			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Menu.VideoCapture.Root"), message);
 		} else if (total_count > 0) {
-			message = "All video capture devices were already active";
-			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
+			message = obs_module_text("Feature.VideoCapture.Activate.NotifyAlreadyActive");
+			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Menu.VideoCapture.Root"), message);
 		} else {
-			message = "No video capture devices found";
-			StreamUP::NotificationManager::SendWarningNotification("Video Capture Devices", message);
+			message = obs_module_text("Feature.VideoCapture.NotifyNoneFound");
+			StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Menu.VideoCapture.Root"), message);
 		}
 	}
 
@@ -609,14 +632,14 @@ bool DeactivateAllVideoCaptureDevices(bool sendNotification)
 	if (sendNotification) {
 		QString message;
 		if (deactivated_count > 0) {
-			message = QString("Deactivated %1 video capture device(s)").arg(deactivated_count);
-			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
+			message = QString(obs_module_text("Feature.VideoCapture.Deactivate.NotifyDeactivated")).arg(deactivated_count);
+			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Menu.VideoCapture.Root"), message);
 		} else if (total_count > 0) {
-			message = "All video capture devices were already inactive";
-			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
+			message = obs_module_text("Feature.VideoCapture.Deactivate.NotifyAlreadyInactive");
+			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Menu.VideoCapture.Root"), message);
 		} else {
-			message = "No video capture devices found";
-			StreamUP::NotificationManager::SendWarningNotification("Video Capture Devices", message);
+			message = obs_module_text("Feature.VideoCapture.NotifyNoneFound");
+			StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Menu.VideoCapture.Root"), message);
 		}
 	}
 	
@@ -660,9 +683,9 @@ bool RefreshAllVideoCaptureDevices(bool sendNotification)
 	if (activeSources.empty()) {
 		if (sendNotification) {
 			QString message = total_count > 0 ? 
-				"No active video capture devices to refresh" : 
-				"No video capture devices found";
-			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
+				obs_module_text("Feature.VideoCapture.Refresh.NotifyNoneActive") : 
+				obs_module_text("Feature.VideoCapture.NotifyNoneFound");
+			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Menu.VideoCapture.Root"), message);
 		}
 		StreamUP::DebugLogger::LogDebugFormat("VideoCapture", "Refresh", "No active video capture devices to refresh (total found: %d)", total_count);
 		return true;
@@ -709,8 +732,8 @@ bool RefreshAllVideoCaptureDevices(bool sendNotification)
 		}
 		
 		if (sendNotification) {
-			QString message = QString("Refreshed %1 video capture device(s)").arg(reactivated);
-			StreamUP::NotificationManager::SendInfoNotification("Video Capture Devices", message);
+			QString message = QString(obs_module_text("Feature.VideoCapture.Refresh.NotifyRefreshed")).arg(reactivated);
+			StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Menu.VideoCapture.Root"), message);
 		}
 		
 		StreamUP::DebugLogger::LogInfoFormat("VideoCapture", "Refreshed %d video capture devices", reactivated);
@@ -723,35 +746,38 @@ bool RefreshAllVideoCaptureDevices(bool sendNotification)
 
 void ActivateAllVideoCaptureDevicesDialog()
 {
-	CreateToolDialog("VideoCaptureActivateInfo1", "VideoCaptureActivateInfo2", "VideoCaptureActivateInfo3",
-			 QString(obs_module_text("VideoCaptureActivateTitle")),
+	CreateToolDialog("Feature.VideoCapture.Activate.Info1", "Feature.VideoCapture.Activate.Info2",
+			 "Feature.VideoCapture.Activate.Info3",
+			 QString("Feature.VideoCapture.Activate.Title"),
 			 []() { ActivateAllVideoCaptureDevices(true); },
 			 QString(), // No JSON needed for this action
-			 "VideoCaptureActivateHow1", "VideoCaptureActivateHow2", 
-			 "VideoCaptureActivateHow3", "VideoCaptureActivateHow4",
-			 "VideoCaptureActivateNotification");
+			 "Feature.VideoCapture.Activate.HowTo1", "Feature.VideoCapture.Activate.HowTo2",
+			 "Feature.VideoCapture.Activate.HowTo3", "Feature.VideoCapture.Activate.HowTo4",
+			 "Feature.VideoCapture.Activate.Notification");
 }
 
 void DeactivateAllVideoCaptureDevicesDialog()
 {
-	CreateToolDialog("VideoCaptureDeactivateInfo1", "VideoCaptureDeactivateInfo2", "VideoCaptureDeactivateInfo3",
-			 QString(obs_module_text("VideoCaptureDeactivateTitle")),
+	CreateToolDialog("Feature.VideoCapture.Deactivate.Info1", "Feature.VideoCapture.Deactivate.Info2",
+			 "Feature.VideoCapture.Deactivate.Info3",
+			 QString("Feature.VideoCapture.Deactivate.Title"),
 			 []() { DeactivateAllVideoCaptureDevices(true); },
 			 QString(), // No JSON needed for this action
-			 "VideoCaptureDeactivateHow1", "VideoCaptureDeactivateHow2", 
-			 "VideoCaptureDeactivateHow3", "VideoCaptureDeactivateHow4",
-			 "VideoCaptureDeactivateNotification");
+			 "Feature.VideoCapture.Deactivate.HowTo1", "Feature.VideoCapture.Deactivate.HowTo2",
+			 "Feature.VideoCapture.Deactivate.HowTo3", "Feature.VideoCapture.Deactivate.HowTo4",
+			 "Feature.VideoCapture.Deactivate.Notification");
 }
 
 void RefreshAllVideoCaptureDevicesDialog()
 {
-	CreateToolDialog("VideoCaptureRefreshInfo1", "VideoCaptureRefreshInfo2", "VideoCaptureRefreshInfo3",
-			 QString(obs_module_text("VideoCaptureRefreshTitle")),
+	CreateToolDialog("Feature.VideoCapture.Refresh.Info1", "Feature.VideoCapture.Refresh.Info2",
+			 "Feature.VideoCapture.Refresh.Info3",
+			 QString("Feature.VideoCapture.Refresh.Title"),
 			 []() { RefreshAllVideoCaptureDevices(true); },
 			 QString(), // No JSON needed for this action
-			 "VideoCaptureRefreshHow1", "VideoCaptureRefreshHow2",
-			 "VideoCaptureRefreshHow3", "VideoCaptureRefreshHow4",
-			 "VideoCaptureRefreshNotification");
+			 "Feature.VideoCapture.Refresh.HowTo1", "Feature.VideoCapture.Refresh.HowTo2",
+			 "Feature.VideoCapture.Refresh.HowTo3", "Feature.VideoCapture.Refresh.HowTo4",
+			 "Feature.VideoCapture.Refresh.Notification");
 }
 
 //-------------------GROUP MANAGEMENT FUNCTIONS-------------------
@@ -760,7 +786,8 @@ bool GroupSelectedSources(bool sendNotification)
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	if (!current_scene) {
 		if (sendNotification) {
-			StreamUP::NotificationManager::SendWarningNotification("Group Sources", "No current scene found");
+			StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Feature.GroupSources.Title"),
+							      obs_module_text("Feature.GroupSources.NotifyNoScene"));
 		}
 		return false;
 	}
@@ -769,7 +796,8 @@ bool GroupSelectedSources(bool sendNotification)
 	if (!scene) {
 		obs_source_release(current_scene);
 		if (sendNotification) {
-			StreamUP::NotificationManager::SendWarningNotification("Group Sources", "Invalid scene source");
+			StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Feature.GroupSources.Title"),
+							      obs_module_text("Feature.GroupSources.NotifyInvalidScene"));
 		}
 		return false;
 	}
@@ -781,18 +809,14 @@ bool GroupSelectedSources(bool sendNotification)
 	if (data.sceneItems.empty()) {
 		obs_source_release(current_scene);
 		if (sendNotification) {
-			StreamUP::NotificationManager::SendWarningNotification("Group Sources", "No sources selected");
+			StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Feature.GroupSources.Title"),
+							      obs_module_text("Feature.GroupSources.NotifyNoSelection"));
 		}
 		return false;
 	}
 
-	if (data.sceneItems.size() < 2) {
-		obs_source_release(current_scene);
-		if (sendNotification) {
-			StreamUP::NotificationManager::SendWarningNotification("Group Sources", "At least 2 sources must be selected");
-		}
-		return false;
-	}
+	// OBS itself allows grouping a single selected source, so we do too (empty is
+	// already handled above).
 
 	// Create a unique group name
 	QString baseName = "Group";
@@ -810,7 +834,8 @@ bool GroupSelectedSources(bool sendNotification)
 	if (!group_item) {
 		obs_source_release(current_scene);
 		if (sendNotification) {
-			StreamUP::NotificationManager::SendWarningNotification("Group Sources", "Failed to group sources");
+			StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Feature.GroupSources.Title"),
+							      obs_module_text("Feature.GroupSources.NotifyFailed"));
 		}
 		return false;
 	}
@@ -818,8 +843,8 @@ bool GroupSelectedSources(bool sendNotification)
 	obs_source_release(current_scene);
 
 	if (sendNotification) {
-		QString message = QString("Grouped %1 sources").arg(data.sceneItems.size());
-		StreamUP::NotificationManager::SendInfoNotification("Group Sources", message);
+		QString message = QString(obs_module_text("Feature.GroupSources.NotifyGrouped")).arg(data.sceneItems.size());
+		StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Feature.GroupSources.Title"), message);
 	}
 
 	StreamUP::DebugLogger::LogInfoFormat("GroupSources", "Grouped %d sources into '%s'",
@@ -879,7 +904,8 @@ bool ToggleVisibilitySelectedSources(bool sendNotification)
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	if (!current_scene) {
 		if (sendNotification) {
-			StreamUP::NotificationManager::SendWarningNotification("Toggle Visibility", "No current scene found");
+			StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Feature.ToggleVisibility.Title"),
+							      obs_module_text("Feature.ToggleVisibility.NotifyNoScene"));
 		}
 		return false;
 	}
@@ -888,7 +914,8 @@ bool ToggleVisibilitySelectedSources(bool sendNotification)
 	if (!scene) {
 		obs_source_release(current_scene);
 		if (sendNotification) {
-			StreamUP::NotificationManager::SendWarningNotification("Toggle Visibility", "Invalid scene source");
+			StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Feature.ToggleVisibility.Title"),
+							      obs_module_text("Feature.ToggleVisibility.NotifyInvalidScene"));
 		}
 		return false;
 	}
@@ -900,7 +927,8 @@ bool ToggleVisibilitySelectedSources(bool sendNotification)
 	if (data.sceneItems.empty()) {
 		obs_source_release(current_scene);
 		if (sendNotification) {
-			StreamUP::NotificationManager::SendWarningNotification("Toggle Visibility", "No sources selected");
+			StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Feature.ToggleVisibility.Title"),
+							      obs_module_text("Feature.ToggleVisibility.NotifyNoSelection"));
 		}
 		return false;
 	}
@@ -923,10 +951,10 @@ bool ToggleVisibilitySelectedSources(bool sendNotification)
 	obs_source_release(current_scene);
 
 	if (sendNotification) {
-		QString message = QString("%1 %2 selected source(s)")
-			.arg(new_visibility ? "Shown" : "Hidden")
+		QString message = QString(obs_module_text(new_visibility ? "Feature.ToggleVisibility.NotifyShown"
+								    : "Feature.ToggleVisibility.NotifyHidden"))
 			.arg(data.sceneItems.size());
-		StreamUP::NotificationManager::SendInfoNotification("Toggle Visibility", message);
+		StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Feature.ToggleVisibility.Title"), message);
 	}
 
 	StreamUP::DebugLogger::LogInfoFormat("ToggleVisibility", "%s %d selected sources",

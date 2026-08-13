@@ -1,0 +1,20 @@
+# One line ending for everyone. Windows' core.autocrlf used to decide this per
+# machine, which is why the same shared header read as a whole-file diff between
+# two plugins. Text is LF in the repo AND in the working tree, so a checkout on
+# any OS produces byte-identical files.
+* text=auto eol=lf
+
+# Binaries git must never touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+*.dll binary
+*.pdb binary

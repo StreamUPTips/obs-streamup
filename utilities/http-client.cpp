@@ -1,5 +1,5 @@
 #include "http-client.hpp"
-#include "debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "../version.h"
 #include <curl/curl.h>
 #include <pthread.h>

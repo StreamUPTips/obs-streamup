@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QList>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -13,14 +14,26 @@
 namespace StreamUP {
 namespace ToolbarConfig {
 
+// Schema version written by toJson(). Anything older is migrated on load.
+constexpr int kConfigurationVersion = 2;
+
+// Note: the stored value is the integer below, so appending only is safe.
+// Version 1 blobs used a different numbering (it carried a Group entry between
+// DockButton and HotkeyButton), which the migration path remaps.
 enum class ItemType {
     Button,
     Separator,
     CustomSpacer,
     DockButton,
-    Group,
-    HotkeyButton
+    HotkeyButton,
+    WebSocketButton,
+    StatusItem
 };
+
+// The last valid value, used to range-check a stored type integer on load.
+// Anything outside the enum is dropped, so this MUST be updated whenever a new
+// item type is added, or the new type silently vanishes on the next reload.
+constexpr ItemType kLastItemType = ItemType::StatusItem;
 
 // Base class for all toolbar items
 class ToolbarItem {
@@ -65,9 +78,14 @@ public:
 class CustomSpacerItem : public ToolbarItem {
 public:
     int size = 20; // Size in pixels
-    bool isStretch = false; // If true, uses stretch instead of fixed size
-    
-    CustomSpacerItem(const QString& itemId, int spacerSize = 20) 
+
+    // Takes whatever space is left over instead of a set length, so a group
+    // after it is pushed to the far end. Two of them put a group in the middle.
+    // This is also the item that gives ground when the bar is short, which is
+    // what leaves fixed spacers holding the exact size they were set to.
+    bool flexible = false;
+
+    CustomSpacerItem(const QString& itemId, int spacerSize = 20)
         : ToolbarItem(ItemType::CustomSpacer, itemId), size(spacerSize) {}
     
     QJsonObject toJson() const override;
@@ -81,8 +99,7 @@ public:
     QString name;
     QString iconPath;
     QString tooltip;
-    std::function<void()> callback;
-    
+
     DockButtonItem(const QString& itemId, const QString& type, const QString& displayName) 
         : ToolbarItem(ItemType::DockButton, itemId), dockButtonType(type), name(displayName) {}
     
@@ -94,6 +111,10 @@ public:
 class HotkeyButtonItem : public ToolbarItem {
 public:
     QString hotkeyName;        // OBS hotkey internal name (e.g., "OBSBasic.StartStreaming")
+    QString hotkeyContext;     // Name of the source that registered it. Source
+                               // hotkeys share names ("libobs.mute" on every
+                               // audio source), so the name alone picks the
+                               // wrong one.
     QString displayName;       // User-friendly name for the hotkey
     QString iconPath;          // Icon for the button (from available icons)
     QString customIconPath;    // User-uploaded custom icon path
@@ -107,26 +128,58 @@ public:
     void fromJson(const QJsonObject& json) override;
 };
 
-// Group items for configuration UI organization (doesn't affect actual toolbar)
-class GroupItem : public ToolbarItem {
+// Buttons that fire an obs-websocket request when pressed.
+//
+// Three sources, because obs-websocket offers no way to ask what is registered:
+// the standard request set (a list we ship), StreamUP's own vendor requests
+// (registered in streamup.cpp under the vendor name "streamup"), and anything
+// else, where the user names the vendor themselves.
+class WebSocketButtonItem : public ToolbarItem {
 public:
-    QString name;
-    QList<std::shared_ptr<ToolbarItem>> childItems;
-    bool expanded = true; // For UI display
-    
-    GroupItem(const QString& itemId, const QString& groupName) 
-        : ToolbarItem(ItemType::Group, itemId), name(groupName) {}
-    
+    enum class Source {
+        ObsWebSocket, // a standard obs-websocket request
+        StreamUP,     // the "streamup" vendor
+        Vendor        // some other plugin's vendor, named in vendorName
+    };
+
+    Source source = Source::ObsWebSocket;
+    QString requestType;       // e.g. "SetCurrentProgramScene"
+    QString vendorName;        // only used when source is Vendor
+    QString requestData;       // JSON object as text, empty when no arguments
+    QString displayName;       // what the user called it
+    QString iconPath;
+    QString customIconPath;
+    QString tooltip;
+    bool useCustomIcon = false;
+
+    WebSocketButtonItem(const QString& itemId, const QString& request)
+        : ToolbarItem(ItemType::WebSocketButton, itemId), requestType(request) {}
+
     QJsonObject toJson() const override;
     void fromJson(const QJsonObject& json) override;
-    
-    // Utility methods for managing child items
-    void addChild(std::shared_ptr<ToolbarItem> child);
-    void removeChild(const QString& childId);
-    void moveChild(int fromIndex, int toIndex);
-    std::shared_ptr<ToolbarItem> findChild(const QString& childId) const;
-    int getChildIndex(const QString& childId) const;
 };
+
+// A readout from the OBS status bar, placed on the toolbar like any other item.
+//
+// The kind is stored by name rather than by index, so the list can be reordered
+// or added to without rewriting anyone's saved toolbar. An unknown name on load
+// drops the item, which is the same treatment an unknown item type gets.
+class StatusItem : public ToolbarItem {
+public:
+    QString kind = QStringLiteral("cpu"); // see ToolbarStatus::kindKey
+    bool showIcon = true;                 // an icon in front of the value
+    bool showHours = false;               // durations show hours under an hour
+
+    StatusItem(const QString& itemId, const QString& statusKind)
+        : ToolbarItem(ItemType::StatusItem, itemId), kind(statusKind) {}
+
+    QJsonObject toJson() const override;
+    void fromJson(const QJsonObject& json) override;
+};
+
+// The requests StreamUP registers on its own vendor, so a picker can offer them
+// without obs-websocket being able to enumerate anything.
+QStringList streamUPVendorRequests();
 
 // Main configuration class
 class ToolbarConfiguration {
@@ -151,17 +204,25 @@ public:
     std::shared_ptr<ToolbarItem> findItem(const QString& id) const;
     int getItemIndex(const QString& id) const;
     
-    // Get all items flattened (expanding any legacy groups)
+    // The item list the toolbar builds from, with unusable entries filtered out
     QList<std::shared_ptr<ToolbarItem>> getFlattenedItems() const;
-    
+
     // Get available dock buttons
     static QList<DockButtonItem> getAvailableDockButtons();
-    
+
+    // True once after a version 1 config was migrated, so a caller can show the
+    // upgrade notice exactly once. The answer is persisted, not just in-memory,
+    // so a user who never opens the toolbar this session still sees it later.
+    bool consumeMigrationNotice();
+
 private:
     // Configuration caching for performance optimization
     mutable bool configCacheValid = false;
     mutable QString lastLoadedJsonString;
-    
+
+    // Set by fromJson() when the parsed blob was pre-version 2
+    bool migratedOnLoad = false;
+
     // Mark configuration as needing reload
     void invalidateCache() const;
 };

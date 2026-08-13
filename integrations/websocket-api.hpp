@@ -48,6 +48,9 @@ void WebsocketRequestLockAllSources(obs_data_t *request_data, obs_data_t *respon
  * @param private_data Private data (unused)
  */
 void WebsocketRequestLockCurrentSources(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+void WebsocketRequestGetAllSourcesLocked(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+void WebsocketRequestGetCurrentSceneSourcesLocked(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+void WebsocketRequestGetSelectedVisibility(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 
 /**
  * Refresh audio monitoring for all sources
@@ -303,6 +306,26 @@ void WebsocketGroupSelectedSources(obs_data_t *request_data, obs_data_t *respons
  * @param private_data Private data (unused)
  */
 void WebsocketToggleVisibilitySelectedSources(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+
+//-------------------BACKUP-------------------
+/**
+ * Create a backup of the whole OBS setup.
+ * Optional request fields: filePath (defaults to the configured backup folder),
+ * includeCredentials (default false), collectMedia (default false).
+ * @param request_data Request data from WebSocket
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketRequestCreateBackup(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+
+/**
+ * Report backup settings and list the backups that exist, newest first.
+ * @param request_data Request data from WebSocket
+ * @param response_data Response data to populate
+ * @param private_data Private data (unused)
+ */
+void WebsocketRequestGetBackupInfo(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 
 } // namespace WebSocketAPI
 } // namespace StreamUP

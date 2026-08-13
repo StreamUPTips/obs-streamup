@@ -243,7 +243,7 @@ protected:
         // Create modal zoom dialog (frameless rounded card + elevation shadow)
         const int sm = StreamUP::UIStyles::ShadowDialog::kShadowMargin;
         QDialog* zoomDialog = new StreamUP::UIStyles::ShadowDialog(this->window());
-        zoomDialog->setWindowTitle("Image Preview - Full Size");
+        zoomDialog->setWindowTitle(obs_module_text("StreamUP.SplashScreen.ImagePreviewTitle"));
         zoomDialog->setModal(true);
         zoomDialog->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog);
         zoomDialog->setAttribute(Qt::WA_TranslucentBackground);
@@ -1260,21 +1260,21 @@ void CreateSplashDialog(ShowCondition condition)
 
                     auto* kofiBtn = new StreamUP::UIStyles::PillButton("Ko-Fi", "primary");
                     kofiBtn->setLeadingIcon(QIcon(":images/icons/social/kofi.svg"), 14);
-                    kofiBtn->setToolTip("Support us on Ko-Fi");
+                    kofiBtn->setToolTip(obs_module_text("StreamUP.SplashScreen.SupportKofiTooltip"));
                     QObject::connect(kofiBtn, &QPushButton::clicked, []() {
                         QDesktopServices::openUrl(QUrl("https://ko-fi.com/streamup"));
                     });
 
                     auto* patreonBtn = new StreamUP::UIStyles::PillButton("Patreon", "primary");
                     patreonBtn->setLeadingIcon(QIcon(":images/icons/social/patreon.svg"), 14);
-                    patreonBtn->setToolTip("Support us on Patreon");
+                    patreonBtn->setToolTip(obs_module_text("StreamUP.SplashScreen.SupportPatreonTooltip"));
                     QObject::connect(patreonBtn, &QPushButton::clicked, []() {
                         QDesktopServices::openUrl(QUrl("https://www.patreon.com/streamup"));
                     });
 
                     auto* andiBtn = new StreamUP::UIStyles::PillButton("Support Andi", "primary");
                     andiBtn->setLeadingIcon(QIcon(":images/icons/social/doras.svg"), 14);
-                    andiBtn->setToolTip("Support Andi Personally");
+                    andiBtn->setToolTip(obs_module_text("StreamUP.SplashScreen.SupportAndiTooltip"));
                     QObject::connect(andiBtn, &QPushButton::clicked, []() {
                         QDesktopServices::openUrl(QUrl("https://andilippi.co.uk/en-gbp"));
                     });
@@ -1638,11 +1638,11 @@ void CreateSplashDialog(ShowCondition condition)
             emptyLabel->setVisible(!any);
             if (any) {
                 if (supportersData.loaded && supportersData.andiSupporters.empty() && supportersData.streamupSupporters.empty()) {
-                    emptyLabel->setText("No public supporters to display at this time.");
+                    emptyLabel->setText(obs_module_text("StreamUP.SplashScreen.NoSupporters"));
                     emptyLabel->setVisible(true);
                 }
             } else if (supportersData.loaded) {
-                emptyLabel->setText("No public supporters to display at this time.");
+                emptyLabel->setText(obs_module_text("StreamUP.SplashScreen.NoSupporters"));
             }
         };
 

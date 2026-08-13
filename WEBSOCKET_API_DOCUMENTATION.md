@@ -11,6 +11,7 @@ This document provides comprehensive documentation for all WebSocket commands av
   - [Utility Commands](#utility-commands)
   - [Plugin Management](#plugin-management)
   - [Source Management](#source-management)
+  - [Backup](#backup)
   - [Transition Management](#transition-management)
   - [File and Output Management](#file-and-output-management)
   - [Source Properties](#source-properties)
@@ -184,6 +185,85 @@ Get the name of the currently selected source in the current scene.
 
 **Response Fields**:
 - `selectedSource` (string): Name of the selected source, or "None" if no source is selected
+
+---
+
+### Backup
+
+#### CreateBackup
+
+Back up the whole OBS setup: scene collections, profiles, plugin settings, themes and OBS
+settings. Every parameter is optional, so a bare call with no request data works.
+
+**Request Parameters**:
+- `filePath` (string, optional): Where to write the archive. Defaults to a timestamped file in
+  the folder set in Settings > Backup.
+- `includeCredentials` (boolean, optional): Include the stream key and OAuth tokens. Defaults to
+  `false`, so the file is safe to share.
+- `collectMedia` (boolean, optional): Copy the media your scenes reference into the archive.
+  Defaults to `false`. Turning this on can make the file very large.
+
+**Response Data**:
+```json
+{
+  "success": true,
+  "filePath": "D:/OBS/config/obs-studio/streamup-backups/streamup-backup-2026-08-05-1926.zip",
+  "fileCount": 1100,
+  "sizeBytes": 19596963,
+  "credentialsIncluded": false,
+  "mediaReferenced": 197,
+  "mediaMissing": 119,
+  "largeFilesSkipped": 0
+}
+```
+
+**Response Fields**:
+- `filePath` (string): Where the backup was written
+- `fileCount` (number): Files included
+- `sizeBytes` (number): Size of the archive
+- `credentialsIncluded` (boolean): Whether the stream key is in the file
+- `mediaReferenced` (number): Files your scenes point at
+- `mediaMissing` (number): How many of those are not on disk. Those sources are already broken
+  in OBS, so this is worth watching in a dashboard.
+- `largeFilesSkipped` (number): Files left out for being over the size limit, usually AI models
+
+---
+
+#### GetBackupInfo
+
+Report the backup settings and list the backups that exist, newest first.
+
+**Request Parameters**: None
+
+**Response Data**:
+```json
+{
+  "success": true,
+  "automaticEnabled": true,
+  "keepCount": 10,
+  "folder": "D:/OBS/config/obs-studio/streamup-backups",
+  "lastAutomaticDate": "2026-08-05",
+  "backups": [
+    {
+      "fileName": "streamup-auto-2026-08-05-1330.zip",
+      "filePath": "D:/OBS/config/obs-studio/streamup-backups/streamup-auto-2026-08-05-1330.zip",
+      "sizeBytes": 19697664,
+      "modified": "2026-08-05T13:30:28"
+    }
+  ]
+}
+```
+
+**Response Fields**:
+- `automaticEnabled` (boolean): Whether a backup is taken as OBS closes
+- `keepCount` (number): How many automatic backups are kept before the oldest is pruned
+- `folder` (string): Where backups are saved
+- `lastAutomaticDate` (string): Date of the last automatic backup, `yyyy-MM-dd`
+- `backups` (array): Existing backups, newest first
+
+**Note**: There is no request to restore a backup. Restoring replaces your setup and has to be
+applied while OBS shuts down, so it is deliberately a decision made in the UI where the contents
+can be reviewed first.
 
 ---
 

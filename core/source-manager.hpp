@@ -122,6 +122,12 @@ bool ToggleLockSceneItemCallback(obs_scene_t *scene, obs_sceneitem_t *item, void
 const char *GetSelectedSourceFromCurrentScene();
 
 /**
+ * Count how many sources are currently selected in the current scene (0, 1, or many)
+ * @return int The number of selected scene items
+ */
+int GetSelectedSourceCount();
+
+/**
  * Check if all sources are locked in the current scene (convenience function for dock widget)
  * @return bool True if all sources in current scene are locked
  */

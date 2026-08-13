@@ -84,6 +84,15 @@ void ApplyStatsWindowEnhancements(QWidget* statsWidget);
 void ApplyMainWindowPadding(QMainWindow* mainWindow);
 
 /**
+ * @brief Tell the theme which edge the StreamUP toolbar is docked to
+ *
+ * That edge loses its window inset so the toolbar sits hard against the window
+ * rather than floating off it. Pass Qt::NoToolBarArea when the toolbar is
+ * floating or absent, which restores the inset on every side.
+ */
+void SetToolbarDockedEdge(Qt::ToolBarArea area);
+
+/**
  * @brief Refresh theme enhancements
  *
  * Call when dialogs are opened or theme changes to reapply enhancements.

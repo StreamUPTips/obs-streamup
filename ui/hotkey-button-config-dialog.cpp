@@ -144,6 +144,7 @@ void HotkeyButtonConfigDialog::setExistingItem(std::shared_ptr<StreamUP::Toolbar
     selectedHotkey = StreamUP::HotkeyInfo();
     selectedHotkey.name = item->hotkeyName;
     selectedHotkey.description = item->displayName;
+    selectedHotkey.context = item->hotkeyContext;
     
     updateHotkeyDisplay();
     
@@ -199,14 +200,17 @@ void HotkeyButtonConfigDialog::updateHotkeyDisplay() {
     } else {
         selectedHotkeyLabel->setText(selectedHotkey.name);
         selectedHotkeyLabel->setStyleSheet(QString("color: %1; font-weight: bold;").arg(UIStyles::Colors::TEXT_PRIMARY));
-        hotkeyDescriptionLabel->setText(selectedHotkey.description);
-        
-        // Auto-fill button text and tooltip if empty
+        hotkeyDescriptionLabel->setText(StreamUP::OBSHotkeyManager::displayLabel(selectedHotkey));
+
+        // Auto-fill button text and tooltip if empty. The caption wants to be
+        // short, so it takes the source name where there is one ("Main Cam"
+        // beats "Switch to scene"); the tooltip spells out both.
         if (buttonTextEdit->text().isEmpty()) {
-            buttonTextEdit->setText(selectedHotkey.description);
+            buttonTextEdit->setText(selectedHotkey.context.isEmpty() ? selectedHotkey.description
+                                                                     : selectedHotkey.context);
         }
         if (tooltipEdit->text().isEmpty()) {
-            tooltipEdit->setText(selectedHotkey.description);
+            tooltipEdit->setText(StreamUP::OBSHotkeyManager::displayLabel(selectedHotkey));
         }
     }
     
@@ -281,6 +285,7 @@ std::shared_ptr<StreamUP::ToolbarConfig::HotkeyButtonItem> HotkeyButtonConfigDia
         selectedHotkey.name, 
         selectedHotkey.description
     );
+    item->hotkeyContext = selectedHotkey.context;
     
     // Set icon configuration - determine if it's custom or built-in based on path
     if (QFileInfo(selectedIconPath).isAbsolute() && QFileInfo(selectedIconPath).exists()) {
@@ -299,8 +304,9 @@ std::shared_ptr<StreamUP::ToolbarConfig::HotkeyButtonItem> HotkeyButtonConfigDia
     QString buttonText = buttonTextEdit->text().trimmed();
     QString tooltip = tooltipEdit->text().trimmed();
     
-    item->displayName = buttonText.isEmpty() ? selectedHotkey.description : buttonText;
-    item->tooltip = tooltip.isEmpty() ? selectedHotkey.description : tooltip;
+    const QString fallbackLabel = StreamUP::OBSHotkeyManager::displayLabel(selectedHotkey);
+    item->displayName = buttonText.isEmpty() ? fallbackLabel : buttonText;
+    item->tooltip = tooltip.isEmpty() ? fallbackLabel : tooltip;
     
     return item;
 }

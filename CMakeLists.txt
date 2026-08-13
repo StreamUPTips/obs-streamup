@@ -37,6 +37,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE Qt::Core Qt::Widgets Qt::Svg)
 find_package(CURL REQUIRED)
 target_link_libraries(${PROJECT_NAME} PRIVATE CURL::libcurl)
 
+# ZLIB backs the backup archive writer (libobs already requires it)
+find_package(ZLIB REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE ZLIB::ZLIB)
+
 # Set include directories for the plugin
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -61,6 +65,21 @@ target_sources(${PROJECT_NAME} PRIVATE
   "${STREAMUP_UI_DIR}/src/feedback.cpp" # shared in-app feedback dialog
   "${STREAMUP_UI_DIR}/include/streamup/ui/switch-button.hpp" # Q_OBJECT -> AUTOMOC
   "${STREAMUP_UI_DIR}/include/streamup/ui/ios-checkbox.hpp"  # Q_OBJECT -> AUTOMOC
+)
+
+# Shared StreamUP utilities (debug logger + undo/redo helpers), vendored under
+# shared/obs-streamup-utils/. Compiled directly into the plugin for the same
+# reason as the UI library above: no shared sub-target, no cross-plugin link.
+# The logger's prefix and its "is debug logging on" gate are set at module load,
+# so each plugin logs under its own name and reads its own toggle.
+set(STREAMUP_UTILS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shared/obs-streamup-utils")
+target_include_directories(${PROJECT_NAME} PRIVATE
+  "${STREAMUP_UTILS_DIR}/include"
+)
+target_sources(${PROJECT_NAME} PRIVATE
+  "${STREAMUP_UTILS_DIR}/src/debug-logger.cpp"
+  "${STREAMUP_UTILS_DIR}/include/streamup/debug-logger.hpp"
+  "${STREAMUP_UTILS_DIR}/include/streamup/undo-helpers.hpp"
 )
 
 if((OS_LINUX OR OS_FREEBSD OR OS_OPENBSD) AND Qt_VERSION VERSION_LESS "6.9.0")
@@ -107,12 +126,20 @@ target_sources(${PROJECT_NAME} PRIVATE
   core/file-manager.hpp
   core/file-manager.cpp
   core/plugin-manager.hpp
-  core/plugin-manager.cpp)
+  core/plugin-manager.cpp
+  core/backup-manager.hpp
+  core/backup-manager.cpp
+  core/restore-manager.hpp
+  core/restore-manager.cpp)
 
 # Utilities module files
 target_sources(${PROJECT_NAME} PRIVATE
   utilities/path-utils.hpp
   utilities/path-utils.cpp
+  utilities/zip-writer.hpp
+  utilities/zip-writer.cpp
+  utilities/zip-reader.hpp
+  utilities/zip-reader.cpp
   utilities/string-utils.hpp
   utilities/string-utils.cpp
   utilities/version-utils.hpp
@@ -123,10 +150,7 @@ target_sources(${PROJECT_NAME} PRIVATE
   utilities/error-handler.hpp
   utilities/error-handler.cpp
   utilities/obs-data-helpers.hpp
-  utilities/obs-data-helpers.cpp
-  utilities/debug-logger.hpp
-  utilities/debug-logger.cpp
-  utilities/undo-helpers.hpp)
+  utilities/obs-data-helpers.cpp)
 
 # Sources module files (Adjustment Layer)
 target_sources(${PROJECT_NAME} PRIVATE
@@ -145,6 +169,10 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/menu-manager.cpp
   ui/settings-manager.hpp
   ui/settings-manager.cpp
+  ui/backup-dialog.hpp
+  ui/backup-dialog.cpp
+  ui/restore-dialog.hpp
+  ui/restore-dialog.cpp
   ui/notification-manager.hpp
   ui/notification-manager.cpp
   ui/splash-screen.hpp
@@ -167,12 +195,21 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/dock/streamup-dock.cpp
   ui/scene-organiser/scene-organiser-dock.hpp
   ui/scene-organiser/scene-organiser-dock.cpp
+  ui/scene-organiser/scene-canvas.hpp
+  ui/scene-organiser/scene-canvas.cpp
   ui/streamup-toolbar.hpp
   ui/streamup-toolbar.cpp
   ui/streamup-toolbar-config.hpp
   ui/streamup-toolbar-config.cpp
-  ui/streamup-toolbar-configurator.hpp
-  ui/streamup-toolbar-configurator.cpp
+  ui/streamup-toolbar-geometry.hpp
+  ui/streamup-toolbar-builder.hpp
+  ui/streamup-toolbar-builder.cpp
+  ui/streamup-toolbar-status.hpp
+  ui/streamup-toolbar-status.cpp
+  ui/streamup-toolbar-editor.hpp
+  ui/streamup-toolbar-editor.cpp
+  ui/streamup-toolbar-edit-panel.hpp
+  ui/streamup-toolbar-edit-panel.cpp
   ui/obs-hotkey-manager.hpp
   ui/obs-hotkey-manager.cpp
   ui/icon-selector-dialog.hpp
@@ -180,7 +217,11 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/hotkey-selector-dialog.hpp
   ui/hotkey-selector-dialog.cpp
   ui/hotkey-button-config-dialog.hpp
-  ui/hotkey-button-config-dialog.cpp)
+  ui/hotkey-button-config-dialog.cpp
+  ui/websocket-button-config-dialog.hpp
+  ui/websocket-button-config-dialog.cpp
+  ui/streamup-toolbar-response-popover.hpp
+  ui/streamup-toolbar-response-popover.cpp)
 
 # Integrations module files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -227,11 +268,19 @@ source_group("Core" FILES
   core/file-manager.hpp
   core/file-manager.cpp
   core/plugin-manager.hpp
-  core/plugin-manager.cpp)
+  core/plugin-manager.cpp
+  core/backup-manager.hpp
+  core/backup-manager.cpp
+  core/restore-manager.hpp
+  core/restore-manager.cpp)
 
 source_group("Utilities" FILES
   utilities/path-utils.hpp
   utilities/path-utils.cpp
+  utilities/zip-writer.hpp
+  utilities/zip-writer.cpp
+  utilities/zip-reader.hpp
+  utilities/zip-reader.cpp
   utilities/string-utils.hpp
   utilities/string-utils.cpp
   utilities/version-utils.hpp
@@ -243,9 +292,9 @@ source_group("Utilities" FILES
   utilities/error-handler.cpp
   utilities/obs-data-helpers.hpp
   utilities/obs-data-helpers.cpp
-  utilities/debug-logger.hpp
-  utilities/debug-logger.cpp
-  utilities/undo-helpers.hpp)
+  "${STREAMUP_UTILS_DIR}/include/streamup/debug-logger.hpp"
+  "${STREAMUP_UTILS_DIR}/src/debug-logger.cpp"
+  "${STREAMUP_UTILS_DIR}/include/streamup/undo-helpers.hpp")
 
 source_group("Sources" FILES
   sources/adjustment-layer.hpp
@@ -262,6 +311,10 @@ source_group("UI" FILES
   ui/menu-manager.cpp
   ui/settings-manager.hpp
   ui/settings-manager.cpp
+  ui/backup-dialog.hpp
+  ui/backup-dialog.cpp
+  ui/restore-dialog.hpp
+  ui/restore-dialog.cpp
   ui/notification-manager.hpp
   ui/notification-manager.cpp
   ui/splash-screen.hpp
@@ -285,15 +338,24 @@ source_group("UI\\Dock" FILES
 
 source_group("UI\\Scene Organiser" FILES
   ui/scene-organiser/scene-organiser-dock.hpp
-  ui/scene-organiser/scene-organiser-dock.cpp)
+  ui/scene-organiser/scene-organiser-dock.cpp
+  ui/scene-organiser/scene-canvas.hpp
+  ui/scene-organiser/scene-canvas.cpp)
 
 source_group("UI\\Toolbar" FILES
   ui/streamup-toolbar.hpp
   ui/streamup-toolbar.cpp
   ui/streamup-toolbar-config.hpp
   ui/streamup-toolbar-config.cpp
-  ui/streamup-toolbar-configurator.hpp
-  ui/streamup-toolbar-configurator.cpp
+  ui/streamup-toolbar-geometry.hpp
+  ui/streamup-toolbar-builder.hpp
+  ui/streamup-toolbar-builder.cpp
+  ui/streamup-toolbar-status.hpp
+  ui/streamup-toolbar-status.cpp
+  ui/streamup-toolbar-editor.hpp
+  ui/streamup-toolbar-editor.cpp
+  ui/streamup-toolbar-edit-panel.hpp
+  ui/streamup-toolbar-edit-panel.cpp
   ui/obs-hotkey-manager.hpp
   ui/obs-hotkey-manager.cpp
   ui/icon-selector-dialog.hpp
@@ -301,7 +363,11 @@ source_group("UI\\Toolbar" FILES
   ui/hotkey-selector-dialog.hpp
   ui/hotkey-selector-dialog.cpp
   ui/hotkey-button-config-dialog.hpp
-  ui/hotkey-button-config-dialog.cpp)
+  ui/hotkey-button-config-dialog.cpp
+  ui/websocket-button-config-dialog.hpp
+  ui/websocket-button-config-dialog.cpp
+  ui/streamup-toolbar-response-popover.hpp
+  ui/streamup-toolbar-response-popover.cpp)
 
 source_group("Integrations" FILES
   integrations/websocket-api.hpp

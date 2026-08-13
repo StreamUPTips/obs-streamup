@@ -1,5 +1,5 @@
 #include "menu-manager.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include <obs.h>
 #include "source-manager.hpp"
 #include "file-manager.hpp"
@@ -9,6 +9,8 @@
 #include "theme-window.hpp"
 #include "websocket-window.hpp"
 #include "settings-manager.hpp"
+#include "backup-dialog.hpp"
+#include "restore-dialog.hpp"
 #include "../multidock/multidock_dialogs.hpp"
 #include "../multidock/multidock_manager.hpp"
 #include "../core/streamup-common.hpp"
@@ -126,6 +128,23 @@ void LoadMenuItems(QMenu* menu)
         }
         StreamUP::PluginManager::ShowCachedPluginUpdatesDialog(); 
     });
+
+    // Backup — hidden entirely when the module is switched off, so the plugin
+    // looks like that part is not installed rather than half-present.
+    if (menuMod.backup) {
+    QMenu* backupMenu = menu->addMenu(obs_module_text("Menu.Backup"));
+    action = backupMenu->addAction(obs_module_text("Menu.Backup.Create"));
+    QObject::connect(action, &QAction::triggered, []() { StreamUP::Backup::ShowCreateBackupDialog(); });
+    action = backupMenu->addAction(obs_module_text("Menu.Backup.Restore"));
+    QObject::connect(action, &QAction::triggered, []() { StreamUP::Restore::ShowRestoreDialog(); });
+
+    backupMenu->addSeparator();
+
+    action = backupMenu->addAction(obs_module_text("Menu.Backup.Settings"));
+    QObject::connect(action, &QAction::triggered, []() {
+        StreamUP::SettingsManager::ShowSettingsDialog(StreamUP::SettingsManager::SettingsTabBackup);
+    });
+    }
 
     // Tools submenu — gated on the StreamUP Dock module since these source
     // management actions duplicate the dock's quick-action buttons. When the

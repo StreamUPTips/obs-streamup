@@ -9,6 +9,7 @@
 #include <obs-frontend-api.h>
 #include <obs-hotkey.h>
 #include <obs-module.h>
+#include <util/dstr.h>
 
 using namespace StreamUP::UIStyles;
 
@@ -223,8 +224,8 @@ QTreeWidgetItem* HotkeySelectorDialog::createHotkeyItem(const StreamUP::HotkeyIn
     Q_UNUSED(parent);
     
     QTreeWidgetItem* item = new QTreeWidgetItem();
-    item->setText(0, hotkey.description);
-    item->setText(1, getHotkeyKeybinding(hotkey.name));
+    item->setText(0, StreamUP::OBSHotkeyManager::displayLabel(hotkey));
+    item->setText(1, getHotkeyKeybinding(hotkey));
     item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
 
     // Ensure text is visible (use theme-appropriate colors)
@@ -238,18 +239,49 @@ QTreeWidgetItem* HotkeySelectorDialog::createHotkeyItem(const StreamUP::HotkeyIn
     QString tooltip = QString(obs_module_text("HotkeySelector.Tooltip.HotkeyInfo"))
                       .arg(hotkey.name)
                       .arg(hotkey.description)
-                      .arg(hotkey.registererType == OBS_HOTKEY_REGISTERER_FRONTEND ? obs_module_text("HotkeySelector.Type.Frontend") : obs_module_text("HotkeySelector.Type.Other"));
+                      .arg(hotkey.registererType == OBS_HOTKEY_REGISTERER_FRONTEND
+                               ? QString::fromUtf8(obs_module_text("HotkeySelector.Type.Frontend"))
+                               : (hotkey.context.isEmpty()
+                                      ? QString::fromUtf8(obs_module_text("HotkeySelector.Type.Other"))
+                                      : hotkey.context));
     item->setToolTip(0, tooltip);
     item->setToolTip(1, tooltip);
     
     return item;
 }
 
-QString HotkeySelectorDialog::getHotkeyKeybinding(const QString& hotkeyName) {
-    (void)hotkeyName;
-    // This is a simplified implementation - in practice you might want to
-    // query OBS for actual key bindings, but that's quite complex
-    return obs_module_text("HotkeySelector.Keys.NotBound");
+QString HotkeySelectorDialog::getHotkeyKeybinding(const StreamUP::HotkeyInfo& hotkey) {
+    // Bindings are stored against the hotkey id, not the name, and a hotkey can
+    // carry several. Anything with no binding at all keeps the "Not bound" text.
+    struct EnumData {
+        obs_hotkey_id target;
+        QStringList combos;
+    } data{hotkey.id, {}};
+
+    obs_enum_hotkey_bindings(
+        [](void* param, size_t, obs_hotkey_binding_t* binding) -> bool {
+            auto* d = static_cast<EnumData*>(param);
+            if (obs_hotkey_binding_get_hotkey_id(binding) != d->target)
+                return true;
+
+            obs_key_combination_t combo = obs_hotkey_binding_get_key_combination(binding);
+            if (obs_key_combination_is_empty(combo))
+                return true;
+
+            struct dstr text = {};
+            obs_key_combination_to_str(combo, &text);
+            const QString str = QString::fromUtf8(text.array ? text.array : "").trimmed();
+            dstr_free(&text);
+            if (!str.isEmpty() && !d->combos.contains(str))
+                d->combos.append(str);
+            return true;
+        },
+        &data);
+
+    if (data.combos.isEmpty())
+        return obs_module_text("HotkeySelector.Keys.NotBound");
+
+    return data.combos.join(", ");
 }
 
 void HotkeySelectorDialog::onSearchTextChanged(const QString& text) {
@@ -335,9 +367,9 @@ void HotkeySelectorDialog::onHotkeySelectionChanged() {
 }
 
 void HotkeySelectorDialog::updateHotkeyDetails() {
-    selectedHotkeyName->setText(selectedHotkey.description);
+    selectedHotkeyName->setText(StreamUP::OBSHotkeyManager::displayLabel(selectedHotkey));
     selectedHotkeyDescription->setText(QString(obs_module_text("HotkeySelector.Info.InternalName")).arg(selectedHotkey.name));
-    selectedHotkeyKeys->setText(QString(obs_module_text("HotkeySelector.Info.Keys")).arg(getHotkeyKeybinding(selectedHotkey.name)));
+    selectedHotkeyKeys->setText(QString(obs_module_text("HotkeySelector.Info.Keys")).arg(getHotkeyKeybinding(selectedHotkey)));
     
     // Generate help text based on hotkey type
     QString helpText;

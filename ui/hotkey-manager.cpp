@@ -1,5 +1,5 @@
 #include "hotkey-manager.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "streamup-common.hpp"
 #include "source-manager.hpp"
 #include "../utilities/obs-data-helpers.hpp"
@@ -259,14 +259,16 @@ void HotkeyCopyShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 	// Get the currently selected source
 	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
-		StreamUP::NotificationManager::SendWarningNotification("Copy Show Transition", "No source selected");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.CopyShowTransition.Name"),
+							      obs_module_text("Feature.Transition.NotifyNoSource"));
 		return;
 	}
 
 	// Get current scene
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	if (!current_scene) {
-		StreamUP::NotificationManager::SendWarningNotification("Copy Show Transition", "No current scene");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.CopyShowTransition.Name"),
+							      obs_module_text("Feature.Transition.NotifyNoScene"));
 		return;
 	}
 
@@ -274,7 +276,8 @@ void HotkeyCopyShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 	obs_sceneitem_t *scene_item = obs_scene_find_source_recursive(scene, selected_source_name);
 	if (!scene_item) {
 		obs_source_release(current_scene);
-		StreamUP::NotificationManager::SendWarningNotification("Copy Show Transition", "Source not found in scene");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.CopyShowTransition.Name"),
+							      obs_module_text("Feature.Transition.NotifyNotInScene"));
 		return;
 	}
 
@@ -282,7 +285,8 @@ void HotkeyCopyShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 	obs_source_t *transition = obs_sceneitem_get_transition(scene_item, true);
 	if (!transition) {
 		obs_source_release(current_scene);
-		StreamUP::NotificationManager::SendWarningNotification("Copy Show Transition", "No show transition set");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.CopyShowTransition.Name"),
+							      obs_module_text("Feature.Transition.Show.NotifyNotSet"));
 		return;
 	}
 
@@ -297,7 +301,8 @@ void HotkeyCopyShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 	obs_data_release(settings);
 	obs_source_release(current_scene);
 
-	StreamUP::NotificationManager::SendInfoNotification("Copy Show Transition", "Show transition copied");
+	StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Hotkey.CopyShowTransition.Name"),
+							      obs_module_text("Feature.Transition.Show.NotifyCopied"));
 }
 
 void HotkeyCopyHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
@@ -312,14 +317,16 @@ void HotkeyCopyHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 	// Get the currently selected source
 	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
-		StreamUP::NotificationManager::SendWarningNotification("Copy Hide Transition", "No source selected");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.CopyHideTransition.Name"),
+							      obs_module_text("Feature.Transition.NotifyNoSource"));
 		return;
 	}
 
 	// Get current scene
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	if (!current_scene) {
-		StreamUP::NotificationManager::SendWarningNotification("Copy Hide Transition", "No current scene");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.CopyHideTransition.Name"),
+							      obs_module_text("Feature.Transition.NotifyNoScene"));
 		return;
 	}
 
@@ -327,7 +334,8 @@ void HotkeyCopyHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 	obs_sceneitem_t *scene_item = obs_scene_find_source_recursive(scene, selected_source_name);
 	if (!scene_item) {
 		obs_source_release(current_scene);
-		StreamUP::NotificationManager::SendWarningNotification("Copy Hide Transition", "Source not found in scene");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.CopyHideTransition.Name"),
+							      obs_module_text("Feature.Transition.NotifyNotInScene"));
 		return;
 	}
 
@@ -335,7 +343,8 @@ void HotkeyCopyHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 	obs_source_t *transition = obs_sceneitem_get_transition(scene_item, false);
 	if (!transition) {
 		obs_source_release(current_scene);
-		StreamUP::NotificationManager::SendWarningNotification("Copy Hide Transition", "No hide transition set");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.CopyHideTransition.Name"),
+							      obs_module_text("Feature.Transition.Hide.NotifyNotSet"));
 		return;
 	}
 
@@ -350,7 +359,8 @@ void HotkeyCopyHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey
 	obs_data_release(settings);
 	obs_source_release(current_scene);
 
-	StreamUP::NotificationManager::SendInfoNotification("Copy Hide Transition", "Hide transition copied");
+	StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Hotkey.CopyHideTransition.Name"),
+							      obs_module_text("Feature.Transition.Hide.NotifyCopied"));
 }
 
 void HotkeyPasteShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
@@ -363,21 +373,24 @@ void HotkeyPasteShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 		return;
 
 	if (!copiedShowTransition.has_data) {
-		StreamUP::NotificationManager::SendWarningNotification("Paste Show Transition", "No show transition copied");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.PasteShowTransition.Name"),
+							      obs_module_text("Feature.Transition.Show.NotifyNoneCopied"));
 		return;
 	}
 
 	// Get the currently selected source
 	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
-		StreamUP::NotificationManager::SendWarningNotification("Paste Show Transition", "No source selected");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.PasteShowTransition.Name"),
+							      obs_module_text("Feature.Transition.NotifyNoSource"));
 		return;
 	}
 
 	// Get current scene
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	if (!current_scene) {
-		StreamUP::NotificationManager::SendWarningNotification("Paste Show Transition", "No current scene");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.PasteShowTransition.Name"),
+							      obs_module_text("Feature.Transition.NotifyNoScene"));
 		return;
 	}
 
@@ -385,7 +398,8 @@ void HotkeyPasteShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 	obs_sceneitem_t *scene_item = obs_scene_find_source_recursive(scene, selected_source_name);
 	if (!scene_item) {
 		obs_source_release(current_scene);
-		StreamUP::NotificationManager::SendWarningNotification("Paste Show Transition", "Source not found in scene");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.PasteShowTransition.Name"),
+							      obs_module_text("Feature.Transition.NotifyNotInScene"));
 		return;
 	}
 
@@ -393,7 +407,8 @@ void HotkeyPasteShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 	obs_source_t *transition = obs_source_create_private(copiedShowTransition.transition_type.c_str(), "Scene Transition", NULL);
 	if (!transition) {
 		obs_source_release(current_scene);
-		StreamUP::NotificationManager::SendWarningNotification("Paste Show Transition", "Failed to create transition");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.PasteShowTransition.Name"),
+							      obs_module_text("Feature.Transition.NotifyCreateFailed"));
 		return;
 	}
 
@@ -411,7 +426,8 @@ void HotkeyPasteShowTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 	obs_source_release(transition);
 	obs_source_release(current_scene);
 
-	StreamUP::NotificationManager::SendInfoNotification("Paste Show Transition", "Show transition pasted");
+	StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Hotkey.PasteShowTransition.Name"),
+							      obs_module_text("Feature.Transition.Show.NotifyPasted"));
 }
 
 void HotkeyPasteHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
@@ -424,21 +440,24 @@ void HotkeyPasteHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 		return;
 
 	if (!copiedHideTransition.has_data) {
-		StreamUP::NotificationManager::SendWarningNotification("Paste Hide Transition", "No hide transition copied");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.PasteHideTransition.Name"),
+							      obs_module_text("Feature.Transition.Hide.NotifyNoneCopied"));
 		return;
 	}
 
 	// Get the currently selected source
 	const char *selected_source_name = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
 	if (!selected_source_name) {
-		StreamUP::NotificationManager::SendWarningNotification("Paste Hide Transition", "No source selected");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.PasteHideTransition.Name"),
+							      obs_module_text("Feature.Transition.NotifyNoSource"));
 		return;
 	}
 
 	// Get current scene
 	obs_source_t *current_scene = obs_frontend_get_current_scene();
 	if (!current_scene) {
-		StreamUP::NotificationManager::SendWarningNotification("Paste Hide Transition", "No current scene");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.PasteHideTransition.Name"),
+							      obs_module_text("Feature.Transition.NotifyNoScene"));
 		return;
 	}
 
@@ -446,7 +465,8 @@ void HotkeyPasteHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 	obs_sceneitem_t *scene_item = obs_scene_find_source_recursive(scene, selected_source_name);
 	if (!scene_item) {
 		obs_source_release(current_scene);
-		StreamUP::NotificationManager::SendWarningNotification("Paste Hide Transition", "Source not found in scene");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.PasteHideTransition.Name"),
+							      obs_module_text("Feature.Transition.NotifyNotInScene"));
 		return;
 	}
 
@@ -454,7 +474,8 @@ void HotkeyPasteHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 	obs_source_t *transition = obs_source_create_private(copiedHideTransition.transition_type.c_str(), "Scene Transition", NULL);
 	if (!transition) {
 		obs_source_release(current_scene);
-		StreamUP::NotificationManager::SendWarningNotification("Paste Hide Transition", "Failed to create transition");
+		StreamUP::NotificationManager::SendWarningNotification(obs_module_text("Hotkey.PasteHideTransition.Name"),
+							      obs_module_text("Feature.Transition.NotifyCreateFailed"));
 		return;
 	}
 
@@ -472,7 +493,8 @@ void HotkeyPasteHideTransition(void *data, obs_hotkey_id id, obs_hotkey_t *hotke
 	obs_source_release(transition);
 	obs_source_release(current_scene);
 
-	StreamUP::NotificationManager::SendInfoNotification("Paste Hide Transition", "Hide transition pasted");
+	StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Hotkey.PasteHideTransition.Name"),
+							      obs_module_text("Feature.Transition.Hide.NotifyPasted"));
 }
 
 void HotkeyGroupSelectedSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)

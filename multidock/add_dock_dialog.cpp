@@ -1,6 +1,6 @@
 #include "add_dock_dialog.hpp"
 #include "inner_dock_host.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "multidock_utils.hpp"
 #include <streamup/ui/window-chrome.hpp>
 #include <streamup/ui/pill-button.hpp>

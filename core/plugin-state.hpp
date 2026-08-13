@@ -40,6 +40,7 @@ public:
         std::map<std::string, std::string> outdatedPlugins; // name -> installed version
         std::vector<std::pair<std::string, std::string>> installedPlugins; // name, version pairs
         std::vector<std::string> failedToLoadPlugins; // module names that failed to load
+        std::map<std::string, bool> disabledPlugins; // plugin name -> true if blocked by safe mode, false if toggled off in OBS's plugin manager
         std::chrono::system_clock::time_point lastChecked;
         bool isValid = false;
     };

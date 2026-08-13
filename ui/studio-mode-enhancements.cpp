@@ -1,7 +1,7 @@
 #include "studio-mode-enhancements.hpp"
 #include "theme-enhancements.hpp"
 #include <streamup/ui/gallery-style.hpp>
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include <obs-frontend-api.h>
 #include <QMainWindow>
 #include <QStyle>

@@ -1,5 +1,5 @@
 #include "persistence.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include <obs-module.h>
 #include <obs.h>
 #include <QStandardPaths>

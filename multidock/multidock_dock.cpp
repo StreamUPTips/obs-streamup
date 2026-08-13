@@ -1,5 +1,5 @@
 #include "multidock_dock.hpp"
-#include "../utilities/debug-logger.hpp"
+#include <streamup/debug-logger.hpp>
 #include "inner_dock_host.hpp"
 #include "persistence.hpp"
 #include "multidock_utils.hpp"
@@ -80,8 +80,12 @@ void MultiDockDock::SetupUi()
     
     // No auto-save - we save on OBS shutdown
     
-    // Set minimum size to ensure usability
-    setMinimumSize(StreamUP::UIStyles::S(400), StreamUP::UIStyles::S(300));
+    // Keep the floor low so the dock can be dragged narrow. 400x300 was wide
+    // enough that the MultiDock refused to shrink to a sensible sidebar width,
+    // especially at 125% scaling where it became 500px. The contained docks
+    // still contribute their own minimums, so anything genuinely too small to
+    // use is still prevented by its content.
+    setMinimumSize(StreamUP::UIStyles::S(120), StreamUP::UIStyles::S(120));
 
     // Let OBS theme handle all styling
     setFrameStyle(QFrame::NoFrame);
@@ -117,10 +121,25 @@ void MultiDockDock::SaveState()
     QStringList capturedDockIds = m_innerHost->GetCapturedDockIds();
     QByteArray layout = m_innerHost->SaveLayout();
 
+    // Preserve any dock IDs that were saved previously but haven't been
+    // restored yet this session (e.g. the OBS Twitch/browser dock loads late
+    // via CEF). Without this, a session that never saw the dock would rewrite
+    // config without it and permanently erase it from the MultiDock.
+    for (const QString& pendingId : m_unresolvedDockIds) {
+        if (!capturedDockIds.contains(pendingId)) {
+            capturedDockIds.append(pendingId);
+        }
+    }
+
     SaveMultiDockState(m_id, capturedDockIds, layout, m_docksLocked);
 
-    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "State", "Saved state for MultiDock '%s': %d captured docks, locked=%s",
-         m_id.toUtf8().constData(), capturedDockIds.size(), m_docksLocked ? "true" : "false");
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "State", "Saved state for MultiDock '%s': %d captured docks (%d preserved unresolved), locked=%s",
+         m_id.toUtf8().constData(), capturedDockIds.size(), m_unresolvedDockIds.size(), m_docksLocked ? "true" : "false");
+}
+
+void MultiDockDock::MarkDockResolved(const QString& dockId)
+{
+    m_unresolvedDockIds.removeAll(dockId);
 }
 
 void MultiDockDock::LoadState()
@@ -143,7 +162,7 @@ void MultiDockDock::LoadState()
     m_docksLocked = locked;
     if (m_lockCheckbox) {
         m_lockCheckbox->setChecked(locked);
-        m_lockCheckbox->setToolTip(locked ? "Docks are locked (click to unlock)" : "Docks are unlocked (click to lock)");
+        m_lockCheckbox->setToolTip(locked ? obs_module_text("MultiDock.Tooltip.Locked") : obs_module_text("MultiDock.Tooltip.Unlocked"));
     }
     m_innerHost->SetDocksLocked(locked);
     
@@ -156,10 +175,14 @@ void MultiDockDock::LoadState()
     
     QList<QDockWidget*> allDocks = FindAllObsDocks(mainWindow);
     int restoredCount = 0;
-    
+
+    // Start fresh: any captured ID we fail to restore below is recorded as
+    // unresolved so SaveState preserves it instead of dropping it.
+    m_unresolvedDockIds.clear();
+
     for (const QString& dockId : capturedDockIds) {
         QDockWidget* dock = nullptr;
-        
+
         // Try to find dock by ID
         for (QDockWidget* candidate : allDocks) {
             QString candidateId = GenerateDockId(candidate);
@@ -168,13 +191,16 @@ void MultiDockDock::LoadState()
                 break;
             }
         }
-        
+
         if (dock && !IsMultiDockContainer(dock)) {
             m_innerHost->AddDock(dock);
             restoredCount++;
             StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Restoration", "Successfully restored dock '%s' with ID '%s'",
                  dock->windowTitle().toUtf8().constData(), dockId.toUtf8().constData());
         } else {
+            // Not found yet (e.g. a late-loading CEF dock). Preserve the ID so
+            // it survives save and can be picked up by a later retry.
+            m_unresolvedDockIds.append(dockId);
             // Enhanced debugging for failed dock restoration
             StreamUP::DebugLogger::LogWarningFormat("MultiDock", "Restoration", "Could not restore dock with ID '%s'",
                  dockId.toUtf8().constData());
@@ -244,7 +270,7 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
         addButton->setProperty("class", "icon-plus");
         addButton->setProperty("themeID", "addIconSmall");
     }
-    addDockAction->setToolTip("Add an OBS dock to this MultiDock");
+    addDockAction->setToolTip(obs_module_text("MultiDock.Tooltip.AddDock"));
     connect(addDockAction, &QAction::triggered, [this]() {
         if (m_innerHost) {
             m_innerHost->ShowAddDockDialog();
@@ -255,11 +281,11 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
     QCheckBox* lockCheckbox = new QCheckBox(this);
     lockCheckbox->setProperty("class", "checkbox-icon indicator-lock");
     lockCheckbox->setChecked(false); // Start unlocked
-    lockCheckbox->setToolTip("Docks are unlocked (click to lock)");
+    lockCheckbox->setToolTip(obs_module_text("MultiDock.Tooltip.Unlocked"));
 
     connect(lockCheckbox, &QCheckBox::toggled, [this, lockCheckbox](bool checked) {
         m_docksLocked = checked;
-        lockCheckbox->setToolTip(m_docksLocked ? "Docks are locked (click to unlock)" : "Docks are unlocked (click to lock)");
+        lockCheckbox->setToolTip(m_docksLocked ? obs_module_text("MultiDock.Tooltip.Locked") : obs_module_text("MultiDock.Tooltip.Unlocked"));
 
         if (m_innerHost) {
             m_innerHost->SetDocksLocked(m_docksLocked);

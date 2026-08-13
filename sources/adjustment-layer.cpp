@@ -1428,13 +1428,34 @@ static void Update(void *data, obs_data_t *settings)
 
 // ---- Registration ----
 
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(32, 2, 0)
+// Custom source-list icons (OBS 32.2+). The caller bfree()s the returned
+// string, so hand back the bmalloc'd path from obs_module_file directly.
+static const char *GetDarkIcon(void *type_data)
+{
+	UNUSED_PARAMETER(type_data);
+	return obs_module_file("icons/adjustment-dark.svg");
+}
+static const char *GetLightIcon(void *type_data)
+{
+	UNUSED_PARAMETER(type_data);
+	return obs_module_file("icons/adjustment-light.svg");
+}
+#endif
+
 void Register()
 {
 	obs_source_info info = {};
 	info.id = SOURCE_ID;
 	info.type = OBS_SOURCE_TYPE_INPUT;
 	info.output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_CUSTOM_DRAW;
+#if LIBOBS_API_VER >= MAKE_SEMANTIC_VERSION(32, 2, 0)
+	info.icon_type = OBS_ICON_TYPE_CUSTOM;
+	info.get_dark_icon = GetDarkIcon;
+	info.get_light_icon = GetLightIcon;
+#else
 	info.icon_type = OBS_ICON_TYPE_COLOR;
+#endif
 
 	info.get_name = GetName;
 	info.create = Create;
