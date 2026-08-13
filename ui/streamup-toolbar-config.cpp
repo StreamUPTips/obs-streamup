@@ -59,12 +59,14 @@ void SeparatorItem::fromJson(const QJsonObject& json) {
 QJsonObject CustomSpacerItem::toJson() const {
     QJsonObject obj = ToolbarItem::toJson();
     obj["size"] = size;
+    obj["flexible"] = flexible;
     return obj;
 }
 
 void CustomSpacerItem::fromJson(const QJsonObject& json) {
     ToolbarItem::fromJson(json);
     size = json["size"].toInt(20);
+    flexible = json["flexible"].toBool(false);
 }
 
 // DockButtonItem implementation

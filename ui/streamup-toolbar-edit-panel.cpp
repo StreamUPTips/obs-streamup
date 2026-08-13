@@ -211,9 +211,9 @@ void ToolbarEditPanel::buildUi()
 	auto *sizeLayout = new QHBoxLayout(sizeRow_);
 	sizeLayout->setContentsMargins(0, 0, 0, 0);
 	sizeLayout->setSpacing(S(8));
-	auto *sizeLabel = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.SpacerSize")), sizeRow_);
-	sizeLabel->setStyleSheet(UIStyles::labelStyle());
-	sizeLayout->addWidget(sizeLabel, 1);
+	sizeLabel_ = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.SpacerSize")), sizeRow_);
+	sizeLabel_->setStyleSheet(UIStyles::labelStyle());
+	sizeLayout->addWidget(sizeLabel_, 1);
 	sizeSpin_ = new UIStyles::MacSpinBox(sizeRow_);
 	sizeSpin_->setOnCard(true);
 	sizeSpin_->setRange(5, 4000);
@@ -228,6 +228,23 @@ void ToolbarEditPanel::buildUi()
 			return;
 		item->size = value;
 		editor_->rebuild();
+		emit configurationChanged();
+	});
+
+	flexibleCheck_ = new UIStyles::IOSCheckBox(
+		QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.SpacerFlexible")), propertiesBody_);
+	body->addWidget(flexibleCheck_);
+	connect(flexibleCheck_, &QCheckBox::toggled, this, [this](bool on) {
+		if (!editor_)
+			return;
+		auto item = std::dynamic_pointer_cast<ToolbarConfig::CustomSpacerItem>(editor_->selectedItem());
+		if (!item || item->flexible == on)
+			return;
+		item->flexible = on;
+		// The size field becomes a minimum rather than a length, so the label
+		// alongside it has to change with the tick.
+		editor_->rebuild();
+		onSelectionChanged(currentId_);
 		emit configurationChanged();
 	});
 
@@ -377,9 +394,19 @@ void ToolbarEditPanel::onSelectionChanged(const QString &itemId)
 
 	auto spacer = std::dynamic_pointer_cast<ToolbarConfig::CustomSpacerItem>(item);
 	sizeRow_->setVisible(spacer != nullptr);
+	flexibleCheck_->setVisible(spacer != nullptr);
 	if (spacer) {
 		QSignalBlocker blocker(sizeSpin_);
 		sizeSpin_->setValue(spacer->size);
+		{
+			QSignalBlocker flexBlocker(flexibleCheck_);
+			flexibleCheck_->setChecked(spacer->flexible);
+		}
+		// A flexible spacer has no length of its own, so the number beside it
+		// is the least it will ever be rather than the size it will be.
+		sizeLabel_->setText(QString::fromUtf8(obs_module_text(
+			spacer->flexible ? "StreamUP.Toolbar.Panel.SpacerMinSize"
+					 : "StreamUP.Toolbar.Panel.SpacerSize")));
 	}
 
 	auto status = std::dynamic_pointer_cast<ToolbarConfig::StatusItem>(item);

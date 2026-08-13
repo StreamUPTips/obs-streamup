@@ -79,7 +79,13 @@ class CustomSpacerItem : public ToolbarItem {
 public:
     int size = 20; // Size in pixels
 
-    CustomSpacerItem(const QString& itemId, int spacerSize = 20) 
+    // Takes whatever space is left over instead of a set length, so a group
+    // after it is pushed to the far end. Two of them put a group in the middle.
+    // This is also the item that gives ground when the bar is short, which is
+    // what leaves fixed spacers holding the exact size they were set to.
+    bool flexible = false;
+
+    CustomSpacerItem(const QString& itemId, int spacerSize = 20)
         : ToolbarItem(ItemType::CustomSpacer, itemId), size(spacerSize) {}
     
     QJsonObject toJson() const override;

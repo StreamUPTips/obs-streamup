@@ -12,6 +12,7 @@ namespace StreamUP {
 namespace ToolbarBuild {
 
 const char *const kSpacerSizeProperty = "streamupSpacerSize";
+const char *const kSpacerFlexibleProperty = "streamupSpacerFlexible";
 const char *const kItemIdProperty = "streamupItemId";
 
 namespace {
@@ -56,11 +57,21 @@ public:
 		updateGeometry();
 	}
 
-	QSize sizeHint() const override { return axis_.size(size_, 0); }
+	// A flexible spacer asks for nothing and takes everything left over. Its
+	// configured size becomes a floor rather than a length, so a group after it
+	// is still pushed clear even on a bar with nothing to spare.
+	void setFlexible(bool flexible)
+	{
+		flexible_ = flexible;
+		updateGeometry();
+	}
+
+	QSize sizeHint() const override { return axis_.size(flexible_ ? 0 : size_, 0); }
 	QSize minimumSizeHint() const override { return QSize(0, 0); }
 
 private:
 	int size_ = 0;
+	bool flexible_ = false;
 	ToolbarGeom::Axis axis_{false};
 };
 
@@ -72,6 +83,32 @@ void applySpacerSize(QWidget *spacer, int size, const ToolbarGeom::Axis &axis)
 		return;
 
 	spacer->setProperty(kSpacerSizeProperty, size);
+
+	// Flexibility rides on the widget rather than the argument list, so the
+	// editor can resize a spacer mid-drag without having to carry it around.
+	const bool flexible = spacer->property(kSpacerFlexibleProperty).toBool();
+	if (auto *sized = dynamic_cast<SpacerWidget *>(spacer)) {
+		// The hint is what the layout actually asks for, so it has to move
+		// with the size. Without this a spacer resized mid-drag keeps asking
+		// for its old length and only the cap changes.
+		sized->setSpacerSize(size, axis);
+		sized->setFlexible(flexible);
+	}
+
+	if (flexible) {
+		// Expanding along the flow: it asks for nothing, takes what is left,
+		// and is the first thing to give it back when the bar is short. The
+		// configured size is a floor so a group after it is always pushed
+		// clear of the one before it.
+		spacer->setMinimumSize(0, 0);
+		spacer->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+		if (axis.vertical())
+			spacer->setMinimumHeight(size);
+		else
+			spacer->setMinimumWidth(size);
+		spacer->setSizePolicy(axis.policy(QSizePolicy::Expanding, QSizePolicy::Expanding));
+		return;
+	}
 
 	// Clear whatever a previous orientation pinned, or the old axis survives
 	// and the spacer comes out square.
@@ -99,20 +136,16 @@ void applySpacerSize(QWidget *spacer, int size, const ToolbarGeom::Axis &axis)
 	// prevented by the cap set above, and by the alignment stretches, which are
 	// Expanding and take any genuine slack first.
 	spacer->setSizePolicy(axis.policy(QSizePolicy::Preferred, QSizePolicy::Expanding));
-
-	// The hint is what the layout actually asks for, so it has to move with the
-	// size. Without this a spacer resized mid-drag keeps asking for its old
-	// length and only the cap changes.
-	if (auto *sized = dynamic_cast<SpacerWidget *>(spacer))
-		sized->setSpacerSize(size, axis);
 }
 
-QWidget *createSpacer(const QString &id, int size, const ToolbarGeom::Axis &axis, QWidget *parent)
+QWidget *createSpacer(const QString &id, int size, bool flexible, const ToolbarGeom::Axis &axis, QWidget *parent)
 {
 	QWidget *spacer = new SpacerWidget(size, axis, parent);
 	spacer->setProperty("class", "toolbar-spacer");
 	spacer->setObjectName(id);
 	spacer->setProperty(kItemIdProperty, id);
+	// Set before sizing, since applySpacerSize reads it back off the widget.
+	spacer->setProperty(kSpacerFlexibleProperty, flexible);
 	applySpacerSize(spacer, size, axis);
 	return spacer;
 }
@@ -193,9 +226,24 @@ Result build(const ToolbarConfig::ToolbarConfiguration &config, const Options &o
 
 	const auto items = config.getFlattenedItems();
 
+	// Alignment is a whole-bar setting: it puts the entire run at one end or in
+	// the middle. A flexible spacer is a finer statement than that, since it
+	// says where one group ends and the next begins, so it takes precedence.
+	//
+	// They cannot both apply. The alignment stretches and a flexible spacer are
+	// all Expanding, so leaving both in place would split the leftover space
+	// between them and put the run somewhere that answers to neither setting:
+	// ask for buttons left and stats right, and get both adrift in the middle.
+	const bool hasFlexibleSpacer = std::any_of(items.begin(), items.end(), [](const auto &item) {
+		if (!item || !item->visible || item->type != ToolbarConfig::ItemType::CustomSpacer)
+			return false;
+		auto spacer = std::static_pointer_cast<ToolbarConfig::CustomSpacerItem>(item);
+		return spacer && spacer->flexible;
+	});
+
 	// Leading stretch pushes the run off the near edge for centre and end
 	// alignment. Start alignment leaves it where it is.
-	if (opts.alignment != SettingsManager::ToolbarAlignment::Start)
+	if (!hasFlexibleSpacer && opts.alignment != SettingsManager::ToolbarAlignment::Start)
 		result.layout->addStretch();
 
 	// The StreamUP button is pinned to the far end, so it is held back until
@@ -227,7 +275,9 @@ Result build(const ToolbarConfig::ToolbarConfiguration &config, const Options &o
 			break;
 		case ToolbarConfig::ItemType::CustomSpacer: {
 			auto spacerItem = std::static_pointer_cast<ToolbarConfig::CustomSpacerItem>(item);
-			place(item->id, createSpacer(item->id, spacerItem->size, axis, result.container), item->type);
+			place(item->id,
+			      createSpacer(item->id, spacerItem->size, spacerItem->flexible, axis, result.container),
+			      item->type);
 			break;
 		}
 		default:
@@ -238,7 +288,7 @@ Result build(const ToolbarConfig::ToolbarConfiguration &config, const Options &o
 
 	// Trailing stretch holds the run against the near edge. End alignment is
 	// already against the far end and does not want one.
-	if (opts.alignment != SettingsManager::ToolbarAlignment::End)
+	if (!hasFlexibleSpacer && opts.alignment != SettingsManager::ToolbarAlignment::End)
 		result.layout->addStretch();
 
 	for (const auto &item : deferred)

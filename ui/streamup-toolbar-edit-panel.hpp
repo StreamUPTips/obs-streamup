@@ -80,7 +80,9 @@ private:
 	QWidget *propertiesBody_ = nullptr;
 	QCheckBox *visibleCheck_ = nullptr;
 	QWidget *sizeRow_ = nullptr;
+	QLabel *sizeLabel_ = nullptr;
 	UIStyles::MacSpinBox *sizeSpin_ = nullptr;
+	QCheckBox *flexibleCheck_ = nullptr;
 	QCheckBox *showIconCheck_ = nullptr;
 	QCheckBox *showHoursCheck_ = nullptr;
 	QWidget *removeRow_ = nullptr;

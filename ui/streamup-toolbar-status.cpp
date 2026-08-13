@@ -5,6 +5,8 @@
 #include <obs-module.h>
 
 #include <QBoxLayout>
+#include <QContextMenuEvent>
+#include <QMenu>
 #include <QDateTime>
 #include <QEvent>
 #include <QIcon>
@@ -127,6 +129,25 @@ QString kindIconName(Kind kind)
 bool kindIsDuration(Kind kind)
 {
 	return kind == Kind::RecordTime || kind == Kind::StreamTime;
+}
+
+bool kindIsResettable(Kind kind)
+{
+	switch (kind) {
+	case Kind::FramesDropped:
+		// Counts up for as long as OBS has been open, so without this a
+		// morning's worth of frames follows you into the evening's stream.
+		return true;
+	case Kind::Message:
+		// Not a counter, but it holds the last thing said until it times out,
+		// and dismissing it early is worth having.
+		return true;
+	default:
+		// The clocks belong to the recording and the stream: zeroing one would
+		// claim the recording started at a time it did not. CPU, frame rate and
+		// the bitrates are readings of this second, so there is nothing held.
+		return false;
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -486,12 +507,14 @@ QString Monitor::text(Kind kind, bool compact, bool showHours) const
 	case Kind::Fps:
 		return QString::number(fps_, 'f', compact ? 0 : 2);
 	case Kind::FramesDropped: {
-		// Rendering lag, which is what OBS's "missed frames" readout counts.
-		const double percent = totalFrames_ > 0
-					       ? (static_cast<double>(laggedFrames_) / static_cast<double>(totalFrames_)) * 100.0
-					       : 0.0;
-		return compact ? QStringLiteral("%1").arg(laggedFrames_)
-			       : QStringLiteral("%1 (%2%)").arg(laggedFrames_).arg(percent, 0, 'f', 1);
+		// Rendering lag, which is what OBS's "missed frames" readout counts,
+		// measured from the last reset rather than from when OBS started.
+		const uint32_t lagged = laggedFrames_ >= laggedBaseline_ ? laggedFrames_ - laggedBaseline_ : 0;
+		const uint32_t total = totalFrames_ >= totalBaseline_ ? totalFrames_ - totalBaseline_ : 0;
+		const double percent =
+			total > 0 ? (static_cast<double>(lagged) / static_cast<double>(total)) * 100.0 : 0.0;
+		return compact ? QStringLiteral("%1").arg(lagged)
+			       : QStringLiteral("%1 (%2%)").arg(lagged).arg(percent, 0, 'f', 1);
 	}
 	case Kind::RecordTime:
 		return durationText(recordTime_.ms(), showHours);
@@ -549,14 +572,41 @@ QString Monitor::widestText(Kind kind, bool compact, bool showHours) const
 	return QString();
 }
 
+bool Monitor::canReset(Kind kind) const
+{
+	return kindIsResettable(kind);
+}
+
+void Monitor::resetCounters(Kind kind)
+{
+	switch (kind) {
+	case Kind::FramesDropped:
+		// OBS's counters are OBS's, and other things read them. Rather than
+		// trying to zero them, this remembers where they stood and reports the
+		// difference from here.
+		laggedBaseline_ = laggedFrames_;
+		totalBaseline_ = totalFrames_;
+		break;
+	case Kind::Message:
+		message_ = MessageId::None;
+		break;
+	default:
+		return;
+	}
+
+	emit updated();
+}
+
 bool Monitor::isAlerting(Kind kind) const
 {
 	switch (kind) {
 	case Kind::Cpu:
 		return cpuPercent_ >= 90.0;
-	case Kind::FramesDropped:
-		return totalFrames_ > 0 &&
-		       (static_cast<double>(laggedFrames_) / static_cast<double>(totalFrames_)) > 0.05;
+	case Kind::FramesDropped: {
+		const uint32_t lagged = laggedFrames_ >= laggedBaseline_ ? laggedFrames_ - laggedBaseline_ : 0;
+		const uint32_t total = totalFrames_ >= totalBaseline_ ? totalFrames_ - totalBaseline_ : 0;
+		return total > 0 && (static_cast<double>(lagged) / static_cast<double>(total)) > 0.05;
+	}
 	case Kind::Message:
 		return message_ == MessageId::EncodingOverloaded;
 	default:
@@ -622,6 +672,9 @@ StatusWidget::StatusWidget(Kind kind, bool vertical, bool showIcon, bool showHou
 	icon_->setFixedSize(kIconPx, kIconPx);
 	icon_->setPixmap(QIcon(UIHelpers::GetThemedIconPath(kindIconName(kind))).pixmap(kIconPx, kIconPx));
 	icon_->setVisible(showIcon_);
+	// Children must not swallow the right click, or the reset menu only opens
+	// on the few pixels of padding between them.
+	icon_->setAttribute(Qt::WA_TransparentForMouseEvents);
 	layout->addWidget(icon_, 0, Qt::AlignCenter);
 
 	value_ = new QLabel(this);
@@ -632,6 +685,7 @@ StatusWidget::StatusWidget(Kind kind, bool vertical, bool showIcon, bool showHou
 	// under its icon and centring is what lines the column up.
 	value_->setAlignment(vertical_ ? Qt::AlignCenter : (Qt::AlignLeft | Qt::AlignVCenter));
 	value_->setTextInteractionFlags(Qt::NoTextInteraction);
+	value_->setAttribute(Qt::WA_TransparentForMouseEvents);
 	layout->addWidget(value_, 0, vertical_ ? Qt::AlignCenter : Qt::AlignVCenter);
 
 	Monitor::instance().addObserver();
@@ -695,6 +749,25 @@ void StatusWidget::applyPinnedSize()
 
 	pinnedWidth_ = width;
 	value_->setFixedWidth(width);
+}
+
+void StatusWidget::contextMenuEvent(QContextMenuEvent *event)
+{
+	// A preview in the editor is scenery, and the editor owns every click there.
+	if (preview_ || !Monitor::instance().canReset(kind_)) {
+		// Ignoring it lets the event reach the toolbar, so right clicking a
+		// readout still opens the toolbar's own menu rather than doing nothing.
+		event->ignore();
+		return;
+	}
+
+	QMenu menu(this);
+	QAction *reset = menu.addAction(
+		QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Status.Reset")).arg(kindDisplayName(kind_)));
+	connect(reset, &QAction::triggered, this, [this]() { Monitor::instance().resetCounters(kind_); });
+
+	menu.exec(event->globalPos());
+	event->accept();
 }
 
 void StatusWidget::refresh()

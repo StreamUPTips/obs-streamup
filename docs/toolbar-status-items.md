@@ -76,6 +76,50 @@ row of icon-then-value would either force the bar wide or clip. `240.00` becomes
 `240`, `6000 kb/s` becomes `6000k`, and each message has its own shorter wording
 rather than being elided.
 
+## Resetting a readout
+
+Right click a readout and it offers to reset itself, for the ones where that
+means anything.
+
+Missed frames counts up for as long as OBS has been open, so without a reset a
+morning's worth of dropped frames follows you into the evening's stream. The
+reset does not touch OBS's counter, which belongs to OBS and is read by other
+things: it records where the counter stood and reports the difference, which is
+what "since I last looked" actually means.
+
+The status message can be dismissed early rather than waiting for it to time
+out.
+
+Nothing else offers it, on purpose. The two clocks belong to the recording and
+the stream, and zeroing one would claim a recording started at a time it did
+not. CPU, frame rate and the two bitrates are readings of the current second,
+so there is nothing held to clear.
+
+Right clicking a readout that cannot be reset opens the toolbar's own menu, so
+the bar behaves the same wherever you click it.
+
+## Alignment, and putting groups at both ends
+
+The toolbar alignment setting (Settings > Toolbar) is a whole-bar statement: it
+puts the entire run at the start, the centre, or the end.
+
+A **flexible spacer** is a finer one. Instead of a set length it takes whatever
+space is left over, so `buttons | flexible | readouts` puts the buttons at one
+end and the readouts at the other, and a second flexible spacer gives you three
+groups with one in the middle. That is how you get left, centre and right on a
+single bar, which whole-bar alignment cannot express.
+
+The two cannot both apply, so a flexible spacer anywhere in the run switches the
+alignment stretches off. Both are Expanding, so leaving both in would split the
+leftover space between them and put the run somewhere that answers to neither
+setting: ask for buttons left and readouts right, and get both adrift in the
+middle.
+
+A flexible spacer is also the first thing to give space back when the bar is
+short, which is what leaves your fixed spacers holding the exact sizes you set
+them to. Its configured size becomes a minimum rather than a length, so the
+groups either side never touch.
+
 ## Running out of room
 
 A readout that grows has to take the space from somewhere. If the bar is full,

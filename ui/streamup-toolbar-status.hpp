@@ -53,6 +53,12 @@ QString kindIconName(Kind kind);
 // Whether this kind offers the "show hours under an hour" setting.
 bool kindIsDuration(Kind kind);
 
+// Whether this kind counts up from somewhere and can therefore be sent back to
+// zero. A running clock cannot: zeroing it would say the recording started at a
+// time it did not. CPU, frame rate and the bitrates are instantaneous readings
+// of what is happening now, so there is nothing held to clear.
+bool kindIsResettable(Kind kind);
+
 // Samples everything the status items show, once a second, for all of them.
 class Monitor : public QObject {
 	Q_OBJECT
@@ -78,6 +84,12 @@ public:
 	// True when the value is one OBS would colour red. The item turns this
 	// into a Qt property for the theme rather than painting a colour itself.
 	bool isAlerting(Kind kind) const;
+
+	// Sends a counting readout back to zero. OBS's own counters keep running,
+	// since they belong to OBS: this records where they were and reports the
+	// difference, which is what "since I last looked" means.
+	void resetCounters(Kind kind);
+	bool canReset(Kind kind) const;
 
 signals:
 	void updated();
@@ -143,6 +155,10 @@ private:
 	double fps_ = 0.0;
 	uint32_t laggedFrames_ = 0;
 	uint32_t totalFrames_ = 0;
+	// Where OBS's counters stood when the readout was last reset, so what is
+	// shown is the count since then rather than since OBS started.
+	uint32_t laggedBaseline_ = 0;
+	uint32_t totalBaseline_ = 0;
 	uint32_t skippedFrames_ = 0;
 	uint32_t encodedFrames_ = 0;
 	// The window the overload warning is judged over, so one bad second on a
@@ -186,6 +202,9 @@ protected:
 	// polished, so the pinned width is taken once it is.
 	void showEvent(QShowEvent *event) override;
 	void changeEvent(QEvent *event) override;
+	// Right click offers to reset the counting readouts. Anything else is
+	// passed up so the toolbar's own menu still opens from a readout.
+	void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:
 	void applyPinnedSize();

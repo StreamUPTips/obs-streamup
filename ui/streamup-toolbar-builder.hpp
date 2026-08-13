@@ -31,6 +31,8 @@ namespace ToolbarBuild {
 // The configured length of a spacer, stashed on the widget so a rebuild never
 // has to recover it from rendered geometry.
 extern const char *const kSpacerSizeProperty;
+// Whether a spacer takes the leftover space rather than a set length.
+extern const char *const kSpacerFlexibleProperty;
 // The item id a widget was built for. Every widget in a run carries one, so hit
 // testing is a lookup rather than a guess at running order.
 extern const char *const kItemIdProperty;
@@ -60,7 +62,7 @@ Result build(const ToolbarConfig::ToolbarConfiguration &config, const Options &o
 // Size a spacer: pinned along the flow, filling across.
 void applySpacerSize(QWidget *spacer, int size, const ToolbarGeom::Axis &axis);
 
-QWidget *createSpacer(const QString &id, int size, const ToolbarGeom::Axis &axis, QWidget *parent);
+QWidget *createSpacer(const QString &id, int size, bool flexible, const ToolbarGeom::Axis &axis, QWidget *parent);
 QFrame *createSeparator(const QString &id, const ToolbarGeom::Axis &axis, QWidget *parent);
 
 // Shared so nothing can disagree about what an item looks like or is called.
