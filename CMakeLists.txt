@@ -204,6 +204,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/streamup-toolbar-geometry.hpp
   ui/streamup-toolbar-builder.hpp
   ui/streamup-toolbar-builder.cpp
+  ui/streamup-toolbar-status.hpp
+  ui/streamup-toolbar-status.cpp
   ui/streamup-toolbar-editor.hpp
   ui/streamup-toolbar-editor.cpp
   ui/streamup-toolbar-edit-panel.hpp
@@ -348,6 +350,8 @@ source_group("UI\\Toolbar" FILES
   ui/streamup-toolbar-geometry.hpp
   ui/streamup-toolbar-builder.hpp
   ui/streamup-toolbar-builder.cpp
+  ui/streamup-toolbar-status.hpp
+  ui/streamup-toolbar-status.cpp
   ui/streamup-toolbar-editor.hpp
   ui/streamup-toolbar-editor.cpp
   ui/streamup-toolbar-edit-panel.hpp

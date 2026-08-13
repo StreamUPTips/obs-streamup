@@ -1,5 +1,6 @@
 #include "streamup-toolbar-config.hpp"
 #include "settings-manager.hpp"
+#include "streamup-toolbar-status.hpp"
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -148,6 +149,17 @@ std::shared_ptr<ToolbarItem> createItem(ItemType type, const QJsonObject& json) 
     case ItemType::WebSocketButton:
         item = std::make_shared<WebSocketButtonItem>(id, json["requestType"].toString());
         break;
+    case ItemType::StatusItem: {
+        // A kind this build does not know about is dropped rather than shown as
+        // an empty readout that never updates.
+        const QString kind = json["kind"].toString();
+        ToolbarStatus::Kind parsed;
+        if (!ToolbarStatus::kindFromKey(kind, parsed)) {
+            return nullptr;
+        }
+        item = std::make_shared<StatusItem>(id, kind);
+        break;
+    }
     }
 
     if (item) {
@@ -221,6 +233,22 @@ void WebSocketButtonItem::fromJson(const QJsonObject& json) {
     customIconPath = json["customIconPath"].toString();
     tooltip = json["tooltip"].toString();
     useCustomIcon = json["useCustomIcon"].toBool();
+}
+
+// StatusItem implementation
+QJsonObject StatusItem::toJson() const {
+    QJsonObject obj = ToolbarItem::toJson();
+    obj["kind"] = kind;
+    obj["showLabel"] = showLabel;
+    obj["showHours"] = showHours;
+    return obj;
+}
+
+void StatusItem::fromJson(const QJsonObject& json) {
+    ToolbarItem::fromJson(json);
+    kind = json["kind"].toString();
+    showLabel = json["showLabel"].toBool(true);
+    showHours = json["showHours"].toBool(false);
 }
 
 // Mirrors the registration list in streamup.cpp. It is kept by hand because

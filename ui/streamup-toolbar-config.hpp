@@ -26,13 +26,14 @@ enum class ItemType {
     CustomSpacer,
     DockButton,
     HotkeyButton,
-    WebSocketButton
+    WebSocketButton,
+    StatusItem
 };
 
 // The last valid value, used to range-check a stored type integer on load.
 // Anything outside the enum is dropped, so this MUST be updated whenever a new
 // item type is added, or the new type silently vanishes on the next reload.
-constexpr ItemType kLastItemType = ItemType::WebSocketButton;
+constexpr ItemType kLastItemType = ItemType::StatusItem;
 
 // Base class for all toolbar items
 class ToolbarItem {
@@ -147,6 +148,24 @@ public:
 
     WebSocketButtonItem(const QString& itemId, const QString& request)
         : ToolbarItem(ItemType::WebSocketButton, itemId), requestType(request) {}
+
+    QJsonObject toJson() const override;
+    void fromJson(const QJsonObject& json) override;
+};
+
+// A readout from the OBS status bar, placed on the toolbar like any other item.
+//
+// The kind is stored by name rather than by index, so the list can be reordered
+// or added to without rewriting anyone's saved toolbar. An unknown name on load
+// drops the item, which is the same treatment an unknown item type gets.
+class StatusItem : public ToolbarItem {
+public:
+    QString kind = QStringLiteral("cpu"); // see ToolbarStatus::kindKey
+    bool showLabel = true;                // "CPU: 11%" rather than "11%"
+    bool showHours = false;               // durations show hours under an hour
+
+    StatusItem(const QString& itemId, const QString& statusKind)
+        : ToolbarItem(ItemType::StatusItem, itemId), kind(statusKind) {}
 
     QJsonObject toJson() const override;
     void fromJson(const QJsonObject& json) override;

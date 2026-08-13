@@ -1,6 +1,7 @@
 #include "streamup-toolbar-builder.hpp"
 #include "ui-helpers.hpp"
 #include "obs-hotkey-manager.hpp"
+#include "streamup-toolbar-status.hpp"
 
 #include <obs-module.h>
 
@@ -255,6 +256,13 @@ QString labelForItem(const std::shared_ptr<ToolbarConfig::ToolbarItem> &item)
 	case ToolbarConfig::ItemType::CustomSpacer: {
 		auto spacer = std::static_pointer_cast<ToolbarConfig::CustomSpacerItem>(item);
 		return QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Item.Spacer")).arg(spacer->size);
+	}
+	case ToolbarConfig::ItemType::StatusItem: {
+		auto status = std::static_pointer_cast<ToolbarConfig::StatusItem>(item);
+		ToolbarStatus::Kind kind;
+		if (!ToolbarStatus::kindFromKey(status->kind, kind))
+			return QString();
+		return ToolbarStatus::kindDisplayName(kind);
 	}
 	default:
 		return QString();

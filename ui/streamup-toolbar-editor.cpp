@@ -1,5 +1,6 @@
 #include "streamup-toolbar-editor.hpp"
 #include "streamup-toolbar-builder.hpp"
+#include "streamup-toolbar-status.hpp"
 
 #include <algorithm>
 
@@ -466,6 +467,8 @@ QStringList ToolbarEditor::paletteDescriptors()
 		out.append(QStringLiteral("builtin:") + button.type);
 	for (const auto &dock : ToolbarConfig::ToolbarConfiguration::getAvailableDockButtons())
 		out.append(QStringLiteral("dock:") + dock.dockButtonType);
+	for (const QString &kind : ToolbarStatus::allKindKeys())
+		out.append(QStringLiteral("status:") + kind);
 	out.append(QString::fromLatin1(kDescriptorSeparator));
 	out.append(QString::fromLatin1(kDescriptorSpacer));
 	return out;
@@ -483,6 +486,15 @@ std::shared_ptr<ToolbarConfig::ToolbarItem> ToolbarEditor::createItemFromDescrip
 	if (descriptor == QLatin1String(kDescriptorSpacer))
 		return std::make_shared<ToolbarConfig::CustomSpacerItem>(QStringLiteral("spacer_%1").arg(stamp),
 									 kDefaultSpacerSize);
+
+	if (descriptor.startsWith(QLatin1String("status:"))) {
+		const QString kind = descriptor.mid(7);
+		ToolbarStatus::Kind parsed;
+		if (!ToolbarStatus::kindFromKey(kind, parsed))
+			return nullptr;
+		return std::make_shared<ToolbarConfig::StatusItem>(QStringLiteral("status_%1_%2").arg(kind).arg(stamp),
+								   kind);
+	}
 
 	if (descriptor.startsWith(QLatin1String("builtin:"))) {
 		const QString type = descriptor.mid(8);

@@ -4,6 +4,7 @@
 #include "websocket-button-config-dialog.hpp"
 #include "streamup-toolbar-builder.hpp"
 #include "streamup-toolbar-editor.hpp"
+#include "streamup-toolbar-status.hpp"
 
 #include <obs-module.h>
 
@@ -230,6 +231,37 @@ void ToolbarEditPanel::buildUi()
 		emit configurationChanged();
 	});
 
+	// Status readouts carry their own two settings. Both rebuild the item
+	// rather than poking the live widget, because the pinned width has to be
+	// recalculated from the new wording or the bar jitters again.
+	showLabelCheck_ = new UIStyles::IOSCheckBox(
+		QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.StatusShowLabel")), propertiesBody_);
+	body->addWidget(showLabelCheck_);
+	connect(showLabelCheck_, &QCheckBox::toggled, this, [this](bool on) {
+		if (!editor_)
+			return;
+		auto item = std::dynamic_pointer_cast<ToolbarConfig::StatusItem>(editor_->selectedItem());
+		if (!item || item->showLabel == on)
+			return;
+		item->showLabel = on;
+		editor_->rebuild();
+		emit configurationChanged();
+	});
+
+	showHoursCheck_ = new UIStyles::IOSCheckBox(
+		QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.StatusShowHours")), propertiesBody_);
+	body->addWidget(showHoursCheck_);
+	connect(showHoursCheck_, &QCheckBox::toggled, this, [this](bool on) {
+		if (!editor_)
+			return;
+		auto item = std::dynamic_pointer_cast<ToolbarConfig::StatusItem>(editor_->selectedItem());
+		if (!item || item->showHours == on)
+			return;
+		item->showHours = on;
+		editor_->rebuild();
+		emit configurationChanged();
+	});
+
 	removeRow_ = new QWidget(propertiesBody_);
 	auto *removeLayout = new QHBoxLayout(removeRow_);
 	removeLayout->setContentsMargins(0, 0, 0, 0);
@@ -275,6 +307,8 @@ void ToolbarEditPanel::populatePalette()
 					     QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.GroupButtons")));
 	QTreeWidgetItem *tools = makeGroup(palette_,
 					   QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.GroupTools")));
+	QTreeWidgetItem *status = makeGroup(palette_,
+					    QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.GroupStatus")));
 	QTreeWidgetItem *layout = makeGroup(palette_,
 					    QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.GroupLayout")));
 
@@ -288,6 +322,8 @@ void ToolbarEditPanel::populatePalette()
 			parent = buttons;
 		else if (descriptor.startsWith(QStringLiteral("dock:")))
 			parent = tools;
+		else if (descriptor.startsWith(QStringLiteral("status:")))
+			parent = status;
 
 		auto *row = new QTreeWidgetItem(parent, {ToolbarBuild::labelForItem(item)});
 		row->setIcon(0, ToolbarBuild::iconForItem(item));
@@ -296,7 +332,7 @@ void ToolbarEditPanel::populatePalette()
 	}
 
 	// An empty group reads as a fault rather than as "nothing here".
-	for (QTreeWidgetItem *group : {buttons, tools, layout}) {
+	for (QTreeWidgetItem *group : {buttons, tools, status, layout}) {
 		group->setHidden(group->childCount() == 0);
 		group->setExpanded(true);
 	}
@@ -344,6 +380,24 @@ void ToolbarEditPanel::onSelectionChanged(const QString &itemId)
 	if (spacer) {
 		QSignalBlocker blocker(sizeSpin_);
 		sizeSpin_->setValue(spacer->size);
+	}
+
+	auto status = std::dynamic_pointer_cast<ToolbarConfig::StatusItem>(item);
+	showLabelCheck_->setVisible(status != nullptr);
+	if (status) {
+		QSignalBlocker blocker(showLabelCheck_);
+		showLabelCheck_->setChecked(status->showLabel);
+	}
+
+	// Hours only mean anything on a duration. A CPU readout offering it would
+	// be a setting that does nothing.
+	ToolbarStatus::Kind kind = ToolbarStatus::Kind::Cpu;
+	const bool isDuration = status && ToolbarStatus::kindFromKey(status->kind, kind) &&
+				ToolbarStatus::kindIsDuration(kind);
+	showHoursCheck_->setVisible(isDuration);
+	if (isDuration) {
+		QSignalBlocker blocker(showHoursCheck_);
+		showHoursCheck_->setChecked(status->showHours);
 	}
 }
 

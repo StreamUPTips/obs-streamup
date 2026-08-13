@@ -7,6 +7,7 @@
 #include "settings-manager.hpp"
 #include "streamup-toolbar-builder.hpp"
 #include "streamup-toolbar-response-popover.hpp"
+#include "streamup-toolbar-status.hpp"
 #include "theme-enhancements.hpp"
 #include "obs-hotkey-manager.hpp"
 #include "../obs-websocket-api.h"
@@ -1229,8 +1230,25 @@ void StreamUPToolbar::setupDynamicUI()
 	buildOpts.alignment = currentAlignment();
 	buildOpts.spacing = StreamUP::UIStyles::S(1);
 
-	auto makeWidgets = [this](const std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem>& item) -> QList<QWidget*> {
+	auto makeWidgets = [this, buildVertical](const std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem>& item) -> QList<QWidget*> {
 		QList<QWidget*> widgets;
+
+		// A status readout is text, not a button, so it never goes near
+		// createButtonFromConfig. The compact form is decided here, where the
+		// orientation we are building into is already known.
+		if (item->type == StreamUP::ToolbarConfig::ItemType::StatusItem) {
+			auto statusItem = std::static_pointer_cast<StreamUP::ToolbarConfig::StatusItem>(item);
+			StreamUP::ToolbarStatus::Kind kind;
+			if (!StreamUP::ToolbarStatus::kindFromKey(statusItem->kind, kind))
+				return widgets;
+
+			auto* readout = new StreamUP::ToolbarStatus::StatusWidget(
+				kind, buildVertical, statusItem->showLabel, statusItem->showHours, centralWidget);
+			readout->setObjectName(item->id);
+			widgets.append(readout);
+			return widgets;
+		}
+
 		QToolButton* button = createButtonFromConfig(item);
 		if (!button)
 			return widgets;
