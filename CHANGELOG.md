@@ -2,8 +2,8 @@
 
 ---
 
-## v2.3.0 (11 Aug '26)
-**Patch Focus:** Backup and restore, vertical canvas Scene Organiser, plugin check improvements
+## v2.3.0 (13 Aug '26)
+**Patch Focus:** Backup and restore, the status bar on your toolbar, vertical canvas Scene Organiser, plugin check improvements
 
 ### New Features
 - Spacers that fill the space that is left. Tick Fill available space on a spacer and instead of a set width it takes whatever the bar has spare, so your buttons can sit on the left and your stats on the right, and a second one gives you a group in the middle too. The toolbar alignment setting moves the whole bar at once and cannot say that, so a flexible spacer takes over from it wherever you use one. It is also the first thing to give room back when the bar runs short, which means the spacers you sized by hand keep the sizes you gave them

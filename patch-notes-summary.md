@@ -1,4 +1,4 @@
-# StreamUP v2.3.0 - Next Update (Unreleased)
+# StreamUP v2.3.0 - Feature Update
 
 ## New Features
 - **Spacers That Fill What Is Left** - Tick Fill available space on a spacer and it stops being a set width and starts taking whatever the bar has spare. That is how you get your buttons on the left and your stats hard against the right, and drop in a second one and you have a group in the middle as well. The toolbar alignment setting shifts the whole bar in one go and was never able to say that, so a flexible spacer quietly takes over from it wherever you use one. It is also the first thing to hand room back when the bar gets tight, so every spacer you sized by hand keeps the size you gave it.
