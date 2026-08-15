@@ -1,3 +1,10 @@
+# StreamUP v2.3.2 - Patch Update
+
+## Bug Fixes
+- **Switching Scene Collections Could Take OBS Down** - Change to another scene collection and OBS would complain that not all sources could be cleared, then hang or close on you. StreamUP watches the scene you are working in so it can tell Streamer.bot and your Stream Deck what you have selected, and it was still holding on to that scene while OBS was trying to pack the old collection away. It lets go before the switch starts now, and picks the new scene up once the new collection has loaded. Same on the way out, so closing OBS is clean too.
+
+---
+
 # StreamUP v2.3.1 - Patch Update
 
 ## Bug Fixes
