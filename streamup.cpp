@@ -364,6 +364,11 @@ obs_websocket_vendor vendor = nullptr;
 // the only source state with no built-in OBS event (lock/visibility already have
 // SceneItemLockStateChanged / SceneItemEnableStateChanged).
 static obs_source_t *g_streamup_sel_scene = nullptr; // hooked scene (owns a +1 ref)
+// True between SCENE_COLLECTION_CHANGING and SCENE_COLLECTION_CHANGED. The hook
+// owns a real reference to the live scene, so it has to let go before OBS clears
+// the collection, or OBS finds the scene still referenced, logs "Not all sources
+// were cleared when clearing scene data" and can take the whole app down with it.
+static bool g_streamup_sel_collection_changing = false;
 
 static void StreamUpEmitSelectionChanged()
 {
@@ -410,18 +415,30 @@ static void StreamUpOnItemState(void *, calldata_t *)
 	StreamUpEmitSourceStateChanged();
 }
 
+static void StreamUpUnhookSelectionScene()
+{
+	if (!g_streamup_sel_scene)
+		return;
+
+	signal_handler_t *osh = obs_source_get_signal_handler(g_streamup_sel_scene);
+	signal_handler_disconnect(osh, "item_select", StreamUpOnItemSelect, nullptr);
+	signal_handler_disconnect(osh, "item_deselect", StreamUpOnItemSelect, nullptr);
+	signal_handler_disconnect(osh, "item_locked", StreamUpOnItemState, nullptr);
+	signal_handler_disconnect(osh, "item_visible", StreamUpOnItemState, nullptr);
+	obs_source_release(g_streamup_sel_scene);
+	g_streamup_sel_scene = nullptr;
+}
+
 static void StreamUpHookSelectionScene()
 {
 	// Unhook the previously-hooked scene, if any.
-	if (g_streamup_sel_scene) {
-		signal_handler_t *osh = obs_source_get_signal_handler(g_streamup_sel_scene);
-		signal_handler_disconnect(osh, "item_select", StreamUpOnItemSelect, nullptr);
-		signal_handler_disconnect(osh, "item_deselect", StreamUpOnItemSelect, nullptr);
-		signal_handler_disconnect(osh, "item_locked", StreamUpOnItemState, nullptr);
-		signal_handler_disconnect(osh, "item_visible", StreamUpOnItemState, nullptr);
-		obs_source_release(g_streamup_sel_scene);
-		g_streamup_sel_scene = nullptr;
-	}
+	StreamUpUnhookSelectionScene();
+
+	// Never hook while the collection is being torn down or swapped in: the
+	// "current scene" at that point belongs to a collection on its way out.
+	if (g_streamup_sel_collection_changing)
+		return;
+
 	// Hook the current scene (obs_frontend_get_current_scene returns a new ref we keep).
 	obs_source_t *scene = obs_frontend_get_current_scene();
 	if (scene) {
@@ -437,8 +454,28 @@ static void StreamUpHookSelectionScene()
 static void StreamUpSelectionFrontendEvent(enum obs_frontend_event event, void *)
 {
 	switch (event) {
+	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING:
+		// Drop the reference before OBS clears the old collection's scenes.
+		g_streamup_sel_collection_changing = true;
+		StreamUpUnhookSelectionScene();
+		break;
+	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
+		g_streamup_sel_collection_changing = false;
+		StreamUpHookSelectionScene();
+		StreamUpEmitSelectionChanged();
+		StreamUpEmitSourceStateChanged();
+		break;
+	case OBS_FRONTEND_EVENT_EXIT:
+		// Same again for shutdown: OBS clears scene data on the way out.
+		g_streamup_sel_collection_changing = true;
+		StreamUpUnhookSelectionScene();
+		break;
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING: // initial hook once OBS is up
 	case OBS_FRONTEND_EVENT_SCENE_CHANGED:     // re-hook + report on scene switch
+		// SCENE_CHANGED fires while a collection is loading, pointing at scenes
+		// that are still being built. Ignore those; CHANGED does the re-hook.
+		if (g_streamup_sel_collection_changing)
+			break;
 		StreamUpHookSelectionScene();
 		StreamUpEmitSelectionChanged();
 		StreamUpEmitSourceStateChanged();
@@ -451,15 +488,7 @@ static void StreamUpSelectionFrontendEvent(enum obs_frontend_event event, void *
 static void StreamUpSelectionCleanup()
 {
 	obs_frontend_remove_event_callback(StreamUpSelectionFrontendEvent, nullptr);
-	if (g_streamup_sel_scene) {
-		signal_handler_t *osh = obs_source_get_signal_handler(g_streamup_sel_scene);
-		signal_handler_disconnect(osh, "item_select", StreamUpOnItemSelect, nullptr);
-		signal_handler_disconnect(osh, "item_deselect", StreamUpOnItemSelect, nullptr);
-		signal_handler_disconnect(osh, "item_locked", StreamUpOnItemState, nullptr);
-		signal_handler_disconnect(osh, "item_visible", StreamUpOnItemState, nullptr);
-		obs_source_release(g_streamup_sel_scene);
-		g_streamup_sel_scene = nullptr;
-	}
+	StreamUpUnhookSelectionScene();
 }
 
 void SettingsDialog()
