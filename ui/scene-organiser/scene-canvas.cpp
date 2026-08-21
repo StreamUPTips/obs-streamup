@@ -83,6 +83,22 @@ obs_canvas_t *Acquire(CanvasType type)
 	return obs_get_main_canvas();
 }
 
+bool GetDimensions(CanvasType type, int &width, int &height)
+{
+	obs_canvas_t *canvas = Acquire(type);
+	if (!canvas)
+		return false;
+
+	struct obs_video_info ovi = {};
+	const bool ok = obs_canvas_get_video_info(canvas, &ovi);
+	if (ok) {
+		width = (int)ovi.base_width;
+		height = (int)ovi.base_height;
+	}
+	obs_canvas_release(canvas);
+	return ok;
+}
+
 bool VerticalAvailable()
 {
 	obs_canvas_t *canvas = AcquireVertical();

@@ -715,6 +715,14 @@ void SceneOrganiserDock::setupContextMenu()
         m_sceneContextMenu->addMenu(m_sceneTransitionMenu);
     }
 
+    // Linked scenes, the same as Aitum's own vertical scene list. Vertical dock
+    // only: a link says "when this main scene goes live, put that vertical scene
+    // on the vertical canvas", so it only means anything from the vertical side.
+    if (m_canvasType == CanvasType::Vertical) {
+        m_sceneLinkedScenesMenu = new QMenu(obs_module_text("SceneOrganiser.Action.LinkedScenes"), this);
+        m_sceneContextMenu->addMenu(m_sceneLinkedScenesMenu);
+    }
+
     // Additional OBS actions
     m_sceneContextMenu->addSeparator();
     m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Screenshot.Scene"), -1), this, &SceneOrganiserDock::onScreenshotSceneClicked);
@@ -1458,6 +1466,9 @@ void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelInd
 
     // Transition override follows whichever scene was right clicked
     populateTransitionOverrideMenu(source);
+
+    // Linked scenes follows the same rule
+    populateLinkedScenesMenu(source);
 
     // Enable/disable "Paste Filters" based on whether we have copied filters
     QList<QAction*> actions = m_sceneContextMenu->actions();
@@ -3641,6 +3652,116 @@ void SceneOrganiserDock::populateTransitionOverrideMenu(obs_source_t *sceneSourc
     durationAction->setDefaultWidget(duration);
     m_sceneTransitionMenu->addSeparator();
     m_sceneTransitionMenu->addAction(durationAction);
+}
+
+void SceneOrganiserDock::populateLinkedScenesMenu(obs_source_t *sceneSource)
+{
+    if (!m_sceneLinkedScenesMenu) {
+        return;
+    }
+
+    // Rebuilt from scratch each time. Main scenes come and go while the dock is
+    // open, and the ticks have to follow whichever vertical scene was clicked.
+    m_sceneLinkedScenesMenu->clear();
+
+    int canvasWidth = 0, canvasHeight = 0;
+    if (!sceneSource || !Canvas::GetDimensions(m_canvasType, canvasWidth, canvasHeight)) {
+        m_sceneLinkedScenesMenu->setEnabled(false);
+        return;
+    }
+    m_sceneLinkedScenesMenu->setEnabled(true);
+
+    const QString verticalSceneName = QString::fromUtf8(obs_source_get_name(sceneSource));
+
+    // The link lives on the MAIN scene, not the vertical one: a "canvas" array
+    // on its settings, one entry per canvas, keyed by the canvas dimensions.
+    // Aitum reads exactly this when the main scene changes, so a link written
+    // here works in its dock too, and one written there is ticked in here. The
+    // dimensions are the key it uses, hence GetDimensions rather than a name.
+    auto setLink = [canvasWidth, canvasHeight](obs_source_t *mainScene, const QString &verticalScene) {
+        obs_data_t *settings = obs_source_get_settings(mainScene);
+        obs_data_array_t *canvases = obs_data_get_array(settings, "canvas");
+
+        obs_data_t *found = nullptr;
+        const size_t count = canvases ? obs_data_array_count(canvases) : 0;
+        for (size_t i = 0; i < count; i++) {
+            obs_data_t *item = obs_data_array_item(canvases, i);
+            if (!item) continue;
+            if (obs_data_get_int(item, "width") == canvasWidth &&
+                obs_data_get_int(item, "height") == canvasHeight) {
+                found = item;
+                // Clearing a link means dropping the entry entirely: an empty
+                // scene name left behind would send Aitum looking for a scene
+                // called "" every time that main scene goes live.
+                if (verticalScene.isEmpty()) {
+                    obs_data_array_erase(canvases, i);
+                }
+                break;
+            }
+            obs_data_release(item);
+        }
+
+        if (!verticalScene.isEmpty()) {
+            if (!canvases) {
+                canvases = obs_data_array_create();
+                obs_data_set_array(settings, "canvas", canvases);
+            }
+            if (!found) {
+                found = obs_data_create();
+                obs_data_set_int(found, "width", canvasWidth);
+                obs_data_set_int(found, "height", canvasHeight);
+                obs_data_array_push_back(canvases, found);
+            }
+            obs_data_set_string(found, "scene", verticalScene.toUtf8().constData());
+        }
+
+        obs_data_release(found);
+        obs_data_array_release(canvases);
+        obs_data_release(settings);
+    };
+
+    struct obs_frontend_source_list mainScenes = {};
+    obs_frontend_get_scenes(&mainScenes);
+    for (size_t i = 0; i < mainScenes.sources.num; i++) {
+        obs_source_t *mainScene = mainScenes.sources.array[i];
+        const char *name = obs_source_get_name(mainScene);
+        if (!name) continue;
+
+        const QString mainSceneName = QString::fromUtf8(name);
+
+        bool linkedToThis = false;
+        obs_data_t *settings = obs_source_get_settings(mainScene);
+        if (obs_data_array_t *canvases = obs_data_get_array(settings, "canvas")) {
+            const size_t count = obs_data_array_count(canvases);
+            for (size_t j = 0; j < count; j++) {
+                obs_data_t *item = obs_data_array_item(canvases, j);
+                if (!item) continue;
+                if (obs_data_get_int(item, "width") == canvasWidth &&
+                    obs_data_get_int(item, "height") == canvasHeight) {
+                    linkedToThis = QString::fromUtf8(obs_data_get_string(item, "scene")) == verticalSceneName;
+                }
+                obs_data_release(item);
+            }
+            obs_data_array_release(canvases);
+        }
+        obs_data_release(settings);
+
+        QAction *action = m_sceneLinkedScenesMenu->addAction(mainSceneName);
+        action->setCheckable(true);
+        action->setChecked(linkedToThis);
+
+        // The main scene is looked up again when the action fires rather than
+        // captured here: the menu outlives this call, and a scene can be renamed
+        // or removed in between, so holding a source pointer would be stale.
+        connect(action, &QAction::triggered, this,
+                [setLink, mainSceneName, verticalSceneName](bool checked) {
+            obs_source_t *scene = obs_get_source_by_name(mainSceneName.toUtf8().constData());
+            if (!scene) return;
+            setLink(scene, checked ? verticalSceneName : QString());
+            obs_source_release(scene);
+        });
+    }
+    obs_frontend_source_list_free(&mainScenes);
 }
 
 void SceneOrganiserDock::populateProjectorMenu()

@@ -156,6 +156,9 @@ private:
     // Rebuilt every time the menu opens: the transition list and the scene's
     // stored override can both change between one right click and the next.
     void populateTransitionOverrideMenu(obs_source_t *sceneSource);
+    // Vertical dock only. Rebuilt every time the menu opens: the main scene
+    // list and the links stored on it can both change between right clicks.
+    void populateLinkedScenesMenu(obs_source_t *sceneSource);
 
 public:
     // Color helper methods (public for CustomColorDelegate access)
@@ -229,6 +232,7 @@ public:
     QMenu *m_sceneOrderMenu;
     QMenu *m_sceneProjectorMenu;
     QMenu *m_sceneTransitionMenu = nullptr;
+    QMenu *m_sceneLinkedScenesMenu = nullptr;
 
     // "Set Colour" submenu, shared by the folder and scene context menus (both
     // act on m_currentContextItem, so one instance serves both).

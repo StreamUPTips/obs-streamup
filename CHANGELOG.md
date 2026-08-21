@@ -2,6 +2,18 @@
 
 ---
 
+## v2.3.3 (unreleased)
+**Patch Focus:** Plugin check nagging, vertical scene links
+
+### New Features
+- Linked Scenes in the Vertical Scene Organiser right click menu, the same as Aitum's own vertical scene list. Tick the main scenes that should bring this vertical scene up with them, and when one of them goes live the vertical canvas follows. The link is stored on the main scene where Aitum stores it, so one set here is ticked in their dock and the other way round
+
+### Bug Fixes
+- The toolbar edit panel opened half off screen in the bottom left corner. It was anchored to the leading edge of the bar, and a bar docked along the bottom of the window is the full width of it, so "below the bottom edge, from the left edge" was off screen on both axes and got clamped into the corner. It now centres on the bar and opens on whichever side has room, and falls back to the middle of the OBS window when neither side does
+- A plugin you switched off yourself no longer nags you on every start. The startup check treated a required plugin being off as something that always had to be shouted about, so it skipped the "don't remind me" logic entirely, and the tickbox was only ever drawn for updates and load failures, so there was nothing to tick. The dialog now offers "I switched these off on purpose, stop reminding me" when that is all it is reporting, and honours it. Turning the plugin back on clears it, so if you switch it off again later it will say so once more, and a manual plugin check, or installing a product, still reports it every time. Installing against a switched-off plugin is what breaks the product, so that check never goes quiet
+
+---
+
 ## v2.3.2 (15 Aug '26)
 **Patch Focus:** Scene collection crash fix
 
