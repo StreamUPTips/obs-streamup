@@ -2,6 +2,7 @@
 
 #include <obs-data.h>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -353,6 +354,28 @@ void ClearSkippedUpdates();
  * @return bool True if current updates exactly match skipped updates
  */
 bool AreUpdatesSkipped(const std::map<std::string, std::string>& currentOutdated, const std::vector<std::string>& currentFailed);
+
+/**
+ * @brief Remember that the user switched these plugins off on purpose, so the
+ * startup check stops reminding them about it.
+ * @param pluginNames Plugin names to add to the ignore list (merged with any
+ * already stored, never replacing them)
+ */
+void AddIgnoredDisabledPlugins(const std::set<std::string>& pluginNames);
+
+/**
+ * @brief Get the plugins the user has marked as deliberately switched off.
+ * @return std::set<std::string> Plugin names
+ */
+std::set<std::string> GetIgnoredDisabledPlugins();
+
+/**
+ * @brief Drop anything from the ignore list that isn't switched off any more,
+ * so a plugin that gets turned back on and later switched off again reminds
+ * the user afresh.
+ * @param stillDisabled Plugin names currently reported as switched off
+ */
+void PruneIgnoredDisabledPlugins(const std::set<std::string>& stillDisabled);
 
 /**
  * @brief Get the most recently persisted snapshot of which hard-toggle modules

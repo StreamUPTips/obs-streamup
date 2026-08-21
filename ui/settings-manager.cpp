@@ -60,6 +60,7 @@
 #include <mutex>
 #include <algorithm>
 #include <functional>
+#include <set>
 #include <vector>
 #include <util/platform.h>
 
@@ -3749,6 +3750,103 @@ bool AreUpdatesSkipped(const std::map<std::string, std::string>& currentOutdated
 	std::sort(sortedSkipped.begin(), sortedSkipped.end());
 
 	return sortedCurrent == sortedSkipped;
+}
+
+// Plugins the user has told us they switched off on purpose. Kept separate from
+// skipped_updates: an update gets skipped for one specific version and comes
+// back when a newer one lands, while "I turned this off myself" holds until the
+// plugin is turned back on.
+std::set<std::string> GetIgnoredDisabledPlugins()
+{
+	std::set<std::string> ignored;
+
+	obs_data_t* settings = LoadSettings();
+	if (!settings) {
+		return ignored;
+	}
+
+	obs_data_array_t* ignoredArray = obs_data_get_array(settings, "ignored_disabled_plugins");
+	if (ignoredArray) {
+		size_t count = obs_data_array_count(ignoredArray);
+		for (size_t i = 0; i < count; i++) {
+			obs_data_t* pluginData = obs_data_array_item(ignoredArray, i);
+			const char* name = obs_data_get_string(pluginData, "name");
+			if (name && *name) {
+				ignored.insert(name);
+			}
+			obs_data_release(pluginData);
+		}
+		obs_data_array_release(ignoredArray);
+	}
+
+	obs_data_release(settings);
+	return ignored;
+}
+
+// Write the set back out. Callers hold the merged/pruned result already, so
+// this is a plain overwrite.
+static void WriteIgnoredDisabledPlugins(const std::set<std::string>& pluginNames)
+{
+	obs_data_t* settings = LoadSettings();
+	if (!settings) {
+		return;
+	}
+
+	if (pluginNames.empty()) {
+		obs_data_erase(settings, "ignored_disabled_plugins");
+	} else {
+		obs_data_array_t* ignoredArray = obs_data_array_create();
+		for (const auto& name : pluginNames) {
+			obs_data_t* pluginData = obs_data_create();
+			obs_data_set_string(pluginData, "name", name.c_str());
+			obs_data_array_push_back(ignoredArray, pluginData);
+			obs_data_release(pluginData);
+		}
+		obs_data_set_array(settings, "ignored_disabled_plugins", ignoredArray);
+		obs_data_array_release(ignoredArray);
+	}
+
+	SaveSettings(settings);
+	obs_data_release(settings);
+}
+
+void AddIgnoredDisabledPlugins(const std::set<std::string>& pluginNames)
+{
+	if (pluginNames.empty()) {
+		return;
+	}
+
+	std::set<std::string> ignored = GetIgnoredDisabledPlugins();
+	const size_t before = ignored.size();
+	ignored.insert(pluginNames.begin(), pluginNames.end());
+
+	// Nothing new, so don't rewrite the settings file.
+	if (ignored.size() == before) {
+		return;
+	}
+
+	WriteIgnoredDisabledPlugins(ignored);
+}
+
+void PruneIgnoredDisabledPlugins(const std::set<std::string>& stillDisabled)
+{
+	std::set<std::string> ignored = GetIgnoredDisabledPlugins();
+	if (ignored.empty()) {
+		return;
+	}
+
+	std::set<std::string> kept;
+	for (const auto& name : ignored) {
+		if (stillDisabled.find(name) != stillDisabled.end()) {
+			kept.insert(name);
+		}
+	}
+
+	if (kept.size() == ignored.size()) {
+		return;
+	}
+
+	WriteIgnoredDisabledPlugins(kept);
 }
 
 AppliedModuleSnapshot GetAppliedModuleSnapshot()
