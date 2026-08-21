@@ -6,6 +6,7 @@
 **Patch Focus:** Plugin check nagging, vertical scene links
 
 ### New Features
+- The virtual camera button changes its icon when the camera is running, the way the record and stream buttons do. It goes green while it is on, so a glance at the bar tells you, rather than having to spot the dot on the taskbar
 - Linked Scenes in the Vertical Scene Organiser right click menu, the same as Aitum's own vertical scene list. Tick the main scenes that should bring this vertical scene up with them, and when one of them goes live the vertical canvas follows. The link is stored on the main scene where Aitum stores it, so one set here is ticked in their dock and the other way round
 
 ### Bug Fixes

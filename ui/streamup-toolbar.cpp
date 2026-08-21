@@ -449,6 +449,9 @@ void StreamUPToolbar::updateVirtualCameraButton()
 	if (virtualCameraButton) {
 		bool active = obs_frontend_virtualcam_active();
 		virtualCameraButton->setChecked(active);
+		// Same tell as the record and stream buttons: the glyph itself changes,
+		// not just the checked styling, so a glance says whether it is running.
+		virtualCameraButton->setIcon(getCachedIcon(active ? "virtual-camera-on" : "virtual-camera"));
 		virtualCameraButton->setToolTip(active ? obs_module_text("Toolbar.Tooltip.StopVirtualCamera")
 					  : obs_module_text("Toolbar.Tooltip.StartVirtualCamera"));
 	}
@@ -709,7 +712,7 @@ void StreamUPToolbar::updateButtonStatesEfficiently()
 
 	if (virtualCameraButton) {
 		virtualCameraButton->setChecked(vcamActive);
-		virtualCameraButton->setIcon(getCachedIcon("virtual-camera"));
+		virtualCameraButton->setIcon(getCachedIcon(vcamActive ? "virtual-camera-on" : "virtual-camera"));
 		virtualCameraButton->setToolTip(vcamActive ? obs_module_text("Toolbar.Tooltip.StopVirtualCamera")
 					       : obs_module_text("Toolbar.Tooltip.StartVirtualCamera"));
 	}
@@ -760,7 +763,8 @@ void StreamUPToolbar::updateIconsForTheme()
 	}
 
 	if (virtualCameraButton) {
-		virtualCameraButton->setIcon(getCachedIcon("virtual-camera"));
+		const bool vcamActive = obs_frontend_virtualcam_active();
+		virtualCameraButton->setIcon(getCachedIcon(vcamActive ? "virtual-camera-on" : "virtual-camera"));
 	}
 
 	if (virtualCameraConfigButton) {
