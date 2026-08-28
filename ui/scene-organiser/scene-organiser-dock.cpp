@@ -6006,7 +6006,13 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
 
     const int step = indentation();
 
-    if (StreamUP::SettingsManager::GetCurrentSettings().sceneOrganiserShowIndentGuides && depth > 0) {
+    // A folder sitting inside another folder gets no guide drawn on its own row,
+    // so the line breaks at each folder rather than running past it. The rows
+    // inside it still get theirs, which is what makes a nested folder read as a
+    // new heading rather than as another item in the list above it.
+    const bool nestedFolderRow = (depth > 0) && index.data(TabItemIsFolderRole).toBool();
+
+    if (StreamUP::SettingsManager::GetCurrentSettings().sceneOrganiserShowIndentGuides && depth > 0 && !nestedFolderRow) {
         // Derived from the theme's own text colour at low alpha rather than a
         // fixed grey, so the guides sit a consistent distance from the
         // background on a light theme and a dark one alike.
@@ -6075,7 +6081,14 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
         // Sized off the row so it keeps its proportions as the row height
         // setting changes, and kept small enough not to crowd the icon.
         const int size = qBound(5, cell.height() / 4, 9);
-        const QPoint centre = cell.center();
+
+        // Centred on the guide line that runs past this row, not on the middle
+        // of the indent step. The guide sits under the parent folder's ICON, so
+        // a chevron centred on the step lands a couple of pixels off it and the
+        // line appears to clip the arrow rather than meet it. A top level folder
+        // has no line to meet, so it keeps the middle of its step.
+        const int guideX = rect.left() + (depth * step) + (iconSize().width() / 2);
+        const QPoint centre = (depth > 0) ? QPoint(guideX, cell.center().y()) : cell.center();
 
         // Follows the theme through the palette, so it stays legible on a light
         // theme and a dark one without either being special-cased.
@@ -7877,6 +7890,10 @@ void SceneFolderItem::setupFolderItem()
     updateIcon();
     setDropEnabled(true);
     setDragEnabled(true);
+
+    // The same marker the tab trees put on their folders, so the guide painting
+    // can ask one question of either tree rather than knowing about item types.
+    setData(true, TabItemIsFolderRole);
 }
 
 void SceneFolderItem::updateIcon()
