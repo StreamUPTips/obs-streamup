@@ -166,6 +166,9 @@ struct PluginSettings {
     bool showToolbar;
     bool debugLoggingEnabled;
     bool sceneOrganiserShowIcons;
+    bool sceneOrganiserShowIndentGuides;
+    bool sceneOrganiserShowFavouritesTab;
+    bool sceneOrganiserShowRecentTab;
     bool sceneOrganiserGroupFolders;
     bool sceneOrganiserRememberFolderState;
     bool sceneOrganiserDisablePreviewSwitchingInStudioMode; // Disable preview switching (single-click) when in studio mode
@@ -190,7 +193,7 @@ struct PluginSettings {
     bool moduleSetupComplete;       // Legacy wizard sentinel (kept for compat)
     std::string wizardVersionShown; // PROJECT_VERSION when the wizard last ran. Drives the upgrader prompt.
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), toolbarAlignment(ToolbarAlignment::Start), backupAutomatic(true), backupKeepCount(10), backupLocation(), backupLastAutoDate(), moduleSetupComplete(false), wizardVersionShown() {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserShowIndentGuides(true), sceneOrganiserShowFavouritesTab(true), sceneOrganiserShowRecentTab(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), toolbarAlignment(ToolbarAlignment::Start), backupAutomatic(true), backupKeepCount(10), backupLocation(), backupLastAutoDate(), moduleSetupComplete(false), wizardVersionShown() {}
 };
 
 /**

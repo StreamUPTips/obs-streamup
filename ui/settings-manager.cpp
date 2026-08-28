@@ -494,6 +494,12 @@ PluginSettings GetCurrentSettings()
 		settings.showToolbar = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "show_toolbar", true);
 		settings.debugLoggingEnabled = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "debug_logging_enabled", false);
 		settings.sceneOrganiserShowIcons = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_icons", true);
+		settings.sceneOrganiserShowIndentGuides = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_indent_guides", true);
+		// The pair replaced a single show-both switch; that key is the default for
+		// both halves so an existing config carries over rather than resetting.
+		const bool legacyShowTabs = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_quick_tabs", true);
+		settings.sceneOrganiserShowFavouritesTab = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_favourites_tab", legacyShowTabs);
+		settings.sceneOrganiserShowRecentTab = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_recent_tab", legacyShowTabs);
 	settings.sceneOrganiserGroupFolders = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_group_folders", true);
 	settings.sceneOrganiserRememberFolderState = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_remember_folder_state", true);
 	// Load new split studio mode settings, with migration from old combined setting
@@ -656,6 +662,9 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "show_toolbar", settings.showToolbar);
 	obs_data_set_bool(data, "debug_logging_enabled", settings.debugLoggingEnabled);
 	obs_data_set_bool(data, "scene_organiser_show_icons", settings.sceneOrganiserShowIcons);
+	obs_data_set_bool(data, "scene_organiser_show_indent_guides", settings.sceneOrganiserShowIndentGuides);
+	obs_data_set_bool(data, "scene_organiser_show_favourites_tab", settings.sceneOrganiserShowFavouritesTab);
+	obs_data_set_bool(data, "scene_organiser_show_recent_tab", settings.sceneOrganiserShowRecentTab);
 	obs_data_set_bool(data, "scene_organiser_group_folders", settings.sceneOrganiserGroupFolders);
 	obs_data_set_bool(data, "scene_organiser_remember_folder_state", settings.sceneOrganiserRememberFolderState);
 	obs_data_set_bool(data, "scene_organiser_disable_preview_switching_in_studio_mode", settings.sceneOrganiserDisablePreviewSwitchingInStudioMode);
@@ -1433,6 +1442,51 @@ void ShowSettingsDialog(int tabIndex)
 		showIconsLayout->addStretch();
 		showIconsLayout->addWidget(showIconsSwitch);
 		sceneOrganiserLayout->addLayout(showIconsLayout);
+
+		// Favourites tab and Recent tab, switched independently
+		auto addTabSwitch = [&](const char *labelKey, const char *descKey, bool initial,
+					void (*apply)(bool)) {
+			QHBoxLayout *row = new QHBoxLayout();
+
+			QLabel *label = new QLabel(obs_module_text(labelKey));
+			label->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+					.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+					.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
+			label->setToolTip(obs_module_text(descKey));
+
+			StreamUP::UIStyles::SwitchButton *toggle = StreamUP::UIStyles::CreateStyledSwitch("", initial);
+			toggle->setToolTip(obs_module_text(descKey));
+			QObject::connect(toggle, &StreamUP::UIStyles::SwitchButton::toggled, apply);
+
+			row->addWidget(label);
+			row->addStretch();
+			row->addWidget(toggle);
+			sceneOrganiserLayout->addLayout(row);
+		};
+
+		addTabSwitch("SceneOrganiser.Settings.ShowFavouritesTab", "SceneOrganiser.Settings.ShowFavouritesTabDesc",
+			     currentSettings.sceneOrganiserShowFavouritesTab, [](bool checked) {
+				PluginSettings settings = GetCurrentSettings();
+				settings.sceneOrganiserShowFavouritesTab = checked;
+				UpdateSettings(settings);
+				StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+			     });
+
+		addTabSwitch("SceneOrganiser.Settings.ShowRecentTab", "SceneOrganiser.Settings.ShowRecentTabDesc",
+			     currentSettings.sceneOrganiserShowRecentTab, [](bool checked) {
+				PluginSettings settings = GetCurrentSettings();
+				settings.sceneOrganiserShowRecentTab = checked;
+				UpdateSettings(settings);
+				StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+			     });
+
+		addTabSwitch("SceneOrganiser.Settings.ShowIndentGuides", "SceneOrganiser.Settings.ShowIndentGuidesDesc",
+			     currentSettings.sceneOrganiserShowIndentGuides, [](bool checked) {
+				PluginSettings settings = GetCurrentSettings();
+				settings.sceneOrganiserShowIndentGuides = checked;
+				UpdateSettings(settings);
+				StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+			     });
 
 		// Remember Folder State setting
 		QHBoxLayout *rememberFolderStateLayout = new QHBoxLayout();

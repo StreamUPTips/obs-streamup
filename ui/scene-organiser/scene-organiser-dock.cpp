@@ -30,6 +30,8 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QIcon>
+#include <QFileInfo>
+#include <QFileDialog>
 #include <QColor>
 #include <QStyle>
 #include <QFile>
@@ -86,6 +88,14 @@ static const QList<QColor> &PresetColors()
 // colour, UserRole+100 is the creation timestamp, so +2 is free.
 static constexpr int ProgramSceneRole = Qt::UserRole + 2;
 
+// The item's custom icon spec (see ResolveIconSpec). +3 is the next role free
+// after the colour, the program marker and before the timestamp at +100.
+static constexpr int CustomIconRole = Qt::UserRole + 3;
+
+// Marks a row in a TAB's tree as a folder rather than a scene reference. Only
+// the tab trees use it; the Scenes tree distinguishes them by item type.
+static constexpr int TabItemIsFolderRole = Qt::UserRole + 10;
+
 // Optimized theme icon cache
 static QHash<QString, QIcon> s_themeIconCache;
 static QWidget* s_cachedMainWindow = nullptr;
@@ -118,8 +128,77 @@ static QIcon GetThemeIcon(const QString& propertyName)
         }
     }
 
-    // Cache the result (even if empty)
-    s_themeIconCache.insert(propertyName, icon);
+    // Only a real icon is cached. An empty result means we asked before OBS had
+    // published its theme properties - caching that would freeze the blank in
+    // place for the rest of the session, which is exactly what happened when the
+    // Set Icon menu was built during dock construction and swept all sixteen
+    // properties before any of them existed.
+    if (!icon.isNull()) {
+        s_themeIconCache.insert(propertyName, icon);
+    }
+    return icon;
+}
+
+// Every icon OBS exposes on its main window as a theme property. These follow
+// the active theme, so an item using one keeps matching when the theme changes -
+// which a baked-in image cannot do.
+struct ObsThemeIcon {
+    const char *property;
+    const char *label;
+};
+
+static const ObsThemeIcon kObsThemeIcons[] = {
+    {"sceneIcon",              "Scene"},
+    {"groupIcon",              "Group"},
+    {"imageIcon",              "Image"},
+    {"colorIcon",              "Colour"},
+    {"slideshowIcon",          "Slideshow"},
+    {"audioInputIcon",         "Audio Input"},
+    {"audioOutputIcon",        "Audio Output"},
+    {"audioProcessOutputIcon", "Application Audio"},
+    {"desktopCapIcon",         "Display Capture"},
+    {"windowCapIcon",          "Window Capture"},
+    {"gameCapIcon",            "Game Capture"},
+    {"cameraIcon",             "Camera"},
+    {"textIcon",               "Text"},
+    {"mediaIcon",              "Media"},
+    {"browserIcon",            "Browser"},
+    {"defaultIcon",            "Default"},
+};
+
+// Custom icons are stored as a small spec string rather than image data, so the
+// scene tree JSON stays readable and a themed icon stays themed:
+//   "obs:sceneIcon"     - an OBS theme icon, resolved fresh on every theme change
+//   "file:C:/pic.png"   - an image on disk
+// Anything else (or empty) means "use the default for this item type".
+static QHash<QString, QIcon> s_customIconCache;
+
+static QIcon ResolveIconSpec(const QString &spec)
+{
+    if (spec.isEmpty()) {
+        return QIcon();
+    }
+
+    auto cached = s_customIconCache.find(spec);
+    if (cached != s_customIconCache.end()) {
+        return cached.value();
+    }
+
+    QIcon icon;
+    if (spec.startsWith(QLatin1String("obs:"))) {
+        icon = GetThemeIcon(spec.mid(4));
+    } else if (spec.startsWith(QLatin1String("file:"))) {
+        const QString path = spec.mid(5);
+        if (QFileInfo::exists(path)) {
+            icon = QIcon(path);
+        }
+    }
+
+    // Same rule as GetThemeIcon: a miss is not cached, because it may only be a
+    // miss for now (theme not up yet, file not mounted yet).
+    if (!icon.isNull()) {
+        s_customIconCache.insert(spec, icon);
+    }
     return icon;
 }
 
@@ -177,6 +256,7 @@ static void OnThemeChanged()
     // Clear theme-dependent caches
     s_themeIconCache.clear();
     s_coloredIconCache.clear(); // Color icons may also be theme-dependent
+    s_customIconCache.clear();  // Holds resolved obs: icons, which are themed
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Theme", "Cleared caches for theme change");
 }
 
@@ -355,7 +435,15 @@ void SceneOrganiserDock::setupUI()
 
     // Configure tree view with minimal settings - match OBS scenes dock
     m_treeView->setHeaderHidden(true);
-    m_treeView->setSelectionMode(QAbstractItemView::SingleSelection);
+
+    // Stated rather than left to the default, so the tree and the flat tabs are
+    // known to agree: names elide, the view never scrolls sideways.
+    m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_treeView->setTextElideMode(Qt::ElideRight);
+    // Extended selection so a reorganise can move a run of scenes in one drag.
+    // Ctrl-click adds, Shift-click takes a range, and the drag payload carries
+    // whatever is selected - see SceneTreeModel::mimeData().
+    m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_treeView->setDragDropMode(QAbstractItemView::InternalMove);
@@ -363,6 +451,7 @@ void SceneOrganiserDock::setupUI()
     m_treeView->setDropIndicatorShown(true);
     m_treeView->setIndentation(20);
     m_treeView->setRootIsDecorated(true);
+
     m_treeView->setExpandsOnDoubleClick(false);
 
     // Apply initial item height setting. sceneOrganiserItemHeight is now an absolute
@@ -399,6 +488,18 @@ void SceneOrganiserDock::setupUI()
         updateExpandCollapseButtonState();
     });
 
+    // A folder rename finishes in the inline editor, long after the menu action
+    // returned, so the undo entry is pushed when the item's text actually
+    // changes rather than when editing was requested.
+    connect(m_model, &QStandardItemModel::itemChanged, this, [this](QStandardItem *item) {
+        if (m_renameLayoutBefore.isEmpty() || !item) {
+            return;
+        }
+        const QString before = m_renameLayoutBefore;
+        m_renameLayoutBefore.clear();
+        pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.RenameFolder")), before);
+    });
+
     connect(m_model, &SceneTreeModel::modelChanged,
             [this]() {
                 applySortingIfEnabled();
@@ -407,11 +508,42 @@ void SceneOrganiserDock::setupUI()
                 scheduleOptimizedUpdate();
             });
 
-    // Tree view takes up most of the space (like OBS scenes dock)
-    m_mainLayout->addWidget(m_treeView, 1);
+    // Tabs switch the whole dock between the organiser tree and the flat lists.
+    // The tree is still the default and is untouched by the other tabs. The bar
+    // itself is added further down, under the search field - see
+    // createBottomToolbar().
+    setupQuickTabs();
+    m_mainLayout->addWidget(m_viewStack, 1);
 
     // Create and add the toolbar at the bottom
     createBottomToolbar();
+}
+
+// Copies the height of OBS's Sources dock toolbar onto ours. Runs once the
+// widget tree is up, since a toolbar has no meaningful height before that.
+void SceneOrganiserDock::matchObsToolbarHeight()
+{
+    if (!m_toolbar) {
+        return;
+    }
+
+    QWidget *mainWindow = static_cast<QWidget *>(obs_frontend_get_main_window());
+    if (!mainWindow) {
+        return;
+    }
+
+    // sourcesToolbar is the object name OBS gives it in OBSBasic.ui.
+    QToolBar *reference = mainWindow->findChild<QToolBar *>("sourcesToolbar");
+    if (!reference) {
+        return;
+    }
+
+    const int height = reference->sizeHint().height();
+    if (height > 0) {
+        m_toolbar->setFixedHeight(height);
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Toolbar",
+            QString("Matched OBS sources toolbar height: %1px").arg(height).toUtf8().constData());
+    }
 }
 
 void SceneOrganiserDock::createBottomToolbar()
@@ -423,6 +555,12 @@ void SceneOrganiserDock::createBottomToolbar()
     // Add search bar above the toolbar
     if (m_searchWidget) {
         m_mainLayout->addWidget(m_searchWidget);
+    }
+
+    // Tabs sit under the search field, so the dock's controls are gathered at
+    // the bottom together rather than split across both ends.
+    if (m_quickTabs) {
+        m_mainLayout->addWidget(m_quickTabs, 0);
     }
 
     // Create a proper QToolBar like in the multidock
@@ -455,10 +593,20 @@ void SceneOrganiserDock::createBottomToolbar()
     addMenu->addAction(obs_module_text("SceneOrganiser.Action.AddFolder"), this, &SceneOrganiserDock::onAddFolderClicked);
     addMenu->addAction(obs_module_text("SceneOrganiser.Action.CreateScene"), this, &SceneOrganiserDock::onCreateSceneClicked);
 
+    // A tab gains scenes and folders of its own, not OBS scenes and tree folders,
+    // so the menu shown depends on which tab is open. Previously this always
+    // showed the Scenes menu, which is why the tabs appeared to have no add
+    // options at all.
+    QMenu *addTabMenu = new QMenu(this);
+    addTabMenu->setObjectName("SceneOrganiserAddTabMenu");
+    addTabMenu->addAction(obs_module_text("SceneOrganiser.Menu.AddScenes"), this, &SceneOrganiserDock::showAddToTabMenu);
+    addTabMenu->addAction(obs_module_text("SceneOrganiser.Action.AddFolder"), this, &SceneOrganiserDock::onAddTabFolderClicked);
+
     // Show menu on click without dropdown arrow
-    connect(addButton, &QToolButton::clicked, [this, addButton, addMenu]() {
+    connect(addButton, &QToolButton::clicked, [this, addButton, addMenu, addTabMenu]() {
+        QMenu *menu = (m_currentKind == QuickTabKind::Scenes) ? addMenu : addTabMenu;
         QPoint pos = addButton->mapToGlobal(QPoint(0, addButton->height()));
-        addMenu->exec(pos);
+        menu->exec(pos);
     });
 
     m_toolbar->addWidget(addButton);
@@ -579,6 +727,13 @@ void SceneOrganiserDock::createBottomToolbar()
     // Add toolbar to the bottom of the layout
     m_mainLayout->addWidget(m_toolbar, 0); // 0 means don't stretch
 
+    // Height is taken from OBS's own Sources toolbar rather than styled to a
+    // number. Our bar holds real widgets (icon checkboxes in a container, a
+    // spacer) where OBS's holds only actions, so the two never size alike from
+    // the same rules - every attempt to express this in the theme landed either
+    // side of it. Measuring the thing we are matching cannot land beside it.
+    QTimer::singleShot(0, this, [this]() { matchObsToolbarHeight(); });
+
     // Initialize toolbar button states
     updateToolbarState();
 }
@@ -614,6 +769,9 @@ void SceneOrganiserDock::setupContextMenu()
     // m_currentContextItem, which is set before either menu is exec'd.
     m_colorMenu = createColorSubmenu();
     m_folderContextMenu->addMenu(m_colorMenu);
+    // Same instance serves both menus, for the same reason the colour one does.
+    m_iconMenu = createIconSubmenu();
+    m_folderContextMenu->addMenu(m_iconMenu);
     m_folderContextMenu->addSeparator();
     m_folderToggleIconsAction = m_folderContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
     m_folderToggleIconsAction->setCheckable(true);
@@ -686,6 +844,13 @@ void SceneOrganiserDock::setupContextMenu()
     m_deleteSceneAction = m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Remove"), -1), this, &SceneOrganiserDock::onDeleteSceneClicked);
     m_deleteSceneAction->setShortcut(QKeySequence(Qt::Key_Delete));
 
+    // Favourite toggle - drives the Favourites tab
+    m_favouriteToggleAction = m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.AddFavourite"), this, &SceneOrganiserDock::onToggleFavouriteClicked);
+
+    // Custom tabs the scene can be put in. Rebuilt each time the menu opens.
+    m_addToTabMenu = new QMenu(obs_module_text("SceneOrganiser.Menu.AddToTab"), this);
+    m_sceneContextMenu->addMenu(m_addToTabMenu);
+
     // Scene visibility actions
     m_hideSceneAction = m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.HideScene"), this, &SceneOrganiserDock::onHideSceneClicked);
     m_showSceneAction = m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ShowScene"), this, &SceneOrganiserDock::onShowSceneClicked);
@@ -735,6 +900,7 @@ void SceneOrganiserDock::setupContextMenu()
     // Custom actions
     m_sceneContextMenu->addSeparator();
     m_sceneContextMenu->addMenu(m_colorMenu);
+    m_sceneContextMenu->addMenu(m_iconMenu);
     m_sceneContextMenu->addSeparator();
     m_sceneToggleIconsAction = m_sceneContextMenu->addAction(obs_module_text("SceneOrganiser.Action.ToggleIcons"), this, &SceneOrganiserDock::onToggleIconsClicked);
     m_sceneToggleIconsAction->setCheckable(true);
@@ -972,6 +1138,9 @@ void SceneOrganiserDock::setupSearchBar()
 
     // Connect search functionality
     connect(m_searchEdit, &QLineEdit::textChanged, this, &SceneOrganiserDock::onSearchTextChanged);
+
+    // Enter goes live with the first scene still showing under the filter.
+    connect(m_searchEdit, &QLineEdit::returnPressed, this, &SceneOrganiserDock::activateFirstSearchMatch);
 
     // Add Escape key shortcut to clear search
     QAction *escapeAction = new QAction(this);
@@ -1341,6 +1510,15 @@ void SceneOrganiserDock::onItemClicked(const QModelIndex &index)
     // Get current settings for later use
     StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 
+    // With extended selection a ctrl/shift click is part of building a multi-item
+    // selection, not a request to go live. Switching on those would take the
+    // stream somewhere the user never asked for, so only a click that leaves a
+    // single row selected is allowed to change scene.
+    if (m_treeView->selectionModel()->selectedRows().count() > 1) {
+        m_lastClickedIndex = index;
+        return;
+    }
+
     // Check if studio mode is active - it overrides normal click behavior
     if (studioModeFor(m_canvasType) && item->type() == SceneTreeItem::UserType + 2) {
         // Check if preview switching is disabled in studio mode
@@ -1445,6 +1623,8 @@ void SceneOrganiserDock::showFolderContextMenu(const QPoint &pos, const QModelIn
 {
     QModelIndex sourceIndex = m_proxyModel->mapToSource(index);
     m_currentContextItem = m_model->itemFromIndex(sourceIndex);
+    refreshColorMenuState();
+    refreshIconMenuState();
     m_folderContextMenu->exec(pos);
 }
 
@@ -1460,6 +1640,17 @@ void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelInd
     // Update dynamic menu states
     QString sceneName = m_currentContextItem->text();
     obs_source_t *source = Canvas::FindScene(m_canvasType, sceneName.toUtf8().constData());
+
+    refreshIconMenuState();
+    populateAddToTabMenu();
+
+    // The favourite action is a toggle, so it has to say which way it will go
+    // for THIS scene.
+    if (m_favouriteToggleAction) {
+        m_favouriteToggleAction->setText(isFavourite(sceneName)
+            ? obs_module_text("SceneOrganiser.Action.RemoveFavourite")
+            : obs_module_text("SceneOrganiser.Action.AddFavourite"));
+    }
 
     // Populate projector menu with current monitors
     populateProjectorMenu();
@@ -1520,12 +1711,21 @@ void SceneOrganiserDock::showBackgroundContextMenu(const QPoint &pos)
 
 void SceneOrganiserDock::onAddFolderClicked()
 {
+    // On a flat tab the add button fills the list instead of the tree.
+    if (m_currentKind != QuickTabKind::Scenes) {
+        showAddToTabMenu();
+        return;
+    }
+
+
+    const QString layoutBefore = captureLayout();
+
     QPointer<SceneOrganiserDock> self(this);
     su::prompt(this,
         QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.AddFolder.Title")),
         QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.AddFolder.Text")),
         QString(),
-        [self](const QString &folderName) {
+        [self, layoutBefore](const QString &folderName) {
             if (!self) return;
             if (folderName.isEmpty()) return;
             auto folderItem = self->m_model->createFolderItem(folderName);
@@ -1533,11 +1733,15 @@ void SceneOrganiserDock::onAddFolderClicked()
             self->m_treeView->expand(folderItem->index());
             self->applySortingIfEnabled();
             self->m_saveTimer->start();
+            // Pushed here, not after su::prompt returns: the dialog is modeless,
+            // so the folder does not exist yet at that point.
+            self->pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.AddFolder")), layoutBefore);
         });
 }
 
 void SceneOrganiserDock::onCreateSceneClicked()
 {
+
     QPointer<SceneOrganiserDock> self(this);
     su::prompt(this,
         QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.CreateScene.Title")),
@@ -1575,16 +1779,52 @@ void SceneOrganiserDock::onCreateSceneClicked()
 
 void SceneOrganiserDock::onRemoveClicked()
 {
-    QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
+    // On a tab, remove means 'take out of this tab', never 'delete the scene
+    // from OBS' - the scene itself is not this tab's to destroy. A folder goes
+    // with its contents, which likewise only leave the tab.
+    if (m_currentKind != QuickTabKind::Scenes) {
+        if (m_quickTree && m_quickTree->selectionModel() && editableNodesForCurrentTab()) {
+            const QModelIndexList selected = m_quickTree->selectionModel()->selectedRows();
+            if (!selected.isEmpty()) {
+                onRemoveFromTabClicked(m_quickModel->itemFromIndex(m_quickProxy->mapToSource(selected.first())));
+            }
+        }
+        return;
+    }
+
+
+    // Extended selection means this can be a batch. Everything is resolved by
+    // NAME up front and re-resolved at accept-time, because the confirm dialog
+    // is modeless and the tree can be rebuilt by an OBS event while it is open.
+    QModelIndexList selected = m_treeView->selectionModel()->selectedRows();
     if (selected.isEmpty()) return;
 
-    QModelIndex sourceIndex = m_proxyModel->mapToSource(selected.first());
-    QStandardItem *item = m_model->itemFromIndex(sourceIndex);
-    if (!item) return;
+    QStringList sceneNames;
+    QStringList folderNames;
+    for (const QModelIndex &proxyIndex : selected) {
+        QStandardItem *item = m_model->itemFromIndex(m_proxyModel->mapToSource(proxyIndex));
+        if (!item) continue;
+        if (item->type() == SceneTreeItem::UserType + 2) {
+            sceneNames.append(item->text());
+        } else if (item->type() == SceneFolderItem::UserType + 1) {
+            folderNames.append(item->text());
+        }
+    }
 
-    QString itemName = item->text();
-    bool isFolder = (item->type() == SceneFolderItem::UserType + 1);
-    QString itemType = isFolder ? "folder" : "scene";
+    const int total = sceneNames.size() + folderNames.size();
+    if (total == 0) return;
+
+    // One item keeps the original wording ("scene 'Intro'"); a batch names the
+    // count instead, since listing forty scenes in a dialog helps nobody.
+    QString itemType;
+    QString itemName;
+    if (total == 1) {
+        itemType = folderNames.isEmpty() ? QString("scene") : QString("folder");
+        itemName = folderNames.isEmpty() ? sceneNames.first() : folderNames.first();
+    } else {
+        itemType = QString("items");
+        itemName = QString::number(total);
+    }
 
     QPointer<SceneOrganiserDock> self(this);
     su::confirm(this,
@@ -1592,69 +1832,67 @@ void SceneOrganiserDock::onRemoveClicked()
         QString(obs_module_text("SceneOrganiser.Dialog.Remove.Text")).arg(itemType, itemName),
         QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.Remove.Title")),
         "danger",
-        [self]() {
+        [self, sceneNames, folderNames]() {
             if (!self) return;
 
-            // Re-resolve the target item from the live selection at accept-time
-            // (the confirm dialog is modeless, so we avoid holding a raw
-            // QStandardItem* that may have been torn down).
-            QModelIndexList selected = self->m_treeView->selectionModel()->selectedIndexes();
-            if (selected.isEmpty()) return;
-            QModelIndex sourceIndex = self->m_proxyModel->mapToSource(selected.first());
-            QStandardItem *item = self->m_model->itemFromIndex(sourceIndex);
-            if (!item) return;
+            self->m_treeView->selectionModel()->clearSelection();
 
-            QString itemName = item->text();
-            bool isFolder = (item->type() == SceneFolderItem::UserType + 1);
-            bool isScene = (item->type() == SceneTreeItem::UserType + 2);
+            for (const QString &sceneName : sceneNames) {
+                obs_source_t *source = Canvas::FindScene(self->GetCanvasType(), sceneName.toUtf8().constData());
+                if (!source) {
+                    continue;
+                }
 
-            if (isScene) {
-                // Delete the actual scene from OBS
-                obs_source_t *source = Canvas::FindScene(self->GetCanvasType(), itemName.toUtf8().constData());
-                if (source) {
-                    // Before removing from OBS, clean up our tracking and UI
+                // Drop our own tracking and row before OBS removes the source,
+                // so the tree never holds a row for a scene that is gone.
+                if (QStandardItem *item = self->m_model->findSceneItemByName(sceneName)) {
                     if (item->type() == SceneTreeItem::UserType + 2) {
                         SceneTreeItem *sceneItem = static_cast<SceneTreeItem*>(item);
-                        obs_weak_source_t *weak = sceneItem->getWeakSource();
-
-                        // Remove from our tracking map
-                        self->m_model->removeSceneFromTracking(weak);
+                        self->m_model->removeSceneFromTracking(sceneItem->getWeakSource());
                     }
-
-                    // Clear selection first
-                    self->m_treeView->selectionModel()->clearSelection();
-
-                    // Remove the item from the tree view immediately
                     QStandardItem *parent = item->parent();
                     if (!parent) parent = self->m_model->invisibleRootItem();
                     parent->removeRow(item->row());
+                }
 
-                    // Now remove from OBS
-                    obs_source_remove(source);
-                    obs_source_release(source);
+                obs_source_remove(source);
+                obs_source_release(source);
 
-                    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Removal",
-                        QString("Deleted scene from OBS and removed from dock: %1").arg(itemName).toUtf8().constData());
+                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Scene Removal",
+                    QString("Removed scene '%1'").arg(sceneName).toUtf8().constData());
+            }
 
-                    // Clean up any empty folders and save immediately
-                    self->m_model->cleanupEmptyItems();
-                    self->SaveConfiguration(); // Immediate save on deletion
+            if (!sceneNames.isEmpty()) {
+                self->m_model->cleanupEmptyItems();
+            }
+
+            for (const QString &folderName : folderNames) {
+                if (QStandardItem *item = self->m_model->findFolderItemByName(folderName)) {
+                    QStandardItem *parent = item->parent();
+                    if (!parent) parent = self->m_model->invisibleRootItem();
+                    parent->removeRow(item->row());
                 }
             }
 
-            // Remove from tree model (this will be handled by OBS events for scenes)
-            if (isFolder) {
-                QStandardItem *parent = item->parent();
-                if (!parent) parent = self->m_model->invisibleRootItem();
-                parent->removeRow(item->row());
-                self->SaveConfiguration(); // Immediate save on folder deletion
-            }
-            // For scenes, the tree will be updated automatically by OBS events
+            self->SaveConfiguration(); // Immediate save on deletion
         });
 }
 
 void SceneOrganiserDock::onFiltersClicked()
 {
+    // Filters work off whichever scene is selected, on any tab.
+    if (m_currentKind != QuickTabKind::Scenes) {
+        const QString sceneName = selectedSceneOnCurrentTab();
+        if (!sceneName.isEmpty()) {
+            if (obs_source_t *source = Canvas::FindScene(m_canvasType, sceneName.toUtf8().constData())) {
+                obs_frontend_open_source_filters(source);
+                obs_source_release(source);
+            }
+        }
+        return;
+    }
+
+
     QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
     if (selected.isEmpty()) return;
 
@@ -1673,6 +1911,14 @@ void SceneOrganiserDock::onFiltersClicked()
 
 void SceneOrganiserDock::onMoveUpClicked()
 {
+    if (m_currentKind != QuickTabKind::Scenes) {
+        moveWithinCurrentTab(-1);
+        return;
+    }
+
+
+    const QString layoutBefore = captureLayout();
+
     QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
     if (selected.isEmpty()) return;
 
@@ -1695,10 +1941,20 @@ void SceneOrganiserDock::onMoveUpClicked()
 
         m_saveTimer->start();
     }
+
+    pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.Move")), layoutBefore);
 }
 
 void SceneOrganiserDock::onMoveDownClicked()
 {
+    if (m_currentKind != QuickTabKind::Scenes) {
+        moveWithinCurrentTab(1);
+        return;
+    }
+
+
+    const QString layoutBefore = captureLayout();
+
     QModelIndexList selected = m_treeView->selectionModel()->selectedIndexes();
     if (selected.isEmpty()) return;
 
@@ -1721,11 +1977,32 @@ void SceneOrganiserDock::onMoveDownClicked()
 
         m_saveTimer->start();
     }
+
+    pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.Move")), layoutBefore);
 }
 
 void SceneOrganiserDock::onExpandCollapseAllClicked()
 {
-    if (!m_treeView || !m_expandCollapseButton) return;
+    if (!m_expandCollapseButton) return;
+
+    // On a tab this is the tab's own tree. Its collapsed state is remembered,
+    // because the tab tree is rebuilt on every refresh and would otherwise
+    // spring back open the moment anything changed.
+    if (m_currentKind != QuickTabKind::Scenes) {
+        if (!m_quickTree) return;
+
+        m_quickTreeCollapsed = m_expandCollapseButton->isChecked();
+        if (m_quickTreeCollapsed) {
+            m_quickTree->collapseAll();
+            m_expandCollapseButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.ExpandAll"));
+        } else {
+            m_quickTree->expandAll();
+            m_expandCollapseButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.CollapseAll"));
+        }
+        return;
+    }
+
+    if (!m_treeView) return;
 
     // Note: In OBS convention, checked = collapsed, unchecked = expanded
     // The checkbox state has already been toggled by Qt, so we read the current state
@@ -1816,6 +2093,107 @@ void SceneOrganiserDock::onToggleIconsClicked()
 // a checkable Clear entry, a checkable Custom Colour entry, then a grid of the
 // eight preset swatches. Check state is refreshed on every show from the
 // context item's stored colour, so no extra preset index has to be persisted.
+QMenu *SceneOrganiserDock::createIconSubmenu()
+{
+    QMenu *menu = new QMenu(obs_module_text("SceneOrganiser.Action.SetIcon"), this);
+
+    m_iconDefaultAction = menu->addAction(obs_module_text("SceneOrganiser.Icon.Default"), this, [this]() {
+        applyIconSpec(QString());
+    });
+    m_iconDefaultAction->setCheckable(true);
+
+    m_iconCustomAction = menu->addAction(obs_module_text("SceneOrganiser.Icon.CustomImage"), this,
+                                         &SceneOrganiserDock::onSetCustomIconImageClicked);
+    m_iconCustomAction->setCheckable(true);
+
+    menu->addSeparator();
+
+    // Every icon the OBS theme provides, each shown with the icon itself so the
+    // menu reads as a picker rather than a list of names.
+    m_iconThemeActions.clear();
+    for (const ObsThemeIcon &themeIcon : kObsThemeIcons) {
+        const QString spec = QString::fromLatin1("obs:") + QString::fromLatin1(themeIcon.property);
+        QAction *action = menu->addAction(QString::fromUtf8(themeIcon.label), this, [this, spec]() {
+            applyIconSpec(spec);
+        });
+        action->setCheckable(true);
+        // Preview icons are filled in by refreshIconMenuState() when the menu
+        // opens, not here: this runs while the dock is being built, long before
+        // the OBS theme is available to ask.
+        m_iconThemeActions.insert(spec, action);
+    }
+
+    return menu;
+}
+
+// Ticks whichever entry matches the item the menu was opened on, so the current
+// icon is visible without having to remember what was picked.
+void SceneOrganiserDock::refreshIconMenuState()
+{
+    const QString spec = m_currentContextItem ? m_currentContextItem->data(CustomIconRole).toString() : QString();
+
+    if (m_iconDefaultAction) m_iconDefaultAction->setChecked(spec.isEmpty());
+    if (m_iconCustomAction) m_iconCustomAction->setChecked(spec.startsWith(QLatin1String("file:")));
+
+    for (auto it = m_iconThemeActions.begin(); it != m_iconThemeActions.end(); ++it) {
+        it.value()->setChecked(it.key() == spec);
+        // Re-resolved on every open: the menu is built once, but the icons it
+        // previews are themed and the theme can change under it.
+        it.value()->setIcon(ResolveIconSpec(it.key()));
+    }
+}
+
+void SceneOrganiserDock::applyIconSpec(const QString &spec)
+{
+    if (!m_currentContextItem) {
+        return;
+    }
+
+    const QString layoutBefore = captureLayout();
+
+    if (spec.isEmpty()) {
+        m_currentContextItem->setData(QVariant(), CustomIconRole);
+    } else {
+        m_currentContextItem->setData(spec, CustomIconRole);
+    }
+
+    if (m_currentContextItem->type() == SceneFolderItem::UserType + 1) {
+        static_cast<SceneFolderItem*>(m_currentContextItem)->updateIcon();
+    } else if (m_currentContextItem->type() == SceneTreeItem::UserType + 2) {
+        static_cast<SceneTreeItem*>(m_currentContextItem)->updateIcon();
+    }
+
+    forceTreeViewRepaint();
+    pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.Icon")), layoutBefore);
+    SaveConfiguration();
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Icon",
+        QString("Set icon '%1' on '%2'").arg(spec.isEmpty() ? QString("default") : spec,
+                                             m_currentContextItem->text()).toUtf8().constData());
+}
+
+void SceneOrganiserDock::onSetCustomIconImageClicked()
+{
+    if (!m_currentContextItem) {
+        return;
+    }
+
+    // Modal on purpose: it is the platform file dialog, and the item the menu
+    // was opened on has to still be the item when the path comes back.
+    const QString path = QFileDialog::getOpenFileName(this,
+        QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.ChooseIcon")),
+        QString(),
+        QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.ChooseIcon.Filter")));
+
+    if (path.isEmpty()) {
+        return;
+    }
+
+    // The path is stored, not the pixels: an icon that is edited on disk then
+    // follows, and the tree JSON stays small.
+    applyIconSpec(QString::fromLatin1("file:") + path);
+}
+
 QMenu *SceneOrganiserDock::createColorSubmenu()
 {
     QMenu *menu = new QMenu(obs_module_text("SceneOrganiser.Action.SetColor"), this);
@@ -1910,6 +2288,8 @@ void SceneOrganiserDock::refreshColorMenuState()
 // menus, mirroring the native behaviour of clicking a swatch.
 void SceneOrganiserDock::applyPresetColor(int presetIndex)
 {
+    const QString layoutBefore = captureLayout();
+
     const QList<QColor> &presets = PresetColors();
     if (!m_currentContextItem || presetIndex < 0 || presetIndex >= presets.size()) {
         return;
@@ -1934,10 +2314,14 @@ void SceneOrganiserDock::applyPresetColor(int presetIndex)
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "CustomColor",
         QString("Set preset colour %1 for item '%2': %3")
         .arg(presetIndex + 1).arg(m_currentContextItem->text(), color.name(QColor::HexArgb)).toUtf8().constData());
+
+    pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.Colour")), layoutBefore);
 }
 
 void SceneOrganiserDock::onSetCustomColorClicked()
 {
+    const QString layoutBefore = captureLayout();
+
     if (!m_currentContextItem) {
         return;
     }
@@ -1965,7 +2349,7 @@ void SceneOrganiserDock::onSetCustomColorClicked()
     QObject::connect(cancel, &QPushButton::clicked, sh.dialog, &QDialog::close);
 
     QPointer<SceneOrganiserDock> self(this);
-    QObject::connect(ok, &QPushButton::clicked, sh.dialog, [self, cp, dlg = sh.dialog]() {
+    QObject::connect(ok, &QPushButton::clicked, sh.dialog, [self, cp, dlg = sh.dialog, layoutBefore]() {
         if (self) {
             // Re-read the context item the menu was opened on (same member the
             // synchronous code used). Guard against it having been cleared.
@@ -1986,6 +2370,9 @@ void SceneOrganiserDock::onSetCustomColorClicked()
                     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "CustomColor",
                         QString("Set custom color for item '%1': %2")
                         .arg(item->text(), selectedColor.name()).toUtf8().constData());
+
+                    // Modeless dialog: the colour is only chosen here.
+                    self->pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.Colour")), layoutBefore);
                 }
             }
         }
@@ -2001,6 +2388,8 @@ void SceneOrganiserDock::onSetCustomColorClicked()
 
 void SceneOrganiserDock::onClearCustomColorClicked()
 {
+    const QString layoutBefore = captureLayout();
+
     if (!m_currentContextItem) {
         return;
     }
@@ -2017,6 +2406,8 @@ void SceneOrganiserDock::onClearCustomColorClicked()
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "CustomColor",
         QString("Cleared custom color for item '%1'").arg(m_currentContextItem->text()).toUtf8().constData());
+
+    pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.Colour")), layoutBefore);
 }
 
 void SceneOrganiserDock::applyCustomColorToItem(QStandardItem *item, const QColor &color)
@@ -2127,6 +2518,50 @@ QColor SceneOrganiserDock::adjustColorBrightness(const QColor &color, float fact
     return QColor::fromHsv(h, s, v);
 }
 
+// Guards against a theme whose highlight colour is barely distinguishable from
+// the row background - the row would read as unpainted, which is the exact
+// complaint this replaces. Nudges the fill away from the backdrop until it
+// clears a modest luminance gap, preserving hue so themed accents survive.
+QColor SceneOrganiserDock::ensureRowContrast(const QColor &bgColor)
+{
+    if (!bgColor.isValid()) {
+        return bgColor;
+    }
+
+    const QColor backdrop = m_treeView ? m_treeView->palette().color(QPalette::Base) : QColor(30, 30, 30);
+
+    auto luminance = [](const QColor &c) {
+        return 0.2126 * c.redF() + 0.7152 * c.greenF() + 0.0722 * c.blueF();
+    };
+
+    const double backdropLum = luminance(backdrop);
+    // Push away from the backdrop: lighten on a dark dock, darken on a light one.
+    const float factor = (backdropLum < 0.5) ? 1.35f : 0.7f;
+
+    QColor result = bgColor;
+    for (int i = 0; i < 4 && qAbs(luminance(result) - backdropLum) < 0.12; ++i) {
+        QColor next = adjustColorBrightness(result, factor);
+        if (next == result) {
+            // Pure black cannot be brightened by scaling value alone.
+            next = (backdropLum < 0.5) ? QColor(80, 80, 80) : QColor(175, 175, 175);
+        }
+        result = next;
+    }
+
+    return result;
+}
+
+int SceneOrganiserDock::currentRowHeight() const
+{
+    int rowHeight = StreamUP::SettingsManager::GetCurrentSettings().sceneOrganiserItemHeight;
+    if (rowHeight < 19) {
+        rowHeight = 24;
+    } else if (rowHeight > 48) {
+        rowHeight = 48;
+    }
+    return rowHeight;
+}
+
 QColor SceneOrganiserDock::getSelectionColor(const QColor &baseColor)
 {
     if (!baseColor.isValid()) {
@@ -2183,7 +2618,9 @@ void SceneOrganiserDock::onRenameFolderClicked()
     auto item = m_model->itemFromIndex(sourceIndex);
     if (!item || item->type() != SceneFolderItem::UserType + 1) return;
 
-    // Start inline editing
+    // Start inline editing. The rename lands when the editor closes, which is
+    // handled by the model's itemChanged hook - see connectRenameUndo().
+    m_renameLayoutBefore = captureLayout();
     m_treeView->edit(selectedIndexes.first());
 }
 
@@ -2206,6 +2643,7 @@ void SceneOrganiserDock::setLocked(bool locked)
 
     // Apply scene visibility based on lock state
     applySceneVisibility();
+
 
     // Update lock action states in context menus
     updateLockActionStates();
@@ -2244,11 +2682,8 @@ void SceneOrganiserDock::updateUIEnabledState()
     if (m_moveDownButton) m_moveDownButton->setEnabled(unlocked && hasSelection);
 
     // Tree view drag & drop - only allow when unlocked (moving is destructive)
-    if (m_treeView) {
-        m_treeView->setDragEnabled(unlocked);
-        m_treeView->setAcceptDrops(unlocked);
-        m_treeView->setDragDropMode(unlocked ? QAbstractItemView::InternalMove : QAbstractItemView::NoDragDrop);
-    }
+    // and while no search filter is narrowing the tree. See updateDragEnabled().
+    updateDragEnabled();
 
     // Context menus - enable but control individual destructive actions
     if (m_folderContextMenu) {
@@ -2314,7 +2749,15 @@ void SceneOrganiserDock::onSettingsChanged()
         // relayout for the new height to take effect, then repaint.
         m_treeView->doItemsLayout();
         m_treeView->viewport()->update();
+
+        // The flat tabs follow the tree's metrics.
+        applyRowMetricsToQuickList();
+
+        // Indent guides are painted per row, so a repaint is all they need.
+        m_treeView->viewport()->update();
     }
+
+    rebuildTabBar();
 }
 
 void SceneOrganiserDock::onIconsChanged()
@@ -2323,6 +2766,9 @@ void SceneOrganiserDock::onIconsChanged()
     if (m_model) {
         updateAllItemIcons(m_model->invisibleRootItem());
     }
+
+    // The flat tabs copy their icons from the tree items, so they need rebuilding.
+    refreshQuickList();
 
     // Update checkmarks in context menus
     updateToggleIconsState();
@@ -2394,6 +2840,20 @@ void SceneOrganiserDock::updateActiveSceneHighlight()
     // normal (blue) selection. This tracks the real program scene no matter
     // how it changed (Stream Deck, hotkey, websocket, OBS scene list, etc.).
     updateActiveSceneHighlightRecursive(m_model->invisibleRootItem(), current_scene_name, preview_scene_name);
+
+    // Whatever is live is by definition the most recent. Held back until the
+    // initial load is done so replaying the tree at startup does not rewrite
+    // the recents list before it has even been read from disk.
+    if (m_initialLoadComplete) {
+        noteRecentScene(current_scene_name);
+
+        // noteRecentScene only rebuilds when the order actually changes, but the
+        // green programme marker moves whenever the live scene does - including
+        // back to one already at the top of the list.
+        if (m_currentKind != QuickTabKind::Scenes) {
+            refreshQuickList();
+        }
+    }
 
     // In studio mode, keep the tree SELECTION (blue preview indicator) in sync
     // with OBS' current preview scene, so external preview changes are
@@ -2512,7 +2972,14 @@ void SceneOrganiserDock::triggerActivateSelectedScene()
     }
 
     QModelIndex sourceIndex = m_proxyModel->mapToSource(selected.first());
-    QStandardItem *item = m_model->itemFromIndex(sourceIndex);
+    activateSceneItem(m_model->itemFromIndex(sourceIndex));
+}
+
+// Takes a scene item live. In studio mode that means setting preview and
+// triggering the transition; otherwise it cuts straight to program. Folders and
+// nulls are ignored, so callers can hand over whatever the tree gave them.
+void SceneOrganiserDock::activateSceneItem(QStandardItem *item)
+{
     if (!item || item->type() != SceneTreeItem::UserType + 2) {
         return; // only scenes can be activated (folders ignored)
     }
@@ -2526,14 +2993,92 @@ void SceneOrganiserDock::triggerActivateSelectedScene()
         obs_frontend_set_current_preview_scene(source);
         obs_frontend_preview_program_trigger_transition();
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Activate",
-            QString("Enter: transitioned '%1' to program").arg(item->text()).toUtf8().constData());
+            QString("Transitioned '%1' to program").arg(item->text()).toUtf8().constData());
     } else {
         Canvas::SetCurrentScene(m_canvasType, source);
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Activate",
-            QString("Enter: set program scene to '%1'").arg(item->text()).toUtf8().constData());
+            QString("Set program scene to '%1'").arg(item->text()).toUtf8().constData());
     }
 
     obs_source_release(source);
+}
+
+// Enter in the search box goes live with the first scene the filter left
+// standing, reading the tree top to bottom exactly as drawn. Folder rows are
+// skipped (they survive the filter to hold their matching children) as are
+// hidden scenes, which are not switchable from this dock.
+void SceneOrganiserDock::activateFirstSearchMatch()
+{
+    // On a tab, the first row still showing is the one to go live with.
+    if (m_currentKind != QuickTabKind::Scenes) {
+        if (m_quickProxy && m_quickProxy->rowCount() > 0) {
+            std::function<bool(const QModelIndex &)> firstScene = [&](const QModelIndex &parent) {
+                for (int i = 0; i < m_quickProxy->rowCount(parent); ++i) {
+                    const QModelIndex proxyIndex = m_quickProxy->index(i, 0, parent);
+                    QStandardItem *item = m_quickModel->itemFromIndex(m_quickProxy->mapToSource(proxyIndex));
+                    if (item && (item->flags() & Qt::ItemIsEnabled) && !item->data(TabItemIsFolderRole).toBool()) {
+                        if (QStandardItem *treeItem = m_model->findSceneItemByName(item->text())) {
+                            activateSceneItem(treeItem);
+                            return true;
+                        }
+                    }
+                    if (firstScene(proxyIndex)) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            firstScene(QModelIndex());
+        }
+        return;
+    }
+
+    if (!m_treeView || !m_proxyModel || !m_model) {
+        return;
+    }
+
+    QStandardItem *match = nullptr;
+    std::function<void(const QModelIndex &)> walk = [&](const QModelIndex &parent) {
+        const int rows = m_proxyModel->rowCount(parent);
+        for (int i = 0; i < rows && !match; ++i) {
+            const QModelIndex proxyIndex = m_proxyModel->index(i, 0, parent);
+            QStandardItem *item = m_model->itemFromIndex(m_proxyModel->mapToSource(proxyIndex));
+            if (item && item->type() == SceneTreeItem::UserType + 2 && !m_hiddenScenes.contains(item->text())) {
+                match = item;
+                return;
+            }
+            walk(proxyIndex);
+        }
+    };
+    walk(QModelIndex());
+
+    if (!match) {
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Search", "Enter pressed with no switchable match");
+        return;
+    }
+
+    activateSceneItem(match);
+    selectSceneByName(match->text());
+}
+
+// Puts the cursor in this dock's search box, raising the dock first so the
+// hotkey still works when it is tabbed behind another dock. Bound to a
+// frontend hotkey per canvas - see hotkey-manager.cpp.
+void SceneOrganiserDock::FocusSearchBox(CanvasType canvasType)
+{
+    for (SceneOrganiserDock *dock : s_dockInstances) {
+        if (!dock || dock->GetCanvasType() != canvasType || !dock->m_searchEdit) {
+            continue;
+        }
+
+        if (QWidget *dockWidget = dock->parentWidget()) {
+            dockWidget->raise();
+            dockWidget->show();
+        }
+        dock->m_searchEdit->setFocus(Qt::ShortcutFocusReason);
+        dock->m_searchEdit->selectAll();
+        return;
+    }
 }
 
 void SceneOrganiserDock::updateAllItemIcons(QStandardItem *parent)
@@ -2588,6 +3133,11 @@ void SceneOrganiserDock::performInitialLoad()
             }
             // Mark initial load as complete - saves are now allowed
             m_initialLoadComplete = true;
+
+            // Last word on the tab bar. LoadConfiguration builds it too, but at
+            // that point the scene tree is still filling; rebuilding here means
+            // the bar is built once from finished data.
+            rebuildTabBar();
             StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Init",
                 "Initial load complete - saves now enabled");
         });
@@ -2746,6 +3296,8 @@ void SceneOrganiserDock::SaveConfiguration()
         hiddenFile.close();
     }
 
+    saveQuickTabs(configDir, sceneCollectionName);
+
     // Now using DigitOtter approach - save is handled by saveSceneTree()
     // which is called automatically on OBS frontend events
     m_model->saveSceneTree();
@@ -2791,6 +3343,10 @@ void SceneOrganiserDock::LoadConfiguration()
         // Default to unlocked if no saved state
         setLocked(false);
     }
+
+    loadQuickTabs(configDir, sceneCollectionName);
+    rebuildTabBar();
+    updateControlsForTab();
 
     // Load hidden scenes per scene collection
     QString hiddenScenesFile = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_hidden_scenes.txt";
@@ -2917,6 +3473,25 @@ void SceneOrganiserDock::LoadConfiguration()
 }
 
 // Search functionality implementation
+// Drag and drop is allowed only when the tree is unlocked AND unfiltered.
+// A drop while a search is active lands against the proxy's filtered rows, so
+// the scene ends up somewhere the user never saw - the neighbours it appeared
+// to land between are not its real neighbours in the unfiltered tree. Rather
+// than try to translate the drop, we take dragging away for the duration.
+void SceneOrganiserDock::updateDragEnabled()
+{
+    if (!m_treeView) {
+        return;
+    }
+
+    const bool searching = m_proxyModel && !m_proxyModel->filterRegularExpression().pattern().isEmpty();
+    const bool allowed = !m_isLocked && !searching;
+
+    m_treeView->setDragEnabled(allowed);
+    m_treeView->setAcceptDrops(allowed);
+    m_treeView->setDragDropMode(allowed ? QAbstractItemView::InternalMove : QAbstractItemView::NoDragDrop);
+}
+
 void SceneOrganiserDock::onSearchTextChanged(const QString &text)
 {
     if (!m_proxyModel) return;
@@ -2930,6 +3505,15 @@ void SceneOrganiserDock::onSearchTextChanged(const QString &text)
         saveExpansionState();
     }
 
+    // The filter follows whichever tree is on screen.
+    if (m_currentKind != QuickTabKind::Scenes) {
+        if (m_quickProxy) {
+            m_quickProxy->setFilterWildcard(text);
+            m_quickTree->expandAll();
+        }
+        return;
+    }
+
     // Apply filter to proxy model
     m_proxyModel->setFilterWildcard(text);
 
@@ -2940,6 +3524,9 @@ void SceneOrganiserDock::onSearchTextChanged(const QString &text)
         // Restore previous expansion state when search is cleared
         restoreExpansionState();
     }
+
+    // Reordering against a filtered tree is not meaningful - see updateDragEnabled().
+    updateDragEnabled();
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Search",
         QString("Search filter applied: '%1'").arg(text).toUtf8().constData());
@@ -3486,6 +4073,8 @@ void SceneOrganiserDock::onOpenProjectorWindowClicked()
 
 void SceneOrganiserDock::onSceneMoveUpClicked()
 {
+    const QString layoutBefore = captureLayout();
+
     if (!m_currentContextItem) return;
 
     QStandardItem *parent = m_currentContextItem->parent();
@@ -3503,10 +4092,14 @@ void SceneOrganiserDock::onSceneMoveUpClicked()
             m_saveTimer->start();
         }
     }
+
+    pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.Move")), layoutBefore);
 }
 
 void SceneOrganiserDock::onSceneMoveDownClicked()
 {
+    const QString layoutBefore = captureLayout();
+
     if (!m_currentContextItem) return;
 
     QStandardItem *parent = m_currentContextItem->parent();
@@ -3524,10 +4117,14 @@ void SceneOrganiserDock::onSceneMoveDownClicked()
             m_saveTimer->start();
         }
     }
+
+    pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.Move")), layoutBefore);
 }
 
 void SceneOrganiserDock::onSceneMoveToTopClicked()
 {
+    const QString layoutBefore = captureLayout();
+
     if (!m_currentContextItem) return;
 
     QStandardItem *parent = m_currentContextItem->parent();
@@ -3545,10 +4142,14 @@ void SceneOrganiserDock::onSceneMoveToTopClicked()
             m_saveTimer->start();
         }
     }
+
+    pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.Move")), layoutBefore);
 }
 
 void SceneOrganiserDock::onSceneMoveToBottomClicked()
 {
+    const QString layoutBefore = captureLayout();
+
     if (!m_currentContextItem) return;
 
     QStandardItem *parent = m_currentContextItem->parent();
@@ -3567,6 +4168,8 @@ void SceneOrganiserDock::onSceneMoveToBottomClicked()
             m_saveTimer->start();
         }
     }
+
+    pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.Move")), layoutBefore);
 }
 
 void SceneOrganiserDock::populateTransitionOverrideMenu(obs_source_t *sceneSource)
@@ -3926,20 +4529,54 @@ QMimeData *SceneTreeModel::mimeData(const QModelIndexList &indexes) const
 
     QMimeData *mimeData = new QMimeData();
 
+    // Collect the items being dragged, one per row, discarding two things that
+    // a multi-item selection can hand us and a single one never could:
+    //
+    //  - duplicates, since selectedIndexes() reports every column;
+    //  - any item that sits inside a folder which is ALSO being dragged. The
+    //    folder move re-creates its whole subtree and destroys the originals,
+    //    so a separate entry for the child would be a dangling pointer by the
+    //    time the drop loop reached it.
+    QList<QStandardItem *> items;
+    for (const QModelIndex &index : indexes) {
+        if (index.column() != 0 || !index.isValid()) {
+            continue;
+        }
+        if (QStandardItem *item = itemFromIndex(index)) {
+            if (!items.contains(item)) {
+                items.append(item);
+            }
+        }
+    }
+
+    QList<QStandardItem *> topLevel;
+    for (QStandardItem *item : items) {
+        bool insideDraggedFolder = false;
+        for (QStandardItem *ancestor = item->parent(); ancestor; ancestor = ancestor->parent()) {
+            if (items.contains(ancestor)) {
+                insideDraggedFolder = true;
+                break;
+            }
+        }
+        if (!insideDraggedFolder) {
+            topLevel.append(item);
+        }
+    }
+
+    if (topLevel.isEmpty()) {
+        delete mimeData;
+        return nullptr;
+    }
+
     // Use binary data format like DigitOtter plugin
     QByteArray mimeDataBytes;
-    const int numIndexes = indexes.size();
+    const int numIndexes = topLevel.size();
 
     mimeDataBytes.append(reinterpret_cast<const char*>(&numIndexes), sizeof(int));
 
-    for (const QModelIndex &index : indexes) {
-        if (index.isValid()) {
-            QStandardItem *item = itemFromIndex(index);
-            if (item) {
-                // Store item pointer directly
-                mimeDataBytes.append(reinterpret_cast<const char*>(&item), sizeof(QStandardItem*));
-            }
-        }
+    for (QStandardItem *item : topLevel) {
+        // Store item pointer directly
+        mimeDataBytes.append(reinterpret_cast<const char*>(&item), sizeof(QStandardItem*));
     }
 
     mimeData->setData("application/x-streamup-sceneorganiser", mimeDataBytes);
@@ -4249,6 +4886,39 @@ void SceneTreeModel::moveSceneToFolder(obs_weak_source_t *weak_source, QStandard
             emit modelChanged();
         }
     }
+}
+
+// Depth-first lookup by display name, used when an item has to be re-found
+// after a modeless dialog rather than held across it as a raw pointer.
+QStandardItem *SceneTreeModel::findItemByName(const QString &name, int itemType, QStandardItem *parent)
+{
+    if (!parent) {
+        parent = invisibleRootItem();
+    }
+
+    for (int i = 0; i < parent->rowCount(); ++i) {
+        QStandardItem *item = parent->child(i);
+        if (!item) continue;
+
+        if (item->type() == itemType && item->text() == name) {
+            return item;
+        }
+        if (QStandardItem *found = findItemByName(name, itemType, item)) {
+            return found;
+        }
+    }
+
+    return nullptr;
+}
+
+QStandardItem *SceneTreeModel::findSceneItemByName(const QString &name)
+{
+    return findItemByName(name, SceneTreeItem::UserType + 2, nullptr);
+}
+
+QStandardItem *SceneTreeModel::findFolderItemByName(const QString &name)
+{
+    return findItemByName(name, SceneFolderItem::UserType + 1, nullptr);
 }
 
 void SceneTreeModel::cleanupEmptyItems()
@@ -4826,6 +5496,12 @@ obs_data_array_t *SceneTreeModel::createFolderArray(QStandardItem &parent)
                 obs_data_set_string(item_data, "custom_color", color.name(QColor::HexArgb).toUtf8().constData());
             }
 
+            // Save custom icon spec if set
+            const QString folderIconSpec = child->data(CustomIconRole).toString();
+            if (!folderIconSpec.isEmpty()) {
+                obs_data_set_string(item_data, "custom_icon", folderIconSpec.toUtf8().constData());
+            }
+
             // Recursively save children
             obs_data_array_t *children = createFolderArray(*child);
             obs_data_set_array(item_data, "children", children);
@@ -4842,6 +5518,12 @@ obs_data_array_t *SceneTreeModel::createFolderArray(QStandardItem &parent)
                 QColor color = colorData.value<QColor>();
                 // HexArgb: the preset colours carry alpha, which QColor::name() would drop.
                 obs_data_set_string(item_data, "custom_color", color.name(QColor::HexArgb).toUtf8().constData());
+            }
+
+            // Save custom icon spec if set
+            const QString sceneIconSpec = child->data(CustomIconRole).toString();
+            if (!sceneIconSpec.isEmpty()) {
+                obs_data_set_string(item_data, "custom_icon", sceneIconSpec.toUtf8().constData());
             }
         }
 
@@ -4885,6 +5567,13 @@ void SceneTreeModel::loadFolderArray(obs_data_array_t *folder_array, QStandardIt
                     }
                 }
 
+                // Load custom icon spec if present
+                const char *iconSpec = obs_data_get_string(item_data, "custom_icon");
+                if (iconSpec && strlen(iconSpec) > 0) {
+                    folderItem->setData(QString::fromUtf8(iconSpec), CustomIconRole);
+                    static_cast<SceneFolderItem*>(folderItem)->updateIcon();
+                }
+
                 // Load children
                 obs_data_array_t *children = obs_data_get_array(item_data, "children");
                 if (children) {
@@ -4908,6 +5597,13 @@ void SceneTreeModel::loadFolderArray(obs_data_array_t *folder_array, QStandardIt
                     if (color.isValid()) {
                         sceneItem->setData(color, Qt::UserRole + 1);
                     }
+                }
+
+                // Load custom icon spec if present
+                const char *sceneIconSpec = obs_data_get_string(item_data, "custom_icon");
+                if (sceneIconSpec && strlen(sceneIconSpec) > 0) {
+                    sceneItem->setData(QString::fromUtf8(sceneIconSpec), CustomIconRole);
+                    static_cast<SceneTreeItem*>(sceneItem)->updateIcon();
                 }
 
                 // Add to our tracking map
@@ -4944,6 +5640,129 @@ void SceneTreeView::setupView()
     // This ensures we don't interfere with OBS theme styling
 }
 
+void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QModelIndex &index) const
+{
+    // The branch column is painted here rather than by QTreeView, because the
+    // base implementation hands the current hover and selection state to the
+    // style, and an OBS theme styles ::branch for those states independently of
+    // the row. That produced two separate faults: a small rounded block of the
+    // item hover colour in the indent column, and a chevron that vanished in
+    // whichever states the theme (or a fix to it) had rules for but no image.
+    //
+    // Drawing it with a clean state means only the plain ::branch:closed and
+    // ::branch:open rules can match - the two that actually carry the chevron
+    // images - so the arrow is drawn identically no matter what the mouse is
+    // doing, and no state background is ever painted here at all.
+
+    // The indent column is repainted with the dock's own background before
+    // anything else goes into it. Some themes paint row state into this column
+    // through the ::branch rules, which leaves a small rounded block of the
+    // hover or selection colour floating to the left of the row - the row's pill
+    // is the only thing that should express that state. Rather than chase which
+    // rule in which theme is responsible, the column is simply cleared first.
+    painter->save();
+    painter->fillRect(rect, palette().color(QPalette::Base));
+    painter->restore();
+
+    int depth = 0;
+    for (QModelIndex walk = index.parent(); walk.isValid(); walk = walk.parent()) {
+        ++depth;
+    }
+
+    const int step = indentation();
+
+    if (StreamUP::SettingsManager::GetCurrentSettings().sceneOrganiserShowIndentGuides && depth > 0) {
+        // Derived from the theme's own text colour at low alpha rather than a
+        // fixed grey, so the guides sit a consistent distance from the
+        // background on a light theme and a dark one alike.
+        QColor guide = palette().color(QPalette::Text);
+        guide.setAlpha(60);
+
+        painter->save();
+        painter->setPen(QPen(guide, 1));
+
+        const int rowTop = rect.top();
+        const int rowBottom = rect.bottom();
+        const int rowMiddle = rowTop + (rect.height() / 2);
+        const int iconHalf = iconSize().width() / 2;
+
+        QModelIndex ancestor = index.parent();
+        for (int level = depth - 1; level >= 0 && ancestor.isValid(); --level) {
+            // Lined up under the parent folder's ICON, not down the middle of the
+            // indent step. The step's centre sits in the parent's chevron column,
+            // which reads as a line beside the folder rather than one descending
+            // from it. The parent's icon starts one step in from its own depth.
+            const int x = rect.left() + ((level + 1) * step) + iconHalf;
+
+            const QModelIndex parentOfAncestor = ancestor.parent();
+            const bool ancestorHasMoreSiblings =
+                ancestor.row() < (model()->rowCount(parentOfAncestor) - 1);
+
+            if (level == depth - 1) {
+                // The guide for the level this row sits directly in stops at the
+                // row's middle when the row is the last child - a line carrying
+                // on past it would imply siblings that are not there.
+                const bool isLastChild = index.row() == (model()->rowCount(index.parent()) - 1);
+                painter->drawLine(x, rowTop, x, isLastChild ? rowMiddle : rowBottom);
+                if (isLastChild) {
+                    // The short elbow into the row, so the last child still
+                    // reads as attached rather than floating. It stops short of
+                    // the child's own icon, which begins at the next step.
+                    const int elbowEnd = rect.left() + ((level + 2) * step) - 2;
+                    painter->drawLine(x, rowMiddle, elbowEnd, rowMiddle);
+                }
+            } else if (ancestorHasMoreSiblings) {
+                painter->drawLine(x, rowTop, x, rowBottom);
+            }
+
+            ancestor = parentOfAncestor;
+        }
+
+        painter->restore();
+    }
+
+    // The chevron is drawn here rather than handed to the style. Going through
+    // PE_IndicatorBranch means a theme's ::branch rules decide what appears, and
+    // those are matched per state: the closed rule drew fine while the open one
+    // never matched at all, leaving an expanded folder with no arrow. Rather
+    // than keep guessing which pseudo-state combination a given theme wants,
+    // the dock draws its own - one shape, both states, every theme.
+    if (model()->hasChildren(index)) {
+        const QRect cell(rect.left() + (depth * step), rect.top(), step, rect.height());
+
+        // Sized off the row so it keeps its proportions as the row height
+        // setting changes, and kept small enough not to crowd the icon.
+        const int size = qBound(5, cell.height() / 4, 9);
+        const QPoint centre = cell.center();
+
+        // Follows the theme through the palette, so it stays legible on a light
+        // theme and a dark one without either being special-cased.
+        QColor arrow = palette().color(QPalette::Text);
+        arrow.setAlpha(200);
+
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(arrow);
+
+        QPolygon triangle;
+        if (isExpanded(index)) {
+            // Pointing down: the folder is open.
+            triangle << QPoint(centre.x() - size, centre.y() - (size / 2))
+                     << QPoint(centre.x() + size, centre.y() - (size / 2))
+                     << QPoint(centre.x(), centre.y() + (size / 2) + 1);
+        } else {
+            // Pointing right: the folder is closed.
+            triangle << QPoint(centre.x() - (size / 2), centre.y() - size)
+                     << QPoint(centre.x() - (size / 2), centre.y() + size)
+                     << QPoint(centre.x() + (size / 2) + 1, centre.y());
+        }
+
+        painter->drawPolygon(triangle);
+        painter->restore();
+    }
+}
+
 void SceneTreeView::dragEnterEvent(QDragEnterEvent *event)
 {
     if (event->mimeData()->hasFormat("application/x-streamup-sceneorganiser")) {
@@ -4964,7 +5783,25 @@ void SceneTreeView::dragMoveEvent(QDragMoveEvent *event)
 
 void SceneTreeView::dropEvent(QDropEvent *event)
 {
+    // Snapshot before the drop so the whole move - however many items it took,
+    // and whatever folders it reshuffled - collapses into one undo entry.
+    SceneOrganiserDock *dock = nullptr;
+    QWidget *walk = parentWidget();
+    while (walk && !dock) {
+        dock = qobject_cast<SceneOrganiserDock*>(walk);
+        walk = walk->parentWidget();
+    }
+
+    // Only the Scenes tree feeds the undo stack: a tab is an arrangement of its
+    // own and its drops are saved directly, not recorded as scene-tree edits.
+    const bool isScenesTree = dock && dock->m_treeView == this;
+    const QString before = isScenesTree ? dock->captureLayout() : QString();
+
     QTreeView::dropEvent(event);
+
+    if (isScenesTree) {
+        dock->pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.Move")), before);
+    }
 }
 
 void SceneTreeView::contextMenuEvent(QContextMenuEvent *event)
@@ -4983,15 +5820,10 @@ void SceneTreeView::drawRow(QPainter *painter, const QStyleOptionViewItem &optio
     // The delegate's own copy of the state was already cleared, which is why an
     // unselected coloured row looked right and only the selected one did not:
     // this fill happens a level above the delegate and needed clearing too.
-    const bool hasCustomColour = index.data(Qt::UserRole + 1).isValid();
-    const bool isProgram = index.data(ProgramSceneRole).toBool();
-
-    if (!hasCustomColour && !isProgram) {
-        // Plain rows keep the native selection highlight.
-        QTreeView::drawRow(painter, option, index);
-        return;
-    }
-
+    // Every selected or hovered row is now painted by CustomColorDelegate - a
+    // plain row included, since the theme's own rule for a generic QTreeView is
+    // not something we can rely on. So the row fill underneath always has to go,
+    // not just on coloured rows.
     QStyleOptionViewItem opt = option;
     opt.state &= ~QStyle::State_Selected;
     opt.state &= ~QStyle::State_MouseOver;
@@ -5038,6 +5870,1653 @@ void SceneTreeView::keyPressEvent(QKeyEvent *event)
     QTreeView::keyPressEvent(event);
 }
 
+
+
+//==============================================================================
+// Layout undo / redo
+//==============================================================================
+
+// The tree layout already has a serialised form - the one written to disk - so
+// undo is built on whole-layout snapshots rather than an inverse operation per
+// command. One mechanism then covers drag and drop, the move actions, folder
+// add/rename/delete and colour changes, and it cannot drift out of step with
+// them the way hand-written inverses do.
+//
+// Scene DELETION is deliberately not covered: that removes the source from OBS
+// itself, and no amount of restoring our tree brings the scene back.
+QString SceneTreeModel::serialiseLayout()
+{
+    obs_data_t *root = obs_data_create();
+    obs_data_array_t *folder_array = createFolderArray(*invisibleRootItem());
+    obs_data_set_array(root, "layout", folder_array);
+    obs_data_array_release(folder_array);
+
+    const QString json = QString::fromUtf8(obs_data_get_json(root));
+    obs_data_release(root);
+    return json;
+}
+
+void SceneTreeModel::restoreLayout(const QString &json)
+{
+    obs_data_t *root = obs_data_create_from_json(json.toUtf8().constData());
+    if (!root) {
+        return;
+    }
+
+    obs_data_array_t *folder_array = obs_data_get_array(root, "layout");
+    if (folder_array) {
+        cleanupSceneTree();
+        loadFolderArray(folder_array, *invisibleRootItem());
+        obs_data_array_release(folder_array);
+
+        // Reconcile against what OBS actually has, so a scene created or
+        // renamed since the snapshot is not stranded outside the tree.
+        updateTree();
+        emit modelChanged();
+        saveSceneTree();
+    }
+
+    obs_data_release(root);
+}
+
+QString SceneOrganiserDock::captureLayout()
+{
+    return m_model ? m_model->serialiseLayout() : QString();
+}
+
+void SceneOrganiserDock::pushLayoutUndo(const QString &name, const QString &before)
+{
+    // Nothing to record if the snapshot failed, the layout is unchanged, or we
+    // are ourselves in the middle of applying an undo.
+    if (m_applyingLayoutSnapshot || before.isEmpty()) {
+        return;
+    }
+
+    const QString after = captureLayout();
+    if (after.isEmpty() || after == before) {
+        return;
+    }
+
+    auto pack = [this](const QString &layout) {
+        obs_data_t *data = obs_data_create();
+        obs_data_set_int(data, "canvas", static_cast<int>(m_canvasType));
+        obs_data_set_string(data, "layout", layout.toUtf8().constData());
+        const QString json = QString::fromUtf8(obs_data_get_json(data));
+        obs_data_release(data);
+        return json;
+    };
+
+    const QString undoData = pack(before);
+    const QString redoData = pack(after);
+
+    obs_frontend_add_undo_redo_action(name.toUtf8().constData(),
+                                      SceneOrganiserDock::ApplyLayoutSnapshot,
+                                      SceneOrganiserDock::ApplyLayoutSnapshot,
+                                      undoData.toUtf8().constData(),
+                                      redoData.toUtf8().constData(),
+                                      false);
+}
+
+// Undo and redo are the same operation here - both just put a stored layout
+// back - so one callback serves both directions.
+void SceneOrganiserDock::ApplyLayoutSnapshot(const char *data)
+{
+    if (!data) {
+        return;
+    }
+
+    obs_data_t *parsed = obs_data_create_from_json(data);
+    if (!parsed) {
+        return;
+    }
+
+    const CanvasType canvasType = static_cast<CanvasType>(obs_data_get_int(parsed, "canvas"));
+    const QString layout = QString::fromUtf8(obs_data_get_string(parsed, "layout"));
+    obs_data_release(parsed);
+
+    for (SceneOrganiserDock *dock : s_dockInstances) {
+        if (!dock || dock->GetCanvasType() != canvasType) {
+            continue;
+        }
+
+        // Guard so restoring does not register an undo of its own, and so the
+        // save timer does not fight the restore.
+        dock->m_applyingLayoutSnapshot = true;
+        dock->m_model->restoreLayout(layout);
+        dock->applyAllCustomColors();
+        dock->applySceneVisibility();
+        dock->updateActiveSceneHighlight();
+        dock->refreshQuickList();
+        dock->m_applyingLayoutSnapshot = false;
+        return;
+    }
+}
+
+//==============================================================================
+// QuickListDelegate Implementation
+//==============================================================================
+
+StreamUP::SceneOrganiser::QuickListDelegate::QuickListDelegate(SceneOrganiserDock *dock, QObject *parent)
+    : QStyledItemDelegate(parent), m_dock(dock)
+{
+}
+
+void StreamUP::SceneOrganiser::QuickListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
+                                                        const QModelIndex &index) const
+{
+    if (!index.isValid() || !m_dock) {
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+
+    const bool isProgram = index.data(ProgramSceneRole).toBool();
+    const QVariant colorData = index.data(Qt::UserRole + 1);
+    const QColor customColor = colorData.isValid() ? colorData.value<QColor>() : QColor();
+    const bool isSelected = option.state & QStyle::State_Selected;
+    const bool isHovered = option.state & QStyle::State_MouseOver;
+
+    if (!isProgram && !customColor.isValid() && !isSelected && !isHovered) {
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+
+    // Identical rules to the tree: programme green outranks a custom colour,
+    // selection brightens whatever the base is, hover brightens it less.
+    QColor baseColor = isProgram ? QColor(Colors::COLOR_SUCCESS) : customColor;
+    QColor bgColor = baseColor;
+    if (isSelected) {
+        bgColor = m_dock->getSelectionColor(baseColor);
+    } else if (isHovered) {
+        bgColor = m_dock->getHoverColor(baseColor);
+    }
+
+    if (!bgColor.isValid()) {
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+    bgColor = m_dock->ensureRowContrast(bgColor);
+
+    const QColor textColor = m_dock->getContrastTextColor(bgColor);
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing, true);
+
+    QRect rect = option.rect;
+    rect.adjust(2, 1, -2, -1);
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(bgColor);
+    painter->drawRoundedRect(rect, 4, 4);
+    painter->restore();
+
+    QStyleOptionViewItem modifiedOption = option;
+    modifiedOption.palette.setColor(QPalette::Text, textColor);
+    modifiedOption.palette.setColor(QPalette::HighlightedText, textColor);
+    modifiedOption.backgroundBrush = QBrush(Qt::NoBrush);
+    modifiedOption.state &= ~QStyle::State_HasFocus;
+    modifiedOption.state &= ~QStyle::State_Selected;
+    modifiedOption.state &= ~QStyle::State_MouseOver;
+
+    QStyledItemDelegate::paint(painter, modifiedOption, index);
+}
+
+QSize StreamUP::SceneOrganiser::QuickListDelegate::sizeHint(const QStyleOptionViewItem &option,
+                                                           const QModelIndex &index) const
+{
+    QSize size = QStyledItemDelegate::sizeHint(option, index);
+    size.setHeight(m_dock ? m_dock->currentRowHeight() : 24);
+    return size;
+}
+
+//==============================================================================
+// Tabs: Scenes, the built-in lists, and user-made custom tabs
+//==============================================================================
+
+// Tab bar entries carry their identity in tabData as a token, not a number tied
+// to their position: tabs are reorderable, can be switched off in the settings,
+// and custom ones come and go. A custom tab is identified by its name, so its
+// place in the saved order survives its neighbours being renamed or deleted.
+static const char *kTabTokenScenes = "scenes";
+static const char *kTabTokenFavourites = "favourites";
+static const char *kTabTokenRecent = "recent";
+static const char *kTabTokenCustomPrefix = "custom:";
+
+static QString CustomTabToken(const QString &name)
+{
+    return QString::fromLatin1(kTabTokenCustomPrefix) + name;
+}
+
+void SceneOrganiserDock::setupQuickTabs()
+{
+    m_quickTabs = new QTabBar(this);
+    // Named so the theme can shape it. The global QTabBar rules are built for
+    // the main window's preview tabs, which round the BOTTOM corners; a tab bar
+    // sitting above a toolbar wants the opposite.
+    m_quickTabs->setObjectName("SceneOrganiserTabBar");
+    m_quickTabs->setExpanding(false);
+
+    // Every tab can be dragged into whatever order suits, the built-in three
+    // included - the order is saved by tab identity, so it survives tabs being
+    // switched off in the settings and switched back on later.
+    m_quickTabs->setMovable(true);
+    m_quickTabs->setDrawBase(true);
+
+    // Right-click is the route to creating and managing custom tabs.
+    m_quickTabs->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_quickTabs, &QWidget::customContextMenuRequested, this, &SceneOrganiserDock::onQuickTabsContextMenu);
+    connect(m_quickTabs, &QTabBar::currentChanged, this, &SceneOrganiserDock::onQuickTabChanged);
+    connect(m_quickTabs, &QTabBar::tabMoved, this, &SceneOrganiserDock::onTabMoved);
+
+    // One tree serves every non-Scenes tab, repopulated as tabs change. It is
+    // the SAME view class as the Scenes tree - that is what gives it the same
+    // painting - over a plain item model, because a tab holds an arrangement of
+    // names rather than live scene sources.
+    m_quickModel = new QStandardItemModel(this);
+    m_quickProxy = new QSortFilterProxyModel(this);
+    m_quickProxy->setSourceModel(m_quickModel);
+    m_quickProxy->setRecursiveFilteringEnabled(true);
+    m_quickProxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
+
+    m_quickTree = new SceneTreeView(this);
+    m_quickTree->setModel(m_quickProxy);
+    m_quickTree->setHeaderHidden(true);
+    m_quickTree->setFrameShape(QFrame::NoFrame);
+    m_quickTree->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_quickTree->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_quickTree->setIndentation(20);
+    m_quickTree->setRootIsDecorated(true);
+    m_quickTree->setExpandsOnDoubleClick(false);
+    m_quickTree->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
+    // Folders are arranged by dragging, exactly as in the Scenes tree.
+    m_quickTree->setDragDropMode(QAbstractItemView::InternalMove);
+    m_quickTree->setDefaultDropAction(Qt::MoveAction);
+    m_quickTree->setDropIndicatorShown(true);
+    m_quickTree->setDragEnabled(true);
+    m_quickTree->setAcceptDrops(true);
+
+    // No sideways scrolling: a long scene name is cut with an ellipsis.
+    m_quickTree->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_quickTree->setTextElideMode(Qt::ElideRight);
+
+    // Same delegate as the Scenes tree, so a row looks the same anywhere.
+    m_quickTree->setItemDelegate(new CustomColorDelegate(this, m_quickTree, m_quickProxy, m_quickModel));
+    applyRowMetricsToQuickList();
+
+    connect(m_quickTree, &QAbstractItemView::clicked, this, &SceneOrganiserDock::onQuickTreeActivated);
+    connect(m_quickTree, &QWidget::customContextMenuRequested, this, &SceneOrganiserDock::onQuickTreeContextMenu);
+
+    // A drag inside the tree changes the tab's arrangement, so the widget is
+    // read back into the tab whenever its rows move.
+    connect(m_quickModel, &QAbstractItemModel::rowsMoved, this, [this]() { commitQuickTreeToTab(); });
+    connect(m_quickModel, &QAbstractItemModel::rowsRemoved, this, [this]() {
+        if (!m_populatingQuickTree) {
+            commitQuickTreeToTab();
+        }
+    });
+
+    m_viewStack = new QStackedWidget(this);
+    m_viewStack->addWidget(m_treeView);   // index 0 - the organiser tree
+    m_viewStack->addWidget(m_quickTree);  // index 1 - whichever tab is active
+
+    rebuildTabBar();
+}
+
+// ---------------------------------------------------------------------------
+// Node helpers
+// ---------------------------------------------------------------------------
+
+bool SceneOrganiserDock::nodesContainScene(const QVector<TabNode> &nodes, const QString &sceneName)
+{
+    for (const TabNode &node : nodes) {
+        if (!node.isFolder && node.name == sceneName) {
+            return true;
+        }
+        if (node.isFolder && nodesContainScene(node.children, sceneName)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool SceneOrganiserDock::removeSceneFromNodes(QVector<TabNode> &nodes, const QString &sceneName)
+{
+    for (int i = 0; i < nodes.size(); ++i) {
+        if (!nodes[i].isFolder && nodes[i].name == sceneName) {
+            nodes.remove(i);
+            return true;
+        }
+        if (nodes[i].isFolder && removeSceneFromNodes(nodes[i].children, sceneName)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void SceneOrganiserDock::collectSceneNames(const QVector<TabNode> &nodes, QStringList &out)
+{
+    for (const TabNode &node : nodes) {
+        if (node.isFolder) {
+            collectSceneNames(node.children, out);
+        } else if (!out.contains(node.name)) {
+            out << node.name;
+        }
+    }
+}
+
+QString SceneOrganiserDock::uniqueFolderName(const QVector<TabNode> &nodes, const QString &base)
+{
+    QStringList taken;
+    for (const TabNode &node : nodes) {
+        if (node.isFolder) {
+            taken << node.name;
+        }
+    }
+
+    if (!taken.contains(base)) {
+        return base;
+    }
+    for (int suffix = 2; ; ++suffix) {
+        const QString candidate = QString("%1 %2").arg(base).arg(suffix);
+        if (!taken.contains(candidate)) {
+            return candidate;
+        }
+    }
+}
+
+QVector<TabNode> *SceneOrganiserDock::editableNodesForCurrentTab()
+{
+    if (m_currentKind == QuickTabKind::Favourites) {
+        return &m_favouriteNodes;
+    }
+    if (m_currentKind == QuickTabKind::Custom &&
+        m_currentCustomTab >= 0 && m_currentCustomTab < m_customTabs.size()) {
+        return &m_customTabs[m_currentCustomTab].nodes;
+    }
+    return nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// Populating the tab tree, and reading it back
+// ---------------------------------------------------------------------------
+
+void SceneOrganiserDock::refreshQuickList()
+{
+    if (!m_quickTree || !m_quickModel || m_currentKind == QuickTabKind::Scenes) {
+        return;
+    }
+
+    // Guarded because populating inserts and removes rows, which is also how a
+    // drag finishes - without this the rebuild would write itself back.
+    m_populatingQuickTree = true;
+    m_quickModel->clear();
+
+    QString liveScene;
+    if (obs_source_t *current = Canvas::GetCurrentScene(m_canvasType)) {
+        liveScene = QString::fromUtf8(obs_source_get_name(current));
+        obs_source_release(current);
+    }
+
+    auto makeSceneItem = [&](const QString &sceneName) -> QStandardItem * {
+        // A name that no longer resolves to a scene on this canvas is skipped
+        // rather than listed: a row that does nothing when clicked is worse than
+        // an absent one. The node stays in the tab, so it returns if the scene does.
+        QStandardItem *treeItem = m_model->findSceneItemByName(sceneName);
+        if (!treeItem || m_hiddenScenes.contains(sceneName)) {
+            return nullptr;
+        }
+
+        QStandardItem *item = new QStandardItem(sceneName);
+        item->setIcon(treeItem->icon());
+        item->setData(false, TabItemIsFolderRole);
+        item->setEditable(false);
+        item->setDropEnabled(false); // a scene is not a container
+        item->setDragEnabled(true);
+
+        // Colour and programme marker are passed as data, exactly as the Scenes
+        // tree does it, so the delegate draws them the same way.
+        const QVariant colorData = treeItem->data(Qt::UserRole + 1);
+        if (colorData.isValid()) {
+            item->setData(colorData, Qt::UserRole + 1);
+        }
+        item->setData(sceneName == liveScene, ProgramSceneRole);
+        return item;
+    };
+
+    std::function<void(const QVector<TabNode> &, QStandardItem *)> build =
+        [&](const QVector<TabNode> &nodes, QStandardItem *parent) {
+            for (const TabNode &node : nodes) {
+                if (node.isFolder) {
+                    QStandardItem *folder = new QStandardItem(node.name);
+                    folder->setIcon(GetThemeIcon("groupIcon"));
+                    folder->setData(true, TabItemIsFolderRole);
+                    folder->setEditable(false);
+                    folder->setDropEnabled(true);
+                    folder->setDragEnabled(true);
+
+                    if (parent) {
+                        parent->appendRow(folder);
+                    } else {
+                        m_quickModel->invisibleRootItem()->appendRow(folder);
+                    }
+                    build(node.children, folder);
+                } else if (QStandardItem *item = makeSceneItem(node.name)) {
+                    if (parent) {
+                        parent->appendRow(item);
+                    } else {
+                        m_quickModel->invisibleRootItem()->appendRow(item);
+                    }
+                }
+            }
+        };
+
+    if (m_currentKind == QuickTabKind::Recent) {
+        // Recent has no arrangement to speak of - it is a plain, ordered list.
+        for (const QString &sceneName : m_recentScenes) {
+            if (QStandardItem *item = makeSceneItem(sceneName)) {
+                m_quickModel->invisibleRootItem()->appendRow(item);
+            }
+        }
+    } else if (QVector<TabNode> *nodes = editableNodesForCurrentTab()) {
+        build(*nodes, nullptr);
+    }
+
+    if (m_quickModel->rowCount() == 0) {
+        const char *emptyText = "SceneOrganiser.Tab.Custom.Empty";
+        if (m_currentKind == QuickTabKind::Favourites) {
+            emptyText = "SceneOrganiser.Tab.Favourites.Empty";
+        } else if (m_currentKind == QuickTabKind::Recent) {
+            emptyText = "SceneOrganiser.Tab.Recent.Empty";
+        }
+
+        QStandardItem *empty = new QStandardItem(obs_module_text(emptyText));
+        empty->setFlags(Qt::NoItemFlags);
+        m_quickModel->invisibleRootItem()->appendRow(empty);
+    }
+
+    // Folders come back the way the user left them.
+    if (m_quickTreeCollapsed) {
+        m_quickTree->collapseAll();
+    } else {
+        m_quickTree->expandAll();
+    }
+
+    // Recent is not rearranged by hand, so it does not accept drags.
+    const bool arrangeable = (editableNodesForCurrentTab() != nullptr);
+    m_quickTree->setDragDropMode(arrangeable ? QAbstractItemView::InternalMove
+                                             : QAbstractItemView::NoDragDrop);
+    m_quickTree->setDragEnabled(arrangeable);
+    m_quickTree->setAcceptDrops(arrangeable);
+
+    m_populatingQuickTree = false;
+}
+
+void SceneOrganiserDock::commitQuickTreeToTab()
+{
+    QVector<TabNode> *nodes = editableNodesForCurrentTab();
+    if (!nodes || !m_quickModel || m_populatingQuickTree) {
+        return;
+    }
+
+    std::function<QVector<TabNode>(QStandardItem *)> read = [&](QStandardItem *parent) {
+        QVector<TabNode> out;
+        QStandardItem *root = parent ? parent : m_quickModel->invisibleRootItem();
+        for (int i = 0; i < root->rowCount(); ++i) {
+            QStandardItem *item = root->child(i);
+            if (!item || !(item->flags() & Qt::ItemIsEnabled)) {
+                continue; // the empty-state placeholder
+            }
+
+            TabNode node;
+            node.isFolder = item->data(TabItemIsFolderRole).toBool();
+            node.name = item->text();
+            if (node.isFolder) {
+                node.children = read(item);
+            }
+            out << node;
+        }
+        return out;
+    };
+
+    *nodes = read(nullptr);
+    SaveConfiguration();
+}
+
+// The item behind a view index on the tab tree, mapping through its proxy.
+static QStandardItem *TabItemFromIndex(QSortFilterProxyModel *proxy, QStandardItemModel *model,
+                                       const QModelIndex &index)
+{
+    if (!proxy || !model || !index.isValid()) {
+        return nullptr;
+    }
+    return model->itemFromIndex(proxy->mapToSource(index));
+}
+
+void SceneOrganiserDock::onQuickTreeActivated(const QModelIndex &index)
+{
+    QStandardItem *item = TabItemFromIndex(m_quickProxy, m_quickModel, index);
+    if (!item || !(item->flags() & Qt::ItemIsEnabled) || item->data(TabItemIsFolderRole).toBool()) {
+        return; // folders are for organising, not for going live
+    }
+
+    if (QStandardItem *treeItem = m_model->findSceneItemByName(item->text())) {
+        activateSceneItem(treeItem);
+        refreshQuickList();
+    }
+}
+
+void SceneOrganiserDock::onQuickTreeContextMenu(const QPoint &pos)
+{
+    QStandardItem *item = TabItemFromIndex(m_quickProxy, m_quickModel, m_quickTree->indexAt(pos));
+    const bool isFolder = item && item->data(TabItemIsFolderRole).toBool();
+    const bool arrangeable = (editableNodesForCurrentTab() != nullptr);
+
+    QMenu menu(this);
+
+    if (arrangeable) {
+        menu.addAction(obs_module_text("SceneOrganiser.Action.AddFolder"), this,
+                       &SceneOrganiserDock::onAddTabFolderClicked);
+        menu.addAction(obs_module_text("SceneOrganiser.Menu.AddScenes"), this,
+                       &SceneOrganiserDock::showAddToTabMenu);
+    }
+
+    if (item && (item->flags() & Qt::ItemIsEnabled)) {
+        menu.addSeparator();
+
+        if (isFolder && arrangeable) {
+            menu.addAction(QString::fromUtf8(obs_frontend_get_locale_string("Rename"), -1), this, [this, item]() {
+                onRenameTabFolderClicked(item);
+            });
+        }
+        if (arrangeable) {
+            menu.addAction(obs_module_text("SceneOrganiser.Action.RemoveFromTab"), this, [this, item]() {
+                onRemoveFromTabClicked(item);
+            });
+        }
+
+        if (!isFolder) {
+            const QString sceneName = item->text();
+            menu.addSeparator();
+            menu.addAction(isFavourite(sceneName)
+                               ? obs_module_text("SceneOrganiser.Action.RemoveFavourite")
+                               : obs_module_text("SceneOrganiser.Action.AddFavourite"),
+                           this, [this, sceneName]() {
+                               if (isFavourite(sceneName)) {
+                                   removeSceneFromNodes(m_favouriteNodes, sceneName);
+                               } else {
+                                   TabNode node;
+                                   node.name = sceneName;
+                                   m_favouriteNodes.append(node);
+                               }
+                               refreshQuickList();
+                               SaveConfiguration();
+                           });
+
+            // Jumping back to the tree is the natural next step after finding a
+            // scene here and wanting to see where it actually lives.
+            menu.addAction(obs_module_text("SceneOrganiser.Action.ShowInTree"), this, [this, sceneName]() {
+                if (m_quickTabs) {
+                    m_quickTabs->setCurrentIndex(0);
+                }
+                selectSceneByName(sceneName);
+            });
+        }
+    }
+
+    if (menu.isEmpty()) {
+        return;
+    }
+    menu.exec(m_quickTree->mapToGlobal(pos));
+}
+
+void SceneOrganiserDock::onAddTabFolderClicked()
+{
+    if (!editableNodesForCurrentTab()) {
+        return;
+    }
+
+    QPointer<SceneOrganiserDock> self(this);
+    su::prompt(this,
+        QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.AddFolder.Title")),
+        QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.AddFolder.Text")),
+        QString(),
+        [self](const QString &folderName) {
+            if (!self || folderName.trimmed().isEmpty()) {
+                return;
+            }
+            QVector<TabNode> *target = self->editableNodesForCurrentTab();
+            if (!target) {
+                return;
+            }
+
+            TabNode folder;
+            folder.isFolder = true;
+            folder.name = uniqueFolderName(*target, folderName.trimmed());
+            target->append(folder);
+
+            self->refreshQuickList();
+            self->SaveConfiguration();
+        });
+}
+
+void SceneOrganiserDock::onRenameTabFolderClicked(QStandardItem *item)
+{
+    if (!item || !item->data(TabItemIsFolderRole).toBool()) {
+        return;
+    }
+
+    QPointer<SceneOrganiserDock> self(this);
+    const QString oldName = item->text();
+
+    su::prompt(this,
+        QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.RenameFolder.Title")),
+        QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.RenameFolder.Text")),
+        oldName,
+        [self, item, oldName](const QString &newName) {
+            if (!self || newName.trimmed().isEmpty() || newName.trimmed() == oldName) {
+                return;
+            }
+            item->setText(newName.trimmed());
+            self->commitQuickTreeToTab();
+        });
+}
+
+void SceneOrganiserDock::onRemoveFromTabClicked(QStandardItem *item)
+{
+    if (!item || !editableNodesForCurrentTab() || !m_quickModel) {
+        return;
+    }
+
+    // Removing a folder takes its contents out of the tab with it. The scenes
+    // themselves are untouched - a tab is an arrangement, not ownership.
+    QStandardItem *parent = item->parent() ? item->parent() : m_quickModel->invisibleRootItem();
+    parent->removeRow(item->row());
+
+    commitQuickTreeToTab();
+    refreshQuickList();
+}
+
+// ---------------------------------------------------------------------------
+// Tab bar: building, ordering, switching
+// ---------------------------------------------------------------------------
+
+void SceneOrganiserDock::rebuildTabBar()
+{
+    if (!m_quickTabs) {
+        return;
+    }
+
+    // Remember what was selected so the same tab can be picked back up. Doing
+    // this by identity rather than by position is what lets a tab appear or
+    // vanish beside the current one without moving the user somewhere else.
+    const QString wantToken = currentTabToken();
+
+    QSignalBlocker blocker(m_quickTabs);
+    while (m_quickTabs->count() > 0) {
+        m_quickTabs->removeTab(0);
+    }
+
+    QStringList available;
+    available << QString::fromLatin1(kTabTokenScenes);
+
+    const StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+    if (settings.sceneOrganiserShowFavouritesTab) {
+        available << QString::fromLatin1(kTabTokenFavourites);
+    }
+    if (settings.sceneOrganiserShowRecentTab) {
+        available << QString::fromLatin1(kTabTokenRecent);
+    }
+    for (const CustomSceneTab &tab : m_customTabs) {
+        available << CustomTabToken(tab.name);
+    }
+
+    // Saved order first, then anything new appended - so a tab switched back on
+    // returns to where it was, and a tab just created lands at the end.
+    QStringList ordered;
+    for (const QString &token : m_tabOrder) {
+        if (available.contains(token) && !ordered.contains(token)) {
+            ordered << token;
+        }
+    }
+    for (const QString &token : available) {
+        if (!ordered.contains(token)) {
+            ordered << token;
+        }
+    }
+    m_tabOrder = ordered;
+
+    for (const QString &token : ordered) {
+        QString label;
+        if (token == QLatin1String(kTabTokenScenes)) {
+            label = obs_module_text("SceneOrganiser.Tab.Scenes");
+        } else if (token == QLatin1String(kTabTokenFavourites)) {
+            label = obs_module_text("SceneOrganiser.Tab.Favourites");
+        } else if (token == QLatin1String(kTabTokenRecent)) {
+            label = obs_module_text("SceneOrganiser.Tab.Recent");
+        } else {
+            label = token.mid(int(strlen(kTabTokenCustomPrefix)));
+        }
+
+        const int index = m_quickTabs->addTab(label);
+        m_quickTabs->setTabData(index, token);
+    }
+
+    // With only the tree left there is nothing to switch between, so the bar
+    // itself goes rather than sitting there as a single dead tab.
+    m_quickTabs->setVisible(m_quickTabs->count() > 1);
+
+    int restoreIndex = 0;
+    for (int i = 0; i < m_quickTabs->count(); ++i) {
+        if (m_quickTabs->tabData(i).toString() == wantToken) {
+            restoreIndex = i;
+            break;
+        }
+    }
+
+    blocker.unblock();
+    m_quickTabs->setCurrentIndex(restoreIndex);
+    // setCurrentIndex is silent when the index has not changed (it is 0 here on
+    // a rebuild that dropped the active tab), so the state is applied directly.
+    onQuickTabChanged(restoreIndex);
+}
+
+QString SceneOrganiserDock::currentTabToken() const
+{
+    switch (m_currentKind) {
+    case QuickTabKind::Favourites:
+        return QString::fromLatin1(kTabTokenFavourites);
+    case QuickTabKind::Recent:
+        return QString::fromLatin1(kTabTokenRecent);
+    case QuickTabKind::Custom:
+        if (m_currentCustomTab >= 0 && m_currentCustomTab < m_customTabs.size()) {
+            return CustomTabToken(m_customTabs.at(m_currentCustomTab).name);
+        }
+        return QString::fromLatin1(kTabTokenScenes);
+    case QuickTabKind::Scenes:
+    default:
+        return QString::fromLatin1(kTabTokenScenes);
+    }
+}
+
+// Any tab can be dragged anywhere, including the built-in three. The bar's new
+// order simply becomes the saved order.
+void SceneOrganiserDock::onTabMoved(int from, int to)
+{
+    Q_UNUSED(from);
+    Q_UNUSED(to);
+
+    if (!m_quickTabs) {
+        return;
+    }
+
+    QStringList order;
+    for (int i = 0; i < m_quickTabs->count(); ++i) {
+        order << m_quickTabs->tabData(i).toString();
+    }
+    m_tabOrder = order;
+
+    SaveConfiguration();
+}
+
+void SceneOrganiserDock::onQuickTabChanged(int index)
+{
+    const QString token = (m_quickTabs && index >= 0) ? m_quickTabs->tabData(index).toString()
+                                                     : QString::fromLatin1(kTabTokenScenes);
+
+    m_currentCustomTab = -1;
+    if (token == QLatin1String(kTabTokenFavourites)) {
+        m_currentKind = QuickTabKind::Favourites;
+    } else if (token == QLatin1String(kTabTokenRecent)) {
+        m_currentKind = QuickTabKind::Recent;
+    } else if (token.startsWith(QLatin1String(kTabTokenCustomPrefix))) {
+        m_currentKind = QuickTabKind::Custom;
+        m_currentCustomTab = customTabIndexByName(token.mid(int(strlen(kTabTokenCustomPrefix))));
+        if (m_currentCustomTab < 0) {
+            m_currentKind = QuickTabKind::Scenes;
+        }
+    } else {
+        m_currentKind = QuickTabKind::Scenes;
+    }
+
+    if (m_viewStack) {
+        m_viewStack->setCurrentIndex(m_currentKind == QuickTabKind::Scenes ? 0 : 1);
+    }
+
+    // A search typed on one tab should not quietly hide rows on the next, so the
+    // box is cleared on the way through.
+    if (m_searchEdit && !m_searchEdit->text().isEmpty()) {
+        m_searchEdit->clear();
+    }
+    if (m_quickProxy) {
+        m_quickProxy->setFilterWildcard(QString());
+    }
+
+    refreshQuickList();
+    updateControlsForTab();
+    if (m_saveTimer) {
+        m_saveTimer->start();
+    }
+}
+
+void SceneOrganiserDock::onQuickTabsContextMenu(const QPoint &pos)
+{
+    QMenu menu(this);
+
+    menu.addAction(obs_module_text("SceneOrganiser.Action.NewTab"), this, &SceneOrganiserDock::onCreateCustomTabClicked);
+
+    // Rename and delete apply to the tab actually under the cursor, not the
+    // selected one - right-clicking a tab and having it act on a different tab
+    // would be indefensible.
+    const int barIndex = m_quickTabs->tabAt(pos);
+    const QString token = (barIndex >= 0) ? m_quickTabs->tabData(barIndex).toString() : QString();
+    if (token.startsWith(QLatin1String(kTabTokenCustomPrefix))) {
+        const int customIndex = customTabIndexByName(token.mid(int(strlen(kTabTokenCustomPrefix))));
+        menu.addAction(obs_module_text("SceneOrganiser.Action.RenameTab"), this, [this, customIndex]() {
+            onRenameCustomTabClicked(customIndex);
+        });
+        menu.addAction(obs_module_text("SceneOrganiser.Action.DeleteTab"), this, [this, customIndex]() {
+            onDeleteCustomTabClicked(customIndex);
+        });
+    }
+
+    // The built-in tabs are switched off from here as well as from the settings
+    // page - right-clicking the thing you want rid of is the obvious gesture.
+    if (token == QLatin1String(kTabTokenFavourites) || token == QLatin1String(kTabTokenRecent)) {
+        const bool favourites = (token == QLatin1String(kTabTokenFavourites));
+        menu.addAction(obs_module_text("SceneOrganiser.Action.HideTab"), this, [favourites]() {
+            StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
+            if (favourites) {
+                settings.sceneOrganiserShowFavouritesTab = false;
+            } else {
+                settings.sceneOrganiserShowRecentTab = false;
+            }
+            StreamUP::SettingsManager::UpdateSettings(settings);
+            SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+        });
+    }
+
+    menu.addSeparator();
+    menu.addAction(obs_module_text("SceneOrganiser.Action.OpenSettings"), this, &SceneOrganiserDock::onSettingsClicked);
+
+    menu.exec(m_quickTabs->mapToGlobal(pos));
+}
+
+// ---------------------------------------------------------------------------
+// Toolbar behaviour per tab
+// ---------------------------------------------------------------------------
+
+void SceneOrganiserDock::updateControlsForTab()
+{
+    // Search stays on every tab: a tab with folders is just as worth filtering as
+    // the Scenes tree, and a control that comes and goes makes the dock jump.
+    if (m_searchEdit) {
+        m_searchEdit->setPlaceholderText(obs_module_text("SceneOrganiser.Search.Placeholder"));
+    }
+
+    // The tab bar is built before the toolbar is, so the first call arrives with
+    // no buttons to speak of.
+    if (!m_toolbar) {
+        return;
+    }
+
+    const bool onTree = (m_currentKind == QuickTabKind::Scenes);
+    // Recent is maintained by what you go live with, so it is the one tab you do
+    // not arrange by hand. Everything else is a tree the user owns.
+    const bool arrangeable = (m_currentKind == QuickTabKind::Favourites ||
+                              m_currentKind == QuickTabKind::Custom);
+
+    // Rather than grey buttons out, each is relabelled for what it does here:
+    // add puts scenes and folders into this tab, remove takes them out, and the
+    // arrows order them. Only controls with no meaning at all are hidden.
+    if (m_addButton) {
+        m_addButton->setVisible(onTree || arrangeable);
+        m_addButton->setToolTip(onTree ? obs_module_text("SceneOrganiser.Tooltip.Add")
+                                       : obs_module_text("SceneOrganiser.Tooltip.AddToTab"));
+    }
+    if (m_removeButton) {
+        m_removeButton->setToolTip(onTree ? obs_module_text("SceneOrganiser.Tooltip.Remove")
+                                          : obs_module_text("SceneOrganiser.Tooltip.RemoveFromTab"));
+    }
+    if (m_moveUpButton) {
+        m_moveUpButton->setVisible(onTree || arrangeable);
+    }
+    if (m_moveDownButton) {
+        m_moveDownButton->setVisible(onTree || arrangeable);
+    }
+    if (m_expandCollapseButton) {
+        // Tab trees have folders of their own, so expand/collapse applies there
+        // too. Only Recent, a flat list, has nothing to expand.
+        m_expandCollapseButton->setVisible(m_currentKind != QuickTabKind::Recent);
+
+        // The button shows the state of the tree actually on screen.
+        const bool collapsed = (m_currentKind == QuickTabKind::Scenes) ? !m_allExpanded : m_quickTreeCollapsed;
+        m_expandCollapseButton->blockSignals(true);
+        m_expandCollapseButton->setChecked(collapsed);
+        m_expandCollapseButton->blockSignals(false);
+    }
+    if (m_lockButton) {
+        // The lock protects the Scenes tree from edits; a tab is an arrangement
+        // and has nothing of OBS's to protect.
+        m_lockButton->setVisible(onTree);
+    }
+
+    updateUIEnabledState();
+}
+
+QString SceneOrganiserDock::selectedSceneOnCurrentTab() const
+{
+    if (m_currentKind == QuickTabKind::Scenes) {
+        if (!m_treeView || !m_treeView->selectionModel()) {
+            return QString();
+        }
+        const QModelIndexList selected = m_treeView->selectionModel()->selectedRows();
+        if (selected.isEmpty()) {
+            return QString();
+        }
+        QStandardItem *item = m_model->itemFromIndex(m_proxyModel->mapToSource(selected.first()));
+        return (item && item->type() == SceneTreeItem::UserType + 2) ? item->text() : QString();
+    }
+
+    if (!m_quickTree || !m_quickTree->selectionModel()) {
+        return QString();
+    }
+    const QModelIndexList selected = m_quickTree->selectionModel()->selectedRows();
+    if (selected.isEmpty()) {
+        return QString();
+    }
+    QStandardItem *item = TabItemFromIndex(m_quickProxy, m_quickModel, selected.first());
+    if (!item || !(item->flags() & Qt::ItemIsEnabled) || item->data(TabItemIsFolderRole).toBool()) {
+        return QString();
+    }
+    return item->text();
+}
+
+void SceneOrganiserDock::applyRowMetricsToQuickList()
+{
+    if (!m_quickTree || !m_treeView) {
+        return;
+    }
+
+    // Taken from the Scenes tree rather than recomputed, so there is exactly one
+    // definition of what a row looks like in this dock.
+    m_quickTree->setIconSize(m_treeView->iconSize());
+    m_quickTree->setFont(m_treeView->font());
+    m_quickTree->setIndentation(m_treeView->indentation());
+
+    // Row height comes from the delegate's sizeHint, which Qt caches.
+    m_quickTree->doItemsLayout();
+    if (m_quickTree->viewport()) {
+        m_quickTree->viewport()->update();
+    }
+}
+
+// Add, on a tab: a checklist of every scene not already in it, so a tab can be
+// filled in one pass rather than one scene per trip to the menu.
+void SceneOrganiserDock::showAddToTabMenu()
+{
+    QVector<TabNode> *nodes = editableNodesForCurrentTab();
+    if (!nodes) {
+        return;
+    }
+
+    QStringList candidates;
+    std::function<void(QStandardItem *)> collect = [&](QStandardItem *parent) {
+        for (int i = 0; i < parent->rowCount(); ++i) {
+            QStandardItem *item = parent->child(i);
+            if (!item) continue;
+            if (item->type() == SceneTreeItem::UserType + 2) {
+                const QString sceneName = item->text();
+                if (!nodesContainScene(*nodes, sceneName) && !m_hiddenScenes.contains(sceneName)) {
+                    candidates << sceneName;
+                }
+            }
+            if (item->rowCount() > 0) {
+                collect(item);
+            }
+        }
+    };
+    collect(m_model->invisibleRootItem());
+
+    if (candidates.isEmpty()) {
+        su::info(this,
+            QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.AddScenes.Title")),
+            QString::fromUtf8(obs_module_text("SceneOrganiser.Menu.AllScenesAdded")));
+        return;
+    }
+
+    auto shell = su::makeWindow(QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.AddScenes.Title")),
+                                "v" PROJECT_VERSION, this, /*brandFooter=*/false, "StreamUP");
+
+    auto *listWidget = new QListWidget();
+    listWidget->setSelectionMode(QAbstractItemView::NoSelection);
+    listWidget->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    for (const QString &sceneName : candidates) {
+        QListWidgetItem *item = new QListWidgetItem(sceneName, listWidget);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Unchecked);
+    }
+
+    // The whole row toggles, not just the little box. Aiming for a 13px target
+    // in a list of scene names is a needless bit of precision.
+    QObject::connect(listWidget, &QListWidget::itemClicked, [](QListWidgetItem *item) {
+        item->setCheckState(item->checkState() == Qt::Checked ? Qt::Unchecked : Qt::Checked);
+    });
+
+    // Wide enough for the longest scene name, so nothing is cut off or needs
+    // scrolling sideways to read. Scene names here run long by nature.
+    int widest = 0;
+    const QFontMetrics metrics(listWidget->font());
+    for (const QString &sceneName : candidates) {
+        widest = std::max(widest, metrics.horizontalAdvance(sceneName));
+    }
+    // Text, plus the checkbox and its spacing, plus the dialog's own margins.
+    const int contentWidth = widest + su::S(90);
+
+    shell.content->setContentsMargins(su::S(16), su::S(16), su::S(16), su::S(8));
+    shell.content->addWidget(listWidget);
+
+    auto *cancel = new su::PillButton("Cancel", "outline");
+    auto *add = new su::PillButton("Add", "primary");
+    shell.footerButtons->addWidget(cancel);
+    shell.footerButtons->addWidget(add);
+
+    QObject::connect(cancel, &QPushButton::clicked, shell.dialog, &QDialog::close);
+
+    QPointer<SceneOrganiserDock> self(this);
+    QObject::connect(add, &QPushButton::clicked, shell.dialog, [self, listWidget, dlg = shell.dialog]() {
+        if (self) {
+            // Re-resolved on accept: the dialog is modeless, so the tab showing
+            // now is the tab the scenes belong in.
+            if (QVector<TabNode> *target = self->editableNodesForCurrentTab()) {
+                for (int i = 0; i < listWidget->count(); ++i) {
+                    QListWidgetItem *item = listWidget->item(i);
+                    if (item->checkState() == Qt::Checked && !nodesContainScene(*target, item->text())) {
+                        TabNode node;
+                        node.name = item->text();
+                        target->append(node);
+                    }
+                }
+                self->refreshQuickList();
+                self->SaveConfiguration();
+            }
+        }
+        dlg->close();
+    });
+
+    // Bounded so a very long scene name cannot throw a dialog wider than the
+    // screen, and a short list still gets a sensible minimum.
+    const int dialogWidth = qBound(su::S(320), contentWidth, su::S(760));
+    shell.dialog->resize(dialogWidth, su::S(460));
+    shell.dialog->show();
+}
+
+// Move the selected row within its own level of the current tab's tree.
+// Moving between folders is a drag; this is the toolbar equivalent for ordering
+// within one.
+void SceneOrganiserDock::moveWithinCurrentTab(int direction)
+{
+    if (!m_quickTree || !m_quickModel || !editableNodesForCurrentTab()) {
+        return;
+    }
+
+    const QModelIndexList selected = m_quickTree->selectionModel()->selectedRows();
+    if (selected.isEmpty()) {
+        return;
+    }
+
+    QStandardItem *item = TabItemFromIndex(m_quickProxy, m_quickModel, selected.first());
+    if (!item || !(item->flags() & Qt::ItemIsEnabled)) {
+        return;
+    }
+
+    QStandardItem *parent = item->parent() ? item->parent() : m_quickModel->invisibleRootItem();
+    const int from = item->row();
+    const int to = from + direction;
+    if (to < 0 || to >= parent->rowCount()) {
+        return;
+    }
+
+    // Taken out and put back rather than swapped, so a folder keeps its children.
+    m_populatingQuickTree = true;
+    QList<QStandardItem *> row = parent->takeRow(from);
+    parent->insertRow(to, row);
+    m_populatingQuickTree = false;
+
+    m_quickTree->expandAll();
+    const QModelIndex moved = m_quickProxy->mapFromSource(m_quickModel->indexFromItem(row.first()));
+    m_quickTree->selectionModel()->select(moved, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    m_quickTree->setCurrentIndex(moved);
+
+    commitQuickTreeToTab();
+}
+
+// ---------------------------------------------------------------------------
+// Custom tab management
+// ---------------------------------------------------------------------------
+
+int SceneOrganiserDock::customTabIndexByName(const QString &name) const
+{
+    for (int i = 0; i < m_customTabs.size(); ++i) {
+        if (m_customTabs.at(i).name == name) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Asks for a tab name, and keeps asking if the answer is one that is already
+// taken. skipIndex is the tab being renamed, which is allowed to keep its own
+// name; -1 when creating. Blank is treated as a cancel.
+void SceneOrganiserDock::promptForTabName(const QString &title, const QString &fieldLabel,
+                                          const QString &initial, int skipIndex,
+                                          std::function<void(const QString &)> onAccept)
+{
+    QPointer<SceneOrganiserDock> self(this);
+
+    su::prompt(this, title, fieldLabel, initial,
+        [self, title, fieldLabel, skipIndex, onAccept](const QString &entered) {
+            if (!self) {
+                return;
+            }
+
+            const QString name = entered.trimmed();
+            if (name.isEmpty()) {
+                return;
+            }
+
+            const int clash = self->customTabIndexByName(name);
+            if (clash >= 0 && clash != skipIndex) {
+                // Say what went wrong, then hand the typed name straight back so
+                // it can be edited rather than retyped from nothing.
+                su::info(self,
+                    QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.TabNameTaken.Title")),
+                    QString(obs_module_text("SceneOrganiser.Dialog.TabNameTaken.Text")).arg(name));
+
+                self->promptForTabName(title, fieldLabel, name, skipIndex, onAccept);
+                return;
+            }
+
+            onAccept(name);
+        });
+}
+
+void SceneOrganiserDock::onCreateCustomTabClicked()
+{
+    QPointer<SceneOrganiserDock> self(this);
+
+    promptForTabName(QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.NewTab.Title")),
+                     QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.NewTab.Text")),
+                     QString(), -1,
+        [self](const QString &name) {
+            if (!self) {
+                return;
+            }
+
+            CustomSceneTab tab;
+            tab.name = name;
+            self->m_customTabs.append(tab);
+
+            // Land the user on the tab they just made - it is empty, and its
+            // toolbar is how scenes and folders get into it.
+            self->m_currentKind = QuickTabKind::Custom;
+            self->m_currentCustomTab = self->m_customTabs.size() - 1;
+
+            self->rebuildTabBar();
+            self->SaveConfiguration();
+        });
+}
+
+void SceneOrganiserDock::onRenameCustomTabClicked(int customIndex)
+{
+    if (customIndex < 0 || customIndex >= m_customTabs.size()) {
+        return;
+    }
+
+    QPointer<SceneOrganiserDock> self(this);
+    const QString oldName = m_customTabs.at(customIndex).name;
+
+    promptForTabName(QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.RenameTab.Title")),
+                     QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.RenameTab.Text")),
+                     oldName, customIndex,
+        [self, customIndex, oldName](const QString &name) {
+            if (!self) {
+                return;
+            }
+            // Re-check the index: the dialog is modeless and the tab list can
+            // have changed underneath it.
+            if (customIndex >= self->m_customTabs.size() || self->m_customTabs.at(customIndex).name != oldName) {
+                return;
+            }
+
+            self->m_customTabs[customIndex].name = name;
+            // The saved order refers to tabs by name, so it has to follow.
+            const int orderIndex = self->m_tabOrder.indexOf(CustomTabToken(oldName));
+            if (orderIndex >= 0) {
+                self->m_tabOrder[orderIndex] = CustomTabToken(name);
+            }
+
+            self->rebuildTabBar();
+            self->SaveConfiguration();
+        });
+}
+
+void SceneOrganiserDock::onDeleteCustomTabClicked(int customIndex)
+{
+    if (customIndex < 0 || customIndex >= m_customTabs.size()) {
+        return;
+    }
+
+    const QString tabName = m_customTabs.at(customIndex).name;
+    QPointer<SceneOrganiserDock> self(this);
+
+    su::confirm(this,
+        QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.DeleteTab.Title")),
+        QString(obs_module_text("SceneOrganiser.Dialog.DeleteTab.Text")).arg(tabName),
+        QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.DeleteTab.Title")),
+        "danger",
+        [self, tabName]() {
+            if (!self) {
+                return;
+            }
+            // Resolved by name at accept-time; the list may have moved on.
+            const int index = self->customTabIndexByName(tabName);
+            if (index < 0) {
+                return;
+            }
+
+            self->m_customTabs.remove(index);
+            self->m_tabOrder.removeAll(CustomTabToken(tabName));
+
+            // Deleting the tab you were looking at drops you back on the tree.
+            if (self->m_currentKind == QuickTabKind::Custom && self->m_currentCustomTab == index) {
+                self->m_currentKind = QuickTabKind::Scenes;
+                self->m_currentCustomTab = -1;
+            }
+
+            self->rebuildTabBar();
+            self->SaveConfiguration();
+        });
+}
+
+void SceneOrganiserDock::addSceneToCustomTab(const QString &sceneName, int customIndex)
+{
+    if (customIndex < 0 || customIndex >= m_customTabs.size() || sceneName.isEmpty()) {
+        return;
+    }
+    if (nodesContainScene(m_customTabs.at(customIndex).nodes, sceneName)) {
+        return;
+    }
+
+    TabNode node;
+    node.name = sceneName;
+    m_customTabs[customIndex].nodes.append(node);
+
+    refreshQuickList();
+    SaveConfiguration();
+}
+
+void SceneOrganiserDock::removeSceneFromCustomTab(const QString &sceneName, int customIndex)
+{
+    if (customIndex < 0 || customIndex >= m_customTabs.size()) {
+        return;
+    }
+
+    removeSceneFromNodes(m_customTabs[customIndex].nodes, sceneName);
+    refreshQuickList();
+    SaveConfiguration();
+}
+
+void SceneOrganiserDock::populateAddToTabMenu()
+{
+    if (!m_addToTabMenu) {
+        return;
+    }
+
+    m_addToTabMenu->clear();
+
+    const QString sceneName = m_currentContextItem ? m_currentContextItem->text() : QString();
+
+    for (int i = 0; i < m_customTabs.size(); ++i) {
+        const CustomSceneTab &tab = m_customTabs.at(i);
+        const bool alreadyIn = nodesContainScene(tab.nodes, sceneName);
+
+        QAction *action = m_addToTabMenu->addAction(tab.name, this, [this, sceneName, i, alreadyIn]() {
+            if (alreadyIn) {
+                removeSceneFromCustomTab(sceneName, i);
+            } else {
+                addSceneToCustomTab(sceneName, i);
+            }
+        });
+        // Checked means "in this tab", and clicking it again takes the scene out,
+        // so one menu covers both directions.
+        action->setCheckable(true);
+        action->setChecked(alreadyIn);
+    }
+
+    if (!m_customTabs.isEmpty()) {
+        m_addToTabMenu->addSeparator();
+    }
+    m_addToTabMenu->addAction(obs_module_text("SceneOrganiser.Action.NewTab"), this,
+                              &SceneOrganiserDock::onCreateCustomTabClicked);
+}
+
+
+// ---------------------------------------------------------------------------
+// Tab persistence
+//
+// Tab trees are nested, so they are stored as JSON rather than the flat text
+// the other per-collection files use. The previous flat format is still read
+// once, so tabs built before folders existed come across intact.
+// ---------------------------------------------------------------------------
+
+static obs_data_array_t *TabNodesToArray(const QVector<TabNode> &nodes)
+{
+    obs_data_array_t *array = obs_data_array_create();
+
+    for (const TabNode &node : nodes) {
+        obs_data_t *item = obs_data_create();
+        obs_data_set_string(item, "type", node.isFolder ? "folder" : "scene");
+        obs_data_set_string(item, "name", node.name.toUtf8().constData());
+
+        if (node.isFolder) {
+            obs_data_array_t *children = TabNodesToArray(node.children);
+            obs_data_set_array(item, "children", children);
+            obs_data_array_release(children);
+        }
+
+        obs_data_array_push_back(array, item);
+        obs_data_release(item);
+    }
+
+    return array;
+}
+
+static QVector<TabNode> TabNodesFromArray(obs_data_array_t *array)
+{
+    QVector<TabNode> nodes;
+    if (!array) {
+        return nodes;
+    }
+
+    const size_t count = obs_data_array_count(array);
+    for (size_t i = 0; i < count; ++i) {
+        obs_data_t *item = obs_data_array_item(array, i);
+        if (!item) {
+            continue;
+        }
+
+        TabNode node;
+        node.isFolder = (strcmp(obs_data_get_string(item, "type"), "folder") == 0);
+        node.name = QString::fromUtf8(obs_data_get_string(item, "name"));
+
+        if (node.isFolder) {
+            obs_data_array_t *children = obs_data_get_array(item, "children");
+            node.children = TabNodesFromArray(children);
+            obs_data_array_release(children);
+        }
+
+        if (!node.name.isEmpty()) {
+            nodes << node;
+        }
+        obs_data_release(item);
+    }
+
+    return nodes;
+}
+
+void SceneOrganiserDock::saveQuickTabs(const QString &configDir, const QString &sceneCollectionName)
+{
+    const QString path = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_quick_tabs.json";
+
+    obs_data_t *root = obs_data_create();
+    obs_data_set_string(root, "current_tab", currentTabToken().toUtf8().constData());
+
+    obs_data_array_t *order = obs_data_array_create();
+    for (const QString &token : m_tabOrder) {
+        obs_data_t *entry = obs_data_create();
+        obs_data_set_string(entry, "token", token.toUtf8().constData());
+        obs_data_array_push_back(order, entry);
+        obs_data_release(entry);
+    }
+    obs_data_set_array(root, "order", order);
+    obs_data_array_release(order);
+
+    obs_data_array_t *favourites = TabNodesToArray(m_favouriteNodes);
+    obs_data_set_array(root, "favourites", favourites);
+    obs_data_array_release(favourites);
+
+    obs_data_array_t *recent = obs_data_array_create();
+    for (const QString &sceneName : m_recentScenes) {
+        obs_data_t *entry = obs_data_create();
+        obs_data_set_string(entry, "name", sceneName.toUtf8().constData());
+        obs_data_array_push_back(recent, entry);
+        obs_data_release(entry);
+    }
+    obs_data_set_array(root, "recent", recent);
+    obs_data_array_release(recent);
+
+    obs_data_array_t *tabs = obs_data_array_create();
+    for (const CustomSceneTab &tab : m_customTabs) {
+        obs_data_t *entry = obs_data_create();
+        obs_data_set_string(entry, "name", tab.name.toUtf8().constData());
+
+        obs_data_array_t *nodes = TabNodesToArray(tab.nodes);
+        obs_data_set_array(entry, "nodes", nodes);
+        obs_data_array_release(nodes);
+
+        obs_data_array_push_back(tabs, entry);
+        obs_data_release(entry);
+    }
+    obs_data_set_array(root, "tabs", tabs);
+    obs_data_array_release(tabs);
+
+    obs_data_save_json(root, path.toUtf8().constData());
+    obs_data_release(root);
+}
+
+void SceneOrganiserDock::loadQuickTabs(const QString &configDir, const QString &sceneCollectionName)
+{
+    m_favouriteNodes.clear();
+    m_recentScenes.clear();
+    m_customTabs.clear();
+    m_tabOrder.clear();
+
+    const QString path = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_quick_tabs.json";
+
+    obs_data_t *root = obs_data_create_from_json_file(path.toUtf8().constData());
+    if (!root) {
+        // Nothing in the new format: try the flat file this replaced, so tabs
+        // made before folders existed are carried over rather than lost. It is
+        // read once and then written back as JSON by the next save.
+        const QString legacyPath = configDir + "/" + m_configKey + "_" + sceneCollectionName + "_quick_tabs.txt";
+        const bool migrated = loadLegacyQuickTabs(legacyPath);
+
+        StreamUP::DebugLogger::LogInfo("SceneOrganiser",
+            QString("No tab JSON at '%1' - legacy file %2")
+                .arg(path, migrated ? "migrated" : "not found")
+                .toUtf8()
+                .constData());
+        return;
+    }
+
+    m_currentKindToken = QString::fromUtf8(obs_data_get_string(root, "current_tab"));
+
+    obs_data_array_t *order = obs_data_get_array(root, "order");
+    if (order) {
+        const size_t count = obs_data_array_count(order);
+        for (size_t i = 0; i < count; ++i) {
+            obs_data_t *entry = obs_data_array_item(order, i);
+            if (entry) {
+                m_tabOrder << QString::fromUtf8(obs_data_get_string(entry, "token"));
+                obs_data_release(entry);
+            }
+        }
+        obs_data_array_release(order);
+    }
+
+    obs_data_array_t *favourites = obs_data_get_array(root, "favourites");
+    m_favouriteNodes = TabNodesFromArray(favourites);
+    obs_data_array_release(favourites);
+
+    obs_data_array_t *recent = obs_data_get_array(root, "recent");
+    if (recent) {
+        const size_t count = obs_data_array_count(recent);
+        for (size_t i = 0; i < count; ++i) {
+            obs_data_t *entry = obs_data_array_item(recent, i);
+            if (entry) {
+                m_recentScenes << QString::fromUtf8(obs_data_get_string(entry, "name"));
+                obs_data_release(entry);
+            }
+        }
+        obs_data_array_release(recent);
+    }
+
+    obs_data_array_t *tabs = obs_data_get_array(root, "tabs");
+    if (tabs) {
+        const size_t count = obs_data_array_count(tabs);
+        for (size_t i = 0; i < count; ++i) {
+            obs_data_t *entry = obs_data_array_item(tabs, i);
+            if (!entry) {
+                continue;
+            }
+
+            CustomSceneTab tab;
+            tab.name = QString::fromUtf8(obs_data_get_string(entry, "name"));
+
+            obs_data_array_t *nodes = obs_data_get_array(entry, "nodes");
+            tab.nodes = TabNodesFromArray(nodes);
+            obs_data_array_release(nodes);
+
+            if (!tab.name.isEmpty()) {
+                m_customTabs << tab;
+            }
+            obs_data_release(entry);
+        }
+        obs_data_array_release(tabs);
+    }
+
+    obs_data_release(root);
+
+    // Restore the selected tab from its token, now that the tabs it may name
+    // are loaded.
+    m_currentKind = QuickTabKind::Scenes;
+    m_currentCustomTab = -1;
+    if (m_currentKindToken == QLatin1String(kTabTokenFavourites)) {
+        m_currentKind = QuickTabKind::Favourites;
+    } else if (m_currentKindToken == QLatin1String(kTabTokenRecent)) {
+        m_currentKind = QuickTabKind::Recent;
+    } else if (m_currentKindToken.startsWith(QLatin1String(kTabTokenCustomPrefix))) {
+        const int index = customTabIndexByName(m_currentKindToken.mid(int(strlen(kTabTokenCustomPrefix))));
+        if (index >= 0) {
+            m_currentKind = QuickTabKind::Custom;
+            m_currentCustomTab = index;
+        }
+    }
+
+    StreamUP::DebugLogger::LogInfo("SceneOrganiser",
+        QString("Loaded tabs from '%1': %2 custom, %3 favourite entries, %4 recent, order [%5]")
+            .arg(path)
+            .arg(m_customTabs.size())
+            .arg(m_favouriteNodes.size())
+            .arg(m_recentScenes.size())
+            .arg(m_tabOrder.join(", "))
+            .toUtf8()
+            .constData());
+}
+
+bool SceneOrganiserDock::loadLegacyQuickTabs(const QString &path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return false;
+    }
+
+    QTextStream in(&file);
+    bool headerRead = false;
+    QStringList *plainTarget = nullptr;   // recent, or the order list
+    QVector<TabNode> *nodeTarget = nullptr;
+
+    while (!in.atEnd()) {
+        const QString trimmed = in.readLine().trimmed();
+        if (trimmed.isEmpty()) {
+            continue;
+        }
+
+        if (!headerRead) {
+            headerRead = true;
+            continue; // the old header held a visibility flag and tab index
+        }
+
+        if (trimmed == "[order]") {
+            plainTarget = &m_tabOrder;
+            nodeTarget = nullptr;
+        } else if (trimmed == "[favourites]") {
+            plainTarget = nullptr;
+            nodeTarget = &m_favouriteNodes;
+        } else if (trimmed == "[recent]") {
+            plainTarget = &m_recentScenes;
+            nodeTarget = nullptr;
+        } else if (trimmed.startsWith("[tab]")) {
+            CustomSceneTab tab;
+            tab.name = trimmed.mid(5);
+            m_customTabs.append(tab);
+            plainTarget = nullptr;
+            nodeTarget = &m_customTabs.last().nodes;
+        } else if (plainTarget) {
+            plainTarget->append(trimmed);
+        } else if (nodeTarget) {
+            // Everything in the old format was a flat scene entry.
+            TabNode node;
+            node.name = trimmed;
+            nodeTarget->append(node);
+        }
+    }
+
+    file.close();
+    return true;
+}
+
+bool SceneOrganiserDock::isFavourite(const QString &sceneName) const
+{
+    return nodesContainScene(m_favouriteNodes, sceneName);
+}
+
+void SceneOrganiserDock::noteRecentScene(const QString &sceneName)
+{
+    if (sceneName.isEmpty() || (!m_recentScenes.isEmpty() && m_recentScenes.first() == sceneName)) {
+        return;
+    }
+
+    m_recentScenes.removeAll(sceneName);
+    m_recentScenes.prepend(sceneName);
+    while (m_recentScenes.size() > kMaxRecentScenes) {
+        m_recentScenes.removeLast();
+    }
+
+    refreshQuickList();
+    m_saveTimer->start();
+}
+
+void SceneOrganiserDock::onToggleFavouriteClicked()
+{
+    if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) {
+        return;
+    }
+
+    const QString sceneName = m_currentContextItem->text();
+    if (isFavourite(sceneName)) {
+        removeSceneFromNodes(m_favouriteNodes, sceneName);
+    } else {
+        // New favourites land at the top level; from there they can be filed
+        // into whatever folders the Favourites tab has.
+        TabNode node;
+        node.name = sceneName;
+        m_favouriteNodes.append(node);
+    }
+
+    refreshQuickList();
+    SaveConfiguration();
+}
+
 //==============================================================================
 // Item Classes Implementation
 //==============================================================================
@@ -5061,13 +7540,15 @@ void SceneFolderItem::setupFolderItem()
 void SceneFolderItem::updateIcon()
 {
     StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
-    if (settings.sceneOrganiserShowIcons) {
-        // Use OBS group icon for folders from theme properties
-        QIcon groupIcon = GetThemeIcon("groupIcon");
-        setIcon(groupIcon);
-    } else {
+    if (!settings.sceneOrganiserShowIcons) {
         setIcon(QIcon());
+        return;
     }
+
+    // A custom icon wins; an unresolvable one (deleted file, property a theme
+    // does not define) falls back to the default rather than showing nothing.
+    const QIcon custom = ResolveIconSpec(data(CustomIconRole).toString());
+    setIcon(custom.isNull() ? GetThemeIcon("groupIcon") : custom);
 }
 
 qint64 SceneFolderItem::getCreationTimestamp() const
@@ -5110,9 +7591,9 @@ void SceneTreeItem::updateIcon()
 {
     StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
     if (settings.sceneOrganiserShowIcons) {
-        // Use scene icon from theme properties
-        QIcon sceneIcon = GetThemeIcon("sceneIcon");
-        setIcon(sceneIcon);
+        // A custom icon wins; an unresolvable one falls back to the default.
+        const QIcon custom = ResolveIconSpec(data(CustomIconRole).toString());
+        setIcon(custom.isNull() ? GetThemeIcon("sceneIcon") : custom);
 
         // Could add special styling for current scene in the future
         // obs_source_t *current_scene = Canvas::GetCurrentScene(m_canvasType);
@@ -5218,8 +7699,10 @@ void StreamUP::SceneOrganiser::SceneOrganiserDock::onThemeChanged()
 // CustomColorDelegate Implementation
 //==============================================================================
 
-StreamUP::SceneOrganiser::CustomColorDelegate::CustomColorDelegate(SceneOrganiserDock *dock, QObject *parent)
-    : QStyledItemDelegate(parent), m_dock(dock)
+StreamUP::SceneOrganiser::CustomColorDelegate::CustomColorDelegate(SceneOrganiserDock *dock, QObject *parent,
+                                                                   QSortFilterProxyModel *proxy,
+                                                                   QStandardItemModel *model)
+    : QStyledItemDelegate(parent), m_dock(dock), m_proxy(proxy), m_model(model)
 {
 }
 
@@ -5230,8 +7713,9 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
         return;
     }
 
-    // Get the item to check for custom color
-    QStandardItemModel *model = qobject_cast<QStandardItemModel*>(m_dock->m_model);
+    // Whichever tree this delegate was built for.
+    QStandardItemModel *model = m_model ? m_model : qobject_cast<QStandardItemModel*>(m_dock->m_model);
+    QSortFilterProxyModel *proxy = m_proxy ? m_proxy : m_dock->m_proxyModel;
     if (!model) {
         QStyledItemDelegate::paint(painter, option, index);
         return;
@@ -5239,8 +7723,8 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
 
     // Map from proxy model to source model if needed
     QModelIndex sourceIndex = index;
-    if (m_dock->m_proxyModel) {
-        sourceIndex = m_dock->m_proxyModel->mapToSource(index);
+    if (proxy) {
+        sourceIndex = proxy->mapToSource(index);
     }
 
     QStandardItem *item = model->itemFromIndex(sourceIndex);
@@ -5258,9 +7742,11 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
     QVariant colorData = item->data(Qt::UserRole + 1);
     QColor customColor = colorData.isValid() ? colorData.value<QColor>() : QColor();
 
-    if (!isProgram && !customColor.isValid()) {
-        // No program indicator and no custom color: use default painting so the
-        // native (blue) selection highlight shows the preview/selected scene.
+    const bool isSelected = option.state & QStyle::State_Selected;
+    const bool isHovered = option.state & QStyle::State_MouseOver;
+
+    if (!isProgram && !customColor.isValid() && !isSelected && !isHovered) {
+        // Plain, idle row: nothing for us to draw, let the theme paint it.
         QStyledItemDelegate::paint(painter, option, index);
         return;
     }
@@ -5273,11 +7759,23 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
     // that is also selected stays green (a brighter selection-variant of green)
     // so it never gets confused with the blue preview/selection indicator.
     QColor bgColor = baseColor;
-    if (option.state & QStyle::State_Selected) {
+    if (isSelected) {
         bgColor = m_dock->getSelectionColor(baseColor);
-    } else if (option.state & QStyle::State_MouseOver) {
+    } else if (isHovered) {
         bgColor = m_dock->getHoverColor(baseColor);
     }
+
+    // A plain row that is only selected/hovered has no base colour of its own,
+    // so the two helpers above hand back the theme's palette Highlight. That is
+    // the theme-agnostic part: a theme that only styles OBS' own SceneTree (by
+    // class name, which a QTreeView in our namespace can never match) used to
+    // leave this row painted by whatever generic rule it happened to have -
+    // near-black in some themes, with no hover at all. We own the fill now.
+    if (!bgColor.isValid()) {
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+    bgColor = m_dock->ensureRowContrast(bgColor);
 
     // Calculate contrasting text color
     QColor textColor = m_dock->getContrastTextColor(bgColor);
@@ -5334,13 +7832,7 @@ QSize StreamUP::SceneOrganiser::CustomColorDelegate::sizeHint(const QStyleOption
     // whole row scales - not just the icon. Without this the row height is only the
     // implicit max(icon, text) height, which stops tracking once the icon dominates.
     QSize size = QStyledItemDelegate::sizeHint(option, index);
-    int rowHeight = StreamUP::SettingsManager::GetCurrentSettings().sceneOrganiserItemHeight;
-    if (rowHeight < 19) {
-        rowHeight = 24;
-    } else if (rowHeight > 48) {
-        rowHeight = 48;
-    }
-    size.setHeight(rowHeight);
+    size.setHeight(m_dock ? m_dock->currentRowHeight() : 24);
     return size;
 }
 

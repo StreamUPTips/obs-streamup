@@ -10,6 +10,7 @@
 
 // Forward declarations for functions from main streamup.cpp
 #include "notification-manager.hpp"
+#include "scene-organiser/scene-organiser-dock.hpp"
 
 namespace StreamUP {
 namespace HotkeyManager {
@@ -32,6 +33,8 @@ static obs_hotkey_id paste_show_transition_hotkey_id = OBS_INVALID_HOTKEY_ID;
 static obs_hotkey_id paste_hide_transition_hotkey_id = OBS_INVALID_HOTKEY_ID;
 static obs_hotkey_id group_selected_sources_hotkey_id = OBS_INVALID_HOTKEY_ID;
 static obs_hotkey_id toggle_visibility_selected_sources_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id focus_scene_organiser_search_hotkey_id = OBS_INVALID_HOTKEY_ID;
+static obs_hotkey_id focus_scene_organiser_search_vertical_hotkey_id = OBS_INVALID_HOTKEY_ID;
 
 //-------------------TRANSITION CLIPBOARD STORAGE-------------------
 struct TransitionData {
@@ -521,6 +524,30 @@ void HotkeyToggleVisibilitySelectedSources(void *data, obs_hotkey_id id, obs_hot
 	StreamUP::SourceManager::ToggleVisibilitySelectedSources();
 }
 
+void HotkeyFocusSceneOrganiserSearch(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
+
+	if (!pressed)
+		return;
+
+	StreamUP::SceneOrganiser::SceneOrganiserDock::FocusSearchBox(StreamUP::SceneOrganiser::CanvasType::Normal);
+}
+
+void HotkeyFocusSceneOrganiserSearchVertical(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed)
+{
+	Q_UNUSED(id);
+	Q_UNUSED(hotkey);
+	Q_UNUSED(data);
+
+	if (!pressed)
+		return;
+
+	StreamUP::SceneOrganiser::SceneOrganiserDock::FocusSearchBox(StreamUP::SceneOrganiser::CanvasType::Vertical);
+}
+
 //-------------------HOTKEY MANAGEMENT-------------------
 void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 {
@@ -545,6 +572,8 @@ void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "paste_hide_transition_hotkey", paste_hide_transition_hotkey_id);
 		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "group_selected_sources_hotkey", group_selected_sources_hotkey_id);
 		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "toggle_visibility_selected_sources_hotkey", toggle_visibility_selected_sources_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "focus_scene_organiser_search_hotkey", focus_scene_organiser_search_hotkey_id);
+		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "focus_scene_organiser_search_vertical_hotkey", focus_scene_organiser_search_vertical_hotkey_id);
 	} else {
 		// load hotkeys
 		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "refresh_browser_sources_hotkey", refresh_browser_sources_hotkey_id);
@@ -564,6 +593,8 @@ void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "paste_hide_transition_hotkey", paste_hide_transition_hotkey_id);
 		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "group_selected_sources_hotkey", group_selected_sources_hotkey_id);
 		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "toggle_visibility_selected_sources_hotkey", toggle_visibility_selected_sources_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "focus_scene_organiser_search_hotkey", focus_scene_organiser_search_hotkey_id);
+		StreamUP::OBSDataHelpers::LoadHotkeyFromData(save_data, "focus_scene_organiser_search_vertical_hotkey", focus_scene_organiser_search_vertical_hotkey_id);
 	}
 }
 
@@ -614,6 +645,10 @@ void RegisterHotkeys()
 											HotkeyGroupSelectedSources, nullptr);
 	toggle_visibility_selected_sources_hotkey_id = obs_hotkey_register_frontend("streamup_toggle_visibility_selected_sources", "StreamUP: Toggle Visibility of Selected Sources",
 											HotkeyToggleVisibilitySelectedSources, nullptr);
+	focus_scene_organiser_search_hotkey_id = obs_hotkey_register_frontend("streamup_focus_scene_organiser_search", "StreamUP: Focus Scene Organiser Search",
+											HotkeyFocusSceneOrganiserSearch, nullptr);
+	focus_scene_organiser_search_vertical_hotkey_id = obs_hotkey_register_frontend("streamup_focus_scene_organiser_search_vertical", "StreamUP: Focus Scene Organiser Search (Vertical)",
+											HotkeyFocusSceneOrganiserSearchVertical, nullptr);
 }
 
 void SetHotkeyGroupEnabled(bool enabled)
@@ -648,6 +683,8 @@ void UnregisterHotkeys()
 	obs_hotkey_unregister(paste_hide_transition_hotkey_id);
 	obs_hotkey_unregister(group_selected_sources_hotkey_id);
 	obs_hotkey_unregister(toggle_visibility_selected_sources_hotkey_id);
+	obs_hotkey_unregister(focus_scene_organiser_search_hotkey_id);
+	obs_hotkey_unregister(focus_scene_organiser_search_vertical_hotkey_id);
 }
 
 void ResetAllHotkeys()
@@ -673,6 +710,8 @@ void ResetAllHotkeys()
 	obs_hotkey_load(paste_hide_transition_hotkey_id, emptyArray);
 	obs_hotkey_load(group_selected_sources_hotkey_id, emptyArray);
 	obs_hotkey_load(toggle_visibility_selected_sources_hotkey_id, emptyArray);
+	obs_hotkey_load(focus_scene_organiser_search_hotkey_id, emptyArray);
+	obs_hotkey_load(focus_scene_organiser_search_vertical_hotkey_id, emptyArray);
 
 	obs_data_array_release(emptyArray);
 
@@ -715,6 +754,10 @@ obs_hotkey_id GetHotkeyId(const char* hotkeyName)
 		return group_selected_sources_hotkey_id;
 	else if (strcmp(hotkeyName, "streamup_toggle_visibility_selected_sources") == 0)
 		return toggle_visibility_selected_sources_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_focus_scene_organiser_search") == 0)
+		return focus_scene_organiser_search_hotkey_id;
+	else if (strcmp(hotkeyName, "streamup_focus_scene_organiser_search_vertical") == 0)
+		return focus_scene_organiser_search_vertical_hotkey_id;
 
 	return OBS_INVALID_HOTKEY_ID;
 }
