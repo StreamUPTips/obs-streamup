@@ -2,14 +2,24 @@
 
 ---
 
-## v2.3.3 (unreleased)
-**Patch Focus:** Plugin check nagging, vertical scene links
+## v2.4.0 (unreleased)
+**Patch Focus:** Scene Organiser tabs, undo, custom icons
 
 ### New Features
+- Tabs in the Scene Organiser. Favourites, Recent, and as many of your own as you want. Each one is a proper tree with its own folders, arranged however you like, so the same scene can sit in a different folder on every tab. Right click the tab bar to make a tab, rename it, delete it or hide the built in ones, and drag the tabs into whatever order suits. Favourites fills from the right click menu on a scene, Recent fills itself from whatever you go live with, and the rest is yours to fill from the add button. All of it is saved per scene collection
+- Undo and redo in the Scene Organiser. Ctrl+Z covers moving scenes and folders, adding a folder, renaming one, deleting one, and colour changes. Deleting a scene is the one thing it will not bring back, because that removes the scene from OBS itself and no amount of putting our tree back changes that
+- Multi select. Ctrl click and shift click to pick up a run of scenes and drag the lot in one go, instead of one at a time
+- Custom icons on scenes and folders. Right click, Set Icon, and take any of the 16 icons your OBS theme provides or an image off your drive. Theme icons stay themed, so they follow when you change theme. There is an Icon Colour submenu with the same 8 swatches the row colours use, and it tints whichever icon is in use including the default one, so you can colour code a whole collection without picking a single custom icon
+- Folder guide lines down the tree, so you can see at a glance which folder a scene belongs to. There is a switch for them in Settings, Scene Organiser
+- The search box now works on every tab, not just the main one, and Enter takes the first scene still showing straight to program. There is a hotkey for jumping to the search box too, in Settings, Hotkeys
 - The virtual camera button changes its icon when the camera is running, the way the record and stream buttons do. It goes green while it is on, so a glance at the bar tells you, rather than having to spot the dot on the taskbar
 - Linked Scenes in the Vertical Scene Organiser right click menu, the same as Aitum's own vertical scene list. Tick the main scenes that should bring this vertical scene up with them, and when one of them goes live the vertical canvas follows. The link is stored on the main scene where Aitum stores it, so one set here is ticked in their dock and the other way round
 
 ### Bug Fixes
+- The live scene was almost invisible in the Scene Organiser on some themes, and it was the one row that would not light up when you moved the mouse over it. Rows the dock does not colour itself were left to the theme, and a theme that styles the OBS scene list by name rather than styling tree views in general had nothing to say about ours, so the row came out near enough black. The dock paints its own highlight now, on every row, and checks the colour it lands on against the background so a theme with a dark selection colour still reads. Thanks to Mapsking for the report and the screenshots
+- Dragging while the search box had something in it could drop a scene somewhere you did not choose. The drop landed against the filtered list rather than the real one, so the neighbours it appeared to land between were not its actual neighbours. Dragging is switched off while a search is active
+- Renaming a scene anywhere outside the Scene Organiser used to drop it out of your Favourites and your tabs, and quietly un hide a hidden scene. All 3 of those remember a scene by name, so a rename left them pointing at a name that matched nothing. The dock listens for renames now, wherever they happen, whether that is the scene list, a hotkey or a websocket call, and follows the new name through everything it stores
+- Some tidying under the surface. 3 of the toolbar buttons were never initialised properly, which meant every check for whether they existed was reading whatever happened to be in memory. Nothing had gone wrong with it yet, and now it cannot
 - The toolbar edit panel opened half off screen in the bottom left corner. It was anchored to the leading edge of the bar, and a bar docked along the bottom of the window is the full width of it, so "below the bottom edge, from the left edge" was off screen on both axes and got clamped into the corner. It now centres on the bar and opens on whichever side has room, and falls back to the middle of the OBS window when neither side does
 - A plugin you switched off yourself no longer nags you on every start. The startup check treated a required plugin being off as something that always had to be shouted about, so it skipped the "don't remind me" logic entirely, and the tickbox was only ever drawn for updates and load failures, so there was nothing to tick. The dialog now offers "I switched these off on purpose, stop reminding me" when that is all it is reporting, and honours it. Turning the plugin back on clears it, so if you switch it off again later it will say so once more, and a manual plugin check, or installing a product, still reports it every time. Installing against a switched-off plugin is what breaks the product, so that check never goes quiet
 
