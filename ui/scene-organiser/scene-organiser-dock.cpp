@@ -2260,20 +2260,34 @@ QMenu *SceneOrganiserDock::createIconSubmenu()
 
     m_iconColorMenu->addSeparator();
 
-    // The same eight presets the row colours use, at full opacity: an icon is a
-    // small shape, and the translucent versions read as grey at that size.
+    // The same 4x2 swatch grid as Set Colour, so the two menus read as one
+    // idea rather than as two different ways of picking a colour. The presets
+    // are the same eight, taken at full opacity: an icon is a small shape and
+    // the translucent versions read as grey at that size.
+    QWidget *iconSwatchWidget = new QWidget(m_iconColorMenu);
+    QGridLayout *iconGrid = new QGridLayout(iconSwatchWidget);
+    iconGrid->setContentsMargins(su::S(8), su::S(4), su::S(8), su::S(8));
+    iconGrid->setSpacing(su::S(4));
+
     const QList<QColor> &iconPresets = PresetColors();
-    for (const QColor &preset : iconPresets) {
-        const QColor solid(preset.red(), preset.green(), preset.blue());
+    m_iconColorSwatchButtons.clear();
+    for (int i = 0; i < iconPresets.size(); ++i) {
+        const QColor solid(iconPresets[i].red(), iconPresets[i].green(), iconPresets[i].blue());
 
-        QPixmap swatch(16, 16);
-        swatch.fill(solid);
-
-        QAction *action = m_iconColorMenu->addAction(QIcon(swatch), solid.name().toUpper(), this,
-                                                     [this, solid]() { applyIconColor(solid); });
-        action->setCheckable(true);
-        m_iconColorActions.insert(solid.name(QColor::HexArgb), action);
+        QPushButton *swatch = new QPushButton(iconSwatchWidget);
+        swatch->setFlat(true);
+        swatch->setFixedSize(su::S(26), su::S(22));
+        swatch->setCursor(Qt::PointingHandCursor);
+        connect(swatch, &QPushButton::clicked, this, [this, solid]() { applyIconColor(solid); });
+        iconGrid->addWidget(swatch, i / 4, i % 4);
+        m_iconColorSwatchButtons.append(swatch);
     }
+
+    QWidgetAction *iconSwatchAction = new QWidgetAction(m_iconColorMenu);
+    iconSwatchAction->setDefaultWidget(iconSwatchWidget);
+    m_iconColorMenu->addAction(iconSwatchAction);
+
+    connect(m_iconColorMenu, &QMenu::aboutToShow, this, &SceneOrganiserDock::refreshIconColorMenuState);
 
     menu->addSeparator();
 
@@ -2303,17 +2317,6 @@ void SceneOrganiserDock::refreshIconMenuState()
 
     if (m_iconDefaultAction) m_iconDefaultAction->setChecked(spec.isEmpty());
     if (m_iconCustomAction) m_iconCustomAction->setChecked(spec.startsWith(QLatin1String("file:")));
-
-    const QColor tint = m_currentContextItem ? m_currentContextItem->data(CustomIconColorRole).value<QColor>()
-                                             : QColor();
-    if (m_iconColorClearAction) m_iconColorClearAction->setChecked(!tint.isValid());
-    if (m_iconColorCustomAction) {
-        // Custom means "a colour that is not one of the presets".
-        m_iconColorCustomAction->setChecked(tint.isValid() && !m_iconColorActions.contains(tint.name(QColor::HexArgb)));
-    }
-    for (auto it = m_iconColorActions.begin(); it != m_iconColorActions.end(); ++it) {
-        it.value()->setChecked(tint.isValid() && it.key() == tint.name(QColor::HexArgb));
-    }
 
     for (auto it = m_iconThemeActions.begin(); it != m_iconThemeActions.end(); ++it) {
         it.value()->setChecked(it.key() == spec);
@@ -2355,6 +2358,48 @@ void SceneOrganiserDock::applyIconSpec(const QString &spec)
 // Sets (or clears, with an invalid colour) the tint on the item the menu was
 // opened on. Kept separate from applyIconSpec so a colour can be changed without
 // re-picking the icon, and a colour survives changing the icon.
+// Reflects the context item's current icon tint, exactly as the Set Colour menu
+// reflects its row colour: Clear ticked when there is none, the matching swatch
+// outlined when it is one of the presets, otherwise Custom Colour ticked.
+void SceneOrganiserDock::refreshIconColorMenuState()
+{
+    QColor current;
+    if (m_currentContextItem) {
+        current = m_currentContextItem->data(CustomIconColorRole).value<QColor>();
+    }
+
+    const QList<QColor> &presets = PresetColors();
+    int matchedPreset = -1;
+    if (current.isValid()) {
+        for (int i = 0; i < presets.size(); ++i) {
+            if (QColor(presets[i].red(), presets[i].green(), presets[i].blue()) == current) {
+                matchedPreset = i;
+                break;
+            }
+        }
+    }
+
+    if (m_iconColorClearAction) {
+        m_iconColorClearAction->setChecked(!current.isValid());
+    }
+    if (m_iconColorCustomAction) {
+        m_iconColorCustomAction->setChecked(current.isValid() && matchedPreset < 0);
+    }
+
+    for (int i = 0; i < m_iconColorSwatchButtons.size() && i < presets.size(); ++i) {
+        const QColor c(presets[i].red(), presets[i].green(), presets[i].blue());
+        const QString border = (i == matchedPreset) ? QStringLiteral("2px solid black")
+                                                    : QStringLiteral("1px solid rgba(0,0,0,60)");
+        m_iconColorSwatchButtons[i]->setStyleSheet(
+            QString("QPushButton{background-color:rgb(%1,%2,%3);border:%4;border-radius:%5px;}")
+                .arg(c.red())
+                .arg(c.green())
+                .arg(c.blue())
+                .arg(border)
+                .arg(su::S(3)));
+    }
+}
+
 void SceneOrganiserDock::applyIconColor(const QColor &color)
 {
     if (!m_currentContextItem) {
@@ -2380,6 +2425,15 @@ void SceneOrganiserDock::applyIconColor(const QColor &color)
     refreshQuickList();
     pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.IconColour")), layoutBefore);
     SaveConfiguration();
+
+    // A swatch is a click on a widget inside the menu, which does not dismiss it
+    // the way choosing an action would.
+    if (m_iconColorMenu) {
+        m_iconColorMenu->close();
+    }
+    if (m_iconMenu) {
+        m_iconMenu->close();
+    }
 }
 
 void SceneOrganiserDock::onSetCustomIconColorClicked()
@@ -5967,6 +6021,19 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
         const int rowMiddle = rowTop + (rect.height() / 2);
         const int iconHalf = iconSize().width() / 2;
 
+        // A guide belongs to a FOLDER, and runs the height of that folder's
+        // contents. Which means the question at each level is "is this row the
+        // last thing inside that folder", not "does that folder have a sibling
+        // after it" - the sibling rule is the classic one, and it drops the
+        // outer line beside a nested folder's children whenever the outer folder
+        // happens to be the last item in its own parent, leaving a gap in the
+        // middle of a run of rows that are all still inside it.
+        //
+        // A row is the last thing inside an ancestor only if it is the last
+        // child of its parent AND every folder between the two is likewise the
+        // last child of its own parent, so the flag is carried outward.
+        bool lastInside = index.row() == (model()->rowCount(index.parent()) - 1);
+
         QModelIndex ancestor = index.parent();
         for (int level = depth - 1; level >= 0 && ancestor.isValid(); --level) {
             // Lined up under the parent folder's ICON, not down the middle of the
@@ -5975,27 +6042,21 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
             // from it. The parent's icon starts one step in from its own depth.
             const int x = rect.left() + ((level + 1) * step) + iconHalf;
 
-            const QModelIndex parentOfAncestor = ancestor.parent();
-            const bool ancestorHasMoreSiblings =
-                ancestor.row() < (model()->rowCount(parentOfAncestor) - 1);
-
-            if (level == depth - 1) {
-                // The guide for the level this row sits directly in stops at the
-                // row's middle when the row is the last child - a line carrying
-                // on past it would imply siblings that are not there.
-                const bool isLastChild = index.row() == (model()->rowCount(index.parent()) - 1);
-                painter->drawLine(x, rowTop, x, isLastChild ? rowMiddle : rowBottom);
-                if (isLastChild) {
-                    // The short elbow into the row, so the last child still
-                    // reads as attached rather than floating. It stops short of
-                    // the child's own icon, which begins at the next step.
-                    const int elbowEnd = rect.left() + ((level + 2) * step) - 2;
-                    painter->drawLine(x, rowMiddle, elbowEnd, rowMiddle);
-                }
-            } else if (ancestorHasMoreSiblings) {
+            if (lastInside) {
+                // The run ends here: stop halfway and turn into the row, so the
+                // last item reads as attached rather than the line running on
+                // past the end of the folder.
+                painter->drawLine(x, rowTop, x, rowMiddle);
+                const int elbowEnd = rect.left() + ((level + 2) * step) - 2;
+                painter->drawLine(x, rowMiddle, elbowEnd, rowMiddle);
+            } else {
                 painter->drawLine(x, rowTop, x, rowBottom);
             }
 
+            // Step outward: this ancestor's own position decides whether the
+            // next level out is still running.
+            const QModelIndex parentOfAncestor = ancestor.parent();
+            lastInside = lastInside && (ancestor.row() == (model()->rowCount(parentOfAncestor) - 1));
             ancestor = parentOfAncestor;
         }
 

@@ -204,6 +204,7 @@ private:
     void onSetCustomIconImageClicked();
     // Icon tint, kept apart from the icon itself so either can change alone.
     void applyIconColor(const QColor &color);
+    void refreshIconColorMenuState();
     void onSetCustomIconColorClicked();
     void refreshColorMenuState();
     void applyPresetColor(int presetIndex);
@@ -330,7 +331,7 @@ public:
     QMenu *m_iconColorMenu = nullptr;
     QAction *m_iconColorClearAction = nullptr;
     QAction *m_iconColorCustomAction = nullptr;
-    QHash<QString, QAction *> m_iconColorActions;
+    QList<QPushButton *> m_iconColorSwatchButtons;
 
     // Toggle actions (for checkmarks)
     QAction *m_folderToggleIconsAction;
