@@ -202,6 +202,9 @@ private:
     void refreshIconMenuState();
     void applyIconSpec(const QString &spec);
     void onSetCustomIconImageClicked();
+    // Icon tint, kept apart from the icon itself so either can change alone.
+    void applyIconColor(const QColor &color);
+    void onSetCustomIconColorClicked();
     void refreshColorMenuState();
     void applyPresetColor(int presetIndex);
     void updateTreeViewStylesheet();
@@ -266,6 +269,14 @@ public:
     static void OnCanvasSourceAdded(void *data, calldata_t *cd);
     static void OnCanvasSourceRemoved(void *data, calldata_t *cd);
     static void OnCanvasSourceRenamed(void *data, calldata_t *cd);
+    // Fires for every source rename in OBS, whoever did the renaming. The three
+    // things this dock stores by name have to follow, or they quietly lose the
+    // scene: see renameStoredScene().
+    static void OnSourceRenamed(void *data, calldata_t *cd);
+    // Rewrites a scene's name everywhere this dock keeps one: hidden scenes,
+    // recents, favourites and every custom tab.
+    void renameStoredScene(const QString &oldName, const QString &newName);
+    static void renameSceneInNodes(QVector<TabNode> &nodes, const QString &oldName, const QString &newName);
     static void OnCanvasChannelChanged(void *data, calldata_t *cd);
     QVBoxLayout *m_mainLayout;
     SceneTreeView *m_treeView;
@@ -316,6 +327,10 @@ public:
     QAction *m_iconDefaultAction = nullptr;
     QAction *m_iconCustomAction = nullptr;
     QHash<QString, QAction *> m_iconThemeActions;
+    QMenu *m_iconColorMenu = nullptr;
+    QAction *m_iconColorClearAction = nullptr;
+    QAction *m_iconColorCustomAction = nullptr;
+    QHash<QString, QAction *> m_iconColorActions;
 
     // Toggle actions (for checkmarks)
     QAction *m_folderToggleIconsAction;

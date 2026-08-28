@@ -96,6 +96,11 @@ static constexpr int CustomIconRole = Qt::UserRole + 3;
 // the tab trees use it; the Scenes tree distinguishes them by item type.
 static constexpr int TabItemIsFolderRole = Qt::UserRole + 10;
 
+// The colour an item's icon is tinted with. Separate from the icon spec so the
+// same icon can be re-coloured without re-picking it, and from UserRole+1,
+// which colours the ROW rather than the icon.
+static constexpr int CustomIconColorRole = Qt::UserRole + 4;
+
 // Optimized theme icon cache
 static QHash<QString, QIcon> s_themeIconCache;
 static QWidget* s_cachedMainWindow = nullptr;
@@ -173,13 +178,46 @@ static const ObsThemeIcon kObsThemeIcons[] = {
 // Anything else (or empty) means "use the default for this item type".
 static QHash<QString, QIcon> s_customIconCache;
 
-static QIcon ResolveIconSpec(const QString &spec)
+// Repaints an icon in a single colour, keeping its shape. Every pixel the icon
+// draws becomes the colour; everything transparent stays transparent, so the
+// silhouette survives and only the ink changes.
+static QIcon TintIcon(const QIcon &icon, const QColor &color)
+{
+    if (icon.isNull() || !color.isValid()) {
+        return icon;
+    }
+
+    QIcon tinted;
+    // The sizes the dock actually asks for, plus headroom for a large row
+    // height and for high-DPI. An icon rendered at the wrong size looks soft.
+    for (int size : {16, 20, 24, 32, 48, 64}) {
+        QPixmap pixmap = icon.pixmap(QSize(size, size));
+        if (pixmap.isNull()) {
+            continue;
+        }
+
+        QPainter painter(&pixmap);
+        painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        painter.fillRect(pixmap.rect(), color);
+        painter.end();
+
+        tinted.addPixmap(pixmap);
+    }
+
+    return tinted.isNull() ? icon : tinted;
+}
+
+static QIcon ResolveIconSpec(const QString &spec, const QColor &tint = QColor())
 {
     if (spec.isEmpty()) {
         return QIcon();
     }
 
-    auto cached = s_customIconCache.find(spec);
+    // Colour is part of the cache key: the same icon in two colours is two
+    // different pixmaps.
+    const QString cacheKey = tint.isValid() ? (spec + "|" + tint.name(QColor::HexArgb)) : spec;
+
+    auto cached = s_customIconCache.find(cacheKey);
     if (cached != s_customIconCache.end()) {
         return cached.value();
     }
@@ -194,10 +232,14 @@ static QIcon ResolveIconSpec(const QString &spec)
         }
     }
 
+    if (tint.isValid()) {
+        icon = TintIcon(icon, tint);
+    }
+
     // Same rule as GetThemeIcon: a miss is not cached, because it may only be a
     // miss for now (theme not up yet, file not mounted yet).
     if (!icon.isNull()) {
-        s_customIconCache.insert(spec, icon);
+        s_customIconCache.insert(cacheKey, icon);
     }
     return icon;
 }
@@ -359,6 +401,8 @@ SceneOrganiserDock::~SceneOrganiserDock()
     // Remove frontend event callback to prevent use-after-free
     obs_frontend_remove_event_callback(onFrontendEvent, this);
     disconnectCanvasSignals();
+
+    signal_handler_disconnect(obs_get_signal_handler(), "source_rename", OnSourceRenamed, this);
 
     // Clean up copy filters source
     if (m_copyFiltersSource) {
@@ -994,6 +1038,12 @@ void SceneOrganiserDock::setupContextMenu()
 void SceneOrganiserDock::setupObsSignals()
 {
     obs_frontend_add_event_callback(onFrontendEvent, this);
+
+    // Favourites, custom tabs and hidden scenes are all keyed by scene name, so
+    // they have to hear about renames from wherever they happen - the scene
+    // list, a hotkey, a websocket call. The global signal is the only place
+    // that sees all of them.
+    signal_handler_connect(obs_get_signal_handler(), "source_rename", OnSourceRenamed, this);
     connectCanvasSignals();
     watchVerticalCurrentScene();
 }
@@ -1098,6 +1148,95 @@ void SceneOrganiserDock::OnCanvasSourceRemoved(void *data, calldata_t *)
             return;
         dock->refreshSceneList();
     }, Qt::QueuedConnection);
+}
+
+void SceneOrganiserDock::OnSourceRenamed(void *data, calldata_t *cd)
+{
+    auto *dock = static_cast<SceneOrganiserDock *>(data);
+    if (!dock || !cd) {
+        return;
+    }
+
+    const char *prevName = calldata_string(cd, "prev_name");
+    const char *newName = calldata_string(cd, "new_name");
+    if (!prevName || !newName || strcmp(prevName, newName) == 0) {
+        return;
+    }
+
+    const QString oldNameCopy = QString::fromUtf8(prevName);
+    const QString newNameCopy = QString::fromUtf8(newName);
+
+    // The signal arrives on OBS' thread; everything this touches is Qt state.
+    QMetaObject::invokeMethod(dock, [dock, oldNameCopy, newNameCopy]() {
+        dock->renameStoredScene(oldNameCopy, newNameCopy);
+    }, Qt::QueuedConnection);
+}
+
+void SceneOrganiserDock::renameSceneInNodes(QVector<TabNode> &nodes, const QString &oldName, const QString &newName)
+{
+    for (TabNode &node : nodes) {
+        if (node.isFolder) {
+            // A folder's name is the tab's own, not a scene's, so it is left alone.
+            renameSceneInNodes(node.children, oldName, newName);
+        } else if (node.name == oldName) {
+            node.name = newName;
+        }
+    }
+}
+
+// The Scenes tree survives a rename on its own - it tracks scenes by weak
+// source and simply relabels the item. These three do not: they hold names, and
+// a name that no longer matches anything means the scene silently disappears
+// from a tab or quietly stops being hidden. So they are rewritten here.
+void SceneOrganiserDock::renameStoredScene(const QString &oldName, const QString &newName)
+{
+    bool changed = false;
+    bool hiddenChanged = false;
+
+    if (m_hiddenScenes.contains(oldName)) {
+        m_hiddenScenes.remove(oldName);
+        m_hiddenScenes.insert(newName);
+        changed = true;
+        hiddenChanged = true;
+    }
+
+    const int recentIndex = m_recentScenes.indexOf(oldName);
+    if (recentIndex >= 0) {
+        m_recentScenes[recentIndex] = newName;
+        changed = true;
+    }
+
+    if (nodesContainScene(m_favouriteNodes, oldName)) {
+        renameSceneInNodes(m_favouriteNodes, oldName, newName);
+        changed = true;
+    }
+
+    for (CustomSceneTab &tab : m_customTabs) {
+        if (nodesContainScene(tab.nodes, oldName)) {
+            renameSceneInNodes(tab.nodes, oldName, newName);
+            changed = true;
+        }
+    }
+
+    if (!changed) {
+        return;
+    }
+
+    if (hiddenChanged) {
+        // The row's greyed-out styling is applied by name too, so it has to be
+        // reapplied or the renamed scene looks visible while still being hidden.
+        applySceneVisibility();
+        updateHiddenScenesStyling();
+    }
+
+    refreshQuickList();
+    SaveConfiguration();
+
+    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Rename",
+        QString("Followed rename '%1' -> '%2' through the stored lists")
+            .arg(oldName, newName)
+            .toUtf8()
+            .constData());
 }
 
 void SceneOrganiserDock::OnCanvasSourceRenamed(void *data, calldata_t *)
@@ -2106,6 +2245,36 @@ QMenu *SceneOrganiserDock::createIconSubmenu()
                                          &SceneOrganiserDock::onSetCustomIconImageClicked);
     m_iconCustomAction->setCheckable(true);
 
+    // Colour applies to whichever icon is in use, the default included, so it is
+    // offered here rather than only alongside a custom icon.
+    m_iconColorMenu = menu->addMenu(obs_module_text("SceneOrganiser.Menu.IconColour"));
+
+    m_iconColorClearAction = m_iconColorMenu->addAction(
+        QString::fromUtf8(obs_frontend_get_locale_string("Clear"), -1), this, [this]() { applyIconColor(QColor()); });
+    m_iconColorClearAction->setCheckable(true);
+
+    m_iconColorCustomAction = m_iconColorMenu->addAction(
+        QString::fromUtf8(obs_frontend_get_locale_string("CustomColor"), -1), this,
+        &SceneOrganiserDock::onSetCustomIconColorClicked);
+    m_iconColorCustomAction->setCheckable(true);
+
+    m_iconColorMenu->addSeparator();
+
+    // The same eight presets the row colours use, at full opacity: an icon is a
+    // small shape, and the translucent versions read as grey at that size.
+    const QList<QColor> &iconPresets = PresetColors();
+    for (const QColor &preset : iconPresets) {
+        const QColor solid(preset.red(), preset.green(), preset.blue());
+
+        QPixmap swatch(16, 16);
+        swatch.fill(solid);
+
+        QAction *action = m_iconColorMenu->addAction(QIcon(swatch), solid.name().toUpper(), this,
+                                                     [this, solid]() { applyIconColor(solid); });
+        action->setCheckable(true);
+        m_iconColorActions.insert(solid.name(QColor::HexArgb), action);
+    }
+
     menu->addSeparator();
 
     // Every icon the OBS theme provides, each shown with the icon itself so the
@@ -2134,6 +2303,17 @@ void SceneOrganiserDock::refreshIconMenuState()
 
     if (m_iconDefaultAction) m_iconDefaultAction->setChecked(spec.isEmpty());
     if (m_iconCustomAction) m_iconCustomAction->setChecked(spec.startsWith(QLatin1String("file:")));
+
+    const QColor tint = m_currentContextItem ? m_currentContextItem->data(CustomIconColorRole).value<QColor>()
+                                             : QColor();
+    if (m_iconColorClearAction) m_iconColorClearAction->setChecked(!tint.isValid());
+    if (m_iconColorCustomAction) {
+        // Custom means "a colour that is not one of the presets".
+        m_iconColorCustomAction->setChecked(tint.isValid() && !m_iconColorActions.contains(tint.name(QColor::HexArgb)));
+    }
+    for (auto it = m_iconColorActions.begin(); it != m_iconColorActions.end(); ++it) {
+        it.value()->setChecked(tint.isValid() && it.key() == tint.name(QColor::HexArgb));
+    }
 
     for (auto it = m_iconThemeActions.begin(); it != m_iconThemeActions.end(); ++it) {
         it.value()->setChecked(it.key() == spec);
@@ -2170,6 +2350,77 @@ void SceneOrganiserDock::applyIconSpec(const QString &spec)
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Icon",
         QString("Set icon '%1' on '%2'").arg(spec.isEmpty() ? QString("default") : spec,
                                              m_currentContextItem->text()).toUtf8().constData());
+}
+
+// Sets (or clears, with an invalid colour) the tint on the item the menu was
+// opened on. Kept separate from applyIconSpec so a colour can be changed without
+// re-picking the icon, and a colour survives changing the icon.
+void SceneOrganiserDock::applyIconColor(const QColor &color)
+{
+    if (!m_currentContextItem) {
+        return;
+    }
+
+    const QString layoutBefore = captureLayout();
+
+    if (color.isValid()) {
+        m_currentContextItem->setData(color, CustomIconColorRole);
+    } else {
+        m_currentContextItem->setData(QVariant(), CustomIconColorRole);
+    }
+
+    if (m_currentContextItem->type() == SceneFolderItem::UserType + 1) {
+        static_cast<SceneFolderItem *>(m_currentContextItem)->updateIcon();
+    } else if (m_currentContextItem->type() == SceneTreeItem::UserType + 2) {
+        static_cast<SceneTreeItem *>(m_currentContextItem)->updateIcon();
+    }
+
+    forceTreeViewRepaint();
+    // The tabs copy their icons from the tree's items, so they need rebuilding.
+    refreshQuickList();
+    pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.IconColour")), layoutBefore);
+    SaveConfiguration();
+}
+
+void SceneOrganiserDock::onSetCustomIconColorClicked()
+{
+    if (!m_currentContextItem) {
+        return;
+    }
+
+    const QColor current = m_currentContextItem->data(CustomIconColorRole).value<QColor>();
+
+    auto sh = su::makeWindow(QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.IconColour.Title")),
+                             "v" PROJECT_VERSION, this, /*brandFooter=*/false, "StreamUP");
+    auto *cp = new su::ColorPicker();
+    if (current.isValid()) {
+        cp->setColor(current);
+    }
+    sh.content->setContentsMargins(su::S(16), su::S(16), su::S(16), su::S(8));
+    sh.content->addWidget(cp);
+
+    auto *cancel = new su::PillButton("Cancel", "outline");
+    auto *ok = new su::PillButton("Select", "primary");
+    sh.footerButtons->addWidget(cancel);
+    sh.footerButtons->addWidget(ok);
+
+    QObject::connect(cancel, &QPushButton::clicked, sh.dialog, &QDialog::close);
+
+    QPointer<SceneOrganiserDock> self(this);
+    QObject::connect(ok, &QPushButton::clicked, sh.dialog, [self, cp, dlg = sh.dialog]() {
+        if (self) {
+            const QColor chosen = cp->color();
+            if (chosen.isValid()) {
+                // Opaque: an icon is a small shape and a translucent tint just
+                // reads as grey at that size.
+                self->applyIconColor(QColor(chosen.red(), chosen.green(), chosen.blue()));
+            }
+        }
+        dlg->close();
+    });
+
+    sh.dialog->resize(su::S(360), su::S(420));
+    sh.dialog->show();
 }
 
 void SceneOrganiserDock::onSetCustomIconImageClicked()
@@ -5502,6 +5753,12 @@ obs_data_array_t *SceneTreeModel::createFolderArray(QStandardItem &parent)
                 obs_data_set_string(item_data, "custom_icon", folderIconSpec.toUtf8().constData());
             }
 
+            const QColor folderIconColor = child->data(CustomIconColorRole).value<QColor>();
+            if (folderIconColor.isValid()) {
+                obs_data_set_string(item_data, "custom_icon_color",
+                                    folderIconColor.name(QColor::HexArgb).toUtf8().constData());
+            }
+
             // Recursively save children
             obs_data_array_t *children = createFolderArray(*child);
             obs_data_set_array(item_data, "children", children);
@@ -5524,6 +5781,12 @@ obs_data_array_t *SceneTreeModel::createFolderArray(QStandardItem &parent)
             const QString sceneIconSpec = child->data(CustomIconRole).toString();
             if (!sceneIconSpec.isEmpty()) {
                 obs_data_set_string(item_data, "custom_icon", sceneIconSpec.toUtf8().constData());
+            }
+
+            const QColor sceneIconColor = child->data(CustomIconColorRole).value<QColor>();
+            if (sceneIconColor.isValid()) {
+                obs_data_set_string(item_data, "custom_icon_color",
+                                    sceneIconColor.name(QColor::HexArgb).toUtf8().constData());
             }
         }
 
@@ -5567,10 +5830,19 @@ void SceneTreeModel::loadFolderArray(obs_data_array_t *folder_array, QStandardIt
                     }
                 }
 
-                // Load custom icon spec if present
+                // Load custom icon spec and tint if present
                 const char *iconSpec = obs_data_get_string(item_data, "custom_icon");
-                if (iconSpec && strlen(iconSpec) > 0) {
-                    folderItem->setData(QString::fromUtf8(iconSpec), CustomIconRole);
+                const char *iconColor = obs_data_get_string(item_data, "custom_icon_color");
+                if ((iconSpec && strlen(iconSpec) > 0) || (iconColor && strlen(iconColor) > 0)) {
+                    if (iconSpec && strlen(iconSpec) > 0) {
+                        folderItem->setData(QString::fromUtf8(iconSpec), CustomIconRole);
+                    }
+                    if (iconColor && strlen(iconColor) > 0) {
+                        const QColor color(iconColor);
+                        if (color.isValid()) {
+                            folderItem->setData(color, CustomIconColorRole);
+                        }
+                    }
                     static_cast<SceneFolderItem*>(folderItem)->updateIcon();
                 }
 
@@ -5599,10 +5871,19 @@ void SceneTreeModel::loadFolderArray(obs_data_array_t *folder_array, QStandardIt
                     }
                 }
 
-                // Load custom icon spec if present
+                // Load custom icon spec and tint if present
                 const char *sceneIconSpec = obs_data_get_string(item_data, "custom_icon");
-                if (sceneIconSpec && strlen(sceneIconSpec) > 0) {
-                    sceneItem->setData(QString::fromUtf8(sceneIconSpec), CustomIconRole);
+                const char *sceneIconColor = obs_data_get_string(item_data, "custom_icon_color");
+                if ((sceneIconSpec && strlen(sceneIconSpec) > 0) || (sceneIconColor && strlen(sceneIconColor) > 0)) {
+                    if (sceneIconSpec && strlen(sceneIconSpec) > 0) {
+                        sceneItem->setData(QString::fromUtf8(sceneIconSpec), CustomIconRole);
+                    }
+                    if (sceneIconColor && strlen(sceneIconColor) > 0) {
+                        const QColor color(sceneIconColor);
+                        if (color.isValid()) {
+                            sceneItem->setData(color, CustomIconColorRole);
+                        }
+                    }
                     static_cast<SceneTreeItem*>(sceneItem)->updateIcon();
                 }
 
@@ -7547,8 +7828,15 @@ void SceneFolderItem::updateIcon()
 
     // A custom icon wins; an unresolvable one (deleted file, property a theme
     // does not define) falls back to the default rather than showing nothing.
-    const QIcon custom = ResolveIconSpec(data(CustomIconRole).toString());
-    setIcon(custom.isNull() ? GetThemeIcon("groupIcon") : custom);
+    // The default is tinted too, so a colour can be set without picking an icon.
+    const QColor tint = data(CustomIconColorRole).value<QColor>();
+    const QIcon custom = ResolveIconSpec(data(CustomIconRole).toString(), tint);
+    if (!custom.isNull()) {
+        setIcon(custom);
+    } else {
+        const QIcon base = GetThemeIcon("groupIcon");
+        setIcon(tint.isValid() ? TintIcon(base, tint) : base);
+    }
 }
 
 qint64 SceneFolderItem::getCreationTimestamp() const
@@ -7592,8 +7880,15 @@ void SceneTreeItem::updateIcon()
     StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
     if (settings.sceneOrganiserShowIcons) {
         // A custom icon wins; an unresolvable one falls back to the default.
-        const QIcon custom = ResolveIconSpec(data(CustomIconRole).toString());
-        setIcon(custom.isNull() ? GetThemeIcon("sceneIcon") : custom);
+        // The default is tinted too, so a colour can be set on its own.
+        const QColor tint = data(CustomIconColorRole).value<QColor>();
+        const QIcon custom = ResolveIconSpec(data(CustomIconRole).toString(), tint);
+        if (!custom.isNull()) {
+            setIcon(custom);
+        } else {
+            const QIcon base = GetThemeIcon("sceneIcon");
+            setIcon(tint.isValid() ? TintIcon(base, tint) : base);
+        }
 
         // Could add special styling for current scene in the future
         // obs_source_t *current_scene = Canvas::GetCurrentScene(m_canvasType);
