@@ -545,6 +545,9 @@ public:
     // Whole-layout snapshot / restore, used to back undo and redo.
     QString serialiseLayout();
     void restoreLayout(const QString &json);
+    // Removes scene rows the tracking map does not know about, which is what a
+    // move that left its original behind produces. Returns how many went.
+    int removeUntrackedSceneDuplicates(QStandardItem *parent = nullptr);
     void cleanupEmptyItems();
     void removeSceneFromTracking(obs_weak_source_t *weak_source);
 
@@ -585,6 +588,9 @@ protected:
     // Draws the vertical guides that show which folder a row belongs to, then
     // lets the base class put the expand/collapse chevron on top.
     void drawBranches(QPainter *painter, const QRect &rect, const QModelIndex &index) const override;
+    // Prunes a selection that holds both a folder and its contents before the
+    // drag begins, so the view and the drag payload describe the same rows.
+    void startDrag(Qt::DropActions supportedActions) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
     void dropEvent(QDropEvent *event) override;

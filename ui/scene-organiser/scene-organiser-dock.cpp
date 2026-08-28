@@ -5013,12 +5013,66 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
         ++row; // Increment for next item
     }
 
+    // Before anything else looks at the tree, and crucially before the save
+    // below, take out any original the move left behind.
+    removeUntrackedSceneDuplicates();
+
     emit modelChanged();
 
     // Immediately save after drag & drop to ensure changes persist
     saveSceneTree();
 
     return true;
+}
+
+// A scene is in the tree exactly once, and m_scenesInTree says which item that
+// is. Anything else claiming the same scene is a leftover.
+//
+// Copies get left behind because a drop INSERTS the moved items and then relies
+// on the view to remove the originals. That holds for a single row, but not for
+// a folder dragged with its children also selected: the folder move already
+// rebuilds the subtree, so the removal that follows is working from indexes that
+// have moved underneath it, and an original survives. The survivor is not in the
+// tracking map, so nothing afterwards notices it, and it gets saved.
+//
+// Rather than argue with the view about who removes what, the tree is measured
+// against the map: an untracked scene row cannot be legitimate.
+int SceneTreeModel::removeUntrackedSceneDuplicates(QStandardItem *parent)
+{
+    if (!parent) {
+        parent = invisibleRootItem();
+    }
+
+    QSet<QStandardItem *> tracked;
+    for (const auto &entry : m_scenesInTree) {
+        if (entry.second) {
+            tracked.insert(entry.second);
+        }
+    }
+
+    int removed = 0;
+    std::function<void(QStandardItem *)> sweep = [&](QStandardItem *node) {
+        for (int i = node->rowCount() - 1; i >= 0; --i) {
+            QStandardItem *child = node->child(i);
+            if (!child) {
+                continue;
+            }
+
+            if (child->rowCount() > 0) {
+                sweep(child);
+            }
+
+            if (child->type() == SceneTreeItem::UserType + 2 && !tracked.contains(child)) {
+                StreamUP::DebugLogger::LogInfo("SceneOrganiser",
+                    QString("Removed a duplicate row for scene '%1'").arg(child->text()).toUtf8().constData());
+                node->removeRow(i);
+                ++removed;
+            }
+        }
+    };
+    sweep(parent);
+
+    return removed;
 }
 
 void SceneTreeModel::updateTree(const QModelIndex &selectedIndex)
@@ -5122,6 +5176,11 @@ void SceneTreeModel::updateTree(const QModelIndex &selectedIndex)
 
     // Update our scene tree
     m_scenesInTree = std::move(new_scene_tree);
+
+    // With the map settled, anything in the tree it does not know about is a
+    // leftover copy from a move. Cheap, and it heals a tree that already has
+    // some rather than only preventing new ones.
+    removeUntrackedSceneDuplicates();
 
     Canvas::ReleaseScenes(scene_list);
 
@@ -6080,15 +6139,13 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
 
         // Sized off the row so it keeps its proportions as the row height
         // setting changes, and kept small enough not to crowd the icon.
-        const int size = qBound(5, cell.height() / 4, 9);
+        const qreal size = qBound(5, cell.height() / 4, 9);
 
-        // Centred on the guide line that runs past this row, not on the middle
-        // of the indent step. The guide sits under the parent folder's ICON, so
-        // a chevron centred on the step lands a couple of pixels off it and the
-        // line appears to clip the arrow rather than meet it. A top level folder
-        // has no line to meet, so it keeps the middle of its step.
-        const int guideX = rect.left() + (depth * step) + (iconSize().width() / 2);
-        const QPoint centre = (depth > 0) ? QPoint(guideX, cell.center().y()) : cell.center();
+        // The guide line that runs past this row. A top level folder has none,
+        // so it falls back to the middle of its own indent step.
+        const qreal guideX = rect.left() + (depth * step) + (iconSize().width() / 2.0);
+        const qreal centreX = (depth > 0) ? guideX : cell.center().x();
+        const qreal centreY = cell.center().y() + 0.5;
 
         // Follows the theme through the palette, so it stays legible on a light
         // theme and a dark one without either being special-cased.
@@ -6100,22 +6157,50 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
         painter->setPen(Qt::NoPen);
         painter->setBrush(arrow);
 
-        QPolygon triangle;
+        // Floating point, and a true apex rather than a point nudged a pixel
+        // past the base: the old shape was a pixel wider on one side than the
+        // other, which at this size reads as a blunt 2px tip instead of a point.
+        QPolygonF triangle;
         if (isExpanded(index)) {
-            // Pointing down: the folder is open.
-            triangle << QPoint(centre.x() - size, centre.y() - (size / 2))
-                     << QPoint(centre.x() + size, centre.y() - (size / 2))
-                     << QPoint(centre.x(), centre.y() + (size / 2) + 1);
+            // Open: pointing down, sitting centred on the line.
+            triangle << QPointF(centreX - size, centreY - (size / 2.0))
+                     << QPointF(centreX + size, centreY - (size / 2.0))
+                     << QPointF(centreX, centreY + (size / 2.0));
         } else {
-            // Pointing right: the folder is closed.
-            triangle << QPoint(centre.x() - (size / 2), centre.y() - size)
-                     << QPoint(centre.x() - (size / 2), centre.y() + size)
-                     << QPoint(centre.x() + (size / 2) + 1, centre.y());
+            // Closed: pointing right, with its long side ON the line rather than
+            // straddling it, so the line reads as the edge the arrow grows from.
+            triangle << QPointF(centreX, centreY - size)
+                     << QPointF(centreX, centreY + size)
+                     << QPointF(centreX + size, centreY);
         }
 
         painter->drawPolygon(triangle);
         painter->restore();
     }
+}
+
+void SceneTreeView::startDrag(Qt::DropActions supportedActions)
+{
+    // A folder carries its contents, so a selection holding both a folder and
+    // something inside it describes the same rows twice. The payload already
+    // drops the inner ones, but the view removes the ORIGINALS from the
+    // selection, not from the payload - so it would go looking for rows the
+    // folder move has already rebuilt, working from positions that have shifted
+    // underneath it. Pruning the selection first keeps the two in step.
+    if (QItemSelectionModel *selection = selectionModel()) {
+        const QModelIndexList selected = selection->selectedRows();
+
+        for (const QModelIndex &index : selected) {
+            for (QModelIndex walk = index.parent(); walk.isValid(); walk = walk.parent()) {
+                if (selected.contains(walk)) {
+                    selection->select(index, QItemSelectionModel::Deselect | QItemSelectionModel::Rows);
+                    break;
+                }
+            }
+        }
+    }
+
+    QTreeView::startDrag(supportedActions);
 }
 
 void SceneTreeView::dragEnterEvent(QDragEnterEvent *event)
