@@ -185,6 +185,9 @@ private:
     void showSceneContextMenu(const QPoint &pos, const QModelIndex &index);
     void showBackgroundContextMenu(const QPoint &pos);
     void updateAllItemIcons(QStandardItem *parent);
+    // Folder icons follow whether the row is open, which only the view knows.
+    void setFolderExpandedState(const QModelIndex &proxyIndex, bool expanded);
+    void syncFolderIcons(QStandardItem *parent = nullptr);
     void updateToggleIconsState();
     void updateLockActionStates();
     void updateActiveSceneHighlight();

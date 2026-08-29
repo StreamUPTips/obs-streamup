@@ -96,6 +96,11 @@ static constexpr int CustomIconRole = Qt::UserRole + 3;
 // the tab trees use it; the Scenes tree distinguishes them by item type.
 static constexpr int TabItemIsFolderRole = Qt::UserRole + 10;
 
+// Whether a folder row is currently open. Expansion is the view's business, not
+// the model's, so the dock writes it here when a row expands or collapses and
+// the item reads it back when it works out which icon to wear.
+static constexpr int FolderExpandedRole = Qt::UserRole + 11;
+
 // The colour an item's icon is tinted with. Separate from the icon spec so the
 // same icon can be re-coloured without re-picking it, and from UserRole+1,
 // which colours the ROW rather than the icon.
@@ -205,6 +210,42 @@ static QIcon TintIcon(const QIcon &icon, const QColor &color)
     }
 
     return tinted.isNull() ? icon : tinted;
+}
+
+// The open and closed folder icons the plugin ships: Lucide's folder and
+// folder-open, ISC licensed, with the licence alongside them in data/icons.
+// OBS themes provide one folder icon (the group icon, which is the open shape),
+// so a closed one has to come from somewhere. They are single colour strokes and
+// are tinted to the theme's text colour, the same treatment the chevron gets, so
+// they sit right on a light theme and a dark one without shipping a pair of each.
+static QIcon GetFolderIcon(bool expanded, const QColor &tint)
+{
+    const char *fileName = expanded ? "icons/folder-open.svg" : "icons/folder-closed.svg";
+
+    const QString cacheKey = QString::fromLatin1(fileName) +
+                             (tint.isValid() ? ("|" + tint.name(QColor::HexArgb)) : QString());
+
+    auto cached = s_customIconCache.find(cacheKey);
+    if (cached != s_customIconCache.end()) {
+        return cached.value();
+    }
+
+    QIcon icon;
+    if (char *path = obs_module_file(fileName)) {
+        icon = QIcon(QString::fromUtf8(path));
+        bfree(path);
+    }
+
+    if (icon.isNull()) {
+        // Shipped icon missing: the theme's group icon is a reasonable stand-in
+        // and at least tells you the row is a folder.
+        return GetThemeIcon("groupIcon");
+    }
+
+    icon = TintIcon(icon, tint.isValid() ? tint : QColor(255, 255, 255));
+
+    s_customIconCache.insert(cacheKey, icon);
+    return icon;
 }
 
 static QIcon ResolveIconSpec(const QString &spec, const QColor &tint = QColor())
@@ -523,11 +564,13 @@ void SceneOrganiserDock::setupUI()
             this, &SceneOrganiserDock::onCustomContextMenuRequested);
 
     // Connect expansion signals to save folder state and update button
-    connect(m_treeView, &QTreeView::expanded, this, [this](const QModelIndex &) {
+    connect(m_treeView, &QTreeView::expanded, this, [this](const QModelIndex &index) {
+        setFolderExpandedState(index, true);
         m_saveTimer->start();
         updateExpandCollapseButtonState();
     });
-    connect(m_treeView, &QTreeView::collapsed, this, [this](const QModelIndex &) {
+    connect(m_treeView, &QTreeView::collapsed, this, [this](const QModelIndex &index) {
+        setFolderExpandedState(index, false);
         m_saveTimer->start();
         updateExpandCollapseButtonState();
     });
@@ -2150,12 +2193,14 @@ void SceneOrganiserDock::onExpandCollapseAllClicked()
     if (isCollapsed) {
         // Collapse all folders
         m_treeView->collapseAll();
+        syncFolderIcons();
         m_allExpanded = false;
         m_expandCollapseButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.ExpandAll"));
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "ExpandCollapse", "Collapsed all folders");
     } else {
         // Expand all folders
         m_treeView->expandAll();
+        syncFolderIcons();
         m_allExpanded = true;
         m_expandCollapseButton->setToolTip(obs_module_text("SceneOrganiser.Tooltip.CollapseAll"));
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "ExpandCollapse", "Expanded all folders");
@@ -3383,6 +3428,57 @@ void SceneOrganiserDock::FocusSearchBox(CanvasType canvasType)
         dock->m_searchEdit->setFocus(Qt::ShortcutFocusReason);
         dock->m_searchEdit->selectAll();
         return;
+    }
+}
+
+// Writes a folder row's open/closed state onto the item and repaints its icon.
+// Expansion belongs to the view, the icon belongs to the item, so this is the
+// join between the two.
+void SceneOrganiserDock::setFolderExpandedState(const QModelIndex &proxyIndex, bool expanded)
+{
+    if (!m_model || !m_proxyModel || !proxyIndex.isValid()) {
+        return;
+    }
+
+    QStandardItem *item = m_model->itemFromIndex(m_proxyModel->mapToSource(proxyIndex));
+    if (!item || item->type() != SceneFolderItem::UserType + 1) {
+        return;
+    }
+
+    item->setData(expanded, FolderExpandedRole);
+    static_cast<SceneFolderItem *>(item)->updateIcon();
+}
+
+// Walks the whole tree and brings every folder's icon in line with whether that
+// row is actually open. Used after a load or a rebuild, when rows have been
+// expanded without anyone having gone through the signal above.
+void SceneOrganiserDock::syncFolderIcons(QStandardItem *parent)
+{
+    if (!m_model || !m_treeView || !m_proxyModel) {
+        return;
+    }
+    if (!parent) {
+        parent = m_model->invisibleRootItem();
+    }
+
+    for (int i = 0; i < parent->rowCount(); ++i) {
+        QStandardItem *child = parent->child(i);
+        if (!child) {
+            continue;
+        }
+
+        if (child->type() == SceneFolderItem::UserType + 1) {
+            const QModelIndex proxyIndex = m_proxyModel->mapFromSource(m_model->indexFromItem(child));
+            const bool expanded = proxyIndex.isValid() && m_treeView->isExpanded(proxyIndex);
+            if (child->data(FolderExpandedRole).toBool() != expanded) {
+                child->setData(expanded, FolderExpandedRole);
+                static_cast<SceneFolderItem *>(child)->updateIcon();
+            }
+        }
+
+        if (child->rowCount() > 0) {
+            syncFolderIcons(child);
+        }
     }
 }
 
@@ -6583,6 +6679,21 @@ void SceneOrganiserDock::setupQuickTabs()
     applyRowMetricsToQuickList();
 
     connect(m_quickTree, &QAbstractItemView::clicked, this, &SceneOrganiserDock::onQuickTreeActivated);
+
+    // Tab folders swap between the open and closed icon the same as the Scenes
+    // tree's do.
+    auto tabFolderIcon = [this](const QModelIndex &index, bool expanded) {
+        if (!m_quickModel || !m_quickProxy) {
+            return;
+        }
+        if (QStandardItem *item = m_quickModel->itemFromIndex(m_quickProxy->mapToSource(index))) {
+            if (item->data(TabItemIsFolderRole).toBool()) {
+                item->setIcon(GetFolderIcon(expanded, palette().color(QPalette::Text)));
+            }
+        }
+    };
+    connect(m_quickTree, &QTreeView::expanded, this, [tabFolderIcon](const QModelIndex &i) { tabFolderIcon(i, true); });
+    connect(m_quickTree, &QTreeView::collapsed, this, [tabFolderIcon](const QModelIndex &i) { tabFolderIcon(i, false); });
     connect(m_quickTree, &QWidget::customContextMenuRequested, this, &SceneOrganiserDock::onQuickTreeContextMenu);
 
     // A drag inside the tree changes the tab's arrangement, so the widget is
@@ -6727,7 +6838,10 @@ void SceneOrganiserDock::refreshQuickList()
             for (const TabNode &node : nodes) {
                 if (node.isFolder) {
                     QStandardItem *folder = new QStandardItem(node.name);
-                    folder->setIcon(GetThemeIcon("groupIcon"));
+                    // Tab folders are drawn expanded unless the tree is
+                    // collapsed, which refreshQuickList applies just below.
+                    folder->setIcon(GetFolderIcon(!m_quickTreeCollapsed,
+                                                  palette().color(QPalette::Text)));
                     folder->setData(true, TabItemIsFolderRole);
                     folder->setEditable(false);
                     folder->setDropEnabled(true);
@@ -7995,11 +8109,22 @@ void SceneFolderItem::updateIcon()
     const QColor tint = data(CustomIconColorRole).value<QColor>();
     const QIcon custom = ResolveIconSpec(data(CustomIconRole).toString(), tint);
     if (!custom.isNull()) {
+        // A folder given an icon of its own keeps it in both states. Picking an
+        // icon deliberately and then having it change underneath you would be
+        // the wrong kind of clever.
         setIcon(custom);
-    } else {
-        const QIcon base = GetThemeIcon("groupIcon");
-        setIcon(tint.isValid() ? TintIcon(base, tint) : base);
+        return;
     }
+
+    // Otherwise the icon follows the folder: open when the row is expanded,
+    // closed when it is not.
+    QColor iconTint = tint;
+    if (!iconTint.isValid()) {
+        // Follows the theme rather than being fixed white, since the shipped
+        // folder icons are flat single-colour shapes.
+        iconTint = QApplication::palette().color(QPalette::Text);
+    }
+    setIcon(GetFolderIcon(data(FolderExpandedRole).toBool(), iconTint));
 }
 
 qint64 SceneFolderItem::getCreationTimestamp() const
