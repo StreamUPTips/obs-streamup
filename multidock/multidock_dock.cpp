@@ -1,4 +1,5 @@
 #include "multidock_dock.hpp"
+#include <obs-frontend-api.h>
 #include <QEvent>
 #include <QPainterPath>
 #include <QPainter>
@@ -15,6 +16,7 @@
 #include <QFrame>
 #include <QTimer>
 #include <QToolBar>
+#include <QPointer>
 #include <QToolButton>
 #include <QCheckBox>
 #include <QAction>
@@ -477,6 +479,28 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
     
     // Add toolbar widget to the bottom of the layout
     layout->addWidget(toolBar, 0); // 0 means don't stretch
+
+    // Height taken from OBS' own Sources toolbar rather than styled to a number.
+    // This bar holds real widgets where OBS' holds only actions, so no set of
+    // rules sizes the two alike, and the Scene Organiser toolbar needed the same
+    // treatment. Measuring the thing being matched cannot land beside it.
+    QPointer<QToolBar> bar(toolBar);
+    QTimer::singleShot(0, this, [bar]() {
+        if (!bar) {
+            return;
+        }
+
+        QWidget* mainWindow = static_cast<QWidget*>(obs_frontend_get_main_window());
+        QToolBar* reference = mainWindow ? mainWindow->findChild<QToolBar*>("sourcesToolbar") : nullptr;
+        if (!reference) {
+            return;
+        }
+
+        const int height = reference->sizeHint().height();
+        if (height > 0) {
+            bar->setFixedHeight(height);
+        }
+    });
     
     // Initialize toolbar button states
     UpdateToolbarState();
