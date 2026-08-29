@@ -1,4 +1,8 @@
 #include "inner_dock_host.hpp"
+#include <QPalette>
+#include <QRegion>
+#include <QResizeEvent>
+#include <QPainterPath>
 #include <streamup/debug-logger.hpp>
 #include "multidock_dock.hpp"
 #include "add_dock_dialog.hpp"
@@ -58,13 +62,37 @@ void InnerDockHost::SetupDockOptions()
     // (background, border, border-radius, etc.). We only ship structural rules.
     setObjectName("InnerDockHost");
 
+    // Whether this paints a background, and in what colour, is decided by the
+    // theme through MultiDockDock's multidockBodyColor property. Left alone here
+    // so a theme that asks for nothing gets the default appearance.
+
+    // Set object name for styling
+    // Theme hook: QMainWindow#InnerDockHost — the OBS theme owns appearance
+    // (background, border, border-radius, etc.). We only ship structural rules.
+    setObjectName("InnerDockHost");
+
+    // This QMainWindow paints a square background over the rounded container
+    // behind it. Not painting at all leaves stale pixels in the corners, since
+    // nothing clears them, so instead it paints the SAME colour the container
+    // does: the join is then invisible and the rounded corners belong to the
+    // container, which is drawn around it.
+    //
+    // Set through the palette rather than a stylesheet on purpose. A stylesheet
+    // on this widget drags the MultiDock's title bar colours into the stylesheet
+    // with it and the title comes out inverted.
+    QPalette hostPalette = palette();
+    hostPalette.setColor(QPalette::Window, QColor(9, 9, 9)); // matches --bg_darkest
+    setPalette(hostPalette);
+    setAutoFillBackground(true);
+
     // Set content margins to create gap between docks and edges
-    setContentsMargins(StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8));
+    setContentsMargins(0, 0, 0, 0);
 
     // Functional rule only: hide the per-dock float button (multi-dock owns
     // float state itself). All visual styling is left to the OBS theme.
     setStyleSheet(StreamUP::UIStyles::scale_qss("QDockWidget::float-button { width: 0px; height: 0px; }"));
 }
+
 
 
 void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)

@@ -2,6 +2,9 @@
 #define STREAMUP_MULTIDOCK_DOCK_HPP
 
 #include <QFrame>
+#include <QEvent>
+#include <QList>
+#include <QColor>
 #include <QStringList>
 
 class QVBoxLayout;
@@ -23,6 +26,24 @@ class InnerDockHost;
 class MultiDockDock : public QFrame
 {
     Q_OBJECT
+
+    // Set by the theme, not by us. A theme that says nothing gets the plain
+    // square dock it has always had: the body keeps the application's own
+    // background and no corners are painted. Only a theme that asks for this,
+    // and supplies the 2 colours it needs, gets the rounded body.
+    //
+    //   .multidock-frame {
+    //       qproperty-multidockBodyColor: #090909;    the body
+    //       qproperty-multidockCornerColor: #111111;  what shows at the corners
+    //   }
+    Q_PROPERTY(QColor multidockBodyColor READ multidockBodyColor WRITE setMultidockBodyColor)
+    Q_PROPERTY(QColor multidockCornerColor READ multidockCornerColor WRITE setMultidockCornerColor)
+
+public:
+    QColor multidockBodyColor() const { return m_bodyColor; }
+    void setMultidockBodyColor(const QColor& color);
+    QColor multidockCornerColor() const { return m_cornerColor; }
+    void setMultidockCornerColor(const QColor& color);
 
 public:
     explicit MultiDockDock(const QString& id, const QString& name, QWidget* parent = nullptr);
@@ -83,7 +104,22 @@ public:
 
     // No slots needed - we save on OBS shutdown
 
+protected:
+    // Keeps the corner cover sized to the container it sits in front of.
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 private:
+    // Paint the body's rounded corners over the top of the dock host. Four small
+    // widgets, one per corner, so the middle of the body stays clear of Qt
+    // widgets: the vertical canvas preview renders natively and stops drawing if
+    // anything is laid over it.
+    QList<QWidget*> m_cornerOverlays;
+
+    // Both invalid until a theme sets them, which is what keeps this off
+    // everywhere else.
+    QColor m_bodyColor;
+    QColor m_cornerColor;
+
     void SetupUi();
     void CreateBottomToolbar(QVBoxLayout* layout);
 

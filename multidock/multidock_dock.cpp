@@ -1,4 +1,7 @@
 #include "multidock_dock.hpp"
+#include <QEvent>
+#include <QPainterPath>
+#include <QPainter>
 #include <streamup/debug-logger.hpp>
 #include "inner_dock_host.hpp"
 #include "persistence.hpp"
@@ -44,10 +47,161 @@ MultiDockDock::~MultiDockDock()
          m_name.toUtf8().constData());
 }
 
+namespace {
+
+// Draws ONE of the body's rounded corners, on top of whatever is beneath it.
+//
+// The body is a stack: a frame, a container, and a QMainWindow holding the docks.
+// Children always paint over parents, so the QMainWindow's square corners cover
+// any rounding the container draws underneath. Insetting it far enough to clear
+// the curve costs about 14px of padding on every side, and masking it clips the
+// docks inside it, so the corner is painted over the top instead.
+//
+// Four small widgets rather than one covering the body: a Qt widget laid over the
+// whole area covers the vertical canvas preview, which renders through a native
+// window rather than through Qt and stops drawing entirely. These are radius
+// sized and sit in the corners, so the middle is left alone.
+class CornerOverlay : public QWidget {
+public:
+	CornerOverlay(Qt::Corner corner, int radius, QWidget *parent)
+		: QWidget(parent), m_corner(corner), m_radius(radius)
+	{
+		setAttribute(Qt::WA_TransparentForMouseEvents, true);
+		setFixedSize(radius, radius);
+		// Hidden until a theme supplies a colour.
+		hide();
+	}
+
+	void setColor(const QColor &color)
+	{
+		m_color = color;
+		setVisible(color.isValid());
+		update();
+	}
+
+	void positionIn(const QRect &area)
+	{
+		switch (m_corner) {
+		case Qt::TopLeftCorner:
+			move(area.left(), area.top());
+			break;
+		case Qt::TopRightCorner:
+			move(area.right() - m_radius + 1, area.top());
+			break;
+		case Qt::BottomLeftCorner:
+			move(area.left(), area.bottom() - m_radius + 1);
+			break;
+		case Qt::BottomRightCorner:
+			move(area.right() - m_radius + 1, area.bottom() - m_radius + 1);
+			break;
+		}
+		raise();
+	}
+
+protected:
+	void paintEvent(QPaintEvent *) override
+	{
+		// This square, less the quarter of the curve that falls inside it.
+		const qreal diameter = m_radius * 2.0;
+		QRectF circle;
+		switch (m_corner) {
+		case Qt::TopLeftCorner:
+			circle = QRectF(0, 0, diameter, diameter);
+			break;
+		case Qt::TopRightCorner:
+			circle = QRectF(-m_radius, 0, diameter, diameter);
+			break;
+		case Qt::BottomLeftCorner:
+			circle = QRectF(0, -m_radius, diameter, diameter);
+			break;
+		case Qt::BottomRightCorner:
+			circle = QRectF(-m_radius, -m_radius, diameter, diameter);
+			break;
+		}
+
+		QPainterPath square;
+		square.addRect(QRectF(rect()));
+
+		QPainterPath rounded;
+		rounded.addEllipse(circle);
+
+		if (!m_color.isValid()) {
+			return;
+		}
+
+		QPainter painter(this);
+		painter.setRenderHint(QPainter::Antialiasing, true);
+		painter.setPen(Qt::NoPen);
+		// The colour of whatever sits behind the body, given by the theme.
+		painter.setBrush(m_color);
+		painter.drawPath(square.subtracted(rounded));
+	}
+
+private:
+	Qt::Corner m_corner;
+	int m_radius;
+	QColor m_color;
+};
+
+} // namespace
+
+
+// Keeps the corner cover the size of the container it sits in front of, and on
+// top of the host, which raises itself when docks are added.
+bool MultiDockDock::eventFilter(QObject *watched, QEvent *event)
+{
+	if (!m_cornerOverlays.isEmpty() && event->type() == QEvent::Resize) {
+		if (QWidget *widget = qobject_cast<QWidget *>(watched)) {
+			for (QWidget *piece : m_cornerOverlays) {
+				static_cast<CornerOverlay *>(piece)->positionIn(widget->rect());
+			}
+		}
+	}
+
+	return QFrame::eventFilter(watched, event);
+}
+
+// Both of these are driven by the theme through qproperty. Until a theme sets
+// them the dock looks exactly as it always did, which is what keeps the rounded
+// body a StreamUP theme feature rather than something imposed on every theme.
+void MultiDockDock::setMultidockBodyColor(const QColor& color)
+{
+	m_bodyColor = color;
+
+	// The host paints the body. It has to paint the same colour the container
+	// behind it is painted, or the join shows; painting nothing at all leaves
+	// stale pixels in the corners.
+	if (m_innerHost) {
+		if (color.isValid()) {
+			QPalette hostPalette = m_innerHost->palette();
+			hostPalette.setColor(QPalette::Window, color);
+			m_innerHost->setPalette(hostPalette);
+			m_innerHost->setAutoFillBackground(true);
+		} else {
+			m_innerHost->setAutoFillBackground(false);
+		}
+	}
+}
+
+void MultiDockDock::setMultidockCornerColor(const QColor& color)
+{
+	m_cornerColor = color;
+
+	for (QWidget* piece : m_cornerOverlays) {
+		static_cast<CornerOverlay*>(piece)->setColor(color);
+	}
+}
+
 void MultiDockDock::SetupUi()
 {
     // Set object name for identification  
     setObjectName(QString("streamup_multidock_%1").arg(m_id));
+
+    // The object name carries the dock's id, so no stylesheet can match it. This
+    // class is the stable hook the theme needs: this frame sits behind the whole
+    // MultiDock body, and a rounded corner on the body is only visible if what
+    // is behind it is a different colour.
+    setProperty("class", "multidock-frame");
     
     // Create main layout directly on this QFrame
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
@@ -60,7 +214,14 @@ void MultiDockDock::SetupUi()
     innerContainer->setFrameStyle(QFrame::NoFrame);
     // No custom styling - let OBS theme handle everything
     QVBoxLayout* innerLayout = new QVBoxLayout(innerContainer);
-    innerLayout->setContentsMargins(StreamUP::UIStyles::S(4), StreamUP::UIStyles::S(4), StreamUP::UIStyles::S(4), StreamUP::UIStyles::S(4)); // 4px margins on all sides
+    // 2px here plus 4px in the host below, so the gap between the body edge and
+    // a dock inside it matches the spacing the theme gives docks in the main
+    // window. It used to be 4 plus 8, which read as noticeably roomier than
+    // every other dock.
+    // The host inside paints a square, so it has to sit far enough in that its
+    // corners stay clear of the container's curve. This is that clearance, and
+    // the host itself now adds nothing on top.
+    innerLayout->setContentsMargins(StreamUP::UIStyles::S(6), StreamUP::UIStyles::S(6), StreamUP::UIStyles::S(6), StreamUP::UIStyles::S(6));
     innerLayout->setSpacing(0);
     
     // Create inner host as a direct child
@@ -74,6 +235,20 @@ void MultiDockDock::SetupUi()
     
     // Add container to main layout (takes most space)
     mainLayout->addWidget(innerContainer, 1);
+
+    // The 4 corner covers. See CornerOverlay: this is what makes the body's
+    // rounded corners visible without padding the docks in or clipping them.
+    //
+    // The radius must match --radius_multidock_body in the theme, since these
+    // paint the corners that rounding leaves; a mismatch shows as a double curve.
+    const int cornerRadius = StreamUP::UIStyles::S(28);
+    for (Qt::Corner corner : {Qt::TopLeftCorner, Qt::TopRightCorner,
+                              Qt::BottomLeftCorner, Qt::BottomRightCorner}) {
+        auto *piece = new CornerOverlay(corner, cornerRadius, innerContainer);
+        piece->positionIn(innerContainer->rect());
+        m_cornerOverlays.append(piece);
+    }
+    innerContainer->installEventFilter(this);
     
     // Create and add the toolbar at the bottom of our layout (no padding)
     CreateBottomToolbar(mainLayout);
