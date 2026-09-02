@@ -45,6 +45,19 @@ public:
     QList<QDockWidget*> GetAllDocks() const;
 
     /**
+     * @brief Hand every captured dock back to the main window it came from
+     *
+     * A captured dock is reparented into this host, but OBS still owns it: it
+     * keeps a shared_ptr to every dock a plugin registered, and deletes them
+     * all from ~OBSBasic. If a dock is still a child of this host when the
+     * host dies, Qt deletes it as a child and OBS then deletes it a second
+     * time - a pure virtual call on a freed QObject, which aborts the process
+     * on the way out. Releasing them first is what keeps the two owners from
+     * colliding.
+     */
+    void ReleaseAllDocks();
+
+    /**
      * @brief Restore the layout from saved state
      * @param layout The layout data to restore
      */

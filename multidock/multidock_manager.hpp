@@ -28,6 +28,16 @@ public:
     static void Shutdown();
 
     /**
+     * @brief Hand every captured dock back to the OBS main window
+     *
+     * Called at OBS_FRONTEND_EVENT_EXIT, while the main window is still
+     * alive. OBS owns every dock a plugin registered and deletes them from
+     * ~OBSBasic; a dock still captured by a MultiDock at that point has
+     * already been deleted by Qt as a child of the MultiDock.
+     */
+    void ReleaseAllCapturedDocks();
+
+    /**
      * @brief Master enable/disable for the entire Multi-Dock system.
      *        Calls Initialize()/Shutdown() under the hood so the toggle takes
      *        effect immediately at runtime without an OBS restart.

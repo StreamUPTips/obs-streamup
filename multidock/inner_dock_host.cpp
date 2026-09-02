@@ -38,8 +38,32 @@ InnerDockHost::InnerDockHost(const QString& multiDockId, QWidget* parent)
 
 InnerDockHost::~InnerDockHost()
 {
+    // Last line of defence. The docks should already have gone back at
+    // OBS_FRONTEND_EVENT_EXIT, but anything still captured here would be
+    // deleted by Qt as a child of this host while OBS still holds its own
+    // shared_ptr to it - see ReleaseAllDocks.
+    ReleaseAllDocks();
+
     StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Host Destruction", "Destroying InnerDockHost for '%s'", 
          m_multiDockId.toUtf8().constData());
+}
+
+void InnerDockHost::ReleaseAllDocks()
+{
+    // GetAllDocks hands back a copy, so removing as we go is safe.
+    const QList<QDockWidget*> docks = GetAllDocks();
+    if (docks.isEmpty()) {
+        return;
+    }
+
+    for (QDockWidget* dock : docks) {
+        if (dock) {
+            RemoveDock(dock);
+        }
+    }
+
+    StreamUP::DebugLogger::LogInfoFormat("MultiDock", "Released %d dock(s) from MultiDock '%s' back to OBS",
+         (int)docks.size(), m_multiDockId.toUtf8().constData());
 }
 
 

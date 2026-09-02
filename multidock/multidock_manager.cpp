@@ -57,6 +57,19 @@ void MultiDockManager::OnFrontendEvent(enum obs_frontend_event event, void *priv
     
     switch (event) {
     case OBS_FRONTEND_EVENT_EXIT:
+        manager->SaveAllMultiDocks();
+        // Then give every captured dock back to the main window, while that
+        // window is still alive. A captured dock is reparented into a
+        // MultiDock, but OBS never gave up ownership: it holds a shared_ptr to
+        // every dock a plugin registered and deletes the lot from
+        // ~OBSBasic. Leave them captured and Qt deletes them first, as children
+        // of the MultiDock, and OBS' delete then lands on a freed QObject -
+        // a pure virtual call that aborts OBS on every single shutdown.
+        //
+        // The capture list has just been saved, so the docks are picked back up
+        // on the next launch exactly as they were.
+        manager->ReleaseAllCapturedDocks();
+        break;
     case OBS_FRONTEND_EVENT_PROFILE_CHANGING:
     case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING:
         manager->SaveAllMultiDocks();
@@ -97,6 +110,19 @@ void MultiDockManager::Shutdown()
     delete s_instance;
     s_instance = nullptr;
 
+}
+
+void MultiDockManager::ReleaseAllCapturedDocks()
+{
+    const QList<MultiDockDock*> multiDocks = GetAllMultiDocks();
+    for (MultiDockDock* multiDock : multiDocks) {
+        if (!multiDock) {
+            continue;
+        }
+        if (InnerDockHost* host = multiDock->GetInnerHost()) {
+            host->ReleaseAllDocks();
+        }
+    }
 }
 
 void MultiDockManager::SetGlobalEnabled(bool enabled)
