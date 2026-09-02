@@ -71,15 +71,42 @@ static QString MarkdownBodyToHtml(const QString &md)
 				.arg(UIStyles::Colors::TEXT_PRIMARY, line.mid(4));
 		} else if (line.startsWith("## ")) {
 			closeList();
-			out += QString("<h3 style=\"color: %1; margin: 12px 0 6px 0; font-size: 14px; font-weight: 700;\">%2</h3>\n")
+			out += QString("<h3 style=\"color: %1; margin: 22px 0 0 0; font-size: 15px; font-weight: 700;\">%2</h3>\n")
 				.arg(UIStyles::Colors::PRIMARY_LIGHT, line.mid(3));
 		} else if (line.startsWith("- ")) {
-			if (!inList) {
-				out += "<ul style=\"margin: 4px 0 8px 0; padding-left: 18px;\">\n";
-				inList = true;
+			// An entry is written as `- **Title** Body`. Rendered as one bullet
+			// that is a paragraph with a bold run buried at the front, and a
+			// page of them reads as a wall. The title goes on its own line
+			// instead, with the detail under it, so the list can be skimmed by
+			// title alone and only the interesting ones get read.
+			closeList();
+			const QString entry = line.mid(2).trimmed();
+			QString title;
+			QString detail = entry;
+			if (entry.startsWith("**")) {
+				const int close = entry.indexOf("**", 2);
+				if (close > 2) {
+					title = entry.mid(2, close - 2).trimmed();
+					detail = entry.mid(close + 2).trimmed();
+				}
 			}
-			out += QString("<li style=\"margin: 2px 0;\">%1</li>\n")
-				.arg(ApplyInlineFormatting(line.mid(2)));
+
+			if (title.isEmpty()) {
+				out += QString("<p style=\"margin: 0 0 12px 0;\">%1</p>\n")
+					.arg(ApplyInlineFormatting(entry));
+			} else {
+				// The title has to win against the detail under it, and the two
+				// text colours are a shade apart, so the weight and the size do
+				// the work. The gap between entries hangs off the title's top
+				// margin rather than the detail's bottom one, which keeps a
+				// title tight to the text it introduces.
+				out += QString("<p style=\"margin: 16px 0 2px 0; color: %1; font-size: 13px; font-weight: 700;\">%2</p>\n")
+					.arg(UIStyles::Colors::TEXT_PRIMARY, ApplyInlineFormatting(title));
+				if (!detail.isEmpty()) {
+					out += QString("<p style=\"margin: 0; color: %1; font-weight: 400;\">%2</p>\n")
+						.arg(UIStyles::Colors::TEXT_SECONDARY, ApplyInlineFormatting(detail));
+				}
+			}
 		} else {
 			closeList();
 			out += QString("<p style=\"margin: 6px 0;\">%1</p>\n").arg(ApplyInlineFormatting(line));
@@ -87,7 +114,7 @@ static QString MarkdownBodyToHtml(const QString &md)
 	}
 	if (inList) out += "</ul>\n";
 
-	return QString("<div style=\"color: %1; line-height: 1.45; font-size: 12px;\">%2</div>")
+	return QString("<div style=\"color: %1; line-height: 1.5; font-size: 12px;\">%2</div>")
 		.arg(UIStyles::Colors::TEXT_SECONDARY, out);
 }
 
