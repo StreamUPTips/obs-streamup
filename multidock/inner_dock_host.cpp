@@ -56,10 +56,38 @@ void InnerDockHost::ReleaseAllDocks()
         return;
     }
 
+    // Ownership is the only thing that matters here, not layout. RemoveDock
+    // puts a dock back where it came from and shows it, which is right when
+    // somebody takes a dock out of a MultiDock by hand, and wrong on the way
+    // out: OBS is closing, so the user gets a last look at their docks being
+    // dealt back into the main window one at a time.
+    //
+    // So the dock is handed to the main window as a plain child and left
+    // hidden. That is all Qt needs to stop treating it as ours to delete, and
+    // OBS deletes it from ~OBSBasic moments later anyway. The capture list has
+    // already been saved, so the MultiDock picks them all up again on the next
+    // start.
     for (QDockWidget* dock : docks) {
-        if (dock) {
-            RemoveDock(dock);
+        if (!dock) {
+            continue;
         }
+
+        const DockId dockId = GenerateDockId(dock);
+        const CapturedDock captured = m_capturedDocks.value(dockId);
+
+        DisconnectDockSignals(dock);
+        removeDockWidget(dock);
+
+        dock->setMinimumSize(captured.original.minimumSize);
+        dock->setMaximumSize(captured.original.maximumSize);
+        dock->setContextMenuPolicy(captured.original.contextMenuPolicy);
+
+        if (captured.original.main) {
+            dock->setParent(captured.original.main);
+        }
+        dock->hide();
+
+        m_capturedDocks.remove(dockId);
     }
 
     StreamUP::DebugLogger::LogInfoFormat("MultiDock", "Released %d dock(s) from MultiDock '%s' back to OBS",
