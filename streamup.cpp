@@ -1303,6 +1303,12 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 			// This ensures cached data is available even if startup check is disabled
 			StreamUP::DebugLogger::LogDebug("Plugin", "Async Init", "Performing plugin check and cache");
 			StreamUP::PluginManager::PerformPluginCheckAndCache();
+
+			// Daily config backup, off the shutdown path (see obs_module_unload).
+			// The config on disk is the previous session as OBS last wrote it,
+			// which is exactly what a restore wants.
+			StreamUP::DebugLogger::LogDebug("Plugin", "Async Init", "Running automatic backup if due");
+			StreamUP::Backup::RunAutomaticBackupIfDue();
 			
 			// Schedule startup UI to show on UI thread with delay
 			StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
@@ -1458,14 +1464,17 @@ void obs_module_unload()
 		if (StreamUP::Restore::HasPending()) {
 			blog(LOG_INFO, "[StreamUP] Applying staged restore during shutdown");
 			StreamUP::Restore::ApplyPending();
-		} else {
-			// Automatic backup runs in the same window and for the same
-			// reason: OBS has finished writing, so this captures the session
-			// that just ended. Skipped when a restore was applied above,
-			// since that path already took its own safety backup and the
-			// config on disk is no longer what this session was using.
-			StreamUP::Backup::RunAutomaticBackupIfDue();
 		}
+
+		// The automatic backup used to run here too, and that was the wrong
+		// place for it: zipping every profile, scene collection and plugin
+		// config directory is minutes of solid disk and CPU work, and doing it
+		// inside obs_shutdown() means OBS' window is gone while the machine is
+		// still pinned - reported as OBS "hanging" on close, stuttering audio,
+		// and on at least one Linux desktop a full freeze seconds after quit.
+		// It now runs on the worker thread just after OBS finishes loading,
+		// where it is still a once-a-day snapshot of the config on disk but
+		// nothing is waiting on it. See OnOBSFinishedLoading.
 
 		blog(LOG_INFO, "[StreamUP] Plugin unload completed successfully");
 		StreamUP::DebugLogger::LogInfo("Plugin", "Plugin unload completed successfully");

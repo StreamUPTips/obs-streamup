@@ -12,9 +12,11 @@
 #include <util/platform.h>
 
 #include <QCryptographicHash>
+#include <QApplication>
 #include <QDate>
 #include <QDateTime>
 #include <QElapsedTimer>
+#include <QThread>
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -650,7 +652,7 @@ void RunAutomaticBackupIfDue()
 	if (!settings.backupAutomatic)
 		return;
 
-	// One a day. Closing OBS five times in an evening should not produce five
+	// One a day. Starting OBS five times in an evening should not produce five
 	// archives, and the day's work is what is worth keeping.
 	const QString today = QDate::currentDate().toString(Qt::ISODate);
 	if (QString::fromStdString(settings.backupLastAutoDate) == today) {
@@ -678,6 +680,9 @@ void RunAutomaticBackupIfDue()
 	// restore from it should not need the stream key re-entering.
 	options.includeCredentials = true;
 	options.collectMedia = false;
+	// Nobody is watching this run, so skip the media audit and its per-file
+	// stat of every path a scene collection references.
+	options.auditMedia = false;
 
 	StreamUP::DebugLogger::LogInfoFormat("Backup", "Running automatic backup to %s", path.toUtf8().constData());
 	const QElapsedTimer timer = [] {
@@ -718,7 +723,10 @@ Result CreateBackup(const QString &archivePath, const Options &options, Progress
 	// OBS only flushes config on save, so without this the archive holds the
 	// last flush rather than what is on screen right now. During shutdown the
 	// frontend has already saved and the API is gone, so this is skipped.
-	if (obs_frontend_get_app_config())
+	// obs_frontend_save touches the frontend's own state and is only safe on
+	// the UI thread; the automatic backup runs on a worker.
+	if (obs_frontend_get_app_config() && QApplication::instance() &&
+	    QThread::currentThread() == QApplication::instance()->thread())
 		obs_frontend_save();
 
 	// Build the file list first so progress can be reported against a total,
@@ -776,7 +784,8 @@ Result CreateBackup(const QString &archivePath, const Options &options, Progress
 	if (options.includeThemes)
 		addArea(QStringLiteral("themes"), loc.themesDir, QStringLiteral("themes/"), {});
 
-	const QList<MediaReference> media = ScanMediaReferences(loc);
+	const QList<MediaReference> media =
+		(options.collectMedia || options.auditMedia) ? ScanMediaReferences(loc) : QList<MediaReference>();
 	result.mediaReferenced = media.size();
 	for (const MediaReference &ref : media) {
 		if (!ref.exists) {

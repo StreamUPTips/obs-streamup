@@ -42,6 +42,13 @@ struct Options {
 	bool includeThemes = true;
 	bool includePluginConfig = true;
 
+	// Walk every scene collection and stat each external file it points at, so
+	// the result can report media that has gone missing. Worth it for a backup
+	// a human asked for and is watching; pure cost for an unattended one, where
+	// nobody reads the report and a path on a slow network share stalls the
+	// whole run.
+	bool auditMedia = true;
+
 	// Per-file size ceiling. Plugin config directories can hold enormous
 	// downloadable assets: a Whisper model shipped with obs-localvocal is
 	// nearly 3 GB on its own. Compressing that into a backup takes minutes,
@@ -138,10 +145,11 @@ int PruneBackups(const QString &folder, const QString &pattern, int keep);
 /**
  * Write an automatic backup if one is due.
  *
- * Called during shutdown, after OBS has written its final state, so the archive
- * holds the session that just ended. Does nothing when automatic backups are
- * off, when one has already run today, or when a restore is staged (that path
- * takes its own safety backup).
+ * Called on a worker thread shortly after OBS finishes loading, where the
+ * config on disk is still the previous session exactly as OBS last wrote it.
+ * Deliberately NOT on the shutdown path: zipping the whole config inside
+ * obs_shutdown() pins the machine after OBS' window has already gone.
+ * Does nothing when automatic backups are off, or when one has run today.
  */
 void RunAutomaticBackupIfDue();
 
