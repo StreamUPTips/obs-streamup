@@ -83,9 +83,9 @@ static const QList<QColor> &PresetColors()
 }
 
 // Data role marking the scene item that is currently LIVE on program.
-// Painted by CustomColorDelegate as a distinct green "on air" indicator that is
-// independent of the tree's normal (blue) selection. UserRole+1 is the custom
-// colour, UserRole+100 is the creation timestamp, so +2 is free.
+// Drawn with the theme's own selected-row look, independent of what the user
+// has actually got selected. UserRole+1 is the custom colour, UserRole+100 is
+// the creation timestamp, so +2 is free.
 static constexpr int ProgramSceneRole = Qt::UserRole + 2;
 
 // The item's custom icon spec (see ResolveIconSpec). +3 is the next role free
@@ -3185,10 +3185,11 @@ void SceneOrganiserDock::updateActiveSceneHighlight()
     }
 
     // Mark the LIVE program scene throughout the tree with the dedicated
-    // ProgramSceneRole. The CustomColorDelegate paints these items with a
-    // distinct green "on air" indicator that is INDEPENDENT of the tree's
-    // normal (blue) selection. This tracks the real program scene no matter
-    // how it changed (Stream Deck, hotkey, websocket, OBS scene list, etc.).
+    // ProgramSceneRole. These rows are drawn with the theme's selected-row
+    // look, INDEPENDENTLY of the tree's own selection, so the live scene still
+    // reads as live in studio mode where the selection is the preview. This
+    // tracks the real program scene no matter how it changed (Stream Deck,
+    // hotkey, websocket, OBS scene list, etc.).
     updateActiveSceneHighlightRecursive(m_model->invisibleRootItem(), current_scene_name, preview_scene_name);
 
     // Whatever is live is by definition the most recent. Held back until the
@@ -3198,7 +3199,7 @@ void SceneOrganiserDock::updateActiveSceneHighlight()
         noteRecentScene(current_scene_name);
 
         // noteRecentScene only rebuilds when the order actually changes, but the
-        // green programme marker moves whenever the live scene does - including
+        // programme marker moves whenever the live scene does - including
         // back to one already at the top of the list.
         if (m_currentKind != QuickTabKind::Scenes) {
             refreshQuickList();
@@ -6150,9 +6151,20 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
     // hover or selection colour floating to the left of the row - the row's pill
     // is the only thing that should express that state. Rather than chase which
     // rule in which theme is responsible, the column is simply cleared first.
+    //
+    // This applies to every row, theme-painted ones included. A theme's
+    // ::branch:selected rule draws its own rounded block here, which on an
+    // indented row is a second pill floating to the left of the real one with a
+    // gap between them. The highlight belongs to the item, so the indent column
+    // is cleared back to the dock background and the highlight simply starts
+    // where the item does.
     painter->save();
     painter->fillRect(rect, palette().color(QPalette::Base));
     painter->restore();
+
+    // Guides and chevron always sit on the cleared background, never on a
+    // highlight, so they follow the plain text colour.
+    const QPalette::ColorRole branchRole = QPalette::Text;
 
     int depth = 0;
     for (QModelIndex walk = index.parent(); walk.isValid(); walk = walk.parent()) {
@@ -6171,7 +6183,7 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
         // Derived from the theme's own text colour at low alpha rather than a
         // fixed grey, so the guides sit a consistent distance from the
         // background on a light theme and a dark one alike.
-        QColor guide = palette().color(QPalette::Text);
+        QColor guide = palette().color(branchRole);
         guide.setAlpha(60);
 
         painter->save();
@@ -6245,7 +6257,7 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
 
         // Follows the theme through the palette, so it stays legible on a light
         // theme and a dark one without either being special-cased.
-        QColor arrow = palette().color(QPalette::Text);
+        QColor arrow = palette().color(branchRole);
         arrow.setAlpha(200);
 
         painter->save();
@@ -6356,10 +6368,22 @@ void SceneTreeView::drawRow(QPainter *painter, const QStyleOptionViewItem &optio
     // The delegate's own copy of the state was already cleared, which is why an
     // unselected coloured row looked right and only the selected one did not:
     // this fill happens a level above the delegate and needed clearing too.
-    // Every selected or hovered row is now painted by CustomColorDelegate - a
-    // plain row included, since the theme's own rule for a generic QTreeView is
-    // not something we can rely on. So the row fill underneath always has to go,
-    // not just on coloured rows.
+    //
+    // Only rows the delegate actually paints need it suppressed. A row with no
+    // custom colour is left entirely to the theme, so the theme's selection and
+    // hover fill has to survive - that is what makes the dock match the Sources
+    // list beside it. The live scene gets the theme's selected row fill by
+    // asking the style for it here, matching what the delegate does above.
+    const bool paintedByDelegate = index.data(Qt::UserRole + 1).isValid();
+    if (!paintedByDelegate) {
+        QStyleOptionViewItem themedOpt = option;
+        if (index.data(ProgramSceneRole).toBool()) {
+            themedOpt.state |= QStyle::State_Selected;
+        }
+        QTreeView::drawRow(painter, themedOpt, index);
+        return;
+    }
+
     QStyleOptionViewItem opt = option;
     opt.state &= ~QStyle::State_Selected;
     opt.state &= ~QStyle::State_MouseOver;
@@ -6551,19 +6575,24 @@ void StreamUP::SceneOrganiser::QuickListDelegate::paint(QPainter *painter, const
     const bool isSelected = option.state & QStyle::State_Selected;
     const bool isHovered = option.state & QStyle::State_MouseOver;
 
-    if (!isProgram && !customColor.isValid() && !isSelected && !isHovered) {
-        QStyledItemDelegate::paint(painter, option, index);
+    if (!customColor.isValid()) {
+        // Same rule as the tree: no custom colour means the theme owns the row,
+        // and the live scene is shown with the theme's selected look.
+        QStyleOptionViewItem themedOption = option;
+        if (isProgram) {
+            themedOption.state |= QStyle::State_Selected;
+        }
+        QStyledItemDelegate::paint(painter, themedOption, index);
         return;
     }
 
-    // Identical rules to the tree: programme green outranks a custom colour,
-    // selection brightens whatever the base is, hover brightens it less.
-    QColor baseColor = isProgram ? QColor(Colors::COLOR_SUCCESS) : customColor;
-    QColor bgColor = baseColor;
-    if (isSelected) {
-        bgColor = m_dock->getSelectionColor(baseColor);
+    // Identical rules to the tree: a hand-set colour is brightened for
+    // selection (and for the live scene), less so for hover.
+    QColor bgColor = customColor;
+    if (isSelected || isProgram) {
+        bgColor = m_dock->getSelectionColor(customColor);
     } else if (isHovered) {
-        bgColor = m_dock->getHoverColor(baseColor);
+        bgColor = m_dock->getHoverColor(customColor);
     }
 
     if (!bgColor.isValid()) {
@@ -8316,9 +8345,9 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
         return;
     }
 
-    // Is this the LIVE program scene? The program indicator is a dedicated
-    // green "on air" highlight that is INDEPENDENT of selection and takes
-    // precedence over any custom colour while the scene is live.
+    // Is this the LIVE program scene? It is marked with the theme's own
+    // selection colour, not a colour of ours, so the dock reads the same way as
+    // the Scenes and Sources docks beside it in whatever theme is loaded.
     const bool isProgram = item->data(ProgramSceneRole).toBool();
 
     // Check if this item has a custom color
@@ -8328,24 +8357,27 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
     const bool isSelected = option.state & QStyle::State_Selected;
     const bool isHovered = option.state & QStyle::State_MouseOver;
 
-    if (!isProgram && !customColor.isValid() && !isSelected && !isHovered) {
-        // Plain, idle row: nothing for us to draw, let the theme paint it.
-        QStyledItemDelegate::paint(painter, option, index);
+    if (!customColor.isValid()) {
+        // No colour of our own to apply, so we do not paint at all - selection
+        // and hover come from the active OBS theme. The live scene borrows the
+        // theme's selected look by asking for it, rather than by us guessing at
+        // a colour: painting our own pill here made the dock the odd one out in
+        // every theme, which is what users saw.
+        QStyleOptionViewItem themedOption = option;
+        if (isProgram) {
+            themedOption.state |= QStyle::State_Selected;
+        }
+        QStyledItemDelegate::paint(painter, themedOption, index);
         return;
     }
 
-    // Base colour: the live program scene is always green (distinct from the
-    // blue selection); otherwise fall back to the item's custom colour.
-    QColor baseColor = isProgram ? QColor(Colors::COLOR_SUCCESS) : customColor;
-
-    // Calculate the appropriate background color based on state. A program scene
-    // that is also selected stays green (a brighter selection-variant of green)
-    // so it never gets confused with the blue preview/selection indicator.
-    QColor bgColor = baseColor;
-    if (isSelected) {
-        bgColor = m_dock->getSelectionColor(baseColor);
+    // From here the row has a colour the user set by hand, which is the only
+    // case we paint ourselves.
+    QColor bgColor = customColor;
+    if (isSelected || isProgram) {
+        bgColor = m_dock->getSelectionColor(customColor);
     } else if (isHovered) {
-        bgColor = m_dock->getHoverColor(baseColor);
+        bgColor = m_dock->getHoverColor(customColor);
     }
 
     // A plain row that is only selected/hovered has no base colour of its own,
@@ -8399,8 +8431,8 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
     // The background above is the finished article: bgColor already accounts for
     // selection and hover. Leaving those flags set makes the style paint the
     // theme's own highlight over the top, which washes a coloured row out into a
-    // blue-tinted blend and draws the theme's selection border around it.
-    // Clearing them is what keeps a selected green scene green.
+    // highlight-tinted blend and draws the theme's selection border around it.
+    // Clearing them is what keeps a selected custom colour recognisably itself.
     modifiedOption.state &= ~QStyle::State_Selected;
     modifiedOption.state &= ~QStyle::State_MouseOver;
 

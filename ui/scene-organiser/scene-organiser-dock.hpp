@@ -650,8 +650,8 @@ private:
 };
 
 // Paints the flat Favourites / Recent rows exactly as CustomColorDelegate paints
-// the tree: same rounded pill, same programme green, same selection and hover
-// treatment, same row height. The two delegates cannot be one class because they
+// the tree: theme-owned selection and hover on a plain row, the same rounded
+// pill for a hand-set colour, the same row height. The two delegates cannot be one class because they
 // read from different models (a tree behind a proxy vs a plain list), but they
 // share every colour and metric decision through the dock.
 class QuickListDelegate : public QStyledItemDelegate {
