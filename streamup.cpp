@@ -56,6 +56,7 @@
 #include <QDockWidget>
 #include <QMainWindow>
 #include <QTimer>
+#include <atomic>
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QGroupBox>
@@ -389,9 +390,46 @@ static void StreamUpEmitSelectionChanged()
 	obs_data_release(d);
 }
 
+// Both of the emitters below walk scenes, and both are called from an OBS item
+// signal. That is a deadlock waiting to happen: obs_sceneitem_set_locked (and
+// friends) hold the scene's own mutex while they signal, so answering the
+// signal by enumerating that scene takes the same non-recursive lock a second
+// time on the same thread. Lock All Sources walks every scene locking items,
+// each successful change fires item_locked, and the handler tried to re-scan
+// every scene from inside the walk. OBS sat there waiting on itself.
+//
+// So the work is posted to the Qt event loop, where no OBS lock is held, and
+// coalesced: locking 200 items in one press queues one scan, not 200.
+static std::atomic<bool> g_streamup_selection_pending{false};
+static std::atomic<bool> g_streamup_source_state_pending{false};
+
+static void StreamUpQueueEmit(std::atomic<bool> &pending, void (*emitFn)())
+{
+	if (!vendor)
+		return;
+
+	bool expected = false;
+	if (!pending.compare_exchange_strong(expected, true))
+		return; // one is already queued and will see this change too
+
+	QApplication *app = qobject_cast<QApplication *>(QApplication::instance());
+	if (!app) {
+		pending = false;
+		return;
+	}
+
+	QMetaObject::invokeMethod(
+		app,
+		[&pending, emitFn]() {
+			pending = false;
+			emitFn();
+		},
+		Qt::QueuedConnection);
+}
+
 static void StreamUpOnItemSelect(void *, calldata_t *)
 {
-	StreamUpEmitSelectionChanged();
+	StreamUpQueueEmit(g_streamup_selection_pending, StreamUpEmitSelectionChanged);
 }
 
 // Emits vendor event "SourceStateChanged" carrying the aggregate lock state
@@ -413,7 +451,7 @@ static void StreamUpEmitSourceStateChanged()
 
 static void StreamUpOnItemState(void *, calldata_t *)
 {
-	StreamUpEmitSourceStateChanged();
+	StreamUpQueueEmit(g_streamup_source_state_pending, StreamUpEmitSourceStateChanged);
 }
 
 static void StreamUpUnhookSelectionScene()
