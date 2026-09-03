@@ -504,8 +504,24 @@ static void StreamUpSelectionFrontendEvent(enum obs_frontend_event event, void *
 		StreamUpEmitSelectionChanged();
 		StreamUpEmitSourceStateChanged();
 		break;
+	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
+	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP:
 	case OBS_FRONTEND_EVENT_EXIT:
 		// Same again for shutdown: OBS clears scene data on the way out.
+		//
+		// SCRIPTING_SHUTDOWN is the one that matters: OBSBasic raises it on the
+		// line directly above its ClearSceneData() call, which is the last
+		// moment a reference can be handed back. The other two are too late -
+		// EXIT lands after the clear (measured at 8ms after, every time), and
+		// CLEANUP is raised by ClearSceneData itself only once it has already
+		// removed every source. They stay listed as a backstop for teardown
+		// orders that skip the scripting event. The scene stayed alive
+		// through the clear, taking its whole item tree with it ("Not all
+		// sources were cleared when clearing scene data"), and the release that
+		// finally came landed on sources OBS had already force-destroyed:
+		// "Double destroy just occurred", then a crash in scene_destroy walking
+		// a freed sceneitem. CLEANUP fires before the clear, which is where a
+		// reference to the current scene has to be given back.
 		g_streamup_sel_collection_changing = true;
 		StreamUpUnhookSelectionScene();
 		break;
