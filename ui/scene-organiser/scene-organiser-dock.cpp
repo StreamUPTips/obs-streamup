@@ -41,7 +41,6 @@
 #include <QAbstractItemView>
 #include <QItemSelectionModel>
 #include <QRegularExpression>
-#include <QSet>
 #include <QScreen>
 #include <QGuiApplication>
 #include <QDir>
@@ -378,53 +377,103 @@ static void ClearIconCaches()
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Cache", "Cleared icon caches");
 }
 
-// OBS themes only ever style list ROWS by the classes their own docks use -
-// QListView::item and QListWidget::item (SceneTree and SourceTree are both
-// QListView subclasses). Our organiser is a QTreeView, which none of those
-// selectors can match, so it fell through to Qt's built-in hover and selection
-// and read visibly differently to the dock sat next to it.
+// OBS themes style list ROWS by the classes their own docks use - mostly
+// QListView::item / QListWidget::item, since SceneTree and SourceTree are both
+// QListView subclasses. Our organiser is a QTreeView, and two separate problems
+// follow from that.
 //
-// Rather than hard-code a colour per theme, the rules are lifted out of the
-// stylesheet the theme actually installed (qApp->styleSheet() is fully
-// resolved by OBSApp::PrepareQSS, variables and all) and re-emitted against
-// QTreeView. Whatever the theme says a hovered row looks like, our rows now
-// look like that too - including themes we have never seen.
-static QString BuildThemeRowQss()
+// One: a theme that never mentions QTreeView (Yami and the stock themes) leaves
+// our rows to Qt's built-in hover, which reads nothing like the dock beside us.
+//
+// Two, and less obvious: QTreeView paints a row background AND an item
+// background, and Qt applies the ::item rule to both. A theme whose hover is a
+// translucent overlay - every StreamUP theme - therefore paints that overlay
+// TWICE on a tree and once on a list. On SilverLink that is #436393 against the
+// Sources dock's #37527b, from the same rule.
+//
+// So the rules are lifted out of the stylesheet the theme actually installed
+// (qApp->styleSheet() is fully resolved by OBSApp::PrepareQSS, variables and
+// all), re-emitted against QTreeView, and any translucent row background is
+// flattened against the view's own backdrop first. Painting an opaque colour
+// twice looks exactly like painting it once, so the tree matches the list in
+// whatever theme is loaded - including themes we have never seen.
+static QString BuildThemeRowQss(const QColor &paletteBackdrop)
 {
     const QString appQss = qApp ? qApp->styleSheet() : QString();
     if (appQss.isEmpty()) {
         return QString();
     }
 
-    static QString s_cachedSource;
+    // The backdrop to flatten against is whatever the theme paints BEHIND the
+    // rows, which is not the palette: the StreamUP themes give QTreeView
+    // bg_secondary while palette Base is bg_darkest, several shades darker.
+    // Flattening against the palette would have produced a hover nobody asked
+    // for. Read the view's own background out of the stylesheet, and fall back
+    // to the palette only when the theme never states one.
+    QColor backdrop = paletteBackdrop;
+    {
+        static const QRegularExpression viewBgRe(
+            QStringLiteral(R"(QTreeView\s*\{[^{}]*?background(?:-color)?\s*:\s*([^;}]+))"));
+        const QRegularExpressionMatch m = viewBgRe.match(appQss);
+        if (m.hasMatch()) {
+            const QColor stated(m.captured(1).trimmed());
+            if (stated.isValid()) {
+                backdrop = stated;
+            }
+        }
+    }
+
+    const QString cacheKey = appQss + QLatin1Char('|') + backdrop.name(QColor::HexArgb);
+    static QString s_cachedKey;
     static QString s_cachedResult;
-    if (appQss == s_cachedSource) {
+    if (cacheKey == s_cachedKey) {
         return s_cachedResult;
     }
 
     // Top-level "selectors { body }" blocks. QSS has no nesting, so a flat
     // scan is enough and is far cheaper than pulling in a parser.
     static const QRegularExpression blockRe(QStringLiteral(R"(([^{}]+)\{([^{}]*)\})"));
+    // rgba(r, g, b, a) with a as either 0-1 or 0-255. Anything opaque (#hex,
+    // rgb(), a named colour) is left exactly as the theme wrote it.
+    static const QRegularExpression rgbaRe(
+        QStringLiteral(R"(rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([0-9.]+)\s*\))"));
 
-    // Anything the theme already says about QTreeView rows is left well alone.
-    // The StreamUP themes DO style QTreeView::item (Yami and the stock themes
-    // do not), and their hover is a translucent overlay - so copying a second
-    // rule on top of it painted the overlay twice and came out visibly lighter
-    // than the Sources dock. Only states the theme has no QTreeView rule for
-    // are filled in.
-    QSet<QString> existingTreeSelectors;
-    {
-        QRegularExpressionMatchIterator scan = blockRe.globalMatch(appQss);
-        while (scan.hasNext()) {
-            const QStringList selectors = scan.next().captured(1).split(QLatin1Char(','));
-            for (const QString &rawSelector : selectors) {
-                const QString selector = rawSelector.trimmed();
-                if (selector.startsWith(QStringLiteral("QTreeView::item"))) {
-                    existingTreeSelectors.insert(selector);
-                }
+    auto flatten = [&](QString body) {
+        QString out;
+        int last = 0;
+        QRegularExpressionMatchIterator hits = rgbaRe.globalMatch(body);
+        while (hits.hasNext()) {
+            const QRegularExpressionMatch m = hits.next();
+            double alpha = m.captured(4).toDouble();
+            if (alpha > 1.0) {
+                alpha /= 255.0; // the 0-255 spelling
             }
+            alpha = qBound(0.0, alpha, 1.0);
+
+            const int r = m.captured(1).toInt();
+            const int g = m.captured(2).toInt();
+            const int b = m.captured(3).toInt();
+            const QColor solid(qRound(alpha * r + (1.0 - alpha) * backdrop.red()),
+                               qRound(alpha * g + (1.0 - alpha) * backdrop.green()),
+                               qRound(alpha * b + (1.0 - alpha) * backdrop.blue()));
+
+            out += body.mid(last, m.capturedStart() - last);
+            out += solid.name();
+            last = m.capturedEnd();
         }
-    }
+        out += body.mid(last);
+        return out;
+    };
+
+    // Every class whose row styling should carry across to our tree. SourceTree
+    // is included so we follow the Sources dock exactly when a theme singles it
+    // out, and QTreeView so a theme's own tree rule gets the same flattening.
+    static const QStringList kPrefixes = {
+        QStringLiteral("QListView::item"),
+        QStringLiteral("QListWidget::item"),
+        QStringLiteral("SourceTree::item"),
+        QStringLiteral("QTreeView::item"),
+    };
 
     QString result;
     QRegularExpressionMatchIterator it = blockRe.globalMatch(appQss);
@@ -439,7 +488,7 @@ static QString BuildThemeRowQss()
         const QStringList selectors = match.captured(1).split(QLatin1Char(','));
         for (const QString &rawSelector : selectors) {
             const QString selector = rawSelector.trimmed();
-            for (const QString &prefix : {QStringLiteral("QListView::item"), QStringLiteral("QListWidget::item")}) {
+            for (const QString &prefix : kPrefixes) {
                 if (!selector.startsWith(prefix)) {
                     continue;
                 }
@@ -453,9 +502,6 @@ static QString BuildThemeRowQss()
                     continue;
                 }
                 const QString candidate = QStringLiteral("QTreeView::item") + states;
-                if (existingTreeSelectors.contains(candidate)) {
-                    break; // the theme already dresses this state itself
-                }
                 if (!rewritten.contains(candidate)) {
                     rewritten << candidate;
                 }
@@ -464,12 +510,12 @@ static QString BuildThemeRowQss()
         }
 
         if (!rewritten.isEmpty()) {
-            result += rewritten.join(QStringLiteral(",\n")) + QStringLiteral(" {\n") + body +
+            result += rewritten.join(QStringLiteral(",\n")) + QStringLiteral(" {\n") + flatten(body) +
                       QStringLiteral("\n}\n");
         }
     }
 
-    s_cachedSource = appQss;
+    s_cachedKey = cacheKey;
     s_cachedResult = result;
     return result;
 }
@@ -8446,7 +8492,11 @@ void StreamUP::SceneOrganiser::SceneOrganiserDock::clearIconCaches()
 
 void StreamUP::SceneOrganiser::SceneOrganiserDock::applyThemeRowStyling()
 {
-    const QString rowQss = BuildThemeRowQss();
+    // The colour a translucent row overlay has to be flattened against: the
+    // view's own background, which is what the theme paints behind the rows.
+    const QColor backdrop = m_treeView ? m_treeView->palette().color(QPalette::Base)
+                                       : palette().color(QPalette::Base);
+    const QString rowQss = BuildThemeRowQss(backdrop);
 
     // Set on the views themselves, so the rules reach nothing but our rows.
     for (QAbstractItemView *view : {static_cast<QAbstractItemView *>(m_treeView),
