@@ -784,6 +784,12 @@ static void CreateVerticalSceneOrganiserDock()
 	if (!StreamUP::SceneOrganiser::Canvas::VerticalAvailable())
 		return;
 
+	// The Scenes dock gates on this at load; the Vertical one is built from
+	// canvas events instead and used to skip the check entirely, so turning the
+	// Scene Organiser module off still left a vertical dock running.
+	if (!StreamUP::SettingsManager::GetCurrentSettings().modules.sceneOrganiser)
+		return;
+
 	const auto main_window = static_cast<QMainWindow *>(obs_frontend_get_main_window());
 	if (!main_window)
 		return;
