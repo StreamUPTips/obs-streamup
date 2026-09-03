@@ -38,6 +38,10 @@
 #include <QTextStream>
 #include <QtSvg/QSvgRenderer>
 #include <QSortFilterProxyModel>
+#include <QAbstractItemView>
+#include <QItemSelectionModel>
+#include <QRegularExpression>
+#include <QSet>
 #include <QScreen>
 #include <QGuiApplication>
 #include <QDir>
@@ -87,6 +91,47 @@ static const QList<QColor> &PresetColors()
 // has actually got selected. UserRole+1 is the custom colour, UserRole+100 is
 // the creation timestamp, so +2 is free.
 static constexpr int ProgramSceneRole = Qt::UserRole + 2;
+
+// The live row wears the theme's selected fill, which is right when it is also
+// the row the user has picked. It stops being right the moment something ELSE
+// is highlighted - a folder, or a run of scenes being reorganised - because two
+// rows then carry the same fill with nothing to say which one is on program.
+// In that case the live row keeps its fill and gains an outline.
+static bool ProgramRowNeedsOutline(const QStyleOptionViewItem &option, const QModelIndex &index)
+{
+    const QAbstractItemView *view = qobject_cast<const QAbstractItemView *>(option.widget);
+    if (!view || !view->selectionModel()) {
+        return false;
+    }
+
+    // selectedIndexes(), not selectedRows(): the tree is left on Qt's default
+    // SelectItems behaviour, and selectedRows() hands back an empty list unless
+    // the view selects whole rows - which is why this check never once fired.
+    const QModelIndexList selected = view->selectionModel()->selectedIndexes();
+    for (const QModelIndex &sel : selected) {
+        if (sel.row() != index.row() || sel.parent() != index.parent()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// A one pixel ring just inside the row, in whatever colour the text on that
+// fill is drawn in, so it reads on a theme highlight and on a hand-set colour
+// alike. Radius 4 matches the rounded fill the colour delegates paint.
+static void DrawProgramOutline(QPainter *painter, const QRect &rowRect, const QColor &inkColor)
+{
+    QColor pen = inkColor.isValid() ? inkColor : QColor(255, 255, 255);
+    pen.setAlpha(200);
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing, true);
+    painter->setBrush(Qt::NoBrush);
+    painter->setPen(QPen(pen, 2));
+    QRectF ring = QRectF(rowRect).adjusted(3, 2, -3, -2);
+    painter->drawRoundedRect(ring, 4, 4);
+    painter->restore();
+}
 
 // The item's custom icon spec (see ResolveIconSpec). +3 is the next role free
 // after the colour, the program marker and before the timestamp at +100.
@@ -333,6 +378,102 @@ static void ClearIconCaches()
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Cache", "Cleared icon caches");
 }
 
+// OBS themes only ever style list ROWS by the classes their own docks use -
+// QListView::item and QListWidget::item (SceneTree and SourceTree are both
+// QListView subclasses). Our organiser is a QTreeView, which none of those
+// selectors can match, so it fell through to Qt's built-in hover and selection
+// and read visibly differently to the dock sat next to it.
+//
+// Rather than hard-code a colour per theme, the rules are lifted out of the
+// stylesheet the theme actually installed (qApp->styleSheet() is fully
+// resolved by OBSApp::PrepareQSS, variables and all) and re-emitted against
+// QTreeView. Whatever the theme says a hovered row looks like, our rows now
+// look like that too - including themes we have never seen.
+static QString BuildThemeRowQss()
+{
+    const QString appQss = qApp ? qApp->styleSheet() : QString();
+    if (appQss.isEmpty()) {
+        return QString();
+    }
+
+    static QString s_cachedSource;
+    static QString s_cachedResult;
+    if (appQss == s_cachedSource) {
+        return s_cachedResult;
+    }
+
+    // Top-level "selectors { body }" blocks. QSS has no nesting, so a flat
+    // scan is enough and is far cheaper than pulling in a parser.
+    static const QRegularExpression blockRe(QStringLiteral(R"(([^{}]+)\{([^{}]*)\})"));
+
+    // Anything the theme already says about QTreeView rows is left well alone.
+    // The StreamUP themes DO style QTreeView::item (Yami and the stock themes
+    // do not), and their hover is a translucent overlay - so copying a second
+    // rule on top of it painted the overlay twice and came out visibly lighter
+    // than the Sources dock. Only states the theme has no QTreeView rule for
+    // are filled in.
+    QSet<QString> existingTreeSelectors;
+    {
+        QRegularExpressionMatchIterator scan = blockRe.globalMatch(appQss);
+        while (scan.hasNext()) {
+            const QStringList selectors = scan.next().captured(1).split(QLatin1Char(','));
+            for (const QString &rawSelector : selectors) {
+                const QString selector = rawSelector.trimmed();
+                if (selector.startsWith(QStringLiteral("QTreeView::item"))) {
+                    existingTreeSelectors.insert(selector);
+                }
+            }
+        }
+    }
+
+    QString result;
+    QRegularExpressionMatchIterator it = blockRe.globalMatch(appQss);
+    while (it.hasNext()) {
+        const QRegularExpressionMatch match = it.next();
+        const QString body = match.captured(2).trimmed();
+        if (body.isEmpty()) {
+            continue;
+        }
+
+        QStringList rewritten;
+        const QStringList selectors = match.captured(1).split(QLatin1Char(','));
+        for (const QString &rawSelector : selectors) {
+            const QString selector = rawSelector.trimmed();
+            for (const QString &prefix : {QStringLiteral("QListView::item"), QStringLiteral("QListWidget::item")}) {
+                if (!selector.startsWith(prefix)) {
+                    continue;
+                }
+                // Everything after "::item" is the pseudo-state chain
+                // (:hover, :selected:hover, :disabled and so on). Carried
+                // across untouched so the whole state matrix comes with it.
+                const QString states = selector.mid(prefix.length());
+                // A descendant selector would target a child widget we do not
+                // have; only the row itself transfers cleanly.
+                if (states.contains(QLatin1Char(' ')) || states.contains(QLatin1Char('>'))) {
+                    continue;
+                }
+                const QString candidate = QStringLiteral("QTreeView::item") + states;
+                if (existingTreeSelectors.contains(candidate)) {
+                    break; // the theme already dresses this state itself
+                }
+                if (!rewritten.contains(candidate)) {
+                    rewritten << candidate;
+                }
+                break;
+            }
+        }
+
+        if (!rewritten.isEmpty()) {
+            result += rewritten.join(QStringLiteral(",\n")) + QStringLiteral(" {\n") + body +
+                      QStringLiteral("\n}\n");
+        }
+    }
+
+    s_cachedSource = appQss;
+    s_cachedResult = result;
+    return result;
+}
+
 // Theme change handler (call this when theme changes)
 static void OnThemeChanged()
 {
@@ -502,6 +643,10 @@ void SceneOrganiserDock::setupUI()
     // NOTE: Using "scenes" will apply OBS theme styling for the native scenes dock
     // Try changing this to see if it affects the double-selection issue
     m_treeView->setObjectName("streamupSceneOrganiser");  // Try: "sceneorganiser", "streamupScenes", or ""
+
+    // Borrow the theme's own row rules (see BuildThemeRowQss). Re-applied on
+    // every theme change so hover never drifts away from the docks beside us.
+    applyThemeRowStyling();
 
     // DEBUG: Log the current stylesheet to see what's being applied
     QString currentStyleSheet = m_treeView->styleSheet();
@@ -6583,6 +6728,9 @@ void StreamUP::SceneOrganiser::QuickListDelegate::paint(QPainter *painter, const
             themedOption.state |= QStyle::State_Selected;
         }
         QStyledItemDelegate::paint(painter, themedOption, index);
+        if (isProgram && ProgramRowNeedsOutline(option, index)) {
+            DrawProgramOutline(painter, option.rect, option.palette.color(QPalette::HighlightedText));
+        }
         return;
     }
 
@@ -6612,6 +6760,10 @@ void StreamUP::SceneOrganiser::QuickListDelegate::paint(QPainter *painter, const
     painter->setBrush(bgColor);
     painter->drawRoundedRect(rect, 4, 4);
     painter->restore();
+
+    if (isProgram && ProgramRowNeedsOutline(option, index)) {
+        DrawProgramOutline(painter, option.rect, textColor);
+    }
 
     QStyleOptionViewItem modifiedOption = option;
     modifiedOption.palette.setColor(QPalette::Text, textColor);
@@ -6706,6 +6858,10 @@ void SceneOrganiserDock::setupQuickTabs()
     // Same delegate as the Scenes tree, so a row looks the same anywhere.
     m_quickTree->setItemDelegate(new CustomColorDelegate(this, m_quickTree, m_quickProxy, m_quickModel));
     applyRowMetricsToQuickList();
+
+    // The quick list is built after the constructor ran, so it takes its copy
+    // of the theme's row rules here.
+    applyThemeRowStyling();
 
     connect(m_quickTree, &QAbstractItemView::clicked, this, &SceneOrganiserDock::onQuickTreeActivated);
 
@@ -8288,6 +8444,19 @@ void StreamUP::SceneOrganiser::SceneOrganiserDock::clearIconCaches()
     ClearIconCaches();
 }
 
+void StreamUP::SceneOrganiser::SceneOrganiserDock::applyThemeRowStyling()
+{
+    const QString rowQss = BuildThemeRowQss();
+
+    // Set on the views themselves, so the rules reach nothing but our rows.
+    for (QAbstractItemView *view : {static_cast<QAbstractItemView *>(m_treeView),
+                                    static_cast<QAbstractItemView *>(m_quickTree)}) {
+        if (view) {
+            view->setStyleSheet(rowQss);
+        }
+    }
+}
+
 
 void StreamUP::SceneOrganiser::SceneOrganiserDock::onThemeChanged()
 {
@@ -8301,6 +8470,8 @@ void StreamUP::SceneOrganiser::SceneOrganiserDock::onThemeChanged()
             dock->currentThemeIsDark = StreamUP::UIHelpers::IsOBSThemeDark();
             // Update all icons with the new theme
             dock->updateAllItemIcons(dock->m_model->invisibleRootItem());
+            // Re-lift the new theme's row rules (hover/selection) onto our views
+            dock->applyThemeRowStyling();
             // Schedule viewport repaint
             dock->scheduleOptimizedUpdate();
         }
@@ -8368,6 +8539,9 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
             themedOption.state |= QStyle::State_Selected;
         }
         QStyledItemDelegate::paint(painter, themedOption, index);
+        if (isProgram && ProgramRowNeedsOutline(option, index)) {
+            DrawProgramOutline(painter, option.rect, option.palette.color(QPalette::HighlightedText));
+        }
         return;
     }
 
@@ -8409,7 +8583,11 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
     painter->setBrush(bgColor);
     painter->drawRoundedRect(rect, 4, 4);
 
-    // No selection outline. One was tried here, drawn in the contrast colour so
+    if (isProgram && ProgramRowNeedsOutline(option, index)) {
+        DrawProgramOutline(painter, option.rect, textColor);
+    }
+
+    // No selection outline on a merely selected row. One was tried here, drawn in the contrast colour so
     // it would read on light and dark rows alike, but on a bright row that means
     // a dark ring, which looks exactly like the row has been painted twice —
     // the very artefact this delegate exists to avoid. Selection is carried by

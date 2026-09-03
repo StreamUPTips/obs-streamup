@@ -497,6 +497,10 @@ public:
     static void clearIconCaches();
     static void onThemeChanged();
 
+    // Mirrors the active theme's own list-row rules onto our tree views, so
+    // hover and selection read the same here as in the Scenes/Sources docks.
+    void applyThemeRowStyling();
+
     bool currentThemeIsDark;
 
     // OBS integration
