@@ -21,7 +21,7 @@
 ### Improvements
 - The daily backup runs at startup instead of on close, so OBS closes clean
 - The Scene Organiser keeps a backup of your folder layout every time it saves
-- MultiDocks can be dragged narrower, and the docks inside scroll instead of being clipped
+- MultiDocks can be dragged narrower, and a wide dock inside no longer sets the floor for the whole thing
 - Rounded corners on the MultiDock body on the StreamUP theme
 
 ### Bug Fixes
