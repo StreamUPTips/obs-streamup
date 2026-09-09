@@ -52,6 +52,13 @@ runs:
       run: |
         : Install Dependencies 🛍️
         echo ::group::Install Dependencies
+
+        : Drop apt sources we do not build against 🧹
+        # The runner image ships Google Chrome's apt repo. StreamUP does not
+        # build against it, but a bad index there fails apt update, and that
+        # takes the whole build down before a line of the plugin is compiled.
+        sudo rm -f /etc/apt/sources.list.d/google-chrome.list /etc/apt/sources.list.d/google-chrome.sources
+
         sudo apt update
       
         : Install system dependencies 🛍️
