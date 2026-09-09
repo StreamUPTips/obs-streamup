@@ -3,36 +3,39 @@
 ---
 
 ## v2.4.0 (unreleased)
-**Patch Focus:** Scene Organiser tabs, undo, custom icons, MultiDock and Vertical Canvas polish
+**Patch Focus:** Scene Organiser tabs, undo and custom icons, MultiDock and Vertical Canvas polish
 
 ### New Features
-- Tabs in the Scene Organiser. Favourites, Recent, and as many of your own as you like, each one a proper tree with its own folders, so the same scene can sit in a different folder on every tab. Right click the tab bar to add, rename, delete or hide a tab, and drag them into whatever order suits. Favourites fills from the right click menu, Recent fills itself from whatever you go live with. Saved per scene collection
-- Undo and redo in the Scene Organiser. Ctrl+Z covers moving scenes and folders, adding, renaming and deleting folders, and colour changes. Deleting a scene is the one thing it will not bring back, because that removes the scene from OBS itself
-- Multi select. Ctrl click and shift click to pick up a run of scenes and drag the lot in one go
-- Custom icons on scenes and folders. Right click, Set Icon, then take any of the 16 icons your OBS theme provides or an image off your drive. Theme icons stay themed, so they follow when you change theme. The Icon Colour submenu tints whichever icon is in use, including the default one
-- Folders show an open or a closed folder icon depending on whether they are open. A folder you have given an icon of your own keeps that icon in both states. The 2 icons are from Lucide and take the colour of your theme
-- Folder guide lines down the tree, so you can see which folder a scene belongs to. There is a switch for them in Settings, Scene Organiser
-- The Vertical Canvas control row is a proper toolbar on the StreamUP theme. Aitum put those buttons in a plain row with nothing behind them, so a theme had nothing to paint. StreamUP wraps the row and adds dividers so the outputs, the clip controls and settings read as groups. Nothing is moved or replaced, and any other theme is left exactly as Aitum built it
-- The backtrack switch in the Vertical Canvas dock is one of the StreamUP theme's toggles now. It was always there, it just had nowhere to be drawn: the toggle is wider than the 32px button it lives in, so it was cut away to nothing. The button gives way instead
-- The MultiDock body has rounded corners on the StreamUP theme, so the panel hugs the docks inside it
-- The search box works on every tab, not just the main one, and Enter takes the first scene still showing straight to program. There is a hotkey for jumping to the search box in Settings, Hotkeys
-- The virtual camera button changes its icon when the camera is running, the way the record and stream buttons do
-- Linked Scenes in the Vertical Scene Organiser right click menu, the same as Aitum's own vertical scene list. Tick the main scenes that should bring this vertical scene up with them. The link is stored where Aitum stores it, so one set here is ticked in their dock and the other way round
+- Tabs in the Scene Organiser. Favourites, Recent, and as many of your own as you like, saved per scene collection
+- Undo and redo. Ctrl+Z covers moves, folders, renames and colours
+- Multi select, so you can drag a run of scenes at once
+- Custom icons on scenes and folders, from your OBS theme or an image off your drive
+- Icon colours, including on the default icon
+- Folders show an open or a closed icon
+- Folder guide lines down the tree, with a switch in Settings, Scene Organiser
+- Search works on every tab, and Enter sends the top scene straight to program
+- Linked Scenes in the Vertical Scene Organiser, shared with Aitum's own list
+- The Vertical Canvas control row is a proper toolbar on the StreamUP theme
+- The virtual camera button goes green while the camera is running
 
 ### Improvements
-- The daily backup runs shortly after OBS loads instead of as it closes. Zipping every profile, scene collection and plugin config on the way out meant the machine stayed pinned after the window had already gone, which read as OBS hanging on close and dragged audio with it. It is still once a day and still the same backup, taken from the config exactly as OBS last wrote it
+- The daily backup runs at startup instead of on close, so OBS closes clean
+- The Scene Organiser keeps a backup of your folder layout every time it saves
+- MultiDocks can be dragged narrower, and the docks inside scroll instead of being clipped
+- Rounded corners on the MultiDock body on the StreamUP theme
 
 ### Bug Fixes
-- Closing OBS could take it down. A dock captured into a MultiDock was deleted twice on the way out, once by the MultiDock that was holding it and once by OBS, which still owns every dock a plugin registers. That happened after the window had closed and it skipped OBS' crash reporter, so there was no crash log to go on, just OBS sitting about and the machine stuttering. Captured docks are handed back before OBS starts clearing up, and picked up again on the next start
-- The live scene was almost invisible in the Scene Organiser on some themes, and it was the one row that would not light up under the mouse. The dock used to paint its own highlight on every row, which meant it never looked like the Sources dock sat next to it in any theme. Rows you have not coloured yourself are left to the theme now, live scene included, so the dock highlights the way the rest of OBS does. A scene you have given a colour still keeps that colour. Thanks to Mapsking for the report and the screenshots
-- Dragging while the search box had something in it could drop a scene somewhere you did not choose. The drop landed against the filtered list rather than the real one, so the neighbours it appeared to land between were not its actual neighbours. Dragging is switched off while a search is active
-- Renaming a scene anywhere outside the Scene Organiser used to drop it out of your Favourites and your tabs, and quietly un hide a hidden scene. All 3 remember a scene by name, so a rename left them pointing at nothing. The dock follows renames now, wherever they happen, whether that is the scene list, a hotkey or a websocket call
-- The stream and record timers in the Vertical Canvas dock were cut off part way through, so a long recording showed the first few digits and nothing else. Those 2 buttons are no longer given a width to stay inside
-- The MultiDock toolbar sat taller than every other toolbar in the dock stack. It takes its height from OBS' own toolbar now, so the 3 of them line up
-- Moving a folder that had scenes selected inside it could leave a copy of those scenes behind, so the same scene turned up in the tree more than once and stayed there. The dock checks the tree against its own record of which scene is which after every change and before anything is saved, so a copy cannot survive. It tidies up a tree that already has some, so if you have seen this, one start sorts it
-- The toolbar edit panel opened half off screen in the bottom left corner. It was anchored to the leading edge of the bar, and a bar docked along the bottom is the full width of the window, so it got clamped into the corner. It centres on the bar now and opens on whichever side has room, falling back to the middle of the OBS window when neither does
-- A plugin you switched off yourself no longer nags you on every start. The dialog offers to stop reminding you when that is all it is reporting, and honours it. Turning the plugin back on clears it, and a manual plugin check, or installing a product, still reports it every time
-- Some tidying under the surface. 3 of the toolbar buttons were never initialised properly, which meant every check for whether they existed was reading whatever happened to be in memory. Nothing had gone wrong with it yet, and now it cannot
+- Closing OBS could take it down when a dock was captured in a MultiDock
+- Switching scene collections could wipe a collection's Scene Organiser folders
+- The live scene and row hover follow your theme again. Thanks to Mapsking for the report
+- Moving a folder could leave a copy of a scene behind
+- Renaming a scene emptied your favourites, tabs and hidden scenes
+- Dragging while searching could drop a scene in the wrong place
+- The stream and record timers in the Vertical Canvas dock were cut off
+- The MultiDock toolbar was taller than every other one
+- The toolbar edit panel opened off screen
+- Plugins you switched off no longer nag you at every start
+- Old dock entries left behind in a saved layout are cleared out
 
 ---
 

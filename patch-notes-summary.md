@@ -1,33 +1,36 @@
 # StreamUP v2.4.0 - Feature Update
 
 ## New Features
-- **Tabs In The Scene Organiser** Favourites, Recent, and as many of your own as you like, each one a proper tree with its own folders. Right click the tab bar to add, rename, hide or reorder them. Saved per scene collection.
-- **Undo And Redo** Ctrl+Z covers moving scenes and folders, adding, renaming and deleting folders, and colour changes. Deleting a scene is the one thing it will not bring back.
-- **Multi Select** Ctrl click and shift click to pick up a run of scenes and drag the lot in one go.
-- **Custom Icons On Scenes And Folders** Right click, Set Icon, then take any of the 16 icons your OBS theme provides or an image off your drive. Icon Colour tints whichever icon is in use, including the default one.
-- **Folders Open And Close** A folder shows an open or a closed icon depending on whether it is open. One you have given an icon of your own keeps that icon in both states.
-- **Folder Guide Lines** Lines down the tree so you can see which folder a scene belongs to. There is a switch for them in Settings, Scene Organiser.
-- **Search On Every Tab** The search box works on all of them now, and Enter sends the first scene still showing straight to program. There is a hotkey for jumping to it.
-- **A Real Toolbar For The Vertical Canvas** On the StreamUP theme, Aitum's control row gets a background and dividers, so the outputs, the clip controls and settings read as groups. Any other theme is left exactly as Aitum built it.
-- **The Backtrack Switch Is Back** The toggle was wider than the 32px button it lives in, so it was cut away to nothing. The button gives way instead.
-- **Rounded MultiDock** On the StreamUP theme the MultiDock body has rounded corners, so it hugs the docks inside it.
-- **Virtual Camera Button Goes Green** It changes icon while the camera is running, the way the record and stream buttons do.
-- **Linked Scenes In The Vertical Scene Organiser** Right click a vertical scene and tick the main scenes that should bring it up with them. Stored where Aitum stores it, so both docks agree.
+- **Tabs In The Scene Organiser** Favourites, Recent, and as many of your own as you like.
+- **Undo And Redo** Ctrl+Z covers moves, folders, renames and colours.
+- **Multi Select** Ctrl click and shift click to drag a run of scenes at once.
+- **Custom Icons** Any of the 16 icons from your OBS theme, or an image off your drive.
+- **Icon Colours** Tint whichever icon is in use, including the default one.
+- **Folders Open And Close** A folder shows an open or a closed icon.
+- **Folder Guide Lines** Lines down the tree so you can see what sits in what.
+- **Search On Every Tab** Enter sends the top scene straight to program.
+- **Linked Scenes** In the Vertical Scene Organiser, shared with Aitum's own list.
+- **A Real Toolbar For The Vertical Canvas** Background and dividers on the StreamUP theme.
+- **Virtual Camera Button** Goes green while the camera is running.
 
 ## Improvements
-- **The Daily Backup Runs At Startup** It used to run as OBS closed, which meant zipping your whole config after the window had already gone. It happens shortly after OBS loads now. Still once a day, still the same backup.
+- **The Daily Backup Runs At Startup** Instead of on close, so OBS closes clean.
+- **Folder Layouts Are Backed Up** The Scene Organiser keeps a copy every time it saves.
+- **MultiDocks Drag Narrower** The docks inside scroll instead of being clipped.
+- **Rounded MultiDock Corners** On the StreamUP theme.
 
 ## Bug Fixes
-- **Closing OBS Could Take It Down** Any dock you had captured into a MultiDock was deleted twice on the way out, once by the MultiDock and once by OBS, which killed OBS on every close. It happened after the window closed and skipped the crash reporter, so all you saw was OBS hanging about or your machine stuttering. Captured docks now go back to OBS before it starts clearing up, and are picked up again on the next start.
-- **The Live Scene And Hover Now Follow Your Theme** The Scene Organiser painted its own highlight on every row, which never matched the Sources dock sat next to it. Rows you have not coloured yourself are the theme's job now, live scene included. Scenes you have given a colour of your own still keep it. Thanks to Mapsking for the report and the screenshots.
-- **A Move Could Leave A Copy Of The Scene Behind** Move a folder with scenes selected inside it and the same scene could turn up in the tree twice, and stay there. The dock checks itself after every change now, and tidies up a tree that already has copies.
-- **Renaming A Scene Emptied Your Lists** Favourites, tabs and hidden scenes all remember a scene by name, so renaming one anywhere else left them pointing at nothing. Renames are followed now, wherever they happen.
-- **Dragging While Searching Put Scenes In The Wrong Place** The drop landed against the filtered list rather than the real one. Dragging is switched off while a search is active.
-- **Stream And Record Timers Were Cut Off** The 2 buttons in the Vertical Canvas dock are no longer held to a width, so they take whatever the timer needs.
-- **The MultiDock Toolbar Was Too Tall** It takes its height from OBS' own toolbar now, so the 3 of them line up.
-- **The Toolbar Edit Panel Opened Off Screen** It centres on the bar now and opens on whichever side has room, falling back to the middle of the OBS window when neither does.
-- **Plugins You Switched Off No Longer Nag You** The startup check offers to stop reminding you when a switched off plugin is all it has to report, and honours it. A manual check, or installing a product, still tells you every time.
-- **Some Tidying Under The Surface** 3 of the Scene Organiser toolbar buttons were never initialised properly, so every check for them was reading whatever happened to be in memory. Nothing had gone wrong with it yet, and now it cannot.
+- **Closing OBS Could Take It Down** A dock captured in a MultiDock was deleted twice on the way out.
+- **Scene Organiser Folders Could Be Lost** Switching scene collections could wipe a collection's folders.
+- **The Live Scene And Hover Follow Your Theme** Thanks to Mapsking for the report.
+- **A Move Could Leave A Copy Of A Scene Behind** The tree checks itself after every change now.
+- **Renaming A Scene Emptied Your Lists** Favourites, tabs and hidden scenes follow renames now.
+- **Dragging While Searching Dropped Scenes In The Wrong Place** Dragging is off while a search is active.
+- **Stream And Record Timers Were Cut Off** In the Vertical Canvas dock.
+- **The MultiDock Toolbar Was Too Tall** It matches OBS' own toolbars now.
+- **The Toolbar Edit Panel Opened Off Screen** It opens beside the bar now.
+- **Plugins You Switched Off No Longer Nag You** The startup check can be told to leave them alone.
+- **Ghost Docks In Saved Layouts** Old entries left behind in a saved layout are cleared out.
 
 ---
 
@@ -334,26 +337,19 @@ Options in StreamUP > Tools now trigger their function directly instead of openi
 
 ---
 
-# Support This Project
+# Support StreamUP
 
-StreamUP is completely free and always will be. Your support helps us continue developing amazing features!
+StreamUP is built in the open, on stream, most weeks of the year. If you want to back it:
 
-## Ways to Support:
-- **[Patreon](https://www.patreon.com/streamup)** Monthly memberships with exclusive benefits
-- **[Ko-Fi](https://ko-fi.com/streamup)** One-time donations and coffee fund
-- **[Buy Me a Beer](https://paypal.me/andilippi)** Because coding is thirsty work!
+- **[Memberships](https://andi.lol/membership)** From £8.50 a month. Covers the products, the stream and the StreamUP side.
+- **[StreamUP Premium](https://StreamUP.tips)** Early access to StreamUP releases.
 
-## Monthly Supporter Benefits:
-- **Tier 1 (£5/month):** StreamUP Product Pass + Discord role + Priority support
-- **Tier 2 (£10/month):** All Access Pass + Early releases + Budget-friendly access  
-- **Tier 3 (£25/month):** Gold Supporter + Name in credits + Monthly giveaways + Exclusive Discord role
-
-## Follow StreamUP's Development Journey:
-- **[Andi's Streams](https://twitch.tv/andilippi)** Watch development live and see what's coming next!
-- **[Andi's Socials](https://doras.to/andi)** Andi always posts about what he's working on!
-- **[Discord Community](https://discord.com/invite/RnDKRaVCEu)** Get support and chat with other users
-- **[Twitter Updates](https://twitter.com/StreamUPTips)** Latest news and announcements
+## Follow The Development
+- **[Andi's streams](https://twitch.tv/andilippi)** Most of this gets built live.
+- **[Andi's socials](https://doras.to/andi)** Andi posts whatever he is working on.
+- **[Discord](https://discord.com/invite/RnDKRaVCEu)** Support, and chat with other users.
+- **[StreamUP on X](https://twitter.com/StreamUPTips)** News and announcements.
 
 ---
 
-*StreamUP v2.0.0 is our biggest update yet - a complete rebuild that makes everything more reliable whilst adding loads of new features. Thanks for being part of the StreamUP community.*
+*StreamUP v2.4.0 is the biggest Scene Organiser update yet. Thanks for using it.*
