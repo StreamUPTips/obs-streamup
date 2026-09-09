@@ -189,6 +189,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/studio-mode-enhancements.cpp
   ui/mixer-enhancements.hpp
   ui/mixer-enhancements.cpp
+  ui/vertical-canvas-enhancements.hpp
+  ui/vertical-canvas-enhancements.cpp
   ui/theme-enhancements.hpp
   ui/theme-enhancements.cpp
   ui/dock/streamup-dock.hpp
@@ -329,6 +331,8 @@ source_group("UI" FILES
   ui/studio-mode-enhancements.cpp
   ui/mixer-enhancements.hpp
   ui/mixer-enhancements.cpp
+  ui/vertical-canvas-enhancements.hpp
+  ui/vertical-canvas-enhancements.cpp
   ui/theme-enhancements.hpp
   ui/theme-enhancements.cpp)
 

@@ -160,6 +160,16 @@ void HotkeyGroupSelectedSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotk
  */
 void HotkeyToggleVisibilitySelectedSources(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
 
+/**
+ * Hotkey handler for focusing the Scene Organiser search box (main canvas)
+ */
+void HotkeyFocusSceneOrganiserSearch(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
+
+/**
+ * Hotkey handler for focusing the Scene Organiser search box (vertical canvas)
+ */
+void HotkeyFocusSceneOrganiserSearchVertical(void *data, obs_hotkey_id id, obs_hotkey_t *hotkey, bool pressed);
+
 //-------------------HOTKEY MANAGEMENT-------------------
 /**
  * Save and load hotkey settings

@@ -60,6 +60,7 @@
 #include <mutex>
 #include <algorithm>
 #include <functional>
+#include <set>
 #include <vector>
 #include <util/platform.h>
 
@@ -493,6 +494,12 @@ PluginSettings GetCurrentSettings()
 		settings.showToolbar = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "show_toolbar", true);
 		settings.debugLoggingEnabled = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "debug_logging_enabled", false);
 		settings.sceneOrganiserShowIcons = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_icons", true);
+		settings.sceneOrganiserShowIndentGuides = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_indent_guides", true);
+		// The pair replaced a single show-both switch; that key is the default for
+		// both halves so an existing config carries over rather than resetting.
+		const bool legacyShowTabs = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_quick_tabs", true);
+		settings.sceneOrganiserShowFavouritesTab = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_favourites_tab", legacyShowTabs);
+		settings.sceneOrganiserShowRecentTab = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_recent_tab", legacyShowTabs);
 	settings.sceneOrganiserGroupFolders = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_group_folders", true);
 	settings.sceneOrganiserRememberFolderState = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_remember_folder_state", true);
 	// Load new split studio mode settings, with migration from old combined setting
@@ -655,6 +662,9 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "show_toolbar", settings.showToolbar);
 	obs_data_set_bool(data, "debug_logging_enabled", settings.debugLoggingEnabled);
 	obs_data_set_bool(data, "scene_organiser_show_icons", settings.sceneOrganiserShowIcons);
+	obs_data_set_bool(data, "scene_organiser_show_indent_guides", settings.sceneOrganiserShowIndentGuides);
+	obs_data_set_bool(data, "scene_organiser_show_favourites_tab", settings.sceneOrganiserShowFavouritesTab);
+	obs_data_set_bool(data, "scene_organiser_show_recent_tab", settings.sceneOrganiserShowRecentTab);
 	obs_data_set_bool(data, "scene_organiser_group_folders", settings.sceneOrganiserGroupFolders);
 	obs_data_set_bool(data, "scene_organiser_remember_folder_state", settings.sceneOrganiserRememberFolderState);
 	obs_data_set_bool(data, "scene_organiser_disable_preview_switching_in_studio_mode", settings.sceneOrganiserDisablePreviewSwitchingInStudioMode);
@@ -1432,6 +1442,51 @@ void ShowSettingsDialog(int tabIndex)
 		showIconsLayout->addStretch();
 		showIconsLayout->addWidget(showIconsSwitch);
 		sceneOrganiserLayout->addLayout(showIconsLayout);
+
+		// Favourites tab and Recent tab, switched independently
+		auto addTabSwitch = [&](const char *labelKey, const char *descKey, bool initial,
+					void (*apply)(bool)) {
+			QHBoxLayout *row = new QHBoxLayout();
+
+			QLabel *label = new QLabel(obs_module_text(labelKey));
+			label->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+					.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
+					.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
+			label->setToolTip(obs_module_text(descKey));
+
+			StreamUP::UIStyles::SwitchButton *toggle = StreamUP::UIStyles::CreateStyledSwitch("", initial);
+			toggle->setToolTip(obs_module_text(descKey));
+			QObject::connect(toggle, &StreamUP::UIStyles::SwitchButton::toggled, apply);
+
+			row->addWidget(label);
+			row->addStretch();
+			row->addWidget(toggle);
+			sceneOrganiserLayout->addLayout(row);
+		};
+
+		addTabSwitch("SceneOrganiser.Settings.ShowFavouritesTab", "SceneOrganiser.Settings.ShowFavouritesTabDesc",
+			     currentSettings.sceneOrganiserShowFavouritesTab, [](bool checked) {
+				PluginSettings settings = GetCurrentSettings();
+				settings.sceneOrganiserShowFavouritesTab = checked;
+				UpdateSettings(settings);
+				StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+			     });
+
+		addTabSwitch("SceneOrganiser.Settings.ShowRecentTab", "SceneOrganiser.Settings.ShowRecentTabDesc",
+			     currentSettings.sceneOrganiserShowRecentTab, [](bool checked) {
+				PluginSettings settings = GetCurrentSettings();
+				settings.sceneOrganiserShowRecentTab = checked;
+				UpdateSettings(settings);
+				StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+			     });
+
+		addTabSwitch("SceneOrganiser.Settings.ShowIndentGuides", "SceneOrganiser.Settings.ShowIndentGuidesDesc",
+			     currentSettings.sceneOrganiserShowIndentGuides, [](bool checked) {
+				PluginSettings settings = GetCurrentSettings();
+				settings.sceneOrganiserShowIndentGuides = checked;
+				UpdateSettings(settings);
+				StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
+			     });
 
 		// Remember Folder State setting
 		QHBoxLayout *rememberFolderStateLayout = new QHBoxLayout();
@@ -3749,6 +3804,103 @@ bool AreUpdatesSkipped(const std::map<std::string, std::string>& currentOutdated
 	std::sort(sortedSkipped.begin(), sortedSkipped.end());
 
 	return sortedCurrent == sortedSkipped;
+}
+
+// Plugins the user has told us they switched off on purpose. Kept separate from
+// skipped_updates: an update gets skipped for one specific version and comes
+// back when a newer one lands, while "I turned this off myself" holds until the
+// plugin is turned back on.
+std::set<std::string> GetIgnoredDisabledPlugins()
+{
+	std::set<std::string> ignored;
+
+	obs_data_t* settings = LoadSettings();
+	if (!settings) {
+		return ignored;
+	}
+
+	obs_data_array_t* ignoredArray = obs_data_get_array(settings, "ignored_disabled_plugins");
+	if (ignoredArray) {
+		size_t count = obs_data_array_count(ignoredArray);
+		for (size_t i = 0; i < count; i++) {
+			obs_data_t* pluginData = obs_data_array_item(ignoredArray, i);
+			const char* name = obs_data_get_string(pluginData, "name");
+			if (name && *name) {
+				ignored.insert(name);
+			}
+			obs_data_release(pluginData);
+		}
+		obs_data_array_release(ignoredArray);
+	}
+
+	obs_data_release(settings);
+	return ignored;
+}
+
+// Write the set back out. Callers hold the merged/pruned result already, so
+// this is a plain overwrite.
+static void WriteIgnoredDisabledPlugins(const std::set<std::string>& pluginNames)
+{
+	obs_data_t* settings = LoadSettings();
+	if (!settings) {
+		return;
+	}
+
+	if (pluginNames.empty()) {
+		obs_data_erase(settings, "ignored_disabled_plugins");
+	} else {
+		obs_data_array_t* ignoredArray = obs_data_array_create();
+		for (const auto& name : pluginNames) {
+			obs_data_t* pluginData = obs_data_create();
+			obs_data_set_string(pluginData, "name", name.c_str());
+			obs_data_array_push_back(ignoredArray, pluginData);
+			obs_data_release(pluginData);
+		}
+		obs_data_set_array(settings, "ignored_disabled_plugins", ignoredArray);
+		obs_data_array_release(ignoredArray);
+	}
+
+	SaveSettings(settings);
+	obs_data_release(settings);
+}
+
+void AddIgnoredDisabledPlugins(const std::set<std::string>& pluginNames)
+{
+	if (pluginNames.empty()) {
+		return;
+	}
+
+	std::set<std::string> ignored = GetIgnoredDisabledPlugins();
+	const size_t before = ignored.size();
+	ignored.insert(pluginNames.begin(), pluginNames.end());
+
+	// Nothing new, so don't rewrite the settings file.
+	if (ignored.size() == before) {
+		return;
+	}
+
+	WriteIgnoredDisabledPlugins(ignored);
+}
+
+void PruneIgnoredDisabledPlugins(const std::set<std::string>& stillDisabled)
+{
+	std::set<std::string> ignored = GetIgnoredDisabledPlugins();
+	if (ignored.empty()) {
+		return;
+	}
+
+	std::set<std::string> kept;
+	for (const auto& name : ignored) {
+		if (stillDisabled.find(name) != stillDisabled.end()) {
+			kept.insert(name);
+		}
+	}
+
+	if (kept.size() == ignored.size()) {
+		return;
+	}
+
+	WriteIgnoredDisabledPlugins(kept);
 }
 
 AppliedModuleSnapshot GetAppliedModuleSnapshot()

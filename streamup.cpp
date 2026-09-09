@@ -33,6 +33,7 @@
 #include "ui/module-setup-wizard.hpp"
 #include "ui/studio-mode-enhancements.hpp"
 #include "ui/mixer-enhancements.hpp"
+#include "ui/vertical-canvas-enhancements.hpp"
 #include "ui/theme-enhancements.hpp"
 #include "multidock/multidock_manager.hpp"
 #include "multidock/multidock_utils.hpp"
@@ -55,6 +56,7 @@
 #include <QDockWidget>
 #include <QMainWindow>
 #include <QTimer>
+#include <atomic>
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QGroupBox>
@@ -388,9 +390,46 @@ static void StreamUpEmitSelectionChanged()
 	obs_data_release(d);
 }
 
+// Both of the emitters below walk scenes, and both are called from an OBS item
+// signal. That is a deadlock waiting to happen: obs_sceneitem_set_locked (and
+// friends) hold the scene's own mutex while they signal, so answering the
+// signal by enumerating that scene takes the same non-recursive lock a second
+// time on the same thread. Lock All Sources walks every scene locking items,
+// each successful change fires item_locked, and the handler tried to re-scan
+// every scene from inside the walk. OBS sat there waiting on itself.
+//
+// So the work is posted to the Qt event loop, where no OBS lock is held, and
+// coalesced: locking 200 items in one press queues one scan, not 200.
+static std::atomic<bool> g_streamup_selection_pending{false};
+static std::atomic<bool> g_streamup_source_state_pending{false};
+
+static void StreamUpQueueEmit(std::atomic<bool> &pending, void (*emitFn)())
+{
+	if (!vendor)
+		return;
+
+	bool expected = false;
+	if (!pending.compare_exchange_strong(expected, true))
+		return; // one is already queued and will see this change too
+
+	QApplication *app = qobject_cast<QApplication *>(QApplication::instance());
+	if (!app) {
+		pending = false;
+		return;
+	}
+
+	QMetaObject::invokeMethod(
+		app,
+		[&pending, emitFn]() {
+			pending = false;
+			emitFn();
+		},
+		Qt::QueuedConnection);
+}
+
 static void StreamUpOnItemSelect(void *, calldata_t *)
 {
-	StreamUpEmitSelectionChanged();
+	StreamUpQueueEmit(g_streamup_selection_pending, StreamUpEmitSelectionChanged);
 }
 
 // Emits vendor event "SourceStateChanged" carrying the aggregate lock state
@@ -412,7 +451,7 @@ static void StreamUpEmitSourceStateChanged()
 
 static void StreamUpOnItemState(void *, calldata_t *)
 {
-	StreamUpEmitSourceStateChanged();
+	StreamUpQueueEmit(g_streamup_source_state_pending, StreamUpEmitSourceStateChanged);
 }
 
 static void StreamUpUnhookSelectionScene()
@@ -465,8 +504,24 @@ static void StreamUpSelectionFrontendEvent(enum obs_frontend_event event, void *
 		StreamUpEmitSelectionChanged();
 		StreamUpEmitSourceStateChanged();
 		break;
+	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
+	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP:
 	case OBS_FRONTEND_EVENT_EXIT:
 		// Same again for shutdown: OBS clears scene data on the way out.
+		//
+		// SCRIPTING_SHUTDOWN is the one that matters: OBSBasic raises it on the
+		// line directly above its ClearSceneData() call, which is the last
+		// moment a reference can be handed back. The other two are too late -
+		// EXIT lands after the clear (measured at 8ms after, every time), and
+		// CLEANUP is raised by ClearSceneData itself only once it has already
+		// removed every source. They stay listed as a backstop for teardown
+		// orders that skip the scripting event. The scene stayed alive
+		// through the clear, taking its whole item tree with it ("Not all
+		// sources were cleared when clearing scene data"), and the release that
+		// finally came landed on sources OBS had already force-destroyed:
+		// "Double destroy just occurred", then a crash in scene_destroy walking
+		// a freed sceneitem. CLEANUP fires before the clear, which is where a
+		// reference to the current scene has to be given back.
 		g_streamup_sel_collection_changing = true;
 		StreamUpUnhookSelectionScene();
 		break;
@@ -727,6 +782,12 @@ static void CreateVerticalSceneOrganiserDock()
 	if (globalSceneOrganiserVertical)
 		return;
 	if (!StreamUP::SceneOrganiser::Canvas::VerticalAvailable())
+		return;
+
+	// The Scenes dock gates on this at load; the Vertical one is built from
+	// canvas events instead and used to skip the check entirely, so turning the
+	// Scene Organiser module off still left a vertical dock running.
+	if (!StreamUP::SettingsManager::GetCurrentSettings().modules.sceneOrganiser)
 		return;
 
 	const auto main_window = static_cast<QMainWindow *>(obs_frontend_get_main_window());
@@ -1273,6 +1334,7 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 		// StreamUP theme is set, this is what makes it look right.
 		StreamUP::StudioModeEnhancements::ApplyStudioModeEnhancements();
 		StreamUP::MixerEnhancements::ApplyMixerEnhancements();
+		StreamUP::VerticalCanvasEnhancements::ApplyVerticalCanvasEnhancements();
 		StreamUP::ThemeEnhancements::ApplyThemeEnhancements();
 
 		// Snapshot fields for the three enhancements always read true now —
@@ -1301,6 +1363,12 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 			// This ensures cached data is available even if startup check is disabled
 			StreamUP::DebugLogger::LogDebug("Plugin", "Async Init", "Performing plugin check and cache");
 			StreamUP::PluginManager::PerformPluginCheckAndCache();
+
+			// Daily config backup, off the shutdown path (see obs_module_unload).
+			// The config on disk is the previous session as OBS last wrote it,
+			// which is exactly what a restore wants.
+			StreamUP::DebugLogger::LogDebug("Plugin", "Async Init", "Running automatic backup if due");
+			StreamUP::Backup::RunAutomaticBackupIfDue();
 			
 			// Schedule startup UI to show on UI thread with delay
 			StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
@@ -1434,6 +1502,7 @@ void obs_module_unload()
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up UI enhancements");
 		StreamUP::StudioModeEnhancements::CleanupStudioModeEnhancements();
 		StreamUP::MixerEnhancements::CleanupMixerEnhancements();
+		StreamUP::VerticalCanvasEnhancements::CleanupVerticalCanvasEnhancements();
 		StreamUP::ThemeEnhancements::CleanupThemeEnhancements();
 
 		// Save all current settings before cleanup
@@ -1455,14 +1524,17 @@ void obs_module_unload()
 		if (StreamUP::Restore::HasPending()) {
 			blog(LOG_INFO, "[StreamUP] Applying staged restore during shutdown");
 			StreamUP::Restore::ApplyPending();
-		} else {
-			// Automatic backup runs in the same window and for the same
-			// reason: OBS has finished writing, so this captures the session
-			// that just ended. Skipped when a restore was applied above,
-			// since that path already took its own safety backup and the
-			// config on disk is no longer what this session was using.
-			StreamUP::Backup::RunAutomaticBackupIfDue();
 		}
+
+		// The automatic backup used to run here too, and that was the wrong
+		// place for it: zipping every profile, scene collection and plugin
+		// config directory is minutes of solid disk and CPU work, and doing it
+		// inside obs_shutdown() means OBS' window is gone while the machine is
+		// still pinned - reported as OBS "hanging" on close, stuttering audio,
+		// and on at least one Linux desktop a full freeze seconds after quit.
+		// It now runs on the worker thread just after OBS finishes loading,
+		// where it is still a once-a-day snapshot of the config on disk but
+		// nothing is waiting on it. See OnOBSFinishedLoading.
 
 		blog(LOG_INFO, "[StreamUP] Plugin unload completed successfully");
 		StreamUP::DebugLogger::LogInfo("Plugin", "Plugin unload completed successfully");

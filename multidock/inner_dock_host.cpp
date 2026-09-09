@@ -1,4 +1,9 @@
 #include "inner_dock_host.hpp"
+#include <QScrollArea>
+#include <QPalette>
+#include <QRegion>
+#include <QResizeEvent>
+#include <QPainterPath>
 #include <streamup/debug-logger.hpp>
 #include "multidock_dock.hpp"
 #include "add_dock_dialog.hpp"
@@ -34,8 +39,61 @@ InnerDockHost::InnerDockHost(const QString& multiDockId, QWidget* parent)
 
 InnerDockHost::~InnerDockHost()
 {
+    // Last line of defence. The docks should already have gone back at
+    // OBS_FRONTEND_EVENT_EXIT, but anything still captured here would be
+    // deleted by Qt as a child of this host while OBS still holds its own
+    // shared_ptr to it - see ReleaseAllDocks.
+    ReleaseAllDocks();
+
     StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Host Destruction", "Destroying InnerDockHost for '%s'", 
          m_multiDockId.toUtf8().constData());
+}
+
+void InnerDockHost::ReleaseAllDocks()
+{
+    // GetAllDocks hands back a copy, so removing as we go is safe.
+    const QList<QDockWidget*> docks = GetAllDocks();
+    if (docks.isEmpty()) {
+        return;
+    }
+
+    // Ownership is the only thing that matters here, not layout. RemoveDock
+    // puts a dock back where it came from and shows it, which is right when
+    // somebody takes a dock out of a MultiDock by hand, and wrong on the way
+    // out: OBS is closing, so the user gets a last look at their docks being
+    // dealt back into the main window one at a time.
+    //
+    // So the dock is handed to the main window as a plain child and left
+    // hidden. That is all Qt needs to stop treating it as ours to delete, and
+    // OBS deletes it from ~OBSBasic moments later anyway. The capture list has
+    // already been saved, so the MultiDock picks them all up again on the next
+    // start.
+    for (QDockWidget* dock : docks) {
+        if (!dock) {
+            continue;
+        }
+
+        const DockId dockId = GenerateDockId(dock);
+        const CapturedDock captured = m_capturedDocks.value(dockId);
+
+        DisconnectDockSignals(dock);
+        UnwrapDockContent(captured);
+        removeDockWidget(dock);
+
+        dock->setMinimumSize(captured.original.minimumSize);
+        dock->setMaximumSize(captured.original.maximumSize);
+        dock->setContextMenuPolicy(captured.original.contextMenuPolicy);
+
+        if (captured.original.main) {
+            dock->setParent(captured.original.main);
+        }
+        dock->hide();
+
+        m_capturedDocks.remove(dockId);
+    }
+
+    StreamUP::DebugLogger::LogInfoFormat("MultiDock", "Released %d dock(s) from MultiDock '%s' back to OBS",
+         (int)docks.size(), m_multiDockId.toUtf8().constData());
 }
 
 
@@ -58,13 +116,37 @@ void InnerDockHost::SetupDockOptions()
     // (background, border, border-radius, etc.). We only ship structural rules.
     setObjectName("InnerDockHost");
 
+    // Whether this paints a background, and in what colour, is decided by the
+    // theme through MultiDockDock's multidockBodyColor property. Left alone here
+    // so a theme that asks for nothing gets the default appearance.
+
+    // Set object name for styling
+    // Theme hook: QMainWindow#InnerDockHost — the OBS theme owns appearance
+    // (background, border, border-radius, etc.). We only ship structural rules.
+    setObjectName("InnerDockHost");
+
+    // This QMainWindow paints a square background over the rounded container
+    // behind it. Not painting at all leaves stale pixels in the corners, since
+    // nothing clears them, so instead it paints the SAME colour the container
+    // does: the join is then invisible and the rounded corners belong to the
+    // container, which is drawn around it.
+    //
+    // Set through the palette rather than a stylesheet on purpose. A stylesheet
+    // on this widget drags the MultiDock's title bar colours into the stylesheet
+    // with it and the title comes out inverted.
+    QPalette hostPalette = palette();
+    hostPalette.setColor(QPalette::Window, QColor(9, 9, 9)); // matches --bg_darkest
+    setPalette(hostPalette);
+    setAutoFillBackground(true);
+
     // Set content margins to create gap between docks and edges
-    setContentsMargins(StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(8));
+    setContentsMargins(0, 0, 0, 0);
 
     // Functional rule only: hide the per-dock float button (multi-dock owns
     // float state itself). All visual styling is left to the OBS theme.
     setStyleSheet(StreamUP::UIStyles::scale_qss("QDockWidget::float-button { width: 0px; height: 0px; }"));
 }
+
 
 
 void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)
@@ -130,13 +212,20 @@ void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)
         dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
     }
     
+    // Put the content behind a scroll area first, so the relaxed minimum below
+    // is honest: anything that does not fit scrolls instead of being clipped.
+    WrapDockContent(m_capturedDocks[dockId]);
+
     // Relax the captured dock's own minimum while it lives in the MultiDock.
     // A single wide dock (Twitch chat is the usual culprit) would otherwise set
     // the floor for the whole MultiDock and stop it being dragged narrow. The
     // original constraints are restored in RemoveDock.
     dock->setMinimumSize(StreamUP::UIStyles::S(80), StreamUP::UIStyles::S(80));
 
-    // Make dock fill available space
+    // Make dock fill available space. Only the dock and whatever is directly
+    // inside it are touched - once wrapped that is the scroll area, and the
+    // content keeps the size policy it shipped with so its minimumSizeHint
+    // still means something to the scroll area.
     dock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     if (dock->widget()) {
         dock->widget()->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -166,7 +255,11 @@ void InnerDockHost::RemoveDock(QDockWidget* dock)
     
     CapturedDock captured = m_capturedDocks[dockId];
     DisconnectDockSignals(dock);
-    
+
+    // Hand the dock its own widget back before anything else, so the dock the
+    // main window receives is the dock OBS registered.
+    UnwrapDockContent(captured);
+
     // Restore original size constraints
     dock->setMinimumSize(captured.original.minimumSize);
     dock->setMaximumSize(captured.original.maximumSize);
@@ -296,6 +389,75 @@ void InnerDockHost::ShowAddDockDialog()
 
 
 
+
+void InnerDockHost::WrapDockContent(CapturedDock& captured)
+{
+    QDockWidget* dock = captured.widget;
+    if (!dock) {
+        return;
+    }
+
+    QWidget* content = dock->widget();
+    if (!content) {
+        return;
+    }
+
+    // Never wrap twice - a dock re-added after a failed removal would otherwise
+    // end up with a scroll area inside a scroll area.
+    if (qobject_cast<QScrollArea*>(content)) {
+        return;
+    }
+
+    QScrollArea* scrollArea = new QScrollArea(dock);
+    scrollArea->setObjectName("MultiDockScrollArea");
+    // Resizable so the content still fills the dock when there is room; the
+    // scrollbars only appear once the dock is dragged below what the content
+    // can actually lay out in.
+    scrollArea->setWidgetResizable(true);
+    // No frame and no styling: the OBS theme owns how this looks, and a frame
+    // here would draw a second border inside the dock's own.
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    // setWidget does not delete the widget it replaces, so the content is safe
+    // between these two calls; it is reparented into the scroll area's viewport
+    // by the second.
+    dock->setWidget(scrollArea);
+    scrollArea->setWidget(content);
+
+    captured.scrollArea = scrollArea;
+    captured.contentWidget = content;
+
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dock Management",
+         "Wrapped content of dock '%s' in a scroll area",
+         dock->windowTitle().toUtf8().constData());
+}
+
+void InnerDockHost::UnwrapDockContent(const CapturedDock& captured)
+{
+    QDockWidget* dock = captured.widget;
+    QScrollArea* scrollArea = captured.scrollArea;
+    if (!dock || !scrollArea) {
+        return; // never wrapped, or the dock is already gone
+    }
+
+    // takeWidget hands ownership back rather than deleting, which is what lets
+    // the dock keep the widget OBS gave it.
+    QWidget* content = scrollArea->takeWidget();
+    if (content) {
+        dock->setWidget(content);
+    }
+
+    // The scroll area is ours alone, so it is the one thing here we do delete -
+    // deferred, because this can run from inside a dock event.
+    scrollArea->setParent(nullptr);
+    scrollArea->deleteLater();
+
+    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dock Management",
+         "Unwrapped content of dock '%s'",
+         dock->windowTitle().toUtf8().constData());
+}
 
 bool InnerDockHost::eventFilter(QObject* obj, QEvent* event)
 {

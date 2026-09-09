@@ -6,6 +6,7 @@
 #include "version-utils.hpp"
 #include "path-utils.hpp"
 #include "http-client.hpp"
+#include <set>
 #include <sstream>
 #include <algorithm>
 #include <cstdlib>
@@ -827,11 +828,17 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			dialogLayout->addWidget(warningLabel);
 		}
 
-		// Add skip checkbox for startup checks (only if there are updates/failures and no missing plugins)
+		// Add skip checkbox for startup checks (only if there are updates/failures
+		// or deliberately switched-off plugins, and no missing plugins).
+		// A switched-off plugin gets its own wording when that's all the dialog
+		// is reporting: "these updates" reads wrong for something the user turned
+		// off themselves, which is the whole reason they want it to stop asking.
 		IOSCheckBox *skipCheckbox = nullptr;
-		if (isStartupCheck && !hasMissing && (hasUpdates || hasFailedToLoad)) {
+		if (isStartupCheck && !hasMissing && (hasUpdates || hasFailedToLoad || hasDisabled)) {
 			dialogLayout->addSpacing(S(12));
-			skipCheckbox = new IOSCheckBox(obs_module_text("Plugin.Dialog.SkipTheseUpdates"));
+			const bool disabledOnly = hasDisabled && !hasUpdates && !hasFailedToLoad;
+			skipCheckbox = new IOSCheckBox(obs_module_text(disabledOnly ? "Plugin.Dialog.SkipTheseDisabled"
+										 : "Plugin.Dialog.SkipTheseUpdates"));
 			QWidget *skipRow = new QWidget();
 			QHBoxLayout *skipLay = new QHBoxLayout(skipRow);
 			skipLay->setContentsMargins(S(25), 0, S(25), 0);
@@ -852,23 +859,47 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		}
 
 		auto *okButton = new su::PillButton(obs_module_text("UI.Button.OK"), continueCallback ? "outline" : "primary");
-		QObject::connect(okButton, &QPushButton::clicked, [dialog, skipCheckbox, version_mismatch_modules, failed_to_load_modules]() {
+		QObject::connect(okButton, &QPushButton::clicked, [dialog, skipCheckbox, isStartupCheck, version_mismatch_modules, failed_to_load_modules, disabled_modules]() {
 			// Save skipped updates if checkbox is checked
 			if (skipCheckbox && skipCheckbox->isChecked()) {
-				// Convert installed versions to required versions before saving
-				std::map<std::string, std::string> requiredVersions;
-				const auto& allPlugins = StreamUP::GetAllPlugins();
-
-				for (const auto& plugin : version_mismatch_modules) {
-					const std::string& pluginName = plugin.first;
-					auto it = allPlugins.find(pluginName);
-					if (it != allPlugins.end()) {
-						// Save the required version, not the installed version
-						requiredVersions[pluginName] = it->second.version;
+				// Switched-off plugins are remembered by name, with no
+				// version attached: the user isn't putting off an update,
+				// they're saying they meant to turn it off.
+				//
+				// Startup only, and belt and braces: the ignore list must
+				// never be written from an install or a manual check. Those
+				// have to keep reporting a switched-off plugin every time,
+				// because installing a product against one is what breaks
+				// the product. The checkbox isn't built for them today
+				// (see above), and this makes sure it stays that way if
+				// that condition is ever loosened.
+				if (isStartupCheck && !disabled_modules.empty()) {
+					std::set<std::string> ignoredDisabled;
+					for (const auto& plugin : disabled_modules) {
+						ignoredDisabled.insert(plugin.first);
 					}
+					StreamUP::SettingsManager::AddIgnoredDisabledPlugins(ignoredDisabled);
 				}
 
-				StreamUP::SettingsManager::SaveSkippedUpdates(requiredVersions, failed_to_load_modules);
+				// Only touch skipped_updates when there's actually an update
+				// or a load failure on screen. A disabled-only dialog would
+				// otherwise overwrite a real skip list with an empty one.
+				if (!version_mismatch_modules.empty() || !failed_to_load_modules.empty()) {
+					// Convert installed versions to required versions before saving
+					std::map<std::string, std::string> requiredVersions;
+					const auto& allPlugins = StreamUP::GetAllPlugins();
+
+					for (const auto& plugin : version_mismatch_modules) {
+						const std::string& pluginName = plugin.first;
+						auto it = allPlugins.find(pluginName);
+						if (it != allPlugins.end()) {
+							// Save the required version, not the installed version
+							requiredVersions[pluginName] = it->second.version;
+						}
+					}
+
+					StreamUP::SettingsManager::SaveSkippedUpdates(requiredVersions, failed_to_load_modules);
+				}
 			}
 			dialog->close();
 		});
@@ -2006,6 +2037,11 @@ void ShowCachedPluginIssuesDialog(std::function<void()> continueCallback)
 
 	// Filter switched-off plugins to the required ones - a non-required plugin
 	// the user deliberately turned off isn't this dialog's business.
+	//
+	// Note this deliberately ignores the "I switched these off on purpose"
+	// list that quiets the startup nag. This is the install-a-product path:
+	// a required plugin being off will break the product being installed
+	// whether or not the user meant to turn it off, so it always blocks here.
 	std::map<std::string, bool> filteredDisabled;
 	for (const auto& plugin : status.disabledPlugins) {
 		if (requiredPlugins.find(plugin.first) != requiredPlugins.end()) {
@@ -2089,6 +2125,24 @@ void ShowCachedPluginUpdatesDialogSilent()
 		if (requiredPluginsForDisabled.find(plugin.first) != requiredPluginsForDisabled.end()) {
 			requiredDisabled[plugin.first] = plugin.second;
 		}
+	}
+
+	// Drop the ones the user has told us they switched off on purpose. Prune
+	// first so a plugin that was turned back on (and later switched off again)
+	// starts reminding them afresh, rather than staying silent forever off the
+	// back of a tickbox from months ago. Pruning is against every disabled
+	// plugin we can see, not just the required ones, so an optional plugin the
+	// user ignored doesn't get dropped from the list on a start where it isn't
+	// in this bucket.
+	std::set<std::string> stillDisabled;
+	for (const auto& plugin : status.disabledPlugins) {
+		stillDisabled.insert(plugin.first);
+	}
+	StreamUP::SettingsManager::PruneIgnoredDisabledPlugins(stillDisabled);
+
+	const std::set<std::string> ignoredDisabled = StreamUP::SettingsManager::GetIgnoredDisabledPlugins();
+	for (auto it = requiredDisabled.begin(); it != requiredDisabled.end();) {
+		it = ignoredDisabled.count(it->first) ? requiredDisabled.erase(it) : std::next(it);
 	}
 
 	if (status.outdatedPlugins.empty() && status.failedToLoadPlugins.empty() && requiredDisabled.empty()) {

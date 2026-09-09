@@ -22,7 +22,12 @@
 #include <QLineEdit>
 #include <QSortFilterProxyModel>
 #include <QCheckBox>
+#include <QTabBar>
+#include <QStackedWidget>
+#include <QListWidget>
+#include <QTreeWidget>
 #include <map>
+#include <functional>
 #include <obs.h>
 #include <obs-frontend-api.h>
 #include "../settings-manager.hpp"
@@ -44,6 +49,36 @@ enum class CanvasType {
     Vertical
 };
 
+// What a tab in the dock's tab bar is. Scenes is the organiser tree and is
+// always present; Favourites and Recent are built-in lists that can each be
+// switched off on their own; Custom is a list the user made and filled.
+enum class QuickTabKind {
+    Scenes,
+    Favourites,
+    Recent,
+    Custom
+};
+
+// One entry in a tab's tree: either a folder (with children of its own) or a
+// reference to a scene by name. A tab holds a list of these, so a tab can be
+// organised with folders exactly like the Scenes tree - and independently of it,
+// since the same scene may sit in a different folder on every tab.
+//
+// A scene is held by NAME rather than by a weak source: a tab is a saved
+// arrangement, and a scene that disappears should leave the arrangement intact
+// for when it comes back, not tear a hole in it.
+struct TabNode {
+    bool isFolder = false;
+    QString name;
+    QVector<TabNode> children;
+};
+
+// A user-made tab: a name and the tree they built in it.
+struct CustomSceneTab {
+    QString name;
+    QVector<TabNode> nodes;
+};
+
 class SceneOrganiserDock : public QFrame {
     Q_OBJECT
 
@@ -57,6 +92,11 @@ public:
     static void NotifySceneOrganiserIconsChanged();
 
     void SaveConfiguration();
+    // Tab trees are saved as JSON, since they are nested. The old flat text
+    // format is still read once, so tabs made before this survive the upgrade.
+    void saveQuickTabs(const QString &configDir, const QString &sceneCollectionName);
+    void loadQuickTabs(const QString &configDir, const QString &sceneCollectionName);
+    bool loadLegacyQuickTabs(const QString &path);
     void LoadConfiguration();
 
 private slots:
@@ -109,6 +149,13 @@ public:
     // Activate (go-live/transition to) the currently selected scene — bound to
     // the Enter/Return key in the tree view.
     void triggerActivateSelectedScene();
+    // Takes the given scene item live (studio mode aware). Ignores folders.
+    void activateSceneItem(QStandardItem *item);
+    // Enter in the search box: go live with the first match still visible.
+    void activateFirstSearchMatch();
+    // Focuses the search box of the dock bound to the given canvas. Static so a
+    // frontend hotkey can reach it without holding a dock pointer.
+    static void FocusSearchBox(CanvasType canvasType);
     // Runs the one-time load (config, folder tree, scenes, colours). Normally
     // driven by FINISHED_LOADING; public so a dock created after that event has
     // fired can be kicked directly. Idempotent.
@@ -126,6 +173,9 @@ private:
     void saveFolderExpansionState();
     void restoreFolderExpansionState();
     void createBottomToolbar();
+    // Takes the height of OBS's own Sources toolbar so the two bars line up.
+    void matchObsToolbarHeight();
+    void updateDragEnabled();
     void updateToolbarState();
     void refreshSceneList();
     void applySortingIfEnabled();
@@ -135,6 +185,9 @@ private:
     void showSceneContextMenu(const QPoint &pos, const QModelIndex &index);
     void showBackgroundContextMenu(const QPoint &pos);
     void updateAllItemIcons(QStandardItem *parent);
+    // Folder icons follow whether the row is open, which only the view knows.
+    void setFolderExpandedState(const QModelIndex &proxyIndex, bool expanded);
+    void syncFolderIcons(QStandardItem *parent = nullptr);
     void updateToggleIconsState();
     void updateLockActionStates();
     void updateActiveSceneHighlight();
@@ -146,6 +199,16 @@ private:
     // "Set Colour" submenu, mimicking OBS' native Sources menu: Clear, Custom
     // Colour, then the same eight preset swatches OBS offers.
     QMenu *createColorSubmenu();
+    // "Set Icon" submenu: the OBS theme icons plus a custom image and a reset.
+    // Shared by the folder and scene menus, like the colour one.
+    QMenu *createIconSubmenu();
+    void refreshIconMenuState();
+    void applyIconSpec(const QString &spec);
+    void onSetCustomIconImageClicked();
+    // Icon tint, kept apart from the icon itself so either can change alone.
+    void applyIconColor(const QColor &color);
+    void refreshIconColorMenuState();
+    void onSetCustomIconColorClicked();
     void refreshColorMenuState();
     void applyPresetColor(int presetIndex);
     void updateTreeViewStylesheet();
@@ -156,19 +219,37 @@ private:
     // Rebuilt every time the menu opens: the transition list and the scene's
     // stored override can both change between one right click and the next.
     void populateTransitionOverrideMenu(obs_source_t *sceneSource);
+    // Vertical dock only. Rebuilt every time the menu opens: the main scene
+    // list and the links stored on it can both change between right clicks.
+    void populateLinkedScenesMenu(obs_source_t *sceneSource);
 
 public:
     // Color helper methods (public for CustomColorDelegate access)
     QColor getContrastTextColor(const QColor &backgroundColor);
     QColor getDefaultThemeTextColor();
     QColor adjustColorBrightness(const QColor &color, float factor);
+    QColor ensureRowContrast(const QColor &bgColor);
     QColor getSelectionColor(const QColor &baseColor);
     QColor getHoverColor(const QColor &baseColor);
+
+    // Layout undo: capture before a mutation, push after it.
+    QString captureLayout();
+    void pushLayoutUndo(const QString &name, const QString &before);
+    static void ApplyLayoutSnapshot(const char *data);
+    // True while an undo/redo is being applied, so the restore does not record
+    // an undo entry of its own.
+    bool m_applyingLayoutSnapshot = false;
+    // Layout captured when an inline folder rename was started; consumed when
+    // the edit lands. Empty when no rename is in flight.
+    QString m_renameLayoutBefore;
 
     // Color application methods (public for SceneTreeModel access during drag & drop)
     void applyCustomColorToItem(QStandardItem *item, const QColor &color);
     void clearCustomColorFromItem(QStandardItem *item);
     void applyAllCustomColors(QStandardItem *parent = nullptr);
+
+    // The row height every tab uses, from the settings (19-48, default 24).
+    int currentRowHeight() const;
 
     // Force tree view repaint (used after drag and drop)
     void forceTreeViewRepaint();
@@ -192,6 +273,14 @@ public:
     static void OnCanvasSourceAdded(void *data, calldata_t *cd);
     static void OnCanvasSourceRemoved(void *data, calldata_t *cd);
     static void OnCanvasSourceRenamed(void *data, calldata_t *cd);
+    // Fires for every source rename in OBS, whoever did the renaming. The three
+    // things this dock stores by name have to follow, or they quietly lose the
+    // scene: see renameStoredScene().
+    static void OnSourceRenamed(void *data, calldata_t *cd);
+    // Rewrites a scene's name everywhere this dock keeps one: hidden scenes,
+    // recents, favourites and every custom tab.
+    void renameStoredScene(const QString &oldName, const QString &newName);
+    static void renameSceneInNodes(QVector<TabNode> &nodes, const QString &oldName, const QString &newName);
     static void OnCanvasChannelChanged(void *data, calldata_t *cd);
     QVBoxLayout *m_mainLayout;
     SceneTreeView *m_treeView;
@@ -199,13 +288,13 @@ public:
     QSortFilterProxyModel *m_proxyModel;
 
     // Search functionality
-    QWidget *m_searchWidget;
+    QWidget *m_searchWidget = nullptr;
     QHBoxLayout *m_searchLayout;
-    QLineEdit *m_searchEdit;
+    QLineEdit *m_searchEdit = nullptr;
     QMap<QPersistentModelIndex, bool> m_savedExpansionState;
 
     // Toolbar and buttons
-    QToolBar *m_toolbar;
+    QToolBar *m_toolbar = nullptr;
     QAction *m_addFolderAction;
     QAction *m_removeAction;
     QAction *m_filtersAction;
@@ -213,14 +302,14 @@ public:
     QAction *m_moveDownAction;
 
     // Button references for state management
-    QToolButton *m_addButton;
-    QToolButton *m_removeButton;
-    QToolButton *m_filtersButton;
-    QToolButton *m_moveUpButton;
-    QToolButton *m_moveDownButton;
-    QCheckBox *m_expandCollapseButton;
-    QCheckBox *m_lockButton;
-    QToolButton *m_settingsButton;
+    QToolButton *m_addButton = nullptr;
+    QToolButton *m_removeButton = nullptr;
+    QToolButton *m_filtersButton = nullptr;
+    QToolButton *m_moveUpButton = nullptr;
+    QToolButton *m_moveDownButton = nullptr;
+    QCheckBox *m_expandCollapseButton = nullptr;
+    QCheckBox *m_lockButton = nullptr;
+    QToolButton *m_settingsButton = nullptr;
 
     // Context menus
     QMenu *m_folderContextMenu;
@@ -229,6 +318,7 @@ public:
     QMenu *m_sceneOrderMenu;
     QMenu *m_sceneProjectorMenu;
     QMenu *m_sceneTransitionMenu = nullptr;
+    QMenu *m_sceneLinkedScenesMenu = nullptr;
 
     // "Set Colour" submenu, shared by the folder and scene context menus (both
     // act on m_currentContextItem, so one instance serves both).
@@ -236,6 +326,15 @@ public:
     QAction *m_colorClearAction = nullptr;
     QAction *m_colorCustomAction = nullptr;
     QList<QPushButton *> m_colorSwatchButtons;
+
+    QMenu *m_iconMenu = nullptr;
+    QAction *m_iconDefaultAction = nullptr;
+    QAction *m_iconCustomAction = nullptr;
+    QHash<QString, QAction *> m_iconThemeActions;
+    QMenu *m_iconColorMenu = nullptr;
+    QAction *m_iconColorClearAction = nullptr;
+    QAction *m_iconColorCustomAction = nullptr;
+    QList<QPushButton *> m_iconColorSwatchButtons;
 
     // Toggle actions (for checkmarks)
     QAction *m_folderToggleIconsAction;
@@ -282,6 +381,108 @@ public:
     // Scene visibility management
     QSet<QString> m_hiddenScenes;
 
+    // The tab bar and the single list widget the flat tabs share. Which tabs
+    // exist is decided by rebuildTabBar() from the settings plus m_customTabs.
+    QTabBar *m_quickTabs = nullptr;
+    QStackedWidget *m_viewStack = nullptr;
+    // One tree serves every non-Scenes tab; it is repopulated on each switch.
+    // The same view class as the Scenes tree, so every bit of its painting -
+    // the cleared indent column, the folder guides, the chevron - applies here
+    // too. A plain QTreeWidget looked like a different dock.
+    SceneTreeView *m_quickTree = nullptr;
+    QStandardItemModel *m_quickModel = nullptr;
+    QSortFilterProxyModel *m_quickProxy = nullptr;
+    // True while the tab tree is being filled, so the model signals that fire
+    // during population are not mistaken for the user rearranging it.
+    bool m_populatingQuickTree = false;
+    // Whether the tab trees are collapsed. Remembered because a tab tree is
+    // rebuilt on every refresh and would otherwise spring back open.
+    bool m_quickTreeCollapsed = false;
+
+    // Favourites is a tree like the custom tabs: starring a scene drops it in at
+    // the top level, and it can then be filed into folders. Recent stays a plain
+    // list - it is maintained by what you go live with, not arranged by hand.
+    QVector<TabNode> m_favouriteNodes;
+    QStringList m_recentScenes;
+    // User-made tabs, also per scene collection.
+    QVector<CustomSceneTab> m_customTabs;
+
+    // The tab currently selected, held as kind + index rather than a bar
+    // position, so it survives tabs being switched on and off around it.
+    QuickTabKind m_currentKind = QuickTabKind::Scenes;
+    int m_currentCustomTab = -1;
+
+    QAction *m_favouriteToggleAction = nullptr;
+    QMenu *m_addToTabMenu = nullptr;
+
+    void setupQuickTabs();
+    // Rebuilds the bar from scratch: the tree, whichever built-in tabs the
+    // settings allow, then every custom tab. Restores the previous selection if
+    // that tab still exists, otherwise falls back to the tree.
+    void rebuildTabBar();
+    // Repopulates the list behind the current tab.
+    void refreshQuickList();
+    void onQuickTreeActivated(const QModelIndex &index);
+    void onQuickTreeContextMenu(const QPoint &pos);
+    // Writes the tree widget's current shape back to the tab it belongs to,
+    // after a drag or any other edit made in the widget itself.
+    void commitQuickTreeToTab();
+    // The nodes behind the current tab, when it is one the user arranges.
+    QVector<TabNode> *editableNodesForCurrentTab();
+
+    // Node helpers. All of them work on a tab's node list, not on OBS.
+    static bool nodesContainScene(const QVector<TabNode> &nodes, const QString &sceneName);
+    static bool removeSceneFromNodes(QVector<TabNode> &nodes, const QString &sceneName);
+    static void collectSceneNames(const QVector<TabNode> &nodes, QStringList &out);
+    static QString uniqueFolderName(const QVector<TabNode> &nodes, const QString &base);
+
+    // Folder actions on a tab tree.
+    void onAddTabFolderClicked();
+    void onRenameTabFolderClicked(QStandardItem *item);
+    void onRemoveFromTabClicked(QStandardItem *item);
+    void onQuickTabChanged(int index);
+    void onTabMoved(int from, int to);
+    // Identity of the selected tab, for restoring it across a rebuild.
+    QString currentTabToken() const;
+    // The tab bar's order, by identity. Saved, so a tab switched off in the
+    // settings returns to its old place rather than to the end.
+    QStringList m_tabOrder;
+    // The tab that was selected when the config was written, held as a token
+    // until the tabs it may name have finished loading.
+    QString m_currentKindToken;
+    void onQuickTabsContextMenu(const QPoint &pos);
+    void onToggleFavouriteClicked();
+
+    // Custom tab management
+    // Shared by create and rename: asks for a name and re-asks on a clash.
+    void promptForTabName(const QString &title, const QString &fieldLabel, const QString &initial,
+                          int skipIndex, std::function<void(const QString &)> onAccept);
+    void onCreateCustomTabClicked();
+    void onRenameCustomTabClicked(int customIndex);
+    void onDeleteCustomTabClicked(int customIndex);
+    void addSceneToCustomTab(const QString &sceneName, int customIndex);
+    void removeSceneFromCustomTab(const QString &sceneName, int customIndex);
+    // Rebuilt every time the scene menu opens: the custom tabs can change
+    // between one right click and the next.
+    void populateAddToTabMenu();
+    int customTabIndexByName(const QString &name) const;
+
+    // Pushes a scene to the front of the recents list. No-op if it is already
+    // the most recent, so re-selecting the live scene does not churn the list.
+    void noteRecentScene(const QString &sceneName);
+    bool isFavourite(const QString &sceneName) const;
+    // Tree-only controls are meaningless on the flat tabs, so they are hidden
+    // there rather than left on screen doing nothing.
+    void updateControlsForTab();
+    // The scene selected on whichever tab is showing.
+    QString selectedSceneOnCurrentTab() const;
+    void showAddToTabMenu();
+    void moveWithinCurrentTab(int direction);
+    // Applies the tree's row height, icon size and font to the flat lists.
+    void applyRowMetricsToQuickList();
+    // How many recents to keep.
+    static constexpr int kMaxRecentScenes = 20;
+
     // Click tracking for rename functionality
     QPersistentModelIndex m_lastClickedIndex;
     // Action references removed - using direct button approach for right-side buttons
@@ -295,6 +496,10 @@ public:
     // Cache management
     static void clearIconCaches();
     static void onThemeChanged();
+
+    // Mirrors the active theme's own list-row rules onto our tree views, so
+    // hover and selection read the same here as in the Scenes/Sources docks.
+    void applyThemeRowStyling();
 
     bool currentThemeIsDark;
 
@@ -324,6 +529,12 @@ public:
     // Scene management
     void updateTree(const QModelIndex &selectedIndex = QModelIndex());
     void saveSceneTree();
+
+    // Say so before a save that is MEANT to leave the collection with no
+    // folders - the user deleting the last one, or an undo restoring a layout
+    // from before there were any. Without it such a save is refused as a wipe.
+    // Consumed by the next saveSceneTree(), whether or not it needed it.
+    void allowFolderLoss() { m_allowFolderLoss = true; }
     void loadSceneTree();
     QStandardItem *findSceneItem(obs_weak_source_t *weak_source);
     QStandardItem *findFolderItem(const QString &folderName);
@@ -341,6 +552,15 @@ public:
     static obs_data_array_t* convertSceneTreeViewFormat(obs_data_array_t *original_array);
 
     // Cleanup
+    QStandardItem *findItemByName(const QString &name, int itemType, QStandardItem *parent);
+    QStandardItem *findSceneItemByName(const QString &name);
+    QStandardItem *findFolderItemByName(const QString &name);
+    // Whole-layout snapshot / restore, used to back undo and redo.
+    QString serialiseLayout();
+    void restoreLayout(const QString &json);
+    // Removes scene rows the tracking map does not know about, which is what a
+    // move that left its original behind produces. Returns how many went.
+    int removeUntrackedSceneDuplicates(QStandardItem *parent = nullptr);
     void cleanupEmptyItems();
     void removeSceneFromTracking(obs_weak_source_t *weak_source);
 
@@ -366,6 +586,15 @@ private:
 
     CanvasType m_canvasType;
 
+    // The collection whose tree is currently in the model, set only by a
+    // completed loadSceneTree(). A save with anything else here would be
+    // writing one collection's tree - or a tree that was never loaded at all -
+    // under another collection's key, which is how a folder layout gets wiped.
+    QString m_loadedCollection;
+
+    // Set by allowFolderLoss() for one save. See there.
+    bool m_allowFolderLoss = false;
+
 signals:
     void modelChanged();
 };
@@ -378,6 +607,12 @@ public:
     explicit SceneTreeView(QWidget *parent = nullptr);
 
 protected:
+    // Draws the vertical guides that show which folder a row belongs to, then
+    // lets the base class put the expand/collapse chevron on top.
+    void drawBranches(QPainter *painter, const QRect &rect, const QModelIndex &index) const override;
+    // Prunes a selection that holds both a folder and its contents before the
+    // drag begins, so the view and the drag payload describe the same rows.
+    void startDrag(Qt::DropActions supportedActions) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
@@ -433,18 +668,42 @@ private:
     obs_weak_source_t* m_weakSource;
 };
 
-// Custom delegate to paint background colors (overrides theme stylesheet)
-class CustomColorDelegate : public QStyledItemDelegate {
+// Paints the flat Favourites / Recent rows exactly as CustomColorDelegate paints
+// the tree: theme-owned selection and hover on a plain row, the same rounded
+// pill for a hand-set colour, the same row height. The two delegates cannot be one class because they
+// read from different models (a tree behind a proxy vs a plain list), but they
+// share every colour and metric decision through the dock.
+class QuickListDelegate : public QStyledItemDelegate {
     Q_OBJECT
 
 public:
-    explicit CustomColorDelegate(SceneOrganiserDock *dock, QObject *parent = nullptr);
+    explicit QuickListDelegate(SceneOrganiserDock *dock, QObject *parent = nullptr);
 
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
 
 private:
     SceneOrganiserDock *m_dock;
+};
+
+// Custom delegate to paint background colors (overrides theme stylesheet)
+class CustomColorDelegate : public QStyledItemDelegate {
+    Q_OBJECT
+
+public:
+    // The proxy/model pair is passed in so one delegate class can serve both the
+    // Scenes tree and a tab's tree; passing none means the dock's Scenes pair.
+    explicit CustomColorDelegate(SceneOrganiserDock *dock, QObject *parent = nullptr,
+                                 QSortFilterProxyModel *proxy = nullptr,
+                                 QStandardItemModel *model = nullptr);
+
+    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+
+private:
+    SceneOrganiserDock *m_dock;
+    QSortFilterProxyModel *m_proxy;
+    QStandardItemModel *m_model;
 };
 
 } // namespace SceneOrganiser

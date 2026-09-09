@@ -449,6 +449,9 @@ void StreamUPToolbar::updateVirtualCameraButton()
 	if (virtualCameraButton) {
 		bool active = obs_frontend_virtualcam_active();
 		virtualCameraButton->setChecked(active);
+		// Same tell as the record and stream buttons: the glyph itself changes,
+		// not just the checked styling, so a glance says whether it is running.
+		virtualCameraButton->setIcon(getCachedIcon(active ? "virtual-camera-on" : "virtual-camera"));
 		virtualCameraButton->setToolTip(active ? obs_module_text("Toolbar.Tooltip.StopVirtualCamera")
 					  : obs_module_text("Toolbar.Tooltip.StartVirtualCamera"));
 	}
@@ -709,7 +712,7 @@ void StreamUPToolbar::updateButtonStatesEfficiently()
 
 	if (virtualCameraButton) {
 		virtualCameraButton->setChecked(vcamActive);
-		virtualCameraButton->setIcon(getCachedIcon("virtual-camera"));
+		virtualCameraButton->setIcon(getCachedIcon(vcamActive ? "virtual-camera-on" : "virtual-camera"));
 		virtualCameraButton->setToolTip(vcamActive ? obs_module_text("Toolbar.Tooltip.StopVirtualCamera")
 					       : obs_module_text("Toolbar.Tooltip.StartVirtualCamera"));
 	}
@@ -760,7 +763,8 @@ void StreamUPToolbar::updateIconsForTheme()
 	}
 
 	if (virtualCameraButton) {
-		virtualCameraButton->setIcon(getCachedIcon("virtual-camera"));
+		const bool vcamActive = obs_frontend_virtualcam_active();
+		virtualCameraButton->setIcon(getCachedIcon(vcamActive ? "virtual-camera-on" : "virtual-camera"));
 	}
 
 	if (virtualCameraConfigButton) {
@@ -1020,8 +1024,46 @@ void StreamUPToolbar::repositionEditPanel()
 	const QSize panelSize = editPanel->sizeHint();
 	const int gap = StreamUP::UIStyles::S(12);
 
-	QPoint where = isVerticalOrientation() ? QPoint(barRect.right() + gap, barRect.top())
-					       : QPoint(barRect.left(), barRect.bottom() + gap);
+	// Centre on the bar along its own axis, and try the far side first, then
+	// the near side. Anchoring to the bar's leading edge used to throw the
+	// panel into a screen corner: a bottom-docked bar is the full width of the
+	// window, so "below its bottom edge, from its left edge" is off screen on
+	// both axes, and clamping pinned it to the bottom-left where it was half
+	// hidden behind everything.
+	const bool vertical = isVerticalOrientation();
+	QPoint where;
+	bool placed = false;
+	if (vertical) {
+		const int y = barRect.center().y() - panelSize.height() / 2;
+		if (barRect.right() + gap + panelSize.width() <= screen.right()) {
+			where = QPoint(barRect.right() + gap, y);
+			placed = true;
+		} else if (barRect.left() - gap - panelSize.width() >= screen.left()) {
+			where = QPoint(barRect.left() - gap - panelSize.width(), y);
+			placed = true;
+		}
+	} else {
+		const int x = barRect.center().x() - panelSize.width() / 2;
+		if (barRect.bottom() + gap + panelSize.height() <= screen.bottom()) {
+			where = QPoint(x, barRect.bottom() + gap);
+			placed = true;
+		} else if (barRect.top() - gap - panelSize.height() >= screen.top()) {
+			where = QPoint(x, barRect.top() - gap - panelSize.height());
+			placed = true;
+		}
+	}
+
+	// Neither side has room, so the bar is against an edge with the panel
+	// bigger than the gap. Centre it on the OBS window instead of shoving it
+	// into a corner: covering part of the toolbar beats being unreachable.
+	if (!placed) {
+		QRect anchor = screen;
+		if (QWidget *main = static_cast<QWidget *>(obs_frontend_get_main_window()))
+			anchor = QRect(main->mapToGlobal(QPoint(0, 0)), main->size());
+		where = QPoint(anchor.center().x() - panelSize.width() / 2,
+			       anchor.center().y() - panelSize.height() / 2);
+	}
+
 	where.setX(qBound(screen.left(), where.x(), screen.right() - panelSize.width()));
 	where.setY(qBound(screen.top(), where.y(), screen.bottom() - panelSize.height()));
 	editPanel->move(where);

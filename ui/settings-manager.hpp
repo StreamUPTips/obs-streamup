@@ -2,6 +2,7 @@
 
 #include <obs-data.h>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -165,6 +166,9 @@ struct PluginSettings {
     bool showToolbar;
     bool debugLoggingEnabled;
     bool sceneOrganiserShowIcons;
+    bool sceneOrganiserShowIndentGuides;
+    bool sceneOrganiserShowFavouritesTab;
+    bool sceneOrganiserShowRecentTab;
     bool sceneOrganiserGroupFolders;
     bool sceneOrganiserRememberFolderState;
     bool sceneOrganiserDisablePreviewSwitchingInStudioMode; // Disable preview switching (single-click) when in studio mode
@@ -189,7 +193,7 @@ struct PluginSettings {
     bool moduleSetupComplete;       // Legacy wizard sentinel (kept for compat)
     std::string wizardVersionShown; // PROJECT_VERSION when the wizard last ran. Drives the upgrader prompt.
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), toolbarAlignment(ToolbarAlignment::Start), backupAutomatic(true), backupKeepCount(10), backupLocation(), backupLastAutoDate(), moduleSetupComplete(false), wizardVersionShown() {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserShowIndentGuides(true), sceneOrganiserShowFavouritesTab(true), sceneOrganiserShowRecentTab(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), toolbarAlignment(ToolbarAlignment::Start), backupAutomatic(true), backupKeepCount(10), backupLocation(), backupLastAutoDate(), moduleSetupComplete(false), wizardVersionShown() {}
 };
 
 /**
@@ -353,6 +357,28 @@ void ClearSkippedUpdates();
  * @return bool True if current updates exactly match skipped updates
  */
 bool AreUpdatesSkipped(const std::map<std::string, std::string>& currentOutdated, const std::vector<std::string>& currentFailed);
+
+/**
+ * @brief Remember that the user switched these plugins off on purpose, so the
+ * startup check stops reminding them about it.
+ * @param pluginNames Plugin names to add to the ignore list (merged with any
+ * already stored, never replacing them)
+ */
+void AddIgnoredDisabledPlugins(const std::set<std::string>& pluginNames);
+
+/**
+ * @brief Get the plugins the user has marked as deliberately switched off.
+ * @return std::set<std::string> Plugin names
+ */
+std::set<std::string> GetIgnoredDisabledPlugins();
+
+/**
+ * @brief Drop anything from the ignore list that isn't switched off any more,
+ * so a plugin that gets turned back on and later switched off again reminds
+ * the user afresh.
+ * @param stillDisabled Plugin names currently reported as switched off
+ */
+void PruneIgnoredDisabledPlugins(const std::set<std::string>& stillDisabled);
 
 /**
  * @brief Get the most recently persisted snapshot of which hard-toggle modules

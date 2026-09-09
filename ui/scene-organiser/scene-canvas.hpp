@@ -62,6 +62,11 @@ obs_scene_t *CreateScene(CanvasType type, const char *name);
 // Find a scene on the canvas by name. NEW reference, or nullptr.
 obs_source_t *FindScene(CanvasType type, const char *name);
 
+// The canvas base resolution. Aitum keys both its proc handlers and its scene
+// links on canvas dimensions rather than a name, so anything that has to talk
+// to it in its own terms needs these. False when the canvas is not there.
+bool GetDimensions(CanvasType type, int &width, int &height);
+
 // Whether a scene source lives on this dock's canvas. Used to keep vertical
 // scenes out of the Normal dock and vice versa.
 bool SceneBelongsTo(CanvasType type, obs_source_t *source);

@@ -2,6 +2,43 @@
 
 ---
 
+## v2.4.0 (unreleased)
+**Patch Focus:** Scene Organiser tabs, undo and custom icons, MultiDock and Vertical Canvas polish
+
+### New Features
+- Tabs in the Scene Organiser. Favourites, Recent, and as many of your own as you like, saved per scene collection
+- Undo and redo. Ctrl+Z covers moves, folders, renames and colours
+- Multi select, so you can drag a run of scenes at once
+- Custom icons on scenes and folders, from your OBS theme or an image off your drive
+- Icon colours, including on the default icon
+- Folders show an open or a closed icon
+- Folder guide lines down the tree, with a switch in Settings, Scene Organiser
+- Search works on every tab, and Enter sends the top scene straight to program
+- Linked Scenes in the Vertical Scene Organiser, shared with Aitum's own list
+- The Vertical Canvas control row is a proper toolbar on the StreamUP theme
+- The virtual camera button goes green while the camera is running
+
+### Improvements
+- The daily backup runs at startup instead of on close, so OBS closes clean
+- The Scene Organiser keeps a backup of your folder layout every time it saves
+- MultiDocks can be dragged narrower, and the docks inside scroll instead of being clipped
+- Rounded corners on the MultiDock body on the StreamUP theme
+
+### Bug Fixes
+- Closing OBS could take it down when a dock was captured in a MultiDock
+- Switching scene collections could wipe a collection's Scene Organiser folders
+- The live scene and row hover follow your theme again. Thanks to Mapsking for the report
+- Moving a folder could leave a copy of a scene behind
+- Renaming a scene emptied your favourites, tabs and hidden scenes
+- Dragging while searching could drop a scene in the wrong place
+- The stream and record timers in the Vertical Canvas dock were cut off
+- The MultiDock toolbar was taller than every other one
+- The toolbar edit panel opened off screen
+- Plugins you switched off no longer nag you at every start
+- Old dock entries left behind in a saved layout are cleared out
+
+---
+
 ## v2.3.2 (15 Aug '26)
 **Patch Focus:** Scene collection crash fix
 

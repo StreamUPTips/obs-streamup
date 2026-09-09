@@ -651,6 +651,22 @@ void StreamUPDock::onFrontendEvent(enum obs_frontend_event event, void *private_
 	if (dock->isProcessing)
 		return;
 
+	if (event == OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN ||
+	    event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP) {
+		// Hand the scene back BEFORE OBS clears scene data. SCRIPTING_SHUTDOWN
+		// is raised on the line above OBSBasic::ClearSceneData(), which is the
+		// last moment this reference can be released in time. Waiting for the
+		// destructor (or EXIT, which arrives after the clear) kept the current
+		// scene - and every source under it - alive through the teardown, which
+		// OBS reports as "Not all sources were cleared when clearing scene
+		// data" and then force-destroys anyway. Our release then landed on
+		// freed sources: "Double destroy just occurred", followed by a crash
+		// in scene_destroy.
+		dock->disconnectSceneSignals();
+		dock->m_sceneCollectionChanging = true;
+		return;
+	}
+
 	if (event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING) {
 		// Disconnect scene signals immediately before collection teardown
 		// to prevent item_remove signals from firing into stale state
