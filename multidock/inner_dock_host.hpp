@@ -109,29 +109,23 @@ private slots:
 private:
     void SetupDockOptions();
 
-    /**
-     * @brief Put a captured dock's content behind a scroll area
+        /**
+     * @brief Lift the layout size constraint on a captured dock's content
      *
-     * A captured dock has its minimum relaxed to 80x80 so one wide dock cannot
-     * set the floor for the whole MultiDock. Without a scroll area that minimum
-     * is a lie: Qt lays the content out at its own minimumSizeHint and the dock
-     * simply clips whatever does not fit, which is what put a slice of the
-     * Vertical Canvas grid off the left edge. Wrapping means the relaxed
-     * minimum produces scrollbars instead of lost pixels.
-     *
-     * Records the wrapper on the CapturedDock so it can be undone exactly.
-     * @param captured The capture record to wrap (modified in place)
+     * A dock cannot be dragged below the minimum its content's layout imposes.
+     * Lifting it lets the layout squeeze rather than the dock refuse, so a wide
+     * dock (the Vertical Canvas) stops setting the floor for the whole
+     * MultiDock. Records what was there so it can be put back exactly.
+     * @param captured The capture record to relax (modified in place)
      */
-    void WrapDockContent(CapturedDock& captured);
+    void RelaxContentConstraints(CapturedDock& captured);
 
     /**
-     * @brief Undo WrapDockContent, handing the original widget back to the dock
-     *
-     * Must run before a dock is returned to the main window in any path, so OBS
-     * never gets back a dock with our scroll area still inside it.
-     * @param captured The capture record to unwrap
+     * @brief Undo RelaxContentConstraints before a dock goes back to OBS
+     * @param captured The capture record to restore
      */
-    void UnwrapDockContent(const CapturedDock& captured);
+    void RestoreContentConstraints(const CapturedDock& captured);
+
     void ConnectDockSignals(QDockWidget* dock);
     void DisconnectDockSignals(QDockWidget* dock);
     void applyDockFeatures(bool locked);

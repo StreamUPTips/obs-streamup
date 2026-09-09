@@ -1,5 +1,6 @@
 #include "inner_dock_host.hpp"
-#include <QScrollArea>
+#include <QLayout>
+#include <QTimer>
 #include <QPalette>
 #include <QRegion>
 #include <QResizeEvent>
@@ -77,7 +78,7 @@ void InnerDockHost::ReleaseAllDocks()
         const CapturedDock captured = m_capturedDocks.value(dockId);
 
         DisconnectDockSignals(dock);
-        UnwrapDockContent(captured);
+        RestoreContentConstraints(captured);
         removeDockWidget(dock);
 
         dock->setMinimumSize(captured.original.minimumSize);
@@ -212,24 +213,19 @@ void InnerDockHost::AddDock(QDockWidget* dock, Qt::DockWidgetArea area)
         dock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
     }
     
-    // Put the content behind a scroll area first, so the relaxed minimum below
-    // is honest: anything that does not fit scrolls instead of being clipped.
-    WrapDockContent(m_capturedDocks[dockId]);
-
     // Relax the captured dock's own minimum while it lives in the MultiDock.
     // A single wide dock (Twitch chat is the usual culprit) would otherwise set
     // the floor for the whole MultiDock and stop it being dragged narrow. The
     // original constraints are restored in RemoveDock.
     dock->setMinimumSize(StreamUP::UIStyles::S(80), StreamUP::UIStyles::S(80));
 
-    // Make dock fill available space. Only the dock and whatever is directly
-    // inside it are touched - once wrapped that is the scroll area, and the
-    // content keeps the size policy it shipped with so its minimumSizeHint
-    // still means something to the scroll area.
+    // Make dock fill available space.
     dock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     if (dock->widget()) {
         dock->widget()->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     }
+
+    RelaxContentConstraints(m_capturedDocks[dockId]);
     
     // Make dock visible
     dock->show();
@@ -255,10 +251,7 @@ void InnerDockHost::RemoveDock(QDockWidget* dock)
     
     CapturedDock captured = m_capturedDocks[dockId];
     DisconnectDockSignals(dock);
-
-    // Hand the dock its own widget back before anything else, so the dock the
-    // main window receives is the dock OBS registered.
-    UnwrapDockContent(captured);
+    RestoreContentConstraints(captured);
 
     // Restore original size constraints
     dock->setMinimumSize(captured.original.minimumSize);
@@ -390,7 +383,7 @@ void InnerDockHost::ShowAddDockDialog()
 
 
 
-void InnerDockHost::WrapDockContent(CapturedDock& captured)
+void InnerDockHost::RelaxContentConstraints(CapturedDock& captured)
 {
     QDockWidget* dock = captured.widget;
     if (!dock) {
@@ -402,61 +395,47 @@ void InnerDockHost::WrapDockContent(CapturedDock& captured)
         return;
     }
 
-    // Never wrap twice - a dock re-added after a failed removal would otherwise
-    // end up with a scroll area inside a scroll area.
-    if (qobject_cast<QScrollArea*>(content)) {
-        return;
+    // Qt's default SetDefaultConstraint makes a layout impose its minimum size
+    // on the widget holding it, and a QDockWidget will not go below that. It is
+    // why relaxing the dock's own minimum above is not enough on its own: the
+    // Vertical Canvas keeps the width its layout asks for and the MultiDock
+    // cannot be dragged past it, so the canvas ends up with a slice cut off the
+    // edge rather than being made smaller. Lifting the constraint lets the
+    // layout squeeze its children instead.
+    //
+    // Deliberately NOT done by reparenting the content. A scroll area between
+    // the dock and its content breaks every theme rule written against a dock's
+    // direct child, which is how the rounded corners on the Scene Organiser and
+    // the Aitum keyer were lost.
+    captured.contentWidget = content;
+    captured.contentMinimumSize = content->minimumSize();
+    content->setMinimumSize(0, 0);
+
+    if (QLayout* layout = content->layout()) {
+        captured.contentSizeConstraint = static_cast<int>(layout->sizeConstraint());
+        layout->setSizeConstraint(QLayout::SetNoConstraint);
     }
 
-    QScrollArea* scrollArea = new QScrollArea(dock);
-    scrollArea->setObjectName("MultiDockScrollArea");
-    // Resizable so the content still fills the dock when there is room; the
-    // scrollbars only appear once the dock is dragged below what the content
-    // can actually lay out in.
-    scrollArea->setWidgetResizable(true);
-    // No frame and no styling: the OBS theme owns how this looks, and a frame
-    // here would draw a second border inside the dock's own.
-    scrollArea->setFrameShape(QFrame::NoFrame);
-    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-
-    // setWidget does not delete the widget it replaces, so the content is safe
-    // between these two calls; it is reparented into the scroll area's viewport
-    // by the second.
-    dock->setWidget(scrollArea);
-    scrollArea->setWidget(content);
-
-    captured.scrollArea = scrollArea;
-    captured.contentWidget = content;
-
     StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dock Management",
-         "Wrapped content of dock '%s' in a scroll area",
+         "Relaxed layout constraints on dock '%s'",
          dock->windowTitle().toUtf8().constData());
 }
 
-void InnerDockHost::UnwrapDockContent(const CapturedDock& captured)
+void InnerDockHost::RestoreContentConstraints(const CapturedDock& captured)
 {
-    QDockWidget* dock = captured.widget;
-    QScrollArea* scrollArea = captured.scrollArea;
-    if (!dock || !scrollArea) {
-        return; // never wrapped, or the dock is already gone
+    QWidget* content = captured.contentWidget;
+    if (!content) {
+        return; // never relaxed, or the content is already gone
     }
 
-    // takeWidget hands ownership back rather than deleting, which is what lets
-    // the dock keep the widget OBS gave it.
-    QWidget* content = scrollArea->takeWidget();
-    if (content) {
-        dock->setWidget(content);
+    content->setMinimumSize(captured.contentMinimumSize);
+
+    if (QLayout* layout = content->layout()) {
+        if (captured.contentSizeConstraint >= 0) {
+            layout->setSizeConstraint(
+                static_cast<QLayout::SizeConstraint>(captured.contentSizeConstraint));
+        }
     }
-
-    // The scroll area is ours alone, so it is the one thing here we do delete -
-    // deferred, because this can run from inside a dock event.
-    scrollArea->setParent(nullptr);
-    scrollArea->deleteLater();
-
-    StreamUP::DebugLogger::LogDebugFormat("MultiDock", "Dock Management",
-         "Unwrapped content of dock '%s'",
-         dock->windowTitle().toUtf8().constData());
 }
 
 bool InnerDockHost::eventFilter(QObject* obj, QEvent* event)

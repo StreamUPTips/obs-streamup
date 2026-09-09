@@ -3,12 +3,12 @@
 
 #include <QMainWindow>
 #include <QDockWidget>
-#include <QScrollArea>
 #include <QList>
 #include <QPointer>
 #include <QString>
 #include <QStringList>
 #include <QByteArray>
+#include <QSize>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -31,12 +31,14 @@ struct CapturedDock {
     QPointer<QDockWidget> widget;
     OriginalPlacement original;
 
-    // Set when the dock's content was wrapped in a scroll area on capture, so
-    // the MultiDock can be dragged narrower than the content's own minimum
-    // without the content being clipped. Both are null for a dock that was
-    // left alone. See InnerDockHost::WrapDockContent.
-    QPointer<QScrollArea> scrollArea;
+    // A captured dock's floor is set by its content's LAYOUT, not by the dock,
+    // so relaxing the dock alone leaves it as wide as the content's layout says
+    // it must be. The constraint is lifted while the dock lives in a MultiDock
+    // and put back when it leaves. Null/unset for a dock whose content has no
+    // layout of its own.
     QPointer<QWidget> contentWidget;
+    QSize contentMinimumSize;
+    int contentSizeConstraint = -1; // QLayout::SizeConstraint, -1 when untouched
 };
 
 /**
