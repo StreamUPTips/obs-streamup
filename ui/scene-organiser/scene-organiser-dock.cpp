@@ -1036,6 +1036,7 @@ void SceneOrganiserDock::setupContextMenu()
                     m_model->invisibleRootItem()->appendRow(child);
                 }
                 m_model->removeRow(item->row(), item->parent() ? item->parent()->index() : QModelIndex());
+                m_model->allowFolderLoss(); // deleting the last folder is allowed to leave none
                 SaveConfiguration(); // Immediate save on folder deletion
             }
         }
@@ -1670,7 +1671,15 @@ void SceneOrganiserDock::applySortingIfEnabled()
     };
 
     sortItemsRecursive(root);
-    m_model->saveSceneTree();
+
+    // Sorting runs from refreshSceneList(), which fires during a collection
+    // switch and on the way through the initial load. Persisting from there
+    // writes a tree that is still being assembled, so leave the file alone
+    // until the dock says its load is finished; the model refuses such a save
+    // as well, and this keeps it from being attempted at all.
+    if (m_initialLoadComplete) {
+        m_model->saveSceneTree();
+    }
 }
 
 void SceneOrganiserDock::sortManually(StreamUP::SettingsManager::SceneSortMethod method, QStandardItem *parent)
@@ -2247,6 +2256,7 @@ void SceneOrganiserDock::onRemoveClicked()
                 }
             }
 
+            self->m_model->allowFolderLoss(); // a bulk delete may take the last folder with it
             self->SaveConfiguration(); // Immediate save on deletion
         });
 }
@@ -5785,10 +5795,80 @@ void SceneTreeModel::cleanupSceneTree()
     m_scenesInTree.clear();
 }
 
+// Folders are the only thing in the tree a user hand-builds, so they are the
+// measure of whether a save is about to destroy work. Counts them at every
+// depth of a saved array.
+static int CountFoldersInArray(obs_data_array_t *folder_array)
+{
+    if (!folder_array) return 0;
+
+    int folders = 0;
+    size_t count = obs_data_array_count(folder_array);
+    for (size_t i = 0; i < count; i++) {
+        obs_data_t *item_data = obs_data_array_item(folder_array, i);
+        if (!item_data) continue;
+
+        const char *type = obs_data_get_string(item_data, "type");
+        if (type && strcmp(type, "folder") == 0) {
+            folders++;
+            obs_data_array_t *children = obs_data_get_array(item_data, "children");
+            if (children) {
+                folders += CountFoldersInArray(children);
+                obs_data_array_release(children);
+            }
+        }
+
+        obs_data_release(item_data);
+    }
+
+    return folders;
+}
+
+// One rolling backup of the previous contents, plus a snapshot that is never
+// overwritten when a save is about to drop every folder in a collection. The
+// tree file is read-modify-written in place, so without these a single bad
+// save is the end of a layout.
+static void BackupSceneTreeFile(const QString &configFile, bool keepSnapshot)
+{
+    if (!QFile::exists(configFile)) {
+        return;
+    }
+
+    const QString bakFile = configFile + ".bak";
+    QFile::remove(bakFile);
+    QFile::copy(configFile, bakFile);
+
+    // One snapshot per run. A refusal repeats for as long as the tree stays
+    // folderless - the save timer alone fires every 300ms - and a snapshot per
+    // attempt would bury the config directory in copies of the same file.
+    static bool snapshotTaken = false;
+    if (keepSnapshot && !snapshotTaken) {
+        snapshotTaken = true;
+        const QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
+        QFile::copy(configFile, configFile + "." + stamp + ".folders.bak");
+    }
+}
+
 void SceneTreeModel::saveSceneTree()
 {
     char *scene_collection = obs_frontend_get_current_scene_collection();
     if (!scene_collection) return;
+
+    QString sceneCollectionName = QString::fromUtf8(scene_collection);
+
+    // The tree in the model belongs to whatever loadSceneTree() last put there.
+    // If that is not the collection we are about to write - because no load has
+    // happened yet, or because a refresh landed mid-switch - the tree on screen
+    // is not this collection's, and saving it would overwrite a good layout
+    // with a flat list of whatever scenes OBS happens to have.
+    if (m_loadedCollection != sceneCollectionName) {
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Save",
+            QString("Refused to save: model holds '%1' but the current collection is '%2'")
+            .arg(m_loadedCollection.isEmpty() ? QStringLiteral("<nothing loaded>") : m_loadedCollection,
+                 sceneCollectionName).toUtf8().constData());
+        bfree(scene_collection);
+        return;
+    }
 
     char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
     if (!configPath) {
@@ -5798,7 +5878,6 @@ void SceneTreeModel::saveSceneTree()
 
     QString configDir = QString::fromUtf8(configPath);
     QString configFile = configDir + "/" + sceneTreeFileName(m_canvasType);
-    QString sceneCollectionName = QString::fromUtf8(scene_collection);
 
     bfree(configPath);
 
@@ -5809,8 +5888,40 @@ void SceneTreeModel::saveSceneTree()
         root_data = obs_data_create();
     }
 
-    // Update only the current scene collection's data
     obs_data_array_t *folder_array = createFolderArray(*invisibleRootItem());
+    const int newFolders = CountFoldersInArray(folder_array);
+
+    obs_data_array_t *stored_array = obs_data_get_array(root_data, scene_collection);
+    const int storedFolders = CountFoldersInArray(stored_array);
+    if (stored_array) {
+        obs_data_array_release(stored_array);
+    }
+
+    // Deleting the last folder is a real thing to do, and allowFolderLoss()
+    // marks the saves that mean it. Anything else arriving here with a
+    // collection's folders gone has lost them to a bug, not to the user.
+    const bool intentional = m_allowFolderLoss;
+    m_allowFolderLoss = false;
+
+    // Keep the file as it stands and let the next good save write it instead.
+    if (!intentional && storedFolders > 0 && newFolders == 0) {
+        BackupSceneTreeFile(configFile, true);
+
+        blog(LOG_WARNING,
+             "[StreamUP] [SceneOrganiser] Refused a save that would have dropped all %d folders "
+             "from collection '%s' without being asked to. The file is unchanged; a snapshot was "
+             "kept next to it.",
+             storedFolders, scene_collection);
+
+        obs_data_array_release(folder_array);
+        obs_data_release(root_data);
+        bfree(scene_collection);
+        return;
+    }
+
+    BackupSceneTreeFile(configFile, false);
+
+    // Update only the current scene collection's data
     obs_data_set_array(root_data, scene_collection, folder_array);
     obs_data_array_release(folder_array);
 
@@ -5821,7 +5932,8 @@ void SceneTreeModel::saveSceneTree()
     bfree(scene_collection);
 
     StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Save",
-        QString("Saved scene tree for collection '%1' to: %2").arg(sceneCollectionName, configFile).toUtf8().constData());
+        QString("Saved scene tree for collection '%1' (%2 folders) to: %3")
+        .arg(sceneCollectionName).arg(newFolders).arg(configFile).toUtf8().constData());
 }
 
 void SceneTreeModel::loadSceneTree()
@@ -5847,6 +5959,10 @@ void SceneTreeModel::loadSceneTree()
     // Clean up previous tree
     cleanupSceneTree();
 
+    // Nothing is in the model until the load below says otherwise, so a save
+    // racing this point has no collection to claim and backs off.
+    m_loadedCollection.clear();
+
     // Load from file
     obs_data_t *root_data = obs_data_create_from_json_file(configFile.toUtf8().constData());
     if (root_data) {
@@ -5869,6 +5985,10 @@ void SceneTreeModel::loadSceneTree()
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Load",
             QString("Config file does not exist or is invalid: %1").arg(configFile).toUtf8().constData());
     }
+
+    // A collection with no saved tree yet is still loaded - an empty tree is
+    // this collection's tree, and saves for it are legitimate from here on.
+    m_loadedCollection = sceneCollectionName;
 
     bfree(scene_collection);
 }
@@ -6664,6 +6784,9 @@ void SceneTreeModel::restoreLayout(const QString &json)
         // renamed since the snapshot is not stranded outside the tree.
         updateTree();
         emit modelChanged();
+        // An undo can legitimately restore a layout from before the first
+        // folder existed, so this save is allowed to leave none behind.
+        m_allowFolderLoss = true;
         saveSceneTree();
     }
 

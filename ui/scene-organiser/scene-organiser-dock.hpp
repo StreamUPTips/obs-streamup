@@ -529,6 +529,12 @@ public:
     // Scene management
     void updateTree(const QModelIndex &selectedIndex = QModelIndex());
     void saveSceneTree();
+
+    // Say so before a save that is MEANT to leave the collection with no
+    // folders - the user deleting the last one, or an undo restoring a layout
+    // from before there were any. Without it such a save is refused as a wipe.
+    // Consumed by the next saveSceneTree(), whether or not it needed it.
+    void allowFolderLoss() { m_allowFolderLoss = true; }
     void loadSceneTree();
     QStandardItem *findSceneItem(obs_weak_source_t *weak_source);
     QStandardItem *findFolderItem(const QString &folderName);
@@ -579,6 +585,15 @@ private:
     source_map_t m_scenesInTree;
 
     CanvasType m_canvasType;
+
+    // The collection whose tree is currently in the model, set only by a
+    // completed loadSceneTree(). A save with anything else here would be
+    // writing one collection's tree - or a tree that was never loaded at all -
+    // under another collection's key, which is how a folder layout gets wiped.
+    QString m_loadedCollection;
+
+    // Set by allowFolderLoss() for one save. See there.
+    bool m_allowFolderLoss = false;
 
 signals:
     void modelChanged();
