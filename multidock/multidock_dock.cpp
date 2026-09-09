@@ -1,4 +1,5 @@
 #include "multidock_dock.hpp"
+#include <QSet>
 #include <obs-frontend-api.h>
 #include <QEvent>
 #include <QPainterPath>
@@ -399,9 +400,43 @@ void MultiDockDock::LoadState()
         }
     }
     
-    // Restore layout after adding docks
+    // Restore layout after adding docks, but only if every dock it references
+    // is one we can account for. A layout entry for a dock that is never added
+    // back becomes a zero-size placeholder in the layout tree, and those
+    // placeholders wedge drag-and-drop and tabifying for the whole inner host.
+    //
+    // This happens for real: Vertical Canvas tears down and re-registers its
+    // canvas on every scene collection load, and any dock keyed off the canvas
+    // name (the Aitum vertical downstream keyer dock, for one) comes back under
+    // an ID the saved layout no longer matches. Dropping the stale layout costs
+    // one default re-arrangement; keeping it leaves the MultiDock unusable.
     if (!layout.isEmpty()) {
-        m_innerHost->RestoreLayout(layout);
+        QSet<QString> accountedFor;
+        for (QDockWidget* dock : m_innerHost->GetAllDocks()) {
+            if (dock) {
+                accountedFor.insert(dock->objectName());
+            }
+        }
+        // Docks that just haven't loaded yet (late CEF browser docks) keep
+        // their slot - they are expected to arrive and be added later.
+        for (const QString& pendingId : m_unresolvedDockIds) {
+            accountedFor.insert(pendingId);
+        }
+
+        QStringList orphans;
+        for (const QString& name : ExtractDockNamesFromLayout(layout)) {
+            if (!accountedFor.contains(name)) {
+                orphans.append(name);
+            }
+        }
+
+        if (orphans.isEmpty()) {
+            m_innerHost->RestoreLayout(layout);
+        } else {
+            StreamUP::DebugLogger::LogWarningFormat("MultiDock", "Restoration",
+                 "Discarding saved layout for MultiDock '%s': %d orphaned dock(s) [%s] would restore as placeholders and break dock dragging",
+                 m_id.toUtf8().constData(), orphans.size(), orphans.join(", ").toUtf8().constData());
+        }
     }
     
     // Ensure the MultiDock is properly shown and toolbar state is updated

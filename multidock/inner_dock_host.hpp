@@ -108,6 +108,30 @@ private slots:
 
 private:
     void SetupDockOptions();
+
+    /**
+     * @brief Put a captured dock's content behind a scroll area
+     *
+     * A captured dock has its minimum relaxed to 80x80 so one wide dock cannot
+     * set the floor for the whole MultiDock. Without a scroll area that minimum
+     * is a lie: Qt lays the content out at its own minimumSizeHint and the dock
+     * simply clips whatever does not fit, which is what put a slice of the
+     * Vertical Canvas grid off the left edge. Wrapping means the relaxed
+     * minimum produces scrollbars instead of lost pixels.
+     *
+     * Records the wrapper on the CapturedDock so it can be undone exactly.
+     * @param captured The capture record to wrap (modified in place)
+     */
+    void WrapDockContent(CapturedDock& captured);
+
+    /**
+     * @brief Undo WrapDockContent, handing the original widget back to the dock
+     *
+     * Must run before a dock is returned to the main window in any path, so OBS
+     * never gets back a dock with our scroll area still inside it.
+     * @param captured The capture record to unwrap
+     */
+    void UnwrapDockContent(const CapturedDock& captured);
     void ConnectDockSignals(QDockWidget* dock);
     void DisconnectDockSignals(QDockWidget* dock);
     void applyDockFeatures(bool locked);

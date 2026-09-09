@@ -54,6 +54,74 @@ DockId GenerateDockId(QDockWidget* dock)
     return CreateFallbackId(dock);
 }
 
+QStringList ExtractDockNamesFromLayout(const QByteArray& layout)
+{
+    QStringList names;
+    if (layout.isEmpty()) {
+        return names;
+    }
+
+    // QMainWindow's saved state is a QDataStream of, among other things, the
+    // object name of every dock and toolbar it knows about. QDataStream writes
+    // a QString as a quint32 byte count followed by UTF-16BE data, so walk the
+    // buffer looking for a length field whose payload decodes as a plausible
+    // object name. Anything that does not is skipped, not guessed at.
+    const uchar* data = reinterpret_cast<const uchar*>(layout.constData());
+    const int size = layout.size();
+
+    // Object names are short; the cap keeps a bogus length field from making us
+    // read a large slice of unrelated bytes.
+    constexpr quint32 kMaxNameBytes = 512;
+
+    for (int i = 0; i + 4 < size; ++i) {
+        const quint32 len = (static_cast<quint32>(data[i]) << 24) |
+                            (static_cast<quint32>(data[i + 1]) << 16) |
+                            (static_cast<quint32>(data[i + 2]) << 8) |
+                            static_cast<quint32>(data[i + 3]);
+
+        // UTF-16 payloads are an even number of bytes, and an empty or null
+        // string carries no name worth recording.
+        if (len < 2 || len > kMaxNameBytes || (len % 2) != 0) {
+            continue;
+        }
+        if (static_cast<quint32>(size - (i + 4)) < len) {
+            continue;
+        }
+
+        const uchar* payload = data + i + 4;
+        bool printable = true;
+        for (quint32 j = 0; j < len; j += 2) {
+            // Dock object names are ASCII in practice; requiring a zero high
+            // byte and a printable low byte is what keeps this from matching
+            // arbitrary geometry integers.
+            if (payload[j] != 0x00 || payload[j + 1] < 0x20 || payload[j + 1] > 0x7e) {
+                printable = false;
+                break;
+            }
+        }
+        if (!printable) {
+            continue;
+        }
+
+        // Big-endian payload, and the check above proved every high byte is
+        // zero, so the low byte is the character.
+        QString name;
+        name.reserve(static_cast<int>(len / 2));
+        for (quint32 j = 0; j < len; j += 2) {
+            name.append(QChar(static_cast<char16_t>(payload[j + 1])));
+        }
+
+        if (!name.isEmpty() && !names.contains(name)) {
+            names.append(name);
+        }
+
+        // Skip past the payload we just consumed.
+        i += 4 + static_cast<int>(len) - 1;
+    }
+
+    return names;
+}
+
 bool IsQuickAccessUtilityDock(QDockWidget* dock)
 {
     QString objectName = dock->objectName();
