@@ -10,6 +10,7 @@
 - Undo and redo. Ctrl+Z covers moves, folders, renames and colours
 - Multi select, so you can drag a run of scenes at once
 - Custom icons on scenes and folders, from your OBS theme or an image off your drive
+- Emoji and symbol icons, with a searchable picker, or paste in any character you like
 - Icon colours, including on the default icon
 - Folders show an open or a closed icon
 - Folder guide lines down the tree, with a switch in Settings, Scene Organiser
