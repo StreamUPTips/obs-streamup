@@ -205,6 +205,9 @@ private:
     void refreshIconMenuState();
     void applyIconSpec(const QString &spec);
     void onSetCustomIconImageClicked();
+    // Emoji or symbol icons: any text the system font can draw, stored as a
+    // "text:" spec and rendered into a pixmap at icon size.
+    void onSetEmojiIconClicked();
     // Icon tint, kept apart from the icon itself so either can change alone.
     void applyIconColor(const QColor &color);
     void refreshIconColorMenuState();
@@ -330,6 +333,7 @@ public:
     QMenu *m_iconMenu = nullptr;
     QAction *m_iconDefaultAction = nullptr;
     QAction *m_iconCustomAction = nullptr;
+    QAction *m_iconEmojiAction = nullptr;
     QHash<QString, QAction *> m_iconThemeActions;
     QMenu *m_iconColorMenu = nullptr;
     QAction *m_iconColorClearAction = nullptr;
