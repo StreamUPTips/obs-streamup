@@ -32,6 +32,10 @@
 #include <QIcon>
 #include <QFileInfo>
 #include <QFileDialog>
+#include <QFont>
+#include <QFontMetrics>
+#include <QLineEdit>
+#include <QScrollArea>
 #include <QColor>
 #include <QStyle>
 #include <QFile>
@@ -224,6 +228,7 @@ static const ObsThemeIcon kObsThemeIcons[] = {
 // scene tree JSON stays readable and a themed icon stays themed:
 //   "obs:sceneIcon"     - an OBS theme icon, resolved fresh on every theme change
 //   "file:C:/pic.png"   - an image on disk
+//   "text:⭐"          - an emoji or symbol, drawn as text into a pixmap
 // Anything else (or empty) means "use the default for this item type".
 static QHash<QString, QIcon> s_customIconCache;
 
@@ -292,6 +297,55 @@ static QIcon GetFolderIcon(bool expanded, const QColor &tint)
     return icon;
 }
 
+// Draws a short piece of text (an emoji or a symbol) into an icon. Emoji come
+// out of the platform's colour emoji font, so the pen only shows through on the
+// monochrome glyphs: a symbol follows the icon colour, a colour emoji keeps its
+// own colours. The glyph is fitted to the box rather than drawn at a fixed point
+// size, so it stays the same weight as the themed icons next to it.
+static QIcon RenderTextIcon(const QString &text, const QColor &color)
+{
+    if (text.isEmpty()) {
+        return QIcon();
+    }
+
+    const QColor pen = color.isValid() ? color : QColor(255, 255, 255);
+
+    QIcon icon;
+    // The same size ladder TintIcon uses, for the same reason.
+    for (int size : {16, 20, 24, 32, 48, 64}) {
+        QPixmap pixmap(size, size);
+        pixmap.fill(Qt::transparent);
+
+        QFont font;
+        // Emoji are drawn wider than their point size; leaving a margin stops
+        // the taller ones being clipped top and bottom.
+        font.setPixelSize(qMax(1, static_cast<int>(size * 0.78)));
+        font.setStyleStrategy(QFont::PreferQuality);
+
+        // Shrink until the glyph actually fits the box: emoji, CJK and box
+        // characters all measure differently at the same pixel size.
+        QFontMetrics metrics(font);
+        QRect bounds = metrics.boundingRect(text);
+        while (font.pixelSize() > 6 && (bounds.width() > size || bounds.height() > size)) {
+            font.setPixelSize(font.pixelSize() - 1);
+            metrics = QFontMetrics(font);
+            bounds = metrics.boundingRect(text);
+        }
+
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setRenderHint(QPainter::TextAntialiasing);
+        painter.setFont(font);
+        painter.setPen(pen);
+        painter.drawText(pixmap.rect(), Qt::AlignCenter, text);
+        painter.end();
+
+        icon.addPixmap(pixmap);
+    }
+
+    return icon;
+}
+
 static QIcon ResolveIconSpec(const QString &spec, const QColor &tint = QColor())
 {
     if (spec.isEmpty()) {
@@ -308,6 +362,16 @@ static QIcon ResolveIconSpec(const QString &spec, const QColor &tint = QColor())
     }
 
     QIcon icon;
+    if (spec.startsWith(QLatin1String("text:"))) {
+        // Drawn straight in the wanted colour: tinting afterwards would flatten
+        // a colour emoji into a silhouette.
+        icon = RenderTextIcon(spec.mid(5), tint);
+        if (!icon.isNull()) {
+            s_customIconCache.insert(cacheKey, icon);
+        }
+        return icon;
+    }
+
     if (spec.startsWith(QLatin1String("obs:"))) {
         icon = GetThemeIcon(spec.mid(4));
     } else if (spec.startsWith(QLatin1String("file:"))) {
@@ -2491,6 +2555,10 @@ QMenu *SceneOrganiserDock::createIconSubmenu()
                                          &SceneOrganiserDock::onSetCustomIconImageClicked);
     m_iconCustomAction->setCheckable(true);
 
+    m_iconEmojiAction = menu->addAction(obs_module_text("SceneOrganiser.Icon.EmojiSymbol"), this,
+                                        &SceneOrganiserDock::onSetEmojiIconClicked);
+    m_iconEmojiAction->setCheckable(true);
+
     // Colour applies to whichever icon is in use, the default included, so it is
     // offered here rather than only alongside a custom icon.
     m_iconColorMenu = menu->addMenu(obs_module_text("SceneOrganiser.Menu.IconColour"));
@@ -2563,6 +2631,12 @@ void SceneOrganiserDock::refreshIconMenuState()
 
     if (m_iconDefaultAction) m_iconDefaultAction->setChecked(spec.isEmpty());
     if (m_iconCustomAction) m_iconCustomAction->setChecked(spec.startsWith(QLatin1String("file:")));
+    if (m_iconEmojiAction) {
+        const bool isText = spec.startsWith(QLatin1String("text:"));
+        m_iconEmojiAction->setChecked(isText);
+        // Shows the glyph currently in use, so the menu says which one it is.
+        m_iconEmojiAction->setIcon(isText ? ResolveIconSpec(spec) : QIcon());
+    }
 
     for (auto it = m_iconThemeActions.begin(); it != m_iconThemeActions.end(); ++it) {
         it.value()->setChecked(it.key() == spec);
@@ -2721,6 +2795,334 @@ void SceneOrganiserDock::onSetCustomIconColorClicked()
 
     sh.dialog->resize(su::S(360), su::S(420));
     sh.dialog->show();
+}
+
+// The starter set, grouped the way a scene list is: the show itself, cameras and
+// capture, audio, the moments a stream has, then the markers people use to flag
+// a row. Each one carries a name so the search box can find it, because a wall of
+// glyphs is only useful if you can say what you are looking for. Written as
+// codepoints rather than as literal characters so the file stays plain ASCII and
+// cannot be mangled by an editor or a tool saving it in the wrong encoding.
+struct EmojiPreset {
+    char32_t codepoint;
+    const char *name;
+};
+
+struct EmojiGroup {
+    const char *label;
+    const EmojiPreset *items;
+    int count;
+};
+
+static const EmojiPreset kEmojiLive[] = {
+    {U'\U0001F534', "live red record"},     {U'\U000026AB', "offline black dot"},
+    {U'\U0001F3AC', "clapper scene start"}, {U'\U0001F3A5', "movie camera"},
+    {U'\U0001F4FA', "tv screen"},           {U'\U0001F4E1', "stream broadcast"},
+    {U'\U0001F310', "web online"},          {U'\U0001F49C', "purple heart twitch"},
+};
+
+static const EmojiPreset kEmojiCapture[] = {
+    {U'\U0001F4F9', "camera video cam"},    {U'\U0001F4F7', "photo camera"},
+    {U'\U0001F5A5', "desktop display"},     {U'\U0001F4BB', "laptop screen"},
+    {U'\U0001F3AE', "game controller"},     {U'\U0001F579', "joystick retro"},
+    {U'\U0001F4F1', "phone mobile"},        {U'\U0001F5BC', "image picture"},
+};
+
+static const EmojiPreset kEmojiAudio[] = {
+    {U'\U0001F3A7', "headphones audio"},    {U'\U0001F3A4', "microphone mic"},
+    {U'\U0001F507', "muted sound off"},     {U'\U0001F50A', "speaker sound on"},
+    {U'\U0001F3B5', "music note"},          {U'\U0001F3B6', "music notes song"},
+    {U'\U0001F3B8', "guitar band"},         {U'\U0001F3B9', "keyboard piano"},
+};
+
+static const EmojiPreset kEmojiMoments[] = {
+    {U'\U0001F4AC', "chat talking"},        {U'\U0001F44B', "starting soon wave"},
+    {U'\U0001F4E2', "announcement shout"},  {U'\U00002615', "brb break coffee"},
+    {U'\U0001F355', "food pizza break"},    {U'\U0001F6CC', "ending sleep outro"},
+    {U'\U0001F389', "celebration party"},   {U'\U0001F3C6', "trophy win"},
+};
+
+static const EmojiPreset kEmojiMarkers[] = {
+    {U'\U00002B50', "star favourite"},      {U'\U0001F525', "fire hot"},
+    {U'\U00002728', "sparkles new"},        {U'\U0001F4A1', "idea tip"},
+    {U'\U0001F4CC', "pin pinned"},          {U'\U0001F4C1', "folder group"},
+    {U'\U0001F512', "locked"},              {U'\U0001F511', "key access"},
+    {U'\U00002699', "settings gear"},       {U'\U0001F6E0', "tools setup"},
+    {U'\U00002705', "done tick check"},     {U'\U0000274C', "cross broken"},
+    {U'\U000026A0', "warning caution"},     {U'\U0001F6AB', "blocked hidden"},
+    {U'\U0001F4C5', "schedule calendar"},   {U'\U000023F0', "timer countdown"},
+};
+
+static const EmojiPreset kEmojiSymbols[] = {
+    {U'\U000025B6', "play arrow"},          {U'\U000023F8', "pause"},
+    {U'\U000023F9', "stop"},                {U'\U000023FA', "record"},
+    {U'\U000023ED', "next skip"},           {U'\U000023EE', "previous back"},
+    {U'\U00002192', "arrow right"},         {U'\U00002190', "arrow left"},
+    {U'\U00002B06', "arrow up"},            {U'\U00002B07', "arrow down"},
+    {U'\U00002764', "heart"},               {U'\U000025CF', "dot bullet"},
+    {U'\U00002B1B', "square block"},        {U'\U000025C6', "diamond"},
+    {U'\U00002714', "tick mark"},           {U'\U00002716', "cross mark"},
+};
+
+#define SU_EMOJI_GROUP(arr, label) {label, arr, static_cast<int>(sizeof(arr) / sizeof(arr[0]))}
+
+static const EmojiGroup kEmojiGroups[] = {
+    SU_EMOJI_GROUP(kEmojiLive, "Live"),
+    SU_EMOJI_GROUP(kEmojiCapture, "Capture"),
+    SU_EMOJI_GROUP(kEmojiAudio, "Audio"),
+    SU_EMOJI_GROUP(kEmojiMoments, "Moments"),
+    SU_EMOJI_GROUP(kEmojiMarkers, "Markers"),
+    SU_EMOJI_GROUP(kEmojiSymbols, "Symbols"),
+};
+
+#undef SU_EMOJI_GROUP
+
+static const int kEmojiGroupCount = static_cast<int>(sizeof(kEmojiGroups) / sizeof(kEmojiGroups[0]));
+
+void SceneOrganiserDock::onSetEmojiIconClicked()
+{
+    if (!m_currentContextItem) {
+        return;
+    }
+
+    const QString currentSpec = m_currentContextItem->data(CustomIconRole).toString();
+    const QString current = currentSpec.startsWith(QLatin1String("text:")) ? currentSpec.mid(5) : QString();
+
+    auto sh = su::makeWindow(QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.EmojiIcon.Title")),
+                             "v" PROJECT_VERSION, this, /*brandFooter=*/false, "StreamUP");
+    sh.content->setContentsMargins(su::S(16), su::S(12), su::S(16), su::S(8));
+    sh.content->setSpacing(su::S(8));
+
+    // What the row will actually look like, at the size it will be drawn. The
+    // grid glyphs are small on purpose, so this is where a choice is checked
+    // before it is committed.
+    QWidget *previewRow = new QWidget(sh.dialog);
+    QHBoxLayout *previewLayout = new QHBoxLayout(previewRow);
+    previewLayout->setContentsMargins(0, 0, 0, 0);
+    previewLayout->setSpacing(su::S(10));
+
+    QLabel *previewIcon = new QLabel(previewRow);
+    previewIcon->setFixedSize(su::S(34), su::S(34));
+    previewIcon->setAlignment(Qt::AlignCenter);
+
+    QLabel *previewLabel = new QLabel(previewRow);
+    previewLabel->setWordWrap(true);
+
+    previewLayout->addWidget(previewIcon);
+    previewLayout->addWidget(previewLabel, 1);
+    sh.content->addWidget(previewRow);
+
+    // The box does two jobs at once: it is where a pasted glyph goes, and while
+    // what is in it is more than one character it filters the grid by name
+    // instead. Typing "mic" is a search, pasting an emoji is a choice, and there
+    // is no mode to find and switch.
+    QLabel *fieldLabel = new QLabel(QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.EmojiIcon.Field")),
+                                    sh.dialog);
+    fieldLabel->setStyleSheet(su::formLabelStyle());
+    sh.content->addWidget(fieldLabel);
+
+    QLineEdit *edit = new QLineEdit(sh.dialog);
+    edit->setText(current);
+    edit->setPlaceholderText(QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.EmojiIcon.Placeholder")));
+    edit->setClearButtonEnabled(true);
+    // The house input look: a filled surface that contrasts the dialog, and a
+    // 2px accent edge on focus, so it reads as somewhere to type rather than as
+    // a strip of background.
+    edit->setStyleSheet(su::lineEditStyle(false));
+    edit->setMinimumHeight(su::S(34));
+    sh.content->addWidget(edit);
+
+    // Says where the rest of the emoji are. Every desktop has a picker of its
+    // own that types into whatever box has focus, and it holds far more than is
+    // worth shipping in a grid, so the box above is pointed at it rather than
+    // trying to be it.
+    //
+    // The shortcut is drawn as key caps rather than written into the sentence:
+    // a hotkey buried in a line of dim prose is a hotkey nobody presses.
+    QLabel *shortcutHint = new QLabel(sh.dialog);
+#if defined(_WIN32)
+    const QStringList pickerKeys = {QStringLiteral("Windows"), QStringLiteral(".")};
+#elif defined(__APPLE__)
+    const QStringList pickerKeys = {QStringLiteral("Control"), QStringLiteral("Command"), QStringLiteral("Space")};
+#else
+    // No one shortcut across the desktops, so there are no keys to draw and the
+    // wording stays general.
+    const QStringList pickerKeys;
+#endif
+
+    if (pickerKeys.isEmpty()) {
+        shortcutHint->setText(QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.EmojiIcon.PickerHintGeneric")));
+    } else {
+        // Inline HTML, because a key cap is a background and a border around two
+        // or three characters and Qt's rich text does that without a widget each.
+        const QString capStyle = QStringLiteral(
+            "background:%1;border:1px solid %2;border-radius:%3px;"
+            "padding:1px %4px;color:%5;font-weight:700;")
+            .arg(su::Colors::BG_TERTIARY, su::Colors::BG_SECONDARY)
+            .arg(su::S(4))
+            .arg(su::S(5))
+            .arg(su::Colors::TEXT_PRIMARY);
+
+        QStringList caps;
+        for (const QString &key : pickerKeys) {
+            caps << QStringLiteral("<span style=\"%1\">&nbsp;%2&nbsp;</span>").arg(capStyle, key.toHtmlEscaped());
+        }
+
+        shortcutHint->setTextFormat(Qt::RichText);
+        shortcutHint->setText(QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.EmojiIcon.PickerHint"))
+                                  .arg(caps.join(QStringLiteral(" + "))));
+    }
+
+    shortcutHint->setWordWrap(true);
+    shortcutHint->setStyleSheet(su::dimLabelStyle());
+    sh.content->addWidget(shortcutHint);
+
+    QScrollArea *scroll = new QScrollArea(sh.dialog);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+    QWidget *gridWidget = new QWidget(scroll);
+    QVBoxLayout *groupsLayout = new QVBoxLayout(gridWidget);
+    groupsLayout->setContentsMargins(0, 0, su::S(6), 0);
+    groupsLayout->setSpacing(su::S(6));
+
+    QVector<QToolButton *> presetButtons;
+    QVector<QString> presetSearchText;
+    QVector<QWidget *> sections;
+
+    const int columns = 8;
+    for (int g = 0; g < kEmojiGroupCount; ++g) {
+        const EmojiGroup &group = kEmojiGroups[g];
+
+        QWidget *section = new QWidget(gridWidget);
+        QVBoxLayout *sectionLayout = new QVBoxLayout(section);
+        sectionLayout->setContentsMargins(0, 0, 0, 0);
+        sectionLayout->setSpacing(su::S(2));
+
+        QLabel *heading = new QLabel(QString::fromUtf8(group.label), section);
+        QFont headingFont = heading->font();
+        headingFont.setBold(true);
+        headingFont.setPixelSize(su::S(11));
+        heading->setFont(headingFont);
+        // Dimmed rather than coloured: it separates the rows, it is not something
+        // to read.
+        heading->setStyleSheet(QStringLiteral("color: rgba(255,255,255,110);"));
+        sectionLayout->addWidget(heading);
+
+        QGridLayout *grid = new QGridLayout();
+        grid->setContentsMargins(0, 0, 0, 0);
+        grid->setSpacing(su::S(3));
+
+        for (int i = 0; i < group.count; ++i) {
+            const QString glyph = QString::fromUcs4(&group.items[i].codepoint, 1);
+            const QString name = QString::fromUtf8(group.items[i].name);
+
+            QToolButton *button = new QToolButton(section);
+            button->setText(glyph);
+            button->setFixedSize(su::S(32), su::S(32));
+            button->setCursor(Qt::PointingHandCursor);
+            button->setAutoRaise(true);
+            // The glyph is already visible; what is not visible is what it is
+            // called, which is what the search box matches on.
+            button->setToolTip(name);
+            QFont glyphFont = button->font();
+            glyphFont.setPixelSize(su::S(18));
+            button->setFont(glyphFont);
+            // Fills the box rather than committing: nothing is applied until
+            // Select, so a mis-click costs nothing.
+            connect(button, &QToolButton::clicked, edit, [edit, glyph]() {
+                edit->setText(glyph);
+                edit->setFocus();
+            });
+
+            grid->addWidget(button, i / columns, i % columns);
+            presetButtons.append(button);
+            presetSearchText.append((name + QLatin1Char(' ') + QString::fromUtf8(group.label)).toLower());
+        }
+        grid->setColumnStretch(columns, 1);
+        sectionLayout->addLayout(grid);
+
+        groupsLayout->addWidget(section);
+        sections.append(section);
+    }
+    groupsLayout->addStretch(1);
+
+    scroll->setWidget(gridWidget);
+    sh.content->addWidget(scroll, 1);
+
+    // One pass over everything the box drives: the preview, and which buttons the
+    // current search leaves standing.
+    auto refresh = [edit, previewIcon, previewLabel, presetButtons, presetSearchText, sections]() {
+        const QString text = edit->text().trimmed();
+
+        if (text.isEmpty()) {
+            previewIcon->setPixmap(QPixmap());
+            previewLabel->setText(QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.EmojiIcon.Hint")));
+        } else {
+            previewIcon->setPixmap(ResolveIconSpec(QStringLiteral("text:") + text).pixmap(su::S(24), su::S(24)));
+            previewLabel->setText(QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.EmojiIcon.Preview")));
+        }
+
+        // One character is a chosen glyph, not a search term: filtering on it
+        // would empty the grid the moment something was picked.
+        const bool searching = text.size() > 1;
+        const QString needle = text.toLower();
+
+        int seen = 0;
+        for (int g = 0; g < kEmojiGroupCount; ++g) {
+            int visibleInGroup = 0;
+            for (int i = 0; i < kEmojiGroups[g].count; ++i) {
+                const bool visible = !searching || presetSearchText[seen + i].contains(needle);
+                presetButtons[seen + i]->setVisible(visible);
+                if (visible) {
+                    ++visibleInGroup;
+                }
+            }
+            seen += kEmojiGroups[g].count;
+
+            // A heading with nothing under it is noise, so the section goes too.
+            if (g < sections.size()) {
+                sections[g]->setVisible(visibleInGroup > 0);
+            }
+        }
+    };
+
+    QObject::connect(edit, &QLineEdit::textChanged, sh.dialog, [refresh](const QString &) { refresh(); });
+    refresh();
+
+    su::PillButton *clear = new su::PillButton("Remove Icon", "outline");
+    su::PillButton *cancel = new su::PillButton("Cancel", "outline");
+    su::PillButton *ok = new su::PillButton("Select", "primary");
+    sh.footerButtons->addWidget(clear);
+    sh.footerButtons->addWidget(cancel);
+    sh.footerButtons->addWidget(ok);
+
+    QObject::connect(cancel, &QPushButton::clicked, sh.dialog, &QDialog::close);
+
+    QPointer<SceneOrganiserDock> self(this);
+    QObject::connect(clear, &QPushButton::clicked, sh.dialog, [self, dlg = sh.dialog]() {
+        if (self) {
+            self->applyIconSpec(QString());
+        }
+        dlg->close();
+    });
+
+    auto commit = [self, edit, dlg = sh.dialog]() {
+        if (self) {
+            const QString glyph = edit->text().trimmed();
+            // Empty means "no glyph", which is the default icon, not a blank one.
+            self->applyIconSpec(glyph.isEmpty() ? QString() : (QStringLiteral("text:") + glyph));
+        }
+        dlg->close();
+    };
+    QObject::connect(ok, &QPushButton::clicked, sh.dialog, commit);
+    QObject::connect(edit, &QLineEdit::returnPressed, sh.dialog, commit);
+
+    sh.dialog->resize(su::S(420), su::S(520));
+    sh.dialog->show();
+    edit->setFocus();
+    edit->selectAll();
 }
 
 void SceneOrganiserDock::onSetCustomIconImageClicked()

@@ -5,6 +5,7 @@
 - **Undo And Redo** Ctrl+Z covers moves, folders, renames and colours.
 - **Multi Select** Ctrl click and shift click to drag a run of scenes at once.
 - **Custom Icons** Any of the 16 icons from your OBS theme, or an image off your drive.
+- **Emoji And Symbol Icons** Search the built in set, or paste in any emoji or symbol.
 - **Icon Colours** Tint whichever icon is in use, including the default one.
 - **Folders Open And Close** A folder shows an open or a closed icon.
 - **Folder Guide Lines** Lines down the tree so you can see what sits in what.
