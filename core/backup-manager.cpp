@@ -163,21 +163,59 @@ QByteArray stripBasicIni(const QByteArray &raw, bool *changed)
  * sitting in a plugin's config folder cannot quietly turn a 4 MB backup into an
  * hour-long compress of something the plugin will just re-download.
  */
-void collectDir(const QString &rootDir, const QString &relativePrefix, const QStringList &skipDirs,
-		QList<QPair<QString, QString>> &out, qint64 maxBytes = 0, QList<SkippedFile> *skipped = nullptr)
+// Guard rails for the walk. No real OBS config tree comes near either, so
+// hitting one means something on disk is looping and the rest is not worth it.
+constexpr int kMaxCollectDepth = 32;
+constexpr qsizetype kMaxCollectFiles = 100000;
+
+void collectDirImpl(const QString &rootDir, const QString &relativePrefix, const QStringList &skipDirs,
+		    QList<QPair<QString, QString>> &out, qint64 maxBytes, QList<SkippedFile> *skipped,
+		    QSet<QString> &visited, int depth)
 {
 	QDir dir(rootDir);
 	if (!dir.exists())
 		return;
 
+	// A symlink or alias that points back up the tree turned this walk into
+	// an endless themes/X/themes/X/... descent, re-adding the same files on
+	// every lap until the machine ran out of memory (issue #53). Keying on the
+	// canonical path means a folder is only ever entered once, however many
+	// routes lead to it.
+	const QString canonical = QFileInfo(rootDir).canonicalFilePath();
+	if (canonical.isEmpty() || visited.contains(canonical))
+		return;
+	visited.insert(canonical);
+
+	if (depth > kMaxCollectDepth) {
+		StreamUP::DebugLogger::LogWarningFormat("Backup", "Stopped at %s, folders nested over %d deep",
+							rootDir.toUtf8().constData(), kMaxCollectDepth);
+		return;
+	}
+
 	const QFileInfoList entries =
 		dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden);
 	for (const QFileInfo &info : entries) {
+		if (out.size() >= kMaxCollectFiles) {
+			StreamUP::DebugLogger::LogWarningFormat("Backup", "Stopped at %s, over %lld files collected",
+								rootDir.toUtf8().constData(),
+								(long long)kMaxCollectFiles);
+			return;
+		}
+
 		if (info.isDir()) {
 			if (skipDirs.contains(info.fileName(), Qt::CaseInsensitive))
 				continue;
-			collectDir(info.absoluteFilePath(), relativePrefix + info.fileName() + QStringLiteral("/"),
-				   skipDirs, out, maxBytes, skipped);
+			// Linked folders are someone else's data, and the usual way a loop
+			// gets in. Leave them out rather than follow them.
+			// Windows junctions are neither reported as symlinks nor resolved
+			// by canonicalFilePath, so they need their own check.
+			if (info.isSymLink() || info.isJunction() || info.isAlias()) {
+				StreamUP::DebugLogger::LogInfoFormat("Backup", "Skipping linked folder %s",
+								     info.absoluteFilePath().toUtf8().constData());
+				continue;
+			}
+			collectDirImpl(info.absoluteFilePath(), relativePrefix + info.fileName() + QStringLiteral("/"),
+				       skipDirs, out, maxBytes, skipped, visited, depth + 1);
 			continue;
 		}
 
@@ -211,6 +249,13 @@ void collectDir(const QString &rootDir, const QString &relativePrefix, const QSt
 
 		out.append({info.absoluteFilePath(), relativePrefix + info.fileName()});
 	}
+}
+
+void collectDir(const QString &rootDir, const QString &relativePrefix, const QStringList &skipDirs,
+		QList<QPair<QString, QString>> &out, qint64 maxBytes = 0, QList<SkippedFile> *skipped = nullptr)
+{
+	QSet<QString> visited;
+	collectDirImpl(rootDir, relativePrefix, skipDirs, out, maxBytes, skipped, visited, 0);
 }
 
 /**

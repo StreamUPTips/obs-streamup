@@ -33,6 +33,7 @@
 - **Plugins You Switched Off No Longer Nag You** The startup check can be told to leave them alone.
 - **Ghost Docks In Saved Layouts** Old entries left behind in a saved layout are cleared out.
 - **Garbled Window Titles On Linux** The bullet between StreamUP and the window name shows properly now.
+- **Backups Could Eat All Your Memory** A linked folder could send the backup round in circles. Linked folders are skipped now.
 
 ---
 

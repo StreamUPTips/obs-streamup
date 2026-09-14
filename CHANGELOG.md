@@ -38,6 +38,7 @@
 - Plugins you switched off no longer nag you at every start
 - Old dock entries left behind in a saved layout are cleared out
 - The bullet in StreamUP window titles showed as garbled characters on Linux
+- A linked folder in your themes or config could send the backup round in circles until it ate all your memory
 
 ---
 
