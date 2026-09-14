@@ -30,6 +30,8 @@
 - Switching scene collections could wipe a collection's Scene Organiser folders
 - The live scene and row hover follow your theme again. Thanks to Mapsking for the report
 - Moving a folder could leave a copy of a scene behind
+- Dragging a folder into another folder left an empty copy of it behind
+- Selecting a folder made the live scene look selected too
 - Renaming a scene emptied your favourites, tabs and hidden scenes
 - Dragging while searching could drop a scene in the wrong place
 - The stream and record timers in the Vertical Canvas dock were cut off

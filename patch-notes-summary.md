@@ -25,6 +25,8 @@
 - **Scene Organiser Folders Could Be Lost** Switching scene collections could wipe a collection's folders.
 - **The Live Scene And Hover Follow Your Theme** Thanks to Mapsking for the report.
 - **A Move Could Leave A Copy Of A Scene Behind** The tree checks itself after every change now.
+- **Moving A Folder Left An Empty Copy** Drag a folder into another folder and an empty "(1)" copy stayed behind. Folders move for real now.
+- **Two Rows Looked Selected** Select a folder and the live scene looked selected as well. The live scene keeps just its outline now.
 - **Renaming A Scene Emptied Your Lists** Favourites, tabs and hidden scenes follow renames now.
 - **Dragging While Searching Dropped Scenes In The Wrong Place** Dragging is off while a search is active.
 - **Stream And Record Timers Were Cut Off** In the Vertical Canvas dock.
