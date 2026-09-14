@@ -573,8 +573,6 @@ private:
     bool isValidSceneForCanvas(obs_scene_t *scene);
     void cleanupEmptyItemsRecursive(QStandardItem *parent);
     bool isChildOf(QStandardItem *potentialChild, QStandardItem *potentialParent);
-    void moveSceneItem(QStandardItem *item, int row, QStandardItem *parentItem);
-    void moveSceneFolder(QStandardItem *item, int row, QStandardItem *parentItem);
     QString createUniqueFolderName(const QString &baseName, QStandardItem *parentItem);
     void cleanupSceneTree();
     bool isManagedScene(obs_source_t *source);

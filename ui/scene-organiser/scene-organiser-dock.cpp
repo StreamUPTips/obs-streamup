@@ -5538,10 +5538,9 @@ QMimeData *SceneTreeModel::mimeData(const QModelIndexList &indexes) const
     // a multi-item selection can hand us and a single one never could:
     //
     //  - duplicates, since selectedIndexes() reports every column;
-    //  - any item that sits inside a folder which is ALSO being dragged. The
-    //    folder move re-creates its whole subtree and destroys the originals,
-    //    so a separate entry for the child would be a dangling pointer by the
-    //    time the drop loop reached it.
+    //  - any item that sits inside a folder which is ALSO being dragged. It
+    //    travels with the folder already, and a separate entry would pull it
+    //    back out of the folder it came with.
     QList<QStandardItem *> items;
     for (const QModelIndex &index : indexes) {
         if (index.column() != 0 || !index.isValid()) {
@@ -5645,70 +5644,48 @@ bool SceneTreeModel::dropMimeData(const QMimeData *data, Qt::DropAction action,
             continue;
         }
 
-        if (originalItem->type() == SceneTreeItem::UserType + 2) {
-            // Move scene item - create new item and update tracking
-            SceneTreeItem *sceneItem = static_cast<SceneTreeItem*>(originalItem);
-            obs_weak_source_t *weak_source = sceneItem->getWeakSource();
-
-            // Add reference for the new item (since the old item will release its reference when destroyed)
-            obs_weak_source_addref(weak_source);
-            QStandardItem *newItem = new SceneTreeItem(originalItem->text(), weak_source);
-
-            // Copy custom color from original item
-            QVariant customColor = originalItem->data(Qt::UserRole + 1);
-            if (customColor.isValid()) {
-                newItem->setData(customColor, Qt::UserRole + 1);
-                // Apply the color visually
-                QColor color = customColor.value<QColor>();
-                if (color.isValid()) {
-                    // Get the dock instance to use its color helper methods
-                    for (auto dock : SceneOrganiserDock::s_dockInstances) {
-                        if (dock && dock->m_model == this) {
-                            dock->applyCustomColorToItem(newItem, color);
-                            break;
-                        }
-                    }
-                }
+        // The row itself is moved, not rebuilt. Rebuilding a folder and leaving
+        // the view to delete the original went wrong as soon as the rebuild
+        // shifted the rows the view had recorded: the original folder survived
+        // as an empty "(1)" copy, scenes inside it were skipped, and every
+        // setting on a rebuilt row (icon, tint, creation time) had to be copied
+        // by hand. SceneTreeView::dropEvent tells the view not to delete
+        // anything afterwards, since there is nothing left behind to delete.
+        bool intoItself = false;
+        for (QStandardItem *walk = parentItem; walk; walk = walk->parent()) {
+            if (walk == originalItem) {
+                intoItself = true;
+                break;
             }
-
-            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "DragDrop",
-                QString("Inserting scene '%1' at row %2 (parent has %3 children)")
-                .arg(newItem->text()).arg(row).arg(parentItem->rowCount()).toUtf8().constData());
-
-            parentItem->insertRow(row, newItem);
-
-            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "DragDrop",
-                QString("After insert: scene '%1' is now at row %2 (parent has %3 children)")
-                .arg(newItem->text()).arg(newItem->row()).arg(parentItem->rowCount()).toUtf8().constData());
-
-            // Update tracking map with new item
-            m_scenesInTree[weak_source] = newItem;
-
-            StreamUP::DebugLogger::LogDebug("SceneOrganiser", "DragDrop",
-                QString("Updated tracking for scene '%1' - new item at %2")
-                .arg(newItem->text()).arg(reinterpret_cast<uintptr_t>(newItem)).toUtf8().constData());
-
-            // Check if this is the active scene and mark it for immediate update
-            obs_source_t *current_scene = Canvas::GetCurrentScene(m_canvasType);
-            if (current_scene) {
-                QString current_scene_name = QString::fromUtf8(obs_source_get_name(current_scene));
-                if (newItem->text() == current_scene_name) {
-                    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "DragDrop",
-                        QString("Moved scene '%1' is the active scene - forcing immediate repaint")
-                        .arg(newItem->text()).toUtf8().constData());
-
-                    // Force immediate repaint of this specific item
-                    QModelIndex newIndex = indexFromItem(newItem);
-                    if (newIndex.isValid()) {
-                        emit dataChanged(newIndex, newIndex);
-                    }
-                }
-                obs_source_release(current_scene);
-            }
-        } else if (originalItem->type() == SceneFolderItem::UserType + 1) {
-            // Move folder item
-            moveSceneFolder(originalItem, row, parentItem);
         }
+        if (intoItself) {
+            continue; // a folder cannot go inside itself or its own contents
+        }
+
+        QStandardItem *oldParent = originalItem->parent();
+        if (!oldParent) {
+            oldParent = invisibleRootItem();
+        }
+        const int oldRow = originalItem->row();
+
+        if (originalItem->type() == SceneFolderItem::UserType + 1 && oldParent != parentItem) {
+            originalItem->setText(createUniqueFolderName(originalItem->text(), parentItem));
+        }
+
+        QList<QStandardItem *> taken = oldParent->takeRow(oldRow);
+        if (taken.isEmpty()) {
+            continue;
+        }
+        if (oldParent == parentItem && oldRow < row) {
+            --row; // taking the row out shifted the target up by one
+        }
+        row = std::clamp(row, 0, parentItem->rowCount());
+        parentItem->insertRow(row, taken);
+
+        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "DragDrop",
+            QString("Moved '%1' to row %2 in '%3'")
+            .arg(originalItem->text()).arg(row)
+            .arg(parentItem == invisibleRootItem() ? "root" : parentItem->text()).toUtf8().constData());
 
         ++row; // Increment for next item
     }
@@ -6053,100 +6030,6 @@ bool SceneTreeModel::isChildOf(QStandardItem *potentialChild, QStandardItem *pot
         current = current->parent();
     }
     return false;
-}
-
-void SceneTreeModel::moveSceneItem(QStandardItem *item, int row, QStandardItem *parentItem)
-{
-    // This function is now only used for internal moves, not drag & drop
-    // Drag & drop is handled directly in dropMimeData
-    if (!item || item->type() != SceneTreeItem::UserType + 2) {
-        return;
-    }
-
-    SceneTreeItem *sceneItem = static_cast<SceneTreeItem*>(item);
-    QString sceneName = item->text();
-    obs_weak_source_t *weak = sceneItem->getWeakSource();
-
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Move",
-        QString("Moving scene '%1'").arg(sceneName).toUtf8().constData());
-
-    // For internal moves, we can safely move the item directly
-    QStandardItem *oldParent = item->parent();
-    if (!oldParent) oldParent = invisibleRootItem();
-
-    QStandardItem *takenItem = oldParent->takeChild(item->row());
-    if (takenItem) {
-        parentItem->insertRow(row, takenItem);
-        m_scenesInTree[weak] = takenItem;
-
-        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Move",
-            QString("Moved scene '%1' to row %2").arg(sceneName).arg(row).toUtf8().constData());
-    }
-}
-
-void SceneTreeModel::moveSceneFolder(QStandardItem *item, int row, QStandardItem *parentItem)
-{
-    if (!item || item->type() != SceneFolderItem::UserType + 1) {
-        return;
-    }
-
-    QString folderName = item->text();
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Move",
-        QString("Moving folder '%1'").arg(folderName).toUtf8().constData());
-
-    // Check if we're moving to the same parent - if so, keep original name
-    QString uniqueName;
-    QStandardItem *originalParent = item->parent();
-    if (!originalParent) originalParent = invisibleRootItem();
-
-    if (originalParent == parentItem) {
-        // Moving within same parent - keep original name
-        uniqueName = folderName;
-    } else {
-        // Moving to different parent - check for conflicts
-        uniqueName = createUniqueFolderName(folderName, parentItem);
-    }
-
-    // Create new folder item
-    QStandardItem *newFolder = createFolderItem(uniqueName);
-    if (!newFolder) {
-        return;
-    }
-
-    // Copy custom color from original folder
-    QVariant customColor = item->data(Qt::UserRole + 1);
-    if (customColor.isValid()) {
-        newFolder->setData(customColor, Qt::UserRole + 1);
-        // Apply the color visually
-        QColor color = customColor.value<QColor>();
-        if (color.isValid()) {
-            // Get the dock instance to use its color helper methods
-            for (auto dock : SceneOrganiserDock::s_dockInstances) {
-                if (dock && dock->m_model == this) {
-                    dock->applyCustomColorToItem(newFolder, color);
-                    break;
-                }
-            }
-        }
-    }
-
-    parentItem->insertRow(row, newFolder);
-
-    // Recursively move child items
-    for (int childRow = 0; childRow < item->rowCount(); ++childRow) {
-        QStandardItem *childItem = item->child(childRow);
-        if (!childItem) continue;
-
-        if (childItem->type() == SceneFolderItem::UserType + 1) {
-            moveSceneFolder(childItem, childRow, newFolder);
-        } else if (childItem->type() == SceneTreeItem::UserType + 2) {
-            moveSceneItem(childItem, childRow, newFolder);
-        }
-    }
-
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Move",
-        QString("Moved folder '%1' to row %2 with %3 children")
-        .arg(uniqueName).arg(row).arg(item->rowCount()).toUtf8().constData());
 }
 
 QString SceneTreeModel::createUniqueFolderName(const QString &baseName, QStandardItem *parentItem)
@@ -7061,6 +6944,12 @@ void SceneTreeView::dropEvent(QDropEvent *event)
     QTreeView::dropEvent(event);
 
     if (isScenesTree) {
+        // SceneTreeModel::dropMimeData has already moved the real rows. Left as
+        // a move, the view would go on to delete the "originals" by their old
+        // positions, which now point at other rows. Reporting a copy stops it.
+        if (event->isAccepted()) {
+            event->setDropAction(Qt::CopyAction);
+        }
         dock->pushLayoutUndo(QString::fromUtf8(obs_module_text("SceneOrganiser.Undo.Move")), before);
     }
 }
@@ -7090,7 +6979,8 @@ void SceneTreeView::drawRow(QPainter *painter, const QStyleOptionViewItem &optio
     const bool paintedByDelegate = index.data(Qt::UserRole + 1).isValid();
     if (!paintedByDelegate) {
         QStyleOptionViewItem themedOpt = option;
-        if (index.data(ProgramSceneRole).toBool()) {
+        themedOpt.widget = this; // ProgramRowNeedsOutline reads the selection through it
+        if (index.data(ProgramSceneRole).toBool() && !ProgramRowNeedsOutline(themedOpt, index)) {
             themedOpt.state |= QStyle::State_Selected;
         }
         QTreeView::drawRow(painter, themedOpt, index);
@@ -7294,13 +7184,16 @@ void StreamUP::SceneOrganiser::QuickListDelegate::paint(QPainter *painter, const
     if (!customColor.isValid()) {
         // Same rule as the tree: no custom colour means the theme owns the row,
         // and the live scene is shown with the theme's selected look.
+        // The live row only wears the selected fill while nothing else is
+        // selected. Otherwise it would read as a second selected row next to
+        // the one actually picked, and it keeps just the outline instead.
         QStyleOptionViewItem themedOption = option;
-        if (isProgram) {
+        if (isProgram && !ProgramRowNeedsOutline(option, index)) {
             themedOption.state |= QStyle::State_Selected;
         }
         QStyledItemDelegate::paint(painter, themedOption, index);
         if (isProgram && ProgramRowNeedsOutline(option, index)) {
-            DrawProgramOutline(painter, option.rect, option.palette.color(QPalette::HighlightedText));
+            DrawProgramOutline(painter, option.rect, option.palette.color(QPalette::Text));
         }
         return;
     }
@@ -7308,7 +7201,7 @@ void StreamUP::SceneOrganiser::QuickListDelegate::paint(QPainter *painter, const
     // Identical rules to the tree: a hand-set colour is brightened for
     // selection (and for the live scene), less so for hover.
     QColor bgColor = customColor;
-    if (isSelected || isProgram) {
+    if (isSelected || (isProgram && !ProgramRowNeedsOutline(option, index))) {
         bgColor = m_dock->getSelectionColor(customColor);
     } else if (isHovered) {
         bgColor = m_dock->getHoverColor(customColor);
@@ -9109,13 +9002,16 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
         // theme's selected look by asking for it, rather than by us guessing at
         // a colour: painting our own pill here made the dock the odd one out in
         // every theme, which is what users saw.
+        // The live row only wears the selected fill while nothing else is
+        // selected. Otherwise it would read as a second selected row next to
+        // the one actually picked, and it keeps just the outline instead.
         QStyleOptionViewItem themedOption = option;
-        if (isProgram) {
+        if (isProgram && !ProgramRowNeedsOutline(option, index)) {
             themedOption.state |= QStyle::State_Selected;
         }
         QStyledItemDelegate::paint(painter, themedOption, index);
         if (isProgram && ProgramRowNeedsOutline(option, index)) {
-            DrawProgramOutline(painter, option.rect, option.palette.color(QPalette::HighlightedText));
+            DrawProgramOutline(painter, option.rect, option.palette.color(QPalette::Text));
         }
         return;
     }
@@ -9123,7 +9019,7 @@ void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, con
     // From here the row has a colour the user set by hand, which is the only
     // case we paint ourselves.
     QColor bgColor = customColor;
-    if (isSelected || isProgram) {
+    if (isSelected || (isProgram && !ProgramRowNeedsOutline(option, index))) {
         bgColor = m_dock->getSelectionColor(customColor);
     } else if (isHovered) {
         bgColor = m_dock->getHoverColor(customColor);
