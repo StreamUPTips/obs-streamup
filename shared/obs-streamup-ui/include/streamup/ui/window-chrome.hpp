@@ -622,7 +622,7 @@ inline WindowShell applyChrome(ShadowDialog *dlg, const QString &title,
 		// window name collapsed to empty (title was the plugin name itself).
 		headerText = windowName.isEmpty()
 				     ? brandName
-				     : brandName + QStringLiteral(" \xE2\x80\xA2 ") + windowName;
+				     : brandName + QStringLiteral(" \u2022 ") + windowName;
 	}
 	if (!version.isEmpty())
 		headerText += QStringLiteral(" (") + version + QStringLiteral(")");

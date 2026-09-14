@@ -32,6 +32,7 @@
 - **The Toolbar Edit Panel Opened Off Screen** It opens beside the bar now.
 - **Plugins You Switched Off No Longer Nag You** The startup check can be told to leave them alone.
 - **Ghost Docks In Saved Layouts** Old entries left behind in a saved layout are cleared out.
+- **Garbled Window Titles On Linux** The bullet between StreamUP and the window name shows properly now.
 
 ---
 

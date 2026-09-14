@@ -2,7 +2,7 @@
 
 ---
 
-## v2.4.0 (unreleased)
+## v2.4.0 (14 Sep '26)
 **Patch Focus:** Scene Organiser tabs, undo and custom icons, MultiDock and Vertical Canvas polish
 
 ### New Features
@@ -37,6 +37,7 @@
 - The toolbar edit panel opened off screen
 - Plugins you switched off no longer nag you at every start
 - Old dock entries left behind in a saved layout are cleared out
+- The bullet in StreamUP window titles showed as garbled characters on Linux
 
 ---
 
