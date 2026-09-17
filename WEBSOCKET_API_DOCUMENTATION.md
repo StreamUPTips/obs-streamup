@@ -126,6 +126,48 @@ Toggle the lock state of all sources in the current scene only.
 
 ---
 
+#### GetAllSourcesLocked
+
+Read back whether every source in every scene is locked, without changing anything.
+
+**Request Parameters**: None
+
+**Response Data**:
+```json
+{
+  "lockState": true
+}
+```
+
+**Response Fields**:
+- `lockState` (boolean): True when all sources in all scenes are locked
+
+**Notes**:
+- Read-only, so a Stream Deck or Streamer.bot button can show the current state instead of guessing
+
+---
+
+#### GetCurrentSceneSourcesLocked
+
+Read back whether every source in the current scene is locked, without changing anything.
+
+**Request Parameters**: None
+
+**Response Data**:
+```json
+{
+  "lockState": true
+}
+```
+
+**Response Fields**:
+- `lockState` (boolean): True when all sources in the current scene are locked
+
+**Notes**:
+- Read-only, and only looks at the currently active scene
+
+---
+
 #### RefreshAudioMonitoring
 
 Refresh audio monitoring for all audio sources.
@@ -1024,6 +1066,30 @@ Toggle the visibility of all currently selected sources in the current scene.
 - Toggle visibility of multiple related sources at once
 - Show/hide entire groups of elements with a single command
 - Quick visibility management during streaming
+
+---
+
+#### GetSelectedVisibility
+
+Read back how many sources are selected and whether any of them are visible.
+
+**Request Parameters**: None
+
+**Response Data**:
+```json
+{
+  "count": 2,
+  "visible": true
+}
+```
+
+**Response Fields**:
+- `count` (number): How many sources are currently selected
+- `visible` (boolean): True if any of the selected sources are visible
+
+**Notes**:
+- Read-only, and matches the smart toggle behaviour of `ToggleVisibilitySelectedSources`, so a button can show what the next press will do
+- `count` is 0 when nothing is selected
 
 ---
 
