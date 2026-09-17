@@ -2,6 +2,13 @@
 
 ---
 
+## Unreleased
+
+### Bug Fixes
+- "No icon" in the WebSocket and hotkey button windows was cut down to "lo ico". The preview box now widens to fit the text
+
+---
+
 ## v2.4.0 (14 Sep '26)
 **Patch Focus:** Scene Organiser tabs, undo and custom icons, MultiDock and Vertical Canvas polish
 

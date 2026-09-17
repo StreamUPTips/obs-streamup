@@ -476,7 +476,9 @@ void WebSocketButtonConfigDialog::setupIconSection()
 
 	QLabel *previewCaption = new QLabel(obs_module_text("StreamUP.Toolbar.WebSocket.Label.Preview"), iconGroup);
 	iconPreview = new QLabel(iconGroup);
-	iconPreview->setFixedSize(S(32), S(32));
+	iconPreview->setFixedHeight(S(32));
+	iconPreview->setMinimumWidth(S(32));
+	iconPreview->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 	iconPreview->setStyleSheet(scale_qss(QString("border: 1px solid %1;").arg(Colors::POPUP_BORDER)));
 	iconPreview->setAlignment(Qt::AlignCenter);
 	iconPreview->setScaledContents(true);
@@ -810,6 +812,7 @@ void WebSocketButtonConfigDialog::onSelectIconClicked()
 void WebSocketButtonConfigDialog::updateIconDisplay()
 {
 	iconPreview->clear();
+	iconPreview->setContentsMargins(S(6), 0, S(6), 0);
 
 	if (selectedIconPath.isEmpty()) {
 		iconPreview->setText(obs_module_text("StreamUP.Toolbar.WebSocket.Message.NoIcon"));
@@ -822,9 +825,10 @@ void WebSocketButtonConfigDialog::updateIconDisplay()
 	else
 		pixmap.load(StreamUP::UIHelpers::GetThemedIconPath(selectedIconPath));
 
-	if (!pixmap.isNull())
+	if (!pixmap.isNull()) {
+		iconPreview->setContentsMargins(0, 0, 0, 0);
 		iconPreview->setPixmap(pixmap.scaled(S(32), S(32), Qt::KeepAspectRatio, Qt::SmoothTransformation));
-	else
+	} else
 		iconPreview->setText(obs_module_text("StreamUP.Toolbar.WebSocket.Message.InvalidIcon"));
 }
 

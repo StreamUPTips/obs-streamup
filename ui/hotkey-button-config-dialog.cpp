@@ -80,7 +80,9 @@ void HotkeyButtonConfigDialog::setupUI() {
     iconPreviewLayout = new QHBoxLayout();
     iconPreviewLabel = new QLabel(obs_module_text("HotkeyButton.Label.Preview"), iconGroup);
     iconPreview = new QLabel(iconGroup);
-    iconPreview->setFixedSize(S(32), S(32));
+    iconPreview->setFixedHeight(S(32));
+    iconPreview->setMinimumWidth(S(32));
+    iconPreview->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     iconPreview->setStyleSheet(scale_qss(QString("border: 1px solid %1;").arg(Colors::POPUP_BORDER)));
     iconPreview->setAlignment(Qt::AlignCenter);
     iconPreview->setScaledContents(true);
@@ -220,6 +222,7 @@ void HotkeyButtonConfigDialog::updateHotkeyDisplay() {
 
 void HotkeyButtonConfigDialog::updateIconDisplay() {
     iconPreview->clear();
+    iconPreview->setContentsMargins(S(6), 0, S(6), 0);
 
     if (!selectedIconPath.isEmpty()) {
         // Try to load the selected icon
@@ -236,6 +239,7 @@ void HotkeyButtonConfigDialog::updateIconDisplay() {
         }
 
         if (!pixmap.isNull()) {
+            iconPreview->setContentsMargins(0, 0, 0, 0);
             iconPreview->setPixmap(pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         } else {
             iconPreview->setText(obs_module_text("HotkeyButton.Message.Invalid"));
@@ -247,6 +251,7 @@ void HotkeyButtonConfigDialog::updateIconDisplay() {
             QString themedPath = StreamUP::UIHelpers::GetThemedIconPath(defaultIcon);
             QPixmap pixmap(themedPath);
             if (!pixmap.isNull()) {
+                iconPreview->setContentsMargins(0, 0, 0, 0);
                 iconPreview->setPixmap(pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::SmoothTransformation));
                 selectedIconPath = defaultIcon; // Update to use this default
             } else {
