@@ -2,13 +2,6 @@
 
 ---
 
-## Unreleased
-
-### Bug Fixes
-- "No icon" in the WebSocket and hotkey button windows was cut down to "lo ico". The preview box now widens to fit the text
-
----
-
 ## v2.4.0 (14 Sep '26)
 **Patch Focus:** Scene Organiser tabs, undo and custom icons, MultiDock and Vertical Canvas polish
 
@@ -48,6 +41,8 @@
 - Old dock entries left behind in a saved layout are cleared out
 - The bullet in StreamUP window titles showed as garbled characters on Linux
 - A linked folder in your themes or config could send the backup round in circles until it ate all your memory
+- "No icon" in the WebSocket and hotkey button windows was cut down to "lo ico". The preview box widens to fit the text now
+- The Backup settings still said the daily backup runs as OBS closes. It says when OBS starts now, which is what it does
 
 ---
 

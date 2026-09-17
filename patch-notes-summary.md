@@ -36,6 +36,8 @@
 - **Ghost Docks In Saved Layouts** Old entries left behind in a saved layout are cleared out.
 - **Garbled Window Titles On Linux** The bullet between StreamUP and the window name shows properly now.
 - **Backups Could Eat All Your Memory** A linked folder could send the backup round in circles. Linked folders are skipped now.
+- **No Icon Was Cut Off** The WebSocket and hotkey button windows showed "lo ico". The preview box fits the text now.
+- **Backup Settings Said The Wrong Time** They said backups run as OBS closes. They run when OBS starts, and the text says so now.
 
 ---
 
