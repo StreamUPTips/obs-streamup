@@ -198,8 +198,8 @@ above. Portable had been passing only because portable ignores the `[Locations]`
 
 ## WebSocket
 
-`CreateBackup` and `GetBackupInfo` are registered on the streamup vendor, documented in
-WEBSOCKET_API_DOCUMENTATION.md. There is deliberately no restore request: a restore replaces the
+`CreateBackup` and `GetBackupInfo` are registered on the streamup vendor, documented at
+https://docs.streamup.tips/obs/streamup_plugin_websocket_api.html. There is deliberately no restore request: a restore replaces the
 user's setup and has to be applied during shutdown, so it stays a decision made in the UI where
 the contents can be reviewed first.
 

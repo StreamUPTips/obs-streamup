@@ -297,7 +297,7 @@ Every StreamUP function has a hotkey. Bound through OBS Settings > Hotkeys or th
 
 ## WebSocket API
 
-Over 30 vendor commands under the `streamup` namespace. Use them from Streamer.Bot, Touch Portal, Stream Deck, or any tool that talks OBS WebSocket. Full protocol docs in [`WEBSOCKET_API_DOCUMENTATION.md`](WEBSOCKET_API_DOCUMENTATION.md).
+Over 30 vendor commands under the `streamup` namespace. Use them from Streamer.Bot, Touch Portal, Stream Deck, or any tool that talks OBS WebSocket. Full protocol docs, with every command's parameters and response fields, at [docs.streamup.tips](https://docs.streamup.tips/obs/streamup_plugin_websocket_api.html).
 
 ### Utility
 - `GetStreamBitrate`. Current stream bitrate in kbps.
