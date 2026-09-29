@@ -4237,13 +4237,20 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->onThemeChanged();
         });
         break;
+    case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
     case OBS_FRONTEND_EVENT_EXIT:
-        // Save configuration before OBS exits
+        // Save once, as early in shutdown as we hear about it, then stop.
+        // Scripting shutdown comes first, and it is where Aitum Vertical clears
+        // its canvas. Its scenes vanishing makes the tree refresh them out of
+        // their folders, and any save after that (at exit, or as the dock is
+        // destroyed) wrote folders with nothing left in them, taking the
+        // scenes' icons and colours with them. The tree is still whole here.
         if (dock->m_initialLoadComplete) {
             dock->m_model->saveSceneTree();
             dock->SaveConfiguration();
+            dock->m_initialLoadComplete = false;
             StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Exit",
-                "Saved scene tree on OBS exit");
+                "Saved scene tree on OBS shutdown - saves now disabled");
         }
         break;
     default:
