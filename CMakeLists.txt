@@ -199,6 +199,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/scene-organiser/scene-organiser-dock.cpp
   ui/scene-organiser/scene-canvas.hpp
   ui/scene-organiser/scene-canvas.cpp
+  ui/scene-organiser/scene-organiser-collection-data.hpp
+  ui/scene-organiser/scene-organiser-collection-data.cpp
   ui/streamup-toolbar.hpp
   ui/streamup-toolbar.cpp
   ui/streamup-toolbar-config.hpp
@@ -344,7 +346,9 @@ source_group("UI\\Scene Organiser" FILES
   ui/scene-organiser/scene-organiser-dock.hpp
   ui/scene-organiser/scene-organiser-dock.cpp
   ui/scene-organiser/scene-canvas.hpp
-  ui/scene-organiser/scene-canvas.cpp)
+  ui/scene-organiser/scene-canvas.cpp
+  ui/scene-organiser/scene-organiser-collection-data.hpp
+  ui/scene-organiser/scene-organiser-collection-data.cpp)
 
 source_group("UI\\Toolbar" FILES
   ui/streamup-toolbar.hpp

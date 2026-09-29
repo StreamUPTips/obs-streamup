@@ -19,6 +19,7 @@
 #include "ui/dock/streamup-dock.hpp"
 #include "ui/scene-organiser/scene-organiser-dock.hpp"
 #include "ui/scene-organiser/scene-canvas.hpp"
+#include "ui/scene-organiser/scene-organiser-collection-data.hpp"
 #include "ui/streamup-toolbar.hpp"
 #include "ui/settings-manager.hpp"
 #include "ui/ui-helpers.hpp"
@@ -1166,6 +1167,9 @@ bool obs_module_load()
 			blog(LOG_INFO, "[StreamUP] Step 6/8: Loading Scene Organiser docks");
 			StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading Scene Organiser docks");
 			LoadSceneOrganiserDocks();
+			// Keeps a copy of each collection's layout inside the collection
+			// file, so duplicates, renames and imports keep their folders.
+			StreamUP::SceneOrganiser::CollectionData::Register();
 			blog(LOG_INFO, "[StreamUP] Step 6/8: Scene Organiser docks loaded");
 		} else {
 			blog(LOG_INFO, "[StreamUP] Step 6/8: Module 'scene_organiser' disabled — skipping");
@@ -1482,6 +1486,7 @@ void obs_module_unload()
 		blog(LOG_INFO, "[StreamUP] Unload step 2/8: Removing save callback for hotkeys");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Removing save callback for hotkeys");
 		obs_frontend_remove_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
+		StreamUP::SceneOrganiser::CollectionData::Unregister();
 
 		blog(LOG_INFO, "[StreamUP] Unload step 3/8: Unregistering hotkeys");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Unregistering hotkeys");
