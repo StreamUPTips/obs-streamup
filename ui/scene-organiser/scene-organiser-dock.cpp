@@ -9111,4 +9111,45 @@ QSize StreamUP::SceneOrganiser::CustomColorDelegate::sizeHint(const QStyleOption
     return size;
 }
 
+// The rename box. Themes only style an inline editor for list views (Yami's
+// "QListView QLineEdit"), and this is a tree, so it got the full size input
+// padding and a thick border squeezed into a compact row, leaving a sliver of
+// text. Give it its own slim frame, and never let it be shorter than a line.
+QWidget *StreamUP::SceneOrganiser::CustomColorDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &option,
+                                                                     const QModelIndex &index) const
+{
+    QWidget *editor = QStyledItemDelegate::createEditor(parent, option, index);
+    if (auto *line = qobject_cast<QLineEdit *>(editor)) {
+        line->setFont(option.font);
+        line->setMinimumHeight(0);
+        // The border is a hairline, so only the padding and corners scale.
+        line->setStyleSheet(QString("QLineEdit {"
+                                    "  margin: 0;"
+                                    "  padding: 0px %1px;"
+                                    "  border: 1px solid palette(highlight);"
+                                    "  border-radius: %1px;"
+                                    "  background: palette(base);"
+                                    "  color: palette(text);"
+                                    "}")
+                                .arg(StreamUP::UIStyles::S(3)));
+    }
+    return editor;
+}
+
+void StreamUP::SceneOrganiser::CustomColorDelegate::updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option,
+                                                                         const QModelIndex &index) const
+{
+    QStyledItemDelegate::updateEditorGeometry(editor, option, index);
+
+    // Text height plus the 1px border top and bottom. A row set smaller than
+    // that gets an editor that spills evenly above and below it while typing.
+    const int needed = QFontMetrics(editor->font()).height() + 2;
+    QRect rect = editor->geometry();
+    if (rect.height() < needed) {
+        rect.adjust(0, -(needed - rect.height()) / 2, 0, 0);
+        rect.setHeight(needed);
+        editor->setGeometry(rect);
+    }
+}
+
 #include "scene-organiser-dock.moc"
