@@ -4805,9 +4805,13 @@ void SceneOrganiserDock::onDuplicateSceneClicked()
     if (duplicatedScene) {
         obs_source_t *newSource = obs_scene_get_source(duplicatedScene);
 
-        // obs_scene_duplicate always creates on the main canvas, so a vertical
-        // duplicate has to be moved across or it would land in the wrong dock.
-        if (m_canvasType == CanvasType::Vertical) {
+        // obs_scene_duplicate makes the copy on the original's canvas, so a
+        // vertical duplicate is normally already where it belongs. Only move it
+        // when it is not. Moving a scene onto the canvas it is already on takes
+        // it off and puts it back, and taking a group off a canvas strips that
+        // group out of every scene on it. The copy shares its groups with the
+        // original, so that emptied the groups in the original scene as well.
+        if (m_canvasType == CanvasType::Vertical && !Canvas::SceneBelongsTo(m_canvasType, newSource)) {
             if (obs_canvas_t *canvas = Canvas::Acquire(m_canvasType)) {
                 obs_canvas_move_scene(duplicatedScene, canvas);
                 obs_canvas_release(canvas);
