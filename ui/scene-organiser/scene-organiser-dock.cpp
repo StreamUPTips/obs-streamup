@@ -10,6 +10,8 @@
 #include "../../utilities/obs-data-helpers.hpp"
 #include "../../utilities/path-utils.hpp"
 #include "../../core/plugin-manager.hpp"
+#include "../../core/overlay-controls.hpp"
+#include "../overlay-controls-window.hpp"
 #include "../../version.h" // PROJECT_VERSION
 #include <obs-module.h>
 #include <QHeaderView>
@@ -1184,6 +1186,13 @@ void SceneOrganiserDock::setupContextMenu()
     // Scene context menu - matching OBS standard functionality
     m_sceneContextMenu = new QMenu(this);
 
+    // Shown only for scenes that came from an overlay with its own controls.
+    m_customiseOverlayAction = m_sceneContextMenu->addAction(QString(), this, [this]() {
+        if (!m_customiseOverlayId.isEmpty())
+            StreamUP::OverlayControlsWindow::Show(m_customiseOverlayId);
+    });
+    m_customiseOverlaySeparator = m_sceneContextMenu->addSeparator();
+
     // Main actions
     QAction *renameSceneAction = m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Rename"), -1), this, &SceneOrganiserDock::onRenameSceneClicked);
     renameSceneAction->setShortcut(QKeySequence(Qt::Key_F2));
@@ -2110,6 +2119,20 @@ void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelInd
             ? obs_module_text("SceneOrganiser.Action.RemoveFavourite")
             : obs_module_text("SceneOrganiser.Action.AddFavourite"));
     }
+
+    // Overlay controls: offer the panel when this scene is part of an overlay.
+    m_customiseOverlayId = StreamUP::OverlayControls::OverlayForScene(source);
+    StreamUP::OverlayControls::OverlayInfo overlayInfo;
+    const bool hasOverlay = !m_customiseOverlayId.isEmpty() &&
+                            StreamUP::OverlayControls::GetOverlay(m_customiseOverlayId, overlayInfo);
+    if (m_customiseOverlayAction) {
+        m_customiseOverlayAction->setVisible(hasOverlay);
+        if (hasOverlay)
+            m_customiseOverlayAction->setText(
+                QString::fromUtf8(obs_module_text("Menu.Overlays.Customise")).arg(overlayInfo.name));
+    }
+    if (m_customiseOverlaySeparator)
+        m_customiseOverlaySeparator->setVisible(hasOverlay);
 
     // Populate projector menu with current monitors
     populateProjectorMenu();

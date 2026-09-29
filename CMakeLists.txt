@@ -136,7 +136,11 @@ target_sources(${PROJECT_NAME} PRIVATE
   core/backup-manager.hpp
   core/backup-manager.cpp
   core/restore-manager.hpp
-  core/restore-manager.cpp)
+  core/restore-manager.cpp
+  core/overlay-controls.hpp
+  core/overlay-controls.cpp
+  core/overlay-controls-internal.hpp
+  core/overlay-apply.cpp)
 
 # Utilities module files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -199,6 +203,15 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/vertical-canvas-enhancements.cpp
   ui/theme-enhancements.hpp
   ui/theme-enhancements.cpp
+  ui/overlay-controls-window.hpp
+  ui/overlay-controls-window.cpp
+  ui/overlay-ui-common.hpp
+  ui/overlay-platforms-editor.hpp
+  ui/overlay-platforms-editor.cpp
+  ui/overlay-layout-page.hpp
+  ui/overlay-layout-page.cpp
+  ui/overlay-all-settings.hpp
+  ui/overlay-all-settings.cpp
   ui/dock/streamup-dock.hpp
   ui/dock/streamup-dock.cpp
   ui/scene-organiser/scene-organiser-dock.hpp
@@ -282,7 +295,11 @@ source_group("Core" FILES
   core/backup-manager.hpp
   core/backup-manager.cpp
   core/restore-manager.hpp
-  core/restore-manager.cpp)
+  core/restore-manager.cpp
+  core/overlay-controls.hpp
+  core/overlay-controls.cpp
+  core/overlay-controls-internal.hpp
+  core/overlay-apply.cpp)
 
 source_group("Utilities" FILES
   utilities/path-utils.hpp
@@ -342,7 +359,16 @@ source_group("UI" FILES
   ui/vertical-canvas-enhancements.hpp
   ui/vertical-canvas-enhancements.cpp
   ui/theme-enhancements.hpp
-  ui/theme-enhancements.cpp)
+  ui/theme-enhancements.cpp
+  ui/overlay-controls-window.hpp
+  ui/overlay-controls-window.cpp
+  ui/overlay-ui-common.hpp
+  ui/overlay-platforms-editor.hpp
+  ui/overlay-platforms-editor.cpp
+  ui/overlay-layout-page.hpp
+  ui/overlay-layout-page.cpp
+  ui/overlay-all-settings.hpp
+  ui/overlay-all-settings.cpp)
 
 source_group("UI\\Dock" FILES
   ui/dock/streamup-dock.hpp
