@@ -2,6 +2,17 @@
 
 ---
 
+## v2.4.1 (29 Sep '26)
+**Patch Focus:** Scene Organiser folders that follow your collections, plus hotkey and light theme fixes
+
+### Bug Fixes
+- Duplicating, renaming or importing a scene collection left the Scene Organiser empty. Your folders, tabs, icons and hidden scenes are saved inside the scene collection now, so they go wherever it goes. Thanks to CanadianIceTech for the report
+- A hotkey set to a key StreamUP could not read would fire on every key you pressed. Keys it cannot read are left unbound now
+- The icons in the WebSocket and hotkey button windows were white on light themes, so you could barely see them
+- Building on Linux with Qt 6.10 failed. Thanks to phedders for the report and the fix
+
+---
+
 ## v2.4.0 (14 Sep '26)
 **Patch Focus:** Scene Organiser tabs, undo and custom icons, MultiDock and Vertical Canvas polish
 

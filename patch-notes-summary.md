@@ -1,3 +1,13 @@
+# StreamUP v2.4.1 - Patch Update
+
+## Bug Fixes
+- **Scene Organiser Folders Follow Your Collections** Duplicate, rename or import a scene collection and the Scene Organiser used to start empty. Your folders, tabs, icons and hidden scenes are saved inside the scene collection now, so they go wherever it goes. Thanks to CanadianIceTech for the report.
+- **A Hotkey Could Fire On Every Key** Set a hotkey to a key StreamUP could not read and it went off on every key you pressed. Keys it cannot read are left unbound now.
+- **Icons Were White On Light Themes** The icons in the WebSocket and hotkey button windows are dark on light themes now, so you can see them.
+- **Linux Builds With Qt 6.10** Building from source on Qt 6.10 failed. Thanks to phedders for the report and the fix.
+
+---
+
 # StreamUP v2.4.0 - Feature Update
 
 ## New Features
