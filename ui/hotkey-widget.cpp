@@ -419,12 +419,12 @@ QString HotkeyWidget::QtKeyToOBSKey(int qtKey)
         case Qt::Key_Plus: return "OBS_KEY_NUMPLUS";
         
         default:
-            // For unmapped keys, try to use Qt's string representation
-            QString keyStr = QKeySequence(qtKey).toString().toUpper();
-            if (!keyStr.isEmpty()) {
-                return "OBS_KEY_" + keyStr;
-            }
-            return QString::number(qtKey); // Fallback to key code
+            // Unmapped key. Never invent a name here: anything OBS cannot parse
+            // becomes OBS_KEY_NONE on load, and a NONE binding matches EVERY
+            // keystroke (see inject_hotkey() in libobs/obs-hotkey.c), which
+            // silently fires the hotkey on every key press. Return empty so the
+            // caller stores no binding at all.
+            return QString();
     }
 }
 
@@ -433,8 +433,15 @@ obs_data_array_t* HotkeyWidget::CreateHotkeyData(int key, Qt::KeyboardModifiers 
     obs_data_array_t* hotkeyArray = obs_data_array_create();
     obs_data_t* hotkeyBinding = obs_data_create();
     
-    // Convert Qt key to OBS key name
+    // Convert Qt key to OBS key name. An unrecognised key must not be written
+    // out - an OBS_KEY_NONE binding matches every keystroke - so return an
+    // empty array, which OBS reads as "unbound".
     QString obsKeyName = QtKeyToOBSKey(key);
+    if (key == 0 || obsKeyName.isEmpty() || obsKeyName == QStringLiteral("OBS_KEY_NONE")) {
+        obs_data_release(hotkeyBinding);
+        return hotkeyArray;
+    }
+
     obs_data_set_string(hotkeyBinding, "key", obsKeyName.toUtf8().constData());
     
     // Set modifiers as booleans (OBS format)
