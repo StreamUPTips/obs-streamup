@@ -82,8 +82,14 @@ target_sources(${PROJECT_NAME} PRIVATE
   "${STREAMUP_UTILS_DIR}/include/streamup/undo-helpers.hpp"
 )
 
-if((OS_LINUX OR OS_FREEBSD OR OS_OPENBSD) AND Qt_VERSION VERSION_LESS "6.9.0")
-	target_link_libraries(${PROJECT_NAME} PRIVATE Qt::GuiPrivate)
+# Linux builds need Qt's GuiPrivate. From Qt 6.10 it has to be asked for by
+# name rather than coming along with Gui, so find it here and only link it
+# when this Qt actually has it. Windows and macOS never reach this.
+if(OS_LINUX OR OS_FREEBSD OR OS_OPENBSD)
+	find_package(Qt6 QUIET COMPONENTS GuiPrivate)
+	if(TARGET Qt6::GuiPrivate)
+		target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::GuiPrivate)
+	endif()
 endif()
 
 target_compile_options(
