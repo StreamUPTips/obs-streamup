@@ -4,7 +4,7 @@
 
   <defs>
     <mask id="cutout" maskUnits="userSpaceOnUse">
-      <rect x="0" y="0" width="24" height="24" fill="white"/>
+      <rect x="0" y="0" width="24" height="24" fill="#1f2937"/>
       <path d="M12 9.75a.75.75 0 0 1 .75.75v2.25H15a.75.75 0 0 1 0 1.5h-2.25v2.25a.75.75 0 0 1-1.5 0v-2.25H9a.75.75 0 0 1 0-1.5h2.25V10.5a.75.75 0 0 1 .75-.75" fill="black" fill-rule="evenodd" clip-rule="evenodd"/>
     </mask>
   </defs>
