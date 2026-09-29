@@ -512,33 +512,35 @@ QIcon IconSelectorDialog::loadPreviewIcon(const QString& iconPath) {
 }
 
 QString IconSelectorDialog::getOBSThemeIconPath(const QString& iconName) {
-    // Get OBS installation directory from registry or environment
-    const char* obsDataPath = obs_get_module_data_path(obs_current_module());
-    if (!obsDataPath) return QString();
-    
-    QDir obsDir(obsDataPath);
-    // Navigate to OBS themes directory
-    // Go up from module data path to OBS data directory
-    obsDir.cdUp(); // up from obs-plugins
-    obsDir.cdUp(); // up from data  
-    obsDir.cd("data");
-    obsDir.cd("obs-studio");
-    obsDir.cd("themes");
-    
-    bool isDark = obs_frontend_is_theme_dark();
-    QString themeName = isDark ? "Dark" : "Light";
-    
-    obsDir.cd(themeName);
-    
-    // Try different file extensions
-    QStringList extensions = {".svg", ".png", ".jpg", ".jpeg"};
-    for (const QString& ext : extensions) {
-        QString fullPath = obsDir.absoluteFilePath(iconName + ext);
-        if (QFile::exists(fullPath)) {
-            return fullPath;
+    // Find OBS's own themes folder. This used to be worked out from our module's
+    // data path, which only holds while the plugin sits inside the OBS install;
+    // OBS 33 moves plugins out of it (ProgramData, or plugins/ when portable).
+    // Anchor on libobs's data folder instead, which never moves with a plugin.
+    QStringList themeRoots;
+    if (char *effect = obs_find_data_file("default.effect")) {
+        // <data>/libobs/default.effect -> <data>/obs-studio/themes
+        themeRoots << QFileInfo(QString::fromUtf8(effect)).dir().absoluteFilePath("../obs-studio/themes");
+        bfree(effect);
+    }
+    // macOS keeps the frontend's data in the app bundle's Resources folder
+    themeRoots << QCoreApplication::applicationDirPath() + "/../Resources/themes";
+    // Legacy plugin layout: <install>/data/obs-plugins/streamup
+    if (const char *moduleData = obs_get_module_data_path(obs_current_module()))
+        themeRoots << QString::fromUtf8(moduleData) + "/../../obs-studio/themes";
+
+    const QString themeName = obs_frontend_is_theme_dark() ? "Dark" : "Light";
+    const QStringList extensions = {".svg", ".png", ".jpg", ".jpeg"};
+    for (const QString &root : themeRoots) {
+        QDir themeDir(QDir::cleanPath(root + "/" + themeName));
+        if (!themeDir.exists())
+            continue;
+        for (const QString &ext : extensions) {
+            QString fullPath = themeDir.absoluteFilePath(iconName + ext);
+            if (QFile::exists(fullPath))
+                return fullPath;
         }
     }
-    
+
     return QString();
 }
 

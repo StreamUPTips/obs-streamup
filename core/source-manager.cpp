@@ -1,5 +1,6 @@
 #include "source-manager.hpp"
 #include <streamup/debug-logger.hpp>
+#include <streamup/monitoring-compat.hpp>
 #include "streamup-common.hpp"
 #include "error-handler.hpp"
 #include <obs-module.h>
@@ -57,11 +58,11 @@ bool RefreshAudioMonitoring(void *data, obs_source_t *source)
 		return false;
 	}
 
-	obs_monitoring_type original_monitoring_type = obs_source_get_monitoring_type(source);
+	obs_monitoring_type original_monitoring_type = StreamUP::MonitoringCompat::get_type(source);
 
 	if (original_monitoring_type != OBS_MONITORING_TYPE_NONE) {
-		obs_source_set_monitoring_type(source, OBS_MONITORING_TYPE_NONE);
-		obs_source_set_monitoring_type(source, original_monitoring_type);
+		StreamUP::MonitoringCompat::set_type(source, OBS_MONITORING_TYPE_NONE);
+		StreamUP::MonitoringCompat::set_type(source, original_monitoring_type);
 	}
 
 	return true;

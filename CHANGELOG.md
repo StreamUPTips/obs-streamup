@@ -13,6 +13,10 @@
 - Move to Tab in the tab menu sends your selection to another tab and takes it out of this one
 
 ### Bug Fixes
+- Refresh Audio Monitoring works on OBS 33. OBS 33 changed how monitoring is stored, and the old way filled the OBS log with warnings every time it ran
+- Undo keeps Monitor Only on OBS 33. OBS 33 has no Monitor Only mode of its own, so it comes back as monitoring on with the source muted, which is what it always meant
+- The icon picker finds OBS's own theme icons again when StreamUP is installed in the new OBS 33 plugin folder
+- Ready for OBS 33 and 34. The installer puts the plugin where OBS 33 looks for it now: C:\ProgramData\obs-studio\plugins for a normal OBS install, or inside the OBS folder for a portable one. It still works on OBS 31 and 32, and it will keep working when OBS 34 stops loading plugins from the old folders.
 - Duplicating, renaming or importing a scene collection left the Scene Organiser empty. Your folders, tabs, icons and hidden scenes are saved inside the scene collection now, so they go wherever it goes. Thanks to CanadianIceTech for the report
 - A hotkey set to a key StreamUP could not read would fire on every key you pressed. Keys it cannot read are left unbound now
 - The icons in the WebSocket and hotkey button windows were white on light themes, so you could barely see them

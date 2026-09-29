@@ -31,9 +31,22 @@ SetupIconFile="../media/icon.ico"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "..\release\Package\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Installed OBS: the plugin goes in ProgramData, the home OBS 33 gives
+; third-party plugins. The staged folder also carries a bin\64bit copy that
+; OBS 31 and 32 load from the same place (see Package-Windows.ps1).
+Source: "..\release\ProgramData\*"; DestDir: "{commonappdata}\obs-studio\plugins"; Check: not IsPortableObs; Flags: ignoreversion recursesubdirs createallsubdirs
+; Portable OBS never reads ProgramData, so the plugin goes in its own folder:
+; plugins\<name> for OBS 33+, obs-plugins\64bit for OBS 31 and 32.
+Source: "..\release\Portable\*"; DestDir: "{app}"; Check: IsPortableObs; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\LICENSE"; Flags: dontcopy
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
+
+[InstallDelete]
+; Earlier installers put the plugin inside the OBS install folder. OBS 34 stops
+; loading from there, and OBS 31/32 would load that copy alongside the new one.
+Type: files; Name: "{app}\obs-plugins\64bit\{#MyAppName}.dll"; Check: not IsPortableObs
+Type: files; Name: "{app}\obs-plugins\64bit\{#MyAppName}.pdb"; Check: not IsPortableObs
+Type: filesandordirs; Name: "{app}\data\obs-plugins\{#MyAppName}"; Check: not IsPortableObs
 
 [Icons]
 Name: "{group}\{cm:ProgramOnTheWeb,{#MyAppName}}"; Filename: "{#MyAppURL}"
@@ -68,6 +81,40 @@ begin
     Result := InstallPath;
   if RegQueryStringValue(HKLM64, 'SOFTWARE\OBS Studio', '', InstallPath) then
     Result := InstallPath;
+end;
+
+// The OBS install Windows has registered, or '' when there is none.
+function GetInstalledObsDir(): string;
+var
+  InstallPath: string;
+begin
+  Result := '';
+  if RegQueryStringValue(HKLM32, 'SOFTWARE\OBS Studio', '', InstallPath) then
+    Result := InstallPath;
+  if RegQueryStringValue(HKLM64, 'SOFTWARE\OBS Studio', '', InstallPath) then
+    Result := InstallPath;
+end;
+
+function SamePath(A, B: string): Boolean;
+begin
+  Result := CompareText(RemoveBackslashUnlessRoot(ExpandFileName(A)),
+                        RemoveBackslashUnlessRoot(ExpandFileName(B))) = 0;
+end;
+
+// Portable OBS keeps plugins in its own folder instead of ProgramData. It is
+// portable when it has one of the marker files OBS itself checks for, or when
+// it is not the OBS that Windows has registered as installed.
+function IsPortableObs(): Boolean;
+var
+  Dir, Installed: string;
+begin
+  Dir := ExpandConstant('{app}');
+  Result := FileExists(Dir + '\portable_mode') or FileExists(Dir + '\obs_portable_mode') or
+            FileExists(Dir + '\portable_mode.txt') or FileExists(Dir + '\obs_portable_mode.txt');
+  if not Result then begin
+    Installed := GetInstalledObsDir();
+    Result := (Installed = '') or not SamePath(Dir, Installed);
+  end;
 end;
 
 /////////////////////////////////////////////////////////////////////

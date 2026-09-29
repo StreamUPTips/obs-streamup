@@ -73,8 +73,47 @@ function Package {
         throw 'InnoSetup install script not found. Run the build script or the CMake build and install procedures first.'
     }
 
-    Copy-Item -Path "${ProjectRoot}/release/${Configuration}/${ProductName}/bin" -Destination "${ProjectRoot}/release/Package/obs-plugins" -Recurse
-    Copy-Item -Path "${ProjectRoot}/release/${Configuration}/${ProductName}/data" -Destination "${ProjectRoot}/release/Package/data/obs-plugins/${ProductName}" -Recurse
+    # Stage two layouts that each work on every OBS version we support.
+    #
+    # OBS 33 moved third-party plugins to <root>/plugins/<name>/<name>.dll with
+    # data beside it, and stops loading the old locations in OBS 34. OBS 31 and
+    # 32 only know the old ones. Each layout therefore carries the plugin in
+    # both places: OBS 33+ loads the new copy and skips the old one by name,
+    # older OBS never looks at the new one.
+    #
+    # ProgramData: goes in C:\ProgramData\obs-studio\plugins (installed OBS)
+    #   <name>\<name>.dll                33+
+    #   <name>\bin\64bit\<name>.dll      31 and 32
+    #   <name>\data\                     shared by both
+    #
+    # Portable: goes in the OBS folder itself (portable OBS)
+    #   plugins\<name>\<name>.dll + data\                 33+
+    #   obs-plugins\64bit\<name>.dll + data\obs-plugins\  31 and 32
+    $BuiltBin = "${ProjectRoot}/release/${Configuration}/${ProductName}/bin/64bit"
+    $BuiltData = "${ProjectRoot}/release/${Configuration}/${ProductName}/data"
+
+    $ProgramDataStage = "${ProjectRoot}/release/ProgramData"
+    $PortableStage = "${ProjectRoot}/release/Portable"
+    Remove-Item -Path $ProgramDataStage, $PortableStage -Recurse -Force -ErrorAction SilentlyContinue
+
+    $Targets = @(
+        "${ProgramDataStage}/${ProductName}"
+        "${ProgramDataStage}/${ProductName}/bin/64bit"
+        "${PortableStage}/plugins/${ProductName}"
+        "${PortableStage}/obs-plugins/64bit"
+    )
+    foreach ( $Target in $Targets ) {
+        New-Item -ItemType Directory -Path $Target -Force | Out-Null
+        Copy-Item -Path "${BuiltBin}/*" -Destination $Target -Recurse
+    }
+
+    if ( Test-Path -Path $BuiltData ) {
+        Copy-Item -Path $BuiltData -Destination "${ProgramDataStage}/${ProductName}/data" -Recurse
+        Copy-Item -Path $BuiltData -Destination "${PortableStage}/plugins/${ProductName}/data" -Recurse
+        New-Item -ItemType Directory -Path "${PortableStage}/data/obs-plugins" -Force | Out-Null
+        Copy-Item -Path $BuiltData -Destination "${PortableStage}/data/obs-plugins/${ProductName}" -Recurse
+    }
+
     Copy-Item "${IsccFile}" -Destination "${ProjectRoot}/release"
     Copy-Item "${ProjectRoot}/media/icon.ico" -Destination "${ProjectRoot}/release"
 
@@ -85,16 +124,18 @@ function Package {
     Pop-Location -Stack BuildTemp
 
     Log-Group "Archiving ${ProductName}..."
+    # Extract into C:\ProgramData\obs-studio\plugins
     $CompressArgs = @{
-        Path = (Get-ChildItem -Path "${ProjectRoot}/release/${Configuration}" -Exclude "${OutputName}*.*")
+        Path = (Get-ChildItem -Path $ProgramDataStage)
         CompressionLevel = 'Optimal'
         DestinationPath = "${ProjectRoot}/release/${OutputName}-programdata.zip"
         Verbose = ($Env:CI -ne $null)
     }
     Compress-Archive -Force @CompressArgs
 
+    # Extract into a portable OBS folder
     $CompressArgs = @{
-        Path = (Get-ChildItem -Path "${ProjectRoot}/release/Package" -Exclude "${OutputName}*.*")
+        Path = (Get-ChildItem -Path $PortableStage)
         CompressionLevel = 'Optimal'
         DestinationPath = "${ProjectRoot}/release/${OutputName}.zip"
         Verbose = ($Env:CI -ne $null)
