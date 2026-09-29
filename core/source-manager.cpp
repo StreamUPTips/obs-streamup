@@ -14,6 +14,7 @@ extern void CreateToolDialog(const char *infoText1, const char *infoText2, const
                             const std::function<void()> &buttonCallback, const QString &jsonString, const char *how1, const char *how2,
                             const char *how3, const char *how4, const char *notificationMessage);
 #include "notification-manager.hpp"
+#include "../ui/scene-organiser/scene-canvas.hpp"
 
 namespace StreamUP {
 namespace SourceManager {
@@ -229,33 +230,61 @@ bool ToggleLockSceneItems(obs_scene_t *scene, bool lock)
 	return lock;
 }
 
+// The scenes that are live right now: the main canvas' one, plus Aitum
+// Vertical's when it is running. Every entry is a scene and holds a reference
+// the caller releases with ReleaseScenes.
+static std::vector<obs_source_t *> GetLiveScenes()
+{
+	std::vector<obs_source_t *> scenes;
+
+	obs_source_t *main_scene = obs_frontend_get_current_scene();
+	if (main_scene)
+		scenes.push_back(main_scene);
+
+	if (StreamUP::SceneOrganiser::Canvas::VerticalAvailable()) {
+		// Can hand back Aitum's transition mid switch, which is not a scene.
+		obs_source_t *vertical = StreamUP::SceneOrganiser::Canvas::GetCurrentScene(
+			StreamUP::SceneOrganiser::CanvasType::Vertical);
+		if (vertical && obs_scene_from_source(vertical) && vertical != main_scene)
+			scenes.push_back(vertical);
+		else if (vertical)
+			obs_source_release(vertical);
+	}
+
+	return scenes;
+}
+
+static void ReleaseScenes(std::vector<obs_source_t *> &scenes)
+{
+	for (obs_source_t *scene : scenes)
+		obs_source_release(scene);
+	scenes.clear();
+}
+
 bool ToggleLockSourcesInCurrentScene(bool sendNotification)
 {
-	obs_source_t *current_scene = obs_frontend_get_current_scene();
-	if (!current_scene) {
+	std::vector<obs_source_t *> scenes = GetLiveScenes();
+	if (scenes.empty()) {
 		if (sendNotification) {
-			StreamUP::ErrorHandler::LogError("No current scene found", 
+			StreamUP::ErrorHandler::LogError("No current scene found",
 				StreamUP::ErrorHandler::Category::Source);
 		}
 		return false;
 	}
 
-	obs_scene_t *scene = obs_scene_from_source(current_scene);
-	if (!scene) {
-		obs_source_release(current_scene);
-		if (sendNotification) {
-			StreamUP::ErrorHandler::LogError("Invalid scene source", 
-				StreamUP::ErrorHandler::Category::Source);
+	// One decision for every live scene: lock them all if anything in any of
+	// them is unlocked, unlock them all otherwise.
+	bool any_unlocked = false;
+	for (obs_source_t *source : scenes) {
+		if (CheckIfAnyUnlocked(obs_scene_from_source(source))) {
+			any_unlocked = true;
+			break;
 		}
-		return false;
 	}
 
-	// Single-pass optimized check and toggle
-	bool any_unlocked = CheckIfAnyUnlocked(scene);
-	bool lock_state = any_unlocked; // Lock if any unlocked, unlock if all locked
-	
-	ToggleLockSceneItems(scene, lock_state);
-	obs_source_release(current_scene);
+	for (obs_source_t *source : scenes)
+		ToggleLockSceneItems(obs_scene_from_source(source), any_unlocked);
+	ReleaseScenes(scenes);
 
 	if (sendNotification) {
 		if (any_unlocked) {
@@ -268,6 +297,44 @@ bool ToggleLockSourcesInCurrentScene(bool sendNotification)
 	}
 
 	return any_unlocked;
+}
+
+// obs_enum_scenes only walks the main canvas, so the vertical canvas' scenes
+// were never locked. This walks every canvas. The canvases are collected first
+// so their list is not held locked while scene items change underneath it.
+static void EnumScenesOnAllCanvases(bool (*enum_proc)(void *, obs_source_t *), void *param)
+{
+	std::vector<obs_canvas_t *> canvases;
+	obs_enum_canvases(
+		[](void *data, obs_canvas_t *canvas) {
+			if (obs_canvas_t *ref = obs_canvas_get_ref(canvas))
+				static_cast<std::vector<obs_canvas_t *> *>(data)->push_back(ref);
+			return true;
+		},
+		&canvases);
+
+	struct Walk {
+		bool (*proc)(void *, obs_source_t *);
+		void *param;
+		bool stopped;
+	} walk = {enum_proc, param, false};
+
+	for (obs_canvas_t *canvas : canvases) {
+		if (!walk.stopped) {
+			obs_canvas_enum_scenes(
+				canvas,
+				[](void *data, obs_source_t *scene) {
+					auto *w = static_cast<Walk *>(data);
+					if (!w->proc(w->param, scene)) {
+						w->stopped = true;
+						return false;
+					}
+					return true;
+				},
+				&walk);
+		}
+		obs_canvas_release(canvas);
+	}
 }
 
 // Optimized structure for combined operations
@@ -315,7 +382,7 @@ bool CheckIfAnyUnlockedInAllScenes()
 {
 	LockOperationData data;
 	data.check_only = true;
-	obs_enum_scenes(OptimizedLockCallback, &data);
+	EnumScenesOnAllCanvases(OptimizedLockCallback, &data);
 	return data.any_unlocked;
 }
 
@@ -324,7 +391,7 @@ static void ToggleLockSourcesInAllScenes(bool lock)
 	LockOperationData data;
 	data.lock_determined = true;
 	data.lock_state = lock;
-	obs_enum_scenes(OptimizedLockCallback, &data);
+	EnumScenesOnAllCanvases(OptimizedLockCallback, &data);
 }
 
 bool ToggleLockAllSources(bool sendNotification)
@@ -333,7 +400,7 @@ bool ToggleLockAllSources(bool sendNotification)
 	LockOperationData data;
 	
 	// First pass: determine lock state
-	obs_enum_scenes(OptimizedLockCallback, &data);
+	EnumScenesOnAllCanvases(OptimizedLockCallback, &data);
 	
 	// If no unlocked items found, unlock all (toggle behavior)
 	if (!data.any_unlocked) {
@@ -346,7 +413,7 @@ bool ToggleLockAllSources(bool sendNotification)
 	
 	// Second pass: apply the determined lock state
 	data.check_only = false;
-	obs_enum_scenes(OptimizedLockCallback, &data);
+	EnumScenesOnAllCanvases(OptimizedLockCallback, &data);
 
 	if (sendNotification) {
 		if (data.any_unlocked) {
@@ -456,17 +523,15 @@ int GetSelectedSourceCount()
 // Convenience functions for checking lock status (used by dock widget)
 bool AreAllSourcesLockedInCurrentScene()
 {
-	obs_source_t *current_scene = obs_frontend_get_current_scene();
-	if (!current_scene) return false;
-
-	obs_scene_t *scene = obs_scene_from_source(current_scene);
-	bool result = false;
-	
-	if (scene) {
-		result = !CheckIfAnyUnlocked(scene);
+	std::vector<obs_source_t *> scenes = GetLiveScenes();
+	bool result = !scenes.empty();
+	for (obs_source_t *source : scenes) {
+		if (CheckIfAnyUnlocked(obs_scene_from_source(source))) {
+			result = false;
+			break;
+		}
 	}
-	
-	obs_source_release(current_scene);
+	ReleaseScenes(scenes);
 	return result;
 }
 
