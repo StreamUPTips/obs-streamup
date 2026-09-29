@@ -4,6 +4,10 @@
 - **Scene Organiser Folders Follow Your Collections** Duplicate, rename or import a scene collection and the Scene Organiser used to start empty. Your folders, tabs, icons and hidden scenes are saved inside the scene collection now, so they go wherever it goes. Thanks to CanadianIceTech for the report.
 - **A Hotkey Could Fire On Every Key** Set a hotkey to a key StreamUP could not read and it went off on every key you pressed. Keys it cannot read are left unbound now.
 - **Icons Were White On Light Themes** The icons in the WebSocket and hotkey button windows are dark on light themes now, so you can see them.
+- **Lock Sources Works On The Vertical Canvas** Lock All covers every canvas now, and Lock Current does the live main and vertical scenes together.
+- **Vertical Folders Emptied On Restart** Scenes in the Vertical Scene Organiser fell out of their folders every time OBS closed, and lost their icons and colours with them. They stay where you put them now.
+- **Duplicating A Vertical Scene** A copy could empty a group it shared with other vertical scenes, and would not link to a main scene. Both are fixed.
+- **The Rename Box Was Squashed** On some themes the name shrank to a sliver while you renamed a scene. The box fits the row now.
 - **Linux Builds With Qt 6.10** Building from source on Qt 6.10 failed. Thanks to phedders for the report and the fix.
 
 ---

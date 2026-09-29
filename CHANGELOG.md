@@ -3,12 +3,16 @@
 ---
 
 ## v2.4.1 (29 Sep '26)
-**Patch Focus:** Scene Organiser folders that follow your collections, plus hotkey and light theme fixes
+**Patch Focus:** Scene Organiser folders that follow your collections, Aitum Vertical fixes, plus hotkey and light theme fixes
 
 ### Bug Fixes
 - Duplicating, renaming or importing a scene collection left the Scene Organiser empty. Your folders, tabs, icons and hidden scenes are saved inside the scene collection now, so they go wherever it goes. Thanks to CanadianIceTech for the report
 - A hotkey set to a key StreamUP could not read would fire on every key you pressed. Keys it cannot read are left unbound now
 - The icons in the WebSocket and hotkey button windows were white on light themes, so you could barely see them
+- Lock All Sources and Lock Current Scene Sources ignored the Aitum Vertical canvas. Lock All covers every canvas now, and Lock Current does the live main and vertical scenes together
+- Scenes in the Vertical Scene Organiser fell out of their folders every time OBS closed, and lost their icons and colours with them. They stay where you put them now
+- Duplicating a vertical scene could empty a group it shared with other vertical scenes, and the copy would not link to a main scene
+- Renaming a scene in the Scene Organiser squashed the name down to a sliver on some themes. The rename box fits the row now
 - Building on Linux with Qt 6.10 failed. Thanks to phedders for the report and the fix
 
 ---
