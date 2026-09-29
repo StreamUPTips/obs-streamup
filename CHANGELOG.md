@@ -3,7 +3,14 @@
 ---
 
 ## v2.4.1 (29 Sep '26)
-**Patch Focus:** Scene Organiser folders that follow your collections, Aitum Vertical fixes, plus hotkey and light theme fixes
+**Patch Focus:** Scene Organiser folders that follow your collections, Aitum Vertical fixes, multi select on tabs, plus hotkey and light theme fixes
+
+### Improvements
+- Add to Tab works on everything you have selected, not just one scene at a time
+- Folders can be added to a tab too, and bring everything inside them with them
+- New Tab on a folder makes a tab from that folder, with its name filled in for you
+- Multi select on custom tabs, so you can drag a run of scenes into a folder, or remove them, in one go
+- Move to Tab in the tab menu sends your selection to another tab and takes it out of this one
 
 ### Bug Fixes
 - Duplicating, renaming or importing a scene collection left the Scene Organiser empty. Your folders, tabs, icons and hidden scenes are saved inside the scene collection now, so they go wherever it goes. Thanks to CanadianIceTech for the report
@@ -13,6 +20,8 @@
 - Scenes in the Vertical Scene Organiser fell out of their folders every time OBS closed, and lost their icons and colours with them. They stay where you put them now
 - Duplicating a vertical scene could empty a group it shared with other vertical scenes, and the copy would not link to a main scene
 - Renaming a scene in the Scene Organiser squashed the name down to a sliver on some themes. The rename box fits the row now
+- Rearranging a tab quietly dropped any hidden scenes from it. They stay in the tab now
+- The remove button did nothing on a custom tab
 - Building on Linux with Qt 6.10 failed. Thanks to phedders for the report and the fix
 
 ---

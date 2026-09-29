@@ -1,5 +1,11 @@
 # StreamUP v2.4.1 - Patch Update
 
+## Improvements
+- **Add Your Whole Selection To A Tab** Add to Tab works on everything you have selected, not just one scene at a time.
+- **Folders Go Into Tabs** Add a folder to a tab and everything inside it comes too. New Tab on a folder makes a tab from it, named after the folder.
+- **Multi Select On Tabs** Ctrl click and shift click on a custom tab, then drag the lot into a folder or remove it in one go.
+- **Move To Tab** Sends your selection to another tab and takes it out of this one.
+
 ## Bug Fixes
 - **Scene Organiser Folders Follow Your Collections** Duplicate, rename or import a scene collection and the Scene Organiser used to start empty. Your folders, tabs, icons and hidden scenes are saved inside the scene collection now, so they go wherever it goes. Thanks to CanadianIceTech for the report.
 - **A Hotkey Could Fire On Every Key** Set a hotkey to a key StreamUP could not read and it went off on every key you pressed. Keys it cannot read are left unbound now.
@@ -8,6 +14,8 @@
 - **Vertical Folders Emptied On Restart** Scenes in the Vertical Scene Organiser fell out of their folders every time OBS closed, and lost their icons and colours with them. They stay where you put them now.
 - **Duplicating A Vertical Scene** A copy could empty a group it shared with other vertical scenes, and would not link to a main scene. Both are fixed.
 - **The Rename Box Was Squashed** On some themes the name shrank to a sliver while you renamed a scene. The box fits the row now.
+- **Hidden Scenes Fell Out Of Tabs** Rearranging a tab quietly dropped any hidden scenes from it. They stay in the tab now.
+- **Remove Did Nothing On A Tab** The remove button follows what you have selected on the tab now.
 - **Linux Builds With Qt 6.10** Building from source on Qt 6.10 failed. Thanks to phedders for the report and the fix.
 
 ---
