@@ -107,11 +107,11 @@ bool ParseBinding(const QJsonObject &j, Binding &b, QString *why)
 bool ParseLayout(const QJsonObject &j, Control &c, QString *why)
 {
 	Rig &r = c.rig;
-	for (const QJsonValue &v : j.value("scenes").toArray())
+	for (const QJsonValue v : j.value("scenes").toArray())
 		r.scenes.append(v.toString());
-	for (const QJsonValue &v : j.value("sources").toArray())
+	for (const QJsonValue v : j.value("sources").toArray())
 		r.sources.append(v.toString());
-	for (const QJsonValue &v : j.value("frame").toArray())
+	for (const QJsonValue v : j.value("frame").toArray())
 		r.frameSources.append(v.toString());
 	r.parent = j.value("parent").toString();
 	const QJsonArray scale = j.value("scale").toArray();
@@ -124,7 +124,7 @@ bool ParseLayout(const QJsonObject &j, Control &c, QString *why)
 		*why = QString("layout part \"%1\" needs scenes and sources").arg(c.id);
 		return false;
 	}
-	for (const QJsonValue &lv : j.value("links").toArray()) {
+	for (const QJsonValue lv : j.value("links").toArray()) {
 		const QJsonObject lj = lv.toObject();
 		GeoLink l;
 		l.source = lj.value("source").toString();
@@ -187,7 +187,7 @@ bool ParseControl(const QJsonObject &j, const QString &groupTab, Control &c, QSt
 	} else if (type == "select" || type == "font") {
 		c.type = type == "select" ? ControlType::Select : ControlType::Font;
 		c.editable = j.value("editable").toBool(type == "font");
-		for (const QJsonValue &ov : j.value("options").toArray()) {
+		for (const QJsonValue ov : j.value("options").toArray()) {
 			if (ov.isString())
 				c.options.append(SelectOption{ov.toString(), ov.toString()});
 			else
@@ -204,7 +204,7 @@ bool ParseControl(const QJsonObject &j, const QString &groupTab, Control &c, QSt
 	} else if (type == "platforms") {
 		c.type = ControlType::Platforms;
 		c.wordCase = j.value("case").toString();
-		for (const QJsonValue &pv : j.value("platforms").toArray()) {
+		for (const QJsonValue pv : j.value("platforms").toArray()) {
 			const QJsonObject pj = pv.toObject();
 			PlatformDef p;
 			p.id = pj.value("id").toString();
@@ -239,7 +239,7 @@ bool ParseControl(const QJsonObject &j, const QString &groupTab, Control &c, QSt
 	}
 	c.value = c.defaultValue;
 
-	for (const QJsonValue &bv : j.value("bindings").toArray()) {
+	for (const QJsonValue bv : j.value("bindings").toArray()) {
 		Binding b;
 		QString bindWhy;
 		if (!ParseBinding(bv.toObject(), b, &bindWhy)) {
@@ -280,10 +280,10 @@ bool ParseManifest(const QJsonObject &m, Overlay &o, QString *error)
 		*error = "The overlay controls have no id.";
 		return false;
 	}
-	for (const QJsonValue &s : m.value("scenes").toArray())
+	for (const QJsonValue s : m.value("scenes").toArray())
 		o.scenes.append(s.toString());
 
-	for (const QJsonValue &tv : m.value("tabs").toArray()) {
+	for (const QJsonValue tv : m.value("tabs").toArray()) {
 		const QJsonObject tj = tv.toObject();
 		if (!tj.value("id").toString().isEmpty())
 			o.tabs.append(TabInfo{tj.value("id").toString(), tj.value("label").toString(tj.value("id").toString())});
@@ -292,12 +292,12 @@ bool ParseManifest(const QJsonObject &m, Overlay &o, QString *error)
 		o.tabs.append(TabInfo{"look", "Look"});
 
 	QSet<QString> ids;
-	for (const QJsonValue &gv : m.value("groups").toArray()) {
+	for (const QJsonValue gv : m.value("groups").toArray()) {
 		const QJsonObject gj = gv.toObject();
 		Group g;
 		g.label = gj.value("label").toString();
 		g.tab = gj.value("tab").toString(o.tabs.first().id);
-		for (const QJsonValue &cv : gj.value("controls").toArray()) {
+		for (const QJsonValue cv : gj.value("controls").toArray()) {
 			Control c;
 			QString why;
 			if (!ParseControl(cv.toObject(), g.tab, c, &why)) {
@@ -321,7 +321,7 @@ bool ParseManifest(const QJsonObject &m, Overlay &o, QString *error)
 		return false;
 	}
 
-	for (const QJsonValue &ov : m.value("outputs").toArray()) {
+	for (const QJsonValue ov : m.value("outputs").toArray()) {
 		const QJsonObject oj = ov.toObject();
 		Output out;
 		out.source = oj.value("source").toString();
@@ -334,7 +334,7 @@ bool ParseManifest(const QJsonObject &m, Overlay &o, QString *error)
 		o.outputs.append(out);
 	}
 
-	for (const QJsonValue &pv : m.value("presets").toArray()) {
+	for (const QJsonValue pv : m.value("presets").toArray()) {
 		const QJsonObject pj = pv.toObject();
 		Preset p;
 		p.name = pj.value("name").toString();
@@ -431,7 +431,7 @@ void RestoreRigState(Rig &r, const QJsonObject &j)
 	// Only while the part still lists the same things; otherwise it is
 	// measured again from scratch.
 	QList<RigItem> items;
-	for (const QJsonValue &v : j.value("items").toArray()) {
+	for (const QJsonValue v : j.value("items").toArray()) {
 		const QJsonObject ij = v.toObject();
 		RigItem it;
 		it.scene = ij.value("scene").toString();
@@ -518,13 +518,13 @@ void RestoreOverlayState(Overlay &o, const QJsonObject &state)
 				RestoreRigState(c.rig, cj.value("rig").toObject());
 		}
 	}
-	for (const QJsonValue &pv : state.value("userPresets").toArray()) {
+	for (const QJsonValue pv : state.value("userPresets").toArray()) {
 		const QJsonObject pj = pv.toObject();
 		Preset p{pj.value("name").toString(), false, pj.value("values").toObject()};
 		if (!p.name.isEmpty())
 			o.presets.append(p);
 	}
-	for (const QJsonValue &u : state.value("sceneUuids").toArray())
+	for (const QJsonValue u : state.value("sceneUuids").toArray())
 		o.sceneUuids.append(u.toString());
 	o.resourceDir = state.value("resourceDir").toString();
 	SnapshotFromJson(o, state.value("snapshot").toObject());
@@ -785,7 +785,7 @@ void OnSaveLoad(obs_data_t *moduleData, bool saving, void *)
 		const QByteArray json(obs_data_get_string(moduleData, kModuleKey));
 		if (!json.isEmpty()) {
 			const QJsonObject root = QJsonDocument::fromJson(json).object();
-			for (const QJsonValue &ov : root.value("overlays").toArray()) {
+			for (const QJsonValue ov : root.value("overlays").toArray()) {
 				const QJsonObject oj = ov.toObject();
 				Overlay o;
 				QString why;

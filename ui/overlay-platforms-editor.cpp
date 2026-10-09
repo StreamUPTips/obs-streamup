@@ -57,7 +57,7 @@ PlatformsEditor::PlatformsEditor(const oc::ControlInfo &info, QWidget *parent) :
 		QString pick = m_defs.first().id;
 		for (const oc::PlatformDef &d : m_defs) {
 			bool used = false;
-			for (const QJsonValue &r : m_rows)
+			for (const QJsonValue r : m_rows)
 				used = used || r.toObject().value("platform").toString() == d.id;
 			if (!used) {
 				pick = d.id;

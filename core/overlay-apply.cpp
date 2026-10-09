@@ -127,7 +127,7 @@ QJsonValue NormaliseValue(const Control &c, const QJsonValue &in)
 		if (!in.isArray())
 			return undefined;
 		QJsonArray out;
-		for (const QJsonValue &v : in.toArray()) {
+		for (const QJsonValue v : in.toArray()) {
 			const QJsonObject row = v.toObject();
 			const QString platform = row.value("platform").toString();
 			bool known = false;
@@ -764,7 +764,7 @@ QString PlatformToken(Overlay &o, const Control &c, const QString &part)
 	QStringList icons;
 	QStringList words;
 	QJsonArray chat;
-	for (const QJsonValue &v : rows) {
+	for (const QJsonValue v : rows) {
 		const QJsonObject row = v.toObject();
 		const PlatformDef *def = nullptr;
 		for (const PlatformDef &p : c.platforms)
@@ -1467,21 +1467,21 @@ void SnapshotFromJson(Overlay &o, const QJsonObject &j)
 	o.snapshotTaken = j.value("taken").toBool(false);
 	o.snapSources.clear();
 	o.snapItems.clear();
-	for (const QJsonValue &sv : j.value("sources").toArray()) {
+	for (const QJsonValue sv : j.value("sources").toArray()) {
 		const QJsonObject sj = sv.toObject();
 		SnapSource s;
 		s.name = sj.value("name").toString();
 		s.uuid = sj.value("uuid").toString();
 		s.kind = sj.value("kind").toString();
 		s.settings = sj.value("settings").toObject();
-		for (const QJsonValue &fv : sj.value("filters").toArray()) {
+		for (const QJsonValue fv : sj.value("filters").toArray()) {
 			const QJsonObject fj = fv.toObject();
 			s.filters.append(SnapFilter{fj.value("name").toString(), fj.value("uuid").toString(),
 						    fj.value("settings").toObject(), fj.value("enabled").toBool(true)});
 		}
 		o.snapSources.append(s);
 	}
-	for (const QJsonValue &iv : j.value("items").toArray()) {
+	for (const QJsonValue iv : j.value("items").toArray()) {
 		const QJsonObject ij = iv.toObject();
 		o.snapItems.append(SnapItem{ij.value("scene").toString(), ij.value("sceneUuid").toString(),
 					    ij.value("source").toString(), qint64(ij.value("id").toDouble()),
