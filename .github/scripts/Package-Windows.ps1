@@ -94,7 +94,7 @@ function Package {
 
     $ProgramDataStage = "${ProjectRoot}/release/ProgramData"
     $PortableStage = "${ProjectRoot}/release/Portable"
-    Remove-Item -Path $ProgramDataStage, $PortableStage -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $ProgramDataStage, $PortableStage, "${ProjectRoot}/release/OBS33" -Recurse -Force -ErrorAction SilentlyContinue
 
     $Targets = @(
         "${ProgramDataStage}/${ProductName}"
@@ -124,11 +124,17 @@ function Package {
     Pop-Location -Stack BuildTemp
 
     Log-Group "Archiving ${ProductName}..."
-    # Extract into C:\ProgramData\obs-studio\plugins
+    # OBS 33+ only: extract into C:\ProgramData\obs-studio\plugins. The
+    # installer still uses the full ProgramData stage, since bin\64bit is the
+    # copy OBS 31 and 32 load from there.
+    $Obs33Stage = "${ProjectRoot}/release/OBS33"
+    Copy-Item -Path $ProgramDataStage -Destination $Obs33Stage -Recurse
+    Remove-Item -Path "${Obs33Stage}/${ProductName}/bin" -Recurse -Force
+
     $CompressArgs = @{
-        Path = (Get-ChildItem -Path $ProgramDataStage)
+        Path = (Get-ChildItem -Path $Obs33Stage)
         CompressionLevel = 'Optimal'
-        DestinationPath = "${ProjectRoot}/release/${OutputName}-programdata.zip"
+        DestinationPath = "${ProjectRoot}/release/${OutputName}-obs33.zip"
         Verbose = ($Env:CI -ne $null)
     }
     Compress-Archive -Force @CompressArgs
