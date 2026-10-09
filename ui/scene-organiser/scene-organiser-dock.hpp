@@ -417,6 +417,10 @@ public:
     int m_currentCustomTab = -1;
 
     QAction *m_favouriteToggleAction = nullptr;
+    // "Customise <overlay>" on scenes that belong to an overlay with controls.
+    QAction *m_customiseOverlayAction = nullptr;
+    QAction *m_customiseOverlaySeparator = nullptr;
+    QString m_customiseOverlayId;
     QMenu *m_addToTabMenu = nullptr;
     QMenu *m_folderAddToTabMenu = nullptr;
     // The current tab's unlisted top level scenes (see TabItemHiddenRole).
