@@ -94,7 +94,7 @@ function Package {
 
     $ProgramDataStage = "${ProjectRoot}/release/ProgramData"
     $PortableStage = "${ProjectRoot}/release/Portable"
-    Remove-Item -Path $ProgramDataStage, $PortableStage, "${ProjectRoot}/release/OBS33" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $ProgramDataStage, $PortableStage, "${ProjectRoot}/release/OBS33", "${ProjectRoot}/release/OBS31-32" -Recurse -Force -ErrorAction SilentlyContinue
 
     $Targets = @(
         "${ProgramDataStage}/${ProductName}"
@@ -123,30 +123,22 @@ function Package {
     Invoke-External iscc ${IsccFile} /O. /F"${OutputName}-Installer"
     Pop-Location -Stack BuildTemp
 
-    Log-Group "Archiving ${ProductName}..."
-    # OBS 33+ only: extract into C:\ProgramData\obs-studio\plugins. The
-    # installer still uses the full ProgramData stage, since bin\64bit is the
-    # copy OBS 31 and 32 load from there.
+    Log-Group "Staging manual install folders..."
+    # One folder per manual download. CI uploads each folder as its own
+    # artifact (GitHub zips it, so the folder's contents are the zip root) and
+    # the release job zips them the same way.
+    #   OBS33\plugins\<name>\         OBS 33+: extract into the OBS folder
+    #                                 (portable) or C:\ProgramData\obs-studio
+    #   OBS31-32\obs-plugins\64bit\   OBS 31 and 32: extract into the OBS folder
+    #   OBS31-32\data\obs-plugins\
     $Obs33Stage = "${ProjectRoot}/release/OBS33"
-    Copy-Item -Path $ProgramDataStage -Destination $Obs33Stage -Recurse
-    Remove-Item -Path "${Obs33Stage}/${ProductName}/bin" -Recurse -Force
-
-    $CompressArgs = @{
-        Path = (Get-ChildItem -Path $Obs33Stage)
-        CompressionLevel = 'Optimal'
-        DestinationPath = "${ProjectRoot}/release/${OutputName}-obs33.zip"
-        Verbose = ($Env:CI -ne $null)
+    $LegacyStage = "${ProjectRoot}/release/OBS31-32"
+    New-Item -ItemType Directory -Path $Obs33Stage, $LegacyStage -Force | Out-Null
+    Copy-Item -Path "${PortableStage}/plugins" -Destination $Obs33Stage -Recurse
+    Copy-Item -Path "${PortableStage}/obs-plugins" -Destination $LegacyStage -Recurse
+    if ( Test-Path -Path "${PortableStage}/data" ) {
+        Copy-Item -Path "${PortableStage}/data" -Destination $LegacyStage -Recurse
     }
-    Compress-Archive -Force @CompressArgs
-
-    # Extract into a portable OBS folder
-    $CompressArgs = @{
-        Path = (Get-ChildItem -Path $PortableStage)
-        CompressionLevel = 'Optimal'
-        DestinationPath = "${ProjectRoot}/release/${OutputName}.zip"
-        Verbose = ($Env:CI -ne $null)
-    }
-    Compress-Archive -Force @CompressArgs
 
     Log-Group
 }
