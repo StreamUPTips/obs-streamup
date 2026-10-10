@@ -94,7 +94,7 @@ function Package {
 
     $ProgramDataStage = "${ProjectRoot}/release/ProgramData"
     $PortableStage = "${ProjectRoot}/release/Portable"
-    Remove-Item -Path $ProgramDataStage, $PortableStage, "${ProjectRoot}/release/OBS33", "${ProjectRoot}/release/OBS31-32" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path $ProgramDataStage, $PortableStage, "${ProjectRoot}/release/OBS33", "${ProjectRoot}/release/OBS31-32", "${ProjectRoot}/release/WindowsAll" -Recurse -Force -ErrorAction SilentlyContinue
 
     $Targets = @(
         "${ProgramDataStage}/${ProductName}"
@@ -139,6 +139,20 @@ function Package {
     if ( Test-Path -Path "${PortableStage}/data" ) {
         Copy-Item -Path "${PortableStage}/data" -Destination $LegacyStage -Recurse
     }
+
+    # Every Windows version in one download (the file the product pages link
+    # to): the installer plus both manual install folders, extracted, so there
+    # is never a zip inside a zip. No .pdb files, to keep the download small;
+    # the separate OBS33 and OBS31-32 downloads keep them.
+    #   WindowsAll\<name>-<ver>-windows-x64-Installer.exe
+    #   WindowsAll\<name>-<ver>-windows-x64-obs33\plugins\...
+    #   WindowsAll\<name>-<ver>-windows-x64-obs31-32\obs-plugins\... + data\...
+    $AllStage = "${ProjectRoot}/release/WindowsAll"
+    New-Item -ItemType Directory -Path $AllStage -Force | Out-Null
+    Copy-Item -Path "${ProjectRoot}/release/${OutputName}-Installer.exe" -Destination $AllStage
+    Copy-Item -Path $Obs33Stage -Destination "${AllStage}/${OutputName}-obs33" -Recurse
+    Copy-Item -Path $LegacyStage -Destination "${AllStage}/${OutputName}-obs31-32" -Recurse
+    Get-ChildItem -Path $AllStage -Recurse -Filter '*.pdb' | Remove-Item -Force
 
     Log-Group
 }
