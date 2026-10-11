@@ -1,3 +1,17 @@
+# StreamUP v2.4.2 - Patch Update
+
+## New Features
+- **Overlays Can Install Vertical Scenes** A .StreamUP file can carry scenes for Aitum Vertical now, and they install straight onto your vertical canvas. No Aitum Vertical installed? They're skipped and StreamUP tells you.
+
+## Improvements
+- **Overlay Controls Reach The Vertical Canvas** Layout parts, nameplate cut-outs and the preview all work on vertical scenes, and the preview is the right shape for them.
+- **Smoother Sliders** Dragging a slider or picking a colour in Overlay Controls no longer bogs OBS down on overlays with lots of linked settings.
+
+## Bug Fixes
+- **The Layout Page Lagged** Moving parts on the Layout page made OBS stutter, and dragging felt sticky. It runs smoothly now and leaves OBS's own preview alone.
+
+---
+
 # StreamUP v2.4.1 - Patch Update
 
 ## Improvements

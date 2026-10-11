@@ -1096,6 +1096,34 @@ void WebsocketGetOverlays(obs_data_t *request_data, obs_data_t *response_data, v
 	obs_data_set_bool(response_data, "success", true);
 }
 
+// Registers (or re-registers) an overlay's controls from a .StreamUP file
+// without installing any of its sources. For a creator iterating on a product:
+// the scenes already exist, only the control panel needs the new manifest.
+void WebsocketRegisterOverlay(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+	const QString file = QString::fromUtf8(obs_data_get_string(request_data, "file")).trimmed();
+	if (file.isEmpty()) {
+		obs_data_set_string(response_data, "error", "'file' is required (the path of a .StreamUP file).");
+		obs_data_set_bool(response_data, "success", false);
+		return;
+	}
+	QString overlayId;
+	QString error;
+	if (!oc::RegisterFromFile(file, &overlayId, &error)) {
+		obs_data_set_string(response_data, "error", error.toUtf8().constData());
+		obs_data_set_bool(response_data, "success", false);
+		return;
+	}
+	oc::OverlayInfo info;
+	if (oc::GetOverlay(overlayId, info)) {
+		obs_data_set_int(response_data, "links", info.links);
+		obs_data_set_int(response_data, "missingLinks", info.missing);
+	}
+	obs_data_set_string(response_data, "overlay", overlayId.toUtf8().constData());
+	obs_data_set_bool(response_data, "success", true);
+}
+
 void WebsocketGetOverlayControls(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
 	UNUSED_PARAMETER(private_data);
