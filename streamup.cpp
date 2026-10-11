@@ -605,6 +605,7 @@ static void RegisterWebsocketRequests()
 	// Overlay controls
 	obs_websocket_vendor_register_request(vendor, "GetOverlays", StreamUP::WebSocketAPI::WebsocketGetOverlays, nullptr);
 	obs_websocket_vendor_register_request(vendor, "RegisterOverlay", StreamUP::WebSocketAPI::WebsocketRegisterOverlay, nullptr);
+	obs_websocket_vendor_register_request(vendor, "GroupSceneItems", StreamUP::WebSocketAPI::WebsocketGroupSceneItems, nullptr);
 	obs_websocket_vendor_register_request(vendor, "GetOverlayControls", StreamUP::WebSocketAPI::WebsocketGetOverlayControls, nullptr);
 	obs_websocket_vendor_register_request(vendor, "SetOverlayControl", StreamUP::WebSocketAPI::WebsocketSetOverlayControl, nullptr);
 	obs_websocket_vendor_register_request(vendor, "ResetOverlayControls", StreamUP::WebSocketAPI::WebsocketResetOverlayControls, nullptr);

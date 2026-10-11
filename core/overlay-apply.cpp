@@ -9,6 +9,7 @@
 
 #include <QHash>
 #include <QJsonDocument>
+#include <QList>
 #include <QRegularExpression>
 #include <QSet>
 
@@ -221,7 +222,20 @@ obs_source_t *ResolveTarget(QString &source, QString &sourceUuid, QString &filte
 
 namespace {
 
-// Runs fn on a scene item. The item pointer is only valid inside fn.
+// The scene WithItem searched, while its fn runs. A part can sit inside a
+// group, and the group's own transform is what places it on the canvas.
+thread_local obs_scene_t *t_itemScene = nullptr;
+
+// The group item holding item, or null when the item sits on the scene itself.
+obs_sceneitem_t *ParentGroup(obs_sceneitem_t *item)
+{
+	if (!t_itemScene || obs_sceneitem_get_scene(item) == t_itemScene)
+		return nullptr;
+	return obs_sceneitem_get_group(t_itemScene, item);
+}
+
+// Runs fn on a scene item, which may be inside a group. The item pointer is
+// only valid inside fn.
 bool WithItem(QString &scene, QString &sceneUuid, const QString &source, const QString &sourceUuid, qint64 *itemId,
 	      const std::function<void(obs_sceneitem_t *)> &fn)
 {
@@ -261,35 +275,84 @@ bool WithItem(QString &scene, QString &sceneUuid, const QString &source, const Q
 		item = obs_scene_find_source_recursive(sc, source.toUtf8().constData());
 	if (item && itemId)
 		*itemId = obs_sceneitem_get_id(item);
-	if (item)
+	if (item) {
+		obs_scene_t *outer = t_itemScene;
+		t_itemScene = sc;
 		fn(item);
+		t_itemScene = outer;
+	}
 	obs_source_release(sceneSource);
 	return item != nullptr;
 }
 
-// The item's box on its scene's canvas, worked out from its transform rather
-// than read from OBS's box matrix: that matrix only catches up on the next
-// video tick, and layout moves need the answer straight away. Rotation is
+// Group space to canvas space: canvas = origin + scale * local. Identity for
+// an item that is not in a group.
+struct GroupXf {
+	double ox = 0.0;
+	double oy = 0.0;
+	double sx = 1.0;
+	double sy = 1.0;
+};
+
+QRectF ItemBox(obs_sceneitem_t *item, const double *pos = nullptr, const double *scale = nullptr);
+
+GroupXf GroupTransform(obs_sceneitem_t *item)
+{
+	GroupXf g;
+	obs_sceneitem_t *group = ParentGroup(item);
+	if (!group)
+		return g;
+	// A group's source is the size of what it holds, and its children are
+	// placed from its top-left corner.
+	const QRectF box = ItemBox(group);
+	obs_source_t *gs = obs_sceneitem_get_source(group);
+	const uint32_t gw = obs_source_get_width(gs);
+	const uint32_t gh = obs_source_get_height(gs);
+	g.ox = box.x();
+	g.oy = box.y();
+	g.sx = gw ? box.width() / gw : 1.0;
+	g.sy = gh ? box.height() / gh : 1.0;
+	return g;
+}
+
+// An item's position and scale on the canvas, through its group if it has one.
+void CanvasTransform(obs_sceneitem_t *item, double &px, double &py, double &sx, double &sy)
+{
+	const GroupXf g = GroupTransform(item);
+	struct obs_transform_info info;
+	obs_sceneitem_get_info2(item, &info);
+	px = g.ox + g.sx * info.pos.x;
+	py = g.oy + g.sy * info.pos.y;
+	sx = g.sx * info.scale.x;
+	sy = g.sy * info.scale.y;
+}
+
+// The item's box on the canvas, worked out from its transform rather than
+// read from OBS's box matrix: that matrix only catches up on the next video
+// tick, and layout moves need the answer straight away. pos and scale, when
+// given, are canvas values (a part's captured install transform). Rotation is
 // ignored; every overlay part is square to the canvas.
-QRectF ItemBox(obs_sceneitem_t *item, const double *pos = nullptr, const double *scale = nullptr)
+QRectF ItemBox(obs_sceneitem_t *item, const double *pos, const double *scale)
 {
 	obs_source_t *src = obs_sceneitem_get_source(item);
 	struct obs_transform_info info;
 	obs_sceneitem_get_info2(item, &info);
 	struct obs_sceneitem_crop crop;
 	obs_sceneitem_get_crop(item, &crop);
-	const double px = pos ? pos[0] : info.pos.x;
-	const double py = pos ? pos[1] : info.pos.y;
-	const double sx = scale ? scale[0] : info.scale.x;
-	const double sy = scale ? scale[1] : info.scale.y;
+	const GroupXf g = GroupTransform(item);
+	const double px = pos ? pos[0] : g.ox + g.sx * info.pos.x;
+	const double py = pos ? pos[1] : g.oy + g.sy * info.pos.y;
+	const double sx = scale ? scale[0] : g.sx * info.scale.x;
+	const double sy = scale ? scale[1] : g.sy * info.scale.y;
 	double w;
 	double h;
 	if (info.bounds_type != OBS_BOUNDS_NONE) {
 		// Bounds are a fixed box the source is fitted into; they scale with
 		// the part like the item's own scale would.
-		const double k = (scale && info.scale.x != 0.0f) ? scale[0] / info.scale.x : 1.0;
-		w = info.bounds.x * k;
-		h = info.bounds.y * k;
+		const double live = g.sx * info.scale.x;
+		const double k = (scale && live != 0.0) ? scale[0] / live : 1.0;
+		w = info.bounds.x * g.sx * k;
+		h = info.bounds.y * g.sy * k;
 	} else {
 		w = double(int(obs_source_get_width(src)) - crop.left - crop.right) * std::fabs(sx);
 		h = double(int(obs_source_get_height(src)) - crop.top - crop.bottom) * std::fabs(sy);
@@ -1061,12 +1124,8 @@ bool CaptureRig(Overlay &o, Control &c)
 		if (it.captured)
 			continue;
 		WithItem(it.scene, it.sceneUuid, it.source, QString(), &it.itemId, [&](obs_sceneitem_t *item) {
-			struct obs_transform_info info;
-			obs_sceneitem_get_info2(item, &info);
-			it.px = info.pos.x;
-			it.py = info.pos.y;
-			it.sx = info.scale.x;
-			it.sy = info.scale.y;
+			// On the canvas, so an item in a group is captured where it shows.
+			CanvasTransform(item, it.px, it.py, it.sx, it.sy);
 			it.visible = obs_sceneitem_visible(item);
 			it.sourceUuid = QString::fromUtf8(obs_source_get_uuid(obs_sceneitem_get_source(item)));
 			it.captured = true;
@@ -1153,6 +1212,10 @@ void ApplyLayout(Overlay &o, const QString &changedPart)
 	// Sources this pass actually moved, so only the links that measure them
 	// (or belong to a part that moved) are recomputed.
 	QSet<QString> moved;
+	// A group refits itself to its children on the next video tick, which
+	// moves its origin. Held still for the whole pass, every child of it is
+	// placed against the same origin.
+	QList<obs_sceneitem_t *> held;
 	for (Target &t : targets) {
 		if (!affected(*t.control))
 			continue;
@@ -1160,12 +1223,18 @@ void ApplyLayout(Overlay &o, const QString &changedPart)
 		RigItem &it = *t.item;
 		moved.insert(it.scene + '\n' + it.source);
 		WithItem(it.scene, it.sceneUuid, it.source, it.sourceUuid, &it.itemId, [&](obs_sceneitem_t *item) {
+			if (obs_sceneitem_t *group = ParentGroup(item); group && !held.contains(group)) {
+				obs_sceneitem_addref(group);
+				obs_sceneitem_defer_group_resize_begin(group);
+				held.append(group);
+			}
+			const GroupXf g = GroupTransform(item);
 			struct obs_transform_info info;
 			obs_sceneitem_get_info2(item, &info);
-			const float px = float(xf.a * it.px + xf.bx);
-			const float py = float(xf.a * it.py + xf.by);
-			const float sx = float(it.sx * xf.a);
-			const float sy = float(it.sy * xf.a);
+			const float px = float((xf.a * it.px + xf.bx - g.ox) / g.sx);
+			const float py = float((xf.a * it.py + xf.by - g.oy) / g.sy);
+			const float sx = float(it.sx * xf.a / g.sx);
+			const float sy = float(it.sy * xf.a / g.sy);
 			if (std::fabs(info.pos.x - px) > 1e-3f || std::fabs(info.pos.y - py) > 1e-3f ||
 			    std::fabs(info.scale.x - sx) > 1e-6f || std::fabs(info.scale.y - sy) > 1e-6f) {
 				info.pos.x = px;
@@ -1184,6 +1253,10 @@ void ApplyLayout(Overlay &o, const QString &changedPart)
 				it.hiddenByRig = false;
 			}
 		});
+	}
+	for (obs_sceneitem_t *group : held) {
+		obs_sceneitem_defer_group_resize_end(group);
+		obs_sceneitem_release(group);
 	}
 
 	for (Group &g : o.groups)

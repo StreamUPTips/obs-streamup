@@ -2,9 +2,11 @@
 
 ## New Features
 - **Overlays Can Install Vertical Scenes** A .StreamUP file can carry scenes for Aitum Vertical now, and they install straight onto your vertical canvas. No Aitum Vertical installed? They're skipped and StreamUP tells you.
+- **Make A Group Over WebSocket** A new GroupSceneItems request. Give it a scene, the items and a name, and it groups them. Works on the vertical canvas too.
 
 ## Improvements
 - **Overlay Controls Reach The Vertical Canvas** Layout parts, nameplate cut-outs and the preview all work on vertical scenes, and the preview is the right shape for them.
+- **Layout Works Inside Groups** Overlay Controls can move and resize parts that sit in a group, so an overlay can keep each widget tidy in its own group.
 - **Smoother Sliders** Dragging a slider or picking a colour in Overlay Controls no longer bogs OBS down on overlays with lots of linked settings.
 
 ## Bug Fixes

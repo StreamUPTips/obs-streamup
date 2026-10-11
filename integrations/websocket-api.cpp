@@ -9,6 +9,7 @@
 #include "../ui/settings-manager.hpp"
 #include "backup-manager.hpp"
 #include "overlay-controls.hpp"
+#include "../core/canvas-lookup.hpp"
 #include "../ui/overlay-controls-window.hpp"
 #include <obs-frontend-api.h>
 #include <obs-module.h>
@@ -19,6 +20,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <algorithm>
+#include <vector>
 
 // Forward declarations for functions from main streamup.cpp
 extern void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data, bool transition_type);
@@ -852,6 +855,80 @@ void WebsocketGroupSelectedSources(obs_data_t *request_data, obs_data_t *respons
 	if (!success) {
 		obs_data_set_string(response_data, "error", "Failed to group selected sources. Ensure at least one source is selected.");
 	}
+}
+
+void WebsocketGroupSceneItems(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+	auto fail = [&](const char *error) {
+		obs_data_set_string(response_data, "error", error);
+		obs_data_set_bool(response_data, "success", false);
+	};
+
+	const char *groupName = obs_data_get_string(request_data, "groupName");
+	if (!groupName || !*groupName)
+		return fail("'groupName' is required.");
+	// Group names are source names, shared by every canvas.
+	if (obs_source_t *taken = StreamUP::CanvasLookup::GetSourceByName(groupName)) {
+		obs_source_release(taken);
+		return fail("A source with that name already exists.");
+	}
+
+	// By UUID, so a scene on the vertical canvas is found too.
+	obs_source_t *sceneSource = nullptr;
+	const char *sceneUuid = obs_data_get_string(request_data, "sceneUuid");
+	if (sceneUuid && *sceneUuid)
+		sceneSource = obs_get_source_by_uuid(sceneUuid);
+	if (!sceneSource)
+		sceneSource = StreamUP::CanvasLookup::GetSourceByName(obs_data_get_string(request_data, "sceneName"));
+	obs_scene_t *scene = obs_scene_from_source(sceneSource);
+	if (!scene) {
+		obs_source_release(sceneSource);
+		return fail("Scene not found. Pass 'sceneUuid' or 'sceneName'.");
+	}
+
+	std::vector<int64_t> ids;
+	obs_data_array_t *idArray = obs_data_get_array(request_data, "sceneItemIds");
+	for (size_t i = 0; i < obs_data_array_count(idArray); i++) {
+		obs_data_t *entry = obs_data_array_item(idArray, i);
+		ids.push_back(obs_data_get_int(entry, "value"));
+		obs_data_release(entry);
+	}
+	obs_data_array_release(idArray);
+	if (ids.empty()) {
+		obs_source_release(sceneSource);
+		return fail("'sceneItemIds' must list at least one item.");
+	}
+
+	// OBS wants the items bottom to top, in the order they already stack.
+	struct Walk {
+		const std::vector<int64_t> *ids;
+		std::vector<obs_sceneitem_t *> items;
+	} walk{&ids, {}};
+	obs_scene_enum_items(
+		scene,
+		[](obs_scene_t *, obs_sceneitem_t *item, void *param) {
+			auto *w = static_cast<Walk *>(param);
+			if (std::find(w->ids->begin(), w->ids->end(), obs_sceneitem_get_id(item)) != w->ids->end() &&
+			    !obs_sceneitem_is_group(item))
+				w->items.push_back(item);
+			return true;
+		},
+		&walk);
+	if (walk.items.size() != ids.size()) {
+		obs_source_release(sceneSource);
+		return fail("Some items were not found at the top level of the scene, or are groups themselves.");
+	}
+
+	obs_sceneitem_t *group = obs_scene_insert_group(scene, groupName, walk.items.data(), walk.items.size());
+	if (!group) {
+		obs_source_release(sceneSource);
+		return fail("OBS could not make the group.");
+	}
+	obs_data_set_int(response_data, "sceneItemId", obs_sceneitem_get_id(group));
+	obs_data_set_string(response_data, "groupUuid", obs_source_get_uuid(obs_sceneitem_get_source(group)));
+	obs_data_set_bool(response_data, "success", true);
+	obs_source_release(sceneSource);
 }
 
 void WebsocketToggleVisibilitySelectedSources(obs_data_t *request_data, obs_data_t *response_data, void *private_data)

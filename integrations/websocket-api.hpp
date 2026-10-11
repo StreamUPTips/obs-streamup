@@ -332,6 +332,9 @@ void WebsocketRequestGetBackupInfo(obs_data_t *request_data, obs_data_t *respons
 // core/overlay-controls.hpp for what a control is.
 void WebsocketGetOverlays(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 void WebsocketRegisterOverlay(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+// "sceneUuid" (or "sceneName"), "sceneItemIds" and "groupName": puts those items in a new group,
+// on any canvas. The group sits where the topmost item was.
+void WebsocketGroupSceneItems(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 void WebsocketGetOverlayControls(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 // "control" + "value": a colour as "#RRGGBB", a slider number, or a toggle bool / "toggle".
 void WebsocketSetOverlayControl(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
