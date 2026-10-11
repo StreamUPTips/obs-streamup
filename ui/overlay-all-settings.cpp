@@ -1,4 +1,5 @@
 #include "overlay-all-settings.hpp"
+#include "../core/canvas-lookup.hpp"
 #include "overlay-ui-common.hpp"
 
 #include <streamup/ui/color-picker.hpp>
@@ -127,7 +128,7 @@ int DecimalsFor(double step)
 // Runs fn on a scene item found by scene name and id (or source name).
 template <typename Fn> bool WithSceneItem(const QString &scene, qint64 id, const QString &source, Fn fn)
 {
-	obs_source_t *ss = obs_get_source_by_name(scene.toUtf8().constData());
+	obs_source_t *ss = StreamUP::CanvasLookup::GetSourceByName(scene.toUtf8().constData());
 	if (!ss)
 		return false;
 	obs_scene_t *sc = obs_scene_from_source(ss);
@@ -883,7 +884,7 @@ void AllSettingsPage::fillTree()
 			}
 		};
 	for (const QString &sceneName : m_info.scenes) {
-		obs_source_t *sceneSource = obs_get_source_by_name(sceneName.toUtf8().constData());
+		obs_source_t *sceneSource = StreamUP::CanvasLookup::GetSourceByName(sceneName.toUtf8().constData());
 		if (!sceneSource)
 			continue;
 		auto *node = new QTreeWidgetItem(m_tree, QStringList{sceneName});
@@ -926,7 +927,7 @@ void AllSettingsPage::showItem(QTreeWidgetItem *item)
 	v->setContentsMargins(0, 0, su::S(6), 0);
 	v->setSpacing(su::S(12));
 
-	obs_source_t *src = obs_get_source_by_name(m_source.toUtf8().constData());
+	obs_source_t *src = StreamUP::CanvasLookup::GetSourceByName(m_source.toUtf8().constData());
 	if (!src) {
 		v->addWidget(DimLabel(T("OverlayControls.All.Gone")));
 		v->addStretch();

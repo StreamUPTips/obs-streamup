@@ -3,6 +3,7 @@
 // All of it runs under the registry lock held by overlay-controls.cpp.
 
 #include "overlay-controls-internal.hpp"
+#include "canvas-lookup.hpp"
 
 #include <streamup/debug-logger.hpp>
 
@@ -185,7 +186,7 @@ obs_source_t *ResolveTarget(QString &source, QString &sourceUuid, QString &filte
 	if (!sourceUuid.isEmpty())
 		src = obs_get_source_by_uuid(sourceUuid.toUtf8().constData());
 	if (!src)
-		src = obs_get_source_by_name(source.toUtf8().constData());
+		src = StreamUP::CanvasLookup::GetSourceByName(source.toUtf8().constData());
 
 	if (filter.isEmpty()) {
 		if (src) {
@@ -228,7 +229,7 @@ bool WithItem(QString &scene, QString &sceneUuid, const QString &source, const Q
 	if (!sceneUuid.isEmpty())
 		sceneSource = obs_get_source_by_uuid(sceneUuid.toUtf8().constData());
 	if (!sceneSource)
-		sceneSource = obs_get_source_by_name(scene.toUtf8().constData());
+		sceneSource = StreamUP::CanvasLookup::GetSourceByName(scene.toUtf8().constData());
 	if (!sceneSource)
 		return false;
 	obs_scene_t *sc = obs_scene_from_source(sceneSource);
@@ -955,9 +956,10 @@ int Depth(Overlay &o, Control &c)
 	return d;
 }
 
-bool FindItemBox(QString scene, const QString &source, QRectF &box)
+// The scene's UUID is kept by the caller: resolving it by name on every call
+// costs a lookup across every canvas per item per layout step.
+bool FindItemBox(QString &scene, QString &sceneUuid, const QString &source, QRectF &box)
 {
-	QString sceneUuid;
 	qint64 id = 0;
 	return WithItem(scene, sceneUuid, source, QString(), &id, [&](obs_sceneitem_t *item) { box = ItemBox(item); });
 }
@@ -995,7 +997,7 @@ bool CaptureGeoLink(GeoLink &l, Overlay &o)
 							return WithItem(scene, sceneUuid, it.source, it.sourceUuid, &id,
 									[&](obs_sceneitem_t *item) { box = ItemBox(item, pos, scale); });
 						}
-		return FindItemBox(l.scene, source, box);
+		return FindItemBox(l.scene, l.sceneUuid, source, box);
 	};
 	if (!installBox(l.of, l.ofInstall) || !installBox(l.within, l.withinInstall))
 		return false;
@@ -1011,7 +1013,8 @@ void UpdateGeoLink(GeoLink &l, Overlay &o)
 		return;
 	QRectF of;
 	QRectF within;
-	if (!FindItemBox(l.scene, l.of, of) || !FindItemBox(l.scene, l.within, within) || within.width() <= 0 ||
+	if (!FindItemBox(l.scene, l.sceneUuid, l.of, of) || !FindItemBox(l.scene, l.sceneUuid, l.within, within) ||
+	    within.width() <= 0 ||
 	    within.height() <= 0)
 		return;
 	double v = l.base;
@@ -1147,11 +1150,15 @@ void ApplyLayout(Overlay &o, const QString &changedPart)
 		}
 	}
 
+	// Sources this pass actually moved, so only the links that measure them
+	// (or belong to a part that moved) are recomputed.
+	QSet<QString> moved;
 	for (Target &t : targets) {
 		if (!affected(*t.control))
 			continue;
 		const Affine xf = FullTransform(o, *t.control);
 		RigItem &it = *t.item;
+		moved.insert(it.scene + '\n' + it.source);
 		WithItem(it.scene, it.sceneUuid, it.source, it.sourceUuid, &it.itemId, [&](obs_sceneitem_t *item) {
 			struct obs_transform_info info;
 			obs_sceneitem_get_info2(item, &info);
@@ -1183,7 +1190,9 @@ void ApplyLayout(Overlay &o, const QString &changedPart)
 		for (Control &c : g.controls)
 			if (c.type == ControlType::Layout)
 				for (GeoLink &l : c.rig.links)
-					UpdateGeoLink(l, o);
+					if (changedPart.isEmpty() || affected(c) || moved.contains(l.scene + '\n' + l.of) ||
+					    moved.contains(l.scene + '\n' + l.within))
+						UpdateGeoLink(l, o);
 }
 
 QRectF CurrentFrame(Overlay &o, Control &c)
@@ -1383,7 +1392,7 @@ void TakeSnapshot(Overlay &o)
 	o.snapItems.clear();
 	SnapWalk w{&o, {}};
 	for (const QString &name : o.scenes) {
-		obs_source_t *scene = obs_get_source_by_name(name.toUtf8().constData());
+		obs_source_t *scene = StreamUP::CanvasLookup::GetSourceByName(name.toUtf8().constData());
 		if (!scene)
 			continue;
 		SnapScene(w, scene);
@@ -1399,7 +1408,7 @@ void RestoreSnapshot(Overlay &o, const QString &onlySource)
 			continue;
 		obs_source_t *src = obs_get_source_by_uuid(s.uuid.toUtf8().constData());
 		if (!src)
-			src = obs_get_source_by_name(s.name.toUtf8().constData());
+			src = StreamUP::CanvasLookup::GetSourceByName(s.name.toUtf8().constData());
 		if (!src)
 			continue;
 		// A scene's own settings are its item list; items are restored

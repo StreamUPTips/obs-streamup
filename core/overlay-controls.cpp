@@ -3,6 +3,7 @@
 // overlay-apply.cpp.
 
 #include "overlay-controls-internal.hpp"
+#include "canvas-lookup.hpp"
 
 #include <streamup/debug-logger.hpp>
 
@@ -612,7 +613,7 @@ void CaptureAll(Overlay &o)
 	}
 	o.sceneUuids.clear();
 	for (const QString &name : o.scenes) {
-		obs_source_t *scene = obs_get_source_by_name(name.toUtf8().constData());
+		obs_source_t *scene = StreamUP::CanvasLookup::GetSourceByName(name.toUtf8().constData());
 		if (scene) {
 			o.sceneUuids.append(QString::fromUtf8(obs_source_get_uuid(scene)));
 			obs_source_release(scene);

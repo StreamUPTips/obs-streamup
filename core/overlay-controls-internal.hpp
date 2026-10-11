@@ -69,6 +69,7 @@ struct GeoLink {
 	bool captured = false;
 	QString sourceUuid;
 	QString filterUuid;
+	QString sceneUuid; // found once by name, then by UUID: works on every canvas
 	bool hadUserValue = false;
 	QJsonObject original;
 	double base = 0.0;

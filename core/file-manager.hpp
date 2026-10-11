@@ -101,14 +101,16 @@ void MergeFilters(obs_source_t *source, obs_data_array_t *filters);
  * @param data The sources data array
  * @param path The base path of the .StreamUP file
  */
-void LoadSources(obs_data_array_t *data, const QString &path);
+// verticalSkipped, when given, counts vertical scenes left out because Aitum
+// Vertical is not installed.
+void LoadSources(obs_data_array_t *data, const QString &path, int *verticalSkipped = nullptr);
 
 /**
  * Load a complete scene from .StreamUP data
  * @param data The scene data
  * @param path The base path of the .StreamUP file
  */
-void LoadScene(obs_data_t *data, const QString &path);
+void LoadScene(obs_data_t *data, const QString &path, int *verticalSkipped = nullptr);
 
 //-------------------FONT EXTRACTION FUNCTIONS-------------------
 /**

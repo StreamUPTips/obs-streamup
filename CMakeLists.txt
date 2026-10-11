@@ -140,7 +140,9 @@ target_sources(${PROJECT_NAME} PRIVATE
   core/overlay-controls.hpp
   core/overlay-controls.cpp
   core/overlay-controls-internal.hpp
-  core/overlay-apply.cpp)
+  core/overlay-apply.cpp
+  core/canvas-lookup.hpp
+  core/canvas-lookup.cpp)
 
 # Utilities module files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -299,7 +301,9 @@ source_group("Core" FILES
   core/overlay-controls.hpp
   core/overlay-controls.cpp
   core/overlay-controls-internal.hpp
-  core/overlay-apply.cpp)
+  core/overlay-apply.cpp
+  core/canvas-lookup.hpp
+  core/canvas-lookup.cpp)
 
 source_group("Utilities" FILES
   utilities/path-utils.hpp

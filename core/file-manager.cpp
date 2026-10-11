@@ -8,6 +8,7 @@
 #include "version-utils.hpp"
 #include "path-utils.hpp"
 #include "overlay-controls.hpp"
+#include "canvas-lookup.hpp"
 #include "../ui/overlay-controls-window.hpp"
 #include "../ui/ui-helpers.hpp"
 #include "../version.h"
@@ -22,6 +23,7 @@
 #include <QFileInfo>
 #include <QFileDialog>
 #include <QApplication>
+#include <QThread>
 #include <QString>
 #include <QTableWidget>
 #include <QTableWidgetItem>
@@ -33,6 +35,8 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <list>
+#include <string>
+#include <unordered_map>
 #include <map>
 
 using namespace StreamUP::UIStyles;
@@ -704,7 +708,8 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 	for (size_t i = 0; i < count; i++) {
 		obs_data_t *item_data = obs_data_array_item(items, i);
 		const char *name = obs_data_get_string(item_data, "name");
-		obs_source_t *item_source = obs_get_source_by_name(name);
+		// A vertical scene's nested scenes are only found by asking every canvas.
+		obs_source_t *item_source = StreamUP::CanvasLookup::GetSourceByName(name);
 
 		vec2 vec2;
 		obs_data_get_vec2(item_data, "pos", &vec2);
@@ -863,7 +868,48 @@ void MergeFilters(obs_source_t *s, obs_data_array_t *filters)
 	// Note: caller owns the filters array lifecycle - do not release here
 }
 
-void LoadSources(obs_data_array_t *data, const QString &path)
+// A .StreamUP entry marked "canvas": "vertical" is a scene for Aitum's
+// Vertical canvas. Everything else (inputs, main scenes) installs as before.
+bool IsVerticalEntry(obs_data_t *sourceData)
+{
+	const char *canvas = obs_data_get_string(sourceData, "canvas");
+	return canvas && strcmp(canvas, "vertical") == 0;
+}
+
+// The source this entry would merge into, looked up on the canvas it belongs
+// to: obs_get_source_by_name never sees vertical scenes. NEW reference.
+obs_source_t *FindExisting(obs_data_t *sourceData, obs_canvas_t *vertical)
+{
+	const char *name = obs_data_get_string(sourceData, "name");
+	if (IsVerticalEntry(sourceData))
+		return vertical ? obs_canvas_get_source_by_name(vertical, name) : nullptr;
+	return obs_get_source_by_name(name);
+}
+
+// Scene items are found by source UUID first and by name only after that,
+// and a name only finds main-canvas scenes and inputs. When an entry merges
+// into a source that already exists, that source keeps its own UUID, so the
+// file's UUID is pointed at it or a vertical scene nested in another vertical
+// scene would not be found.
+void RemapItemUuids(obs_data_t *sourceData, const std::unordered_map<std::string, std::string> &remap)
+{
+	if (remap.empty())
+		return;
+	obs_data_t *settings = obs_data_get_obj(sourceData, "settings");
+	obs_data_array_t *items = settings ? obs_data_get_array(settings, "items") : nullptr;
+	const size_t n = obs_data_array_count(items);
+	for (size_t i = 0; i < n; i++) {
+		obs_data_t *item = obs_data_array_item(items, i);
+		const auto it = remap.find(obs_data_get_string(item, "source_uuid"));
+		if (it != remap.end())
+			obs_data_set_string(item, "source_uuid", it->second.c_str());
+		obs_data_release(item);
+	}
+	obs_data_array_release(items);
+	obs_data_release(settings);
+}
+
+void LoadSources(obs_data_array_t *data, const QString &path, int *verticalSkipped)
 {
 	const size_t count = obs_data_array_count(data);
 	std::list<obs_source_t *> ref_sources;
@@ -872,12 +918,57 @@ void LoadSources(obs_data_array_t *data, const QString &path)
 	uint32_t w = obs_source_get_width(cs);
 	float factor = (float)w / 1920.0f;
 	obs_source_release(cs);
+
+	// Vertical scenes are authored on a 1080-wide canvas and scale to the
+	// one this machine has, the same way main scenes scale from 1920.
+	bool anyVertical = false;
+	for (size_t i = 0; i < count && !anyVertical; i++) {
+		obs_data_t *sourceData = obs_data_array_item(data, i);
+		anyVertical = IsVerticalEntry(sourceData);
+		obs_data_release(sourceData);
+	}
+	obs_canvas_t *vertical = anyVertical ? StreamUP::CanvasLookup::AcquireVertical() : nullptr;
+	std::string verticalUuid;
+	uint32_t vw = 1080;
+	if (vertical) {
+		verticalUuid = obs_canvas_get_uuid(vertical);
+		struct obs_video_info ovi = {};
+		if (obs_canvas_get_video_info(vertical, &ovi) && ovi.base_width)
+			vw = ovi.base_width;
+	}
+	float vfactor = (float)vw / 1080.0f;
+
+	std::unordered_map<std::string, std::string> remap;
 	for (size_t i = 0; i < count; i++) {
 		obs_data_t *sourceData = obs_data_array_item(data, i);
-		const char *name = obs_data_get_string(sourceData, "name");
+		if (obs_source_t *existing = FindExisting(sourceData, vertical)) {
+			const char *fileUuid = obs_data_get_string(sourceData, "uuid");
+			const char *liveUuid = obs_source_get_uuid(existing);
+			if (fileUuid && *fileUuid && liveUuid && strcmp(fileUuid, liveUuid) != 0)
+				remap[fileUuid] = liveUuid;
+			obs_source_release(existing);
+		}
+		obs_data_release(sourceData);
+	}
+
+	for (size_t i = 0; i < count; i++) {
+		obs_data_t *sourceData = obs_data_array_item(data, i);
+		const bool isVertical = IsVerticalEntry(sourceData);
+		if (isVertical && !vertical) {
+			if (verticalSkipped)
+				++*verticalSkipped;
+			obs_data_release(sourceData);
+			continue;
+		}
+		if (isVertical)
+			obs_data_set_string(sourceData, "canvas_uuid", verticalUuid.c_str());
+		RemapItemUuids(sourceData, remap);
+		const uint32_t cw = isVertical ? vw : w;
+		const uint32_t designWidth = isVertical ? 1080 : 1920;
+		float *scaleBy = isVertical ? &vfactor : &factor;
 
 		bool new_source = true;
-		obs_source_t *s = obs_get_source_by_name(name);
+		obs_source_t *s = FindExisting(sourceData, vertical);
 		if (!s) {
 			ConvertSourcePaths(sourceData, path);
 			s = obs_load_source(sourceData);
@@ -897,10 +988,10 @@ void LoadSources(obs_data_array_t *data, const QString &path)
 			scene = obs_group_from_source(s);
 		if (scene) {
 			obs_data_t *scene_settings = obs_data_get_obj(sourceData, "settings");
-			if (w != 1920) {
-				ResizeSceneItems(scene_settings, factor);
+			if (cw != designWidth) {
+				ResizeSceneItems(scene_settings, *scaleBy);
 				if (new_source)
-					obs_source_enum_filters(s, ResizeMoveFilters, &factor);
+					obs_source_enum_filters(s, ResizeMoveFilters, scaleBy);
 			}
 			if (!new_source) {
 				obs_scene_enum_items(
@@ -931,16 +1022,17 @@ void LoadSources(obs_data_array_t *data, const QString &path)
 
 	for (obs_source_t *source : ref_sources)
 		obs_source_release(source);
+	obs_canvas_release(vertical);
 }
 
-void LoadScene(obs_data_t *data, const QString &path)
+void LoadScene(obs_data_t *data, const QString &path, int *verticalSkipped)
 {
 	if (!data)
 		return;
 	obs_data_array_t *sourcesData = obs_data_get_array(data, "sources");
 	if (!sourcesData)
 		return;
-	LoadSources(sourcesData, path);
+	LoadSources(sourcesData, path, verticalSkipped);
 	obs_data_array_release(sourcesData);
 }
 
@@ -962,7 +1054,15 @@ bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad)
 	auto data = OBSWrappers::MakeOBSDataFromJsonFile(QT_TO_UTF8(file_path));
 	if (data) {
 		StreamUP::ErrorHandler::LogInfo("Successfully loaded StreamUP file: " + file_path.toStdString(), StreamUP::ErrorHandler::Category::FileSystem);
-		LoadScene(data.get(), QFileInfo(file_path).absolutePath());
+		int verticalSkipped = 0;
+		LoadScene(data.get(), QFileInfo(file_path).absolutePath(), &verticalSkipped);
+		if (verticalSkipped > 0) {
+			const std::string note = std::to_string(verticalSkipped) +
+						 " vertical scene(s) in this file were skipped: the Aitum Vertical plugin is not installed.";
+			StreamUP::ErrorHandler::LogWarning(note, StreamUP::ErrorHandler::Category::FileSystem);
+			if (QThread::currentThread() == qApp->thread())
+				StreamUP::ErrorHandler::ShowWarningDialog("Vertical scenes skipped", note);
+		}
 
 		// A file that describes its own controls is an overlay: register them
 		// against the sources that just loaded and offer the panel.
