@@ -6,7 +6,10 @@
 
 #include "../core/overlay-controls.hpp"
 
+#include <QJsonObject>
 #include <QWidget>
+
+#include <obs.h>
 
 #include <atomic>
 #include <functional>
@@ -23,6 +26,7 @@ namespace StreamUP {
 namespace OverlayUI {
 
 class ScenePreview;
+struct PreviewGpu;
 class PanelDoubleSpin;
 class PanelSlider;
 
@@ -48,6 +52,8 @@ private:
 	void selectPart(const QString &id);
 	void showSelected();
 	void write(const QJsonObject &partial);
+	bool flushWrite();
+	void showScene(bool show);
 	const OverlayControls::ControlInfo *part(const QString &id) const;
 	QList<const OverlayControls::ControlInfo *> partsInScene(const QString &scene) const;
 
@@ -73,6 +79,17 @@ private:
 	// some sources (ProText, source clones) draw wrong from the UI thread.
 	std::thread m_render;
 	std::shared_ptr<std::atomic<bool>> m_rendering = std::make_shared<std::atomic<bool>>(false);
+	// Render target and read-back surfaces, kept across frames (see .cpp).
+	std::shared_ptr<PreviewGpu> m_gpu;
+	// The previewed scene, held "showing" for as long as it is on screen
+	// rather than toggled every frame (each toggle fires show/hide on every
+	// source in it).
+	obs_source_t *m_shown = nullptr;
+	QString m_sceneUuid;
+
+	// Drag, nudge, spin and scale writes, throttled like the controls page.
+	QJsonObject m_pending;
+	class QTimer *m_flushTimer = nullptr;
 };
 
 } // namespace OverlayUI

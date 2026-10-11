@@ -34,10 +34,12 @@
 #include <QPointer>
 #include <QScrollArea>
 #include <QStackedWidget>
+#include <QSet>
 #include <QTimer>
 
 #include <cmath>
 #include <memory>
+#include <utility>
 
 namespace su = StreamUP::UIStyles;
 namespace oc = StreamUP::OverlayControls;
@@ -186,15 +188,31 @@ public:
 				   });
 		});
 
+		// A slider drag or a layout drag fires a change per step. Writing every
+		// step to every linked filter, then rebuilding the panel's view of the
+		// whole overlay after each one, is what made the panel lag. Writes are
+		// throttled to ~30 a second (first and last always land), and the
+		// refreshes that follow them are coalesced into one.
+		m_flushTimer = new QTimer(this);
+		m_flushTimer->setSingleShot(true);
+		m_flushTimer->setInterval(33);
+		QObject::connect(m_flushTimer, &QTimer::timeout, this, [this]() {
+			if (flushWrites())
+				m_flushTimer->start();
+		});
+		m_refreshTimer = new QTimer(this);
+		m_refreshTimer->setSingleShot(true);
+		m_refreshTimer->setInterval(90);
+		QObject::connect(m_refreshTimer, &QTimer::timeout, this, [this]() { runRefresh(); });
+
 		oc::Notifier *n = oc::GetNotifier();
 		QObject::connect(n, &oc::Notifier::controlChanged, this,
 				 [this](const QString &overlayId, const QString &controlId) {
 					 if (overlayId != m_id)
 						 return;
 					 if (!m_writing)
-						 refreshControl(controlId);
-					 else
-						 refreshSiblings();
+						 m_changedControls.insert(controlId);
+					 m_refreshTimer->start();
 				 });
 		QObject::connect(n, &oc::Notifier::overlayReset, this, [this](const QString &overlayId) {
 			if (overlayId == m_id)
@@ -217,14 +235,30 @@ public:
 		// slow poll is plenty for a hint dot and costs a few lookups.
 		auto *driftTimer = new QTimer(this);
 		driftTimer->setInterval(1500);
-		QObject::connect(driftTimer, &QTimer::timeout, this, [this]() { refreshDrift(); });
+		QObject::connect(driftTimer, &QTimer::timeout, this, [this]() {
+			// Nothing on the Layout page shows drift, and the poll reads every
+			// linked setting, so leave it alone while that page is up.
+			if (m_layout && m_layout->isVisible())
+				return;
+			refreshDrift();
+		});
 		driftTimer->start();
 
 		const int m = su::S(su::ShadowDialog::kShadowMargin);
 		resize(su::S(1120) + 2 * m, su::S(800) + 2 * m);
 	}
 
+	~OverlayPanel() override
+	{
+		// The last step of a drag may still be waiting on the throttle.
+		flushWrites();
+	}
+
 	QString overlayId() const { return m_id; }
+
+	// A cancelled colour picker reverts straight to the old value, so any
+	// step of it still queued here must not land on top of the revert.
+	void dropPending(const QString &controlId) { m_pending.remove(controlId); }
 
 private:
 	// ------------------------------------------------------------ pages
@@ -658,7 +692,30 @@ private:
 		m_updating = false;
 	}
 
+	// Leading edge goes straight through so a click feels instant; anything
+	// arriving inside the throttle window waits for the timer, latest value
+	// wins.
 	void write(const QString &controlId, const QJsonValue &value)
+	{
+		m_pending.insert(controlId, value);
+		if (!m_flushTimer->isActive()) {
+			flushWrites();
+			m_flushTimer->start();
+		}
+	}
+
+	// Returns whether anything was written.
+	bool flushWrites()
+	{
+		if (m_pending.isEmpty())
+			return false;
+		const QHash<QString, QJsonValue> pending = std::exchange(m_pending, {});
+		for (auto it = pending.cbegin(); it != pending.cend(); ++it)
+			apply(it.key(), it.value());
+		return true;
+	}
+
+	void apply(const QString &controlId, const QJsonValue &value)
 	{
 		m_writing = true;
 		QString error;
@@ -706,7 +763,11 @@ private:
 			if (!self)
 				return;
 			self->write(controlId, HexText(c));
-			self->showValue(self->m_rows[controlId]);
+			if (self->m_rows.contains(controlId)) {
+				Row &row = self->m_rows[controlId];
+				row.info.value = HexText(c);
+				self->showValue(row);
+			}
 		};
 		QObject::connect(cancel, &QPushButton::clicked, sh.dialog, &QDialog::close);
 		QObject::connect(ok, &QPushButton::clicked, sh.dialog, [accepted, dlg = sh.dialog]() {
@@ -717,9 +778,11 @@ private:
 		// colour never sticks. An open panel hears about it through the
 		// notifier like any other change.
 		const QString overlay = m_id;
-		QObject::connect(sh.dialog, &QObject::destroyed, qApp, [overlay, controlId, before, wasApplied, accepted]() {
+		QObject::connect(sh.dialog, &QObject::destroyed, qApp, [self, overlay, controlId, before, wasApplied, accepted]() {
 			if (*accepted)
 				return;
+			if (self)
+				self->dropPending(controlId);
 			if (wasApplied)
 				oc::SetControlValue(overlay, controlId, before);
 			else
@@ -755,6 +818,33 @@ private:
 		}
 		refreshSiblings();
 		updateMissingNote();
+	}
+
+	// One pass for everything that changed since the last one: the rows that
+	// were changed from outside this panel (the Layout page, websocket, a
+	// preset), then the other pages.
+	void runRefresh()
+	{
+		const QSet<QString> changed = std::exchange(m_changedControls, {});
+		oc::OverlayInfo info;
+		if (!oc::GetOverlay(m_id, info))
+			return;
+		m_info = info;
+		for (const oc::GroupInfo &g : info.groups) {
+			for (const oc::ControlInfo &c : g.controls) {
+				if (!changed.contains(c.id) || !m_rows.contains(c.id))
+					continue;
+				Row &row = m_rows[c.id];
+				row.info = c;
+				showValue(row);
+			}
+		}
+		if (m_layout)
+			m_layout->refresh(info);
+		if (m_all && !m_all->isVisible())
+			m_all->refresh();
+		if (!changed.isEmpty())
+			updateMissingNote();
 	}
 
 	// Pages other than the one that made a change still need the new state.
@@ -837,6 +927,10 @@ private:
 	QHash<QString, Row> m_rows;
 	bool m_updating = false;
 	bool m_writing = false;
+	QTimer *m_flushTimer = nullptr;
+	QTimer *m_refreshTimer = nullptr;
+	QHash<QString, QJsonValue> m_pending;
+	QSet<QString> m_changedControls;
 };
 
 QHash<QString, QPointer<OverlayPanel>> &OpenPanels()
