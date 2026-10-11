@@ -1,3 +1,28 @@
+# StreamUP v2.4.1 - Patch Update
+
+## Improvements
+- **Add Your Whole Selection To A Tab** Add to Tab works on everything you have selected, not just one scene at a time.
+- **Folders Go Into Tabs** Add a folder to a tab and everything inside it comes too. New Tab on a folder makes a tab from it, named after the folder.
+- **Multi Select On Tabs** Ctrl click and shift click on a custom tab, then drag the lot into a folder or remove it in one go.
+- **Move To Tab** Sends your selection to another tab and takes it out of this one.
+
+## Bug Fixes
+- **Mute And Monitoring On OBS 33** Refresh Audio Monitoring works on OBS 33 without filling the OBS log with warnings, and undo keeps Monitor Only as monitoring on with the source muted, since OBS 33 has no Monitor Only mode of its own.
+- **Theme Icons In The Icon Picker** The icon picker finds OBS's own theme icons again when StreamUP is installed in the new OBS 33 plugin folder.
+- **Ready For OBS 33 And 34** The installer puts StreamUP where OBS 33 looks for plugins now: C:\ProgramData\obs-studio\plugins for a normal OBS install, or inside the OBS folder for a portable one. It still works on OBS 31 and 32, and keeps working when OBS 34 stops loading plugins from the old folders.
+- **Scene Organiser Folders Follow Your Collections** Duplicate, rename or import a scene collection and the Scene Organiser used to start empty. Your folders, tabs, icons and hidden scenes are saved inside the scene collection now, so they go wherever it goes. Thanks to CanadianIceTech for the report.
+- **A Hotkey Could Fire On Every Key** Set a hotkey to a key StreamUP could not read and it went off on every key you pressed. Keys it cannot read are left unbound now.
+- **Icons Were White On Light Themes** The icons in the WebSocket and hotkey button windows are dark on light themes now, so you can see them.
+- **Lock Sources Works On The Vertical Canvas** Lock All covers every canvas now, and Lock Current does the live main and vertical scenes together.
+- **Vertical Folders Emptied On Restart** Scenes in the Vertical Scene Organiser fell out of their folders every time OBS closed, and lost their icons and colours with them. They stay where you put them now.
+- **Duplicating A Vertical Scene** A copy could empty a group it shared with other vertical scenes, and would not link to a main scene. Both are fixed.
+- **The Rename Box Was Squashed** On some themes the name shrank to a sliver while you renamed a scene. The box fits the row now.
+- **Hidden Scenes Fell Out Of Tabs** Rearranging a tab quietly dropped any hidden scenes from it. They stay in the tab now.
+- **Remove Did Nothing On A Tab** The remove button follows what you have selected on the tab now.
+- **Linux Builds With Qt 6.10** Building from source on Qt 6.10 failed. Thanks to phedders for the report and the fix.
+
+---
+
 # StreamUP v2.4.0 - Feature Update
 
 ## New Features

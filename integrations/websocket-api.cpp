@@ -8,12 +8,17 @@
 #include "../ui/hotkey-manager.hpp"
 #include "../ui/settings-manager.hpp"
 #include "backup-manager.hpp"
+#include "overlay-controls.hpp"
+#include "../ui/overlay-controls-window.hpp"
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <util/platform.h>
 #include <QDir>
 #include <QFileInfo>
 #include <QString>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 
 // Forward declarations for functions from main streamup.cpp
 extern void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data, bool transition_type);
@@ -357,8 +362,27 @@ void WebsocketLoadStreamupFile(obs_data_t *request_data, obs_data_t *response_da
 	// Log the extracted file path for debugging
 	StreamUP::DebugLogger::LogDebugFormat("WebSocket", "File Path", "Extracted 'file' path: %s", file_path);
 
-	// Call the function to load the .streamup file from the path
-	if (!StreamUP::FileManager::LoadStreamupFileFromPath(QString::fromUtf8(file_path), force_load)) {
+	// Load on the UI thread and wait for it. Requests arrive on the
+	// obs-websocket thread, and every scene the file adds makes the frontend
+	// queue a project save on the UI thread. Running alongside, that save
+	// could snapshot a new scene before its items were loaded and write the
+	// empty list back over them, so the scene arrived with nothing in it.
+	// On the UI thread the save waits its turn, as it does for the menu.
+	// The plugin-requirements dialog is a widget and needs that thread too.
+	struct LoadTask {
+		QString path;
+		bool force;
+		bool ok = false;
+	} task{QString::fromUtf8(file_path), force_load};
+	obs_queue_task(
+		OBS_TASK_UI,
+		[](void *param) {
+			auto *t = static_cast<LoadTask *>(param);
+			t->ok = StreamUP::FileManager::LoadStreamupFileFromPath(t->path, t->force);
+		},
+		&task, true);
+
+	if (!task.ok) {
 		obs_data_set_string(response_data, "error", "Failed to load streamup file");
 		return;
 	}
@@ -926,6 +950,265 @@ void WebsocketRequestGetBackupInfo(obs_data_t *request_data, obs_data_t *respons
 
 	obs_data_set_bool(response_data, "success", true);
 }
+
+//-------------------OVERLAY CONTROLS-------------------
+namespace {
+
+namespace oc = StreamUP::OverlayControls;
+
+// Requests may name an overlay by its id ("aura") or its display name ("Aura").
+bool FindOverlayFromRequest(obs_data_t *request_data, obs_data_t *response_data, oc::OverlayInfo &out)
+{
+	const QString wanted = QString::fromUtf8(obs_data_get_string(request_data, "overlay")).trimmed();
+	if (wanted.isEmpty()) {
+		obs_data_set_bool(response_data, "success", false);
+		obs_data_set_string(response_data, "error", "'overlay' is required (an overlay id or name).");
+		return false;
+	}
+	for (const oc::OverlayInfo &o : oc::ListOverlays()) {
+		if (o.id.compare(wanted, Qt::CaseInsensitive) == 0 || o.name.compare(wanted, Qt::CaseInsensitive) == 0) {
+			out = o;
+			return true;
+		}
+	}
+	obs_data_set_bool(response_data, "success", false);
+	obs_data_set_string(response_data, "error", QString("No overlay called \"%1\".").arg(wanted).toUtf8().constData());
+	return false;
+}
+
+void SetJson(obs_data_t *data, const char *key, const QJsonValue &v)
+{
+	if (v.isBool()) {
+		obs_data_set_bool(data, key, v.toBool());
+	} else if (v.isDouble()) {
+		obs_data_set_double(data, key, v.toDouble());
+	} else if (v.isArray() || v.isObject()) {
+		// Wrapped so OBS parses it with the right type, then moved across.
+		const QByteArray json =
+			QJsonDocument(QJsonObject{{"v", v}}).toJson(QJsonDocument::Compact);
+		obs_data_t *wrap = obs_data_create_from_json(json.constData());
+		obs_data_item_t *item = obs_data_item_byname(wrap, "v");
+		if (item && v.isArray()) {
+			obs_data_array_t *arr = obs_data_item_get_array(item);
+			obs_data_set_array(data, key, arr);
+			obs_data_array_release(arr);
+		} else if (item) {
+			obs_data_t *obj = obs_data_item_get_obj(item);
+			obs_data_set_obj(data, key, obj);
+			obs_data_release(obj);
+		}
+		obs_data_item_release(&item);
+		obs_data_release(wrap);
+	} else {
+		obs_data_set_string(data, key, v.toString().toUtf8().constData());
+	}
+}
+
+QJsonValue GetJson(obs_data_t *data, const char *key)
+{
+	obs_data_item_t *item = obs_data_item_byname(data, key);
+	if (!item)
+		return QJsonValue(QJsonValue::Undefined);
+	QJsonValue out(QJsonValue::Undefined);
+	switch (obs_data_item_gettype(item)) {
+	case OBS_DATA_BOOLEAN:
+		out = obs_data_item_get_bool(item);
+		break;
+	case OBS_DATA_NUMBER:
+		out = obs_data_item_get_double(item);
+		break;
+	case OBS_DATA_STRING:
+		out = QString::fromUtf8(obs_data_item_get_string(item));
+		break;
+	case OBS_DATA_OBJECT: {
+		obs_data_t *obj = obs_data_item_get_obj(item);
+		out = QJsonDocument::fromJson(QByteArray(obj ? obs_data_get_json(obj) : "{}")).object();
+		obs_data_release(obj);
+		break;
+	}
+	case OBS_DATA_ARRAY: {
+		// Arrays have no JSON of their own; read them through a wrapper.
+		obs_data_array_t *arr = obs_data_item_get_array(item);
+		obs_data_t *wrap = obs_data_create();
+		obs_data_set_array(wrap, "v", arr);
+		out = QJsonDocument::fromJson(QByteArray(obs_data_get_json(wrap))).object().value("v");
+		obs_data_release(wrap);
+		obs_data_array_release(arr);
+		break;
+	}
+	default:
+		break;
+	}
+	obs_data_item_release(&item);
+	return out;
+}
+
+const char *TypeName(oc::ControlType t)
+{
+	switch (t) {
+	case oc::ControlType::Colour:
+		return "colour";
+	case oc::ControlType::Slider:
+		return "slider";
+	case oc::ControlType::Number:
+		return "number";
+	case oc::ControlType::Toggle:
+		return "toggle";
+	case oc::ControlType::Text:
+		return "text";
+	case oc::ControlType::TextArea:
+		return "textarea";
+	case oc::ControlType::Select:
+		return "select";
+	case oc::ControlType::Font:
+		return "font";
+	case oc::ControlType::Platforms:
+		return "platforms";
+	case oc::ControlType::Layout:
+		return "layout";
+	}
+	return "";
+}
+
+} // namespace
+
+void WebsocketGetOverlays(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+	obs_data_array_t *list = obs_data_array_create();
+	for (const oc::OverlayInfo &o : oc::ListOverlays()) {
+		obs_data_t *item = obs_data_create();
+		obs_data_set_string(item, "id", o.id.toUtf8().constData());
+		obs_data_set_string(item, "name", o.name.toUtf8().constData());
+		obs_data_set_string(item, "version", o.version.toUtf8().constData());
+		int controls = 0;
+		for (const oc::GroupInfo &g : o.groups)
+			controls += g.controls.size();
+		obs_data_set_int(item, "controls", controls);
+		obs_data_set_int(item, "links", o.links);
+		obs_data_set_int(item, "missingLinks", o.missing);
+		obs_data_array_push_back(list, item);
+		obs_data_release(item);
+	}
+	obs_data_set_array(response_data, "overlays", list);
+	obs_data_array_release(list);
+	obs_data_set_bool(response_data, "success", true);
+}
+
+void WebsocketGetOverlayControls(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+	oc::OverlayInfo o;
+	if (!FindOverlayFromRequest(request_data, response_data, o))
+		return;
+
+	obs_data_set_string(response_data, "id", o.id.toUtf8().constData());
+	obs_data_set_string(response_data, "name", o.name.toUtf8().constData());
+	obs_data_array_t *groups = obs_data_array_create();
+	for (const oc::GroupInfo &g : o.groups) {
+		obs_data_t *group = obs_data_create();
+		obs_data_set_string(group, "label", g.label.toUtf8().constData());
+		obs_data_array_t *controls = obs_data_array_create();
+		for (const oc::ControlInfo &c : g.controls) {
+			obs_data_t *control = obs_data_create();
+			obs_data_set_string(control, "id", c.id.toUtf8().constData());
+			obs_data_set_string(control, "type", TypeName(c.type));
+			obs_data_set_string(control, "label", c.label.toUtf8().constData());
+			SetJson(control, "value", c.value);
+			SetJson(control, "default", c.defaultValue);
+			obs_data_set_bool(control, "changed", c.applied);
+			if (!c.tab.isEmpty())
+				obs_data_set_string(control, "tab", c.tab.toUtf8().constData());
+			if (c.type == oc::ControlType::Slider || c.type == oc::ControlType::Number) {
+				obs_data_set_double(control, "min", c.min);
+				obs_data_set_double(control, "max", c.max);
+				obs_data_set_double(control, "step", c.step);
+				obs_data_set_string(control, "unit", c.unit.toUtf8().constData());
+			}
+			obs_data_array_push_back(controls, control);
+			obs_data_release(control);
+		}
+		obs_data_set_array(group, "controls", controls);
+		obs_data_array_release(controls);
+		obs_data_array_push_back(groups, group);
+		obs_data_release(group);
+	}
+	obs_data_set_array(response_data, "groups", groups);
+	obs_data_array_release(groups);
+
+	obs_data_array_t *presets = obs_data_array_create();
+	for (const oc::PresetInfo &p : o.presets) {
+		obs_data_t *preset = obs_data_create();
+		obs_data_set_string(preset, "name", p.name.toUtf8().constData());
+		obs_data_set_bool(preset, "builtIn", p.builtIn);
+		obs_data_array_push_back(presets, preset);
+		obs_data_release(preset);
+	}
+	obs_data_set_array(response_data, "presets", presets);
+	obs_data_array_release(presets);
+	obs_data_set_bool(response_data, "success", true);
+}
+
+void WebsocketSetOverlayControl(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+	oc::OverlayInfo o;
+	if (!FindOverlayFromRequest(request_data, response_data, o))
+		return;
+	const QString control = QString::fromUtf8(obs_data_get_string(request_data, "control"));
+	const QJsonValue value = GetJson(request_data, "value");
+	if (control.isEmpty() || value.isUndefined()) {
+		obs_data_set_bool(response_data, "success", false);
+		obs_data_set_string(response_data, "error", "'control' and 'value' are required.");
+		return;
+	}
+	QString error;
+	if (!oc::SetControlValue(o.id, control, value, &error)) {
+		obs_data_set_bool(response_data, "success", false);
+		obs_data_set_string(response_data, "error", error.toUtf8().constData());
+		return;
+	}
+	obs_data_set_bool(response_data, "success", true);
+}
+
+void WebsocketResetOverlayControls(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+	oc::OverlayInfo o;
+	if (!FindOverlayFromRequest(request_data, response_data, o))
+		return;
+	const QString control = QString::fromUtf8(obs_data_get_string(request_data, "control"));
+	const bool ok = control.isEmpty() ? oc::ResetAll(o.id) : oc::ResetControl(o.id, control);
+	obs_data_set_bool(response_data, "success", ok);
+	if (!ok)
+		obs_data_set_string(response_data, "error",
+				    QString("\"%1\" has no control \"%2\".").arg(o.name, control).toUtf8().constData());
+}
+
+void WebsocketApplyOverlayPreset(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+	oc::OverlayInfo o;
+	if (!FindOverlayFromRequest(request_data, response_data, o))
+		return;
+	QString error;
+	const bool ok = oc::ApplyPreset(o.id, QString::fromUtf8(obs_data_get_string(request_data, "preset")), &error);
+	obs_data_set_bool(response_data, "success", ok);
+	if (!ok)
+		obs_data_set_string(response_data, "error", error.toUtf8().constData());
+}
+
+void WebsocketOpenOverlayControls(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+	oc::OverlayInfo o;
+	if (!FindOverlayFromRequest(request_data, response_data, o))
+		return;
+	StreamUP::OverlayControlsWindow::Show(o.id);
+	obs_data_set_bool(response_data, "success", true);
+}
+
 
 } // namespace WebSocketAPI
 } // namespace StreamUP

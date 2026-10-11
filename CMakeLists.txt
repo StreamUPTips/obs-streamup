@@ -82,8 +82,14 @@ target_sources(${PROJECT_NAME} PRIVATE
   "${STREAMUP_UTILS_DIR}/include/streamup/undo-helpers.hpp"
 )
 
-if((OS_LINUX OR OS_FREEBSD OR OS_OPENBSD) AND Qt_VERSION VERSION_LESS "6.9.0")
-	target_link_libraries(${PROJECT_NAME} PRIVATE Qt::GuiPrivate)
+# Linux builds need Qt's GuiPrivate. From Qt 6.10 it has to be asked for by
+# name rather than coming along with Gui, so find it here and only link it
+# when this Qt actually has it. Windows and macOS never reach this.
+if(OS_LINUX OR OS_FREEBSD OR OS_OPENBSD)
+	find_package(Qt6 QUIET COMPONENTS GuiPrivate)
+	if(TARGET Qt6::GuiPrivate)
+		target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::GuiPrivate)
+	endif()
 endif()
 
 target_compile_options(
@@ -130,7 +136,11 @@ target_sources(${PROJECT_NAME} PRIVATE
   core/backup-manager.hpp
   core/backup-manager.cpp
   core/restore-manager.hpp
-  core/restore-manager.cpp)
+  core/restore-manager.cpp
+  core/overlay-controls.hpp
+  core/overlay-controls.cpp
+  core/overlay-controls-internal.hpp
+  core/overlay-apply.cpp)
 
 # Utilities module files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -193,12 +203,23 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/vertical-canvas-enhancements.cpp
   ui/theme-enhancements.hpp
   ui/theme-enhancements.cpp
+  ui/overlay-controls-window.hpp
+  ui/overlay-controls-window.cpp
+  ui/overlay-ui-common.hpp
+  ui/overlay-platforms-editor.hpp
+  ui/overlay-platforms-editor.cpp
+  ui/overlay-layout-page.hpp
+  ui/overlay-layout-page.cpp
+  ui/overlay-all-settings.hpp
+  ui/overlay-all-settings.cpp
   ui/dock/streamup-dock.hpp
   ui/dock/streamup-dock.cpp
   ui/scene-organiser/scene-organiser-dock.hpp
   ui/scene-organiser/scene-organiser-dock.cpp
   ui/scene-organiser/scene-canvas.hpp
   ui/scene-organiser/scene-canvas.cpp
+  ui/scene-organiser/scene-organiser-collection-data.hpp
+  ui/scene-organiser/scene-organiser-collection-data.cpp
   ui/streamup-toolbar.hpp
   ui/streamup-toolbar.cpp
   ui/streamup-toolbar-config.hpp
@@ -274,7 +295,11 @@ source_group("Core" FILES
   core/backup-manager.hpp
   core/backup-manager.cpp
   core/restore-manager.hpp
-  core/restore-manager.cpp)
+  core/restore-manager.cpp
+  core/overlay-controls.hpp
+  core/overlay-controls.cpp
+  core/overlay-controls-internal.hpp
+  core/overlay-apply.cpp)
 
 source_group("Utilities" FILES
   utilities/path-utils.hpp
@@ -334,7 +359,16 @@ source_group("UI" FILES
   ui/vertical-canvas-enhancements.hpp
   ui/vertical-canvas-enhancements.cpp
   ui/theme-enhancements.hpp
-  ui/theme-enhancements.cpp)
+  ui/theme-enhancements.cpp
+  ui/overlay-controls-window.hpp
+  ui/overlay-controls-window.cpp
+  ui/overlay-ui-common.hpp
+  ui/overlay-platforms-editor.hpp
+  ui/overlay-platforms-editor.cpp
+  ui/overlay-layout-page.hpp
+  ui/overlay-layout-page.cpp
+  ui/overlay-all-settings.hpp
+  ui/overlay-all-settings.cpp)
 
 source_group("UI\\Dock" FILES
   ui/dock/streamup-dock.hpp
@@ -344,7 +378,9 @@ source_group("UI\\Scene Organiser" FILES
   ui/scene-organiser/scene-organiser-dock.hpp
   ui/scene-organiser/scene-organiser-dock.cpp
   ui/scene-organiser/scene-canvas.hpp
-  ui/scene-organiser/scene-canvas.cpp)
+  ui/scene-organiser/scene-canvas.cpp
+  ui/scene-organiser/scene-organiser-collection-data.hpp
+  ui/scene-organiser/scene-organiser-collection-data.cpp)
 
 source_group("UI\\Toolbar" FILES
   ui/streamup-toolbar.hpp

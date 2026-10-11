@@ -10,6 +10,7 @@
 #include "core/source-manager.hpp"
 #include "core/backup-manager.hpp"
 #include "core/restore-manager.hpp"
+#include "core/overlay-controls.hpp"
 #include "ui/restore-dialog.hpp"
 #include "integrations/websocket-api.hpp"
 #include "utilities/path-utils.hpp"
@@ -19,6 +20,7 @@
 #include "ui/dock/streamup-dock.hpp"
 #include "ui/scene-organiser/scene-organiser-dock.hpp"
 #include "ui/scene-organiser/scene-canvas.hpp"
+#include "ui/scene-organiser/scene-organiser-collection-data.hpp"
 #include "ui/streamup-toolbar.hpp"
 #include "ui/settings-manager.hpp"
 #include "ui/ui-helpers.hpp"
@@ -65,6 +67,10 @@
 #include <QObject>
 #include <QApplication>
 #include <QThread>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 
 
 using namespace StreamUP::UIStyles;
@@ -596,6 +602,51 @@ static void RegisterWebsocketRequests()
 	obs_websocket_vendor_register_request(vendor, "CreateBackup", StreamUP::WebSocketAPI::WebsocketRequestCreateBackup, nullptr);
 	obs_websocket_vendor_register_request(vendor, "GetBackupInfo", StreamUP::WebSocketAPI::WebsocketRequestGetBackupInfo, nullptr);
 
+	// Overlay controls
+	obs_websocket_vendor_register_request(vendor, "GetOverlays", StreamUP::WebSocketAPI::WebsocketGetOverlays, nullptr);
+	obs_websocket_vendor_register_request(vendor, "GetOverlayControls", StreamUP::WebSocketAPI::WebsocketGetOverlayControls, nullptr);
+	obs_websocket_vendor_register_request(vendor, "SetOverlayControl", StreamUP::WebSocketAPI::WebsocketSetOverlayControl, nullptr);
+	obs_websocket_vendor_register_request(vendor, "ResetOverlayControls", StreamUP::WebSocketAPI::WebsocketResetOverlayControls, nullptr);
+	obs_websocket_vendor_register_request(vendor, "ApplyOverlayPreset", StreamUP::WebSocketAPI::WebsocketApplyOverlayPreset, nullptr);
+	obs_websocket_vendor_register_request(vendor, "OpenOverlayControls", StreamUP::WebSocketAPI::WebsocketOpenOverlayControls, nullptr);
+
+	// Vendor events so a Stream Deck key or Streamer.bot action showing an
+	// overlay control stays in step with the panel.
+	if (StreamUP::OverlayControls::Notifier *notifier = StreamUP::OverlayControls::GetNotifier()) {
+		QObject::connect(notifier, &StreamUP::OverlayControls::Notifier::controlChanged,
+				 [](const QString &overlayId, const QString &controlId) {
+					 QJsonValue value;
+					 if (!vendor || !StreamUP::OverlayControls::GetControlValue(overlayId, controlId, value))
+						 return;
+					 obs_data_t *d = obs_data_create();
+					 obs_data_set_string(d, "overlay", overlayId.toUtf8().constData());
+					 obs_data_set_string(d, "control", controlId.toUtf8().constData());
+					 if (value.isBool()) {
+						 obs_data_set_bool(d, "value", value.toBool());
+					 } else if (value.isDouble()) {
+						 obs_data_set_double(d, "value", value.toDouble());
+					 } else if (value.isArray() || value.isObject()) {
+						 // Lists and objects travel as JSON text in the event.
+						 const QByteArray json = value.isArray()
+							 ? QJsonDocument(value.toArray()).toJson(QJsonDocument::Compact)
+							 : QJsonDocument(value.toObject()).toJson(QJsonDocument::Compact);
+						 obs_data_set_string(d, "value", json.constData());
+					 } else {
+						 obs_data_set_string(d, "value", value.toString().toUtf8().constData());
+					 }
+					 obs_websocket_vendor_emit_event(vendor, "OverlayControlChanged", d);
+					 obs_data_release(d);
+				 });
+		QObject::connect(notifier, &StreamUP::OverlayControls::Notifier::overlayReset, [](const QString &overlayId) {
+			if (!vendor)
+				return;
+			obs_data_t *d = obs_data_create();
+			obs_data_set_string(d, "overlay", overlayId.toUtf8().constData());
+			obs_websocket_vendor_emit_event(vendor, "OverlayReset", d);
+			obs_data_release(d);
+		});
+	}
+
 	// Source properties
 	obs_websocket_vendor_register_request(vendor, "GetBlendingMethod", StreamUP::WebSocketAPI::WebsocketRequestGetBlendingMethod, nullptr);
 	obs_websocket_vendor_register_request(vendor, "SetBlendingMethod", StreamUP::WebSocketAPI::WebsocketRequestSetBlendingMethod, nullptr);
@@ -1124,6 +1175,10 @@ bool obs_module_load()
 
 	try {
 
+		// Overlay controls ride along with every collection (save callback)
+		// and back the Overlays menu and WebSocket requests set up below.
+		StreamUP::OverlayControls::Initialise();
+
 		blog(LOG_INFO, "[StreamUP] Step 1/8: Starting menu initialization");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Starting menu initialization");
 		// MenuManager is always initialised — the Tools > StreamUP menu hosts
@@ -1166,6 +1221,9 @@ bool obs_module_load()
 			blog(LOG_INFO, "[StreamUP] Step 6/8: Loading Scene Organiser docks");
 			StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading Scene Organiser docks");
 			LoadSceneOrganiserDocks();
+			// Keeps a copy of each collection's layout inside the collection
+			// file, so duplicates, renames and imports keep their folders.
+			StreamUP::SceneOrganiser::CollectionData::Register();
 			blog(LOG_INFO, "[StreamUP] Step 6/8: Scene Organiser docks loaded");
 		} else {
 			blog(LOG_INFO, "[StreamUP] Step 6/8: Module 'scene_organiser' disabled — skipping");
@@ -1482,6 +1540,8 @@ void obs_module_unload()
 		blog(LOG_INFO, "[StreamUP] Unload step 2/8: Removing save callback for hotkeys");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Removing save callback for hotkeys");
 		obs_frontend_remove_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
+		StreamUP::SceneOrganiser::CollectionData::Unregister();
+		StreamUP::OverlayControls::Shutdown();
 
 		blog(LOG_INFO, "[StreamUP] Unload step 3/8: Unregistering hotkeys");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Unregistering hotkeys");

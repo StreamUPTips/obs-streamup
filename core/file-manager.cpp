@@ -7,6 +7,8 @@
 #include "string-utils.hpp"
 #include "version-utils.hpp"
 #include "path-utils.hpp"
+#include "overlay-controls.hpp"
+#include "../ui/overlay-controls-window.hpp"
 #include "../ui/ui-helpers.hpp"
 #include "../version.h"
 #include <streamup/ui/window-chrome.hpp>
@@ -961,6 +963,16 @@ bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad)
 	if (data) {
 		StreamUP::ErrorHandler::LogInfo("Successfully loaded StreamUP file: " + file_path.toStdString(), StreamUP::ErrorHandler::Category::FileSystem);
 		LoadScene(data.get(), QFileInfo(file_path).absolutePath());
+
+		// A file that describes its own controls is an overlay: register them
+		// against the sources that just loaded and offer the panel.
+		QString overlayId;
+		QString overlayError;
+		if (StreamUP::OverlayControls::RegisterFromStreamupData(data.get(), file_path, &overlayId, &overlayError))
+			StreamUP::OverlayControlsWindow::OfferAfterInstall(overlayId);
+		else if (!overlayError.isEmpty())
+			StreamUP::ErrorHandler::LogWarning("Overlay controls not registered: " + overlayError.toStdString(),
+							   StreamUP::ErrorHandler::Category::FileSystem);
 		return true;
 	} else {
 		StreamUP::ErrorHandler::LogError("Failed to parse StreamUP file: " + file_path.toStdString(), StreamUP::ErrorHandler::Category::FileSystem);

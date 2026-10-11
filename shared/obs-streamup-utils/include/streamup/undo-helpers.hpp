@@ -1,6 +1,7 @@
 #pragma once
 
 #include <obs.h>
+#include "monitoring-compat.hpp"
 #include <obs-frontend-api.h>
 #include <string>
 
@@ -101,7 +102,7 @@ inline std::string CaptureAudioState(obs_source_t *source)
 	obs_data_set_int(data, "sync_offset",
 			 obs_source_get_sync_offset(source));
 	obs_data_set_int(data, "monitoring_type",
-			 (int)obs_source_get_monitoring_type(source));
+			 (int)MonitoringCompat::get_type(source));
 	obs_data_set_int(data, "mixers", obs_source_get_audio_mixers(source));
 
 	const char *json = obs_data_get_json(data);
@@ -142,7 +143,7 @@ inline void RestoreAudioState(const char *jsonData)
 
 	obs_source_set_sync_offset(source,
 				   obs_data_get_int(data, "sync_offset"));
-	obs_source_set_monitoring_type(
+	MonitoringCompat::set_type(
 		source,
 		(obs_monitoring_type)obs_data_get_int(data, "monitoring_type"));
 	obs_source_set_audio_mixers(

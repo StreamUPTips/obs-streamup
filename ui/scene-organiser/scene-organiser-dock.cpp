@@ -10,6 +10,8 @@
 #include "../../utilities/obs-data-helpers.hpp"
 #include "../../utilities/path-utils.hpp"
 #include "../../core/plugin-manager.hpp"
+#include "../../core/overlay-controls.hpp"
+#include "../overlay-controls-window.hpp"
 #include "../../version.h" // PROJECT_VERSION
 #include <obs-module.h>
 #include <QHeaderView>
@@ -34,6 +36,7 @@
 #include <QFileDialog>
 #include <QFont>
 #include <QFontMetrics>
+#include <algorithm>
 #include <QLineEdit>
 #include <QScrollArea>
 #include <QColor>
@@ -148,6 +151,12 @@ static constexpr int TabItemIsFolderRole = Qt::UserRole + 10;
 // the model's, so the dock writes it here when a row expands or collapses and
 // the item reads it back when it works out which icon to wear.
 static constexpr int FolderExpandedRole = Qt::UserRole + 11;
+// On a tab folder row: the scenes in that folder that are not listed (hidden,
+// or not on this canvas right now), each with the listed row it came after.
+// A tab is saved back from the rows on screen, and without this those scenes
+// were left out of it on the first drag, rename or removal. Kept on the row so
+// they follow the folder through a drag or a rename, and go when it goes.
+static constexpr int TabItemHiddenRole = Qt::UserRole + 12;
 
 // The colour an item's icon is tinted with. Separate from the icon spec so the
 // same icon can be re-coloured without re-picking it, and from UserRole+1,
@@ -1107,6 +1116,11 @@ void SceneOrganiserDock::setupContextMenu()
     });
     m_deleteFolderAction->setShortcut(QKeySequence(Qt::Key_Delete));
 
+    // A folder goes into a tab with everything in it. Rebuilt each time the
+    // menu opens, the same as the scene menu's.
+    m_folderAddToTabMenu = new QMenu(obs_module_text("SceneOrganiser.Menu.AddToTab"), this);
+    m_folderContextMenu->addMenu(m_folderAddToTabMenu);
+
     m_folderContextMenu->addSeparator();
     // One submenu instance serves both context menus; both act on
     // m_currentContextItem, which is set before either menu is exec'd.
@@ -1171,6 +1185,13 @@ void SceneOrganiserDock::setupContextMenu()
 
     // Scene context menu - matching OBS standard functionality
     m_sceneContextMenu = new QMenu(this);
+
+    // Shown only for scenes that came from an overlay with its own controls.
+    m_customiseOverlayAction = m_sceneContextMenu->addAction(QString(), this, [this]() {
+        if (!m_customiseOverlayId.isEmpty())
+            StreamUP::OverlayControlsWindow::Show(m_customiseOverlayId);
+    });
+    m_customiseOverlaySeparator = m_sceneContextMenu->addSeparator();
 
     // Main actions
     QAction *renameSceneAction = m_sceneContextMenu->addAction(QString::fromUtf8(obs_frontend_get_locale_string("Rename"), -1), this, &SceneOrganiserDock::onRenameSceneClicked);
@@ -2071,6 +2092,7 @@ void SceneOrganiserDock::showFolderContextMenu(const QPoint &pos, const QModelIn
     m_currentContextItem = m_model->itemFromIndex(sourceIndex);
     refreshColorMenuState();
     refreshIconMenuState();
+    populateAddToTabMenu(m_folderAddToTabMenu);
     m_folderContextMenu->exec(pos);
 }
 
@@ -2088,7 +2110,7 @@ void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelInd
     obs_source_t *source = Canvas::FindScene(m_canvasType, sceneName.toUtf8().constData());
 
     refreshIconMenuState();
-    populateAddToTabMenu();
+    populateAddToTabMenu(m_addToTabMenu);
 
     // The favourite action is a toggle, so it has to say which way it will go
     // for THIS scene.
@@ -2097,6 +2119,20 @@ void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelInd
             ? obs_module_text("SceneOrganiser.Action.RemoveFavourite")
             : obs_module_text("SceneOrganiser.Action.AddFavourite"));
     }
+
+    // Overlay controls: offer the panel when this scene is part of an overlay.
+    m_customiseOverlayId = StreamUP::OverlayControls::OverlayForScene(source);
+    StreamUP::OverlayControls::OverlayInfo overlayInfo;
+    const bool hasOverlay = !m_customiseOverlayId.isEmpty() &&
+                            StreamUP::OverlayControls::GetOverlay(m_customiseOverlayId, overlayInfo);
+    if (m_customiseOverlayAction) {
+        m_customiseOverlayAction->setVisible(hasOverlay);
+        if (hasOverlay)
+            m_customiseOverlayAction->setText(
+                QString::fromUtf8(obs_module_text("Menu.Overlays.Customise")).arg(overlayInfo.name));
+    }
+    if (m_customiseOverlaySeparator)
+        m_customiseOverlaySeparator->setVisible(hasOverlay);
 
     // Populate projector menu with current monitors
     populateProjectorMenu();
@@ -2230,10 +2266,7 @@ void SceneOrganiserDock::onRemoveClicked()
     // with its contents, which likewise only leave the tab.
     if (m_currentKind != QuickTabKind::Scenes) {
         if (m_quickTree && m_quickTree->selectionModel() && editableNodesForCurrentTab()) {
-            const QModelIndexList selected = m_quickTree->selectionModel()->selectedRows();
-            if (!selected.isEmpty()) {
-                onRemoveFromTabClicked(m_quickModel->itemFromIndex(m_quickProxy->mapToSource(selected.first())));
-            }
+            removeTabRows(selectedTabRows(nullptr));
         }
         return;
     }
@@ -3634,6 +3667,17 @@ void SceneOrganiserDock::updateUIEnabledState()
     if (m_moveUpButton) m_moveUpButton->setEnabled(unlocked && hasSelection);
     if (m_moveDownButton) m_moveDownButton->setEnabled(unlocked && hasSelection);
 
+    // On a tab those buttons act on the tab's own rows, so they follow its
+    // selection, not the Scenes tree's. They were left in whatever state the
+    // tree last put them in, which usually meant remove stayed greyed out. The
+    // lock guards the Scenes tree only, so it does not apply here.
+    if (m_currentKind != QuickTabKind::Scenes && m_quickTree && m_quickTree->selectionModel()) {
+        const bool tabSelection = editableNodesForCurrentTab() && !selectedTabRows(nullptr).isEmpty();
+        if (m_removeButton) m_removeButton->setEnabled(tabSelection);
+        if (m_moveUpButton) m_moveUpButton->setEnabled(tabSelection);
+        if (m_moveDownButton) m_moveDownButton->setEnabled(tabSelection);
+    }
+
     // Tree view drag & drop - only allow when unlocked (moving is destructive)
     // and while no search filter is narrowing the tree. See updateDragEnabled().
     updateDragEnabled();
@@ -4237,13 +4281,20 @@ void SceneOrganiserDock::onFrontendEvent(enum obs_frontend_event event, void *pr
             dock->onThemeChanged();
         });
         break;
+    case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
     case OBS_FRONTEND_EVENT_EXIT:
-        // Save configuration before OBS exits
+        // Save once, as early in shutdown as we hear about it, then stop.
+        // Scripting shutdown comes first, and it is where Aitum Vertical clears
+        // its canvas. Its scenes vanishing makes the tree refresh them out of
+        // their folders, and any save after that (at exit, or as the dock is
+        // destroyed) wrote folders with nothing left in them, taking the
+        // scenes' icons and colours with them. The tree is still whole here.
         if (dock->m_initialLoadComplete) {
             dock->m_model->saveSceneTree();
             dock->SaveConfiguration();
+            dock->m_initialLoadComplete = false;
             StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Exit",
-                "Saved scene tree on OBS exit");
+                "Saved scene tree on OBS shutdown - saves now disabled");
         }
         break;
     default:
@@ -4798,9 +4849,13 @@ void SceneOrganiserDock::onDuplicateSceneClicked()
     if (duplicatedScene) {
         obs_source_t *newSource = obs_scene_get_source(duplicatedScene);
 
-        // obs_scene_duplicate always creates on the main canvas, so a vertical
-        // duplicate has to be moved across or it would land in the wrong dock.
-        if (m_canvasType == CanvasType::Vertical) {
+        // obs_scene_duplicate makes the copy on the original's canvas, so a
+        // vertical duplicate is normally already where it belongs. Only move it
+        // when it is not. Moving a scene onto the canvas it is already on takes
+        // it off and puts it back, and taking a group off a canvas strips that
+        // group out of every scene on it. The copy shares its groups with the
+        // original, so that emptied the groups in the original scene as well.
+        if (m_canvasType == CanvasType::Vertical && !Canvas::SceneBelongsTo(m_canvasType, newSource)) {
             if (obs_canvas_t *canvas = Canvas::Acquire(m_canvasType)) {
                 obs_canvas_move_scene(duplicatedScene, canvas);
                 obs_canvas_release(canvas);
@@ -7302,7 +7357,9 @@ void SceneOrganiserDock::setupQuickTabs()
     m_quickTree->setHeaderHidden(true);
     m_quickTree->setFrameShape(QFrame::NoFrame);
     m_quickTree->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_quickTree->setSelectionMode(QAbstractItemView::SingleSelection);
+    // Extended, the same as the Scenes tree, so a run of scenes can be
+    // dragged into a folder or sent to another tab in one go.
+    m_quickTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_quickTree->setIndentation(20);
     m_quickTree->setRootIsDecorated(true);
     m_quickTree->setExpandsOnDoubleClick(false);
@@ -7328,6 +7385,8 @@ void SceneOrganiserDock::setupQuickTabs()
     applyThemeRowStyling();
 
     connect(m_quickTree, &QAbstractItemView::clicked, this, &SceneOrganiserDock::onQuickTreeActivated);
+    connect(m_quickTree->selectionModel(), &QItemSelectionModel::selectionChanged, this,
+            [this]() { updateUIEnabledState(); });
 
     // Tab folders swap between the open and closed icon the same as the Scenes
     // tree's do.
@@ -7439,6 +7498,57 @@ QVector<TabNode> *SceneOrganiserDock::editableNodesForCurrentTab()
 // Populating the tab tree, and reading it back
 // ---------------------------------------------------------------------------
 
+// The item behind a view index on the tab tree, mapping through its proxy.
+static QStandardItem *TabItemFromIndex(QSortFilterProxyModel *proxy, QStandardItemModel *model,
+                                       const QModelIndex &index)
+{
+    if (!proxy || !model || !index.isValid()) {
+        return nullptr;
+    }
+    return model->itemFromIndex(proxy->mapToSource(index));
+}
+
+// Identifies a row within one level of a tab, for putting an unlisted scene
+// back after the row it followed. Folder and scene names can match, so the
+// kind is part of it.
+static QString TabAnchorKey(bool isFolder, const QString &name)
+{
+    return (isFolder ? QStringLiteral("f:") : QStringLiteral("s:")) + name;
+}
+
+// Puts a level's unlisted scenes back into what was read from the screen, each
+// after the row it followed when the tab was built. A scene whose row has gone
+// elsewhere goes at the end of the level instead of being lost.
+static void RestoreUnlistedScenes(QVector<TabNode> &level, const QStringList &unlisted)
+{
+    QHash<QString, int> placedAfter;
+    int placedAtStart = 0;
+
+    for (const QString &entry : unlisted) {
+        const int split = entry.indexOf(QChar(0x1f));
+        if (split < 0) {
+            continue;
+        }
+        const QString anchor = entry.left(split);
+        TabNode node;
+        node.name = entry.mid(split + 1);
+
+        int at = level.size();
+        if (anchor.isEmpty()) {
+            at = placedAtStart++;
+        } else {
+            for (int i = 0; i < level.size(); ++i) {
+                if (TabAnchorKey(level[i].isFolder, level[i].name) == anchor) {
+                    at = i + 1 + placedAfter.value(anchor);
+                    placedAfter[anchor]++;
+                    break;
+                }
+            }
+        }
+        level.insert(qMin(at, level.size()), node);
+    }
+}
+
 void SceneOrganiserDock::refreshQuickList()
 {
     if (!m_quickTree || !m_quickModel || m_currentKind == QuickTabKind::Scenes) {
@@ -7448,6 +7558,31 @@ void SceneOrganiserDock::refreshQuickList()
     // Guarded because populating inserts and removes rows, which is also how a
     // drag finishes - without this the rebuild would write itself back.
     m_populatingQuickTree = true;
+
+    // The rows are rebuilt from scratch, which drops the selection with them.
+    // Clicking a scene here rebuilds the list too, so without carrying the
+    // selection across, every click wiped the one before it and a run of rows
+    // could never be selected. Rows are matched back up by their path.
+    auto rowPath = [](QStandardItem *row) {
+        QStringList parts;
+        for (QStandardItem *walk = row; walk; walk = walk->parent()) {
+            parts.prepend(TabAnchorKey(walk->data(TabItemIsFolderRole).toBool(), walk->text()));
+        }
+        return parts.join(QChar(0x1e));
+    };
+    QSet<QString> keepSelected;
+    QString keepCurrent;
+    if (QItemSelectionModel *selection = m_quickTree->selectionModel()) {
+        for (const QModelIndex &index : selection->selectedIndexes()) {
+            if (QStandardItem *row = TabItemFromIndex(m_quickProxy, m_quickModel, index)) {
+                keepSelected.insert(rowPath(row));
+            }
+        }
+        if (QStandardItem *row = TabItemFromIndex(m_quickProxy, m_quickModel, selection->currentIndex())) {
+            keepCurrent = rowPath(row);
+        }
+    }
+
     m_quickModel->clear();
 
     QString liveScene;
@@ -7456,12 +7591,16 @@ void SceneOrganiserDock::refreshQuickList()
         obs_source_release(current);
     }
 
+    // A name that no longer resolves to a scene on this canvas is skipped
+    // rather than listed: a row that does nothing when clicked is worse than
+    // an absent one. The node stays in the tab, so it returns if the scene does.
+    auto makeSceneItemAllowed = [&](const QString &sceneName) {
+        return m_model->findSceneItemByName(sceneName) && !m_hiddenScenes.contains(sceneName);
+    };
+
     auto makeSceneItem = [&](const QString &sceneName) -> QStandardItem * {
-        // A name that no longer resolves to a scene on this canvas is skipped
-        // rather than listed: a row that does nothing when clicked is worse than
-        // an absent one. The node stays in the tab, so it returns if the scene does.
         QStandardItem *treeItem = m_model->findSceneItemByName(sceneName);
-        if (!treeItem || m_hiddenScenes.contains(sceneName)) {
+        if (!makeSceneItemAllowed(sceneName)) {
             return nullptr;
         }
 
@@ -7484,7 +7623,15 @@ void SceneOrganiserDock::refreshQuickList()
 
     std::function<void(const QVector<TabNode> &, QStandardItem *)> build =
         [&](const QVector<TabNode> &nodes, QStandardItem *parent) {
+            // Unlisted scenes at this level, as "<row before it>\x1f<scene>".
+            QStringList unlisted;
+            QString anchor;
             for (const TabNode &node : nodes) {
+                if (!node.isFolder && !makeSceneItemAllowed(node.name)) {
+                    unlisted << anchor + QChar(0x1f) + node.name;
+                    continue;
+                }
+                anchor = TabAnchorKey(node.isFolder, node.name);
                 if (node.isFolder) {
                     QStandardItem *folder = new QStandardItem(node.name);
                     // Tab folders are drawn expanded unless the tree is
@@ -7510,8 +7657,14 @@ void SceneOrganiserDock::refreshQuickList()
                     }
                 }
             }
+            if (parent) {
+                parent->setData(unlisted, TabItemHiddenRole);
+            } else {
+                m_quickRootUnlisted = unlisted;
+            }
         };
 
+    m_quickRootUnlisted.clear();
     if (m_currentKind == QuickTabKind::Recent) {
         // Recent has no arrangement to speak of - it is a plain, ordered list.
         for (const QString &sceneName : m_recentScenes) {
@@ -7541,6 +7694,33 @@ void SceneOrganiserDock::refreshQuickList()
         m_quickTree->collapseAll();
     } else {
         m_quickTree->expandAll();
+    }
+
+    if (!keepSelected.isEmpty() || !keepCurrent.isEmpty()) {
+        QItemSelection reselect;
+        QModelIndex current;
+        std::function<void(QStandardItem *)> walk = [&](QStandardItem *parent) {
+            for (int i = 0; i < parent->rowCount(); ++i) {
+                QStandardItem *row = parent->child(i);
+                if (!row) {
+                    continue;
+                }
+                const QString path = rowPath(row);
+                const QModelIndex index = m_quickProxy->mapFromSource(row->index());
+                if (keepSelected.contains(path)) {
+                    reselect.select(index, index);
+                }
+                if (path == keepCurrent) {
+                    current = index;
+                }
+                walk(row);
+            }
+        };
+        walk(m_quickModel->invisibleRootItem());
+        if (current.isValid()) {
+            m_quickTree->selectionModel()->setCurrentIndex(current, QItemSelectionModel::NoUpdate);
+        }
+        m_quickTree->selectionModel()->select(reselect, QItemSelectionModel::ClearAndSelect);
     }
 
     // Recent is not rearranged by hand, so it does not accept drags.
@@ -7577,6 +7757,7 @@ void SceneOrganiserDock::commitQuickTreeToTab()
             }
             out << node;
         }
+        RestoreUnlistedScenes(out, parent ? parent->data(TabItemHiddenRole).toStringList() : m_quickRootUnlisted);
         return out;
     };
 
@@ -7584,15 +7765,6 @@ void SceneOrganiserDock::commitQuickTreeToTab()
     SaveConfiguration();
 }
 
-// The item behind a view index on the tab tree, mapping through its proxy.
-static QStandardItem *TabItemFromIndex(QSortFilterProxyModel *proxy, QStandardItemModel *model,
-                                       const QModelIndex &index)
-{
-    if (!proxy || !model || !index.isValid()) {
-        return nullptr;
-    }
-    return model->itemFromIndex(proxy->mapToSource(index));
-}
 
 void SceneOrganiserDock::onQuickTreeActivated(const QModelIndex &index)
 {
@@ -7601,17 +7773,95 @@ void SceneOrganiserDock::onQuickTreeActivated(const QModelIndex &index)
         return; // folders are for organising, not for going live
     }
 
+    // A ctrl or shift click that leaves several rows selected is building a
+    // selection, not asking to go live - the same rule as the Scenes tree.
+    if (m_quickTree->selectionModel()->selectedIndexes().size() > 1) {
+        return;
+    }
+
     if (QStandardItem *treeItem = m_model->findSceneItemByName(item->text())) {
         activateSceneItem(treeItem);
         refreshQuickList();
     }
 }
 
+// The rows an action on the current tab applies to. With a row given (the one
+// right clicked), the whole selection when that row is in it, otherwise just
+// that row. Without one, the selection. Tree order, and nothing whose folder
+// is also in the list: the folder already carries it.
+QList<QStandardItem *> SceneOrganiserDock::selectedTabRows(QStandardItem *clicked) const
+{
+    QList<QStandardItem *> selected;
+    const bool usable = clicked && (clicked->flags() & Qt::ItemIsEnabled);
+    const bool clickedInSelection =
+        usable && m_quickTree->selectionModel()->isSelected(m_quickProxy->mapFromSource(clicked->index()));
+
+    if (!clicked || clickedInSelection) {
+        for (const QModelIndex &index : m_quickTree->selectionModel()->selectedIndexes()) {
+            QStandardItem *sel = TabItemFromIndex(m_quickProxy, m_quickModel, index);
+            if (sel && (sel->flags() & Qt::ItemIsEnabled) && !selected.contains(sel)) {
+                selected << sel;
+            }
+        }
+    }
+    if (selected.isEmpty() && usable) {
+        selected << clicked;
+    }
+
+    std::sort(selected.begin(), selected.end(), [this](QStandardItem *a, QStandardItem *b) {
+        return m_quickTree->visualRect(m_quickProxy->mapFromSource(a->index())).top() <
+               m_quickTree->visualRect(m_quickProxy->mapFromSource(b->index())).top();
+    });
+
+    QList<QStandardItem *> tops;
+    for (QStandardItem *sel : selected) {
+        bool insideSelected = false;
+        for (QStandardItem *parent = sel->parent(); parent; parent = parent->parent()) {
+            if (selected.contains(parent)) {
+                insideSelected = true;
+                break;
+            }
+        }
+        if (!insideSelected) {
+            tops << sel;
+        }
+    }
+    return tops;
+}
+
 void SceneOrganiserDock::onQuickTreeContextMenu(const QPoint &pos)
 {
     QStandardItem *item = TabItemFromIndex(m_quickProxy, m_quickModel, m_quickTree->indexAt(pos));
-    const bool isFolder = item && item->data(TabItemIsFolderRole).toBool();
     const bool arrangeable = (editableNodesForCurrentTab() != nullptr);
+
+    const QList<QStandardItem *> tops = selectedTabRows(item);
+
+    // The selection as tab nodes, read from the rows on screen.
+    std::function<TabNode(QStandardItem *)> toNode = [&toNode](QStandardItem *row) {
+        TabNode node;
+        node.name = row->text();
+        node.isFolder = row->data(TabItemIsFolderRole).toBool();
+        if (node.isFolder) {
+            for (int i = 0; i < row->rowCount(); ++i) {
+                QStandardItem *child = row->child(i);
+                if (child && (child->flags() & Qt::ItemIsEnabled)) {
+                    node.children << toNode(child);
+                }
+            }
+        }
+        return node;
+    };
+    QVector<TabNode> nodes;
+    for (QStandardItem *top : tops) {
+        nodes << toNode(top);
+    }
+    QStringList scenes;
+    collectSceneNames(nodes, scenes);
+
+    const bool single = tops.size() == 1;
+    const bool singleFolder = single && nodes.first().isFolder;
+    const bool singleScene = single && !nodes.first().isFolder;
+    const int thisTab = (m_currentKind == QuickTabKind::Custom) ? m_currentCustomTab : -1;
 
     QMenu menu(this);
 
@@ -7622,22 +7872,62 @@ void SceneOrganiserDock::onQuickTreeContextMenu(const QPoint &pos)
                        &SceneOrganiserDock::showAddToTabMenu);
     }
 
-    if (item && (item->flags() & Qt::ItemIsEnabled)) {
+    if (!tops.isEmpty()) {
         menu.addSeparator();
 
-        if (isFolder && arrangeable) {
-            menu.addAction(QString::fromUtf8(obs_frontend_get_locale_string("Rename"), -1), this, [this, item]() {
-                onRenameTabFolderClicked(item);
+        if (singleFolder && arrangeable) {
+            QStandardItem *folder = tops.first();
+            menu.addAction(QString::fromUtf8(obs_frontend_get_locale_string("Rename"), -1), this, [this, folder]() {
+                onRenameTabFolderClicked(folder);
             });
         }
         if (arrangeable) {
-            menu.addAction(obs_module_text("SceneOrganiser.Action.RemoveFromTab"), this, [this, item]() {
-                onRemoveFromTabClicked(item);
+            menu.addAction(obs_module_text("SceneOrganiser.Action.RemoveFromTab"), this, [this, tops]() {
+                removeTabRows(tops);
             });
         }
 
-        if (!isFolder) {
-            const QString sceneName = item->text();
+        // Other custom tabs the selection can go to. Moving takes it out of
+        // this tab as well; adding leaves it here too. Favourites and Recent
+        // are not arranged by hand, so from there it can only be added.
+        auto fillTabMenu = [this, nodes, scenes, thisTab](QMenu *sub, bool move) {
+            for (int i = 0; i < m_customTabs.size(); ++i) {
+                if (i == thisTab) {
+                    continue;
+                }
+                sub->addAction(m_customTabs.at(i).name, this, [this, nodes, i, move]() {
+                    addNodesToCustomTab(nodes, i);
+                    if (move) {
+                        removeNodesFromCustomTab(nodes, m_currentCustomTab);
+                    }
+                });
+            }
+            if (!sub->isEmpty()) {
+                sub->addSeparator();
+            }
+            sub->addAction(obs_module_text("SceneOrganiser.Action.NewTab"), this, [this, nodes, move]() {
+                // The name prompt does not block, and can be cancelled, so a
+                // move only takes the scenes out of here once the tab exists.
+                const int from = m_currentCustomTab;
+                QPointer<SceneOrganiserDock> self(this);
+                createCustomTabWithNodes(nodes, QString(), [self, nodes, move, from]() {
+                    if (self && move) {
+                        self->removeNodesFromCustomTab(nodes, from);
+                    }
+                });
+            });
+            sub->setEnabled(!scenes.isEmpty());
+        };
+
+        if (arrangeable && thisTab >= 0) {
+            QMenu *moveMenu = menu.addMenu(obs_module_text("SceneOrganiser.Menu.MoveToTab"));
+            fillTabMenu(moveMenu, true);
+        }
+        QMenu *addMenu = menu.addMenu(obs_module_text("SceneOrganiser.Menu.AddToTab"));
+        fillTabMenu(addMenu, false);
+
+        if (singleScene) {
+            const QString sceneName = nodes.first().name;
             menu.addSeparator();
             menu.addAction(isFavourite(sceneName)
                                ? obs_module_text("SceneOrganiser.Action.RemoveFavourite")
@@ -7669,6 +7959,27 @@ void SceneOrganiserDock::onQuickTreeContextMenu(const QPoint &pos)
         return;
     }
     menu.exec(m_quickTree->mapToGlobal(pos));
+}
+
+void SceneOrganiserDock::removeTabRows(const QList<QStandardItem *> &rows)
+{
+    if (rows.isEmpty() || !editableNodesForCurrentTab() || !m_quickModel) {
+        return;
+    }
+
+    // Removing a folder takes its contents out of the tab with it. The scenes
+    // themselves are untouched - a tab is an arrangement, not ownership.
+    // Bottom up, so taking one row out never shifts another still to go.
+    m_populatingQuickTree = true;
+    for (int i = rows.size() - 1; i >= 0; --i) {
+        QStandardItem *row = rows.at(i);
+        QStandardItem *parent = row->parent() ? row->parent() : m_quickModel->invisibleRootItem();
+        parent->removeRow(row->row());
+    }
+    m_populatingQuickTree = false;
+
+    commitQuickTreeToTab();
+    refreshQuickList();
 }
 
 void SceneOrganiserDock::onAddTabFolderClicked()
@@ -7723,20 +8034,6 @@ void SceneOrganiserDock::onRenameTabFolderClicked(QStandardItem *item)
         });
 }
 
-void SceneOrganiserDock::onRemoveFromTabClicked(QStandardItem *item)
-{
-    if (!item || !editableNodesForCurrentTab() || !m_quickModel) {
-        return;
-    }
-
-    // Removing a folder takes its contents out of the tab with it. The scenes
-    // themselves are untouched - a tab is an arrangement, not ownership.
-    QStandardItem *parent = item->parent() ? item->parent() : m_quickModel->invisibleRootItem();
-    parent->removeRow(item->row());
-
-    commitQuickTreeToTab();
-    refreshQuickList();
-}
 
 // ---------------------------------------------------------------------------
 // Tab bar: building, ordering, switching
@@ -8340,66 +8637,270 @@ void SceneOrganiserDock::onDeleteCustomTabClicked(int customIndex)
         });
 }
 
-void SceneOrganiserDock::addSceneToCustomTab(const QString &sceneName, int customIndex)
+TabNode SceneOrganiserDock::tabNodeFromItem(QStandardItem *item)
 {
-    if (customIndex < 0 || customIndex >= m_customTabs.size() || sceneName.isEmpty()) {
-        return;
-    }
-    if (nodesContainScene(m_customTabs.at(customIndex).nodes, sceneName)) {
-        return;
-    }
-
     TabNode node;
-    node.name = sceneName;
-    m_customTabs[customIndex].nodes.append(node);
-
-    refreshQuickList();
-    SaveConfiguration();
+    node.name = item->text();
+    node.isFolder = item->type() == SceneFolderItem::UserType + 1;
+    if (node.isFolder) {
+        for (int row = 0; row < item->rowCount(); ++row) {
+            QStandardItem *child = item->child(row);
+            if (child && (child->type() == SceneFolderItem::UserType + 1 ||
+                          child->type() == SceneTreeItem::UserType + 2)) {
+                node.children << tabNodeFromItem(child);
+            }
+        }
+    }
+    return node;
 }
 
-void SceneOrganiserDock::removeSceneFromCustomTab(const QString &sceneName, int customIndex)
+QVector<TabNode> SceneOrganiserDock::contextTabNodes() const
+{
+    QVector<TabNode> nodes;
+    if (!m_currentContextItem) {
+        return nodes;
+    }
+
+    // Right clicking a row outside the selection means just that row, the same
+    // as everywhere else in OBS. Inside it, the whole selection counts.
+    QList<QStandardItem *> items;
+    const QModelIndex contextIndex = m_proxyModel->mapFromSource(m_currentContextItem->index());
+    if (m_treeView->selectionModel()->isSelected(contextIndex)) {
+        for (const QModelIndex &index : m_treeView->selectionModel()->selectedIndexes()) {
+            if (index.column() != 0) {
+                continue;
+            }
+            QStandardItem *item = m_model->itemFromIndex(m_proxyModel->mapToSource(index));
+            if (item && !items.contains(item)) {
+                items << item;
+            }
+        }
+    }
+    if (items.isEmpty()) {
+        items << m_currentContextItem;
+    }
+
+    // Tree order, not click order, so a run of scenes lands in the tab the way
+    // it reads in the list.
+    std::sort(items.begin(), items.end(), [this](QStandardItem *a, QStandardItem *b) {
+        const QModelIndex pa = m_proxyModel->mapFromSource(a->index());
+        const QModelIndex pb = m_proxyModel->mapFromSource(b->index());
+        return m_treeView->visualRect(pa).top() < m_treeView->visualRect(pb).top();
+    });
+
+    for (QStandardItem *item : items) {
+        // A scene inside a selected folder already comes along with the folder.
+        bool insideSelected = false;
+        for (QStandardItem *parent = item->parent(); parent; parent = parent->parent()) {
+            if (items.contains(parent)) {
+                insideSelected = true;
+                break;
+            }
+        }
+        if (!insideSelected && (item->type() == SceneFolderItem::UserType + 1 ||
+                                item->type() == SceneTreeItem::UserType + 2)) {
+            nodes << tabNodeFromItem(item);
+        }
+    }
+    return nodes;
+}
+
+static bool TabHasScene(const QVector<TabNode> &nodes, const QString &sceneName)
+{
+    for (const TabNode &node : nodes) {
+        if (node.isFolder ? TabHasScene(node.children, sceneName) : node.name == sceneName) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Drops every scene the tab already holds, and any folder left empty by that.
+static QVector<TabNode> WithoutScenesIn(const QVector<TabNode> &nodes, const QVector<TabNode> &tab)
+{
+    QVector<TabNode> kept;
+    for (const TabNode &node : nodes) {
+        if (!node.isFolder) {
+            if (!TabHasScene(tab, node.name)) {
+                kept << node;
+            }
+            continue;
+        }
+        TabNode folder = node;
+        folder.children = WithoutScenesIn(node.children, tab);
+        if (!folder.children.isEmpty()) {
+            kept << folder;
+        }
+    }
+    return kept;
+}
+
+// Puts nodes into one level of a tab. A folder whose name is already there
+// fills that folder rather than making a second one beside it.
+static void MergeTabNodes(QVector<TabNode> &level, const QVector<TabNode> &incoming)
+{
+    for (const TabNode &node : incoming) {
+        if (node.isFolder) {
+            auto existing = std::find_if(level.begin(), level.end(), [&node](const TabNode &n) {
+                return n.isFolder && n.name == node.name;
+            });
+            if (existing != level.end()) {
+                MergeTabNodes(existing->children, node.children);
+                continue;
+            }
+        }
+        level << node;
+    }
+}
+
+// Takes out folders the removal left empty, but only ones that came from what
+// was removed. A folder the user emptied on purpose stays.
+static void PruneEmptyFolders(QVector<TabNode> &level, const QStringList &folderNames)
+{
+    for (int i = level.size() - 1; i >= 0; --i) {
+        if (!level[i].isFolder) {
+            continue;
+        }
+        PruneEmptyFolders(level[i].children, folderNames);
+        if (level[i].children.isEmpty() && folderNames.contains(level[i].name)) {
+            level.remove(i);
+        }
+    }
+}
+
+static void CollectFolderNames(const QVector<TabNode> &nodes, QStringList &out)
+{
+    for (const TabNode &node : nodes) {
+        if (node.isFolder) {
+            out << node.name;
+            CollectFolderNames(node.children, out);
+        }
+    }
+}
+
+void SceneOrganiserDock::addNodesToCustomTab(const QVector<TabNode> &nodes, int customIndex)
 {
     if (customIndex < 0 || customIndex >= m_customTabs.size()) {
         return;
     }
 
-    removeSceneFromNodes(m_customTabs[customIndex].nodes, sceneName);
+    QVector<TabNode> &tab = m_customTabs[customIndex].nodes;
+    const QVector<TabNode> fresh = WithoutScenesIn(nodes, tab);
+    if (fresh.isEmpty()) {
+        return;
+    }
+    MergeTabNodes(tab, fresh);
+
     refreshQuickList();
     SaveConfiguration();
 }
 
-void SceneOrganiserDock::populateAddToTabMenu()
+void SceneOrganiserDock::removeNodesFromCustomTab(const QVector<TabNode> &nodes, int customIndex)
 {
-    if (!m_addToTabMenu) {
+    if (customIndex < 0 || customIndex >= m_customTabs.size()) {
         return;
     }
 
-    m_addToTabMenu->clear();
+    QStringList scenes;
+    collectSceneNames(nodes, scenes);
+    QStringList folders;
+    CollectFolderNames(nodes, folders);
 
-    const QString sceneName = m_currentContextItem ? m_currentContextItem->text() : QString();
+    QVector<TabNode> &tab = m_customTabs[customIndex].nodes;
+    for (const QString &scene : scenes) {
+        removeSceneFromNodes(tab, scene);
+    }
+    PruneEmptyFolders(tab, folders);
+
+    refreshQuickList();
+    SaveConfiguration();
+}
+
+void SceneOrganiserDock::createCustomTabWithNodes(const QVector<TabNode> &nodes, const QString &suggestedName,
+                                                  std::function<void()> onCreated)
+{
+    QPointer<SceneOrganiserDock> self(this);
+
+    // The suggestion is only offered when it is free, so the prompt never
+    // opens on a name it would then refuse.
+    const QString initial = customTabIndexByName(suggestedName) < 0 ? suggestedName : QString();
+
+    promptForTabName(QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.NewTab.Title")),
+                     QString::fromUtf8(obs_module_text("SceneOrganiser.Dialog.NewTab.Text")),
+                     initial, -1,
+        [self, nodes, onCreated](const QString &name) {
+            if (!self) {
+                return;
+            }
+
+            CustomSceneTab tab;
+            tab.name = name;
+            tab.nodes = nodes;
+            self->m_customTabs.append(tab);
+
+            // Land on the new tab, so it is clear where everything went.
+            self->m_currentKind = QuickTabKind::Custom;
+            self->m_currentCustomTab = self->m_customTabs.size() - 1;
+
+            self->rebuildTabBar();
+            self->SaveConfiguration();
+
+            if (onCreated) {
+                onCreated();
+            }
+        });
+}
+
+void SceneOrganiserDock::populateAddToTabMenu(QMenu *menu)
+{
+    if (!menu) {
+        return;
+    }
+
+    menu->clear();
+
+    const QVector<TabNode> nodes = contextTabNodes();
+    QStringList scenes;
+    collectSceneNames(nodes, scenes);
 
     for (int i = 0; i < m_customTabs.size(); ++i) {
         const CustomSceneTab &tab = m_customTabs.at(i);
-        const bool alreadyIn = nodesContainScene(tab.nodes, sceneName);
 
-        QAction *action = m_addToTabMenu->addAction(tab.name, this, [this, sceneName, i, alreadyIn]() {
-            if (alreadyIn) {
-                removeSceneFromCustomTab(sceneName, i);
+        // Ticked when every scene is already in this tab, and clicking it then
+        // takes them all out, so one menu covers both directions. A selection
+        // that is only partly in stays unticked, and clicking adds the rest.
+        bool allIn = !scenes.isEmpty();
+        for (const QString &scene : scenes) {
+            if (!nodesContainScene(tab.nodes, scene)) {
+                allIn = false;
+                break;
+            }
+        }
+
+        QAction *action = menu->addAction(tab.name, this, [this, nodes, i, allIn]() {
+            if (allIn) {
+                removeNodesFromCustomTab(nodes, i);
             } else {
-                addSceneToCustomTab(sceneName, i);
+                addNodesToCustomTab(nodes, i);
             }
         });
-        // Checked means "in this tab", and clicking it again takes the scene out,
-        // so one menu covers both directions.
         action->setCheckable(true);
-        action->setChecked(alreadyIn);
+        action->setChecked(allIn);
+        action->setEnabled(!scenes.isEmpty());
     }
 
     if (!m_customTabs.isEmpty()) {
-        m_addToTabMenu->addSeparator();
+        menu->addSeparator();
     }
-    m_addToTabMenu->addAction(obs_module_text("SceneOrganiser.Action.NewTab"), this,
-                              &SceneOrganiserDock::onCreateCustomTabClicked);
+
+    // One folder on its own becomes the tab: its contents at the top level,
+    // and its name offered for the tab. Anything else goes in as it is.
+    const bool singleFolder = nodes.size() == 1 && nodes.first().isFolder;
+    const QVector<TabNode> newTabNodes = singleFolder ? nodes.first().children : nodes;
+    const QString suggestedName = singleFolder ? nodes.first().name : QString();
+
+    menu->addAction(obs_module_text("SceneOrganiser.Action.NewTab"), this,
+                    [this, newTabNodes, suggestedName]() { createCustomTabWithNodes(newTabNodes, suggestedName); });
 }
 
 
@@ -9098,6 +9599,47 @@ QSize StreamUP::SceneOrganiser::CustomColorDelegate::sizeHint(const QStyleOption
     QSize size = QStyledItemDelegate::sizeHint(option, index);
     size.setHeight(m_dock ? m_dock->currentRowHeight() : 24);
     return size;
+}
+
+// The rename box. Themes only style an inline editor for list views (Yami's
+// "QListView QLineEdit"), and this is a tree, so it got the full size input
+// padding and a thick border squeezed into a compact row, leaving a sliver of
+// text. Give it its own slim frame, and never let it be shorter than a line.
+QWidget *StreamUP::SceneOrganiser::CustomColorDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &option,
+                                                                     const QModelIndex &index) const
+{
+    QWidget *editor = QStyledItemDelegate::createEditor(parent, option, index);
+    if (auto *line = qobject_cast<QLineEdit *>(editor)) {
+        line->setFont(option.font);
+        line->setMinimumHeight(0);
+        // The border is a hairline, so only the padding and corners scale.
+        line->setStyleSheet(QString("QLineEdit {"
+                                    "  margin: 0;"
+                                    "  padding: 0px %1px;"
+                                    "  border: 1px solid palette(highlight);"
+                                    "  border-radius: %1px;"
+                                    "  background: palette(base);"
+                                    "  color: palette(text);"
+                                    "}")
+                                .arg(StreamUP::UIStyles::S(3)));
+    }
+    return editor;
+}
+
+void StreamUP::SceneOrganiser::CustomColorDelegate::updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option,
+                                                                         const QModelIndex &index) const
+{
+    QStyledItemDelegate::updateEditorGeometry(editor, option, index);
+
+    // Text height plus the 1px border top and bottom. A row set smaller than
+    // that gets an editor that spills evenly above and below it while typing.
+    const int needed = QFontMetrics(editor->font()).height() + 2;
+    QRect rect = editor->geometry();
+    if (rect.height() < needed) {
+        rect.adjust(0, -(needed - rect.height()) / 2, 0, 0);
+        rect.setHeight(needed);
+        editor->setGeometry(rect);
+    }
 }
 
 #include "scene-organiser-dock.moc"

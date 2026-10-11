@@ -417,7 +417,14 @@ public:
     int m_currentCustomTab = -1;
 
     QAction *m_favouriteToggleAction = nullptr;
+    // "Customise <overlay>" on scenes that belong to an overlay with controls.
+    QAction *m_customiseOverlayAction = nullptr;
+    QAction *m_customiseOverlaySeparator = nullptr;
+    QString m_customiseOverlayId;
     QMenu *m_addToTabMenu = nullptr;
+    QMenu *m_folderAddToTabMenu = nullptr;
+    // The current tab's unlisted top level scenes (see TabItemHiddenRole).
+    QStringList m_quickRootUnlisted;
 
     void setupQuickTabs();
     // Rebuilds the bar from scratch: the tree, whichever built-in tabs the
@@ -443,7 +450,9 @@ public:
     // Folder actions on a tab tree.
     void onAddTabFolderClicked();
     void onRenameTabFolderClicked(QStandardItem *item);
-    void onRemoveFromTabClicked(QStandardItem *item);
+    // Takes rows out of the current tab, folders with their contents.
+    void removeTabRows(const QList<QStandardItem *> &rows);
+    QList<QStandardItem *> selectedTabRows(QStandardItem *clicked) const;
     void onQuickTabChanged(int index);
     void onTabMoved(int from, int to);
     // Identity of the selected tab, for restoring it across a rebuild.
@@ -464,11 +473,21 @@ public:
     void onCreateCustomTabClicked();
     void onRenameCustomTabClicked(int customIndex);
     void onDeleteCustomTabClicked(int customIndex);
-    void addSceneToCustomTab(const QString &sceneName, int customIndex);
-    void removeSceneFromCustomTab(const QString &sceneName, int customIndex);
-    // Rebuilt every time the scene menu opens: the custom tabs can change
-    // between one right click and the next.
-    void populateAddToTabMenu();
+    // Rebuilt every time a scene or folder menu opens: the custom tabs can
+    // change between one right click and the next. Acts on the whole selection
+    // when the row that was right clicked is part of it.
+    void populateAddToTabMenu(QMenu *menu);
+    // What Add to Tab acts on, as tab nodes: selected scenes as they are,
+    // selected folders with everything inside them.
+    QVector<TabNode> contextTabNodes() const;
+    static TabNode tabNodeFromItem(QStandardItem *item);
+    // Adds nodes to a tab, skipping scenes it already holds and merging into
+    // a folder of the same name. Removes them again when every scene is in.
+    void addNodesToCustomTab(const QVector<TabNode> &nodes, int customIndex);
+    void removeNodesFromCustomTab(const QVector<TabNode> &nodes, int customIndex);
+    // New Tab from a menu: asks for a name and fills the tab with nodes.
+    void createCustomTabWithNodes(const QVector<TabNode> &nodes, const QString &suggestedName,
+                                  std::function<void()> onCreated = nullptr);
     int customTabIndexByName(const QString &name) const;
 
     // Pushes a scene to the front of the recents list. No-op if it is already
@@ -701,6 +720,8 @@ public:
 
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+    void updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
 
 private:
     SceneOrganiserDock *m_dock;

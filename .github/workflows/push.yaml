@@ -71,8 +71,15 @@ jobs:
           root_dir="$(pwd)"
           commit_hash="${GITHUB_SHA:0:9}"
 
+          # Windows manual installs arrive as folders (one artifact each); zip
+          # each folder's contents so plugins\ or obs-plugins\ + data\ is the
+          # zip root, matching the artifact downloads.
+          for dir in *-windows-x64-obs33-${commit_hash} *-windows-x64-obs31-32-${commit_hash} *-windows-all-versions-${commit_hash}; do
+            (cd "${dir}" && zip -r -9 "${root_dir}/${dir%-${commit_hash}}.zip" .)
+          done
+
           variants=(
-            'windows-x64;zip|exe'
+            'windows-x64-installer;exe'
             'macos-universal;tar.xz|pkg'
             'ubuntu-24.04-x86_64;tar.xz|deb|ddeb'
             'sources;tar.xz'
