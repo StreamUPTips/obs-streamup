@@ -36,6 +36,7 @@
 #include "ui/studio-mode-enhancements.hpp"
 #include "ui/mixer-enhancements.hpp"
 #include "ui/vertical-canvas-enhancements.hpp"
+#include "ui/source-tree-enhancements.hpp"
 #include "ui/theme-enhancements.hpp"
 #include "multidock/multidock_manager.hpp"
 #include "multidock/multidock_utils.hpp"
@@ -1395,6 +1396,7 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 		StreamUP::StudioModeEnhancements::ApplyStudioModeEnhancements();
 		StreamUP::MixerEnhancements::ApplyMixerEnhancements();
 		StreamUP::VerticalCanvasEnhancements::ApplyVerticalCanvasEnhancements();
+		StreamUP::SourceTreeEnhancements::ApplySourceTreeEnhancements();
 		StreamUP::ThemeEnhancements::ApplyThemeEnhancements();
 
 		// Snapshot fields for the three enhancements always read true now —
@@ -1564,6 +1566,7 @@ void obs_module_unload()
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up UI enhancements");
 		StreamUP::StudioModeEnhancements::CleanupStudioModeEnhancements();
 		StreamUP::MixerEnhancements::CleanupMixerEnhancements();
+		StreamUP::SourceTreeEnhancements::CleanupSourceTreeEnhancements();
 		StreamUP::VerticalCanvasEnhancements::CleanupVerticalCanvasEnhancements();
 		StreamUP::ThemeEnhancements::CleanupThemeEnhancements();
 
