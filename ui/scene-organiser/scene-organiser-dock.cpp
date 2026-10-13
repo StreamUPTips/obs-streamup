@@ -6824,26 +6824,49 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
 
     const int step = indentation();
 
-    // A folder sitting inside another folder gets no guide drawn on its own row,
-    // so the line breaks at each folder rather than running past it. The rows
-    // inside it still get theirs, which is what makes a nested folder read as a
-    // new heading rather than as another item in the list above it.
-    const bool nestedFolderRow = (depth > 0) && index.data(TabItemIsFolderRole).toBool();
+    // Every guide hangs from its folder's chevron: the centre of the indent step
+    // the chevron sits in. Opening a folder then reads as the arrow dropping a
+    // line down past everything inside it, and the line sits in the indent
+    // column, clear of the row's hover and selection pill.
+    const auto guideX = [&](int level) { return rect.left() + (level * step) + (step / 2); };
 
-    if (StreamUP::SettingsManager::GetCurrentSettings().sceneOrganiserShowIndentGuides && depth > 0 && !nestedFolderRow) {
-        // Derived from the theme's own text colour at low alpha rather than a
-        // fixed grey, so the guides sit a consistent distance from the
-        // background on a light theme and a dark one alike.
-        QColor guide = palette().color(branchRole);
-        guide.setAlpha(60);
+    const int rowTop = rect.top();
+    const int rowBottom = rect.bottom();
+    const int rowMiddle = rowTop + (rect.height() / 2);
 
+    // Sized off the row so it keeps its proportions as the row height setting
+    // changes, and kept small enough not to crowd the icon.
+    const qreal chevronSize = qBound(5, rect.height() / 4, 9);
+
+    // A folder inside another folder keeps its parent's guide running through
+    // its own row, so the line reads as one run from the parent's chevron to the
+    // parent's last item. Breaking it at each nested folder left a whole row of
+    // gap between a folder and its own guide.
+    const bool folderRow = index.data(TabItemIsFolderRole).toBool();
+    const bool openFolder = folderRow && isExpanded(index) && model()->hasChildren(index);
+    const bool showGuides = StreamUP::SettingsManager::GetCurrentSettings().sceneOrganiserShowIndentGuides;
+
+    // Derived from the theme's own text colour at low alpha rather than a fixed
+    // grey, so the guides sit a consistent distance from the background on a
+    // light theme and a dark one alike.
+    QColor guide = palette().color(branchRole);
+    guide.setAlpha(60);
+
+    if (showGuides && openFolder) {
+        // An open folder starts its own guide just under its chevron, meeting
+        // the line its first child picks up at the top of the next row.
         painter->save();
         painter->setPen(QPen(guide, 1));
+        const int stubTop = rowMiddle + qRound(chevronSize / 2.0) + 2;
+        if (stubTop < rowBottom) {
+            painter->drawLine(guideX(depth), stubTop, guideX(depth), rowBottom);
+        }
+        painter->restore();
+    }
 
-        const int rowTop = rect.top();
-        const int rowBottom = rect.bottom();
-        const int rowMiddle = rowTop + (rect.height() / 2);
-        const int iconHalf = iconSize().width() / 2;
+    if (showGuides && depth > 0) {
+        painter->save();
+        painter->setPen(QPen(guide, 1));
 
         // A guide belongs to a FOLDER, and runs the height of that folder's
         // contents. Which means the question at each level is "is this row the
@@ -6856,23 +6879,39 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
         // A row is the last thing inside an ancestor only if it is the last
         // child of its parent AND every folder between the two is likewise the
         // last child of its own parent, so the flag is carried outward.
-        bool lastInside = index.row() == (model()->rowCount(index.parent()) - 1);
+        // An open folder is never the last thing inside anything: its own
+        // children follow it, and every guide around it has to keep running.
+        bool lastInside = !openFolder && index.row() == (model()->rowCount(index.parent()) - 1);
 
         QModelIndex ancestor = index.parent();
         for (int level = depth - 1; level >= 0 && ancestor.isValid(); --level) {
-            // Lined up under the parent folder's ICON, not down the middle of the
-            // indent step. The step's centre sits in the parent's chevron column,
-            // which reads as a line beside the folder rather than one descending
-            // from it. The parent's icon starts one step in from its own depth.
-            const int x = rect.left() + ((level + 1) * step) + iconHalf;
+            const int x = guideX(level);
 
             if (lastInside) {
                 // The run ends here: stop halfway and turn into the row, so the
                 // last item reads as attached rather than the line running on
                 // past the end of the folder.
                 painter->drawLine(x, rowTop, x, rowMiddle);
-                const int elbowEnd = rect.left() + ((level + 2) * step) - 2;
-                painter->drawLine(x, rowMiddle, elbowEnd, rowMiddle);
+
+                // When a folder further in ends on this row too, its guide is
+                // the next line along, so the elbow runs into it and the two
+                // endings read as one join rather than two hooks. A closed
+                // folder's elbow stops short of its chevron; anything else runs
+                // up to the icon.
+                int elbowEnd;
+                if (level < depth - 1) {
+                    elbowEnd = guideX(level + 1);
+                } else if (folderRow) {
+                    elbowEnd = guideX(depth) - qRound(chevronSize) - 2;
+                } else {
+                    // Anything that is not a folder is painted one step left,
+                    // in the chevron column it has no use for, so its icon
+                    // starts where this row's own indent step does.
+                    elbowEnd = rect.left() + (depth * step) - 2;
+                }
+                if (elbowEnd > x) {
+                    painter->drawLine(x, rowMiddle, elbowEnd, rowMiddle);
+                }
             } else {
                 painter->drawLine(x, rowTop, x, rowBottom);
             }
@@ -6894,17 +6933,11 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
     // than keep guessing which pseudo-state combination a given theme wants,
     // the dock draws its own - one shape, both states, every theme.
     if (model()->hasChildren(index)) {
-        const QRect cell(rect.left() + (depth * step), rect.top(), step, rect.height());
+        const qreal size = chevronSize;
 
-        // Sized off the row so it keeps its proportions as the row height
-        // setting changes, and kept small enough not to crowd the icon.
-        const qreal size = qBound(5, cell.height() / 4, 9);
-
-        // The guide line that runs past this row. A top level folder has none,
-        // so it falls back to the middle of its own indent step.
-        const qreal guideX = rect.left() + (depth * step) + (iconSize().width() / 2.0);
-        const qreal centreX = (depth > 0) ? guideX : cell.center().x();
-        const qreal centreY = cell.center().y() + 0.5;
+        // Centred on the line this folder's guide drops from.
+        const qreal centreX = guideX(depth);
+        const qreal centreY = rowMiddle + 0.5;
 
         // Follows the theme through the palette, so it stays legible on a light
         // theme and a dark one without either being special-cased.
@@ -6921,16 +6954,15 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
         // other, which at this size reads as a blunt 2px tip instead of a point.
         QPolygonF triangle;
         if (isExpanded(index)) {
-            // Open: pointing down, sitting centred on the line.
+            // Open: pointing down, its tip on the guide it starts.
             triangle << QPointF(centreX - size, centreY - (size / 2.0))
                      << QPointF(centreX + size, centreY - (size / 2.0))
                      << QPointF(centreX, centreY + (size / 2.0));
         } else {
-            // Closed: pointing right, with its long side ON the line rather than
-            // straddling it, so the line reads as the edge the arrow grows from.
-            triangle << QPointF(centreX, centreY - size)
-                     << QPointF(centreX, centreY + size)
-                     << QPointF(centreX + size, centreY);
+            // Closed: pointing right, centred in the column.
+            triangle << QPointF(centreX - (size / 2.0), centreY - size)
+                     << QPointF(centreX - (size / 2.0), centreY + size)
+                     << QPointF(centreX + (size / 2.0), centreY);
         }
 
         painter->drawPolygon(triangle);
@@ -9451,6 +9483,22 @@ void StreamUP::SceneOrganiser::SceneOrganiserDock::onThemeChanged()
 // CustomColorDelegate Implementation
 //==============================================================================
 
+// Only a folder can open, so only a folder needs the chevron column. Every other
+// row moves left into it, the way OBS's own Sources list lays out a group: a
+// scene inside a folder lines up under the folder's icon, and a top level scene
+// sits flush with the folder arrows, instead of everything carrying an empty
+// arrow's width of gap. The tree still lays the row out with that column, so the
+// shift is applied wherever the item is painted or edited.
+static QStyleOptionViewItem ShiftIntoChevronColumn(const QStyleOptionViewItem &option, const QModelIndex &index)
+{
+    QStyleOptionViewItem shifted = option;
+    const auto *tree = qobject_cast<const QTreeView *>(option.widget);
+    if (tree && index.isValid() && !index.data(StreamUP::SceneOrganiser::TabItemIsFolderRole).toBool()) {
+        shifted.rect.adjust(-tree->indentation(), 0, 0, 0);
+    }
+    return shifted;
+}
+
 StreamUP::SceneOrganiser::CustomColorDelegate::CustomColorDelegate(SceneOrganiserDock *dock, QObject *parent,
                                                                    QSortFilterProxyModel *proxy,
                                                                    QStandardItemModel *model)
@@ -9458,8 +9506,10 @@ StreamUP::SceneOrganiser::CustomColorDelegate::CustomColorDelegate(SceneOrganise
 {
 }
 
-void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
+void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, const QStyleOptionViewItem &rowOption, const QModelIndex &index) const
 {
+    const QStyleOptionViewItem option = ShiftIntoChevronColumn(rowOption, index);
+
     if (!index.isValid() || !m_dock) {
         QStyledItemDelegate::paint(painter, option, index);
         return;
@@ -9626,9 +9676,12 @@ QWidget *StreamUP::SceneOrganiser::CustomColorDelegate::createEditor(QWidget *pa
     return editor;
 }
 
-void StreamUP::SceneOrganiser::CustomColorDelegate::updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option,
+void StreamUP::SceneOrganiser::CustomColorDelegate::updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &rowOption,
                                                                          const QModelIndex &index) const
 {
+    // The box sits over the name, which has moved left with the rest of the row.
+    const QStyleOptionViewItem option = ShiftIntoChevronColumn(rowOption, index);
+
     QStyledItemDelegate::updateEditorGeometry(editor, option, index);
 
     // Text height plus the 1px border top and bottom. A row set smaller than

@@ -7,6 +7,7 @@
 ## Improvements
 - **Overlay Controls Reach The Vertical Canvas** Layout parts, nameplate cut-outs and the preview all work on vertical scenes, and the preview is the right shape for them.
 - **Layout Works Inside Groups** Overlay Controls can move and resize parts that sit in a group, so an overlay can keep each widget tidy in its own group.
+- **A Tidier Scene Organiser Tree** Scenes line up under their folder's icon like groups do in the Sources list, without a big gap to the right. The guide lines drop from each folder's arrow and run unbroken to the last thing inside it, even when a folder sits inside another folder.
 - **Smoother Sliders** Dragging a slider or picking a colour in Overlay Controls no longer bogs OBS down on overlays with lots of linked settings.
 
 ## Bug Fixes
