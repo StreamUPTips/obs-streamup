@@ -24,6 +24,8 @@
 #include "dock/streamup-dock.hpp"
 #include "scene-organiser/scene-organiser-dock.hpp"
 #include "streamup-toolbar.hpp"
+#include "theme-enhancements.hpp"
+#include "theme-window.hpp"
 #include "../multidock/multidock_manager.hpp"
 #include <obs-module.h>
 #include <obs-data.h>
@@ -36,6 +38,7 @@
 #include <QFormLayout>
 #include <QPushButton>
 #include <QLabel>
+#include <QUrl>
 #include <QSpacerItem>
 #include <QGroupBox>
 #include <QScrollArea>
@@ -495,6 +498,13 @@ PluginSettings GetCurrentSettings()
 		settings.debugLoggingEnabled = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "debug_logging_enabled", false);
 		settings.sceneOrganiserShowIcons = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_icons", true);
 		settings.sceneOrganiserShowIndentGuides = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_indent_guides", true);
+		settings.themeSourceFolders = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_source_folders", true);
+		settings.themeSourceGuides = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_source_guides", true);
+		settings.themeMixer = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_mixer", true);
+		settings.themeVerticalCanvas = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_vertical_canvas", true);
+		settings.themeStudioMode = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_studio_mode", true);
+		settings.themeSpacing = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_spacing", true);
+		settings.themeWindowPolish = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_window_polish", true);
 		// The pair replaced a single show-both switch; that key is the default for
 		// both halves so an existing config carries over rather than resetting.
 		const bool legacyShowTabs = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_quick_tabs", true);
@@ -663,6 +673,13 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "debug_logging_enabled", settings.debugLoggingEnabled);
 	obs_data_set_bool(data, "scene_organiser_show_icons", settings.sceneOrganiserShowIcons);
 	obs_data_set_bool(data, "scene_organiser_show_indent_guides", settings.sceneOrganiserShowIndentGuides);
+	obs_data_set_bool(data, "theme_source_folders", settings.themeSourceFolders);
+	obs_data_set_bool(data, "theme_source_guides", settings.themeSourceGuides);
+	obs_data_set_bool(data, "theme_mixer", settings.themeMixer);
+	obs_data_set_bool(data, "theme_vertical_canvas", settings.themeVerticalCanvas);
+	obs_data_set_bool(data, "theme_studio_mode", settings.themeStudioMode);
+	obs_data_set_bool(data, "theme_spacing", settings.themeSpacing);
+	obs_data_set_bool(data, "theme_window_polish", settings.themeWindowPolish);
 	obs_data_set_bool(data, "scene_organiser_show_favourites_tab", settings.sceneOrganiserShowFavouritesTab);
 	obs_data_set_bool(data, "scene_organiser_show_recent_tab", settings.sceneOrganiserShowRecentTab);
 	obs_data_set_bool(data, "scene_organiser_group_folders", settings.sceneOrganiserGroupFolders);
@@ -913,7 +930,8 @@ void ShowSettingsDialog(int tabIndex)
 			obs_module_text("Settings.Group.Hotkeys"),
 			obs_module_text("Settings.Group.DockConfig"),
 			obs_module_text("Settings.Group.Plugins"),
-			obs_module_text("Settings.Group.Backup")
+			obs_module_text("Settings.Group.Backup"),
+			obs_module_text("Settings.Group.Theme")
 		};
 
 		for (const QString &category : categories) {
@@ -2689,6 +2707,151 @@ void ShowSettingsDialog(int tabIndex)
 
 		backupPageLayout->addStretch();
 		stackedWidget->addWidget(backupPage);
+
+		// ── 9. StreamUP Theme page ───────────────────────────────────────
+		// The UI tweaks the StreamUP OBS theme adds to OBS itself. They only
+		// ever apply on a StreamUP theme, so on any other theme this page says
+		// what they are for and where to get the theme instead.
+		QWidget *themePage = new QWidget();
+		QVBoxLayout *themePageLayout = new QVBoxLayout(themePage);
+		themePageLayout->setContentsMargins(0, 0, 0, 0);
+		themePageLayout->setSpacing(0);
+
+		QScrollArea *themeScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
+		themeScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+		themeScrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(themeScrollArea->styleSheet() + QString(
+			"QScrollArea {"
+			"    background-color: %1;"
+			"    border: none;"
+			"    border-radius: %2px;"
+			"}"
+			"QScrollArea > QWidget > QWidget {"
+			"    background: transparent;"
+			"}"
+		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
+		 .arg(22)));
+
+		QWidget *themeContentContainer = new QWidget();
+		themeContentContainer->setStyleSheet("QWidget { background: transparent; }");
+		QVBoxLayout *themeContentLayout = new QVBoxLayout(themeContentContainer);
+		themeContentLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
+		                                       StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
+		themeContentLayout->setSpacing(StreamUP::UIStyles::S(16));
+
+		auto addThemeText = [&](const char *key) {
+			QLabel *text = new QLabel(obs_module_text(key));
+			text->setWordWrap(true);
+			text->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+				.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
+				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
+			themeContentLayout->addWidget(text);
+		};
+
+		if (StreamUP::ThemeEnhancements::IsUsingStreamUPTheme()) {
+			addThemeText("Settings.Theme.Intro");
+
+			auto beginThemeGroup = [&](const char *headerKey) {
+				themeContentLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text(headerKey)));
+				QWidget *group = new QWidget();
+				group->setStyleSheet(QString("background: transparent;"));
+				QVBoxLayout *layout = StreamUP::UIHelpers::CreateVBoxLayout(group);
+				layout->setContentsMargins(0, StreamUP::UIStyles::S(4), 0, StreamUP::UIStyles::S(4));
+				layout->setSpacing(StreamUP::UIStyles::S(12));
+				themeContentLayout->addWidget(group);
+				return layout;
+			};
+
+			// One card per tweak, the same card the Plugins page uses. Every
+			// switch takes effect straight away; the descriptions say where
+			// turning one off only finishes on the next OBS start.
+			auto addTweakRow = [&](QVBoxLayout *parent, const char *titleKey, const char *descKey,
+			                       bool PluginSettings::*field) {
+				auto *card = new StreamUP::UIStyles::RoundedContainer(
+					StreamUP::UIStyles::Sizes::RADIUS_CARD, nullptr,
+					QColor(StreamUP::UIStyles::Colors::BG_SECONDARY));
+
+				QHBoxLayout *rowLayout = new QHBoxLayout(card);
+				rowLayout->setContentsMargins(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(14),
+				                              StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(14));
+				rowLayout->setSpacing(StreamUP::UIStyles::S(16));
+
+				QWidget *textBlock = new QWidget();
+				QVBoxLayout *textLayout = new QVBoxLayout(textBlock);
+				textLayout->setContentsMargins(0, 0, 0, 0);
+				textLayout->setSpacing(StreamUP::UIStyles::S(6));
+
+				QLabel *titleLabel = new QLabel(obs_module_text(titleKey));
+				titleLabel->setStyleSheet(StreamUP::UIStyles::labelStyle(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
+
+				QLabel *descLabel = new QLabel(obs_module_text(descKey));
+				descLabel->setWordWrap(true);
+				descLabel->setStyleSheet(StreamUP::UIStyles::dimLabelStyle());
+
+				textLayout->addWidget(titleLabel);
+				textLayout->addWidget(descLabel);
+				rowLayout->addWidget(textBlock, 1);
+
+				StreamUP::UIStyles::SwitchButton *tweakSwitch =
+					StreamUP::UIStyles::CreateStyledSwitch("", GetCurrentSettings().*field);
+				QObject::connect(tweakSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [field](bool checked) {
+					PluginSettings s = GetCurrentSettings();
+					s.*field = checked;
+					UpdateSettings(s);
+					StreamUP::ThemeEnhancements::ReloadTweakSettings();
+					StreamUP::ThemeEnhancements::ReapplyThemeTweaks();
+				});
+				rowLayout->addWidget(tweakSwitch, 0, Qt::AlignVCenter);
+				parent->addWidget(card);
+			};
+
+			QVBoxLayout *sourcesGroup = beginThemeGroup("Settings.Theme.Section.Sources");
+			addTweakRow(sourcesGroup, "Settings.Theme.SourceFolders", "Settings.Theme.SourceFoldersDesc",
+			            &PluginSettings::themeSourceFolders);
+			addTweakRow(sourcesGroup, "Settings.Theme.SourceGuides", "Settings.Theme.SourceGuidesDesc",
+			            &PluginSettings::themeSourceGuides);
+
+			QVBoxLayout *audioGroup = beginThemeGroup("Settings.Theme.Section.Panels");
+			addTweakRow(audioGroup, "Settings.Theme.Mixer", "Settings.Theme.MixerDesc",
+			            &PluginSettings::themeMixer);
+			addTweakRow(audioGroup, "Settings.Theme.VerticalCanvas", "Settings.Theme.VerticalCanvasDesc",
+			            &PluginSettings::themeVerticalCanvas);
+			addTweakRow(audioGroup, "Settings.Theme.StudioMode", "Settings.Theme.StudioModeDesc",
+			            &PluginSettings::themeStudioMode);
+
+			QVBoxLayout *windowGroup = beginThemeGroup("Settings.Theme.Section.Windows");
+			addTweakRow(windowGroup, "Settings.Theme.Spacing", "Settings.Theme.SpacingDesc",
+			            &PluginSettings::themeSpacing);
+			addTweakRow(windowGroup, "Settings.Theme.WindowPolish", "Settings.Theme.WindowPolishDesc",
+			            &PluginSettings::themeWindowPolish);
+		} else {
+			themeContentLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("Settings.Theme.Promo.Title")));
+			addThemeText("Settings.Theme.Promo.Body");
+			addThemeText("Settings.Theme.Promo.Features");
+
+			themeContentLayout->addWidget(StreamUP::ThemeWindow::CreateThemePreviewCarousel(300));
+
+			QHBoxLayout *promoButtons = new QHBoxLayout();
+			promoButtons->setSpacing(StreamUP::UIStyles::S(12));
+			QPushButton *getThemeButton = new StreamUP::UIStyles::PillButton(obs_module_text("Settings.Theme.Promo.Get"), "primary");
+			QObject::connect(getThemeButton, &QPushButton::clicked, []() {
+				QDesktopServices::openUrl(QUrl("https://streamup.tips/product/streamup-obs-theme"));
+			});
+			QPushButton *membershipButton = new StreamUP::UIStyles::PillButton(obs_module_text("Settings.Theme.Promo.Membership"), "outline");
+			QObject::connect(membershipButton, &QPushButton::clicked, []() {
+				QDesktopServices::openUrl(QUrl("https://streamup.tips/premium"));
+			});
+			promoButtons->addWidget(getThemeButton);
+			promoButtons->addWidget(membershipButton);
+			promoButtons->addStretch();
+			themeContentLayout->addLayout(promoButtons);
+
+			addThemeText("Settings.Theme.Promo.HaveIt");
+		}
+
+		themeContentLayout->addStretch();
+		themeScrollArea->setWidget(themeContentContainer);
+		themePageLayout->addWidget(themeScrollArea);
+		stackedWidget->addWidget(themePage);
 
 		// Set initial banner state based on current dirty chips
 		refreshBanner();

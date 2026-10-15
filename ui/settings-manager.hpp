@@ -182,6 +182,16 @@ struct PluginSettings {
     ToolbarSize toolbarSize;        // Size tier — actual pixel sizing comes from the OBS theme via [size="..."] selectors
     ToolbarAlignment toolbarAlignment; // Where the button run sits along the toolbar's main axis
 
+    // StreamUP theme UI tweaks. Each only ever applies while a StreamUP OBS
+    // theme is active; these let someone on the theme switch single ones off.
+    bool themeSourceFolders;  // Sources dock: folder icons and children lined up under them
+    bool themeSourceGuides;   // Sources dock: folder lines down to each group's children
+    bool themeMixer;          // Audio mixer layout
+    bool themeVerticalCanvas; // Aitum Vertical Canvas control row
+    bool themeStudioMode;     // Studio mode transition marker and program area
+    bool themeSpacing;        // Dock and window edge spacing
+    bool themeWindowPolish;   // Colour previews as pills, taller rows in list dialogs
+
     // Automatic backups. Written during shutdown, after OBS has saved its final
     // state, and limited to one a day so closing OBS repeatedly does not fill
     // the folder. Empty backupLocation means the default beside the OBS config.
@@ -193,7 +203,7 @@ struct PluginSettings {
     bool moduleSetupComplete;       // Legacy wizard sentinel (kept for compat)
     std::string wizardVersionShown; // PROJECT_VERSION when the wizard last ran. Drives the upgrader prompt.
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserShowIndentGuides(true), sceneOrganiserShowFavouritesTab(true), sceneOrganiserShowRecentTab(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), toolbarAlignment(ToolbarAlignment::Start), backupAutomatic(true), backupKeepCount(10), backupLocation(), backupLastAutoDate(), moduleSetupComplete(false), wizardVersionShown() {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserShowIndentGuides(true), sceneOrganiserShowFavouritesTab(true), sceneOrganiserShowRecentTab(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), toolbarAlignment(ToolbarAlignment::Start), themeSourceFolders(true), themeSourceGuides(true), themeMixer(true), themeVerticalCanvas(true), themeStudioMode(true), themeSpacing(true), themeWindowPolish(true), backupAutomatic(true), backupKeepCount(10), backupLocation(), backupLastAutoDate(), moduleSetupComplete(false), wizardVersionShown() {}
 };
 
 /**

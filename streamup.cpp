@@ -1296,12 +1296,10 @@ static void OnOBSShutdown(enum obs_frontend_event event, void *private_data)
 	UNUSED_PARAMETER(private_data);
 
 	if (event == OBS_FRONTEND_EVENT_THEME_CHANGED) {
-		// Reset cached theme checks so enhancements re-evaluate on next use,
-		// then re-apply. Apply self-gates on whether a StreamUP theme is
-		// active, so this is silent on any other theme.
-		StreamUP::MixerEnhancements::ResetThemeCache();
-		StreamUP::ThemeEnhancements::ResetThemeCache();
-		StreamUP::ThemeEnhancements::ApplyThemeEnhancements();
+		// Bring every StreamUP theme tweak in line with the new theme. Each
+		// one self-gates, so switching to the theme styles OBS straight away
+		// and switching away puts back what can be put back live.
+		StreamUP::ThemeEnhancements::ReapplyThemeTweaks();
 		return;
 	}
 
@@ -1325,44 +1323,6 @@ static void OnOBSShutdown(enum obs_frontend_event event, void *private_data)
 	}
 }
 
-static void ApplyOBSDockStyleOverrides()
-{
-	// Override OBS native dock margins to match StreamUP style
-	QMainWindow* mainWindow = static_cast<QMainWindow*>(obs_frontend_get_main_window());
-	if (!mainWindow) {
-		blog(LOG_WARNING, "[StreamUP] Failed to get main window for dock style overrides");
-		return;
-	}
-
-	// Find all OBS native docks
-	QList<QDockWidget*> allDocks = StreamUP::MultiDock::FindAllObsDocks(mainWindow);
-
-	int overrideCount = 0;
-	for (QDockWidget* dock : allDocks) {
-		if (!dock) continue;
-
-		// Skip StreamUP's own docks (they already have correct styling)
-		QString objectName = dock->objectName();
-		if (objectName.contains("StreamUP", Qt::CaseInsensitive) ||
-		    objectName.contains("SceneOrganiser", Qt::CaseInsensitive) ||
-		    StreamUP::MultiDock::IsMultiDockContainer(dock)) {
-			continue;
-		}
-
-		// Get the widget inside the dock
-		QWidget* dockWidget = dock->widget();
-		if (dockWidget) {
-			// Override the layout margins to 0
-			if (dockWidget->layout()) {
-				dockWidget->layout()->setContentsMargins(0, 0, 0, 0);
-				overrideCount++;
-			}
-		}
-	}
-
-	blog(LOG_INFO, "[StreamUP] Applied margin overrides to %d OBS native docks", overrideCount);
-}
-
 static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_data)
 {
 	UNUSED_PARAMETER(private_data);
@@ -1383,7 +1343,7 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 		StreamUP::Backup::ResolveLocations();
 
 		// Apply style overrides to OBS native docks
-		ApplyOBSDockStyleOverrides();
+		StreamUP::ThemeEnhancements::ApplyDockSpacing();
 
 		// Aitum's vertical canvas may already exist by now (its plugin can
 		// load before ours), in which case no CANVAS_ADDED ever reaches us.

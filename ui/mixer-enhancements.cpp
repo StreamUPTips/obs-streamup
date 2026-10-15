@@ -1,4 +1,5 @@
 #include "mixer-enhancements.hpp"
+#include "theme-enhancements.hpp"
 #include <streamup/ui/gallery-style.hpp>
 
 #include <obs.h>
@@ -630,7 +631,7 @@ void EnhanceVolumeControl(QWidget* volumeControl)
 
 void RefreshMixerEnhancements()
 {
-    if (!IsOBS32_1OrNewer() || !IsUsingStreamUPTheme()) {
+    if (!IsOBS32_1OrNewer() || !ThemeEnhancements::IsTweakActive(ThemeEnhancements::Tweak::Mixer)) {
         return;
     }
 
@@ -688,7 +689,7 @@ static void AdjustMixerToolbar(QWidget* mixerWidget)
 void ApplyMixerEnhancements()
 {
     // Mixer enhancements require OBS 32.1+ due to mixer layout changes
-    if (!IsOBS32_1OrNewer() || !IsUsingStreamUPTheme()) {
+    if (!IsOBS32_1OrNewer() || !ThemeEnhancements::IsTweakActive(ThemeEnhancements::Tweak::Mixer)) {
         return;
     }
 

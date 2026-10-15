@@ -52,9 +52,9 @@ class ThemeImageCarousel : public QWidget
     Q_OBJECT
 
 public:
-    explicit ThemeImageCarousel(QWidget* parent = nullptr) : QWidget(parent)
+    explicit ThemeImageCarousel(QWidget* parent = nullptr, int height = 400) : QWidget(parent)
     {
-        setFixedHeight(StreamUP::UIStyles::S(400));
+        setFixedHeight(StreamUP::UIStyles::S(height));
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         setCursor(Qt::PointingHandCursor);
 
@@ -469,6 +469,11 @@ void CreateThemeDialog()
         dialog->activateWindow();
         return dialog;
     });
+}
+
+QWidget* CreateThemePreviewCarousel(int height, QWidget* parent)
+{
+    return new ThemeImageCarousel(parent, height);
 }
 
 void ShowThemeWindow()

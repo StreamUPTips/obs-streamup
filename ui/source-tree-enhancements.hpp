@@ -36,5 +36,10 @@ void ApplySourceTreeEnhancements();
  */
 void CleanupSourceTreeEnhancements();
 
+/**
+ * @brief Repaint every hooked tree, after the theme or a switch changes
+ */
+void RefreshSourceTreeEnhancements();
+
 } // namespace SourceTreeEnhancements
 } // namespace StreamUP

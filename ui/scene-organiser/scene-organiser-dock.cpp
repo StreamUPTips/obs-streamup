@@ -6909,8 +6909,10 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
                     // starts where this row's own indent step does.
                     elbowEnd = rect.left() + (depth * step) - 2;
                 }
+                // Starts one pixel right of the run so the corner is not
+                // painted twice (a brighter dot at 60 alpha).
                 if (elbowEnd > x) {
-                    painter->drawLine(x, rowMiddle, elbowEnd, rowMiddle);
+                    painter->drawLine(x + 1, rowMiddle, elbowEnd, rowMiddle);
                 }
             } else {
                 painter->drawLine(x, rowTop, x, rowBottom);

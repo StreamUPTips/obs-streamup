@@ -1,4 +1,5 @@
 #include "source-tree-enhancements.hpp"
+#include "theme-enhancements.hpp"
 #include "mixer-enhancements.hpp"
 #include "settings-manager.hpp"
 
@@ -90,7 +91,7 @@ static Row ClassifyRow(QListView *tree, int row)
 
 static bool IsActive()
 {
-	return StreamUP::MixerEnhancements::IsUsingStreamUPTheme();
+	return StreamUP::ThemeEnhancements::IsTweakActive(StreamUP::ThemeEnhancements::Tweak::SourceFolders);
 }
 
 // The folder pixmap for a group row, tinted to the icon's own text colour the
@@ -357,10 +358,6 @@ static void ScheduleSync(QListView *tree)
 // ever drawn over.
 static void PaintGuides(QListView *tree)
 {
-	if (!StreamUP::SettingsManager::GetCurrentSettings().sceneOrganiserShowIndentGuides) {
-		return;
-	}
-
 	QWidget *viewport = tree->viewport();
 	QAbstractItemModel *model = tree->model();
 	const int rows = model->rowCount();
@@ -393,13 +390,17 @@ static void PaintGuides(QListView *tree)
 
 		const bool last = (i + 1 >= rows) || ClassifyRow(tree, i + 1).type != RowType::Child;
 		const int x = lastGroup.item->x() + GuideX(lastGroup);
+		// Each run stops one pixel short of the next row's top, and the elbow
+		// starts one pixel right of the run. drawLine includes both ends, so
+		// overlapping them painted those pixels twice and the 60-alpha guide
+		// showed a brighter dot at every row boundary and corner.
 		const int top = rect.top();
-		const int bottom = rect.bottom() + tree->spacing() + 1;
+		const int bottom = rect.bottom() + tree->spacing();
 		const int middle = rect.top() + (rect.height() / 2);
 
 		if (last) {
 			painter.drawLine(x, top, x, middle);
-			painter.drawLine(x, middle, lastGroup.item->x() + ChildIconX(lastGroup) - kElbowGap, middle);
+			painter.drawLine(x + 1, middle, lastGroup.item->x() + ChildIconX(lastGroup) - kElbowGap, middle);
 		} else {
 			painter.drawLine(x, top, x, bottom);
 		}
@@ -445,7 +446,8 @@ bool SourceTreeFilter::eventFilter(QObject *watched, QEvent *event)
 	QCoreApplication::sendEvent(viewport, event);
 	viewport->setProperty("streamup_in_paint", false);
 
-	if (IsActive()) {
+	// The guides hang off the folder layout, so they need both switches.
+	if (IsActive() && StreamUP::ThemeEnhancements::IsTweakActive(StreamUP::ThemeEnhancements::Tweak::SourceGuides)) {
 		PaintGuides(tree);
 	}
 	if (NeedsSync(tree)) {
@@ -467,6 +469,17 @@ void ApplySourceTreeEnhancements()
 	for (QWidget *widget : QApplication::allWidgets()) {
 		if (widget->inherits(kTreeClass)) {
 			Hook(qobject_cast<QListView *>(widget));
+		}
+	}
+}
+
+void RefreshSourceTreeEnhancements()
+{
+	// A repaint is enough: the paint draws or skips the guides and schedules
+	// the sync that puts the folder layout on or takes it off.
+	for (const QPointer<QListView> &tree : g_trees) {
+		if (tree) {
+			tree->viewport()->update();
 		}
 	}
 }

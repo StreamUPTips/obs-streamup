@@ -1,4 +1,10 @@
 #include "theme-enhancements.hpp"
+#include "mixer-enhancements.hpp"
+#include "source-tree-enhancements.hpp"
+#include "studio-mode-enhancements.hpp"
+#include "vertical-canvas-enhancements.hpp"
+#include "settings-manager.hpp"
+#include "../multidock/multidock_utils.hpp"
 #include <streamup/ui/gallery-style.hpp>
 
 #include <obs-frontend-api.h>
@@ -19,6 +25,7 @@
 #include <QComboBox>
 #include <QHeaderView>
 #include <QTableView>
+#include <QSlider>
 #include <QPainter>
 #include <QPainterPath>
 #include <QRegion>
@@ -55,6 +62,13 @@ static Qt::ToolBarArea g_toolbarEdge = Qt::NoToolBarArea;
 static void applyMainWindowMargins(QMainWindow* mainWindow)
 {
     if (!mainWindow) return;
+
+    // OBS leaves the main window flush to its edges, so that is what goes
+    // back when the spacing tweak is off or the theme is not StreamUP.
+    if (!IsTweakActive(Tweak::Spacing)) {
+        mainWindow->setContentsMargins(0, 0, 0, 0);
+        return;
+    }
 
     QStatusBar* statusBar = mainWindow->statusBar();
     const bool statusBarVisible = statusBar && statusBar->isVisible();
@@ -285,7 +299,7 @@ ColorPreviewFilter::ColorPreviewFilter(QObject* parent)
 bool ColorPreviewFilter::eventFilter(QObject* watched, QEvent* event)
 {
     // Re-apply styling when the widget's style changes (e.g., color picker updates)
-    if (event->type() == QEvent::StyleChange) {
+    if (event->type() == QEvent::StyleChange && IsTweakActive(Tweak::WindowPolish)) {
         QWidget* widget = qobject_cast<QWidget*>(watched);
         if (widget) {
             // Prevent recursion: setStyleSheet() triggers StyleChange, so we need a guard
@@ -388,8 +402,9 @@ AppWidgetFilter::AppWidgetFilter(QObject* parent)
 
 bool AppWidgetFilter::eventFilter(QObject* watched, QEvent* event)
 {
-    // Only process Show events
-    if (event->type() != QEvent::Show) {
+    // Only process Show events. The filter stays installed after switching
+    // away from a StreamUP theme, so the theme is checked on every show.
+    if (event->type() != QEvent::Show || !IsUsingStreamUPTheme()) {
         return QObject::eventFilter(watched, event);
     }
 
@@ -406,7 +421,7 @@ bool AppWidgetFilter::eventFilter(QObject* watched, QEvent* event)
         bool hasPanel = (frameStyle & QFrame::Panel) != 0;
         bool hasSunken = (frameStyle & QFrame::Sunken) != 0;
 
-        if (hasPanel && hasSunken) {
+        if (hasPanel && hasSunken && IsTweakActive(Tweak::WindowPolish)) {
             // Create filter if needed
             if (!g_colorFilter) {
                 g_colorFilter = new ColorPreviewFilter();
@@ -432,7 +447,8 @@ bool AppWidgetFilter::eventFilter(QObject* watched, QEvent* event)
         ApplyAdvAudioEnhancements(widget);
     }
     // Fix table row height in Remux/Importer/Missing Files dialogs
-    else if (widget->objectName() == "OBSRemux" || widget->objectName() == "OBSImporter" || widget->objectName() == "OBSMissingFiles") {
+    else if ((widget->objectName() == "OBSRemux" || widget->objectName() == "OBSImporter" || widget->objectName() == "OBSMissingFiles") &&
+             IsTweakActive(Tweak::WindowPolish)) {
         if (!widget->property("streamup_table_fixed").toBool()) {
             widget->setProperty("streamup_table_fixed", true);
             ApplyTableRowHeight(widget);
@@ -454,8 +470,8 @@ void ApplyColorPreviewStyling(QWidget* container)
 {
     if (!container) return;
 
-    // Only apply if StreamUP theme is active
-    if (!IsUsingStreamUPTheme()) {
+    // Only apply if StreamUP theme is active and the switch is on
+    if (!IsTweakActive(Tweak::WindowPolish)) {
         return;
     }
 
@@ -645,8 +661,8 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
 {
     if (!mainWindow) return;
 
-    // Only apply if StreamUP theme is active
-    if (!IsUsingStreamUPTheme()) {
+    // Only apply if StreamUP theme is active and the switch is on
+    if (!IsTweakActive(Tweak::Spacing)) {
         return;
     }
 
@@ -946,6 +962,115 @@ void ApplyAdvAudioEnhancements(QWidget* advAudioDialog)
 void ResetThemeCache()
 {
     g_themeChecked = false;
+}
+
+// The switches, read once and again whenever the settings page flips one, so
+// paint-time checks never go to the settings file.
+static bool g_tweaksLoaded = false;
+static StreamUP::SettingsManager::PluginSettings g_tweaks;
+
+void ReloadTweakSettings()
+{
+    g_tweaks = StreamUP::SettingsManager::GetCurrentSettings();
+    g_tweaksLoaded = true;
+}
+
+bool IsTweakActive(Tweak tweak)
+{
+    if (!IsUsingStreamUPTheme()) {
+        return false;
+    }
+    if (!g_tweaksLoaded) {
+        ReloadTweakSettings();
+    }
+
+    switch (tweak) {
+    case Tweak::SourceFolders:
+        return g_tweaks.themeSourceFolders;
+    case Tweak::SourceGuides:
+        return g_tweaks.themeSourceGuides;
+    case Tweak::Mixer:
+        return g_tweaks.themeMixer;
+    case Tweak::VerticalCanvas:
+        return g_tweaks.themeVerticalCanvas;
+    case Tweak::StudioMode:
+        return g_tweaks.themeStudioMode;
+    case Tweak::Spacing:
+        return g_tweaks.themeSpacing;
+    case Tweak::WindowPolish:
+        return g_tweaks.themeWindowPolish;
+    }
+    return false;
+}
+
+void ApplyDockSpacing()
+{
+    // OBS's own docks get their inner margins zeroed to match StreamUP's. The
+    // margins OBS gave them are kept on the layout, so they go back when the
+    // switch is off or the theme is not StreamUP.
+    static const char* kOriginalMarginsProp = "streamup_original_margins";
+    const bool active = IsTweakActive(Tweak::Spacing);
+
+    QMainWindow* mainWindow = static_cast<QMainWindow*>(obs_frontend_get_main_window());
+    if (!mainWindow) {
+        return;
+    }
+
+    for (QDockWidget* dock : StreamUP::MultiDock::FindAllObsDocks(mainWindow)) {
+        if (!dock) continue;
+
+        // Skip StreamUP's own docks (they already have correct styling)
+        const QString objectName = dock->objectName();
+        if (objectName.contains("StreamUP", Qt::CaseInsensitive) ||
+            objectName.contains("SceneOrganiser", Qt::CaseInsensitive) ||
+            StreamUP::MultiDock::IsMultiDockContainer(dock)) {
+            continue;
+        }
+
+        QWidget* dockWidget = dock->widget();
+        QLayout* layout = dockWidget ? dockWidget->layout() : nullptr;
+        if (!layout) continue;
+
+        const QVariant saved = layout->property(kOriginalMarginsProp);
+        if (active) {
+            if (!saved.isValid()) {
+                const QMargins m = layout->contentsMargins();
+                layout->setProperty(kOriginalMarginsProp, QVariantList{m.left(), m.top(), m.right(), m.bottom()});
+            }
+            layout->setContentsMargins(0, 0, 0, 0);
+        } else if (saved.isValid()) {
+            const QVariantList m = saved.toList();
+            layout->setContentsMargins(m.value(0).toInt(), m.value(1).toInt(), m.value(2).toInt(), m.value(3).toInt());
+            layout->setProperty(kOriginalMarginsProp, QVariant());
+        }
+    }
+}
+
+void ReapplyThemeTweaks()
+{
+    // The two theme checks are cached separately, so both are reset.
+    StreamUP::MixerEnhancements::ResetThemeCache();
+    ResetThemeCache();
+
+    ApplyDockSpacing();
+    if (QMainWindow* mainWindow = static_cast<QMainWindow*>(obs_frontend_get_main_window())) {
+        applyMainWindowMargins(mainWindow);
+
+        // The transition marker is drawn at paint time, so a repaint is all
+        // it takes for it to follow the switch.
+        for (QSlider* slider : mainWindow->findChildren<QSlider*>()) {
+            slider->update();
+        }
+    }
+
+    // Each of these checks its own switch and does nothing when it is off.
+    StreamUP::MixerEnhancements::ApplyMixerEnhancements();
+    StreamUP::VerticalCanvasEnhancements::ApplyVerticalCanvasEnhancements();
+    if (obs_frontend_preview_program_mode_active()) {
+        StreamUP::StudioModeEnhancements::StyleProgramContainer();
+    }
+    StreamUP::SourceTreeEnhancements::RefreshSourceTreeEnhancements();
+    ApplyThemeEnhancements();
 }
 
 void CleanupThemeEnhancements()

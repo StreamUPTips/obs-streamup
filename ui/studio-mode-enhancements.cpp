@@ -26,7 +26,9 @@ SliderMidpointFilter::SliderMidpointFilter(QObject* parent)
 
 bool SliderMidpointFilter::eventFilter(QObject* watched, QEvent* event)
 {
-    if (event->type() == QEvent::Paint) {
+    // Checked at paint time, so the marker follows a theme switch without
+    // the filter having to come off.
+    if (event->type() == QEvent::Paint && ThemeEnhancements::IsTweakActive(ThemeEnhancements::Tweak::StudioMode)) {
         QSlider* slider = qobject_cast<QSlider*>(watched);
         if (slider) {
             QPaintEvent* paintEvent = static_cast<QPaintEvent*>(event);
@@ -149,8 +151,8 @@ void EnhanceTransitionSlider()
 
 void StyleProgramContainer()
 {
-    // Only apply if StreamUP theme is active
-    if (!ThemeEnhancements::IsUsingStreamUPTheme()) {
+    // Only apply if StreamUP theme is active and the switch is on
+    if (!ThemeEnhancements::IsTweakActive(ThemeEnhancements::Tweak::StudioMode)) {
         return;
     }
 

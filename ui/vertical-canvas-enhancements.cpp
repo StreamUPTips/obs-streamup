@@ -1,4 +1,5 @@
 #include "vertical-canvas-enhancements.hpp"
+#include "theme-enhancements.hpp"
 #include "mixer-enhancements.hpp"
 #include <streamup/debug-logger.hpp>
 
@@ -458,7 +459,7 @@ void ApplyVerticalCanvasEnhancements()
 {
 	// Same gate as the mixer work: this is a StreamUP theme enhancement, and
 	// on any other theme the dock is left exactly as its plugin built it.
-	if (!StreamUP::MixerEnhancements::IsUsingStreamUPTheme()) {
+	if (!StreamUP::ThemeEnhancements::IsTweakActive(StreamUP::ThemeEnhancements::Tweak::VerticalCanvas)) {
 		return;
 	}
 
