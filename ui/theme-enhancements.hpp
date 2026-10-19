@@ -119,6 +119,7 @@ enum class Tweak {
     SourceGuides,   // Sources dock folder lines
     Mixer,          // Audio mixer layout
     VerticalCanvas, // Aitum Vertical Canvas control row
+    Multistream,    // Aitum Multistream dock
     StudioMode,     // Transition slider marker and program area
     Spacing,        // Dock and window edge spacing
     WindowPolish    // Colour preview pills, taller rows in list dialogs

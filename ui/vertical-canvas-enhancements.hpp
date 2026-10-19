@@ -42,5 +42,11 @@ void CleanupVerticalCanvasEnhancements();
  */
 void TogglePartnerBlocks();
 
+/**
+ * Whether the partner blocks should be hidden. One setting covers both of
+ * Aitum's docks, Vertical Canvas and Multistream.
+ */
+bool ShouldHidePartnerBlocks();
+
 } // namespace VerticalCanvasEnhancements
 } // namespace StreamUP

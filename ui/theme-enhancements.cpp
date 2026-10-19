@@ -3,6 +3,7 @@
 #include "source-tree-enhancements.hpp"
 #include "studio-mode-enhancements.hpp"
 #include "vertical-canvas-enhancements.hpp"
+#include "multistream-enhancements.hpp"
 #include "settings-manager.hpp"
 #include "../multidock/multidock_utils.hpp"
 #include <streamup/ui/gallery-style.hpp>
@@ -993,6 +994,8 @@ bool IsTweakActive(Tweak tweak)
         return g_tweaks.themeMixer;
     case Tweak::VerticalCanvas:
         return g_tweaks.themeVerticalCanvas;
+    case Tweak::Multistream:
+        return g_tweaks.themeMultistream;
     case Tweak::StudioMode:
         return g_tweaks.themeStudioMode;
     case Tweak::Spacing:
@@ -1066,6 +1069,7 @@ void ReapplyThemeTweaks()
     // Each of these checks its own switch and does nothing when it is off.
     StreamUP::MixerEnhancements::ApplyMixerEnhancements();
     StreamUP::VerticalCanvasEnhancements::ApplyVerticalCanvasEnhancements();
+    StreamUP::MultistreamEnhancements::ApplyMultistreamEnhancements();
     if (obs_frontend_preview_program_mode_active()) {
         StreamUP::StudioModeEnhancements::StyleProgramContainer();
     }

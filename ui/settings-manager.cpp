@@ -502,6 +502,7 @@ PluginSettings GetCurrentSettings()
 		settings.themeSourceGuides = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_source_guides", true);
 		settings.themeMixer = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_mixer", true);
 		settings.themeVerticalCanvas = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_vertical_canvas", true);
+		settings.themeMultistream = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_multistream", true);
 		settings.themeStudioMode = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_studio_mode", true);
 		settings.themeSpacing = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_spacing", true);
 		settings.themeWindowPolish = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_window_polish", true);
@@ -677,6 +678,7 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "theme_source_guides", settings.themeSourceGuides);
 	obs_data_set_bool(data, "theme_mixer", settings.themeMixer);
 	obs_data_set_bool(data, "theme_vertical_canvas", settings.themeVerticalCanvas);
+	obs_data_set_bool(data, "theme_multistream", settings.themeMultistream);
 	obs_data_set_bool(data, "theme_studio_mode", settings.themeStudioMode);
 	obs_data_set_bool(data, "theme_spacing", settings.themeSpacing);
 	obs_data_set_bool(data, "theme_window_polish", settings.themeWindowPolish);
@@ -2815,6 +2817,8 @@ void ShowSettingsDialog(int tabIndex)
 			            &PluginSettings::themeMixer);
 			addTweakRow(audioGroup, "Settings.Theme.VerticalCanvas", "Settings.Theme.VerticalCanvasDesc",
 			            &PluginSettings::themeVerticalCanvas);
+			addTweakRow(audioGroup, "Settings.Theme.Multistream", "Settings.Theme.MultistreamDesc",
+			            &PluginSettings::themeMultistream);
 			addTweakRow(audioGroup, "Settings.Theme.StudioMode", "Settings.Theme.StudioModeDesc",
 			            &PluginSettings::themeStudioMode);
 

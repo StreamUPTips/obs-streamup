@@ -188,6 +188,7 @@ struct PluginSettings {
     bool themeSourceGuides;   // Sources dock: folder lines down to each group's children
     bool themeMixer;          // Audio mixer layout
     bool themeVerticalCanvas; // Aitum Vertical Canvas control row
+    bool themeMultistream;    // Aitum Multistream dock
     bool themeStudioMode;     // Studio mode transition marker and program area
     bool themeSpacing;        // Dock and window edge spacing
     bool themeWindowPolish;   // Colour previews as pills, taller rows in list dialogs
@@ -203,7 +204,7 @@ struct PluginSettings {
     bool moduleSetupComplete;       // Legacy wizard sentinel (kept for compat)
     std::string wizardVersionShown; // PROJECT_VERSION when the wizard last ran. Drives the upgrader prompt.
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserShowIndentGuides(true), sceneOrganiserShowFavouritesTab(true), sceneOrganiserShowRecentTab(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), toolbarAlignment(ToolbarAlignment::Start), themeSourceFolders(true), themeSourceGuides(true), themeMixer(true), themeVerticalCanvas(true), themeStudioMode(true), themeSpacing(true), themeWindowPolish(true), backupAutomatic(true), backupKeepCount(10), backupLocation(), backupLastAutoDate(), moduleSetupComplete(false), wizardVersionShown() {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserShowIndentGuides(true), sceneOrganiserShowFavouritesTab(true), sceneOrganiserShowRecentTab(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), toolbarAlignment(ToolbarAlignment::Start), themeSourceFolders(true), themeSourceGuides(true), themeMixer(true), themeVerticalCanvas(true), themeMultistream(true), themeStudioMode(true), themeSpacing(true), themeWindowPolish(true), backupAutomatic(true), backupKeepCount(10), backupLocation(), backupLastAutoDate(), moduleSetupComplete(false), wizardVersionShown() {}
 };
 
 /**

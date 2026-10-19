@@ -203,6 +203,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/mixer-enhancements.cpp
   ui/vertical-canvas-enhancements.hpp
   ui/vertical-canvas-enhancements.cpp
+  ui/multistream-enhancements.hpp
+  ui/multistream-enhancements.cpp
   ui/source-tree-enhancements.hpp
   ui/source-tree-enhancements.cpp
   ui/theme-enhancements.hpp
@@ -364,6 +366,8 @@ source_group("UI" FILES
   ui/mixer-enhancements.cpp
   ui/vertical-canvas-enhancements.hpp
   ui/vertical-canvas-enhancements.cpp
+  ui/multistream-enhancements.hpp
+  ui/multistream-enhancements.cpp
   ui/source-tree-enhancements.hpp
   ui/source-tree-enhancements.cpp
   ui/theme-enhancements.hpp

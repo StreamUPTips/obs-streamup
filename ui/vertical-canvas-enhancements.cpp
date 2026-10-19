@@ -1,6 +1,7 @@
 #include "vertical-canvas-enhancements.hpp"
 #include "theme-enhancements.hpp"
 #include "mixer-enhancements.hpp"
+#include "multistream-enhancements.hpp"
 #include <streamup/debug-logger.hpp>
 
 #include <obs-frontend-api.h>
@@ -47,7 +48,6 @@ static const char *kSeparatorBefore[] = {"canvasRecord", "canvasVirtualCam"};
 
 static void NormaliseButtonCorners(QWidget *bar);
 static void ApplyPartnerBlockVisibility(QWidget *dock, QWidget *bar);
-static bool ShouldHidePartnerBlocks();
 static void WatchChildren(QWidget *dock, QObject *watcher);
 
 // Does this layout contain the given widget, at any depth?
@@ -242,7 +242,8 @@ static void NormaliseButtonCorners(QWidget *bar)
 //   [StreamUP]
 //   HideVerticalCanvasPartnerBlocks=true
 //
-static bool ShouldHidePartnerBlocks()
+// The key predates the Multistream dock, which follows it too.
+bool ShouldHidePartnerBlocks()
 {
 	config_t *config = obs_frontend_get_user_config();
 	if (!config) {
@@ -510,6 +511,7 @@ void TogglePartnerBlocks()
 	for (QWidget *dock : FindCanvasDocks()) {
 		ApplyPartnerBlockVisibility(dock, dock->findChild<QWidget *>(kToolbarObjectName));
 	}
+	StreamUP::MultistreamEnhancements::RefreshPartnerBlocks();
 
 	StreamUP::DebugLogger::LogInfo("VerticalCanvas",
 		hide ? "Partner blocks hidden" : "Partner blocks shown");
