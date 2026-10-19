@@ -1707,8 +1707,13 @@ void MixerDock::updateToolbarState()
 	m_layoutAction->setToolTip(
 		obsText(m_vertical ? "Basic.AudioMixer.Layout.Horizontal" : "Basic.AudioMixer.Layout.Vertical"));
 	if (QWidget *w = m_toolbar->widgetForAction(m_layoutAction)) {
-		StyleClass::toggle(w, "icon-layout-horizontal", m_vertical);
-		StyleClass::toggle(w, "icon-layout-vertical", !m_vertical);
+		// setIcon above puts the plain fallback back on the button on every
+		// refresh, so the theme's qproperty-icon has to be applied again even
+		// when the class did not change.
+		const bool changed = StyleClass::toggle(w, "icon-layout-horizontal", m_vertical) |
+				     StyleClass::toggle(w, "icon-layout-vertical", !m_vertical);
+		if (!changed)
+			StyleClass::repolish(w);
 	}
 }
 
