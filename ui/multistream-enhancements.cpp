@@ -18,10 +18,11 @@
 #include <QScrollArea>
 #include <QStyle>
 #include <QTimer>
+#include <QApplication>
+#include <QTabWidget>
+#include <QToolButton>
 #include <QToolBar>
 #include <QWidget>
-#include <QCoreApplication>
-#include <util/c99defs.h>
 #include <streamup/ui/gallery-style.hpp>
 
 namespace StreamUP {
@@ -472,6 +473,197 @@ static void Enhance(QWidget *dock)
 	watcher->WatchAll();
 }
 
+// ---------------------------------------------------------------------------
+// The settings dialog
+//
+// Aitum's dialog reuses OBS's own class name, OBSBasicSettings, so it already
+// wears most of the theme's settings look. What breaks is inside each output:
+// the card and its name button carry a colour picked from the palette once,
+// and the encoder tabs carry a stylesheet built from the palette's Light role,
+// which is near white in this theme. That painted the inactive tab white
+// under white text, clipped the tab labels with its own padding and drew a
+// white frame round the pane. Those sheets are cleared and the parts tagged,
+// so the tabs fall back to the theme's ordinary dialog tabs.
+
+static const char *kRoleAitumOutput = "aitumOutput";
+static const char *kRoleAitumOutputTitle = "aitumOutputTitle";
+static const char *kRoleAitumAdvanced = "aitumAdvanced";
+static const char *kRoleAitumTabs = "aitumTabs";
+static const char *kRoleAitumInfo = "aitumInfo";
+static const char *kDialogWatcherName = "StreamUPMultistreamDialogWatcher";
+
+// Aitum's dialog, told apart from OBS's by the customTitle property it puts on
+// its page groups. Nothing in OBS sets that.
+static bool IsAitumSettingsDialog(QWidget *widget)
+{
+	if (!widget || !widget->isWindow() || qstrcmp(widget->metaObject()->className(), "OBSBasicSettings") != 0) {
+		return false;
+	}
+	for (QGroupBox *group : widget->findChildren<QGroupBox *>()) {
+		if (group->property("customTitle").isValid()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// The output card a widget sits in, if any. Each card is a QGroupBox Aitum
+// marks altColor.
+static QWidget *OutputCardOf(QWidget *widget)
+{
+	for (QWidget *w = widget ? widget->parentWidget() : nullptr; w; w = w->parentWidget()) {
+		if (qobject_cast<QGroupBox *>(w) && w->property("altColor").toBool()) {
+			return w;
+		}
+	}
+	return nullptr;
+}
+
+static void StyleSettingsDialog(QWidget *dialog)
+{
+	for (QGroupBox *group : dialog->findChildren<QGroupBox *>()) {
+		if (group->property("altColor").toBool()) {
+			TakeOver(group, kRoleAitumOutput);
+		} else if (group->property("customTitle").toBool() && OutputCardOf(group)) {
+			// The box round the advanced switch and tabs. A second rounded box
+			// inside the card is what made each output look nested 3 deep.
+			TakeOver(group, kRoleAitumAdvanced);
+		} else if (!group->property("customTitle").isValid() && !OutputCardOf(group) && !group->isCheckable()) {
+			// The welcome and canvas info boxes, so they match the cards
+			// beside them rather than standing out a shade lighter.
+			TakeOver(group, kRoleAitumInfo);
+		}
+	}
+
+	for (QToolButton *title : dialog->findChildren<QToolButton *>()) {
+		if (title->arrowType() != Qt::NoArrow && OutputCardOf(title)) {
+			TakeOver(title, kRoleAitumOutputTitle);
+		}
+	}
+
+	for (QTabWidget *tabs : dialog->findChildren<QTabWidget *>()) {
+		if (OutputCardOf(tabs)) {
+			TakeOver(tabs, kRoleAitumTabs);
+		}
+	}
+}
+
+// Aitum rebuilds the output cards whenever an output is added, edited or
+// removed, so each new child queues another pass, coalesced.
+class DialogWatcher : public QObject {
+public:
+	explicit DialogWatcher(QWidget *dialog) : QObject(dialog), m_dialog(dialog)
+	{
+		setObjectName(kDialogWatcherName);
+	}
+
+	void WatchAll()
+	{
+		if (!m_dialog) {
+			return;
+		}
+		m_dialog->removeEventFilter(this);
+		m_dialog->installEventFilter(this);
+		for (QWidget *child : m_dialog->findChildren<QWidget *>()) {
+			child->removeEventFilter(this);
+			child->installEventFilter(this);
+		}
+	}
+
+	void UnwatchAll()
+	{
+		if (!m_dialog) {
+			return;
+		}
+		m_dialog->removeEventFilter(this);
+		for (QWidget *child : m_dialog->findChildren<QWidget *>()) {
+			child->removeEventFilter(this);
+		}
+	}
+
+protected:
+	bool eventFilter(QObject *watched, QEvent *event) override
+	{
+		if (event->type() == QEvent::ChildAdded && m_dialog && !m_pending) {
+			m_pending = true;
+			QTimer::singleShot(0, this, [this]() {
+				m_pending = false;
+				if (m_dialog && StreamUP::ThemeEnhancements::IsTweakActive(
+							StreamUP::ThemeEnhancements::Tweak::Multistream)) {
+					StyleSettingsDialog(m_dialog);
+					WatchAll();
+				}
+			});
+		}
+		return QObject::eventFilter(watched, event);
+	}
+
+private:
+	QPointer<QWidget> m_dialog;
+	bool m_pending = false;
+};
+
+// The dialog is built on demand when the gear is clicked and opened modally
+// straight away, so it is caught as it shows rather than looked for up front.
+class DialogShowFilter : public QObject {
+protected:
+	bool eventFilter(QObject *watched, QEvent *event) override
+	{
+		if (event->type() == QEvent::Show && watched->isWidgetType()) {
+			auto *widget = static_cast<QWidget *>(watched);
+			if (IsAitumSettingsDialog(widget) &&
+			    StreamUP::ThemeEnhancements::IsTweakActive(StreamUP::ThemeEnhancements::Tweak::Multistream)) {
+				StyleSettingsDialog(widget);
+				auto *watcher = static_cast<DialogWatcher *>(
+					widget->findChild<QObject *>(kDialogWatcherName, Qt::FindDirectChildrenOnly));
+				if (!watcher) {
+					watcher = new DialogWatcher(widget);
+				}
+				watcher->WatchAll();
+			}
+		}
+		return QObject::eventFilter(watched, event);
+	}
+};
+
+static DialogShowFilter *g_dialogFilter = nullptr;
+
+static void InstallDialogFilter()
+{
+	if (g_dialogFilter || !QApplication::instance()) {
+		return;
+	}
+	g_dialogFilter = new DialogShowFilter;
+	QApplication::instance()->installEventFilter(g_dialogFilter);
+}
+
+static void CleanupSettingsDialogs()
+{
+	if (g_dialogFilter) {
+		if (QApplication::instance()) {
+			QApplication::instance()->removeEventFilter(g_dialogFilter);
+		}
+		delete g_dialogFilter;
+		g_dialogFilter = nullptr;
+	}
+
+	for (QWidget *window : QApplication::topLevelWidgets()) {
+		if (!IsAitumSettingsDialog(window)) {
+			continue;
+		}
+		if (auto *watcher = static_cast<DialogWatcher *>(
+			    window->findChild<QObject *>(kDialogWatcherName, Qt::FindDirectChildrenOnly))) {
+			watcher->UnwatchAll();
+			watcher->deleteLater();
+		}
+		for (QWidget *widget : window->findChildren<QWidget *>()) {
+			if (widget->property(kOriginalSheetProperty).isValid()) {
+				GiveBack(widget);
+			}
+		}
+	}
+}
+
 static QWidget *FindDock()
 {
 	QMainWindow *mainWindow = static_cast<QMainWindow *>(obs_frontend_get_main_window());
@@ -496,29 +688,10 @@ void ApplyMultistreamEnhancements()
 		return;
 	}
 
+	InstallDialogFilter();
+
 	if (QWidget *dock = FindDock()) {
 		Enhance(dock);
-	}
-
-	// TEMP-DEBUG-GRAB
-	static bool grabArmed = false;
-	if (!grabArmed && qEnvironmentVariableIsSet("SU_GRAB")) {
-		grabArmed = true;
-		QTimer::singleShot(15000, []() {
-			QWidget *dock = FindDock();
-			if (!dock) return;
-			QWidget *host = dock->parentWidget();
-			const QSize size(qEnvironmentVariableIntValue("SU_GRAB_W"), qEnvironmentVariableIntValue("SU_GRAB_H"));
-			dock->setParent(nullptr);
-			dock->setAttribute(Qt::WA_DontShowOnScreen, true);
-			dock->resize(size);
-			dock->show();
-			QCoreApplication::processEvents();
-			dock->resize(size);
-			QCoreApplication::processEvents();
-			dock->grab().save(qEnvironmentVariable("SU_GRAB"));
-			UNUSED_PARAMETER(host);
-		});
 	}
 }
 
@@ -531,6 +704,8 @@ void RefreshPartnerBlocks()
 
 void CleanupMultistreamEnhancements()
 {
+	CleanupSettingsDialogs();
+
 	QWidget *dock = FindDock();
 	if (!dock) {
 		return;
