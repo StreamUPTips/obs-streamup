@@ -56,6 +56,7 @@ struct ModuleSettings {
     // Hard toggles — require an OBS restart to apply (no unregister API in OBS)
     bool sceneOrganiser;
     bool streamupDock;
+    bool mixerDock;
     bool mixerEnhancements;
     bool studioModeEnhancements;
     bool themeEnhancements;
@@ -69,6 +70,7 @@ struct ModuleSettings {
         backup(true),
         sceneOrganiser(true),
         streamupDock(true),
+        mixerDock(true),
         mixerEnhancements(true),
         studioModeEnhancements(true),
         themeEnhancements(true),
@@ -84,6 +86,7 @@ struct ModuleSettings {
 struct AppliedModuleSnapshot {
     bool sceneOrganiser;
     bool streamupDock;
+    bool mixerDock;
     bool mixerEnhancements;
     bool studioModeEnhancements;
     bool themeEnhancements;
@@ -93,6 +96,7 @@ struct AppliedModuleSnapshot {
     AppliedModuleSnapshot() :
         sceneOrganiser(true),
         streamupDock(true),
+        mixerDock(true),
         mixerEnhancements(true),
         studioModeEnhancements(true),
         themeEnhancements(true),

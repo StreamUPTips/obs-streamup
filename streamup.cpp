@@ -19,6 +19,7 @@
 // UI modules
 #include "ui/dock/streamup-dock.hpp"
 #include "ui/scene-organiser/scene-organiser-dock.hpp"
+#include "ui/mixer-dock/mixer-dock.hpp"
 #include "ui/scene-organiser/scene-canvas.hpp"
 #include "ui/scene-organiser/scene-organiser-collection-data.hpp"
 #include "ui/streamup-toolbar.hpp"
@@ -1233,6 +1234,14 @@ bool obs_module_load()
 			blog(LOG_INFO, "[StreamUP] Step 6/8: Module 'scene_organiser' disabled — skipping");
 		}
 
+		if (mod.mixerDock) {
+			// Tabbed mixer. Its layout rides in each scene collection via
+			// its own save callback, registered alongside the dock.
+			StreamUP::Mixer::RegisterMixerDock();
+		} else {
+			blog(LOG_INFO, "[StreamUP] Module 'mixer_dock' disabled, skipping");
+		}
+
 		if (mod.toolbar) {
 			blog(LOG_INFO, "[StreamUP] Step 7/8: Loading StreamUP toolbar");
 			StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Loading StreamUP toolbar");
@@ -1260,6 +1269,7 @@ bool obs_module_load()
 			StreamUP::SettingsManager::AppliedModuleSnapshot snap;
 			snap.sceneOrganiser = mod.sceneOrganiser;
 			snap.streamupDock = mod.streamupDock;
+			snap.mixerDock = mod.mixerDock;
 			snap.websocketApi = true; // Always registered — see Step 2/8 above.
 			snap.adjustmentLayerSource = mod.adjustmentLayerSource;
 			// Enhancement values are committed in OnOBSFinishedLoading where

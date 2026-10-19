@@ -197,6 +197,9 @@ void Show(std::function<void()> onFinished)
 		rows->push_back({"Plugins.StreamupDock.Title",  "Plugins.StreamupDock.Description",
 		                 [](const Mod &m){ return m.streamupDock; },
 		                 [](Mod &m, bool v){ m.streamupDock = v; }, nullptr});
+		rows->push_back({"Plugins.MixerDock.Title",     "Plugins.MixerDock.Description",
+		                 [](const Mod &m){ return m.mixerDock; },
+		                 [](Mod &m, bool v){ m.mixerDock = v; }, nullptr});
 		rows->push_back({"Plugins.MultiDock.Title",     "Plugins.MultiDock.Description",
 		                 [](const Mod &m){ return m.multiDock; },
 		                 [](Mod &m, bool v){ m.multiDock = v; }, nullptr});

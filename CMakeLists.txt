@@ -226,6 +226,12 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/scene-organiser/scene-canvas.cpp
   ui/scene-organiser/scene-organiser-collection-data.hpp
   ui/scene-organiser/scene-organiser-collection-data.cpp
+  ui/mixer-dock/mixer-dock.hpp
+  ui/mixer-dock/mixer-dock.cpp
+  ui/mixer-dock/mixer-strip.hpp
+  ui/mixer-dock/mixer-strip.cpp
+  ui/mixer-dock/mixer-native-widgets.hpp
+  ui/mixer-dock/mixer-native-widgets.cpp
   ui/streamup-toolbar.hpp
   ui/streamup-toolbar.cpp
   ui/streamup-toolbar-config.hpp
@@ -393,6 +399,14 @@ source_group("UI\\Scene Organiser" FILES
   ui/scene-organiser/scene-canvas.cpp
   ui/scene-organiser/scene-organiser-collection-data.hpp
   ui/scene-organiser/scene-organiser-collection-data.cpp)
+
+source_group("UI\\Mixer" FILES
+  ui/mixer-dock/mixer-dock.hpp
+  ui/mixer-dock/mixer-dock.cpp
+  ui/mixer-dock/mixer-strip.hpp
+  ui/mixer-dock/mixer-strip.cpp
+  ui/mixer-dock/mixer-native-widgets.hpp
+  ui/mixer-dock/mixer-native-widgets.cpp)
 
 source_group("UI\\Toolbar" FILES
   ui/streamup-toolbar.hpp

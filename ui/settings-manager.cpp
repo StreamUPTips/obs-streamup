@@ -359,6 +359,7 @@ static void LoadModuleSettings(obs_data_t *data, ModuleSettings &out)
     out.hotkeys = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "hotkeys", true);
     out.sceneOrganiser = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "scene_organiser", true);
     out.streamupDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "streamup_dock", true);
+    out.mixerDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "mixer_dock", true);
     out.mixerEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "mixer_enhancements", true);
     out.studioModeEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "studio_mode_enhancements", true);
     out.themeEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "theme_enhancements", true);
@@ -377,6 +378,7 @@ static void SaveModuleSettings(obs_data_t *data, const ModuleSettings &in)
     obs_data_set_bool(modulesData, "hotkeys", in.hotkeys);
     obs_data_set_bool(modulesData, "scene_organiser", in.sceneOrganiser);
     obs_data_set_bool(modulesData, "streamup_dock", in.streamupDock);
+    obs_data_set_bool(modulesData, "mixer_dock", in.mixerDock);
     obs_data_set_bool(modulesData, "mixer_enhancements", in.mixerEnhancements);
     obs_data_set_bool(modulesData, "studio_mode_enhancements", in.studioModeEnhancements);
     obs_data_set_bool(modulesData, "theme_enhancements", in.themeEnhancements);
@@ -2532,6 +2534,13 @@ void ShowSettingsDialog(int tabIndex)
 			[](const AppliedModuleSnapshot &a) { return a.streamupDock; },
 			nullptr);
 
+		addModuleRow(docksLayout, "Plugins.MixerDock.Title", "Plugins.MixerDock.Description",
+			[](const PluginSettings &s) { return s.modules.mixerDock; },
+			[](PluginSettings &s, bool v) { s.modules.mixerDock = v; },
+			true,
+			[](const AppliedModuleSnapshot &a) { return a.mixerDock; },
+			nullptr);
+
 		addModuleRow(docksLayout, "Plugins.MultiDock.Title", "Plugins.MultiDock.Description",
 			[](const PluginSettings &s) { return s.modules.multiDock; },
 			[](PluginSettings &s, bool v) { s.modules.multiDock = v; },
@@ -4082,6 +4091,7 @@ AppliedModuleSnapshot GetAppliedModuleSnapshot()
 	if (appliedData) {
 		snap.sceneOrganiser = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "scene_organiser", true);
 		snap.streamupDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "streamup_dock", true);
+		snap.mixerDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "mixer_dock", true);
 		snap.mixerEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "mixer_enhancements", true);
 		snap.studioModeEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "studio_mode_enhancements", true);
 		snap.themeEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "theme_enhancements", true);
@@ -4104,6 +4114,7 @@ void CommitAppliedModuleSnapshot(const AppliedModuleSnapshot &snapshot)
 	obs_data_t *appliedData = obs_data_create();
 	obs_data_set_bool(appliedData, "scene_organiser", snapshot.sceneOrganiser);
 	obs_data_set_bool(appliedData, "streamup_dock", snapshot.streamupDock);
+	obs_data_set_bool(appliedData, "mixer_dock", snapshot.mixerDock);
 	obs_data_set_bool(appliedData, "mixer_enhancements", snapshot.mixerEnhancements);
 	obs_data_set_bool(appliedData, "studio_mode_enhancements", snapshot.studioModeEnhancements);
 	obs_data_set_bool(appliedData, "theme_enhancements", snapshot.themeEnhancements);
