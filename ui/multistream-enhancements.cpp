@@ -18,6 +18,7 @@
 #include <QScrollArea>
 #include <QStyle>
 #include <QTimer>
+#include <QToolBar>
 #include <QWidget>
 #include <QCoreApplication>
 #include <util/c99defs.h>
@@ -47,6 +48,7 @@ static const char *kOriginalSheetProperty = "streamup_original_sheet";
 static const char *kFullTextProperty = "streamup_full_text";
 static const char *kOriginalMarginsProperty = "streamup_original_margins";
 static const char *kOriginalSpacingProperty = "streamup_original_spacing";
+static const char *kOriginalMinHeightProperty = "streamup_original_min_height";
 
 // The helpers below carry no Q_OBJECT, so findChild cannot look them up by type;
 // they are found by these names instead.
@@ -320,8 +322,7 @@ static void WrapButtonRow(QWidget *dock)
 		bar->setLayout(row);
 		// A stylesheet's padding does not move a layout, so the row's own
 		// margins are what keep the end icons off the dock edges.
-		row->setContentsMargins(StreamUP::UIStyles::S(10), StreamUP::UIStyles::S(2), StreamUP::UIStyles::S(10),
-					StreamUP::UIStyles::S(2));
+		row->setContentsMargins(StreamUP::UIStyles::S(10), 0, StreamUP::UIStyles::S(10), 0);
 		// The buttons carry their own small margin from the theme, as on the
 		// Vertical Canvas row, so the heart and logo sit together as a pair.
 		row->setSpacing(0);
@@ -329,6 +330,20 @@ static void WrapButtonRow(QWidget *dock)
 		// Settings on the left, the heart and logo together on the right,
 		// the way the Vertical Canvas row ends with them.
 		row->insertStretch(row->indexOf(gear) + 1, 1);
+
+		// Aitum pins these buttons to a 30px minimum in code, which no
+		// stylesheet can go below, so they are released here and the bar
+		// takes the height of OBS's own Sources toolbar, the way the Scene
+		// Organiser and MultiDock toolbars do.
+		for (QPushButton *button : bar->findChildren<QPushButton *>()) {
+			button->setProperty(kOriginalMinHeightProperty, button->minimumHeight());
+			button->setMinimumHeight(0);
+		}
+		QWidget *mainWindow = static_cast<QWidget *>(obs_frontend_get_main_window());
+		QToolBar *reference = mainWindow ? mainWindow->findChild<QToolBar *>("sourcesToolbar") : nullptr;
+		if (reference && reference->sizeHint().height() > 0) {
+			bar->setFixedHeight(reference->sizeHint().height());
+		}
 
 		dockLayout->insertWidget(i, bar);
 
@@ -589,6 +604,13 @@ void CleanupMultistreamEnhancements()
 		row->setContentsMargins(m[0].toInt(), m[1].toInt(), m[2].toInt(), m[3].toInt());
 	}
 	row->setSpacing(bar->property(kOriginalSpacingProperty).toInt());
+	for (QPushButton *button : bar->findChildren<QPushButton *>()) {
+		const QVariant minHeight = button->property(kOriginalMinHeightProperty);
+		if (minHeight.isValid()) {
+			button->setMinimumHeight(minHeight.toInt());
+			button->setProperty(kOriginalMinHeightProperty, QVariant());
+		}
+	}
 
 	dockLayout->takeAt(index);
 	bar->setLayout(nullptr);
