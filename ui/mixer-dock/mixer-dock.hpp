@@ -9,6 +9,18 @@
 //
 // The layout is saved inside the scene collection (one per collection) as a
 // JSON string. Sources are tracked by UUID, so renames are followed for free.
+//
+// Everything OBS's own mixer offers is here too, using the same settings and
+// per-source flags so both mixers agree: show inactive, show hidden, keep
+// hidden or inactive sources last, pin, hide, unhide all, lock volume,
+// copy and paste filters, rename, filters, properties, advanced audio
+// properties, studio mode preview sources and the global audio devices.
+//
+// The visibility options are OBS's own global settings (Basic window >
+// Mixer...), so changing them here changes them in OBS's mixer as well, and
+// the other way round. Each tab can override "show inactive" and "show
+// hidden" for itself: an Alerts tab can always show its sounds even though
+// OBS hides inactive sources elsewhere. The overrides are saved with the tab.
 
 #include "mixer-native-widgets.hpp"
 
@@ -17,6 +29,7 @@
 
 #include <QFrame>
 #include <QHash>
+#include <QSet>
 #include <QList>
 #include <QPointer>
 #include <QString>
@@ -25,9 +38,14 @@
 #include <QTimer>
 #include <QVector>
 
+#include <string>
+
 class QBoxLayout;
 class QLabel;
 class QMenu;
+class QPushButton;
+class QToolBar;
+class QAction;
 class QScrollArea;
 class QStackedWidget;
 class QToolButton;
@@ -37,10 +55,15 @@ namespace Mixer {
 
 class MixerStrip;
 
+// How a tab treats inactive or hidden sources.
+enum class TabOverride { FollowMixer = 0, Show = 1, Hide = 2 };
+
 struct MixerTab {
 	QString name;
 	QStringList sources; // source UUIDs, in display order
 	bool unassigned = false;
+	TabOverride inactive = TabOverride::FollowMixer;
+	TabOverride hidden = TabOverride::FollowMixer;
 };
 
 // The drag payload: which source, and which tab it was dragged out of.
@@ -117,6 +140,10 @@ public:
 private slots:
 	// OBS's mixer announces pin, hide and lock changes with this signal.
 	void nativeMixerStatusChanged(QString uuid);
+	// OBS's own settings changing: the mixer options, toolbar visibility,
+	// meter settings and accessibility colours.
+	void obsUserSettingChanged(const std::string &category, const std::string &name);
+	void obsProfileSettingChanged(const std::string &category, const std::string &name);
 
 private:
 	static void onFrontendEvent(enum obs_frontend_event event, void *data);
@@ -180,6 +207,31 @@ private:
 	void scheduleSave();
 	void refreshTheme();
 	void updatePreviewFlags();
+	void watchPreviewScene();
+	static void onPreviewItemVisible(void *data, calldata_t *cd);
+
+	// Visibility, as OBS's mixer decides it, with the tab's overrides.
+	bool showInactiveForTab(int index) const;
+	bool showHiddenForTab(int index) const;
+	bool stripVisible(const MixerStrip *strip) const;
+	void scheduleVisibilityUpdate();
+
+	// OBS's mixer settings (BasicWindow in the user config), shared with it.
+	static bool obsMixerSetting(const char *name);
+	void setObsMixerSetting(const char *name, bool value);
+
+	// Native mixer actions
+	void buildMixerMenu(QMenu *menu);
+	void showMixerMenu(const QPoint &globalPos);
+	void unhideAll();
+	void setPinned(const QString &uuid, bool pinned);
+	void setHidden(const QString &uuid, bool hidden);
+	void setLocked(const QString &uuid, bool locked);
+	void renameSource(const QString &uuid);
+	void openAdvancedAudio();
+	void updateToolbarState();
+	void addTabOverrideMenu(QMenu *menu, int tabIndex);
+	int modelPositionForDisplayIndex(int displayIndex) const;
 
 	QVector<MixerTab> m_tabs;
 	int m_current = 0;
@@ -197,8 +249,20 @@ private:
 	QScrollArea *m_scroll = nullptr;
 	StripArea *m_area = nullptr;
 	QLabel *m_empty = nullptr;
+	QToolBar *m_toolbar = nullptr;
 	QToolButton *m_addButton = nullptr;
-	QToolButton *m_optionsButton = nullptr;
+	QPushButton *m_hiddenButton = nullptr;
+	QAction *m_layoutAction = nullptr;
+	QAction *m_advAudioAction = nullptr;
+	QPushButton *m_optionsButton = nullptr;
+	int m_hiddenCount = 0;
+	QTimer m_visibilityTimer;
+
+	// Studio mode: the sources OBS treats as "Preview" (visible items of the
+	// preview scene that have audio), and the scene being watched for items
+	// being shown or hidden.
+	QSet<QString> m_previewSources;
+	obs_source_t *m_watchedPreview = nullptr;
 	// The open tab's strips, in display order.
 	QList<MixerStrip *> m_strips;
 	// Every strip built so far, by source UUID, shown or not. Switching tab

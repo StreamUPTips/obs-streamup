@@ -16,6 +16,9 @@
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
+#include <QCheckBox>
+#include <QMainWindow>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QSpacerItem>
 #include <QStyle>
@@ -71,6 +74,37 @@ bool privateFlag(obs_source_t *source, const char *key)
 	const bool value = obs_data_get_bool(priv, key);
 	obs_data_release(priv);
 	return value;
+}
+
+// OBS's own test: no audio tracks, and not a Monitor Only source (which is
+// meant to be heard locally only).
+bool isUnassigned(obs_source_t *source)
+{
+	return obs_source_get_audio_mixers(source) == 0 &&
+	       StreamUP::MonitoringCompat::get_type(source) != OBS_MONITORING_TYPE_MONITOR_ONLY;
+}
+
+// The notice OBS shows the first time an unassigned source is unmuted, with
+// its own text and its own "do not show again" setting, so it appears once
+// whichever mixer was used.
+void showUnassignedWarning(const QString &name)
+{
+	QTimer::singleShot(0, [name]() {
+		auto *main = static_cast<QWidget *>(obs_frontend_get_main_window());
+		QMessageBox box(main);
+		box.setWindowTitle(obsText("VolControl.UnassignedWarning.Title"));
+		box.setText(obsText("VolControl.UnassignedWarning.Text").arg(name));
+		box.setIcon(QMessageBox::Information);
+		box.addButton(QMessageBox::Ok);
+		auto *dontShow = new QCheckBox(obsText("DoNotShowAgain"));
+		box.setCheckBox(dontShow);
+		box.exec();
+		if (dontShow->isChecked()) {
+			config_t *config = obs_frontend_get_user_config();
+			config_set_bool(config, "General", "WarnedAboutUnassignedSources", true);
+			config_save_safe(config, "tmp", nullptr);
+		}
+	});
 }
 
 bool isGlobalSource(obs_source_t *source)
@@ -158,7 +192,8 @@ MixerStrip::MixerStrip(obs_source_t *source, bool vertical, QWidget *parent)
 	});
 	connect(m_mute, &QPushButton::clicked, this, &MixerStrip::handleMuteButton);
 	connect(m_monitor, &QPushButton::clicked, this, &MixerStrip::handleMonitorButton);
-	connect(m_name, &QAbstractButton::clicked, this, [this]() { emit menuRequested(this, QCursor::pos()); });
+	connect(m_name, &QAbstractButton::clicked, this,
+		[this]() { emit menuRequested(this, m_name->mapToGlobal(m_name->rect().bottomLeft())); });
 
 	m_name->setFullText(QString::fromUtf8(obs_source_get_name(m_source)));
 	changeVolume();
@@ -328,6 +363,11 @@ void MixerStrip::buildHorizontal()
 	setLayout(layout);
 }
 
+void MixerStrip::refreshMeterColours()
+{
+	m_meter->refreshColors();
+}
+
 void MixerStrip::applyMeterSettings()
 {
 	config_t *profile = obs_frontend_get_profile_config();
@@ -407,6 +447,15 @@ void MixerStrip::updateText()
 	const float db = obs_fader_get_db(m_fader);
 	m_volLabel->setText(db < -96.0f ? QStringLiteral("-inf dB")
 					: QString::number(db, 'f', 1).append(QStringLiteral(" dB")));
+	updateAccessibleNames();
+}
+
+void MixerStrip::updateAccessibleNames()
+{
+	const QString name = QString::fromUtf8(obs_source_get_name(m_source));
+	m_slider->setAccessibleName(
+		obsText(obs_source_muted(m_source) ? "VolControl.SliderMuted" : "VolControl.SliderUnmuted").arg(name));
+	m_mute->setAccessibleName(obsText("VolControl.Mute").arg(name));
 }
 
 void MixerStrip::refreshState()
@@ -419,14 +468,29 @@ void MixerStrip::setPreviewed(bool previewed)
 	if (m_previewed == previewed)
 		return;
 	m_previewed = previewed;
-	processMixerState();
+	updateCategoryLabel();
+	emit mixerStateChanged(this);
 }
 
 void MixerStrip::processMixerState(int knownMonitoringType)
 {
-	const bool unassigned = obs_source_get_audio_mixers(m_source) == 0;
+	const bool unassigned = isUnassigned(m_source);
 	const bool active = obs_source_active(m_source) && obs_source_audio_active(m_source);
 	const bool muted = obs_source_muted(m_source);
+	const bool hidden = privateFlag(m_source, "mixer_hidden");
+	const bool pinned = privateFlag(m_source, "mixer_pinned");
+	const bool global = isGlobalSource(m_source);
+	const bool locked = privateFlag(m_source, "volume_locked");
+
+	const bool visibilityChanged = !m_stateKnown || active != m_active || hidden != m_hidden ||
+				       pinned != m_pinned || global != m_global;
+	m_active = active;
+	m_hidden = hidden;
+	m_pinned = pinned;
+	m_global = global;
+	m_locked = locked;
+	m_unassigned = unassigned;
+	m_stateKnown = true;
 	const obs_monitoring_type monitoring = knownMonitoringType >= 0
 						       ? static_cast<obs_monitoring_type>(knownMonitoringType)
 						       : StreamUP::MonitoringCompat::get_type(m_source);
@@ -469,16 +533,22 @@ void MixerStrip::processMixerState(int knownMonitoringType)
 	}
 
 	// OBS's per-source volume lock.
-	m_slider->setEnabled(!privateFlag(m_source, "volume_locked"));
+	m_slider->setEnabled(!locked);
 
-	updateCategoryLabel(active, unassigned);
+	updateCategoryLabel();
+	updateAccessibleNames();
+
+	if (visibilityChanged)
+		emit mixerStateChanged(this);
 }
 
-void MixerStrip::updateCategoryLabel(bool active, bool unassigned)
+void MixerStrip::updateCategoryLabel()
 {
-	const bool global = isGlobalSource(m_source);
-	const bool pinned = privateFlag(m_source, "mixer_pinned");
-	const bool hidden = privateFlag(m_source, "mixer_hidden");
+	const bool active = m_active;
+	const bool unassigned = m_unassigned;
+	const bool global = m_global;
+	const bool pinned = m_pinned;
+	const bool hidden = m_hidden;
 
 	QString text = obsText("Basic.AudioMixer.Category.Active");
 	if (unassigned)
@@ -521,7 +591,11 @@ void MixerStrip::updateCategoryLabel(bool active, bool unassigned)
 
 void MixerStrip::handleMuteButton(bool mute)
 {
+	const bool unassigned = isUnassigned(m_source);
 	obs_source_set_muted(m_source, mute);
+	if (!mute && unassigned &&
+	    !config_get_bool(obs_frontend_get_user_config(), "General", "WarnedAboutUnassignedSources"))
+		showUnassignedWarning(QString::fromUtf8(obs_source_get_name(m_source)));
 	// As in OBS: unmuting a Monitor Only source sends it to the stream again.
 	if (!mute && StreamUP::MonitoringCompat::get_type(m_source) == OBS_MONITORING_TYPE_MONITOR_ONLY)
 		StreamUP::MonitoringCompat::set_type(m_source, OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT);

@@ -6,6 +6,8 @@
 #include <streamup/ui/gallery-style.hpp>
 
 #include <obs-module.h>
+#include <obs.hpp>
+#include <util/config-file.h>
 
 #include <QApplication>
 #include <QBoxLayout>
@@ -13,14 +15,18 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
 #include <QMainWindow>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMimeData>
+#include <QPushButton>
 #include <QScrollArea>
+#include <QActionGroup>
 #include <QHash>
 #include <QSet>
 #include <QStackedWidget>
@@ -32,6 +38,10 @@
 #include <algorithm>
 
 #include "moc_mixer-dock.cpp"
+
+// OBS's frontend slots read the subject source from a QAction property of
+// this type. Declared here so the property carries the same registered type.
+Q_DECLARE_METATYPE(OBSSource);
 
 
 namespace StreamUP {
@@ -88,16 +98,25 @@ bool isCopyDrop(const QDropEvent *event)
 	return (event->modifiers() & Qt::ControlModifier) != 0;
 }
 
-// OBS's own mixer keeps its "Hide in Mixer" flag in each source's private
-// settings and re-sorts when the main window's mixerStatusChanged signal fires.
-// The signal is invoked by name, so on an OBS without it this quietly does
-// nothing and the native mixer picks the flag up the next time it reloads.
-void setHiddenInNativeMixer(obs_source_t *source, bool hidden)
+// OBS's own strings, so menus and dialogs read exactly as in its mixer and
+// follow the user's OBS language.
+QString obsText(const char *key)
+{
+	const char *text = obs_frontend_get_locale_string(key);
+	return QString::fromUtf8(text ? text : key);
+}
+
+// OBS's mixer keeps hide, pin and volume lock in each source's private
+// settings and re-sorts when the main window's mixerStatusChanged signal
+// fires. The signal is invoked by name, so on an OBS without it this quietly
+// does nothing and the native mixer picks the flag up when it next reloads.
+// The StreamUP Mixer listens to the same signal, so this updates both.
+void setMixerFlag(obs_source_t *source, const char *key, bool value)
 {
 	if (!source)
 		return;
 	obs_data_t *priv = obs_source_get_private_settings(source);
-	obs_data_set_bool(priv, "mixer_hidden", hidden);
+	obs_data_set_bool(priv, key, value);
 	obs_data_release(priv);
 
 	QObject *main = static_cast<QObject *>(obs_frontend_get_main_window());
@@ -107,14 +126,59 @@ void setHiddenInNativeMixer(obs_source_t *source, bool hidden)
 	}
 }
 
-bool isHiddenInNativeMixer(obs_source_t *source)
+void setMixerFlag(const QString &uuid, const char *key, bool value)
 {
-	if (!source)
-		return false;
-	obs_data_t *priv = obs_source_get_private_settings(source);
-	const bool hidden = obs_data_get_bool(priv, "mixer_hidden");
-	obs_data_release(priv);
-	return hidden;
+	obs_source_t *source = obs_get_source_by_uuid(uuid.toUtf8().constData());
+	setMixerFlag(source, key, value);
+	obs_source_release(source);
+}
+
+// Runs one of OBSBasic's filter clipboard or dialog slots on a source. Those
+// slots read the subject from sender()->property("source"), so a throwaway
+// action carrying it, connected by name, drives OBS's real implementation.
+bool triggerNativeSourceAction(const QString &uuid, const char *slotSignature)
+{
+	QObject *main = static_cast<QObject *>(obs_frontend_get_main_window());
+	obs_source_t *source = obs_get_source_by_uuid(uuid.toUtf8().constData());
+	bool done = false;
+	if (main && source) {
+		QAction action(nullptr);
+		action.setProperty("source", QVariant::fromValue(OBSSource(source)));
+		if (QObject::connect(&action, SIGNAL(triggered()), main, slotSignature)) {
+			action.trigger();
+			done = true;
+		}
+	}
+	obs_source_release(source);
+	return done;
+}
+
+bool nativePasteFiltersAvailable()
+{
+	QObject *main = static_cast<QObject *>(obs_frontend_get_main_window());
+	QAction *paste = main ? main->findChild<QAction *>("actionPasteFilters") : nullptr;
+	return paste && paste->isEnabled();
+}
+
+const char *overrideKey(TabOverride value)
+{
+	switch (value) {
+	case TabOverride::Show:
+		return "show";
+	case TabOverride::Hide:
+		return "hide";
+	default:
+		return "follow";
+	}
+}
+
+TabOverride overrideFromKey(const QString &key)
+{
+	if (key == "show")
+		return TabOverride::Show;
+	if (key == "hide")
+		return TabOverride::Hide;
+	return TabOverride::FollowMixer;
 }
 
 void onSaveLoad(obs_data_t *moduleData, bool saving, void *)
@@ -330,33 +394,173 @@ MixerDock::MixerDock(QWidget *parent) : ::AudioMixer(parent)
 	buildUi();
 	obs_frontend_add_event_callback(&MixerDock::onFrontendEvent, this);
 
+	// Visibility changes arrive in bursts (a scene switch activates and
+	// deactivates many sources at once), so they are gathered into one pass.
+	m_visibilityTimer.setSingleShot(true);
+	m_visibilityTimer.setInterval(0);
+	connect(&m_visibilityTimer, &QTimer::timeout, this, [this]() {
+		if (!m_frozen)
+			syncStrips();
+	});
+
 	// Connected by name: OBSBasic is internal to the frontend. On an OBS
-	// without the signal this simply does not connect.
+	// without a signal that connection simply does not happen.
 	if (QObject *main = static_cast<QObject *>(obs_frontend_get_main_window())) {
-		if (main->metaObject()->indexOfSignal("mixerStatusChanged(QString)") >= 0)
+		const QMetaObject *meta = main->metaObject();
+		if (meta->indexOfSignal("mixerStatusChanged(QString)") >= 0)
 			connect(main, SIGNAL(mixerStatusChanged(QString)), this,
 				SLOT(nativeMixerStatusChanged(QString)));
+		if (meta->indexOfSignal("userSettingChanged(std::string,std::string)") >= 0)
+			connect(main, SIGNAL(userSettingChanged(std::string, std::string)), this,
+				SLOT(obsUserSettingChanged(std::string, std::string)));
+		if (meta->indexOfSignal("profileSettingChanged(std::string,std::string)") >= 0)
+			connect(main, SIGNAL(profileSettingChanged(std::string, std::string)), this,
+				SLOT(obsProfileSettingChanged(std::string, std::string)));
 	}
+}
+
+void MixerDock::obsUserSettingChanged(const std::string &category, const std::string &name)
+{
+	if (category == "BasicWindow" &&
+	    (name == "MixerShowInactive" || name == "MixerShowHidden" || name == "MixerKeepInactiveLast" ||
+	     name == "MixerKeepHiddenLast")) {
+		scheduleVisibilityUpdate();
+		updateToolbarState();
+	} else if (category == "BasicWindow" && name == "ShowListboxToolbars") {
+		updateToolbarState();
+	} else if (category == "Accessibility" && name == "SettingsChanged") {
+		for (MixerStrip *strip : std::as_const(m_pool))
+			strip->refreshMeterColours();
+	}
+}
+
+void MixerDock::obsProfileSettingChanged(const std::string &category, const std::string &name)
+{
+	if (category == "Audio" && (name == "MeterDecayRate" || name == "PeakMeterType")) {
+		for (MixerStrip *strip : std::as_const(m_pool))
+			strip->applyMeterSettings();
+	}
+}
+
+bool MixerDock::obsMixerSetting(const char *name)
+{
+	config_t *config = obs_frontend_get_user_config();
+	return config && config_get_bool(config, "BasicWindow", name);
+}
+
+void MixerDock::setObsMixerSetting(const char *name, bool value)
+{
+	config_t *config = obs_frontend_get_user_config();
+	if (!config)
+		return;
+	config_set_bool(config, "BasicWindow", name, value);
+	// Tell OBS (its mixer reloads) and, through the same signal, this dock.
+	QObject *main = static_cast<QObject *>(obs_frontend_get_main_window());
+	const bool told = main && QMetaObject::invokeMethod(main, "userSettingChanged", Qt::DirectConnection,
+							   Q_ARG(std::string, std::string("BasicWindow")),
+							   Q_ARG(std::string, std::string(name)));
+	if (!told)
+		obsUserSettingChanged("BasicWindow", name);
+}
+
+bool MixerDock::showInactiveForTab(int index) const
+{
+	if (index >= 0 && index < m_tabs.size() && m_tabs[index].inactive != TabOverride::FollowMixer)
+		return m_tabs[index].inactive == TabOverride::Show;
+	return obsMixerSetting("MixerShowInactive");
+}
+
+bool MixerDock::showHiddenForTab(int index) const
+{
+	if (index >= 0 && index < m_tabs.size() && m_tabs[index].hidden != TabOverride::FollowMixer)
+		return m_tabs[index].hidden == TabOverride::Show;
+	return obsMixerSetting("MixerShowHidden");
+}
+
+// OBS's rule (AudioMixer::getMixerVisibilityForControl), with this tab's
+// overrides for showing inactive and hidden sources.
+bool MixerDock::stripVisible(const MixerStrip *strip) const
+{
+	const bool hidden = strip->isHiddenInMixer();
+	if (strip->isPinnedInMixer())
+		return true;
+	if (hidden && showHiddenForTab(m_current))
+		return true;
+	if (!strip->isActive() && showInactiveForTab(m_current))
+		return !hidden;
+	if (strip->isActive())
+		return !hidden;
+	if (strip->isPreviewed())
+		return !hidden;
+	return false;
+}
+
+void MixerDock::scheduleVisibilityUpdate()
+{
+	if (!m_frozen && !m_visibilityTimer.isActive())
+		m_visibilityTimer.start();
 }
 
 void MixerDock::nativeMixerStatusChanged(QString uuid)
 {
 	if (MixerStrip *strip = m_pool.value(uuid))
 		strip->refreshState();
+	// The hidden count covers every strip of the tab, shown or not.
+	scheduleVisibilityUpdate();
 }
 
+// As OBS works out its "Preview" sources in studio mode: the visible items of
+// the preview scene that have audio playing.
 void MixerDock::updatePreviewFlags()
 {
+	m_previewSources.clear();
 	obs_source_t *preview = obs_frontend_preview_program_mode_active()
 					? obs_frontend_get_current_preview_scene()
 					: nullptr;
-	obs_scene_t *scene = preview ? obs_scene_from_source(preview) : nullptr;
-	for (MixerStrip *strip : m_strips) {
-		const bool previewed = scene && obs_scene_find_source_recursive(
-							scene, obs_source_get_name(strip->source())) != nullptr;
-		strip->setPreviewed(previewed);
+	if (obs_scene_t *scene = preview ? obs_scene_from_source(preview) : nullptr) {
+		obs_scene_enum_items(
+			scene,
+			[](obs_scene_t *, obs_sceneitem_t *item, void *param) {
+				if (!obs_sceneitem_visible(item))
+					return true;
+				obs_source_t *source = obs_sceneitem_get_source(item);
+				if (source && (obs_source_get_output_flags(source) & OBS_SOURCE_AUDIO) &&
+				    obs_source_audio_active(source))
+					static_cast<QSet<QString> *>(param)->insert(
+						QString::fromUtf8(obs_source_get_uuid(source)));
+				return true;
+			},
+			&m_previewSources);
 	}
 	obs_source_release(preview);
+
+	for (MixerStrip *strip : std::as_const(m_pool))
+		strip->setPreviewed(m_previewSources.contains(strip->uuid()));
+}
+
+void MixerDock::onPreviewItemVisible(void *data, calldata_t *)
+{
+	auto *dock = static_cast<MixerDock *>(data);
+	QMetaObject::invokeMethod(dock, [dock]() { dock->updatePreviewFlags(); }, Qt::QueuedConnection);
+}
+
+// Follows items being shown or hidden in the studio mode preview scene, as
+// OBS's mixer does. Holds a reference to the watched scene while connected,
+// released when the preview changes or the collection goes.
+void MixerDock::watchPreviewScene()
+{
+	if (m_watchedPreview) {
+		signal_handler_disconnect(obs_source_get_signal_handler(m_watchedPreview), "item_visible",
+					  &MixerDock::onPreviewItemVisible, this);
+		obs_source_release(m_watchedPreview);
+		m_watchedPreview = nullptr;
+	}
+	if (m_frozen || !obs_frontend_preview_program_mode_active())
+		return;
+	m_watchedPreview = obs_frontend_get_current_preview_scene();
+	if (m_watchedPreview)
+		signal_handler_connect(obs_source_get_signal_handler(m_watchedPreview), "item_visible",
+				       &MixerDock::onPreviewItemVisible, this);
 }
 
 MixerDock::~MixerDock()
@@ -399,6 +603,8 @@ void MixerDock::handleFrontendEvent(enum obs_frontend_event event)
 		connectGlobalSignals();
 		m_frozen = false;
 		applyPendingLoad();
+		watchPreviewScene();
+		updateToolbarState();
 		break;
 
 	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING:
@@ -406,6 +612,7 @@ void MixerDock::handleFrontendEvent(enum obs_frontend_event event)
 		// treating removals as the user deleting things.
 		m_frozen = true;
 		m_saveTimer.stop();
+		watchPreviewScene();
 		clearStrips();
 		// A collection that carries no layout (a brand new one) must not
 		// inherit this one's tabs.
@@ -421,12 +628,13 @@ void MixerDock::handleFrontendEvent(enum obs_frontend_event event)
 	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
 		m_frozen = false;
 		applyPendingLoad();
+		watchPreviewScene();
 		break;
 
 	case OBS_FRONTEND_EVENT_PROFILE_CHANGED:
 		// Meter decay and peak type are profile settings.
-		if (!m_frozen)
-			rebuildStrips();
+		for (MixerStrip *strip : std::as_const(m_pool))
+			strip->applyMeterSettings();
 		break;
 
 	case OBS_FRONTEND_EVENT_THEME_CHANGED:
@@ -436,8 +644,10 @@ void MixerDock::handleFrontendEvent(enum obs_frontend_event event)
 	case OBS_FRONTEND_EVENT_PREVIEW_SCENE_CHANGED:
 	case OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED:
 	case OBS_FRONTEND_EVENT_STUDIO_MODE_DISABLED:
-		if (!m_frozen)
+		if (!m_frozen) {
 			updatePreviewFlags();
+			watchPreviewScene();
+		}
 		break;
 
 	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
@@ -447,6 +657,7 @@ void MixerDock::handleFrontendEvent(enum obs_frontend_event event)
 		m_frozen = true;
 		m_saveTimer.stop();
 		disconnectGlobalSignals();
+		watchPreviewScene();
 		clearStrips();
 		flushGraveyard();
 		if (event == OBS_FRONTEND_EVENT_EXIT)
@@ -527,6 +738,10 @@ QString MixerDock::serialiseLayout() const
 			obj["name"] = tab.name;
 			obj["sources"] = QJsonArray::fromStringList(tab.sources);
 		}
+		if (tab.inactive != TabOverride::FollowMixer)
+			obj["showInactive"] = overrideKey(tab.inactive);
+		if (tab.hidden != TabOverride::FollowMixer)
+			obj["showHidden"] = overrideKey(tab.hidden);
 		tabs.append(obj);
 	}
 
@@ -571,6 +786,8 @@ bool MixerDock::parseLayout(const QString &json)
 					tab.sources.append(id);
 			}
 		}
+		tab.inactive = overrideFromKey(obj["showInactive"].toString());
+		tab.hidden = overrideFromKey(obj["showHidden"].toString());
 		tabs.append(tab);
 	}
 	if (tabs.isEmpty())
@@ -873,7 +1090,10 @@ void MixerDock::buildUi()
 	m_empty->setMargin(S(12));
 	m_empty->hide();
 
+	// The same toolbar as OBS's mixer: hidden count, layout, advanced audio
+	// properties and the Options menu, plus this dock's own "add sources".
 	auto *toolbar = new QToolBar(this);
+	m_toolbar = toolbar;
 	toolbar->setObjectName("StreamUPMixerToolbar");
 	toolbar->setMovable(false);
 	toolbar->setFloatable(false);
@@ -886,21 +1106,65 @@ void MixerDock::buildUi()
 	m_addButton->setProperty("class", "icon-plus");
 	m_addButton->setToolTip(T("Mixer.Tooltip.AddSources"));
 	toolbar->addWidget(m_addButton);
+	toolbar->addSeparator();
 
+	m_hiddenButton = new QPushButton(toolbar);
+	m_hiddenButton->setCheckable(true);
+	m_hiddenButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Preferred);
+	StyleClass::add(m_hiddenButton, "toolbar-button");
+	StyleClass::add(m_hiddenButton, "toggle-hidden");
+	toolbar->addWidget(m_hiddenButton);
+
+	toolbar->addSeparator();
 	auto *spacer = new QWidget(toolbar);
-	spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+	spacer->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Preferred);
 	toolbar->addWidget(spacer);
+	toolbar->addSeparator();
 
-	m_optionsButton = new QToolButton(toolbar);
+	m_layoutAction = new QAction(this);
+	m_layoutAction->setObjectName("actionStreamUPMixerToggleLayout");
+	toolbar->addAction(m_layoutAction);
+	toolbar->addSeparator();
+
+	m_advAudioAction = new QAction(this);
+	m_advAudioAction->setText(obsText("Basic.AdvAudio"));
+	m_advAudioAction->setToolTip(obsText("Basic.AdvAudio"));
+	m_advAudioAction->setIcon(QIcon(QStringLiteral(":/settings/images/settings/advanced.svg")));
+	toolbar->addAction(m_advAudioAction);
+	toolbar->addSeparator();
+	if (QWidget *w = toolbar->widgetForAction(m_advAudioAction))
+		StyleClass::add(w, "icon-cogs");
+
+	m_optionsButton = new QPushButton(obsText("Basic.AudioMixer.Options"), toolbar);
 	m_optionsButton->setObjectName("StreamUPMixerOptionsButton");
-	m_optionsButton->setProperty("themeID", "menuIconSmall");
-	m_optionsButton->setProperty("class", "icon-dots-vert");
-	m_optionsButton->setToolTip(T("Mixer.Tooltip.Options"));
+	StyleClass::add(m_optionsButton, "toolbar-button");
+	StyleClass::add(m_optionsButton, "text-bold");
+	// A menu so the button draws OBS's drop-down arrow; it is rebuilt each
+	// time it opens so it always shows the current settings.
+	auto *optionsMenu = new QMenu(m_optionsButton);
+	optionsMenu->setObjectName("StreamUPMixerOptionsMenu");
+	connect(optionsMenu, &QMenu::aboutToShow, this, [this, optionsMenu]() {
+		optionsMenu->clear();
+		buildMixerMenu(optionsMenu);
+	});
+	m_optionsButton->setMenu(optionsMenu);
 	toolbar->addWidget(m_optionsButton);
 	root->addWidget(toolbar);
 
 	connect(m_addButton, &QToolButton::clicked, this, &MixerDock::showAddMenu);
-	connect(m_optionsButton, &QToolButton::clicked, this, &MixerDock::showOptionsMenu);
+	connect(m_hiddenButton, &QPushButton::clicked, this,
+		[this](bool checked) { setObsMixerSetting("MixerShowHidden", checked); });
+	connect(m_layoutAction, &QAction::triggered, this, [this]() { setVerticalStrips(!m_vertical); });
+	connect(m_advAudioAction, &QAction::triggered, this, &MixerDock::openAdvancedAudio);
+
+	// Right-clicking empty mixer space opens the same menu, as in OBS.
+	m_scroll->setContextMenuPolicy(Qt::CustomContextMenu);
+	connect(m_scroll, &QWidget::customContextMenuRequested, this,
+		[this](const QPoint &pos) { showMixerMenu(m_scroll->mapToGlobal(pos)); });
+	m_area->setContextMenuPolicy(Qt::CustomContextMenu);
+	connect(m_area, &QWidget::customContextMenuRequested, this,
+		[this](const QPoint &pos) { showMixerMenu(m_area->mapToGlobal(pos)); });
+	updateToolbarState();
 
 	connect(m_tabBar, &QTabBar::currentChanged, this, [this](int index) {
 		if (m_updatingTabBar || index < 0)
@@ -928,7 +1192,7 @@ void MixerDock::buildUi()
 			moveStrip(uuid, fromTab, tab, -1, copy);
 		});
 	connect(m_area, &StripArea::stripDropped, this, [this](int index, const QString &uuid, int fromTab, bool copy) {
-		moveStrip(uuid, fromTab, m_current, index, copy);
+		moveStrip(uuid, fromTab, m_current, modelPositionForDisplayIndex(index), copy);
 	});
 }
 
@@ -987,6 +1251,8 @@ MixerStrip *MixerDock::createStrip(const QString &uuid)
 		strip = new MixerStrip(source, m_vertical, m_area);
 		connect(strip, &MixerStrip::dragRequested, this, &MixerDock::startStripDrag);
 		connect(strip, &MixerStrip::menuRequested, this, &MixerDock::showStripMenu);
+		connect(strip, &MixerStrip::mixerStateChanged, this, [this]() { scheduleVisibilityUpdate(); });
+		strip->setPreviewed(m_previewSources.contains(uuid));
 		m_pool.insert(uuid, strip);
 	}
 	obs_source_release(source);
@@ -1007,7 +1273,10 @@ void MixerDock::layoutStrips()
 	m_area->setStrips(m_strips);
 
 	if (m_strips.isEmpty()) {
-		m_empty->setText(T(isRegularTab(m_current) ? "Mixer.Empty.Tab" : "Mixer.Empty.Unassigned"));
+		const bool filtered = !sourcesForTab(m_current).isEmpty();
+		m_empty->setText(T(filtered			  ? "Mixer.Empty.Filtered"
+				   : isRegularTab(m_current) ? "Mixer.Empty.Tab"
+							     : "Mixer.Empty.Unassigned"));
 		layout->addWidget(m_empty, 1);
 		m_empty->show();
 	} else {
@@ -1023,27 +1292,80 @@ void MixerDock::syncStrips()
 		return;
 	}
 
-	QList<MixerStrip *> next;
+	// Every source of the tab gets a strip (it is what tracks the source's
+	// state), then OBS's visibility rule decides which of them show.
+	QList<MixerStrip *> tabStrips;
 	for (const QString &uuid : sourcesForTab(m_current)) {
 		if (MixerStrip *strip = m_pool.value(uuid))
-			next.append(strip);
+			tabStrips.append(strip);
 		else if (MixerStrip *strip = createStrip(uuid))
-			next.append(strip);
+			tabStrips.append(strip);
 	}
 
-	// Strips that are not in this tab are parked: out of the layout and
-	// hidden (a hidden meter does not repaint), ready for when they are next
-	// shown.
+	struct Ranked {
+		MixerStrip *strip;
+		int weight;
+	};
+	const bool keepHiddenLast = obsMixerSetting("MixerKeepHiddenLast");
+	const bool keepInactiveLast = obsMixerSetting("MixerKeepInactiveLast");
+	QVector<Ranked> ranked;
+	int hiddenCount = 0;
+	for (MixerStrip *strip : tabStrips) {
+		if (strip->isHiddenInMixer())
+			hiddenCount++;
+		if (!stripVisible(strip))
+			continue;
+		// The tab's own order, with OBS's "keep hidden / inactive last"
+		// options moving those to the end (previewed ones just ahead of the
+		// rest), as OBS weights them.
+		int weight = 0;
+		if (strip->isHiddenInMixer() && keepHiddenLast)
+			weight += strip->isPreviewed() ? 4 : 5;
+		if (!strip->isActive() && keepInactiveLast)
+			weight += strip->isPreviewed() ? 4 : 5;
+		ranked.append({strip, weight});
+	}
+	std::stable_sort(ranked.begin(), ranked.end(),
+			 [](const Ranked &a, const Ranked &b) { return a.weight < b.weight; });
+
+	QList<MixerStrip *> next;
+	for (const Ranked &r : ranked)
+		next.append(r.strip);
+
+	m_hiddenCount = hiddenCount;
+	updateToolbarState();
+
+	// Nothing to move: leave the layout alone so a state change costs nothing.
+	if (next == m_strips && (next.isEmpty() == !m_empty->isHidden()))
+		return;
+
+	// Strips not shown are parked: out of the layout and hidden (a hidden
+	// meter does not repaint), ready for when they are next shown.
 	for (MixerStrip *strip : std::as_const(m_strips)) {
 		if (!next.contains(strip)) {
 			m_area->stripLayout()->removeWidget(strip);
 			strip->hide();
 		}
 	}
+	for (MixerStrip *strip : std::as_const(m_pool)) {
+		if (!next.contains(strip) && strip->isVisible())
+			strip->hide();
+	}
 
 	m_strips = next;
 	layoutStrips();
-	updatePreviewFlags();
+}
+
+int MixerDock::modelPositionForDisplayIndex(int displayIndex) const
+{
+	if (!isRegularTab(m_current))
+		return -1;
+	const QStringList &list = m_tabs[m_current].sources;
+	if (displayIndex >= 0 && displayIndex < m_strips.size())
+		return int(list.indexOf(m_strips[displayIndex]->uuid()));
+	if (!m_strips.isEmpty())
+		return int(list.indexOf(m_strips.last()->uuid())) + 1;
+	return -1;
 }
 
 void MixerDock::flushGraveyard()
@@ -1080,12 +1402,11 @@ void MixerDock::rebuildStrips()
 		return;
 	}
 
-	for (const QString &uuid : sourcesForTab(m_current)) {
-		if (MixerStrip *strip = createStrip(uuid))
-			m_strips.append(strip);
-	}
-	layoutStrips();
 	updatePreviewFlags();
+	m_empty->hide();
+	syncStrips();
+	if (m_strips.isEmpty())
+		layoutStrips();
 }
 
 void MixerDock::startStripDrag(MixerStrip *strip)
@@ -1123,22 +1444,73 @@ void MixerDock::showStripMenu(MixerStrip *strip, const QPoint &globalPos)
 	QMenu menu(this);
 	menu.setObjectName("StreamUPMixerStripMenu");
 
+	// OBS's own channel menu first, in its order and wording.
+	const bool global = strip->isGlobal();
+	const bool pinned = strip->isPinnedInMixer();
+	const bool hidden = strip->isHiddenInMixer();
+
+	connect(menu.addAction(obsText("UnhideAll")), &QAction::triggered, this, &MixerDock::unhideAll);
+	menu.addSeparator();
+	QAction *pin = menu.addAction(obsText(pinned ? "Basic.AudioMixer.Unpin" : "Basic.AudioMixer.Pin"));
+	pin->setEnabled(!global);
+	connect(pin, &QAction::triggered, this, [this, uuid, pinned]() { setPinned(uuid, !pinned); });
+	QAction *hide = menu.addAction(
+		obsText(hidden && !global ? "Basic.AudioMixer.Unhide" : "Basic.AudioMixer.Hide"));
+	hide->setEnabled(!global && !pinned);
+	connect(hide, &QAction::triggered, this, [this, uuid, hidden]() { setHidden(uuid, !hidden); });
+	QAction *lock = menu.addAction(obsText("LockVolume"));
+	lock->setCheckable(true);
+	lock->setChecked(strip->isVolumeLocked());
+	connect(lock, &QAction::toggled, this, [this, uuid](bool checked) { setLocked(uuid, checked); });
+
+	menu.addSeparator();
+	QAction *copyFilters = menu.addAction(obsText("Copy.Filters"));
+	copyFilters->setEnabled(obs_source_filter_count(strip->source()) > 0);
+	connect(copyFilters, &QAction::triggered, this,
+		[uuid]() { triggerNativeSourceAction(uuid, SLOT(actionCopyFilters())); });
+	QAction *pasteFilters = menu.addAction(obsText("Paste.Filters"));
+	pasteFilters->setEnabled(nativePasteFiltersAvailable());
+	connect(pasteFilters, &QAction::triggered, this,
+		[uuid]() { triggerNativeSourceAction(uuid, SLOT(actionPasteFilters())); });
+
+	menu.addSeparator();
+	connect(menu.addAction(obsText("Rename")), &QAction::triggered, this, [this, uuid]() {
+		// Deferred, as OBS does, so the dialog does not open while the menu
+		// is still closing.
+		QTimer::singleShot(0, this, [this, uuid]() { renameSource(uuid); });
+	});
+
+	menu.addSeparator();
+	connect(menu.addAction(obsText("Filters")), &QAction::triggered, this, [uuid]() {
+		obs_source_t *source = obs_get_source_by_uuid(uuid.toUtf8().constData());
+		if (source)
+			obs_frontend_open_source_filters(source);
+		obs_source_release(source);
+	});
+	connect(menu.addAction(obsText("Properties")), &QAction::triggered, this, [uuid]() {
+		obs_source_t *source = obs_get_source_by_uuid(uuid.toUtf8().constData());
+		if (source)
+			obs_frontend_open_source_properties(source);
+		obs_source_release(source);
+	});
+
+	// Then this dock's own: arranging the strip and its tabs.
+	menu.addSeparator();
 	if (regular) {
-		const int at = int(m_tabs[current].sources.indexOf(uuid));
-		const int last = int(m_tabs[current].sources.size()) - 1;
+		const int at = int(m_strips.indexOf(strip));
+		const int last = int(m_strips.size()) - 1;
 		QAction *earlier = menu.addAction(T(m_vertical ? "Mixer.Action.MoveLeft" : "Mixer.Action.MoveUp"));
 		earlier->setEnabled(at > 0);
 		connect(earlier, &QAction::triggered, this, [this, uuid, current, at]() {
-			addToTab(current, uuid, at - 1);
+			addToTab(current, uuid, modelPositionForDisplayIndex(at - 1));
 			layoutChanged();
 		});
 		QAction *later = menu.addAction(T(m_vertical ? "Mixer.Action.MoveRight" : "Mixer.Action.MoveDown"));
 		later->setEnabled(at >= 0 && at < last);
 		connect(later, &QAction::triggered, this, [this, uuid, current, at]() {
-			addToTab(current, uuid, at + 2);
+			addToTab(current, uuid, modelPositionForDisplayIndex(at + 2));
 			layoutChanged();
 		});
-		menu.addSeparator();
 	}
 
 	// Other tabs this source could go to.
@@ -1173,30 +1545,6 @@ void MixerDock::showStripMenu(MixerStrip *strip, const QPoint &globalPos)
 			});
 	}
 
-	menu.addSeparator();
-	QAction *hide = menu.addAction(T("Mixer.Action.HideInObsMixer"));
-	hide->setCheckable(true);
-	hide->setChecked(isHiddenInNativeMixer(strip->source()));
-	hide->setToolTip(T("Mixer.Tooltip.HideInObsMixer"));
-	connect(hide, &QAction::toggled, this, [uuid](bool checked) {
-		obs_source_t *source = obs_get_source_by_uuid(uuid.toUtf8().constData());
-		setHiddenInNativeMixer(source, checked);
-		obs_source_release(source);
-	});
-
-	menu.addSeparator();
-	connect(menu.addAction(T("Mixer.Action.Properties")), &QAction::triggered, this, [uuid]() {
-		obs_source_t *source = obs_get_source_by_uuid(uuid.toUtf8().constData());
-		if (source)
-			obs_frontend_open_source_properties(source);
-		obs_source_release(source);
-	});
-	connect(menu.addAction(T("Mixer.Action.Filters")), &QAction::triggered, this, [uuid]() {
-		obs_source_t *source = obs_get_source_by_uuid(uuid.toUtf8().constData());
-		if (source)
-			obs_frontend_open_source_filters(source);
-		obs_source_release(source);
-	});
 
 	// The strip asking for this menu is on the call stack, and an action can
 	// rebuild the tab, so hold its deletion until the menu has returned.
@@ -1224,6 +1572,8 @@ void MixerDock::showTabMenu(const QPoint &pos)
 
 	if (index >= 0) {
 		menu.addSeparator();
+		addTabOverrideMenu(&menu, index);
+		menu.addSeparator();
 		connect(menu.addAction(T("Mixer.Action.HideTabInObsMixer")), &QAction::triggered, this,
 			[this, index]() { setTabHiddenInNativeMixer(index, true); });
 		connect(menu.addAction(T("Mixer.Action.ShowTabInObsMixer")), &QAction::triggered, this,
@@ -1235,32 +1585,209 @@ void MixerDock::showTabMenu(const QPoint &pos)
 
 void MixerDock::showOptionsMenu()
 {
-	QMenu menu(this);
-	menu.setObjectName("StreamUPMixerOptionsMenu");
-	const int current = m_current;
+	m_optionsButton->showMenu();
+}
 
-	connect(menu.addAction(T("Mixer.Action.NewTabEllipsis")), &QAction::triggered, this,
+// OBS's mixer Options menu, item for item, then this dock's tab options.
+void MixerDock::buildMixerMenu(QMenu *menu)
+{
+	const int current = m_current;
+	const bool vertical = m_vertical;
+
+	connect(menu->addAction(obsText("UnhideAll")), &QAction::triggered, this, &MixerDock::unhideAll);
+	menu->addSeparator();
+
+	auto addSetting = [this, menu](const char *textKey, const char *setting) {
+		QAction *a = menu->addAction(obsText(textKey));
+		a->setCheckable(true);
+		a->setChecked(obsMixerSetting(setting));
+		connect(a, &QAction::toggled, this, [this, setting](bool on) { setObsMixerSetting(setting, on); });
+	};
+	addSetting("Basic.AudioMixer.ShowHidden", "MixerShowHidden");
+	addSetting("Basic.AudioMixer.ShowInactive", "MixerShowInactive");
+	addSetting(vertical ? "Basic.AudioMixer.KeepHiddenRight" : "Basic.AudioMixer.KeepHiddenBottom",
+		   "MixerKeepHiddenLast");
+	addSetting(vertical ? "Basic.AudioMixer.KeepInactiveRight" : "Basic.AudioMixer.KeepInactiveBottom",
+		   "MixerKeepInactiveLast");
+	menu->addSeparator();
+
+	connect(menu->addAction(obsText(vertical ? "Basic.AudioMixer.Layout.Horizontal"
+						 : "Basic.AudioMixer.Layout.Vertical")),
+		&QAction::triggered, this, [this]() { setVerticalStrips(!m_vertical); });
+	menu->addSeparator();
+	connect(menu->addAction(obsText("Basic.AdvAudio")), &QAction::triggered, this, &MixerDock::openAdvancedAudio);
+
+	// This dock's own.
+	menu->addSeparator();
+	QAction *add = menu->addAction(T("Mixer.Action.AddSourcesEllipsis"));
+	add->setEnabled(isRegularTab(current));
+	connect(add, &QAction::triggered, this, [this]() { QTimer::singleShot(0, this, &MixerDock::showAddMenu); });
+	connect(menu->addAction(T("Mixer.Action.NewTabEllipsis")), &QAction::triggered, this,
 		[this]() { promptNewTab(); });
-	QAction *rename = menu.addAction(T("Mixer.Action.RenameTab"));
+	QAction *rename = menu->addAction(T("Mixer.Action.RenameTab"));
 	rename->setEnabled(isRegularTab(current));
 	connect(rename, &QAction::triggered, this, [this, current]() { promptRenameTab(current); });
-	QAction *del = menu.addAction(T("Mixer.Action.DeleteTab"));
+	QAction *del = menu->addAction(T("Mixer.Action.DeleteTab"));
 	del->setEnabled(isRegularTab(current));
 	connect(del, &QAction::triggered, this, [this, current]() { confirmDeleteTab(current); });
-
-	menu.addSeparator();
-	QAction *vertical = menu.addAction(T("Mixer.Action.VerticalStrips"));
-	vertical->setCheckable(true);
-	vertical->setChecked(m_vertical);
-	connect(vertical, &QAction::toggled, this, [this](bool checked) { setVerticalStrips(checked); });
-
-	menu.addSeparator();
-	connect(menu.addAction(T("Mixer.Action.HideTabInObsMixer")), &QAction::triggered, this,
+	menu->addSeparator();
+	addTabOverrideMenu(menu, current);
+	menu->addSeparator();
+	connect(menu->addAction(T("Mixer.Action.HideTabInObsMixer")), &QAction::triggered, this,
 		[this, current]() { setTabHiddenInNativeMixer(current, true); });
-	connect(menu.addAction(T("Mixer.Action.ShowTabInObsMixer")), &QAction::triggered, this,
+	connect(menu->addAction(T("Mixer.Action.ShowTabInObsMixer")), &QAction::triggered, this,
 		[this, current]() { setTabHiddenInNativeMixer(current, false); });
+}
 
-	menu.exec(m_optionsButton->mapToGlobal(QPoint(0, m_optionsButton->height())));
+void MixerDock::showMixerMenu(const QPoint &globalPos)
+{
+	QMenu menu(this);
+	menu.setObjectName("StreamUPMixerOptionsMenu");
+	buildMixerMenu(&menu);
+	menu.exec(globalPos);
+}
+
+// "This tab: inactive sources" and "hidden sources", each following OBS's
+// mixer setting or overriding it for the one tab.
+void MixerDock::addTabOverrideMenu(QMenu *menu, int tabIndex)
+{
+	if (tabIndex < 0 || tabIndex >= m_tabs.size())
+		return;
+	auto addOne = [this, menu, tabIndex](const char *titleKey, bool inactive) {
+		QMenu *sub = menu->addMenu(T(titleKey));
+		const TabOverride currentValue = inactive ? m_tabs[tabIndex].inactive : m_tabs[tabIndex].hidden;
+		auto *group = new QActionGroup(sub);
+		const struct {
+			TabOverride value;
+			const char *key;
+		} options[] = {{TabOverride::FollowMixer, "Mixer.Override.Follow"},
+			       {TabOverride::Show, "Mixer.Override.Show"},
+			       {TabOverride::Hide, "Mixer.Override.Hide"}};
+		for (const auto &option : options) {
+			QAction *a = sub->addAction(T(option.key));
+			a->setCheckable(true);
+			a->setChecked(option.value == currentValue);
+			group->addAction(a);
+			const TabOverride value = option.value;
+			connect(a, &QAction::triggered, this, [this, tabIndex, inactive, value]() {
+				if (tabIndex >= m_tabs.size())
+					return;
+				(inactive ? m_tabs[tabIndex].inactive : m_tabs[tabIndex].hidden) = value;
+				scheduleVisibilityUpdate();
+				scheduleSave();
+			});
+		}
+	};
+	addOne("Mixer.Override.InactiveTitle", true);
+	addOne("Mixer.Override.HiddenTitle", false);
+}
+
+void MixerDock::updateToolbarState()
+{
+	if (!m_toolbar)
+		return;
+	config_t *config = obs_frontend_get_user_config();
+	// OBS's "Show toolbars" setting hides its list toolbars, this one included.
+	const bool showToolbar = !config || !config_has_user_value(config, "BasicWindow", "ShowListboxToolbars") ||
+				 config_get_bool(config, "BasicWindow", "ShowListboxToolbars");
+	m_toolbar->setVisible(showToolbar);
+
+	const bool showHidden = obsMixerSetting("MixerShowHidden");
+	m_hiddenButton->setText(obsText("Basic.AudioMixer.HiddenTotal").arg(m_hiddenCount));
+	m_hiddenButton->setToolTip(obsText(showHidden ? "Basic.AudioMixer.HideHidden" : "Basic.AudioMixer.ShowHidden"));
+	{
+		const QSignalBlocker block(m_hiddenButton);
+		m_hiddenButton->setChecked(showHidden);
+	}
+	m_hiddenButton->setDisabled(m_hiddenCount == 0);
+	StyleClass::toggle(m_hiddenButton, "text-muted", m_hiddenCount == 0);
+
+	m_layoutAction->setIcon(QIcon(m_vertical ? QStringLiteral(":/res/images/layout-horizontal.svg")
+						 : QStringLiteral(":/res/images/layout-vertical.svg")));
+	m_layoutAction->setToolTip(
+		obsText(m_vertical ? "Basic.AudioMixer.Layout.Horizontal" : "Basic.AudioMixer.Layout.Vertical"));
+	if (QWidget *w = m_toolbar->widgetForAction(m_layoutAction)) {
+		StyleClass::toggle(w, "icon-layout-horizontal", m_vertical);
+		StyleClass::toggle(w, "icon-layout-vertical", !m_vertical);
+	}
+}
+
+// ---- Native mixer actions ----
+
+void MixerDock::unhideAll()
+{
+	// As OBS's "Unhide All": every audio source, not only this tab's.
+	for (const QString &uuid : allAudioSources()) {
+		obs_source_t *source = obs_get_source_by_uuid(uuid.toUtf8().constData());
+		obs_data_t *priv = source ? obs_source_get_private_settings(source) : nullptr;
+		const bool hidden = priv && obs_data_get_bool(priv, "mixer_hidden");
+		obs_data_release(priv);
+		if (hidden)
+			setMixerFlag(source, "mixer_hidden", false);
+		obs_source_release(source);
+	}
+}
+
+void MixerDock::setPinned(const QString &uuid, bool pinned)
+{
+	// Pinning unhides, as in OBS.
+	if (pinned)
+		setMixerFlag(uuid, "mixer_hidden", false);
+	setMixerFlag(uuid, "mixer_pinned", pinned);
+}
+
+void MixerDock::setHidden(const QString &uuid, bool hidden)
+{
+	setMixerFlag(uuid, "mixer_hidden", hidden);
+}
+
+void MixerDock::setLocked(const QString &uuid, bool locked)
+{
+	setMixerFlag(uuid, "volume_locked", locked);
+}
+
+// OBS's mixer rename: its dialog text, its checks for empty and taken names.
+void MixerDock::renameSource(const QString &uuid)
+{
+	auto *main = static_cast<QWidget *>(obs_frontend_get_main_window());
+	for (;;) {
+		obs_source_t *source = obs_get_source_by_uuid(uuid.toUtf8().constData());
+		if (!source)
+			return;
+		const QString prevName = QString::fromUtf8(obs_source_get_name(source));
+		bool accepted = false;
+		const QString name = QInputDialog::getText(main, obsText("Basic.Main.MixerRename.Title"),
+							   obsText("Basic.Main.MixerRename.Text"), QLineEdit::Normal,
+							   prevName, &accepted)
+					     .trimmed();
+		if (!accepted || name == prevName) {
+			obs_source_release(source);
+			return;
+		}
+		if (name.isEmpty()) {
+			obs_source_release(source);
+			QMessageBox::warning(main, obsText("NoNameEntered.Title"), obsText("NoNameEntered.Text"));
+			continue;
+		}
+		obs_source_t *existing = obs_get_source_by_name(name.toUtf8().constData());
+		if (existing) {
+			obs_source_release(existing);
+			obs_source_release(source);
+			QMessageBox::warning(main, obsText("NameExists.Title"), obsText("NameExists.Text"));
+			continue;
+		}
+		obs_source_set_name(source, name.toUtf8().constData());
+		obs_source_release(source);
+		return;
+	}
+}
+
+void MixerDock::openAdvancedAudio()
+{
+	// OBS's own Advanced Audio Properties window, through its menu action.
+	QObject *main = static_cast<QObject *>(obs_frontend_get_main_window());
+	if (main)
+		QMetaObject::invokeMethod(main, "on_actionAdvAudioProperties_triggered", Qt::DirectConnection);
 }
 
 void MixerDock::showAddMenu()
@@ -1348,11 +1875,8 @@ void MixerDock::confirmDeleteTab(int index)
 
 void MixerDock::setTabHiddenInNativeMixer(int index, bool hidden)
 {
-	for (const QString &uuid : sourcesForTab(index)) {
-		obs_source_t *source = obs_get_source_by_uuid(uuid.toUtf8().constData());
-		setHiddenInNativeMixer(source, hidden);
-		obs_source_release(source);
-	}
+	for (const QString &uuid : sourcesForTab(index))
+		setMixerFlag(uuid, "mixer_hidden", hidden);
 }
 
 void MixerDock::setVerticalStrips(bool vertical)
@@ -1363,6 +1887,7 @@ void MixerDock::setVerticalStrips(bool vertical)
 	// Every strip lays itself out for one orientation, so this one rebuilds.
 	updateTabTexts();
 	rebuildStrips();
+	updateToolbarState();
 	scheduleSave();
 }
 
@@ -1380,10 +1905,6 @@ void MixerDock::refreshTheme()
 	if (!m_frozen)
 		rebuildStrips();
 }
-
-
-
-
 
 
 

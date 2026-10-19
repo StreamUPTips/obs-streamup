@@ -40,9 +40,25 @@ public:
 	void refreshState();
 	void setPreviewed(bool previewed);
 
+	// The mixer status OBS's own mixer works with, as of the last update.
+	bool isActive() const { return m_active; }
+	bool isHiddenInMixer() const { return m_hidden; }
+	bool isPinnedInMixer() const { return m_pinned; }
+	bool isGlobal() const { return m_global; }
+	bool isVolumeLocked() const { return m_locked; }
+	bool isPreviewed() const { return m_previewed; }
+
+	// Profile meter settings (decay rate, peak meter type) and the
+	// accessibility colour overrides, re-read when OBS reports a change.
+	void applyMeterSettings();
+	void refreshMeterColours();
+
 signals:
 	void dragRequested(StreamUP::Mixer::MixerStrip *strip);
 	void menuRequested(StreamUP::Mixer::MixerStrip *strip, const QPoint &globalPos);
+	// Active, hidden, pinned, global or previewed changed: whether the strip
+	// shows, and where, may be different now.
+	void mixerStateChanged(StreamUP::Mixer::MixerStrip *strip);
 
 protected:
 	void mousePressEvent(QMouseEvent *event) override;
@@ -64,8 +80,8 @@ private:
 	void changeVolume();
 	void updateText();
 	void processMixerState(int knownMonitoringType = -1);
-	void updateCategoryLabel(bool active, bool unassigned);
-	void applyMeterSettings();
+	void updateCategoryLabel();
+	void updateAccessibleNames();
 	void handleMuteButton(bool mute);
 	void handleMonitorButton(bool enable);
 	bool pressStartsDrag(QMouseEvent *event);
@@ -77,6 +93,13 @@ private:
 	QString m_uuid;
 	bool m_vertical = true;
 	bool m_previewed = false;
+	bool m_active = false;
+	bool m_hidden = false;
+	bool m_pinned = false;
+	bool m_global = false;
+	bool m_locked = false;
+	bool m_unassigned = false;
+	bool m_stateKnown = false;
 	// The button look last applied (mute, monitor and warning bits), so an
 	// update that changes nothing restyles nothing.
 	int m_buttonState = -1;

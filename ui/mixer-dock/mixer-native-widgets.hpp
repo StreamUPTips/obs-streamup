@@ -105,6 +105,8 @@ public:
 	void setPeakDecayRate(qreal v) { peakDecayRate = v; }
 	void setPeakMeterType(enum obs_peak_meter_type type);
 	void refreshStyle();
+	// Re-applies the colours so OBS's accessibility overrides take effect.
+	void refreshColors();
 	QRect getBarRect() const;
 
 	QColor getBackgroundNominalColor() const { return p_backgroundNominalColor; }

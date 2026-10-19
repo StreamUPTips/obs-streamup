@@ -190,6 +190,18 @@ void VolumeMeter::refreshStyle()
 	update();
 }
 
+void VolumeMeter::refreshColors()
+{
+	setBackgroundNominalColor(getBackgroundNominalColor());
+	setBackgroundWarningColor(getBackgroundWarningColor());
+	setBackgroundErrorColor(getBackgroundErrorColor());
+	setForegroundNominalColor(getForegroundNominalColor());
+	setForegroundWarningColor(getForegroundWarningColor());
+	setForegroundErrorColor(getForegroundErrorColor());
+	updateBackgroundCache(true);
+	update();
+}
+
 void VolumeMeter::setLevels(const float magnitude[MAX_AUDIO_CHANNELS], const float peak[MAX_AUDIO_CHANNELS],
 			    const float inputPeak[MAX_AUDIO_CHANNELS])
 {
