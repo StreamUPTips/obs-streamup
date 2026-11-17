@@ -185,7 +185,10 @@ void showResult(QWidget *parent, const Result &result, const QString &archivePat
 	dialog->resize(S(1080) + 2 * S(su::ShadowDialog::kShadowMargin), dialog->sizeHint().height());
 	// Shrink to the content's real height once it has been laid out. See
 	// fitWindowToContent: no size hint matches what actually gets drawn here.
-	QTimer::singleShot(0, dialog, [dialog, layout]() { fitWindowToContent(dialog, layout); });
+	QTimer::singleShot(0, dialog, [dialog, layout]() {
+		fitWindowToContent(dialog, layout);
+		StreamUP::BackupUI::fitWindowToScreen(dialog, layout);
+	});
 
 	dialog->show();
 }
@@ -294,7 +297,8 @@ void ShowCreateBackupDialog()
 		cancelButton->setEnabled(false);
 
 		// Grow to make room, rather than reserving the space up front.
-		const int grow = progressArea->sizeHint().height() + layout->spacing();
+		const int grow = qMin(progressArea->sizeHint().height() + layout->spacing(),
+				      StreamUP::BackupUI::roomBelowWindow(dialog));
 		progressArea->setVisible(true);
 		dialog->resize(dialog->width(), dialog->height() + grow);
 
@@ -327,7 +331,10 @@ void ShowCreateBackupDialog()
 	dialog->resize(S(560) + 2 * S(su::ShadowDialog::kShadowMargin), dialog->sizeHint().height());
 	// Shrink to the content's real height once it has been laid out. See
 	// fitWindowToContent: no size hint matches what actually gets drawn here.
-	QTimer::singleShot(0, dialog, [dialog, layout]() { fitWindowToContent(dialog, layout); });
+	QTimer::singleShot(0, dialog, [dialog, layout]() {
+		fitWindowToContent(dialog, layout);
+		StreamUP::BackupUI::fitWindowToScreen(dialog, layout);
+	});
 
 	dialog->show();
 }

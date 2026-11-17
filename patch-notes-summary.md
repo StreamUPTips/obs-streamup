@@ -1,3 +1,14 @@
+# StreamUP v2.4.2 - Patch Update
+
+## Improvements
+- **The MultiDock Toolbar Follows OBS** Turn off View > Dock Toolbars (Show Toolbars on older OBS) and the bar with the + and lock buttons goes too, so a MultiDock takes up less room. Thanks for the suggestion.
+- **Right Click A MultiDock** Right click a MultiDock's title bar, or any empty space inside it, for Add Dock and Lock Docks. Both are still there with the toolbar hidden.
+
+## Bug Fixes
+- **Restore Button Off The Bottom Of The Screen** Restoring a backup with media made the window taller than a 1080p screen, so you could not reach the Restore button, not even with Tab. The window fits your screen now and the middle scrolls, so the buttons always stay in view. The Backup window does the same. Thanks for the report.
+
+---
+
 # StreamUP v2.4.1 - Patch Update
 
 ## Improvements

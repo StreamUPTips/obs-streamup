@@ -2,6 +2,18 @@
 
 ---
 
+## v2.4.2 (17 Nov '26)
+**Patch Focus:** The Restore button stays on screen, and MultiDocks take up less room
+
+### Improvements
+- The MultiDock toolbar follows OBS's View > Dock Toolbars (Show Toolbars on older OBS), so turning toolbars off hides the + and lock bar too
+- Right click a MultiDock's title bar or any empty space inside it for Add Dock and Lock Docks, so both are still there with the toolbar hidden
+
+### Bug Fixes
+- Restoring a backup with media made the window taller than a 1080p screen, so the Restore button was out of reach, even with Tab. The window fits your screen now and the middle scrolls, so the buttons always stay in view. The Backup window does the same
+
+---
+
 ## v2.4.1 (29 Sep '26)
 **Patch Focus:** Scene Organiser folders that follow your collections, Aitum Vertical fixes, multi select on tabs, plus hotkey and light theme fixes
 
