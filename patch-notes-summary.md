@@ -6,6 +6,7 @@
 
 ## Bug Fixes
 - **Restore Button Off The Bottom Of The Screen** Restoring a backup with media made the window taller than a 1080p screen, so you could not reach the Restore button, not even with Tab. The window fits your screen now and the middle scrolls, so the buttons always stay in view. The Backup window does the same. Thanks for the report.
+- **Older OBS Gets The Right Plugin Download** On OBS 30 to 32, the plugin check now tells you to skip Download and use the Website Link, because some plugins' Download links are OBS 33 builds that won't load on your version. That was why some plugins kept asking to be updated after you updated them.
 
 ---
 

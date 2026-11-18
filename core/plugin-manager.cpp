@@ -316,6 +316,21 @@ QString ExtractDomainFromUrl(const QString& url) {
 	
 	return host;
 }
+// The plugin list links the OBS 33+ build where a plugin ships separate OBS 33 and OBS 30-32
+// ("Legacy") builds. On older OBS the Download button installs a build that never loads, so the
+// old copy keeps loading and the update prompt never clears (feedback 2026-11-18). On OBS < 33 the
+// dialog says to use the Website Link instead, and the Download cells carry the same tooltip.
+static bool IsObsOlderThan33()
+{
+	return (obs_get_version() >> 24) < 33;
+}
+
+static void MarkDownloadForOldObs(QTableWidgetItem *downloadItem)
+{
+	if (IsObsOlderThan33())
+		downloadItem->setToolTip(obs_module_text("Plugin.Dialog.OldObsDownloadTip"));
+}
+
 QTableWidget* CreateMissingPluginsTable(const std::map<std::string, std::string>& missing_modules) {
 	QStringList headers = {
 		obs_module_text("UI.Label.PluginName"),
@@ -359,6 +374,7 @@ QTableWidget* CreateMissingPluginsTable(const std::map<std::string, std::string>
 		QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
 		downloadItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 		downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
+		MarkDownloadForOldObs(downloadItem);
 		table->setItem(row, 3, downloadItem);
 		
 		// Website Link column - show domain name
@@ -419,6 +435,7 @@ QTableWidget* CreateUpdatesTable(const std::map<std::string, std::string>& versi
 		QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
 		downloadItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 		downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
+		MarkDownloadForOldObs(downloadItem);
 		table->setItem(row, 3, downloadItem);
 		
 		// Website Link column - show domain name
@@ -560,6 +577,7 @@ QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& fai
 			QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
 			downloadItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 			downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
+		MarkDownloadForOldObs(downloadItem);
 			table->setItem(row, 2, downloadItem);
 
 			// Website Link column - show domain name
@@ -802,6 +820,29 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			addTableSection("Plugin.Dialog.FailedToLoadGroup", CreateFailedToLoadPluginsTable(failed_to_load_modules));
 		if (hasDisabled)
 			addTableSection("Plugin.Dialog.DisabledGroup", CreateDisabledPluginsTable(disabled_modules));
+
+		// OBS 30-32: the Download links are OBS 33 builds, so point people at the plugin's page.
+		if ((hasMissing || hasUpdates || hasFailedToLoad) && IsObsOlderThan33()) {
+			const uint32_t v = obs_get_version();
+			const QString obsVer = QString("%1.%2").arg(v >> 24).arg((v >> 16) & 0xFF);
+			QLabel *oldObsLabel = new QLabel(
+				"⚠️ " + QString(obs_module_text("Plugin.Dialog.OldObsNote")).arg(obsVer));
+			oldObsLabel->setWordWrap(true);
+			oldObsLabel->setStyleSheet(scale_qss(QString(
+				"QLabel {"
+				"background: rgba(45, 55, 72, 0.8);"
+				"color: #fbbf24;"
+				"border: 1px solid #f59e0b;"
+				"border-radius: %1px;"
+				"padding: %2px;"
+				"font-size: %3px;"
+				"line-height: 1.4;"
+				"}")
+				.arg(S(6))
+				.arg(S(12))
+				.arg(Sizes::FONT_SIZE_SMALL)));
+			contentLayout->addWidget(oldObsLabel);
+		}
 
 		// Add warning message above buttons if there's a continue callback (meaning this is for install product)
 		if (continueCallback) {
