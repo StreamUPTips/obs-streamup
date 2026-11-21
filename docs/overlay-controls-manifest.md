@@ -124,14 +124,14 @@ Says which product this is. Every scene the `.StreamUP` file installs gets
 it in its private settings, which travel inside the scene collection:
 
 ```json
-"product": { "id": "sup076", "name": "Logo Card", "version": "1.0.0" }
+"product": { "id": "logo-card-sup076", "name": "Logo Card", "version": "1.0.0" }
 ```
 
 Stored on each scene as:
 
 ```json
 "streamup_product": {
-  "id": "sup076", "name": "Logo Card", "version": "1.0.0",
+  "id": "logo-card-sup076", "name": "Logo Card", "version": "1.0.0",
   "overlay": "logo-card", "installed": "2026-11-21T21:37:28Z"
 }
 ```
@@ -180,7 +180,7 @@ text, timing sliders and the one-click transition set-up.
   "name": "Logo Card",
   "version": "1.0.0",
   "description": "Your logo on a card that sweeps across between scenes.",
-  "product": { "id": "sup076", "name": "Logo Card", "version": "1.0.0" },
+  "product": { "id": "logo-card-sup076", "name": "Logo Card", "version": "1.0.0" },
   "scenes": ["StreamUP • Logo Card"],
   "tabs": [
     { "id": "look", "label": "Look" },
