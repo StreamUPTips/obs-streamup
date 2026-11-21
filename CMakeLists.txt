@@ -142,7 +142,11 @@ target_sources(${PROJECT_NAME} PRIVATE
   core/overlay-controls-internal.hpp
   core/overlay-apply.cpp
   core/canvas-lookup.hpp
-  core/canvas-lookup.cpp)
+  core/canvas-lookup.cpp
+  core/product-transitions.hpp
+  core/product-transitions.cpp
+  core/product-registry.hpp
+  core/product-registry.cpp)
 
 # Utilities module files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -220,6 +224,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/overlay-layout-page.cpp
   ui/overlay-all-settings.hpp
   ui/overlay-all-settings.cpp
+  ui/my-products-window.hpp
+  ui/my-products-window.cpp
   ui/dock/streamup-dock.hpp
   ui/dock/streamup-dock.cpp
   ui/scene-organiser/scene-organiser-dock.hpp
@@ -315,7 +321,11 @@ source_group("Core" FILES
   core/overlay-controls-internal.hpp
   core/overlay-apply.cpp
   core/canvas-lookup.hpp
-  core/canvas-lookup.cpp)
+  core/canvas-lookup.cpp
+  core/product-transitions.hpp
+  core/product-transitions.cpp
+  core/product-registry.hpp
+  core/product-registry.cpp)
 
 source_group("Utilities" FILES
   utilities/path-utils.hpp
@@ -390,7 +400,9 @@ source_group("UI" FILES
   ui/overlay-layout-page.hpp
   ui/overlay-layout-page.cpp
   ui/overlay-all-settings.hpp
-  ui/overlay-all-settings.cpp)
+  ui/overlay-all-settings.cpp
+  ui/my-products-window.hpp
+  ui/my-products-window.cpp)
 
 source_group("UI\\Dock" FILES
   ui/dock/streamup-dock.hpp

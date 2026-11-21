@@ -4,6 +4,7 @@
 
 #include "overlay-controls-internal.hpp"
 #include "canvas-lookup.hpp"
+#include "product-transitions.hpp"
 
 #include <streamup/debug-logger.hpp>
 
@@ -65,7 +66,8 @@ bool IsNumeric(ControlType t)
 
 bool IsString(ControlType t)
 {
-	return t == ControlType::Text || t == ControlType::TextArea || t == ControlType::Select || t == ControlType::Font;
+	return t == ControlType::Text || t == ControlType::TextArea || t == ControlType::Select || t == ControlType::Font ||
+	       t == ControlType::Image;
 }
 
 QJsonValue NormaliseValue(const Control &c, const QJsonValue &in)
@@ -104,6 +106,11 @@ QJsonValue NormaliseValue(const Control &c, const QJsonValue &in)
 			if (s == "false" || s == "off" || s == "0")
 				return false;
 		}
+		return undefined;
+	case ControlType::Image:
+		// A path. Backslashes are fine on Windows but OBS stores forward ones.
+		if (in.isString())
+			return QString(in.toString()).replace(QLatin1Char('\\'), QLatin1Char('/'));
 		return undefined;
 	case ControlType::Text:
 	case ControlType::TextArea:
@@ -218,6 +225,18 @@ obs_source_t *ResolveTarget(QString &source, QString &sourceUuid, QString &filte
 	}
 	obs_source_release(src);
 	return f;
+}
+
+obs_source_t *ResolveBinding(Binding &b)
+{
+	if (!b.transition)
+		return ResolveTarget(b.source, b.sourceUuid, b.filter, b.filterUuid);
+	obs_source_t *t = StreamUP::ProductTransitions::Find(b.source, b.sourceUuid);
+	if (t) {
+		b.sourceUuid = QString::fromUtf8(obs_source_get_uuid(t));
+		b.source = QString::fromUtf8(obs_source_get_name(t));
+	}
+	return t;
 }
 
 namespace {
@@ -556,7 +575,7 @@ bool BindingTargetExists(Binding &b)
 		qint64 id = 0;
 		return WithItem(b.scene, b.sceneUuid, b.source, b.sourceUuid, &id, [](obs_sceneitem_t *) {});
 	}
-	obs_source_t *t = ResolveTarget(b.source, b.sourceUuid, b.filter, b.filterUuid);
+	obs_source_t *t = ResolveBinding(b);
 	obs_source_release(t);
 	return t != nullptr;
 }
@@ -582,7 +601,7 @@ bool CaptureBinding(Binding &b)
 		return true;
 	}
 
-	obs_source_t *target = ResolveTarget(b.source, b.sourceUuid, b.filter, b.filterUuid);
+	obs_source_t *target = ResolveBinding(b);
 	if (!target)
 		return false;
 
@@ -630,6 +649,9 @@ bool CaptureBinding(Binding &b)
 bool WriteBinding(Binding &b, const Control &c)
 {
 	if (!b.captured && !CaptureBinding(b)) {
+		// A transition link waits quietly for its transition to be made.
+		if (b.transition)
+			return false;
 		DebugLogger::LogWarningFormat("OverlayControls", "'%s' / '%s' has no '%s' yet, skipped this time",
 					      b.source.toUtf8().constData(), b.filter.toUtf8().constData(),
 					      b.key.toUtf8().constData());
@@ -643,7 +665,7 @@ bool WriteBinding(Binding &b, const Control &c)
 				[on](obs_sceneitem_t *item) { obs_sceneitem_set_visible(item, on); });
 	}
 
-	obs_source_t *target = ResolveTarget(b.source, b.sourceUuid, b.filter, b.filterUuid);
+	obs_source_t *target = ResolveBinding(b);
 	if (!target)
 		return false;
 
@@ -682,7 +704,8 @@ bool WriteBinding(Binding &b, const Control &c)
 	case ControlType::Text:
 	case ControlType::TextArea:
 	case ControlType::Select:
-	case ControlType::Font: {
+	case ControlType::Font:
+	case ControlType::Image: {
 		const QByteArray s = TransformText(b, c.value.toString()).toUtf8();
 		UpdateKey(target, b.key, [&s](obs_data_t *d, const char *k) { obs_data_set_string(d, k, s.constData()); });
 		break;
@@ -706,7 +729,7 @@ void RestoreBinding(Binding &b)
 			 [on](obs_sceneitem_t *item) { obs_sceneitem_set_visible(item, on); });
 		return;
 	}
-	obs_source_t *target = ResolveTarget(b.source, b.sourceUuid, b.filter, b.filterUuid);
+	obs_source_t *target = ResolveBinding(b);
 	if (!target)
 		return;
 
@@ -738,7 +761,7 @@ bool BindingDrifted(Binding &b, const Control &c)
 			 [&](obs_sceneitem_t *item) { drifted = obs_sceneitem_visible(item) != want; });
 		return drifted;
 	}
-	obs_source_t *target = ResolveTarget(b.source, b.sourceUuid, b.filter, b.filterUuid);
+	obs_source_t *target = ResolveBinding(b);
 	if (!target)
 		return false;
 
@@ -772,6 +795,7 @@ bool BindingDrifted(Binding &b, const Control &c)
 			case ControlType::TextArea:
 			case ControlType::Select:
 			case ControlType::Font:
+			case ControlType::Image:
 				drifted = QString::fromUtf8(obs_data_get_string(container, k.constData())) !=
 					  TransformText(b, c.value.toString());
 				break;
@@ -872,6 +896,7 @@ QString ControlText(const Control &c)
 	case ControlType::TextArea:
 	case ControlType::Select:
 	case ControlType::Font:
+	case ControlType::Image:
 		return c.value.toString();
 	case ControlType::Platforms:
 	case ControlType::Layout:

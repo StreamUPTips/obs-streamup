@@ -12,6 +12,7 @@
 #include "backup-dialog.hpp"
 #include "restore-dialog.hpp"
 #include "overlay-controls-window.hpp"
+#include "my-products-window.hpp"
 #include "../core/overlay-controls.hpp"
 #include "../multidock/multidock_dialogs.hpp"
 #include "../multidock/multidock_manager.hpp"
@@ -120,6 +121,11 @@ void LoadMenuItems(QMenu* menu)
 
     menu->addSeparator();
 #endif
+
+    // My Products: everything StreamUP installed in this collection, each
+    // with its controls one click away.
+    action = menu->addAction(obs_module_text("Menu.MyProducts"));
+    QObject::connect(action, &QAction::triggered, []() { StreamUP::MyProductsWindow::Show(); });
 
     // Overlays: every installed overlay that brought its own controls, plus a
     // way to attach controls to one installed before they existed.

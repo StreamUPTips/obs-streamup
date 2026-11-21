@@ -32,6 +32,7 @@ struct Binding {
 	QString filter;   // empty: the source's own settings
 	QString scene;    // set: a scene item in this scene (key must be @visible)
 	QString key;      // a setting key ("a.b" reaches into an object), @enabled or @visible
+	bool transition = false; // source names a scene transition, not a source
 	BindMode mode = BindMode::Set;
 	double mapTo0 = 0.0;
 	double mapTo1 = 1.0;
@@ -186,6 +187,8 @@ struct Overlay {
 	QList<Group> groups;
 	QList<Preset> presets;
 	QList<Output> outputs;
+	QList<ActionInfo> actions;
+	ProductStamp product;
 	bool snapshotTaken = false;
 	QList<SnapSource> snapSources;
 	QList<SnapItem> snapItems;
@@ -205,6 +208,8 @@ QJsonValue NormaliseValue(const Control &c, const QJsonValue &in);
 // ---------------------------------------------------------------- settings links
 
 obs_source_t *ResolveTarget(QString &source, QString &sourceUuid, QString &filter, QString &filterUuid);
+// A link's target: a source, a filter or a transition. NEW reference.
+obs_source_t *ResolveBinding(Binding &b);
 bool BindingTargetExists(Binding &b);
 bool CaptureBinding(Binding &b);
 bool WriteBinding(Binding &b, const Control &c);

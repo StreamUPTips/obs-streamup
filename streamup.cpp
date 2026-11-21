@@ -615,6 +615,9 @@ static void RegisterWebsocketRequests()
 	obs_websocket_vendor_register_request(vendor, "ResetOverlayControls", StreamUP::WebSocketAPI::WebsocketResetOverlayControls, nullptr);
 	obs_websocket_vendor_register_request(vendor, "ApplyOverlayPreset", StreamUP::WebSocketAPI::WebsocketApplyOverlayPreset, nullptr);
 	obs_websocket_vendor_register_request(vendor, "OpenOverlayControls", StreamUP::WebSocketAPI::WebsocketOpenOverlayControls, nullptr);
+	obs_websocket_vendor_register_request(vendor, "RunOverlayAction", StreamUP::WebSocketAPI::WebsocketRunOverlayAction, nullptr);
+	obs_websocket_vendor_register_request(vendor, "GetMyProducts", StreamUP::WebSocketAPI::WebsocketGetMyProducts, nullptr);
+	obs_websocket_vendor_register_request(vendor, "OpenMyProducts", StreamUP::WebSocketAPI::WebsocketOpenMyProducts, nullptr);
 
 	// Vendor events so a Stream Deck key or Streamer.bot action showing an
 	// overlay control stays in step with the panel.

@@ -9,6 +9,7 @@
 #include "path-utils.hpp"
 #include "overlay-controls.hpp"
 #include "canvas-lookup.hpp"
+#include "product-registry.hpp"
 #include "../ui/overlay-controls-window.hpp"
 #include "../ui/ui-helpers.hpp"
 #include "../version.h"
@@ -1063,6 +1064,10 @@ bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad)
 			if (QThread::currentThread() == qApp->thread())
 				StreamUP::ErrorHandler::ShowWarningDialog("Vertical scenes skipped", note);
 		}
+
+		// Say which product these scenes came from, so My Products can
+		// find them again whatever happens to the controls.
+		StreamUP::Products::StampFromFile(file_path);
 
 		// A file that describes its own controls is an overlay: register them
 		// against the sources that just loaded and offer the panel.

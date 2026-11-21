@@ -11,6 +11,8 @@
 #include "overlay-controls.hpp"
 #include "../core/canvas-lookup.hpp"
 #include "../ui/overlay-controls-window.hpp"
+#include "../ui/my-products-window.hpp"
+#include "../core/product-registry.hpp"
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <util/platform.h>
@@ -1143,6 +1145,8 @@ const char *TypeName(oc::ControlType t)
 		return "platforms";
 	case oc::ControlType::Layout:
 		return "layout";
+	case oc::ControlType::Image:
+		return "image";
 	}
 	return "";
 }
@@ -1252,6 +1256,21 @@ void WebsocketGetOverlayControls(obs_data_t *request_data, obs_data_t *response_
 	}
 	obs_data_set_array(response_data, "presets", presets);
 	obs_data_array_release(presets);
+
+	obs_data_array_t *actions = obs_data_array_create();
+	for (const oc::ActionInfo &a : o.actions) {
+		obs_data_t *action = obs_data_create();
+		obs_data_set_string(action, "id", a.id.toUtf8().constData());
+		obs_data_set_string(action, "type", "use_as_transition");
+		obs_data_set_string(action, "scene", a.scene.toUtf8().constData());
+		obs_data_set_string(action, "transition", a.transition.toUtf8().constData());
+		obs_data_set_bool(action, "exists", a.exists);
+		obs_data_set_bool(action, "current", a.current);
+		obs_data_array_push_back(actions, action);
+		obs_data_release(action);
+	}
+	obs_data_set_array(response_data, "actions", actions);
+	obs_data_array_release(actions);
 	obs_data_set_bool(response_data, "success", true);
 }
 
@@ -1311,6 +1330,80 @@ void WebsocketOpenOverlayControls(obs_data_t *request_data, obs_data_t *response
 	if (!FindOverlayFromRequest(request_data, response_data, o))
 		return;
 	StreamUP::OverlayControlsWindow::Show(o.id);
+	obs_data_set_bool(response_data, "success", true);
+}
+
+void WebsocketRunOverlayAction(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+	oc::OverlayInfo o;
+	if (!FindOverlayFromRequest(request_data, response_data, o))
+		return;
+	QString actionId = QString::fromUtf8(obs_data_get_string(request_data, "action"));
+	if (actionId.isEmpty() && !o.actions.isEmpty())
+		actionId = o.actions.first().id;
+	// Adding a transition drives OBS's own windows: UI thread, and wait.
+	struct ActionTask {
+		QString overlay;
+		QString action;
+		QString message;
+		QString error;
+		bool ok = false;
+	} task{o.id, actionId, QString(), QString(), false};
+	obs_queue_task(
+		OBS_TASK_UI,
+		[](void *param) {
+			auto *t = static_cast<ActionTask *>(param);
+			t->ok = oc::RunAction(t->overlay, t->action, &t->message, &t->error);
+		},
+		&task, true);
+	obs_data_set_bool(response_data, "success", task.ok);
+	obs_data_set_string(response_data, task.ok ? "message" : "error",
+			    (task.ok ? task.message : task.error).toUtf8().constData());
+}
+
+void WebsocketGetMyProducts(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+	struct ListTask {
+		QList<StreamUP::Products::ProductEntry> products;
+	} task;
+	obs_queue_task(
+		OBS_TASK_UI,
+		[](void *param) { static_cast<ListTask *>(param)->products = StreamUP::Products::ListProducts(); }, &task,
+		true);
+	obs_data_array_t *list = obs_data_array_create();
+	for (const StreamUP::Products::ProductEntry &p : task.products) {
+		obs_data_t *item = obs_data_create();
+		obs_data_set_string(item, "id", p.id.toUtf8().constData());
+		obs_data_set_string(item, "name", p.name.toUtf8().constData());
+		obs_data_set_string(item, "version", p.version.toUtf8().constData());
+		obs_data_set_string(item, "overlay", p.overlayId.toUtf8().constData());
+		obs_data_set_bool(item, "stamped", p.stamped);
+		obs_data_set_bool(item, "transition", p.isTransition);
+		obs_data_array_t *scenes = obs_data_array_create();
+		for (const QString &scene : p.scenes) {
+			obs_data_t *sd = obs_data_create();
+			obs_data_set_string(sd, "name", scene.toUtf8().constData());
+			obs_data_array_push_back(scenes, sd);
+			obs_data_release(sd);
+		}
+		obs_data_set_array(item, "scenes", scenes);
+		obs_data_array_release(scenes);
+		obs_data_array_push_back(list, item);
+		obs_data_release(item);
+	}
+	obs_data_set_array(response_data, "products", list);
+	obs_data_array_release(list);
+	obs_data_set_bool(response_data, "success", true);
+}
+
+void WebsocketOpenMyProducts(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+	StreamUP::MyProductsWindow::Show();
 	obs_data_set_bool(response_data, "success", true);
 }
 

@@ -1,6 +1,7 @@
 #include "overlay-controls-window.hpp"
 
 #include "../core/overlay-controls.hpp"
+#include "../core/product-transitions.hpp"
 #include "overlay-all-settings.hpp"
 #include "overlay-layout-page.hpp"
 #include "overlay-platforms-editor.hpp"
@@ -24,7 +25,9 @@
 
 #include <QApplication>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFontDatabase>
+#include <QImageReader>
 #include <QGridLayout>
 #include <QHash>
 #include <QLineEdit>
@@ -99,7 +102,44 @@ struct Row {
 	QPlainTextEdit *area = nullptr;
 	QComboBox *combo = nullptr;
 	OverlayUI::PlatformsEditor *platforms = nullptr;
+	QLineEdit *imagePath = nullptr;
+	QLabel *thumb = nullptr;
 };
+
+// One of the product's actions, as a row with a button.
+struct ActionRow {
+	oc::ActionInfo info;
+	QLabel *state = nullptr;
+	su::PillButton *button = nullptr;
+};
+
+// Image files an OBS image source can show.
+QString ImageFilter()
+{
+	return T("OverlayControls.Image.Filter") + " (*.png *.jpg *.jpeg *.gif *.bmp *.tga *.webp *.psd *.jxr)";
+}
+
+void ShowThumb(QLabel *thumb, const QString &path)
+{
+	const QSize box = thumb->size() * thumb->devicePixelRatioF();
+	QImageReader reader(path);
+	QImage img;
+	if (!path.isEmpty() && reader.canRead()) {
+		const QSize full = reader.size();
+		if (full.isValid())
+			reader.setScaledSize(full.scaled(box, Qt::KeepAspectRatio));
+		img = reader.read();
+	}
+	if (img.isNull()) {
+		thumb->setPixmap(QPixmap());
+		thumb->setText(QString());
+		return;
+	}
+	QPixmap pm = QPixmap::fromImage(img);
+	pm.setDevicePixelRatio(thumb->devicePixelRatioF());
+	thumb->setText(QString());
+	thumb->setPixmap(pm);
+}
 
 class OverlayPanel : public su::ShadowDialog {
 public:
@@ -161,6 +201,8 @@ public:
 		shell.footerButtons->addWidget(resetAll);
 		shell.footerButtons->addWidget(savePreset);
 		shell.footerButtons->addWidget(done);
+		// A product that is all actions has nothing a preset could hold.
+		savePreset->setVisible(m_info.hasControls);
 
 		QObject::connect(done, &QPushButton::clicked, this, &QDialog::close);
 		QObject::connect(resetAll, &QPushButton::clicked, this, [this]() {
@@ -241,6 +283,7 @@ public:
 			if (m_layout && m_layout->isVisible())
 				return;
 			refreshDrift();
+			refreshActions();
 		});
 		driftTimer->start();
 
@@ -266,6 +309,17 @@ private:
 	void buildPages()
 	{
 		bool first = true;
+		bool anyCurated = false;
+		for (const oc::GroupInfo &g : m_info.groups)
+			for (const oc::ControlInfo &c : g.controls)
+				anyCurated = anyCurated || c.type != oc::ControlType::Layout;
+		if (!anyCurated && !m_info.actions.isEmpty()) {
+			// A product with actions and nothing else to tune still opens
+			// on a page that explains it and offers them.
+			m_nav->addItem(T("OverlayControls.Tab.Setup"));
+			m_pages->addWidget(buildCuratedPage(QString(), true));
+			first = false;
+		}
 		for (const oc::TabInfo &tab : m_info.tabs) {
 			bool any = false;
 			for (const oc::GroupInfo &g : m_info.groups)
@@ -318,7 +372,9 @@ private:
 			m_missingNote = su::makeLabel(QString(), su::Sizes::FONT_SIZE_SMALL, 500, su::Colors::COLOR_WARNING);
 			v->addWidget(m_missingNote);
 			updateMissingNote();
-			buildPresetCard(v);
+			buildActionsCard(v);
+			if (!tab.isEmpty())
+				buildPresetCard(v);
 		}
 
 		for (const oc::GroupInfo &g : m_info.groups) {
@@ -341,6 +397,90 @@ private:
 		}
 		v->addStretch(1);
 		return scroll;
+	}
+
+	void buildActionsCard(QVBoxLayout *v)
+	{
+		if (m_info.actions.isEmpty())
+			return;
+		QVBoxLayout *card = su::sectionCard(v, T("OverlayControls.Group.Transition"));
+		for (const oc::ActionInfo &a : m_info.actions) {
+			auto *row = new QHBoxLayout();
+			row->setContentsMargins(0, su::S(6), 0, 0);
+			row->setSpacing(su::S(16));
+			auto *text = new QVBoxLayout();
+			text->setContentsMargins(0, 0, 0, 0);
+			text->setSpacing(su::S(3));
+			const QString title = a.label.isEmpty() ? T("OverlayControls.Action.UseAsTransition") : a.label;
+			text->addWidget(su::makeLabel(title, su::CardText::kTitle, 600, su::Colors::TEXT_PRIMARY));
+			const QString help = a.help.isEmpty()
+						     ? T("OverlayControls.Action.UseAsTransition.Help").arg(a.scene.toHtmlEscaped())
+						     : a.help;
+			QLabel *helpLabel = su::makeLabel(help, su::CardText::kCaption, 400, su::Colors::TEXT_SECONDARY);
+			helpLabel->setWordWrap(true);
+			text->addWidget(helpLabel);
+			ActionRow ar;
+			ar.info = a;
+			ar.state = su::makeLabel(QString(), su::Sizes::FONT_SIZE_TINY, 600, su::Colors::TEXT_MUTED);
+			ar.state->setWordWrap(false);
+			text->addWidget(ar.state);
+			row->addLayout(text, 1);
+			ar.button = new su::PillButton(T("OverlayControls.Action.Use"), "primary");
+			ar.button->setAccessibleName(title);
+			row->addWidget(ar.button, 0, Qt::AlignVCenter);
+			card->addLayout(row);
+
+			const QString id = a.id;
+			QObject::connect(ar.button, &QPushButton::clicked, this, [this, id]() {
+				QString message;
+				QString error;
+				if (oc::RunAction(m_id, id, &message, &error))
+					showStatus(message);
+				else
+					su::info(this, T("OverlayControls.Group.Transition"), error);
+				refreshActions();
+			});
+			m_actionRows.append(ar);
+		}
+		refreshActions();
+	}
+
+	// Cheap: one look at OBS's transition list per action, so it runs with
+	// the drift poll and catches a transition renamed, removed or picked in
+	// the Transitions dock.
+	void refreshActions()
+	{
+		// A reinstall can rename an action's transition.
+		for (ActionRow &ar : m_actionRows)
+			for (const oc::ActionInfo &a : m_info.actions)
+				if (a.id == ar.info.id)
+					ar.info = a;
+		for (ActionRow &ar : m_actionRows) {
+			const QString name = ar.info.transition;
+			obs_source_t *t = StreamUP::ProductTransitions::Find(name);
+			const bool exists = t != nullptr;
+			obs_source_release(t);
+			const bool current = exists && StreamUP::ProductTransitions::IsCurrent(name);
+			QString state;
+			const char *colour = su::Colors::TEXT_MUTED;
+			if (!exists) {
+				state = T("OverlayControls.Action.State.Missing");
+			} else if (current) {
+				state = T("OverlayControls.Action.State.Picked").arg(name);
+				colour = su::Colors::COLOR_SUCCESS;
+			} else {
+				state = T("OverlayControls.Action.State.NotPicked").arg(name);
+			}
+			if (ar.state->text() != state) {
+				ar.state->setText(state);
+				ar.state->setStyleSheet(su::scale_qss(QString("QLabel{color:%1;font-size:%2px;font-weight:600;"
+										 "background:transparent;}")
+										 .arg(colour)
+										 .arg(su::Sizes::FONT_SIZE_TINY)));
+			}
+			ar.button->setText(exists ? T("OverlayControls.Action.Update") : T("OverlayControls.Action.Use"));
+			ar.button->updateGeometry();
+		}
 	}
 
 	void buildPresetCard(QVBoxLayout *v)
@@ -621,6 +761,51 @@ private:
 			}
 			break;
 		}
+		case oc::ControlType::Image: {
+			auto *box = new QWidget();
+			auto *h = new QHBoxLayout(box);
+			h->setContentsMargins(0, 0, 0, 0);
+			h->setSpacing(su::S(8));
+			row.thumb = new QLabel();
+			row.thumb->setFixedSize(su::S(44), su::S(28));
+			row.thumb->setAlignment(Qt::AlignCenter);
+			row.thumb->setStyleSheet(su::scale_qss(
+				QString("QLabel{background:%1;border-radius:6px;color:%2;font-size:12px;}")
+					.arg(su::Colors::INPUT_ON_CARD, su::Colors::TEXT_MUTED)));
+			row.imagePath = new QLineEdit();
+			row.imagePath->setStyleSheet(su::lineEditStyle(true));
+			row.imagePath->setFixedHeight(su::S(28));
+			row.imagePath->setPlaceholderText(T("OverlayControls.Image.Placeholder"));
+			row.imagePath->setToolTip(c.help);
+			row.imagePath->setAccessibleName(c.label);
+			auto *browse = new su::PillButton(T("OverlayControls.All.Browse"), "neutral");
+			browse->setAccessibleName(T("OverlayControls.Image.Pick").arg(c.label));
+			h->addWidget(row.thumb);
+			h->addWidget(row.imagePath, 1);
+			h->addWidget(browse);
+			grid->addWidget(labelBox, r, 0);
+			grid->addWidget(box, r, 1);
+			QLineEdit *edit = row.imagePath;
+			QLabel *thumb = row.thumb;
+			QObject::connect(edit, &QLineEdit::editingFinished, this, [this, id, edit, thumb]() {
+				if (m_rows.contains(id) && edit->text() != m_rows[id].info.value.toString()) {
+					write(id, edit->text());
+					ShowThumb(thumb, edit->text());
+				}
+			});
+			QObject::connect(browse, &QPushButton::clicked, this, [this, id, edit, thumb]() {
+				const QString current = edit->text();
+				const QString start = current.isEmpty() ? QString() : QFileInfo(current).absolutePath();
+				const QString path = QFileDialog::getOpenFileName(this, T("OverlayControls.Image.Pick").arg(m_rows[id].info.label),
+										  start, ImageFilter());
+				if (path.isEmpty())
+					return;
+				edit->setText(path);
+				write(id, path);
+				ShowThumb(thumb, path);
+			});
+			break;
+		}
 		case oc::ControlType::Platforms: {
 			// A list needs the full width: label and reset on their own
 			// line above it.
@@ -684,6 +869,16 @@ private:
 		}
 		case oc::ControlType::Platforms:
 			row.platforms->setValue(c.value.toArray());
+			break;
+		case oc::ControlType::Image:
+			if (!row.imagePath->hasFocus() && row.imagePath->text() != c.value.toString()) {
+				row.imagePath->setText(c.value.toString());
+				ShowThumb(row.thumb, c.value.toString());
+			} else if (row.thumb->pixmap().isNull() && !c.value.toString().isEmpty()) {
+				ShowThumb(row.thumb, c.value.toString());
+			} else if (c.value.toString().isEmpty()) {
+				ShowThumb(row.thumb, QString());
+			}
 			break;
 		case oc::ControlType::Layout:
 			break;
@@ -878,6 +1073,7 @@ private:
 		fillPresets();
 		updateMissingNote();
 		refreshDrift();
+		refreshActions();
 		if (m_layout)
 			m_layout->refresh(info);
 		if (m_all && sourcesChanged)
@@ -925,6 +1121,7 @@ private:
 	su::MacComboBox *m_presets = nullptr;
 	QToolButton *m_deletePreset = nullptr;
 	QHash<QString, Row> m_rows;
+	QList<ActionRow> m_actionRows;
 	bool m_updating = false;
 	bool m_writing = false;
 	QTimer *m_flushTimer = nullptr;
