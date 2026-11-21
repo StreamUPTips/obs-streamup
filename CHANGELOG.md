@@ -17,6 +17,12 @@
 - A .StreamUP file can install scenes onto the Aitum Vertical canvas
 - New WebSocket requests: GroupSceneItems to group items in a scene, and RegisterOverlay to load an overlay's controls without installing it
 - One Windows download for every OBS version
+- My Products: every StreamUP product in your scene collection in one list, from the StreamUP menu, each with an Adjust button that opens its controls
+- Transition products get a Use as My Transition button that adds them to OBS's transitions as a Scene as Transition, set up and picked, with no setup by hand
+- Overlay Controls can drive a transition's own settings, so a product can offer sliders for its duration and swap point
+- A new image control in Overlay Controls: pick your own logo or picture from a file browser, with a preview
+- Every scene a .StreamUP file installs remembers which product it came from, so My Products finds it again later
+- New WebSocket requests: RunOverlayAction, GetMyProducts and OpenMyProducts
 
 ### Improvements
 - Overlay Controls work on vertical scenes, including layout parts, nameplate cut-outs and the preview
@@ -24,6 +30,7 @@
 - The Layout preview is a live OBS display, smooth and sharp
 - A tighter Scene Organiser tree, with guide lines that join up
 - Sliders and colour pickers in Overlay Controls no longer slow OBS down
+- A product made for a newer StreamUP still loads its controls. Anything this version does not know yet is skipped instead of the whole panel failing
 
 ### Bug Fixes
 - Moving parts on the Layout page made OBS stutter

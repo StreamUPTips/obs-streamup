@@ -13,6 +13,11 @@
 - **Make A Group Over WebSocket** A new GroupSceneItems request. Give it a scene, the items and a name, and it groups them. Works on the vertical canvas too.
 - **Load An Overlay's Controls Over WebSocket** A new RegisterOverlay request loads an overlay's controls without installing it again.
 - **One Windows Download** A single Windows download covers every OBS version, with the installer and both plugin folders ready to go.
+- **My Products** A new window in the StreamUP menu lists every StreamUP product in your scene collection. Hit Adjust on any of them and its controls open, so you never have to remember where a setting lives.
+- **Use As My Transition** Transition products come with a button that adds them to your transitions in one click, already pointed at the right scene with the right timing, and picks it for you. No more making a Scene as Transition by hand.
+- **Transition Timing Sliders** A transition product can give you sliders for how long it runs and when the scenes swap over, right in its controls.
+- **Your Own Logo** Overlay Controls can have an image picker now. Browse for your logo, see a little preview, and it lands straight in the overlay.
+- **More WebSocket Requests** RunOverlayAction runs a product's button for you, like Use as My Transition, and GetMyProducts and OpenMyProducts cover the new My Products window.
 
 ## Improvements
 - **Overlay Controls Reach The Vertical Canvas** Layout parts, nameplate cut-outs and the preview all work on vertical scenes, and the preview is the right shape for them.
@@ -20,6 +25,7 @@
 - **A Live Layout Preview** The Layout page draws the scene the same way OBS's own preview does, so it is smooth and sharp instead of choppy.
 - **A Tidier Scene Organiser Tree** Scenes line up under their folder's icon like groups do in the Sources list, without a big gap to the right. The guide lines drop from each folder's arrow and run unbroken to the last thing inside it, even when a folder sits inside another folder.
 - **Smoother Sliders** Dragging a slider or picking a colour in Overlay Controls no longer bogs OBS down on overlays with lots of linked settings.
+- **Newer Products Still Load** A product built for a newer version of StreamUP still opens its controls. Anything this version doesn't know about yet is skipped, instead of the whole panel refusing to load.
 
 ## Bug Fixes
 - **The Layout Page Lagged** Moving parts on the Layout page made OBS stutter, and dragging felt sticky. It runs smoothly now and leaves OBS's own preview alone.
