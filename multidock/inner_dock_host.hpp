@@ -22,6 +22,10 @@ class InnerDockHost : public QMainWindow
 
 public:
     explicit InnerDockHost(const QString& multiDockId, QWidget* parent = nullptr);
+
+    // The Q_INVOKABLE members below are how other plugins (StreamUP Workspaces)
+    // move docks in and out of a MultiDock and save or restore its arrangement:
+    // by name through QMetaObject::invokeMethod, with no link to this plugin.
     ~InnerDockHost();
 
     /**
@@ -29,13 +33,13 @@ public:
      * @param dock The dock widget to add
      * @param area The preferred docking area
      */
-    void AddDock(QDockWidget* dock, Qt::DockWidgetArea area = Qt::RightDockWidgetArea);
+    Q_INVOKABLE void AddDock(QDockWidget* dock, Qt::DockWidgetArea area = Qt::RightDockWidgetArea);
 
     /**
      * @brief Remove a dock widget from this host
      * @param dock The dock widget to remove
      */
-    void RemoveDock(QDockWidget* dock);
+    Q_INVOKABLE void RemoveDock(QDockWidget* dock);
 
 
     /**
@@ -61,19 +65,19 @@ public:
      * @brief Restore the layout from saved state
      * @param layout The layout data to restore
      */
-    void RestoreLayout(const QByteArray& layout);
+    Q_INVOKABLE void RestoreLayout(const QByteArray& layout);
 
     /**
      * @brief Get the current layout state
      * @return Current layout as QByteArray
      */
-    QByteArray SaveLayout() const;
+    Q_INVOKABLE QByteArray SaveLayout() const;
 
     /**
      * @brief Get the list of captured dock IDs
      * @return List of dock IDs currently captured
      */
-    QStringList GetCapturedDockIds() const;
+    Q_INVOKABLE QStringList GetCapturedDockIds() const;
 
 
 public slots:

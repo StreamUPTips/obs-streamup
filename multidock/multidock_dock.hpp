@@ -76,7 +76,7 @@ public:
     /**
      * @brief Save the current state to persistent storage
      */
-    void SaveState();
+    Q_INVOKABLE void SaveState();
 
     /**
      * @brief Load and restore state from persistent storage
@@ -94,7 +94,7 @@ public:
      *        These must be preserved on save so a late-loading dock is never
      *        permanently dropped from persistent storage.
      */
-    QStringList GetUnresolvedDockIds() const { return m_unresolvedDockIds; }
+    Q_INVOKABLE QStringList GetUnresolvedDockIds() const { return m_unresolvedDockIds; }
 
     /**
      * @brief Mark a previously-unresolved dock ID as now restored, so it is

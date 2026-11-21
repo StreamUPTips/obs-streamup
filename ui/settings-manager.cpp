@@ -357,6 +357,7 @@ static void LoadModuleSettings(obs_data_t *data, ModuleSettings &out)
     out.multiDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "multi_dock", true);
     out.backup = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "backup", true);
     out.hotkeys = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "hotkeys", true);
+    out.sourceMenuSceneSwitch = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "source_menu_scene_switch", true);
     out.sceneOrganiser = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "scene_organiser", true);
     out.streamupDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "streamup_dock", true);
     out.mixerDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "mixer_dock", true);
@@ -376,6 +377,7 @@ static void SaveModuleSettings(obs_data_t *data, const ModuleSettings &in)
     obs_data_set_bool(modulesData, "multi_dock", in.multiDock);
     obs_data_set_bool(modulesData, "backup", in.backup);
     obs_data_set_bool(modulesData, "hotkeys", in.hotkeys);
+    obs_data_set_bool(modulesData, "source_menu_scene_switch", in.sourceMenuSceneSwitch);
     obs_data_set_bool(modulesData, "scene_organiser", in.sceneOrganiser);
     obs_data_set_bool(modulesData, "streamup_dock", in.streamupDock);
     obs_data_set_bool(modulesData, "mixer_dock", in.mixerDock);
@@ -2563,6 +2565,12 @@ void ShowSettingsDialog(int tabIndex)
 			false, nullptr,
 			[]() { StreamUP::SettingsManager::PluginSettings ps = GetCurrentSettings();
 			       StreamUP::HotkeyManager::SetHotkeyGroupEnabled(ps.modules.hotkeys); });
+
+		// Read on every right-click, so it applies straight away.
+		addModuleRow(controlsLayout, "Plugins.SourceMenuSceneSwitch.Title", "Plugins.SourceMenuSceneSwitch.Description",
+			[](const PluginSettings &s) { return s.modules.sourceMenuSceneSwitch; },
+			[](PluginSettings &s, bool v) { s.modules.sourceMenuSceneSwitch = v; },
+			false, nullptr, nullptr);
 
 		// ── Tools and sources ────────────────────────────────────────────
 		QVBoxLayout *toolsLayout = beginGroup("Plugins.Section.Tools");

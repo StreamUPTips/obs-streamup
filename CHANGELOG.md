@@ -2,6 +2,36 @@
 
 ---
 
+## v2.5.0 (19 Oct '26)
+**Patch Focus:** The StreamUP Mixer, a tabbed audio mixer with everything OBS's mixer does, plus StreamUP theme settings, Multistream dock styling and Overlay Controls on the vertical canvas
+
+### New Features
+- The StreamUP Mixer: an audio mixer dock with tabs, your own order on each tab, and an Unassigned tab for new sources. Ctrl drop shows a source on two tabs
+- Everything OBS's own mixer does: show inactive, show hidden, pin, hide, unhide all, lock volume, rename, filters, properties, copy and paste filters, Advanced Audio Properties and the layout switch. Hide, pin and lock are shared with OBS's mixer
+- Each mixer tab can follow the mixer setting for inactive and hidden sources, or always show or always hide them
+- Mixer channels use the same parts as OBS's own, so every theme styles them exactly like the native mixer
+- A StreamUP Theme page in Settings switches each of the theme's OBS tweaks on and off. On other themes the tweaks stay off
+- Aitum Multistream dock styling on the StreamUP theme: theme cards, a toolbar at the same height as the others, and output names that shorten to fit
+- Groups in the Sources and Vertical Sources docks look like Scene Organiser folders on the StreamUP theme
+- Right-click a nested scene, or a Source Clone of a scene, in the Sources or Vertical Sources dock to switch to that scene. In studio mode it can go to preview or straight to program, and vertical scenes switch the vertical canvas
+- A .StreamUP file can install scenes onto the Aitum Vertical canvas
+- New WebSocket requests: GroupSceneItems to group items in a scene, and RegisterOverlay to load an overlay's controls without installing it
+- One Windows download for every OBS version
+
+### Improvements
+- Overlay Controls work on vertical scenes, including layout parts, nameplate cut-outs and the preview
+- Overlay Controls can move and resize parts inside a group
+- The Layout preview is a live OBS display, smooth and sharp
+- A tighter Scene Organiser tree, with guide lines that join up
+- Sliders and colour pickers in Overlay Controls no longer slow OBS down
+
+### Bug Fixes
+- Moving parts on the Layout page made OBS stutter
+- Folder guide lines were painted twice at every corner, leaving bright dots
+- The Multistream settings window had white on white tabs and outputs nested three boxes deep on the StreamUP theme
+
+---
+
 ## v2.4.1 (29 Sep '26)
 **Patch Focus:** Scene Organiser folders that follow your collections, Aitum Vertical fixes, multi select on tabs, plus hotkey and light theme fixes
 

@@ -207,6 +207,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/multistream-enhancements.cpp
   ui/source-tree-enhancements.hpp
   ui/source-tree-enhancements.cpp
+  ui/source-menu-scene-switch.hpp
+  ui/source-menu-scene-switch.cpp
   ui/theme-enhancements.hpp
   ui/theme-enhancements.cpp
   ui/overlay-controls-window.hpp
@@ -376,6 +378,8 @@ source_group("UI" FILES
   ui/multistream-enhancements.cpp
   ui/source-tree-enhancements.hpp
   ui/source-tree-enhancements.cpp
+  ui/source-menu-scene-switch.hpp
+  ui/source-menu-scene-switch.cpp
   ui/theme-enhancements.hpp
   ui/theme-enhancements.cpp
   ui/overlay-controls-window.hpp

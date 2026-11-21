@@ -1,17 +1,31 @@
-# StreamUP v2.4.2 - Patch Update
+# StreamUP v2.5.0 - Feature Update
 
 ## New Features
+- **The StreamUP Mixer** A new audio mixer dock with tabs. Put the sources you want on each tab, in the order you drag them into, so your main mix can sit on one tab and alerts and effects on others. New sources land in Unassigned, so nothing goes missing. Hold Ctrl as you drop to show a source on two tabs.
+- **Everything The OBS Mixer Does** Show or hide inactive and hidden sources, pin, hide, unhide all, lock volume, rename, filters, properties, copy and paste filters, Advanced Audio Properties and the layout switch, all in the same menus as OBS's own mixer. Hide, pin and lock are shared with OBS's mixer, so the two always agree.
+- **Per Tab Visibility** Each mixer tab can follow the mixer setting for inactive and hidden sources, or always show or always hide them.
+- **Looks Like OBS In Any Theme** Mixer channels are built from the same parts as OBS's own, so Yami, the light themes, System and the StreamUP theme all style them exactly as they style the native mixer.
+- **StreamUP Theme Settings** A new page in Settings turns each of the StreamUP theme's OBS tweaks on or off one by one. On any other theme the tweaks stay out of the way.
+- **Aitum Multistream Dock On The StreamUP Theme** Cards that follow the theme, a proper toolbar at the same height as the others, and long output names that shorten instead of pushing the stream buttons out of sight.
+- **Sources Dock Groups Like Scene Organiser Folders** On the StreamUP theme, groups in the Sources and Vertical Sources docks get the same folder icons and guide lines as the Scene Organiser.
+- **Jump To A Nested Scene** Right-click a nested scene, or a Source Clone of a scene, in the Sources or Vertical Sources dock and pick Switch to Scene to go straight there. In studio mode you can send it to preview or straight to program, and a vertical scene switches the vertical canvas. Turn it off in StreamUP Settings > Plugins if you don't want it.
 - **Overlays Can Install Vertical Scenes** A .StreamUP file can carry scenes for Aitum Vertical now, and they install straight onto your vertical canvas. No Aitum Vertical installed? They're skipped and StreamUP tells you.
 - **Make A Group Over WebSocket** A new GroupSceneItems request. Give it a scene, the items and a name, and it groups them. Works on the vertical canvas too.
+- **Load An Overlay's Controls Over WebSocket** A new RegisterOverlay request loads an overlay's controls without installing it again.
+- **One Windows Download** A single Windows download covers every OBS version, with the installer and both plugin folders ready to go.
 
 ## Improvements
 - **Overlay Controls Reach The Vertical Canvas** Layout parts, nameplate cut-outs and the preview all work on vertical scenes, and the preview is the right shape for them.
 - **Layout Works Inside Groups** Overlay Controls can move and resize parts that sit in a group, so an overlay can keep each widget tidy in its own group.
+- **A Live Layout Preview** The Layout page draws the scene the same way OBS's own preview does, so it is smooth and sharp instead of choppy.
 - **A Tidier Scene Organiser Tree** Scenes line up under their folder's icon like groups do in the Sources list, without a big gap to the right. The guide lines drop from each folder's arrow and run unbroken to the last thing inside it, even when a folder sits inside another folder.
 - **Smoother Sliders** Dragging a slider or picking a colour in Overlay Controls no longer bogs OBS down on overlays with lots of linked settings.
 
 ## Bug Fixes
 - **The Layout Page Lagged** Moving parts on the Layout page made OBS stutter, and dragging felt sticky. It runs smoothly now and leaves OBS's own preview alone.
+- **Brighter Dots On Folder Lines** The guide lines in the Sources docks and the Scene Organiser were painted twice where they met, leaving bright dots at every corner.
+- **The Multistream Settings Window On The StreamUP Theme** Its tabs were white text on white and its outputs sat three boxes deep. Both are fixed.
+- **Numbers Sort Properly In The Scene Organiser** Sorting A to Z put Scene 10 before Scene 2. Numbers in scene and folder names now sort the way you read them.
 
 ---
 

@@ -20,6 +20,7 @@
 #include "ui/dock/streamup-dock.hpp"
 #include "ui/scene-organiser/scene-organiser-dock.hpp"
 #include "ui/mixer-dock/mixer-dock.hpp"
+#include "ui/source-menu-scene-switch.hpp"
 #include "ui/scene-organiser/scene-canvas.hpp"
 #include "ui/scene-organiser/scene-organiser-collection-data.hpp"
 #include "ui/streamup-toolbar.hpp"
@@ -1331,6 +1332,8 @@ static void OnOBSShutdown(enum obs_frontend_event event, void *private_data)
 		// an access violation on shutdown. Cleanup is idempotent (it nulls the
 		// pointer), so the unload-time call becomes a safe no-op.
 		StreamUpSelectionCleanup();
+
+		StreamUP::SourceMenuSceneSwitch::Uninstall();
 	}
 }
 
@@ -1370,6 +1373,11 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 		StreamUP::MultistreamEnhancements::ApplyMultistreamEnhancements();
 		StreamUP::SourceTreeEnhancements::ApplySourceTreeEnhancements();
 		StreamUP::ThemeEnhancements::ApplyThemeEnhancements();
+
+		// "Switch to Scene" in the Sources docks' right-click menus. Always
+		// installed; whether it adds anything is the module setting, read on
+		// each right-click.
+		StreamUP::SourceMenuSceneSwitch::Install();
 
 		// Snapshot fields for the three enhancements always read true now —
 		// there is no user-facing toggle for them, so the "Restart required"

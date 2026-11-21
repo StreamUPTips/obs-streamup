@@ -52,6 +52,7 @@ struct ModuleSettings {
     bool multiDock;
     bool hotkeys;
     bool backup;
+    bool sourceMenuSceneSwitch; // "Switch to Scene" in the Sources dock menu
 
     // Hard toggles — require an OBS restart to apply (no unregister API in OBS)
     bool sceneOrganiser;
@@ -68,6 +69,7 @@ struct ModuleSettings {
         multiDock(true),
         hotkeys(true),
         backup(true),
+        sourceMenuSceneSwitch(true),
         sceneOrganiser(true),
         streamupDock(true),
         mixerDock(true),

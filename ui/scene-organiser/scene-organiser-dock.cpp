@@ -54,6 +54,20 @@
 #include <QDateTime>
 #include <util/platform.h>
 #include <functional>
+#include <QCollator>
+
+// Alphabetical sorts read numbers the way people do: "Scene 2" before
+// "Scene 10", rather than character by character (1, 10, 11, 2).
+static int NaturalCompare(const QString &a, const QString &b)
+{
+    static const QCollator collator = [] {
+        QCollator c;
+        c.setNumericMode(true);
+        c.setCaseSensitivity(Qt::CaseInsensitive);
+        return c;
+    }();
+    return collator.compare(a, b);
+}
 
 namespace su = StreamUP::UIStyles;
 using namespace StreamUP::UIStyles;
@@ -1666,7 +1680,7 @@ void SceneOrganiserDock::applySortingIfEnabled()
                     else if (item1IsFolder == item2IsFolder) {
                         if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ ||
                             sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA) {
-                            int comparison = QString::compare(item1->text(), item2->text(), Qt::CaseInsensitive);
+                            int comparison = NaturalCompare(item1->text(), item2->text());
                             if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ) {
                                 shouldSwap = (comparison > 0);
                             } else {
@@ -1701,7 +1715,7 @@ void SceneOrganiserDock::applySortingIfEnabled()
                     // Mix folders and scenes, sort by selected method
                     if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ ||
                         sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA) {
-                        int comparison = QString::compare(item1->text(), item2->text(), Qt::CaseInsensitive);
+                        int comparison = NaturalCompare(item1->text(), item2->text());
                         if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ) {
                             shouldSwap = (comparison > 0);
                         } else {
@@ -1812,7 +1826,7 @@ void SceneOrganiserDock::sortManually(StreamUP::SettingsManager::SceneSortMethod
                     else if (item1IsFolder == item2IsFolder) {
                         if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ ||
                             sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA) {
-                            int comparison = QString::compare(item1->text(), item2->text(), Qt::CaseInsensitive);
+                            int comparison = NaturalCompare(item1->text(), item2->text());
                             if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ) {
                                 shouldSwap = (comparison > 0);
                             } else {
@@ -1845,7 +1859,7 @@ void SceneOrganiserDock::sortManually(StreamUP::SettingsManager::SceneSortMethod
                     // Mix folders and scenes, sort by selected method
                     if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ ||
                         sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA) {
-                        int comparison = QString::compare(item1->text(), item2->text(), Qt::CaseInsensitive);
+                        int comparison = NaturalCompare(item1->text(), item2->text());
                         if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ) {
                             shouldSwap = (comparison > 0);
                         } else {

@@ -216,6 +216,9 @@ void Show(std::function<void()> onFinished)
 		rows->push_back({"Plugins.Hotkeys.Title",       "Plugins.Hotkeys.Description",
 		                 [](const Mod &m){ return m.hotkeys; },
 		                 [](Mod &m, bool v){ m.hotkeys = v; }, nullptr});
+		rows->push_back({"Plugins.SourceMenuSceneSwitch.Title", "Plugins.SourceMenuSceneSwitch.Description",
+		                 [](const Mod &m){ return m.sourceMenuSceneSwitch; },
+		                 [](Mod &m, bool v){ m.sourceMenuSceneSwitch = v; }, nullptr});
 		endSection();
 
 		// ── Tools and sources ────────────────────────────────────────────
