@@ -44,7 +44,9 @@ namespace MyProductsWindow {
 
 namespace {
 
-constexpr int kTile = 36; // design px; every row's image is this square
+// Every row's image is this 16:9 box (design px), cropped to it, never stretched.
+constexpr int kTileW = 64;
+constexpr int kTileH = 36;
 
 QWidget *MainWindow()
 {
@@ -76,38 +78,41 @@ QString Initials(const QString &name)
 }
 
 // The product's own image when it shipped one, else its initials on its
-// range's colour. Same size and corner for both.
+// range's colour. Same 16:9 box and corner for both. An image of any other
+// shape (an old square icon) is centre-cropped to fill the box.
 QPixmap Tile(const pr::ProductEntry &p, qreal dpr)
 {
-	const int px = int(su::S(kTile) * dpr);
-	QPixmap pm(px, px);
+	const int w = int(su::S(kTileW) * dpr);
+	const int h = int(su::S(kTileH) * dpr);
+	QPixmap pm(w, h);
 	pm.fill(Qt::transparent);
 	QPainter g(&pm);
 	g.setRenderHint(QPainter::Antialiasing, true);
 	g.setRenderHint(QPainter::SmoothPixmapTransform, true);
+	const qreal radius = su::S(6) * dpr;
 	QPainterPath clip;
-	clip.addRoundedRect(QRectF(0, 0, px, px), px * 0.24, px * 0.24);
+	clip.addRoundedRect(QRectF(0, 0, w, h), radius, radius);
 	g.setClipPath(clip);
 
 	QImage img;
 	if (!p.iconPath.isEmpty()) {
 		QImageReader reader(p.iconPath);
 		const QSize full = reader.size();
-		if (full.isValid()) // cover: fill the square, crop the overflow
-			reader.setScaledSize(full.scaled(px, px, Qt::KeepAspectRatioByExpanding));
+		if (full.isValid()) // cover: fill the box, crop the overflow evenly
+			reader.setScaledSize(full.scaled(w, h, Qt::KeepAspectRatioByExpanding));
 		img = reader.read();
 	}
 	if (!img.isNull()) {
-		g.fillRect(QRect(0, 0, px, px), QColor(su::Colors::BG_SECONDARY));
-		g.drawImage(QPointF((px - img.width()) / 2.0, (px - img.height()) / 2.0), img);
+		g.fillRect(QRect(0, 0, w, h), QColor(su::Colors::BG_SECONDARY));
+		g.drawImage(QPointF((w - img.width()) / 2.0, (h - img.height()) / 2.0), img);
 	} else {
-		g.fillRect(QRect(0, 0, px, px), CategoryColour(p.category));
+		g.fillRect(QRect(0, 0, w, h), CategoryColour(p.category));
 		QFont f = qApp->font();
-		f.setPixelSize(int(px * 0.38));
+		f.setPixelSize(int(h * 0.42));
 		f.setBold(true);
 		g.setFont(f);
 		g.setPen(QColor("#11111b"));
-		g.drawText(QRect(0, 0, px, px), Qt::AlignCenter, Initials(p.name));
+		g.drawText(QRect(0, 0, w, h), Qt::AlignCenter, Initials(p.name));
 	}
 	g.end();
 	pm.setDevicePixelRatio(dpr);
@@ -288,7 +293,7 @@ private:
 		h->setSpacing(su::S(12));
 
 		auto *tile = new QLabel();
-		tile->setFixedSize(su::S(kTile), su::S(kTile));
+		tile->setFixedSize(su::S(kTileW), su::S(kTileH));
 		tile->setPixmap(Tile(p, devicePixelRatioF()));
 		tile->setAccessibleName(p.name);
 		h->addWidget(tile, 0, Qt::AlignVCenter);
