@@ -218,7 +218,7 @@ private:
 		if (vertical) {
 			// The vertical canvas has no preview side: always live, through
 			// Aitum's own switch and transition.
-			auto *a = new QAction(T("SourceMenu.SwitchToVerticalScene").arg(sceneName), menu);
+			auto *a = new QAction(T("SourceMenu.SwitchToVerticalScene"), menu);
 			QObject::connect(a, &QAction::triggered, a, [uuid]() {
 				runOnScene(uuid, [](obs_source_t *s) {
 					StreamUP::SceneOrganiser::Canvas::SetCurrentScene(
@@ -229,24 +229,29 @@ private:
 		} else if (obs_frontend_preview_program_mode_active()) {
 			// Studio mode: preview first, as picking it in the Scenes dock
 			// does, and straight to program as the second choice.
-			auto *preview = new QAction(T("SourceMenu.SwitchToSceneInPreview").arg(sceneName), menu);
+			auto *preview = new QAction(T("SourceMenu.SwitchToSceneInPreview"), menu);
 			QObject::connect(preview, &QAction::triggered, preview, [uuid]() {
 				runOnScene(uuid, [](obs_source_t *s) { obs_frontend_set_current_preview_scene(s); });
 			});
-			auto *program = new QAction(T("SourceMenu.SwitchToSceneInProgram").arg(sceneName), menu);
+			auto *program = new QAction(T("SourceMenu.SwitchToSceneInProgram"), menu);
 			QObject::connect(program, &QAction::triggered, program, [uuid]() {
 				// In studio mode this runs OBS's transition to program.
 				runOnScene(uuid, [](obs_source_t *s) { obs_frontend_set_current_scene(s); });
 			});
 			entries << preview << program;
 		} else {
-			auto *a = new QAction(T("SourceMenu.SwitchToScene").arg(sceneName), menu);
+			auto *a = new QAction(T("SourceMenu.SwitchToScene"), menu);
 			QObject::connect(a, &QAction::triggered, a, [uuid]() {
 				runOnScene(uuid, [](obs_source_t *s) { obs_frontend_set_current_scene(s); });
 			});
 			entries << a;
 		}
 
+		// Short labels keep the menu its normal width; the scene's name is
+		// the tooltip.
+		menu->setToolTipsVisible(true);
+		for (QAction *a : entries)
+			a->setToolTip(sceneName);
 		QAction *first = menu->actions().value(0);
 		for (QAction *a : entries)
 			menu->insertAction(first, a);
