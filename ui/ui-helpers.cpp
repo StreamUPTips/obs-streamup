@@ -18,6 +18,8 @@
 #include <QGridLayout>
 #include <QObject>
 #include <QScreen>
+#include <QGuiApplication>
+#include <algorithm>
 #include <QTimer>
 #include <QIcon>
 #include <QStyle>
@@ -474,6 +476,30 @@ QStandardItem* FindItemRecursive(QStandardItem* parent, const QString& text, int
 	}
 
 	return nullptr;
+}
+
+void PlaceOverMainWindow(QWidget *window, bool onlyWhenElsewhere)
+{
+	QWidget *main = static_cast<QWidget *>(obs_frontend_get_main_window());
+	if (!window || !main)
+		return;
+	QScreen *mainScreen = main->screen() ? main->screen() : QGuiApplication::primaryScreen();
+	if (!mainScreen)
+		return;
+	const QRect area = mainScreen->availableGeometry();
+	const QRect frame = window->frameGeometry();
+	if (onlyWhenElsewhere) {
+		QScreen *at = QGuiApplication::screenAt(frame.center());
+		if (at == mainScreen && area.contains(frame.center()))
+			return;
+	}
+	// Centre over OBS itself, or over its screen when OBS is minimised.
+	const QRect over = main->isMinimized() ? area : main->frameGeometry().intersected(area);
+	QPoint pos = (over.isValid() ? over : area).center() - QPoint(frame.width() / 2, frame.height() / 2);
+	// Keep it on that screen, title bar first when it is too tall to fit.
+	pos.setX(std::clamp(pos.x(), area.left(), std::max(area.left(), area.right() - frame.width())));
+	pos.setY(std::clamp(pos.y(), area.top(), std::max(area.top(), area.bottom() - frame.height())));
+	window->move(pos);
 }
 
 } // namespace UIHelpers

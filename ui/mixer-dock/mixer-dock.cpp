@@ -8,6 +8,8 @@
 #include <obs-module.h>
 #include <obs.hpp>
 #include <util/config-file.h>
+#include <util/platform.h>
+#include "../ui-helpers.hpp"
 
 #include <QApplication>
 #include <QBoxLayout>
@@ -30,6 +32,9 @@
 #include <QHash>
 #include <QSet>
 #include <QStackedWidget>
+#include <QDockWidget>
+#include <QPointer>
+#include <QTimer>
 #include <QStyle>
 #include <QToolBar>
 #include <QToolButton>
@@ -1917,6 +1922,41 @@ void MixerDock::refreshTheme()
 // Registration
 // ============================================================================
 
+// Puts the floating mixer over OBS whenever it opens somewhere else (another
+// screen, or off every screen). The very first time it opens floating it is
+// centred over OBS, wherever Qt would have put it.
+class FloatingDockPlacer : public QObject {
+public:
+	explicit FloatingDockPlacer(QDockWidget *frame) : QObject(frame), m_frame(frame) {}
+
+	bool eventFilter(QObject *obj, QEvent *e) override
+	{
+		if (obj == m_frame && e->type() == QEvent::Show && m_frame->isFloating()) {
+			// After Qt has finished restoring the frame's own geometry.
+			QPointer<QDockWidget> frame(m_frame);
+			QTimer::singleShot(0, this, [frame]() {
+				if (!frame || !frame->isFloating() || !frame->isVisible())
+					return;
+				char *marker = obs_module_config_path("mixer-dock-placed");
+				const bool placedBefore = marker && os_file_exists(marker);
+				StreamUP::UIHelpers::PlaceOverMainWindow(frame, /*onlyWhenElsewhere=*/placedBefore);
+				if (marker && !placedBefore) {
+					char *dir = obs_module_config_path("");
+					if (dir)
+						os_mkdirs(dir);
+					bfree(dir);
+					os_quick_write_utf8_file(marker, "1", 1, false);
+				}
+				bfree(marker);
+			});
+		}
+		return false;
+	}
+
+private:
+	QDockWidget *m_frame;
+};
+
 void RegisterMixerDock()
 {
 	auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window());
@@ -1929,6 +1969,12 @@ void RegisterMixerDock()
 	auto *dock = new MixerDock(main);
 	obs_frontend_add_dock_by_id(kDockId, obs_module_text("Mixer.Title"), dock);
 	obs_frontend_pop_ui_translation();
+
+	// OBS wraps the widget in its own dock frame. When that frame opens
+	// floating, Qt and OBS's saved layout can put it on any monitor; it
+	// belongs over OBS. Docked, it is left exactly where the user put it.
+	if (auto *frame = qobject_cast<QDockWidget *>(dock->parentWidget()))
+		frame->installEventFilter(new FloatingDockPlacer(frame));
 
 	obs_frontend_add_save_callback(onSaveLoad, nullptr);
 	blog(LOG_INFO, "[StreamUP] Mixer dock added");

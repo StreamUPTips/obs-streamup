@@ -122,6 +122,8 @@ struct ProductStamp {
 	QString name;
 	QString version;
 	QString overlay; // the controls manifest id, when there is one
+	QString category; // "alerts", "transitions"... (lower case), may be empty
+	QString icon;     // ProductFromFile only: absolute path of the manifest's icon
 	bool isEmpty() const { return id.isEmpty(); }
 };
 

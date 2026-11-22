@@ -11,6 +11,7 @@
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -377,6 +378,7 @@ bool ParseManifest(const QJsonObject &m, Overlay &o, QString *error)
 	o.product.name = product.value("name").toString(o.name);
 	o.product.version = product.value("version").toString(o.version);
 	o.product.overlay = o.id;
+	o.product.category = product.value("category").toString(m.value("category").toString()).trimmed().toLower();
 	if (o.product.id.isEmpty())
 		o.product.id = o.id;
 
@@ -1405,6 +1407,13 @@ ProductStamp ProductFromFile(const QString &path)
 	p.id = product.value("id").toString(p.overlay).trimmed();
 	p.name = product.value("name").toString(m.value("name").toString(p.id));
 	p.version = product.value("version").toString(m.value("version").toString());
+	p.category = product.value("category").toString(m.value("category").toString()).trimmed().toLower();
+	const QString icon = product.value("icon").toString(m.value("icon").toString()).trimmed();
+	if (!icon.isEmpty()) {
+		const QFileInfo fi(QDir(QFileInfo(path).absolutePath()), icon);
+		if (fi.isFile())
+			p.icon = fi.absoluteFilePath();
+	}
 	return p;
 }
 

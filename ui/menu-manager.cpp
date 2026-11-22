@@ -123,36 +123,10 @@ void LoadMenuItems(QMenu* menu)
 #endif
 
     // My Products: everything StreamUP installed in this collection, each
-    // with its controls one click away.
+    // with its controls one click away. It replaced the Overlays submenu:
+    // customise, add controls from a file and remove controls all live there.
     action = menu->addAction(obs_module_text("Menu.MyProducts"));
     QObject::connect(action, &QAction::triggered, []() { StreamUP::MyProductsWindow::Show(); });
-
-    // Overlays: every installed overlay that brought its own controls, plus a
-    // way to attach controls to one installed before they existed.
-    {
-        QMenu* overlaysMenu = menu->addMenu(obs_module_text("Menu.Overlays"));
-        const QList<StreamUP::OverlayControls::OverlayInfo> overlays = StreamUP::OverlayControls::ListOverlays();
-        if (overlays.isEmpty()) {
-            action = overlaysMenu->addAction(obs_module_text("Menu.Overlays.None"));
-            action->setEnabled(false);
-        }
-        for (const StreamUP::OverlayControls::OverlayInfo& overlay : overlays) {
-            const QString id = overlay.id;
-            action = overlaysMenu->addAction(QString::fromUtf8(obs_module_text("Menu.Overlays.Customise")).arg(overlay.name));
-            QObject::connect(action, &QAction::triggered, [id]() { StreamUP::OverlayControlsWindow::Show(id); });
-        }
-        overlaysMenu->addSeparator();
-        action = overlaysMenu->addAction(obs_module_text("Menu.Overlays.Attach"));
-        QObject::connect(action, &QAction::triggered, []() { StreamUP::OverlayControlsWindow::AttachFromFile(); });
-        if (!overlays.isEmpty()) {
-            QMenu* removeMenu = overlaysMenu->addMenu(obs_module_text("Menu.Overlays.Remove"));
-            for (const StreamUP::OverlayControls::OverlayInfo& overlay : overlays) {
-                const QString id = overlay.id;
-                action = removeMenu->addAction(overlay.name);
-                QObject::connect(action, &QAction::triggered, [id]() { StreamUP::OverlayControlsWindow::ConfirmRemove(id); });
-            }
-        }
-    }
 
     // Plugin updates (all platforms)
     action = menu->addAction(obs_module_text("Menu.Plugin.CheckUpdates"));

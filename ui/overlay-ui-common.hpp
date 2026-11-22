@@ -31,10 +31,14 @@ inline QString T(const char *key)
 // wheel once it has focus.
 class PanelSlider : public QSlider {
 public:
-	PanelSlider() : QSlider(Qt::Horizontal)
+	// ownStyle false: the page carries the slider style once for all its
+	// sliders. A stylesheet per slider costs ~70 ms each to polish under
+	// OBS's app-wide theme, which made a page of sliders open slowly.
+	explicit PanelSlider(bool ownStyle = true) : QSlider(Qt::Horizontal)
 	{
 		setFocusPolicy(Qt::StrongFocus);
-		setStyleSheet(su::sliderStyle());
+		if (ownStyle)
+			setStyleSheet(su::sliderStyle());
 	}
 
 protected:

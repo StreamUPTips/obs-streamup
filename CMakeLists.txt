@@ -224,8 +224,6 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/overlay-platforms-editor.cpp
   ui/overlay-layout-page.hpp
   ui/overlay-layout-page.cpp
-  ui/overlay-all-settings.hpp
-  ui/overlay-all-settings.cpp
   ui/my-products-window.hpp
   ui/my-products-window.cpp
   ui/dock/streamup-dock.hpp
@@ -403,8 +401,6 @@ source_group("UI" FILES
   ui/overlay-platforms-editor.cpp
   ui/overlay-layout-page.hpp
   ui/overlay-layout-page.cpp
-  ui/overlay-all-settings.hpp
-  ui/overlay-all-settings.cpp
   ui/my-products-window.hpp
   ui/my-products-window.cpp)
 

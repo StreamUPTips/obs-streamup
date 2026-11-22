@@ -1196,6 +1196,7 @@ void WebsocketRegisterOverlay(obs_data_t *request_data, obs_data_t *response_dat
 		obs_data_set_bool(response_data, "success", false);
 		return;
 	}
+	StreamUP::Products::CacheIconFromFile(file);
 	oc::OverlayInfo info;
 	if (oc::GetOverlay(overlayId, info)) {
 		obs_data_set_int(response_data, "links", info.links);

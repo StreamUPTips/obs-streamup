@@ -218,5 +218,13 @@ bool IsOBSThemeDark();
  */
 QStandardItem* FindItemRecursive(QStandardItem* parent, const QString& text, int itemType);
 
+/**
+ * Puts a top-level window (a dialog, a floating dock) centred over the OBS main
+ * window, kept inside the screen OBS is on. With onlyWhenElsewhere it leaves the
+ * window alone when its centre is already on OBS's screen and fully reachable,
+ * so a window the user placed there stays put.
+ */
+void PlaceOverMainWindow(QWidget *window, bool onlyWhenElsewhere = false);
+
 } // namespace UIHelpers
 } // namespace StreamUP

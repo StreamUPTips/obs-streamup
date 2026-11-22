@@ -2,10 +2,11 @@
 
 #include "../core/overlay-controls.hpp"
 #include "../core/product-transitions.hpp"
-#include "overlay-all-settings.hpp"
+#include "../core/product-registry.hpp"
 #include "overlay-layout-page.hpp"
 #include "overlay-platforms-editor.hpp"
 #include "overlay-ui-common.hpp"
+#include "ui-helpers.hpp"
 #include <streamup/debug-logger.hpp>
 #include "version.h"
 
@@ -26,6 +27,7 @@
 #include <QApplication>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QElapsedTimer>
 #include <QFontDatabase>
 #include <QImageReader>
 #include <QGridLayout>
@@ -106,6 +108,45 @@ struct Row {
 	QLabel *thumb = nullptr;
 };
 
+// Fills a font combo with every installed family the first time its list is
+// opened, keeping whatever is selected or typed.
+class FontListFiller : public QObject {
+public:
+	FontListFiller(QComboBox *combo, bool separator) : QObject(combo), m_combo(combo), m_separator(separator) {}
+
+	bool eventFilter(QObject *obj, QEvent *e) override
+	{
+		const QEvent::Type t = e->type();
+		if (obj == m_combo && (t == QEvent::MouseButtonPress || t == QEvent::KeyPress || t == QEvent::Wheel || t == QEvent::FocusIn))
+			fill();
+		return false;
+	}
+
+private:
+	void fill()
+	{
+		if (m_filled)
+			return;
+		m_filled = true;
+		const QSignalBlocker block(m_combo);
+		const QString text = m_combo->currentText();
+		const int index = m_combo->currentIndex();
+		if (m_separator)
+			m_combo->insertSeparator(m_combo->count());
+		for (const QString &family : QFontDatabase::families())
+			if (m_combo->findData(family) < 0)
+				m_combo->addItem(family, family);
+		if (m_combo->isEditable())
+			m_combo->setEditText(text);
+		else
+			m_combo->setCurrentIndex(index);
+	}
+
+	QComboBox *m_combo;
+	bool m_separator;
+	bool m_filled = false;
+};
+
 // One of the product's actions, as a row with a button.
 struct ActionRow {
 	oc::ActionInfo info;
@@ -180,7 +221,10 @@ public:
 		shell.content->addWidget(body, 1);
 
 		buildPages();
-		QObject::connect(m_nav, &QListWidget::currentRowChanged, m_pages, &QStackedWidget::setCurrentIndex);
+		QObject::connect(m_nav, &QListWidget::currentRowChanged, this, [this](int row) {
+			ensurePage(row);
+			m_pages->setCurrentIndex(row);
+		});
 		// Screen readers select a row without making it current, so the
 		// page follows the selection too.
 		QObject::connect(m_nav, &QListWidget::itemSelectionChanged, this, [this]() {
@@ -328,7 +372,15 @@ private:
 			if (!any)
 				continue;
 			m_nav->addItem(tab.label);
-			m_pages->addWidget(buildCuratedPage(tab.id, first));
+			if (first) {
+				m_pages->addWidget(buildCuratedPage(tab.id, true));
+			} else {
+				// Built the first time it is shown: a page of rows is the
+				// slow part of opening the panel, and most visits only
+				// look at the first tab.
+				m_lazyTabs.insert(m_pages->count(), tab.id);
+				m_pages->addWidget(new QWidget());
+			}
 			first = false;
 		}
 		bool hasLayout = false;
@@ -341,10 +393,22 @@ private:
 			m_nav->addItem(T("OverlayControls.Tab.Layout"));
 			m_pages->addWidget(m_layout);
 		}
-		m_all = new OverlayUI::AllSettingsPage(m_id, m_info);
-		m_all->onStatus = [this](const QString &s) { showStatus(s); };
-		m_nav->addItem(T("OverlayControls.Tab.All"));
-		m_pages->addWidget(m_all);
+		refreshDrift();
+	}
+
+	void ensurePage(int index)
+	{
+		auto it = m_lazyTabs.find(index);
+		if (it == m_lazyTabs.end())
+			return;
+		const QString tab = it.value();
+		m_lazyTabs.erase(it);
+		QWidget *placeholder = m_pages->widget(index);
+		QWidget *page = buildCuratedPage(tab, false);
+		const QSignalBlocker block(m_pages);
+		m_pages->insertWidget(index, page);
+		m_pages->removeWidget(placeholder);
+		placeholder->deleteLater();
 		refreshDrift();
 	}
 
@@ -359,7 +423,7 @@ private:
 
 		auto *page = new QWidget();
 		page->setObjectName("ocPage");
-		page->setStyleSheet(QString("QWidget#ocPage{background:%1;}").arg(su::Colors::BG_DARKEST));
+		page->setStyleSheet(QString("QWidget#ocPage{background:%1;}").arg(su::Colors::BG_DARKEST) + su::sliderStyle());
 		auto *v = new QVBoxLayout(page);
 		v->setContentsMargins(su::S(16), 0, su::S(16), su::S(16));
 		v->setSpacing(su::S(12));
@@ -622,16 +686,19 @@ private:
 			break;
 		}
 		case oc::ControlType::Slider: {
-			row.slider = new OverlayUI::PanelSlider();
+			row.slider = new OverlayUI::PanelSlider(/*ownStyle=*/false);
 			const int steps = std::max(1, int(std::lround((c.max - c.min) / c.step)));
 			row.slider->setRange(0, steps);
 			row.slider->setPageStep(std::max(1, steps / 10));
 			row.slider->setToolTip(c.help);
 			row.slider->setAccessibleName(c.label);
-			row.value->show();
 			grid->addWidget(labelBox, r, 0);
 			grid->addWidget(row.slider, r, 1);
 			grid->addWidget(row.value, r, 2);
+			// Only once it has a parent. show() on a widget with none makes
+			// it a top-level window for a moment, ~70 ms a slider, which is
+			// most of what made the panel slow to open.
+			row.value->show();
 			QObject::connect(row.slider, &QSlider::valueChanged, this, [this, id](int pos) {
 				if (m_updating)
 					return;
@@ -730,12 +797,11 @@ private:
 			for (const oc::SelectOption &o : c.options)
 				combo->addItem(o.label, o.value);
 			if (c.type == oc::ControlType::Font) {
-				// Suggested fonts first, then everything installed.
-				if (!c.options.isEmpty())
-					combo->insertSeparator(combo->count());
-				for (const QString &family : QFontDatabase::families())
-					if (combo->findData(family) < 0)
-						combo->addItem(family, family);
+				// Suggested fonts first, then everything installed. The
+				// installed list (hundreds of families) is added the first
+				// time the list is opened: filling it up front cost ~60 ms
+				// per font control.
+				combo->installEventFilter(new FontListFiller(combo, !c.options.isEmpty()));
 			}
 			combo->setMaxVisibleItems(16);
 			row.combo = combo;
@@ -1036,8 +1102,6 @@ private:
 		}
 		if (m_layout)
 			m_layout->refresh(info);
-		if (m_all && !m_all->isVisible())
-			m_all->refresh();
 		if (!changed.isEmpty())
 			updateMissingNote();
 	}
@@ -1051,8 +1115,6 @@ private:
 		m_info = info;
 		if (m_layout)
 			m_layout->refresh(info);
-		if (m_all && !m_all->isVisible())
-			m_all->refresh();
 	}
 
 	void refreshAll(bool sourcesChanged)
@@ -1076,8 +1138,6 @@ private:
 		refreshActions();
 		if (m_layout)
 			m_layout->refresh(info);
-		if (m_all && sourcesChanged)
-			m_all->refresh();
 	}
 
 	void refreshDrift()
@@ -1115,7 +1175,7 @@ private:
 	QListWidget *m_nav = nullptr;
 	QStackedWidget *m_pages = nullptr;
 	OverlayUI::LayoutPage *m_layout = nullptr;
-	OverlayUI::AllSettingsPage *m_all = nullptr;
+	QHash<int, QString> m_lazyTabs; // page index -> tab id, built when first shown
 	QLabel *m_missingNote = nullptr;
 	QLabel *m_status = nullptr;
 	su::MacComboBox *m_presets = nullptr;
@@ -1150,11 +1210,20 @@ void ShowOnUiThread(const QString &overlayId)
 		existing->activateWindow();
 		return;
 	}
+	QElapsedTimer opening;
+	opening.start();
 	auto *panel = new OverlayPanel(overlayId, MainWindow());
 	existing = panel;
+	StreamUP::UIHelpers::PlaceOverMainWindow(panel);
 	panel->show();
 	panel->raise();
 	panel->activateWindow();
+	// Once the event loop is free again the panel is on screen and usable.
+	const QString name = info.name;
+	QTimer::singleShot(0, qApp, [opening, name]() {
+		StreamUP::DebugLogger::LogInfoFormat("OverlayControls", "Opened the controls for '%s' in %lld ms",
+						      name.toUtf8().constData(), (long long)opening.elapsed());
+	});
 }
 
 } // namespace
@@ -1192,6 +1261,7 @@ void AttachFromFile()
 		su::info(MainWindow(), T("OverlayControls.Attach.Title"), error);
 		return;
 	}
+	StreamUP::Products::CacheIconFromFile(path);
 	ShowOnUiThread(id);
 }
 
