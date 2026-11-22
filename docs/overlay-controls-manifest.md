@@ -146,14 +146,16 @@ Two optional keys next to it (top level of the manifest, or inside `product`):
     `Resources/Image Sources`, `Media Sources` and `Shader Filters`, so a path
     elsewhere never reaches customers; the packager replaces it with the
     embedded form anyway.
-  - A square image of about 256 px works best (it is shown at 36 px, cropped to
-    a square). At install, when controls are attached, and on
+  - Icons are **16:9**: 320x180 is right, 640x360 for extra sharpness. My
+    Products shows them at 64x36 (more on HiDPI screens) with rounded corners.
+    An image of another shape, such as an old square icon, is centre-cropped
+    to 16:9, never stretched. At install, when controls are attached, and on
     `RegisterOverlay`, the icon is written to the plugin's config folder
     (`product-icons/`), so it survives the user deleting or moving the
     download.
   - The StreamUP-Products packager embeds an icon in every `.StreamUP` it puts
-    in a ZIP (from `dev/marketing/icon.png`, or cropped from the cover with a
-    warning), and gives a product with no manifest a minimal identity block:
+    in a ZIP (320x180, from `dev/marketing/icon.png`, or made from the cover with
+    a warning), and gives a product with no manifest a minimal identity block:
 
     ```json
     "streamup_overlay": {
