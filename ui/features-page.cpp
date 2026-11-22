@@ -3,6 +3,7 @@
 #include "../core/features.hpp"
 #include "overlay-ui-common.hpp"
 #include "settings-manager.hpp"
+#include "streamup-kit.hpp"
 #include "ui-helpers.hpp"
 #include "version.h"
 
@@ -52,88 +53,10 @@ QWidget *MainWindow()
 	return static_cast<QWidget *>(obs_frontend_get_main_window());
 }
 
-QString DemoFile(const QString &id, const char *ext)
-{
-	const QByteArray rel = QString("demos/%1.%2").arg(id, QString::fromLatin1(ext)).toUtf8();
-	char *path = obs_module_file(rel.constData());
-	const QString p = path ? QString::fromUtf8(path) : QString();
-	bfree(path);
-	return QFileInfo::exists(p) ? p : QString();
-}
-
-// The demo at the top of a card: an animated WebP or GIF when there is one
-// (OBS has no Qt Multimedia, so no WebM), a still PNG otherwise, a quiet
-// placeholder when there is neither. Animations only run while the card is on
-// screen; the page starts and stops them as you scroll.
-class DemoView : public QWidget {
-public:
-	explicit DemoView(const QString &id) : m_id(id)
-	{
-		setFixedHeight(su::S(kDemoH));
-		setAttribute(Qt::WA_OpaquePaintEvent, false);
-		QString anim = DemoFile(id, "webp");
-		if (anim.isEmpty())
-			anim = DemoFile(id, "gif");
-		if (!anim.isEmpty()) {
-			m_movie = new QMovie(anim, QByteArray(), this);
-			m_movie->setCacheMode(QMovie::CacheNone);
-			QObject::connect(m_movie, &QMovie::frameChanged, this, [this]() { update(); });
-			m_movie->jumpToFrame(0);
-		}
-		const QString still = DemoFile(id, "png");
-		if (!still.isEmpty())
-			m_still.load(still);
-	}
-
-	void setPlaying(bool on)
-	{
-		if (!m_movie)
-			return;
-		if (on && m_movie->state() != QMovie::Running)
-			m_movie->start();
-		else if (!on && m_movie->state() == QMovie::Running)
-			m_movie->setPaused(true);
-	}
-	bool animated() const { return m_movie != nullptr; }
-
-protected:
-	void paintEvent(QPaintEvent *) override
-	{
-		QPainter p(this);
-		p.setRenderHint(QPainter::Antialiasing, true);
-		p.setRenderHint(QPainter::SmoothPixmapTransform, true);
-		const QRectF r = QRectF(rect());
-		QPainterPath clip;
-		clip.addRoundedRect(r, su::S(12), su::S(12));
-		p.setClipPath(clip);
-		p.fillRect(r, QColor(su::Colors::BG_SECONDARY));
-		QImage frame = m_movie ? m_movie->currentImage() : m_still;
-		if (frame.isNull() && m_movie)
-			frame = m_still;
-		if (!frame.isNull()) {
-			// Cover: fill the box, crop the overflow evenly.
-			const QSizeF s = QSizeF(frame.size()).scaled(r.size(), Qt::KeepAspectRatioByExpanding);
-			p.drawImage(QRectF(r.center().x() - s.width() / 2, r.center().y() - s.height() / 2, s.width(), s.height()),
-				    frame);
-		} else {
-			p.setPen(QColor(su::Colors::TEXT_MUTED));
-			QFont f = qApp->font();
-			f.setPixelSize(su::S(12));
-			p.setFont(f);
-			p.drawText(r, Qt::AlignCenter, T("Features.NoDemo"));
-		}
-	}
-
-private:
-	QString m_id;
-	QMovie *m_movie = nullptr;
-	QImage m_still;
-};
-
 struct Card {
 	QString id;
 	QFrame *frame = nullptr;
-	DemoView *demo = nullptr;
+	StreamUP::Kit::PreviewSlot *demo = nullptr;
 	su::SwitchButton *toggle = nullptr;
 	QLabel *note = nullptr; // "applies after restart"
 };
@@ -187,6 +110,11 @@ public:
 						Qt::AlignTop | Qt::AlignLeft);
 			grid->setColumnStretch(3, 1);
 			v->addLayout(grid);
+		}
+		// Membership, once, at the foot of the list.
+		if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Strip)) {
+			v->addSpacing(su::S(6));
+			v->addWidget(member);
 		}
 		v->addStretch(1);
 
@@ -251,7 +179,7 @@ private:
 		v->setContentsMargins(su::S(12), su::S(12), su::S(12), su::S(12));
 		v->setSpacing(su::S(8));
 
-		card.demo = new DemoView(f.id);
+		card.demo = new StreamUP::Kit::PreviewSlot(QStringLiteral("demos"), f.id, kDemoH);
 		v->addWidget(card.demo);
 
 		// A fixed-height row, so a card with a badge lines up with one without.

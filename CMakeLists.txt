@@ -199,6 +199,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/splash-screen.cpp
   ui/patch-notes-window.hpp
   ui/patch-notes-window.cpp
+  ui/streamup-kit.hpp
+  ui/streamup-kit.cpp
   ui/features-page.hpp
   ui/features-page.cpp
   core/features.hpp
@@ -384,6 +386,8 @@ source_group("UI" FILES
   ui/splash-screen.cpp
   ui/patch-notes-window.hpp
   ui/patch-notes-window.cpp
+  ui/streamup-kit.hpp
+  ui/streamup-kit.cpp
   ui/features-page.hpp
   ui/features-page.cpp
   core/features.hpp
