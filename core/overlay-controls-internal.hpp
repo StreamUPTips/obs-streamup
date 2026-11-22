@@ -111,6 +111,7 @@ struct Control {
 	QString id;
 	QString label;
 	QString help;
+	bool advanced = false; // folded under More options in the window
 	QString tab;
 	ControlType type = ControlType::Slider;
 	double min = 0.0;

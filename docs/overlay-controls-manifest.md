@@ -232,6 +232,21 @@ exact minimum version, list it in `requires`:
 
 An older StreamUP plugin ignores `requires`.
 
+## Folding rare controls
+
+Since 3.0 a control can carry `"advanced": true`. It still works the same, but
+the window folds it, with any other advanced controls on that tab, under
+**More options** at the bottom of the tab. Use it for the settings most people
+never touch (breathing speed, line thickness, exact offsets), so a tab opens on
+the handful that matter.
+
+```json
+{ "id": "breathing_speed", "label": "Breathing speed", "type": "slider", "advanced": true }
+```
+
+A product's `description` shows as a **?** at the top of the first tab, not as
+a paragraph, so keep it to two short sentences.
+
 ## My Products
 
 **StreamUP > My Products…** lists every StreamUP product in the current scene
@@ -339,8 +354,7 @@ text, timing sliders and the one-click transition set-up.
 
 What the user sees after installing it:
 
-1. The install prompt offers to open the controls (or StreamUP > My Products >
-   Adjust later).
+1. The Installed card offers Adjust (or StreamUP > My Products > Adjust later).
 2. Look tab: a **Transition** card with **Use as My Transition**, then the logo
    picker and the text line.
 3. Clicking the button adds "Logo Card" to the Transitions dock at 2000 ms /

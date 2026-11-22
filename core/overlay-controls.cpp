@@ -168,6 +168,7 @@ bool ParseControl(const QJsonObject &j, const QString &groupTab, Control &c, QSt
 	c.id = j.value("id").toString();
 	c.label = j.value("label").toString(c.id);
 	c.help = j.value("help").toString();
+	c.advanced = j.value("advanced").toBool(false);
 	c.tab = j.value("tab").toString(groupTab);
 	if (c.id.isEmpty()) {
 		*why = "a control needs an id";
@@ -769,6 +770,7 @@ ControlInfo MakeInfo(Overlay &o, Control &c)
 	i.id = c.id;
 	i.label = c.label;
 	i.help = c.help;
+	i.advanced = c.advanced;
 	i.tab = c.tab;
 	i.type = c.type;
 	i.min = c.min;

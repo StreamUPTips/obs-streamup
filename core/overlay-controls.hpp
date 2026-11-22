@@ -99,6 +99,7 @@ struct ControlInfo {
 	bool applied = false;              // written since install or the last reset
 	int links = 0;
 	int missing = 0;                   // links whose target no longer exists
+	bool advanced = false;             // manifest "advanced": folded under More options
 };
 
 struct GroupInfo {

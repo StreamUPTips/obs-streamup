@@ -1,4 +1,5 @@
 #include "overlay-controls-window.hpp"
+#include "streamup-kit.hpp"
 
 #include "../core/overlay-controls.hpp"
 #include "../core/product-transitions.hpp"
@@ -407,9 +408,15 @@ private:
 		scroll->setWidget(page);
 
 		if (first) {
-			if (!m_info.description.isEmpty())
-				v->addWidget(su::makeLabel(m_info.description, su::Sizes::FONT_SIZE_SMALL, 400,
-							   su::Colors::TEXT_SECONDARY));
+			if (QLabel *dot = StreamUP::Kit::HelpDot(m_info.description)) {
+				auto *about = new QHBoxLayout();
+				about->setSpacing(su::S(6));
+				about->addWidget(su::makeLabel(T("OverlayControls.HowItWorks"), su::Sizes::FONT_SIZE_SMALL, 600,
+							       su::Colors::TEXT_MUTED));
+				about->addWidget(dot);
+				about->addStretch(1);
+				v->addLayout(about);
+			}
 			m_missingNote = su::makeLabel(QString(), su::Sizes::FONT_SIZE_SMALL, 500, su::Colors::COLOR_WARNING);
 			v->addWidget(m_missingNote);
 			updateMissingNote();
@@ -418,11 +425,27 @@ private:
 				buildPresetCard(v);
 		}
 
+		StreamUP::Kit::MoreOptions *more = nullptr;
 		for (const oc::GroupInfo &g : m_info.groups) {
 			QList<const oc::ControlInfo *> controls;
+			QList<const oc::ControlInfo *> rare;
 			for (const oc::ControlInfo &c : g.controls)
 				if (c.tab == tab && c.type != oc::ControlType::Layout)
-					controls.append(&c);
+					(c.advanced ? rare : controls).append(&c);
+			if (!rare.isEmpty()) {
+				if (!more)
+					more = new StreamUP::Kit::MoreOptions(QStringLiteral("controls.") + m_info.id + "." + tab);
+				QVBoxLayout *rareCard = su::sectionCard(more->body(), g.label);
+				auto *rareGrid = new QGridLayout();
+				rareGrid->setContentsMargins(0, su::S(6), 0, 0);
+				rareGrid->setHorizontalSpacing(su::S(12));
+				rareGrid->setVerticalSpacing(su::S(10));
+				rareGrid->setColumnStretch(1, 1);
+				rareCard->addLayout(rareGrid);
+				int rr = 0;
+				for (const oc::ControlInfo *c : rare)
+					rr = addRow(rareGrid, rr, *c);
+			}
 			if (controls.isEmpty())
 				continue;
 			QVBoxLayout *card = su::sectionCard(v, g.label);
@@ -436,6 +459,8 @@ private:
 			for (const oc::ControlInfo *c : controls)
 				r = addRow(grid, r, *c);
 		}
+		if (more)
+			v->addWidget(more);
 		v->addStretch(1);
 		return scroll;
 	}
@@ -457,9 +482,19 @@ private:
 			const QString help = a.help.isEmpty()
 						     ? T("OverlayControls.Action.UseAsTransition.Help").arg(a.scene.toHtmlEscaped())
 						     : a.help;
-			QLabel *helpLabel = su::makeLabel(help, su::CardText::kCaption, 400, su::Colors::TEXT_SECONDARY);
-			helpLabel->setWordWrap(true);
-			text->addWidget(helpLabel);
+			if (QLabel *dot = StreamUP::Kit::HelpDot(help)) {
+				// The title row carries the detail as a "?".
+				QLayoutItem *titleItem = text->itemAt(text->count() - 1);
+				if (QWidget *titleWidget = titleItem ? titleItem->widget() : nullptr) {
+					text->removeWidget(titleWidget);
+					auto *titleRow = new QHBoxLayout();
+					titleRow->setSpacing(su::S(6));
+					titleRow->addWidget(titleWidget);
+					titleRow->addWidget(dot);
+					titleRow->addStretch(1);
+					text->addLayout(titleRow);
+				}
+			}
 			ActionRow ar;
 			ar.info = a;
 			ar.state = su::makeLabel(QString(), su::Sizes::FONT_SIZE_TINY, 600, su::Colors::TEXT_MUTED);
@@ -870,7 +905,7 @@ private:
 			h->setContentsMargins(0, 0, 0, 0);
 			h->setSpacing(su::S(8));
 			row.thumb = new QLabel();
-			row.thumb->setFixedSize(su::S(44), su::S(28));
+			row.thumb->setFixedSize(su::S(96), su::S(54));
 			row.thumb->setAlignment(Qt::AlignCenter);
 			row.thumb->setStyleSheet(su::scale_qss(
 				QString("QLabel{background:%1;border-radius:6px;color:%2;font-size:12px;}")
@@ -881,11 +916,15 @@ private:
 			row.imagePath->setPlaceholderText(T("OverlayControls.Image.Placeholder"));
 			row.imagePath->setToolTip(c.help);
 			row.imagePath->setAccessibleName(c.label);
-			auto *browse = new su::PillButton(T("OverlayControls.All.Browse"), "neutral");
+			auto *browse = new su::PillButton(T("OverlayControls.Image.Change"), "neutral");
 			browse->setAccessibleName(T("OverlayControls.Image.Pick").arg(c.label));
 			h->addWidget(row.thumb);
-			h->addWidget(row.imagePath, 1);
 			h->addWidget(browse);
+			h->addStretch(1);
+			h->addWidget(row.imagePath);
+			// The file's path is not something to read: it is the tooltip.
+			row.imagePath->hide();
+			row.thumb->setToolTip(c.value.toString());
 			grid->addWidget(labelBox, r, 0, Qt::AlignVCenter);
 			grid->addWidget(box, r, 1);
 			QLineEdit *edit = row.imagePath;
@@ -906,6 +945,7 @@ private:
 				edit->setText(path);
 				write(id, path);
 				ShowThumb(thumb, path);
+				thumb->setToolTip(path);
 			});
 			break;
 		}
