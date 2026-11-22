@@ -1,4 +1,5 @@
 #include "my-products-window.hpp"
+#include "streamup-kit.hpp"
 
 #include "../core/file-manager.hpp"
 #include "../core/overlay-controls.hpp"
@@ -62,10 +63,24 @@ namespace {
 // Every row's image is this 16:9 box (design px), cropped to it, never stretched.
 constexpr int kTileW = 64;
 constexpr int kTileH = 36;
+// Below this many products every category is simply open.
+constexpr int kFoldFrom = 20;
 
 QWidget *MainWindow()
 {
 	return static_cast<QWidget *>(obs_frontend_get_main_window());
+}
+
+void GoToScene(const QString &sceneName)
+{
+	obs_source_t *scene = obs_get_source_by_name(sceneName.toUtf8().constData());
+	if (!scene)
+		return;
+	if (obs_frontend_preview_program_mode_active())
+		obs_frontend_set_current_preview_scene(scene);
+	else
+		obs_frontend_set_current_scene(scene);
+	obs_source_release(scene);
 }
 
 // Catppuccin accents, one per range, so a list of tiles reads at a glance.
@@ -95,10 +110,10 @@ QString Initials(const QString &name)
 // The product's own image when it shipped one, else its initials on its
 // range's colour. Same 16:9 box and corner for both. An image of any other
 // shape (an old square icon) is centre-cropped to fill the box.
-QPixmap Tile(const pr::ProductEntry &p, qreal dpr)
+QPixmap Tile(const pr::ProductEntry &p, qreal dpr, int designW = kTileW, int designH = kTileH)
 {
-	const int w = int(su::S(kTileW) * dpr);
-	const int h = int(su::S(kTileH) * dpr);
+	const int w = int(su::S(designW) * dpr);
+	const int h = int(su::S(designH) * dpr);
 	QPixmap pm(w, h);
 	pm.fill(Qt::transparent);
 	QPainter g(&pm);
@@ -507,6 +522,8 @@ private:
 		m_emptyNote->hide();
 		m_list->addWidget(m_emptyNote);
 		m_list->addStretch(1);
+		if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Strip))
+			m_list->addWidget(member);
 		applyFilter();
 	}
 
@@ -522,15 +539,15 @@ private:
 
 	void buildEmptyState()
 	{
-		m_list->addStretch(1);
-		QLabel *title = su::makeLabel(T("MyProducts.EmptyTitle"), su::CardText::kTitle, 700, su::Colors::TEXT_PRIMARY);
-		title->setAlignment(Qt::AlignCenter);
-		m_list->addWidget(title);
-		QLabel *body = su::makeLabel(T("MyProducts.Empty"), su::CardText::kBody, 400, su::Colors::TEXT_SECONDARY);
-		body->setAlignment(Qt::AlignCenter);
-		body->setWordWrap(true);
-		m_list->addWidget(body);
-		m_list->addStretch(2);
+		QWidget *empty = StreamUP::Kit::EmptyState(
+			QString(), T("MyProducts.EmptyTitle"),
+#ifdef _WIN32
+			T("MyProducts.Install"), []() { StreamUP::FileManager::LoadStreamupFileWithWarning(); },
+#else
+			QString(), {},
+#endif
+			StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Card));
+		m_list->addWidget(empty, 1);
 	}
 
 	QWidget *buildRow(const pr::ProductEntry &p)
@@ -589,6 +606,14 @@ private:
 			QObject::connect(attach, &QPushButton::clicked, this,
 					 []() { StreamUP::OverlayControlsWindow::AttachFromFile(); });
 			h->addWidget(attach, 0, Qt::AlignVCenter);
+		} else if (!p.scenes.isEmpty()) {
+			// No controls to adjust: the next useful step is its scene.
+			auto *go = new su::PillButton(T("MyProducts.GoToScene"), "neutral");
+			go->setAccessibleName(T("MyProducts.GoToSceneAccessible").arg(p.name));
+			go->setToolTip(p.scenes.first());
+			const QString scene = p.scenes.first();
+			QObject::connect(go, &QPushButton::clicked, this, [scene]() { GoToScene(scene); });
+			h->addWidget(go, 0, Qt::AlignVCenter);
 		}
 		return row;
 	}
@@ -641,7 +666,7 @@ private:
 			s.card->setVisible(inSection > 0);
 			// A category page and search results are always open; on All,
 			// a card can be folded away and stays that way.
-			const bool collapsible = !single && !searching;
+			const bool collapsible = !single && !searching && m_total >= kFoldFrom;
 			const bool expanded = !collapsible || !m_collapsed.contains(s.key);
 			s.header->setLabel(s.label, inSection);
 			s.header->setCollapsible(collapsible);
@@ -704,7 +729,90 @@ void ShowOnUiThread()
 	dlg->activateWindow();
 }
 
+// After an install: the product's picture, its name, and the one next step.
+void ShowInstalledOnUiThread(const QString &productId, const QString &productName, const QString &overlayId)
+{
+	pr::ProductEntry product;
+	bool found = false;
+	for (const pr::ProductEntry &p : pr::ListProducts()) {
+		if ((!productId.isEmpty() && p.id == productId) || (!productName.isEmpty() && p.name == productName)) {
+			product = p;
+			found = true;
+			break;
+		}
+	}
+	if (!found) {
+		product.name = productName;
+		product.overlayId = overlayId;
+	}
+	if (product.overlayId.isEmpty())
+		product.overlayId = overlayId;
+
+	su::WindowShell shell = su::makeWindow(T("MyProducts.Installed.Title"), "v" PROJECT_VERSION, MainWindow(), true,
+					       "StreamUP");
+	QDialog *dlg = shell.dialog;
+	dlg->setAttribute(Qt::WA_DeleteOnClose, true);
+	auto *body = new QVBoxLayout();
+	body->setContentsMargins(su::S(24), su::S(20), su::S(24), su::S(12));
+	body->setSpacing(su::S(10));
+	shell.content->addLayout(body);
+
+	auto *tile = new QLabel();
+	tile->setFixedSize(su::S(256), su::S(144));
+	tile->setPixmap(Tile(product, dlg->devicePixelRatioF(), 256, 144));
+	tile->setAccessibleName(product.name);
+	body->addWidget(tile, 0, Qt::AlignHCenter);
+	QLabel *name = su::makeLabel(product.name, su::Sizes::FONT_SIZE_LARGE, 700, su::Colors::TEXT_PRIMARY);
+	name->setAlignment(Qt::AlignCenter);
+	body->addWidget(name);
+	auto *pills = new QHBoxLayout();
+	pills->addStretch(1);
+	pills->addWidget(StreamUP::Kit::StatusPill(StreamUP::Kit::Status::Ok, T("MyProducts.Installed.Pill")));
+	if (!product.scenes.isEmpty())
+		pills->addWidget(StreamUP::Kit::StatusPill(StreamUP::Kit::Status::Neutral,
+							   product.scenes.size() == 1 ? T("MyProducts.OneScene")
+										       : T("MyProducts.Scenes").arg(product.scenes.size())));
+	pills->addStretch(1);
+	body->addLayout(pills);
+	body->addSpacing(su::S(6));
+	if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Strip, T("MyProducts.Installed.MoreLikeThis")))
+		body->addWidget(member);
+
+	auto *done = new su::PillButton(T("OverlayControls.Button.Done"), "outline");
+	QObject::connect(done, &QPushButton::clicked, dlg, &QDialog::close);
+	shell.footerButtons->addWidget(done);
+	if (!product.overlayId.isEmpty()) {
+		auto *adjust = new su::PillButton(T("MyProducts.Adjust"), "primary");
+		const QString id = product.overlayId;
+		QObject::connect(adjust, &QPushButton::clicked, dlg, [dlg, id]() {
+			dlg->close();
+			StreamUP::OverlayControlsWindow::Show(id);
+		});
+		shell.footerButtons->addWidget(adjust);
+	} else if (!product.scenes.isEmpty()) {
+		auto *go = new su::PillButton(T("MyProducts.GoToScene"), "primary");
+		const QString scene = product.scenes.first();
+		QObject::connect(go, &QPushButton::clicked, dlg, [dlg, scene]() {
+			GoToScene(scene);
+			dlg->close();
+		});
+		shell.footerButtons->addWidget(go);
+	}
+	const int m = su::S(su::ShadowDialog::kShadowMargin);
+	dlg->resize(su::S(440) + 2 * m, dlg->sizeHint().height());
+	StreamUP::UIHelpers::PlaceOverMainWindow(dlg);
+	dlg->show();
+	dlg->raise();
+}
+
 } // namespace
+
+void ShowInstalled(const QString &productId, const QString &productName, const QString &overlayId)
+{
+	QMetaObject::invokeMethod(
+		qApp, [productId, productName, overlayId]() { ShowInstalledOnUiThread(productId, productName, overlayId); },
+		Qt::QueuedConnection);
+}
 
 void Show()
 {

@@ -220,12 +220,12 @@ void CacheIconFromFile(const QString &path)
 		DebugLogger::LogInfoFormat("Products", "Cached the icon for %s", p.id.toUtf8().constData());
 }
 
-void StampFromFile(const QString &path)
+oc::ProductStamp StampFromFile(const QString &path)
 {
 	const QStringList scenes = ScenesInFile(path);
 	const oc::ProductStamp product = IdentityOf(path, scenes);
 	if (product.isEmpty())
-		return;
+		return product;
 	CacheIconFromFile(path);
 	const QString installed = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 	int count = 0;
@@ -251,6 +251,7 @@ void StampFromFile(const QString &path)
 	}
 	DebugLogger::LogInfoFormat("Products", "Stamped %d scene(s) as %s %s (%s)", count, product.id.toUtf8().constData(),
 				   product.version.toUtf8().constData(), product.category.toUtf8().constData());
+	return product;
 }
 
 QList<ProductEntry> ListProducts()

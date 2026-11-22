@@ -1,4 +1,5 @@
 #include "file-manager.hpp"
+#include "../ui/my-products-window.hpp"
 #include "streamup-common.hpp"
 #include "plugin-manager.hpp"
 #include "plugin-state.hpp"
@@ -1072,17 +1073,19 @@ bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad)
 
 		// Say which product these scenes came from, so My Products can
 		// find them again whatever happens to the controls.
-		StreamUP::Products::StampFromFile(file_path);
+		const StreamUP::OverlayControls::ProductStamp stamp = StreamUP::Products::StampFromFile(file_path);
 
 		// A file that describes its own controls is an overlay: register them
 		// against the sources that just loaded and offer the panel.
 		QString overlayId;
 		QString overlayError;
-		if (StreamUP::OverlayControls::RegisterFromStreamupData(data.get(), file_path, &overlayId, &overlayError))
-			StreamUP::OverlayControlsWindow::OfferAfterInstall(overlayId);
-		else if (!overlayError.isEmpty())
+		if (!StreamUP::OverlayControls::RegisterFromStreamupData(data.get(), file_path, &overlayId, &overlayError) &&
+		    !overlayError.isEmpty())
 			StreamUP::ErrorHandler::LogWarning("Overlay controls not registered: " + overlayError.toStdString(),
 							   StreamUP::ErrorHandler::Category::FileSystem);
+
+		// Every install ends on the same card: what went in and the next step.
+		StreamUP::MyProductsWindow::ShowInstalled(stamp.id, stamp.name, overlayId);
 		return true;
 	} else {
 		StreamUP::ErrorHandler::LogError("Failed to parse StreamUP file: " + file_path.toStdString(), StreamUP::ErrorHandler::Category::FileSystem);

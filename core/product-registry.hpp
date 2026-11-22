@@ -47,7 +47,8 @@ struct ProductEntry {
 
 // Stamps every scene the .StreamUP file at path describes and caches its icon.
 // UI thread (scene private settings).
-void StampFromFile(const QString &path);
+// Returns who the scenes were stamped as (empty when nothing was).
+OverlayControls::ProductStamp StampFromFile(const QString &path);
 
 // Copies the icon a .StreamUP file's manifest names into the icon cache.
 void CacheIconFromFile(const QString &path);
