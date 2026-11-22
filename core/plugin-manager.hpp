@@ -34,6 +34,34 @@ void PluginsUpToDateOutput(bool manuallyTriggered);
  */
 void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback = nullptr, bool isStartupCheck = false, const std::map<std::string, bool>& disabled_modules = std::map<std::string, bool>());
 
+// One row of the plugin issues window. Rows carry their own links, so a plugin
+// that is not in the StreamUP plugin list (one a product names itself, or a raw
+// source type nobody recognises) can still be shown.
+struct PluginRow {
+	std::string name;
+	std::string requiredVersion;  // may be empty
+	std::string installedVersion; // outdated rows
+	std::string downloadUrl;
+	std::string websiteUrl;
+};
+
+// A row for a plugin in the StreamUP plugin list, with its links and version.
+// Falls back to just the name when the list does not know it.
+PluginRow RowForListedPlugin(const std::string &name, const std::string &installedVersion = std::string());
+
+struct PluginIssues {
+	std::vector<PluginRow> missing;
+	std::vector<PluginRow> outdated;
+	std::vector<std::string> failedToLoad;
+	std::map<std::string, bool> disabled;
+	QString description; // replaces the default line under the title when set
+	QString warning;     // replaces the Continue Anyway warning when set
+};
+
+// The plugin issues window, built from rows. PluginsHaveIssue is a wrapper.
+void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continueCallback = nullptr,
+		      bool isStartupCheck = false);
+
 //-------------------PLUGIN UPDATE FUNCTIONS-------------------
 /**
  * Check all plugins for updates and display results

@@ -146,7 +146,9 @@ target_sources(${PROJECT_NAME} PRIVATE
   core/product-transitions.hpp
   core/product-transitions.cpp
   core/product-registry.hpp
-  core/product-registry.cpp)
+  core/product-registry.cpp
+  core/product-requirements.hpp
+  core/product-requirements.cpp)
 
 # Utilities module files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -325,7 +327,9 @@ source_group("Core" FILES
   core/product-transitions.hpp
   core/product-transitions.cpp
   core/product-registry.hpp
-  core/product-registry.cpp)
+  core/product-registry.cpp
+  core/product-requirements.hpp
+  core/product-requirements.cpp)
 
 source_group("Utilities" FILES
   utilities/path-utils.hpp

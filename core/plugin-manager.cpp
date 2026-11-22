@@ -316,92 +316,97 @@ QString ExtractDomainFromUrl(const QString& url) {
 	
 	return host;
 }
-QTableWidget* CreateMissingPluginsTable(const std::map<std::string, std::string>& missing_modules) {
+PluginRow RowForListedPlugin(const std::string &name, const std::string &installedVersion)
+{
+	PluginRow row;
+	row.name = name;
+	row.installedVersion = installedVersion;
+	const auto allPlugins = StreamUP::GetAllPlugins();
+	auto it = allPlugins.find(name);
+	if (it == allPlugins.end())
+		return row;
+	const StreamUP::PluginInfo &info = it->second;
+	row.requiredVersion = info.version;
+	row.websiteUrl = info.generalURL;
+	row.downloadUrl = StringUtils::GetPlatformURL(QString::fromStdString(info.windowsURL),
+						      QString::fromStdString(info.macURL),
+						      QString::fromStdString(info.linuxURL),
+						      QString::fromStdString(info.generalURL))
+				  .toStdString();
+	return row;
+}
+
+QTableWidget* CreateMissingRowsTable(const std::vector<PluginRow>& rows) {
 	QStringList headers = {
 		obs_module_text("UI.Label.PluginName"),
-		obs_module_text("UI.Label.Status"), 
+		obs_module_text("UI.Label.Status"),
 		obs_module_text("UI.Label.CurrentVersion"),
 		obs_module_text("UI.Label.DownloadLink"),
 		obs_module_text("UI.Label.WebsiteLink")
 	};
-	
+
 	QTableWidget* table = MakeStyledTable(headers);
-	table->setRowCount(static_cast<int>(missing_modules.size()));
-	
+	table->setRowCount(static_cast<int>(rows.size()));
+
 	int row = 0;
-	const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
-	
-	for (const auto& module : missing_modules) {
-		const std::string& moduleName = module.first;
-		const StreamUP::PluginInfo& pluginInfo = requiredPlugins.at(moduleName);
-		const std::string& required_version = pluginInfo.version;
-		const std::string& forum_link = pluginInfo.generalURL;
-		const std::string& direct_download_link = StringUtils::GetPlatformURL(
-			QString::fromStdString(pluginInfo.windowsURL),
-			QString::fromStdString(pluginInfo.macURL),
-			QString::fromStdString(pluginInfo.linuxURL),
-			QString::fromStdString(pluginInfo.generalURL)).toStdString();
-		
+	for (const PluginRow& r : rows) {
 		// Plugin Name column
-		table->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(moduleName)));
-		
+		table->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(r.name)));
+
 		// Status column - Missing
 		QTableWidgetItem* statusItem = new QTableWidgetItem("❌ " + QString(obs_module_text("UI.Message.MISSING")));
 		statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_DANGER));
 		table->setItem(row, 1, statusItem);
-		
+
 		// Version column
-		QTableWidgetItem* versionItem = new QTableWidgetItem("v" + QString::fromStdString(required_version));
+		QTableWidgetItem* versionItem = new QTableWidgetItem(
+			r.requiredVersion.empty() ? QString() : "v" + QString::fromStdString(r.requiredVersion));
 		versionItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_SUCCESS));
 		table->setItem(row, 2, versionItem);
-		
+
 		// Download Link column
-		QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
+		const std::string download = r.downloadUrl.empty() ? r.websiteUrl : r.downloadUrl;
+		QTableWidgetItem* downloadItem = new QTableWidgetItem(download.empty() ? QString() : obs_module_text("UI.Button.Download"));
 		downloadItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
-		downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
+		if (!download.empty())
+			downloadItem->setData(Qt::UserRole, QString::fromStdString(download));
 		table->setItem(row, 3, downloadItem);
-		
+
 		// Website Link column - show domain name
-		QString domainName = ExtractDomainFromUrl(QString::fromStdString(forum_link));
+		QString domainName = ExtractDomainFromUrl(QString::fromStdString(r.websiteUrl));
 		QTableWidgetItem* websiteItem = new QTableWidgetItem(domainName);
 		websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
-		websiteItem->setData(Qt::UserRole, QString::fromStdString(forum_link));
+		if (!r.websiteUrl.empty())
+			websiteItem->setData(Qt::UserRole, QString::fromStdString(r.websiteUrl));
 		table->setItem(row, 4, websiteItem);
-		
+
 		row++;
 	}
-	
+
 	AutoResizeTableColumnsLocal(table);
 	return table;
 }
 
-QTableWidget* CreateUpdatesTable(const std::map<std::string, std::string>& version_mismatch_modules) {
+QTableWidget* CreateUpdatesRowsTable(const std::vector<PluginRow>& rows) {
 	QStringList headers = {
 		obs_module_text("UI.Label.PluginName"),
 		obs_module_text("UI.Label.InstalledVersion"),
-		obs_module_text("UI.Label.CurrentVersion"), 
+		obs_module_text("UI.Label.CurrentVersion"),
 		obs_module_text("UI.Label.DownloadLink"),
 		obs_module_text("UI.Label.WebsiteLink")
 	};
-	
+
 	QTableWidget* table = MakeStyledTable(headers);
-	table->setRowCount(static_cast<int>(version_mismatch_modules.size()));
-	
+	table->setRowCount(static_cast<int>(rows.size()));
+
 	int row = 0;
-	const auto& allPlugins = StreamUP::GetAllPlugins();
-	
-	for (const auto& module : version_mismatch_modules) {
-		const std::string& moduleName = module.first;
-		const std::string& installed_version = module.second;
-		const StreamUP::PluginInfo& plugin_info = allPlugins.at(moduleName);
-		const std::string& required_version = plugin_info.version;
-		const std::string& forum_link = plugin_info.generalURL;
-		const std::string& direct_download_link = StringUtils::GetPlatformURL(
-			QString::fromStdString(plugin_info.windowsURL),
-			QString::fromStdString(plugin_info.macURL),
-			QString::fromStdString(plugin_info.linuxURL),
-			QString::fromStdString(plugin_info.generalURL)).toStdString();
-		
+	for (const PluginRow& r : rows) {
+		const std::string& moduleName = r.name;
+		const std::string& installed_version = r.installedVersion;
+		const std::string& required_version = r.requiredVersion;
+		const std::string& forum_link = r.websiteUrl;
+		const std::string direct_download_link = r.downloadUrl.empty() ? r.websiteUrl : r.downloadUrl;
+
 		// Plugin Name column
 		table->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(moduleName)));
 		
@@ -693,9 +698,27 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 
 void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback, bool isStartupCheck, const std::map<std::string, bool>& disabled_modules)
 {
-	StreamUP::UIHelpers::ShowDialogOnUIThread([missing_modules, version_mismatch_modules, failed_to_load_modules, continueCallback, isStartupCheck, disabled_modules]() {
+	PluginIssues issues;
+	for (const auto& module : missing_modules)
+		issues.missing.push_back(RowForListedPlugin(module.first));
+	for (const auto& module : version_mismatch_modules)
+		issues.outdated.push_back(RowForListedPlugin(module.first, module.second));
+	issues.failedToLoad = failed_to_load_modules;
+	issues.disabled = disabled_modules;
+	ShowPluginIssues(issues, continueCallback, isStartupCheck);
+}
+
+void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continueCallback, bool isStartupCheck)
+{
+	StreamUP::UIHelpers::ShowDialogOnUIThread([issues, continueCallback, isStartupCheck]() {
+		std::map<std::string, std::string> version_mismatch_modules;
+		for (const PluginRow& r : issues.outdated)
+			version_mismatch_modules[r.name] = r.installedVersion;
+		const std::vector<std::string>& failed_to_load_modules = issues.failedToLoad;
+		const std::map<std::string, bool>& disabled_modules = issues.disabled;
+
 		// Create styled dialog with dynamic title
-		bool hasMissing = !missing_modules.empty();
+		bool hasMissing = !issues.missing.empty();
 		bool hasUpdates = !version_mismatch_modules.empty();
 		bool hasFailedToLoad = !failed_to_load_modules.empty();
 		bool hasDisabled = !disabled_modules.empty();
@@ -754,6 +777,8 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		} else if (hasDisabled) {
 			descText = obs_module_text("Plugin.Message.DisabledDescription");
 		}
+		if (!issues.description.isEmpty())
+			descText = issues.description;
 
 		QLabel *subtitleLabel = su::makeLabel(descText, 13, 500, Colors::TEXT_SECONDARY);
 		subtitleLabel->setAlignment(Qt::AlignCenter);
@@ -795,9 +820,9 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		};
 
 		if (hasMissing)
-			addTableSection("Plugin.Dialog.MissingGroup", CreateMissingPluginsTable(missing_modules));
+			addTableSection("Plugin.Dialog.MissingGroup", CreateMissingRowsTable(issues.missing));
 		if (hasUpdates)
-			addTableSection("Plugin.Dialog.UpdateGroup", CreateUpdatesTable(version_mismatch_modules));
+			addTableSection("Plugin.Dialog.UpdateGroup", CreateUpdatesRowsTable(issues.outdated));
 		if (hasFailedToLoad)
 			addTableSection("Plugin.Dialog.FailedToLoadGroup", CreateFailedToLoadPluginsTable(failed_to_load_modules));
 		if (hasDisabled)
@@ -807,7 +832,8 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		if (continueCallback) {
 			dialogLayout->addSpacing(S(12));
 
-			QLabel *warningLabel = new QLabel("⚠️ " + QString(obs_module_text("Plugin.Dialog.WarningContinue")));
+			QLabel *warningLabel = new QLabel("⚠️ " + (issues.warning.isEmpty() ? QString(obs_module_text("Plugin.Dialog.WarningContinue"))
+										   : issues.warning));
 			warningLabel->setWordWrap(true);
 			warningLabel->setStyleSheet(scale_qss(QString(
 				"QLabel {"

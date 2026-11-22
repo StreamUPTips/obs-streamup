@@ -10,6 +10,7 @@
 #include "overlay-controls.hpp"
 #include "canvas-lookup.hpp"
 #include "product-registry.hpp"
+#include "product-requirements.hpp"
 #include "../ui/overlay-controls-window.hpp"
 #include "../ui/ui-helpers.hpp"
 #include "../version.h"
@@ -1040,15 +1041,19 @@ void LoadScene(obs_data_t *data, const QString &path, int *verticalSkipped)
 //-------------------MAIN LOADING FUNCTIONS-------------------
 bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad)
 {
-	if (!forceLoad) {
-		if (!StreamUP::PluginManager::CheckrequiredOBSPlugins(true)) {
-			return false;
-		}
-	}
-
 	// Validate file path first
 	if (!StreamUP::ErrorHandler::ValidateFile(file_path)) {
 		return false;
+	}
+
+	// Only what this file uses has to be there. Anything missing or too old
+	// gets the issues window, whose Continue Anyway installs it regardless.
+	if (!forceLoad) {
+		const StreamUP::ProductRequirements::Result needs = StreamUP::ProductRequirements::Check(file_path);
+		if (needs.readable && !needs.ok()) {
+			StreamUP::ProductRequirements::ShowIssues(needs, [file_path]() { LoadStreamupFileFromPath(file_path, true); });
+			return false;
+		}
 	}
 
 	// Load the .streamup file from the file path
@@ -1086,69 +1091,41 @@ bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad)
 	return false;
 }
 
+// Missing fonts get their own warning before the install goes ahead.
+static void InstallAfterFontCheck(const QString &fileName)
+{
+	std::vector<FontInfo> fonts = ExtractFontsFromStreamupFile(fileName);
+	std::vector<FontInfo> missingFonts = CheckFontAvailability(fonts);
+	if (missingFonts.empty()) {
+		LoadStreamupFileFromPath(fileName, true);
+		return;
+	}
+	ShowMissingFontsDialog(missingFonts, [fileName]() { LoadStreamupFileFromPath(fileName, true); });
+}
+
+// The file is chosen first and then checked, so the plugins asked for are the
+// ones this product uses, not every plugin any StreamUP product might need.
+static void InstallChosenFile(const QString &fileName)
+{
+	StreamUP::ProductRequirements::CheckThen(fileName, [fileName]() { InstallAfterFontCheck(fileName); });
+}
+
 void LoadStreamupFile(bool forceLoad)
 {
-	if (!forceLoad) {
-		if (!StreamUP::PluginManager::CheckrequiredOBSPlugins(true)) {
-			return;
-		}
-	}
-
 	QString fileName =
 		QFileDialog::getOpenFileName(nullptr, QT_UTF8(obs_module_text("UI.Button.Load")), QString(), "StreamUP File (*.streamup)");
-	if (!fileName.isEmpty()) {
-		LoadStreamupFileFromPath(fileName, forceLoad);
-	}
+	if (fileName.isEmpty())
+		return;
+	// Shift: no checks at all.
+	if (forceLoad)
+		LoadStreamupFileFromPath(fileName, true);
+	else
+		InstallChosenFile(fileName);
 }
 
 void LoadStreamupFileWithWarning()
 {
-	// Use cached plugin status for instant response
-	if (StreamUP::PluginManager::IsAllPluginsUpToDateCached()) {
-		// Plugins are OK, show file selector
-		QString fileName = QFileDialog::getOpenFileName(
-			nullptr, QT_UTF8(obs_module_text("UI.Button.Load")),
-			QString(), "StreamUP File (*.streamup)");
-
-		if (!fileName.isEmpty()) {
-			// Check fonts in selected file
-			std::vector<FontInfo> fonts = ExtractFontsFromStreamupFile(fileName);
-			std::vector<FontInfo> missingFonts = CheckFontAvailability(fonts);
-
-			if (missingFonts.empty()) {
-				// All fonts available, load directly
-				LoadStreamupFileFromPath(fileName, false);
-			} else {
-				// Fonts missing, show warning with continue callback
-				ShowMissingFontsDialog(missingFonts, [fileName]() {
-					LoadStreamupFileFromPath(fileName, true);
-				});
-			}
-		}
-		return;
-	}
-
-	// Plugins have issues, show cached plugin issues dialog first
-	// On continue, allow loading with font check
-	StreamUP::PluginManager::ShowCachedPluginIssuesDialog([]() {
-		// After user clicks Continue Anyway for plugins, show file selector with font check
-		QString fileName = QFileDialog::getOpenFileName(
-			nullptr, QT_UTF8(obs_module_text("UI.Button.Load")),
-			QString(), "StreamUP File (*.streamup)");
-
-		if (!fileName.isEmpty()) {
-			std::vector<FontInfo> fonts = ExtractFontsFromStreamupFile(fileName);
-			std::vector<FontInfo> missingFonts = CheckFontAvailability(fonts);
-
-			if (missingFonts.empty()) {
-				LoadStreamupFileFromPath(fileName, true);
-			} else {
-				ShowMissingFontsDialog(missingFonts, [fileName]() {
-					LoadStreamupFileFromPath(fileName, true);
-				});
-			}
-		}
-	});
+	LoadStreamupFile(false);
 }
 
 } // namespace FileManager
