@@ -196,17 +196,27 @@ oc::ProductStamp StampOf(obs_source_t *scene)
 void CacheIconFromFile(const QString &path)
 {
 	const oc::ProductStamp p = oc::ProductFromFile(path);
-	if (p.isEmpty() || p.icon.isEmpty())
+	if (p.isEmpty() || (p.icon.isEmpty() && p.iconData.isEmpty()))
 		return;
 	const QString dir = IconDir();
 	if (dir.isEmpty() || !QDir().mkpath(dir))
 		return;
-	const QString target = QDir(dir).filePath(Slug(p.id) + "." + QFileInfo(p.icon).suffix().toLower());
+	const QString suffix = p.iconData.isEmpty() ? QFileInfo(p.icon).suffix().toLower() : p.iconSuffix;
+	const QString target = QDir(dir).filePath(Slug(p.id) + "." + suffix);
 	// One icon per product, whatever format the last install brought.
 	const QString old = CachedIcon(p.id);
 	if (!old.isEmpty())
 		QFile::remove(old);
-	if (QFile::copy(p.icon, target))
+	bool ok = false;
+	if (!p.iconData.isEmpty()) {
+		// Embedded in the file (the packager puts it there): already
+		// checked to be a small, readable image by ProductFromFile.
+		QFile out(target);
+		ok = out.open(QIODevice::WriteOnly) && out.write(p.iconData) == p.iconData.size();
+	} else {
+		ok = QFile::copy(p.icon, target);
+	}
+	if (ok)
 		DebugLogger::LogInfoFormat("Products", "Cached the icon for %s", p.id.toUtf8().constData());
 }
 

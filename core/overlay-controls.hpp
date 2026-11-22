@@ -42,6 +42,7 @@
 
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QByteArray>
 #include <QJsonValue>
 #include <QList>
 #include <QObject>
@@ -123,7 +124,9 @@ struct ProductStamp {
 	QString version;
 	QString overlay; // the controls manifest id, when there is one
 	QString category; // "alerts", "transitions"... (lower case), may be empty
-	QString icon;     // ProductFromFile only: absolute path of the manifest's icon
+	QString icon;         // ProductFromFile only: absolute path of the manifest's icon file
+	QByteArray iconData;  // ProductFromFile only: an icon embedded in the manifest, validated
+	QString iconSuffix;   // "png", "jpg" or "webp", for iconData
 	bool isEmpty() const { return id.isEmpty(); }
 };
 

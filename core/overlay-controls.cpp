@@ -14,6 +14,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QImage>
 #include <QJsonDocument>
 #include <QRegularExpression>
 #include <QSet>
@@ -960,6 +961,11 @@ bool RegisterFromStreamupData(obs_data_t *fileData, const QString &filePath, QSt
 			*error = QString("Could not read the overlay controls in %1.").arg(QFileInfo(filePath).fileName());
 		return false;
 	}
+	// A block that only says what the product is (id, name, category, icon),
+	// as the packager adds to products with no controls: nothing to register,
+	// and nothing wrong. The product stamp reads it on its own.
+	if (manifest.value("groups").toArray().isEmpty() && manifest.value("actions").toArray().isEmpty())
+		return false;
 	if (!RegisterManifest(manifest, ResourcesBeside(filePath), overlayId, error))
 		return false;
 	RequestSave();
@@ -1396,6 +1402,53 @@ bool RunAction(const QString &overlayId, const QString &actionId, QString *messa
 	return true;
 }
 
+namespace {
+
+// An icon embedded as a data URI: "data:image/png;base64,...". Anything that is
+// not a small, real png, jpg or webp is ignored with a log line, never an error:
+// a bad icon must not get in the way of installing the product.
+constexpr qsizetype kMaxIconBytes = 256 * 1024;
+
+void DecodeIcon(const QString &uri, ProductStamp &p)
+{
+	const qsizetype comma = uri.indexOf(',');
+	const QString header = uri.left(comma).toLower(); // data:image/png;base64
+	QString suffix;
+	if (header.startsWith("data:image/png"))
+		suffix = "png";
+	else if (header.startsWith("data:image/jpeg") || header.startsWith("data:image/jpg"))
+		suffix = "jpg";
+	else if (header.startsWith("data:image/webp"))
+		suffix = "webp";
+	if (comma < 0 || suffix.isEmpty() || !header.endsWith(";base64")) {
+		DebugLogger::LogWarningFormat("OverlayControls", "Product icon skipped: not a base64 png, jpg or webp");
+		return;
+	}
+	// Base64 is 4 characters per 3 bytes; refuse an oversized one before decoding.
+	if ((uri.size() - comma - 1) / 4 * 3 > kMaxIconBytes + 3) {
+		DebugLogger::LogWarningFormat("OverlayControls", "Product icon skipped: bigger than %d KB",
+					      int(kMaxIconBytes / 1024));
+		return;
+	}
+	const auto decoded = QByteArray::fromBase64Encoding(uri.mid(comma + 1).toLatin1(),
+							   QByteArray::AbortOnBase64DecodingErrors);
+	if (!decoded || decoded.decoded.size() > kMaxIconBytes) {
+		DebugLogger::LogWarningFormat("OverlayControls", "Product icon skipped: bad base64 or too big");
+		return;
+	}
+	QImage img;
+	if (!img.loadFromData(decoded.decoded, suffix == "jpg" ? "JPG" : suffix.toUpper().toLatin1().constData()) ||
+	    img.width() < 8 || img.height() < 8 || img.width() > 2048 || img.height() > 2048) {
+		DebugLogger::LogWarningFormat("OverlayControls", "Product icon skipped: not a readable %s image",
+					      suffix.toUtf8().constData());
+		return;
+	}
+	p.iconData = decoded.decoded;
+	p.iconSuffix = suffix;
+}
+
+} // namespace
+
 ProductStamp ProductFromFile(const QString &path)
 {
 	ProductStamp p;
@@ -1403,13 +1456,18 @@ ProductStamp ProductFromFile(const QString &path)
 	if (m.isEmpty())
 		return p;
 	const QJsonObject product = m.value("product").toObject();
-	p.overlay = m.value("id").toString().trimmed();
-	p.id = product.value("id").toString(p.overlay).trimmed();
+	// Only a manifest with controls or actions has a panel to come back to;
+	// one that only says what the product is (id, name, icon) does not.
+	if (!m.value("groups").toArray().isEmpty() || !m.value("actions").toArray().isEmpty())
+		p.overlay = m.value("id").toString().trimmed();
+	p.id = product.value("id").toString(m.value("id").toString()).trimmed();
 	p.name = product.value("name").toString(m.value("name").toString(p.id));
 	p.version = product.value("version").toString(m.value("version").toString());
 	p.category = product.value("category").toString(m.value("category").toString()).trimmed().toLower();
 	const QString icon = product.value("icon").toString(m.value("icon").toString()).trimmed();
-	if (!icon.isEmpty()) {
+	if (icon.startsWith("data:", Qt::CaseInsensitive)) {
+		DecodeIcon(icon, p);
+	} else if (!icon.isEmpty()) {
 		const QFileInfo fi(QDir(QFileInfo(path).absolutePath()), icon);
 		if (fi.isFile())
 			p.icon = fi.absoluteFilePath();
