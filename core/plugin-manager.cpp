@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include "../ui/ui-helpers.hpp"
+#include "../ui/streamup-kit.hpp"
 #include <streamup/ui/window-chrome.hpp>
 #include <streamup/ui/pill-button.hpp>
 #include <streamup/ui/labels.hpp>
@@ -627,73 +628,69 @@ void ErrorDialog(const QString &errorMessage)
 
 void PluginsUpToDateOutput(bool manuallyTriggered)
 {
-	if (manuallyTriggered) {
-		StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
-			// Frameless toast card: ShadowDialog elevation shadow + rounded
-			// success-green card (fill only, no border stroke). The SoT
-			// RoundedContainer now takes a fill colour, so the toast uses it
-			// directly with COLOR_SUCCESS.
-			const int sm = S(su::ShadowDialog::kShadowMargin);
-			QDialog *toast = new su::ShadowDialog();
-			toast->setWindowTitle(obs_module_text("App.Name"));
-			toast->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog | Qt::WindowStaysOnTopHint);
-			toast->setAttribute(Qt::WA_DeleteOnClose);
-			toast->setAttribute(Qt::WA_TranslucentBackground);
-			toast->setFixedSize(S(400) + 2 * sm, S(100) + 2 * sm);
+	if (manuallyTriggered)
+		StreamUP::Kit::Toast(obs_module_text("Plugin.Status.AllUpToDate"), StreamUP::Kit::Status::Ok);
+}
 
-			QVBoxLayout *outerLayout = new QVBoxLayout(toast);
-			outerLayout->setContentsMargins(sm, sm, sm, sm);
-			outerLayout->setSpacing(0);
-
-			auto *card = new su::RoundedContainer(18, nullptr, QColor(Colors::COLOR_SUCCESS));
-			outerLayout->addWidget(card);
-
-			QVBoxLayout *toastLayout = new QVBoxLayout(card);
-			toastLayout->setContentsMargins(S(20), S(12), S(20), S(12));
-			toastLayout->setSpacing(S(8));
-
-			QLabel *messageLabel = new QLabel(obs_module_text("Plugin.Status.AllUpToDate"));
-			messageLabel->setStyleSheet(scale_qss(QString(
-				"QLabel {"
-				"color: %2;"
-				"font-size: %1px;"
-				"font-weight: bold;"
-				"background: transparent;"
-				"border: none;"
-				"}").arg(S(14)).arg(Colors::BG_DARKEST)));
-			messageLabel->setAlignment(Qt::AlignCenter);
-			toastLayout->addWidget(messageLabel);
-
-			QLabel *countdownLabel = new QLabel(obs_module_text("Plugin.Message.AutoClosing3"));
-			countdownLabel->setStyleSheet(scale_qss(QString(
-				"QLabel {"
-				"color: rgba(30, 30, 46, 0.75);"
-				"font-size: %1px;"
-				"background: transparent;"
-				"border: none;"
-				"}").arg(S(12))));
-			countdownLabel->setAlignment(Qt::AlignCenter);
-			toastLayout->addWidget(countdownLabel);
-			
-			toast->show();
-			
-			// Create countdown timer
-			QTimer *countdownTimer = new QTimer(toast);
-			int *remainingSeconds = new int(3);
-			
-			QObject::connect(countdownTimer, &QTimer::timeout, [countdownLabel, remainingSeconds, toast, countdownTimer]() {
-				(*remainingSeconds)--;
-				if (*remainingSeconds > 0) {
-					countdownLabel->setText(QString(obs_module_text("Plugin.Message.AutoClosingN")).arg(*remainingSeconds));
-				} else {
-					countdownTimer->stop();
-					toast->close();
-				}
-			});
-			
-			countdownTimer->start(1000); // Update every second
-		});
+// One plugin per row: its name (with a StreamUP badge when we made it), a
+// status pill, the versions in small text, and one Get button.
+static QWidget *PluginRowsCard(const std::vector<PluginRow> &rows, bool outdated)
+{
+	auto *card = new QFrame();
+	card->setObjectName("suPlugins");
+	card->setStyleSheet(scale_qss(QString("QFrame#suPlugins{background:%1;border-radius:14px;}").arg(Colors::BG_PRIMARY)));
+	auto *v = new QVBoxLayout(card);
+	v->setContentsMargins(S(14), S(6), S(10), S(6));
+	v->setSpacing(0);
+	for (size_t i = 0; i < rows.size(); ++i) {
+		const PluginRow &r = rows[i];
+		auto *row = new QWidget();
+		auto *h = new QHBoxLayout(row);
+		h->setContentsMargins(0, S(6), 0, S(6));
+		h->setSpacing(S(10));
+		const QString name = QString::fromStdString(r.name);
+		auto *text = new QVBoxLayout();
+		text->setSpacing(S(1));
+		auto *nameRow = new QHBoxLayout();
+		nameRow->setSpacing(S(6));
+		QLabel *nameLabel = su::makeLabel(name, Sizes::FONT_SIZE_NORMAL, 700, Colors::TEXT_PRIMARY);
+		nameLabel->setWordWrap(false);
+		nameRow->addWidget(nameLabel);
+		if (name.startsWith("StreamUP", Qt::CaseInsensitive)) {
+			auto *badge = new su::Badge(obs_module_text("Plugin.Badge.StreamUP"), QColor(Colors::PRIMARY_COLOR), QColor("#ffffff"));
+			badge->setToolTip(obs_module_text("Plugin.Badge.StreamUPTooltip"));
+			nameRow->addWidget(badge);
+		}
+		nameRow->addStretch(1);
+		text->addLayout(nameRow);
+		QString detail;
+		if (outdated && !r.installedVersion.empty() && !r.requiredVersion.empty())
+			detail = QString::fromStdString(r.installedVersion) + QString::fromUtf8(" \xe2\x86\x92 ") +
+				 QString::fromStdString(r.requiredVersion);
+		else if (!r.requiredVersion.empty())
+			detail = QString::fromStdString(r.requiredVersion);
+		if (!detail.isEmpty())
+			text->addWidget(su::makeLabel(detail, Sizes::FONT_SIZE_TINY, 500, Colors::TEXT_MUTED));
+		h->addLayout(text, 1);
+		h->addWidget(StreamUP::Kit::StatusPill(outdated ? StreamUP::Kit::Status::Warn : StreamUP::Kit::Status::Bad,
+						       obs_module_text(outdated ? "Plugin.Pill.Update" : "Plugin.Pill.Missing")));
+		const QString url = QString::fromStdString(!r.downloadUrl.empty() ? r.downloadUrl : r.websiteUrl);
+		auto *get = new su::PillButton(obs_module_text("Plugin.Button.Get"), "primary");
+		get->setEnabled(!url.isEmpty());
+		get->setAccessibleName(QString(obs_module_text("Plugin.Button.GetAccessible")).arg(name));
+		if (!r.websiteUrl.empty())
+			get->setToolTip(QString::fromStdString(r.websiteUrl));
+		QObject::connect(get, &QPushButton::clicked, [url]() { QDesktopServices::openUrl(QUrl(url)); });
+		h->addWidget(get);
+		v->addWidget(row);
+		if (i + 1 < rows.size()) {
+			auto *line = new QFrame();
+			line->setFixedHeight(1);
+			line->setStyleSheet(QString("background:%1;").arg(Colors::SEPARATOR));
+			v->addWidget(line);
+		}
 	}
+	return card;
 }
 
 void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback, bool isStartupCheck, const std::map<std::string, bool>& disabled_modules)
@@ -724,6 +721,7 @@ void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continue
 		bool hasDisabled = !disabled_modules.empty();
 
 		QString titleText;
+		const bool installing = static_cast<bool>(continueCallback);
 		// Prioritize title based on what issues exist
 		if (hasMissing && hasUpdates) {
 			// Both missing and updates
@@ -745,6 +743,9 @@ void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continue
 			titleText = obs_module_text("Plugin.Status.DisabledOnly");
 		}
 
+		// One plain title: what the window is for, not a sentence about it.
+		titleText = obs_module_text(installing ? "Plugin.Title.Install" : "Plugin.Title.Check");
+
 		// Branded custom window. Primary StreamUP surface → brandFooter=true.
 		// brandName "StreamUP" + the bare status title compose "StreamUP • <title>".
 		QWidget *parent = static_cast<QWidget *>(obs_frontend_get_main_window());
@@ -753,35 +754,28 @@ void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continue
 		QDialog *dialog = shell.dialog;
 		QVBoxLayout *dialogLayout = shell.content;
 
-		// Header section — centered title + description in the content (the chrome
-		// titlebar already shows the composed title; this echoes it inside the body).
+		// Header: a pill per kind of problem, then one short line.
 		QWidget *headerWidget = new QWidget();
 		QVBoxLayout *headerLayout = new QVBoxLayout(headerWidget);
-		headerLayout->setContentsMargins(S(20), S(20), S(20), S(8));
-		headerLayout->setSpacing(S(4));
+		headerLayout->setContentsMargins(S(25), S(18), S(25), 0);
+		headerLayout->setSpacing(S(8));
+		auto *pills = new QHBoxLayout();
+		pills->setSpacing(S(6));
+		auto pillCount = [&](StreamUP::Kit::Status st, const char *key, size_t n) {
+			if (n)
+				pills->addWidget(StreamUP::Kit::StatusPill(st, QString(obs_module_text(key)).arg(n)));
+		};
+		pillCount(StreamUP::Kit::Status::Bad, "Plugin.Count.Missing", issues.missing.size());
+		pillCount(StreamUP::Kit::Status::Warn, "Plugin.Count.Update", issues.outdated.size());
+		pillCount(StreamUP::Kit::Status::Bad, "Plugin.Count.Failed", failed_to_load_modules.size());
+		pillCount(StreamUP::Kit::Status::Neutral, "Plugin.Count.Off", disabled_modules.size());
+		pills->addStretch(1);
+		headerLayout->addLayout(pills);
 
-		QLabel *titleLabel = su::makeLabel(titleText, 22, 700, Colors::TEXT_PRIMARY);
-		titleLabel->setAlignment(Qt::AlignCenter);
-		headerLayout->addWidget(titleLabel);
-
-		QString descText;
-		// Description should match the title context
-		if (hasMissing && hasUpdates) {
-			descText = obs_module_text("Plugin.Status.SomeMissingAndNeedUpdates");
-		} else if (hasMissing) {
-			descText = obs_module_text("Plugin.Message.RequiredNotInstalled");
-		} else if (hasUpdates) {
-			descText = obs_module_text("Plugin.Message.UpdatesAvailable");
-		} else if (hasFailedToLoad) {
-			descText = obs_module_text("Plugin.Message.FailedToLoadDescription");
-		} else if (hasDisabled) {
-			descText = obs_module_text("Plugin.Message.DisabledDescription");
-		}
-		if (!issues.description.isEmpty())
-			descText = issues.description;
-
+		QString descText = issues.description;
+		if (descText.isEmpty())
+			descText = obs_module_text(installing ? "Plugin.Line.Install" : "Plugin.Line.Check");
 		QLabel *subtitleLabel = su::makeLabel(descText, 13, 500, Colors::TEXT_SECONDARY);
-		subtitleLabel->setAlignment(Qt::AlignCenter);
 		subtitleLabel->setWordWrap(true);
 		headerLayout->addWidget(subtitleLabel);
 
@@ -789,8 +783,8 @@ void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continue
 
 		// Content area - direct layout without main scrolling
 		QVBoxLayout *contentLayout = new QVBoxLayout();
-		contentLayout->setContentsMargins(S(25), S(20), S(25), S(20));
-		contentLayout->setSpacing(S(20));
+		contentLayout->setContentsMargins(S(25), S(14), S(25), S(14));
+		contentLayout->setSpacing(S(10));
 
 		dialogLayout->addLayout(contentLayout);
 
@@ -819,10 +813,15 @@ void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continue
 			contentLayout->addWidget(section);
 		};
 
+		auto addRows = [&](const char *headerKey, QWidget *card) {
+			contentLayout->addWidget(su::sectionHeader(obs_module_text(headerKey)));
+			contentLayout->addWidget(card);
+			widestTable = std::max(widestTable, S(560));
+		};
 		if (hasMissing)
-			addTableSection("Plugin.Dialog.MissingGroup", CreateMissingRowsTable(issues.missing));
+			addRows("Plugin.Dialog.MissingGroup", PluginRowsCard(issues.missing, false));
 		if (hasUpdates)
-			addTableSection("Plugin.Dialog.UpdateGroup", CreateUpdatesRowsTable(issues.outdated));
+			addRows("Plugin.Dialog.UpdateGroup", PluginRowsCard(issues.outdated, true));
 		if (hasFailedToLoad)
 			addTableSection("Plugin.Dialog.FailedToLoadGroup", CreateFailedToLoadPluginsTable(failed_to_load_modules));
 		if (hasDisabled)
@@ -832,25 +831,11 @@ void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continue
 		if (continueCallback) {
 			dialogLayout->addSpacing(S(12));
 
-			QLabel *warningLabel = new QLabel("⚠️ " + (issues.warning.isEmpty() ? QString(obs_module_text("Plugin.Dialog.WarningContinue"))
-										   : issues.warning));
+			QLabel *warningLabel = su::makeLabel(issues.warning.isEmpty() ? QString(obs_module_text("Plugin.Dialog.WarningContinue"))
+										       : issues.warning,
+							     Sizes::FONT_SIZE_SMALL, 600, Colors::COLOR_WARNING);
 			warningLabel->setWordWrap(true);
-			warningLabel->setStyleSheet(scale_qss(QString(
-				"QLabel {"
-				"background: rgba(45, 55, 72, 0.8);"
-				"color: #fbbf24;"
-				"border: 1px solid #f59e0b;"
-				"border-radius: %1px;"
-				"padding: %2px;"
-				"margin: %3px %4px;"
-				"font-size: %5px;"
-				"line-height: 1.4;"
-				"}")
-				.arg(S(6))
-				.arg(S(12))
-				.arg(S(8))
-				.arg(S(25))
-				.arg(Sizes::FONT_SIZE_SMALL)));
+			warningLabel->setContentsMargins(S(25), 0, S(25), 0);
 			dialogLayout->addWidget(warningLabel);
 		}
 
@@ -876,7 +861,7 @@ void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continue
 		// Action buttons → footer's right-anchored slot.
 		// Continue Anyway is a risky action → "primary"; OK is the neutral dismiss.
 		if (continueCallback) {
-			auto *continueButton = new su::PillButton(obs_module_text("UI.Message.ContinueAnyway"), "primary");
+			auto *continueButton = new su::PillButton(obs_module_text("Plugin.Button.InstallAnyway"), "outline");
 			QObject::connect(continueButton, &QPushButton::clicked, [dialog, continueCallback]() {
 				dialog->close();
 				continueCallback();
@@ -884,7 +869,7 @@ void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continue
 			shell.footerButtons->addWidget(continueButton);
 		}
 
-		auto *okButton = new su::PillButton(obs_module_text("UI.Button.OK"), continueCallback ? "outline" : "primary");
+		auto *okButton = new su::PillButton(obs_module_text(continueCallback ? "UI.Button.Cancel" : "UI.Button.Done"), "primary");
 		QObject::connect(okButton, &QPushButton::clicked, [dialog, skipCheckbox, isStartupCheck, version_mismatch_modules, failed_to_load_modules, disabled_modules]() {
 			// Save skipped updates if checkbox is checked
 			if (skipCheckbox && skipCheckbox->isChecked()) {
@@ -930,6 +915,16 @@ void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continue
 			dialog->close();
 		});
 		shell.footerButtons->addWidget(okButton);
+
+		// A manual check is a calm moment to mention membership, once.
+		if (!installing && !isStartupCheck) {
+			if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Strip)) {
+				auto *wrap = new QHBoxLayout();
+				wrap->setContentsMargins(S(25), S(4), S(25), S(4));
+				wrap->addWidget(member);
+				dialogLayout->addLayout(wrap);
+			}
+		}
 
 		// Pool any spare height at the bottom. Without this the layout shares it
 		// out between the header, the sections and the tables, which is why a
