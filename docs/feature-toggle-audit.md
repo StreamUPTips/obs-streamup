@@ -282,7 +282,7 @@ Still running on purpose (Core):
 - The restore journal checks.
 - The menu itself.
 
-The StreamUP menu lists Backup, Tools, Multi-Dock and WebSocket Commands only while their part
+The StreamUP menu lists Backup, Quick Actions, Multi-Dock and WebSocket Commands (under Help) only while their part
 is on. Features is always there.
 
 ### Checked by hand (dev OBS, Main Stream)

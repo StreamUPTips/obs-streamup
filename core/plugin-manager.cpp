@@ -1952,7 +1952,7 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 	// DEV ONLY: STREAMUP_FAKE_UPDATES=1 injects the first ~6 real plugins as "outdated" so the
 	// update dialog can be screenshotted for marketing. No effect unless the env var is set, so it
 	// can never reach real users. Build target `streamup`, launch the dev OBS with the env var, open
-	// StreamUP -> Check for OBS Plugin Updates, screenshot the dialog.
+	// StreamUP -> Check for Plugin Updates…, screenshot the dialog.
 	if (std::getenv("STREAMUP_FAKE_UPDATES")) {
 		auto prevVersion = [](std::string v) -> std::string {
 			std::vector<int> parts;

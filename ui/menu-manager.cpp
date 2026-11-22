@@ -87,18 +87,22 @@ void LoadMenuItems(QMenu* menu)
     menu->clear();
     QAction* action;
 
-    // Read current module settings so submenus can be hidden when their
-    // backing module is turned off in Settings > Modules. Re-read each time
-    // the menu is shown (this function is wired to QMenu::aboutToShow), so
-    // toggles take effect on the next menu open without restarting OBS.
+    // Read on every open (this runs on QMenu::aboutToShow), so a part
+    // switched on or off on the Features page shows or hides here straight
+    // away. A part that is off is left out entirely.
     StreamUP::SettingsManager::PluginSettings menuSettings = StreamUP::SettingsManager::GetCurrentSettings();
     const StreamUP::SettingsManager::ModuleSettings &menuMod = menuSettings.modules;
 
-    // Platform-specific actions (Windows only)
+    // -- Products ---------------------------------------------------------
+    // My Products: everything StreamUP installed in this collection, each
+    // with its controls one click away.
+    action = menu->addAction(obs_module_text("Menu.MyProducts"));
+    QObject::connect(action, &QAction::triggered, []() { StreamUP::MyProductsWindow::Show(); });
+
 #ifdef _WIN32
     action = menu->addAction(obs_module_text("Menu.Plugin.InstallProduct"));
     QObject::connect(action, &QAction::triggered, []() {
-        // Check if Shift is held to force load
+        // Hold Shift to skip the plugin check
         if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
             StreamUP::FileManager::LoadStreamupFile(true);
         } else {
@@ -106,89 +110,53 @@ void LoadMenuItems(QMenu* menu)
         }
     });
 
-    action = menu->addAction(obs_module_text("Menu.Plugin.DownloadProduct"));
-    QObject::connect(action, &QAction::triggered, []() {
-        QDesktopServices::openUrl(QUrl("https://streamup.tips/"));
-    });
-
     action = menu->addAction(obs_module_text("Menu.Plugin.CheckRequirements"));
     QObject::connect(action, &QAction::triggered, []() {
-        // Hold Shift to force refresh cache
+        // Hold Shift to refresh the cached check first
         if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
             StreamUP::PluginManager::PerformPluginCheckAndCache();
         }
         StreamUP::PluginManager::ShowCachedPluginIssuesDialog();
     });
 
-    menu->addSeparator();
+    // A link to the website, so no ellipsis.
+    action = menu->addAction(obs_module_text("Menu.Plugin.BrowseProducts"));
+    QObject::connect(action, &QAction::triggered, []() {
+        QDesktopServices::openUrl(QUrl("https://streamup.tips/"));
+    });
 #endif
 
-    // My Products: everything StreamUP installed in this collection, each
-    // with its controls one click away. It replaced the Overlays submenu:
-    // customise, add controls from a file and remove controls all live there.
-    action = menu->addAction(obs_module_text("Menu.MyProducts"));
-    QObject::connect(action, &QAction::triggered, []() { StreamUP::MyProductsWindow::Show(); });
+    menu->addSeparator();
 
-    // Plugin updates (all platforms)
-    action = menu->addAction(obs_module_text("Menu.Plugin.CheckUpdates"));
-    QObject::connect(action, &QAction::triggered, []() { 
-        // Hold Shift to force refresh cache
-        if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
-            StreamUP::PluginManager::PerformPluginCheckAndCache();
-        }
-        StreamUP::PluginManager::ShowCachedPluginUpdatesDialog(); 
-    });
-
-    // Backup — hidden entirely when the module is switched off, so the plugin
-    // looks like that part is not installed rather than half-present.
-    if (menuMod.backup) {
-    QMenu* backupMenu = menu->addMenu(obs_module_text("Menu.Backup"));
-    action = backupMenu->addAction(obs_module_text("Menu.Backup.Create"));
-    QObject::connect(action, &QAction::triggered, []() { StreamUP::Backup::ShowCreateBackupDialog(); });
-    action = backupMenu->addAction(obs_module_text("Menu.Backup.Restore"));
-    QObject::connect(action, &QAction::triggered, []() { StreamUP::Restore::ShowRestoreDialog(); });
-
-    backupMenu->addSeparator();
-
-    action = backupMenu->addAction(obs_module_text("Menu.Backup.Settings"));
-    QObject::connect(action, &QAction::triggered, []() {
-        StreamUP::SettingsManager::ShowSettingsDialog(StreamUP::SettingsManager::SettingsTabBackup);
-    });
-    }
-
-    // Tools submenu — gated on the StreamUP Dock module since these source
-    // management actions duplicate the dock's quick-action buttons. When the
-    // dock is hidden, hiding the redundant menu entries makes the plugin look
-    // like that section isn't installed.
+    // -- Tools ------------------------------------------------------------
+    // Quick Actions: the source and device actions the StreamUP Dock's
+    // buttons also run, so they follow that part's switch.
     if (menuMod.streamupDock) {
-        QMenu* toolsMenu = menu->addMenu(obs_module_text("Menu.Tools"));
+        QMenu* quickMenu = menu->addMenu(obs_module_text("Menu.QuickActions"));
 
-        // Source Management tools
-        action = toolsMenu->addAction(obs_module_text("Menu.Source.LockAllSources"));
+        action = quickMenu->addAction(obs_module_text("Menu.Source.LockAllSources"));
         QObject::connect(action, &QAction::triggered, []() {
             StreamUP::SourceManager::ToggleLockAllSources();
         });
 
-        action = toolsMenu->addAction(obs_module_text("Menu.Source.LockCurrentSources"));
+        action = quickMenu->addAction(obs_module_text("Menu.Source.LockCurrentSources"));
         QObject::connect(action, &QAction::triggered, []() {
             StreamUP::SourceManager::ToggleLockSourcesInCurrentScene();
         });
 
-        toolsMenu->addSeparator();
+        quickMenu->addSeparator();
 
-        // Audio/Video tools
-        action = toolsMenu->addAction(obs_module_text("Menu.Source.RefreshAudioMonitoring"));
+        action = quickMenu->addAction(obs_module_text("Menu.Source.RefreshAudioMonitoring"));
         QObject::connect(action, &QAction::triggered, []() {
             obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr);
         });
 
-        action = toolsMenu->addAction(obs_module_text("Menu.Source.RefreshBrowserSources"));
+        action = quickMenu->addAction(obs_module_text("Menu.Source.RefreshBrowserSources"));
         QObject::connect(action, &QAction::triggered, []() {
             obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr);
         });
 
-        // Video device management submenu
-        QMenu* videoDeviceMenu = toolsMenu->addMenu(obs_module_text("Menu.VideoCapture.Root"));
+        QMenu* videoDeviceMenu = quickMenu->addMenu(obs_module_text("Menu.VideoCapture.Root"));
 
         action = videoDeviceMenu->addAction(obs_module_text("Menu.VideoCapture.ActivateAll"));
         QObject::connect(action, &QAction::triggered, []() {
@@ -206,7 +174,6 @@ void LoadMenuItems(QMenu* menu)
         });
     }
 
-    // MultiDock submenu — only shown when the Multi-Dock module is enabled.
     if (menuMod.multiDock) {
         QMenu* multiDockMenu = menu->addMenu(obs_module_text("Menu.MultiDock"));
 
@@ -220,25 +187,16 @@ void LoadMenuItems(QMenu* menu)
             StreamUP::MultiDock::ShowManageMultiDocksDialog();
         });
 
-        // Get the MultiDockManager instance and add existing multidocks to menu
+        // Each existing Multi-Dock, ticked while it is showing.
         StreamUP::MultiDock::MultiDockManager* manager = StreamUP::MultiDock::MultiDockManager::Instance();
         if (manager) {
             QList<StreamUP::MultiDock::MultiDockInfo> multiDocks = manager->GetMultiDockInfoList();
-
-            // Only add separator and multidocks if there are any
             if (!multiDocks.isEmpty()) {
                 multiDockMenu->addSeparator();
-
-                // Add each multidock as a checkable action
                 for (const StreamUP::MultiDock::MultiDockInfo& info : multiDocks) {
                     QAction* dockAction = multiDockMenu->addAction(info.name);
                     dockAction->setCheckable(true);
-
-                    // Check if the multidock is currently visible
-                    bool isVisible = manager->IsMultiDockVisible(info.id);
-                    dockAction->setChecked(isVisible);
-
-                    // Connect to toggle visibility
+                    dockAction->setChecked(manager->IsMultiDockVisible(info.id));
                     QObject::connect(dockAction, &QAction::triggered, [manager, info](bool checked) {
                         manager->SetMultiDockVisible(info.id, checked);
                     });
@@ -247,38 +205,65 @@ void LoadMenuItems(QMenu* menu)
         }
     }
 
+    if (menuMod.backup) {
+        QMenu* backupMenu = menu->addMenu(obs_module_text("Menu.Backup"));
+        action = backupMenu->addAction(obs_module_text("Menu.Backup.Create"));
+        QObject::connect(action, &QAction::triggered, []() { StreamUP::Backup::ShowCreateBackupDialog(); });
+        action = backupMenu->addAction(obs_module_text("Menu.Backup.Restore"));
+        QObject::connect(action, &QAction::triggered, []() { StreamUP::Restore::ShowRestoreDialog(); });
+
+        backupMenu->addSeparator();
+
+        action = backupMenu->addAction(obs_module_text("Menu.Backup.Settings"));
+        QObject::connect(action, &QAction::triggered, []() {
+            StreamUP::SettingsManager::ShowSettingsDialog(StreamUP::SettingsManager::SettingsTabBackup);
+        });
+    }
+
+    action = menu->addAction(obs_module_text("Menu.Plugin.CheckUpdates"));
+    QObject::connect(action, &QAction::triggered, []() {
+        // Hold Shift to refresh the cached check first
+        if (QApplication::keyboardModifiers() & Qt::ShiftModifier) {
+            StreamUP::PluginManager::PerformPluginCheckAndCache();
+        }
+        StreamUP::PluginManager::ShowCachedPluginUpdatesDialog();
+    });
+
     menu->addSeparator();
 
-    // StreamUP OBS Theme picker, WebSocket Commands, StreamUP Settings.
-    action = menu->addAction(obs_module_text("Menu.StreamUPTheme"));
-    QObject::connect(action, &QAction::triggered, []() { StreamUP::ThemeWindow::ShowThemeWindow(); });
+    // -- Set-up -----------------------------------------------------------
+    // Features: every part of StreamUP switched on and off in one place.
+    // Always here, so a part that is off can be found again.
+    action = menu->addAction(obs_module_text("Menu.Features"));
+    QObject::connect(action, &QAction::triggered, []() { StreamUP::FeaturesPage::Show(); });
+
+    action = menu->addAction(obs_module_text("Menu.Settings"));
+    QObject::connect(action, &QAction::triggered, []() { SettingsDialog(); });
+
+    menu->addSeparator();
+
+    // -- Help -------------------------------------------------------------
+    QMenu* helpMenu = menu->addMenu(obs_module_text("Menu.Help"));
+
+    action = helpMenu->addAction(obs_module_text("Menu.PatchNotes"));
+    QObject::connect(action, &QAction::triggered, []() { StreamUP::PatchNotesWindow::ShowPatchNotesWindow(); });
 
     // WebSocket Commands, while the WebSocket API is switched on.
     if (menuMod.websocketApi) {
-        action = menu->addAction(obs_module_text("Menu.WebSocket"));
+        action = helpMenu->addAction(obs_module_text("Menu.WebSocket"));
         QObject::connect(action, &QAction::triggered, []() {
-            // Check if Shift is held to show internal tools
+            // Hold Shift to show internal tools
             bool showInternalTools = QApplication::keyboardModifiers() & Qt::ShiftModifier;
             StreamUP::WebSocketWindow::ShowWebSocketWindow(showInternalTools);
         });
     }
 
-    // Features: every part of StreamUP, switched on and off in one place.
-    // Always here, so a part that is off can be found again.
-    action = menu->addAction(obs_module_text("Menu.Features"));
-    QObject::connect(action, &QAction::triggered, []() { StreamUP::FeaturesPage::Show(); });
+    action = helpMenu->addAction(obs_module_text("Menu.StreamUPTheme"));
+    QObject::connect(action, &QAction::triggered, []() { StreamUP::ThemeWindow::ShowThemeWindow(); });
 
-    action = menu->addAction(obs_module_text("Menu.StreamUPSettings"));
-    QObject::connect(action, &QAction::triggered, []() { SettingsDialog(); });
+    helpMenu->addSeparator();
 
-    // Visual divider separating the active controls above from the
-    // info / about-style entries below.
-    menu->addSeparator();
-
-    action = menu->addAction(obs_module_text("Menu.PatchNotes"));
-    QObject::connect(action, &QAction::triggered, []() { StreamUP::PatchNotesWindow::ShowPatchNotesWindow(); });
-
-    action = menu->addAction(obs_module_text("Menu.About"));
+    action = helpMenu->addAction(obs_module_text("Menu.About"));
     QObject::connect(action, &QAction::triggered, []() { StreamUP::SplashScreen::ShowSplashScreen(); });
 
     // Dev Tools submenu (only visible when Shift is held)
@@ -292,7 +277,6 @@ void LoadMenuItems(QMenu* menu)
         });
     }
 }
-
 
 } // namespace MenuManager  
 } // namespace StreamUP

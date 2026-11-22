@@ -234,7 +234,7 @@ An older StreamUP plugin ignores `requires`.
 
 ## My Products
 
-**StreamUP > My Products...** lists every StreamUP product in the current scene
+**StreamUP > My Products…** lists every StreamUP product in the current scene
 collection. It replaced the Overlays submenu. Products come from:
 
 1. the Overlay Controls registry (products whose controls are saved in the
