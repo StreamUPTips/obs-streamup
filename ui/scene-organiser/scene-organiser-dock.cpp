@@ -2143,7 +2143,7 @@ void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelInd
         m_customiseOverlayAction->setVisible(hasOverlay);
         if (hasOverlay)
             m_customiseOverlayAction->setText(
-                QString::fromUtf8(obs_module_text("Menu.Overlays.Customise")).arg(overlayInfo.name));
+                QString::fromUtf8(obs_module_text("SceneOrganiser.Menu.Adjust")).arg(overlayInfo.name));
     }
     if (m_customiseOverlaySeparator)
         m_customiseOverlaySeparator->setVisible(hasOverlay);
