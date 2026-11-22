@@ -1,4 +1,5 @@
 #include "restore-dialog.hpp"
+#include "streamup-kit.hpp"
 
 #include "../core/backup-manager.hpp"
 #include "../core/restore-manager.hpp"
@@ -195,8 +196,14 @@ void ShowRestoreDialog()
 	// is exactly what it did here.
 	QVBoxLayout *contentsCard = sectionCard(rightColumn, obs_module_text("Restore.Section.Contents"));
 
-	cardText(contentsCard, obs_module_text("Restore.Section.ContentsHint"), Colors::TEXT_SECONDARY,
-		 CardText::kCaption);
+	if (QLabel *dot = StreamUP::Kit::HelpDot(obs_module_text("Restore.Section.ContentsHint"))) {
+		auto *hintRow = new QHBoxLayout();
+		hintRow->addWidget(su::makeLabel(obs_module_text("Restore.Section.ContentsShort"), CardText::kCaption, 500,
+						 Colors::TEXT_SECONDARY));
+		hintRow->addWidget(dot);
+		hintRow->addStretch(1);
+		contentsCard->addLayout(hintRow);
+	}
 
 	// Each area gets a switch, so a restore can be narrowed to just what was
 	// lost. Scene collections additionally get a checkable list, because
@@ -404,8 +411,13 @@ void ShowRestoreDialog()
 			QStringList names;
 			for (const PluginGap &gap : info.pluginGaps)
 				names << gap.name;
-			cardText(warnCard, QString(obs_module_text("Restore.Warn.MissingPluginsShort")).arg(names.size()),
-				Colors::COLOR_WARNING, CardText::kBody, true);
+			auto *pillRow = new QHBoxLayout();
+			pillRow->addWidget(StreamUP::Kit::StatusPill(StreamUP::Kit::Status::Warn,
+								     QString(obs_module_text("Restore.Warn.PluginsPill")).arg(names.size())));
+			if (QLabel *dot = StreamUP::Kit::HelpDot(QString(obs_module_text("Restore.Warn.MissingPluginsShort")).arg(names.size())))
+				pillRow->addWidget(dot);
+			pillRow->addStretch(1);
+			warnCard->addLayout(pillRow);
 
 			warnCard->addWidget(cardList(names, 90));
 		}
@@ -415,10 +427,19 @@ void ShowRestoreDialog()
 	}
 
 	// ── What is about to happen ────────────────────────────────────────
-	QVBoxLayout *processCard = sectionCard(leftColumn, obs_module_text("Restore.Section.WhatHappens"));
-	cardText(processCard, obs_module_text("Restore.Step.Safety"), Colors::TEXT_SECONDARY, CardText::kBody);
-	cardText(processCard, obs_module_text("Restore.Step.Prepare"), Colors::TEXT_SECONDARY, CardText::kBody);
-	cardText(processCard, obs_module_text("Restore.Step.Apply"), Colors::TEXT_SECONDARY, CardText::kBody);
+	// One line; the three steps are behind "?".
+	{
+		auto *stepsRow = new QHBoxLayout();
+		stepsRow->setContentsMargins(S(4), 0, 0, 0);
+		stepsRow->addWidget(StreamUP::Kit::StatusPill(StreamUP::Kit::Status::Ok, obs_module_text("Restore.SafetyCopy")));
+		const QString steps = QString("%1\n%2\n%3")
+					      .arg(obs_module_text("Restore.Step.Safety"), obs_module_text("Restore.Step.Prepare"),
+						   obs_module_text("Restore.Step.Apply"));
+		if (QLabel *dot = StreamUP::Kit::HelpDot(steps))
+			stepsRow->addWidget(dot);
+		stepsRow->addStretch(1);
+		leftColumn->addLayout(stepsRow);
+	}
 
 	// Only the left column pools its slack: the right column's card expands.
 	leftColumn->addStretch();

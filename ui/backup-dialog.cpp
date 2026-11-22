@@ -1,4 +1,6 @@
 #include "backup-dialog.hpp"
+#include "streamup-kit.hpp"
+#include <streamup/ui/flow-layout.hpp>
 
 #include "../core/backup-manager.hpp"
 #include <streamup/debug-logger.hpp>
@@ -47,14 +49,20 @@ su::SwitchButton *toggleRow(QVBoxLayout *layout, const QString &title, const QSt
 	auto *textLayout = new QVBoxLayout(textColumn);
 	textLayout->setContentsMargins(0, 0, 0, 0);
 	textLayout->setSpacing(S(1));
-	cardText(textLayout, title, Colors::TEXT_PRIMARY, CardText::kTitle, true);
-	cardText(textLayout, help, Colors::TEXT_SECONDARY, CardText::kCaption);
+	auto *titleRow = new QHBoxLayout();
+	titleRow->setSpacing(S(6));
+	QLabel *titleLabel = su::makeLabel(title, CardText::kTitle, 700, Colors::TEXT_PRIMARY);
+	titleRow->addWidget(titleLabel);
+	if (QLabel *dot = StreamUP::Kit::HelpDot(help))
+		titleRow->addWidget(dot);
+	titleRow->addStretch(1);
+	textLayout->addLayout(titleRow);
 
 	rowLayout->addWidget(textColumn, 1);
 	// Top-aligned, not centred: the help text can run to two or three lines and
 	// a centred switch then drifts away from the title it belongs to.
 	su::SwitchButton *toggle = su::CreateStyledSwitch("", initial);
-	rowLayout->addWidget(toggle, 0, Qt::AlignTop);
+	rowLayout->addWidget(toggle, 0, Qt::AlignVCenter);
 
 	layout->addWidget(row);
 	return toggle;
@@ -205,8 +213,18 @@ void ShowCreateBackupDialog()
 
 	// ── What a backup covers ───────────────────────────────────────────
 	QVBoxLayout *whatCard = sectionCard(layout, obs_module_text("Backup.Section.Includes"));
-	cardText(whatCard, obs_module_text("Backup.Includes.List"), Colors::TEXT_PRIMARY, CardText::kBody);
-	cardText(whatCard, obs_module_text("Backup.Includes.Excluded"), Colors::TEXT_SECONDARY, CardText::kCaption);
+	{
+		// Pills that wrap onto a second line rather than squeeze.
+		auto *pillBox = new QWidget();
+		auto *pills = new StreamUP::UIStyles::FlowLayout(pillBox, 6);
+		pills->setContentsMargins(0, 0, 0, 0);
+		for (const char *key : {"Backup.Item.Collections", "Backup.Item.Profiles", "Backup.Item.Plugins",
+					"Backup.Item.Themes", "Backup.Item.Settings"})
+			pills->addWidget(StreamUP::Kit::StatusPill(StreamUP::Kit::Status::Neutral, obs_module_text(key)));
+		if (QLabel *dot = StreamUP::Kit::HelpDot(obs_module_text("Backup.Includes.Excluded")))
+			pills->addWidget(dot);
+		whatCard->addWidget(pillBox);
+	}
 
 	// ── What this will produce, measured now ───────────────────────────
 	Options estimateOptions;
@@ -239,7 +257,9 @@ void ShowCreateBackupDialog()
 		     Colors::COLOR_WARNING);
 
 	// ── Options ────────────────────────────────────────────────────────
-	QVBoxLayout *optionsCard = sectionCard(layout, obs_module_text("Backup.Section.Options"));
+	auto *moreOptions = new StreamUP::Kit::MoreOptions(QStringLiteral("backup.create.options"));
+	layout->addWidget(moreOptions);
+	QVBoxLayout *optionsCard = sectionCard(moreOptions->body(), obs_module_text("Backup.Section.Options"));
 	su::SwitchButton *credentialsToggle = toggleRow(optionsCard, obs_module_text("Backup.Option.Credentials"),
 							obs_module_text("Backup.Option.CredentialsDesc"), false);
 	su::SwitchButton *mediaToggle = toggleRow(optionsCard, obs_module_text("Backup.Option.CollectMedia"),

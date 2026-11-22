@@ -799,7 +799,7 @@ void ShowInstalledOnUiThread(const QString &productId, const QString &productNam
 		shell.footerButtons->addWidget(go);
 	}
 	const int m = su::S(su::ShadowDialog::kShadowMargin);
-	dlg->resize(su::S(440) + 2 * m, dlg->sizeHint().height());
+	dlg->resize(su::S(500) + 2 * m, dlg->sizeHint().height());
 	StreamUP::UIHelpers::PlaceOverMainWindow(dlg);
 	dlg->show();
 	dlg->raise();
