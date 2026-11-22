@@ -146,6 +146,14 @@ public:
 protected:
 	void paintEvent(QPaintEvent *event) override;
 	void resizeEvent(QResizeEvent *event) override;
+	void showEvent(QShowEvent *event) override;
+	void hideEvent(QHideEvent *event) override;
+
+public:
+	~VolumeMeter() override;
+
+private:
+	bool m_counted = false; // counted in the shared timer's visible meters
 
 private:
 	bool needLayoutChange();

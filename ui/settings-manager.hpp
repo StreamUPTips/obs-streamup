@@ -209,8 +209,9 @@ struct PluginSettings {
     ModuleSettings modules;
     bool moduleSetupComplete;       // Legacy wizard sentinel (kept for compat)
     std::string wizardVersionShown; // PROJECT_VERSION when the wizard last ran. Drives the upgrader prompt.
+    std::string featuresVersionSeen; // PROJECT_VERSION when the Features page was last opened. Drives its "New" badges.
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserShowIndentGuides(true), sceneOrganiserShowFavouritesTab(true), sceneOrganiserShowRecentTab(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), toolbarAlignment(ToolbarAlignment::Start), themeSourceFolders(true), themeSourceGuides(true), themeMixer(true), themeVerticalCanvas(true), themeMultistream(true), themeStudioMode(true), themeSpacing(true), themeWindowPolish(true), backupAutomatic(true), backupKeepCount(10), backupLocation(), backupLastAutoDate(), moduleSetupComplete(false), wizardVersionShown() {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserShowIndentGuides(true), sceneOrganiserShowFavouritesTab(true), sceneOrganiserShowRecentTab(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), toolbarAlignment(ToolbarAlignment::Start), themeSourceFolders(true), themeSourceGuides(true), themeMixer(true), themeVerticalCanvas(true), themeMultistream(true), themeStudioMode(true), themeSpacing(true), themeWindowPolish(true), backupAutomatic(true), backupKeepCount(10), backupLocation(), backupLastAutoDate(), moduleSetupComplete(false), wizardVersionShown(), featuresVersionSeen() {}
 };
 
 /**
@@ -423,6 +424,7 @@ bool HasAnyExistingSettings();
 
 // Global functions for toolbar management (defined in streamup.cpp)
 extern void ApplyToolbarVisibility();
+extern void SetToolbarEnabled(bool enabled);
 extern void ApplyToolbarPosition();
 extern void ApplyToolbarSize();
 extern void ApplyToolbarAlignment();

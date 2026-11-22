@@ -199,8 +199,10 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/splash-screen.cpp
   ui/patch-notes-window.hpp
   ui/patch-notes-window.cpp
-  ui/module-setup-wizard.hpp
-  ui/module-setup-wizard.cpp
+  ui/features-page.hpp
+  ui/features-page.cpp
+  core/features.hpp
+  core/features.cpp
   ui/theme-window.hpp
   ui/theme-window.cpp
   ui/websocket-window.hpp
@@ -382,8 +384,10 @@ source_group("UI" FILES
   ui/splash-screen.cpp
   ui/patch-notes-window.hpp
   ui/patch-notes-window.cpp
-  ui/module-setup-wizard.hpp
-  ui/module-setup-wizard.cpp
+  ui/features-page.hpp
+  ui/features-page.cpp
+  core/features.hpp
+  core/features.cpp
   ui/websocket-window.hpp
   ui/websocket-window.cpp
   ui/studio-mode-enhancements.hpp

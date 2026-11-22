@@ -1,4 +1,5 @@
 #include "settings-manager.hpp"
+#include "features-page.hpp"
 #include "backup-dialog.hpp"
 #include "restore-dialog.hpp"
 #include "../core/backup-manager.hpp"
@@ -640,6 +641,8 @@ PluginSettings GetCurrentSettings()
 		settings.moduleSetupComplete = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "module_setup_complete", false);
 		const char *wvs = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "wizard_version_shown", "");
 		settings.wizardVersionShown = wvs ? wvs : "";
+		const char *fvs = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "features_version_seen", "");
+		settings.featuresVersionSeen = fvs ? fvs : "";
 
 		// Load dock tool settings
 		obs_data_t *dockData = obs_data_get_obj(data, "dock_tools");
@@ -807,6 +810,7 @@ void UpdateSettings(const PluginSettings &settings)
 	SaveModuleSettings(data, settings.modules);
 	obs_data_set_bool(data, "module_setup_complete", settings.moduleSetupComplete);
 	obs_data_set_string(data, "wizard_version_shown", settings.wizardVersionShown.c_str());
+	obs_data_set_string(data, "features_version_seen", settings.featuresVersionSeen.c_str());
 
 	SaveSettings(data);
 
@@ -840,6 +844,10 @@ void ShowSettingsDialog()
 
 void ShowSettingsDialog(int tabIndex)
 {
+	if (tabIndex == SettingsTabPlugins) {
+		StreamUP::FeaturesPage::Show();
+		return;
+	}
 	StreamUP::UIHelpers::ShowSingletonDialogOnUIThread("settings", [tabIndex]() -> QDialog* {
 		obs_data_t *settings = LoadSettings();
 		if (!settings) {
@@ -965,6 +973,8 @@ void ShowSettingsDialog(int tabIndex)
 			setEnabled(5, dimSettings.modules.streamupDock);   // Dock Configuration
 			setEnabled(7, dimSettings.modules.backup);         // Backup
 		}
+		if (auto *pluginsRow = categoryList->item(SettingsTabPlugins); pluginsRow)
+			pluginsRow->setHidden(true);
 
 		categoryList->setCurrentRow(tabIndex);
 
@@ -2362,246 +2372,10 @@ void ShowSettingsDialog(int tabIndex)
 		dockPageLayout->addWidget(dockScrollArea);
 		stackedWidget->addWidget(dockPage);
 
-		// 7. Plugins Page — master enable/disable for each part of StreamUP.
-		QWidget *modulesPage = new QWidget();
-		QVBoxLayout *modulesPageLayout = new QVBoxLayout(modulesPage);
-		modulesPageLayout->setContentsMargins(0, 0, 0, 0);
-		modulesPageLayout->setSpacing(0);
-
-		QScrollArea *modulesScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-		modulesScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		modulesScrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(modulesScrollArea->styleSheet() + QString(
-			"QScrollArea { background-color: %1; border: none; border-radius: %2px; }"
-			"QScrollArea > QWidget > QWidget { background: transparent; }"
-		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY).arg(22)));
-
-		QWidget *modulesContentContainer = new QWidget();
-		modulesContentContainer->setStyleSheet("QWidget { background: transparent; }");
-		QVBoxLayout *modulesContentLayout = new QVBoxLayout(modulesContentContainer);
-		modulesContentLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-		                                         StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-		modulesContentLayout->setSpacing(StreamUP::UIStyles::S(16));
-
-		// Page intro — explains what each toggle actually controls so users
-		// aren't worried about hidden resource cost.
-		QLabel *pluginsIntro = new QLabel(obs_module_text("Plugins.IntroBlurb"));
-		pluginsIntro->setWordWrap(true);
-		pluginsIntro->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
-			.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-			.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-		modulesContentLayout->addWidget(pluginsIntro);
-
-		// Restart-required banner (visible only when at least one hard toggle is dirty).
-		QLabel *modulesRestartBanner = new QLabel(obs_module_text("Plugins.RestartRequired.Banner"));
-		modulesRestartBanner->setWordWrap(true);
-		modulesRestartBanner->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
-			"QLabel { background-color: rgba(250, 179, 135, 0.15); color: %1; "
-			"border: 1px solid rgba(250, 179, 135, 0.5); border-radius: %2px; "
-			"padding: 10px; font-size: %3px; }"
-		).arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-		 .arg(8)
-		 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-		modulesRestartBanner->setVisible(false);
-		modulesContentLayout->addWidget(modulesRestartBanner);
-
-		// Hard-module restart-required chips. Captured by the row builder so the
-		// banner can refresh whenever any hard toggle changes.
-		auto hardChips = std::make_shared<std::vector<QLabel*>>();
-
-		// Helper: build one module row inside a parent layout.
-		// `getValue` returns the current bool from PluginSettings, `setValue` writes
-		// it back. `isHard` controls whether a "Restart required" chip is shown.
-		// `onAfterChange` runs after the new value is persisted, useful for soft
-		// toggles to apply runtime behaviour immediately.
-		auto refreshBanner = [hardChips, modulesRestartBanner]() {
-			bool anyDirty = false;
-			for (QLabel *chip : *hardChips) {
-				if (chip && chip->isVisible()) { anyDirty = true; break; }
-			}
-			modulesRestartBanner->setVisible(anyDirty);
-		};
-
-		auto addModuleRow = [&](QVBoxLayout *parent, const char *titleKey, const char *descKey,
-		                        std::function<bool(const PluginSettings&)> getValue,
-		                        std::function<void(PluginSettings&, bool)> setValue,
-		                        bool isHard,
-		                        std::function<bool(const AppliedModuleSnapshot&)> getApplied,
-		                        std::function<void()> onAfterChange) {
-			// Each setting is its own discrete card: a RoundedContainer (card
-			// radius) holding the title + description on the left and the toggle
-			// on the right, with the description living inside the same card so it
-			// reads as one unit. The Plugins-page scroll surface is BG_PRIMARY, so
-			// the card fills with the darker BG_SECONDARY to read as a distinct
-			// raised tile (a BG_PRIMARY card would be invisible on a BG_PRIMARY
-			// page).
-			auto *card = new StreamUP::UIStyles::RoundedContainer(
-				StreamUP::UIStyles::Sizes::RADIUS_CARD, nullptr,
-				QColor(StreamUP::UIStyles::Colors::BG_SECONDARY));
-
-			QHBoxLayout *rowLayout = new QHBoxLayout(card);
-			rowLayout->setContentsMargins(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(14),
-			                              StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(14));
-			rowLayout->setSpacing(StreamUP::UIStyles::S(16));
-
-			QWidget *textBlock = new QWidget();
-			QVBoxLayout *textLayout = new QVBoxLayout(textBlock);
-			textLayout->setContentsMargins(0, 0, 0, 0);
-			textLayout->setSpacing(StreamUP::UIStyles::S(6));
-
-			QLabel *titleLabel = new QLabel(obs_module_text(titleKey));
-			titleLabel->setStyleSheet(StreamUP::UIStyles::labelStyle(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
-
-			QLabel *descLabel = new QLabel(obs_module_text(descKey));
-			descLabel->setWordWrap(true);
-			descLabel->setStyleSheet(StreamUP::UIStyles::dimLabelStyle());
-
-			textLayout->addWidget(titleLabel);
-			textLayout->addWidget(descLabel);
-			rowLayout->addWidget(textBlock, 1);
-
-			QLabel *restartChip = nullptr;
-			if (isHard) {
-				restartChip = new QLabel(obs_module_text("Plugins.RestartRequired"));
-				restartChip->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
-					"QLabel { color: rgb(250, 179, 135); background-color: rgba(250, 179, 135, 0.15); "
-					"border: 1px solid rgba(250, 179, 135, 0.4); border-radius: 8px; "
-					"padding: 2px 8px; font-size: %1px; }"
-				).arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
-				restartChip->setVisible(false);
-				rowLayout->addWidget(restartChip);
-				hardChips->push_back(restartChip);
-			}
-
-			PluginSettings cur = GetCurrentSettings();
-			AppliedModuleSnapshot snap = GetAppliedModuleSnapshot();
-			StreamUP::UIStyles::SwitchButton *moduleSwitch =
-				StreamUP::UIStyles::CreateStyledSwitch("", getValue(cur));
-
-			// Initial chip state
-			if (restartChip && getApplied) {
-				bool dirty = (getValue(cur) != getApplied(snap));
-				restartChip->setVisible(dirty);
-			}
-
-			QObject::connect(moduleSwitch, &StreamUP::UIStyles::SwitchButton::toggled,
-				[setValue, isHard, getApplied, restartChip, onAfterChange, refreshBanner](bool checked) {
-					PluginSettings s = GetCurrentSettings();
-					setValue(s, checked);
-					UpdateSettings(s);
-					if (restartChip && getApplied) {
-						AppliedModuleSnapshot snap2 = GetAppliedModuleSnapshot();
-						restartChip->setVisible(checked != getApplied(snap2));
-					}
-					if (onAfterChange) {
-						onAfterChange();
-					}
-					refreshBanner();
-				});
-
-			rowLayout->addWidget(moduleSwitch, 0, Qt::AlignVCenter);
-			parent->addWidget(card);
-		};
-
-		// Grouped by what each one gives you, not by how it is implemented.
-		// "Interface" and "System" said nothing useful: Backup and the
-		// Adjustment Layer are neither, and a user picking what to switch on
-		// cares about what appears in OBS, not which half of the plugin it
-		// lives in.
-		auto beginGroup = [&](const char *headerKey) {
-			modulesContentLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text(headerKey)));
-			QWidget *group = new QWidget();
-			group->setStyleSheet(QString("background: transparent;"));
-			QVBoxLayout *layout = StreamUP::UIHelpers::CreateVBoxLayout(group);
-			// Stack the per-setting cards flush to the content edge with an even gap.
-			layout->setContentsMargins(0, StreamUP::UIStyles::S(4), 0, StreamUP::UIStyles::S(4));
-			layout->setSpacing(StreamUP::UIStyles::S(12));
-			modulesContentLayout->addWidget(group);
-			return layout;
-		};
-
-		// ── Docks and panels ─────────────────────────────────────────────
-		QVBoxLayout *docksLayout = beginGroup("Plugins.Section.Docks");
-
-		addModuleRow(docksLayout, "Plugins.SceneOrganiser.Title", "Plugins.SceneOrganiser.Description",
-			[](const PluginSettings &s) { return s.modules.sceneOrganiser; },
-			[](PluginSettings &s, bool v) { s.modules.sceneOrganiser = v; },
-			true,
-			[](const AppliedModuleSnapshot &a) { return a.sceneOrganiser; },
-			nullptr);
-
-		addModuleRow(docksLayout, "Plugins.StreamupDock.Title", "Plugins.StreamupDock.Description",
-			[](const PluginSettings &s) { return s.modules.streamupDock; },
-			[](PluginSettings &s, bool v) { s.modules.streamupDock = v; },
-			true,
-			[](const AppliedModuleSnapshot &a) { return a.streamupDock; },
-			nullptr);
-
-		addModuleRow(docksLayout, "Plugins.MixerDock.Title", "Plugins.MixerDock.Description",
-			[](const PluginSettings &s) { return s.modules.mixerDock; },
-			[](PluginSettings &s, bool v) { s.modules.mixerDock = v; },
-			true,
-			[](const AppliedModuleSnapshot &a) { return a.mixerDock; },
-			nullptr);
-
-		addModuleRow(docksLayout, "Plugins.MultiDock.Title", "Plugins.MultiDock.Description",
-			[](const PluginSettings &s) { return s.modules.multiDock; },
-			[](PluginSettings &s, bool v) { s.modules.multiDock = v; },
-			false, nullptr,
-			[]() { StreamUP::SettingsManager::PluginSettings ps = GetCurrentSettings();
-			       StreamUP::MultiDock::MultiDockManager::SetGlobalEnabled(ps.modules.multiDock); });
-
-		// ── Ways to control OBS ──────────────────────────────────────────
-		QVBoxLayout *controlsLayout = beginGroup("Plugins.Section.Controls");
-
-		addModuleRow(controlsLayout, "Plugins.Toolbar.Title", "Plugins.Toolbar.Description",
-			[](const PluginSettings &s) { return s.modules.toolbar; },
-			[](PluginSettings &s, bool v) { s.modules.toolbar = v; },
-			false, nullptr,
-			[]() { ApplyToolbarVisibility(); });
-
-		addModuleRow(controlsLayout, "Plugins.Hotkeys.Title", "Plugins.Hotkeys.Description",
-			[](const PluginSettings &s) { return s.modules.hotkeys; },
-			[](PluginSettings &s, bool v) { s.modules.hotkeys = v; },
-			false, nullptr,
-			[]() { StreamUP::SettingsManager::PluginSettings ps = GetCurrentSettings();
-			       StreamUP::HotkeyManager::SetHotkeyGroupEnabled(ps.modules.hotkeys); });
-
-		// Read on every right-click, so it applies straight away.
-		addModuleRow(controlsLayout, "Plugins.SourceMenuSceneSwitch.Title", "Plugins.SourceMenuSceneSwitch.Description",
-			[](const PluginSettings &s) { return s.modules.sourceMenuSceneSwitch; },
-			[](PluginSettings &s, bool v) { s.modules.sourceMenuSceneSwitch = v; },
-			false, nullptr, nullptr);
-
-		// ── Tools and sources ────────────────────────────────────────────
-		QVBoxLayout *toolsLayout = beginGroup("Plugins.Section.Tools");
-
-		addModuleRow(toolsLayout, "Plugins.Backup.Title", "Plugins.Backup.Description",
-			[](const PluginSettings &s) { return s.modules.backup; },
-			[](PluginSettings &s, bool v) { s.modules.backup = v; },
-			false, nullptr, nullptr);
-
-		addModuleRow(toolsLayout, "Plugins.AdjustmentLayer.Title", "Plugins.AdjustmentLayer.Description",
-			[](const PluginSettings &s) { return s.modules.adjustmentLayerSource; },
-			[](PluginSettings &s, bool v) { s.modules.adjustmentLayerSource = v; },
-			true,
-			[](const AppliedModuleSnapshot &a) { return a.adjustmentLayerSource; },
-			nullptr);
-
-		// Two things deliberately have no toggle here:
-		//
-		// The WebSocket API vendor is always registered. It powers Streamer.Bot,
-		// custom scripts and OBS Raw integrations, stays idle until something
-		// connects, and removing it breaks more workflows than it saves.
-		//
-		// Mixer, studio mode and theme polish always run. Each self-gates on
-		// whether a StreamUP theme is active, so they are already inert on any
-		// other theme, and they are what makes the StreamUP theme look right
-		// when it is.
-		modulesContentLayout->addStretch();
-
-		modulesScrollArea->setWidget(modulesContentContainer);
-		modulesPageLayout->addWidget(modulesScrollArea);
-		stackedWidget->addWidget(modulesPage);
+		// 7. Plugins: switching parts on and off moved to the Features page.
+		// The slot stays (empty, its sidebar row hidden) so the fixed page
+		// indices other callers use keep pointing at the right pages.
+		stackedWidget->addWidget(new QWidget());
 
 		// ── 8. Backup page ───────────────────────────────────────────────
 		QWidget *backupPage = new QWidget();
@@ -2873,9 +2647,6 @@ void ShowSettingsDialog(int tabIndex)
 		themeScrollArea->setWidget(themeContentContainer);
 		themePageLayout->addWidget(themeScrollArea);
 		stackedWidget->addWidget(themePage);
-
-		// Set initial banner state based on current dirty chips
-		refreshBanner();
 
 		// Connect category selection to page switching
 		QObject::connect(categoryList, &QListWidget::currentRowChanged, [stackedWidget](int index) {

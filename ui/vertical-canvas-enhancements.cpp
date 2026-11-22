@@ -228,8 +228,16 @@ static void NormaliseButtonCorners(QWidget *bar)
 			continue;
 		}
 
+		// Our own rule from the last pass comes off too, or each refresh
+		// would add another copy and the sheet would grow for ever.
+		static const QRegularExpression ourRule(QStringLiteral(R"(QPushButton\{border-radius: \d+px;\})"));
+		const QString before = sheet;
 		sheet.remove(radiusRule);
-		button->setStyleSheet(sheet + evenCorners);
+		sheet.remove(ourRule);
+		sheet += evenCorners;
+		if (sheet != before) {
+			button->setStyleSheet(sheet);
+		}
 	}
 }
 
@@ -362,7 +370,8 @@ protected:
 private:
 	void Refresh()
 	{
-		if (!m_dock) {
+		if (!m_dock ||
+		    !StreamUP::ThemeEnhancements::IsTweakActive(StreamUP::ThemeEnhancements::Tweak::VerticalCanvas)) {
 			return;
 		}
 
@@ -461,6 +470,8 @@ void ApplyVerticalCanvasEnhancements()
 	// Same gate as the mixer work: this is a StreamUP theme enhancement, and
 	// on any other theme the dock is left exactly as its plugin built it.
 	if (!StreamUP::ThemeEnhancements::IsTweakActive(StreamUP::ThemeEnhancements::Tweak::VerticalCanvas)) {
+		// Switched off (or the theme changed): take it all back off.
+		CleanupVerticalCanvasEnhancements();
 		return;
 	}
 
@@ -472,6 +483,14 @@ void ApplyVerticalCanvasEnhancements()
 void CleanupVerticalCanvasEnhancements()
 {
 	for (QWidget *dock : FindCanvasDocks()) {
+		// The watchers go first; deleting one takes it off every widget it
+		// was watching.
+		for (QObject *child : dock->children()) {
+			if (dynamic_cast<DockWatcher *>(child)) {
+				child->deleteLater();
+			}
+		}
+
 		QWidget *bar = dock->findChild<QWidget *>(kToolbarObjectName);
 		QBoxLayout *dockLayout = bar ? qobject_cast<QBoxLayout *>(dock->layout()) : nullptr;
 		if (!bar || !dockLayout) {

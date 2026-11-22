@@ -10,6 +10,8 @@
 #include <QWidget>
 #include <QVBoxLayout>
 #include <QFrame>
+#include <QPointer>
+#include <QPointer>
 #include <QTimer>
 #include <QPalette>
 
@@ -105,48 +107,47 @@ void SliderMidpointFilter::drawMidpointMarker(QSlider* slider, QPaintEvent* pain
     }
 }
 
+// The sliders that carry the marker, so it goes on once and comes off again.
+static QList<QPointer<QSlider>> g_markedSliders;
+
 void EnhanceTransitionSlider()
 {
-    QMainWindow* mainWindow = static_cast<QMainWindow*>(obs_frontend_get_main_window());
-    if (!mainWindow) {
-        blog(LOG_WARNING, "[StreamUP] Studio Mode Enhancement: Failed to get main window");
+    if (!ThemeEnhancements::IsTweakActive(ThemeEnhancements::Tweak::StudioMode))
         return;
-    }
+    QMainWindow* mainWindow = static_cast<QMainWindow*>(obs_frontend_get_main_window());
+    if (!mainWindow)
+        return;
 
-    // Try to find the transition slider by searching for QSlider widgets
-    QList<QSlider*> sliders = mainWindow->findChildren<QSlider*>();
-
-    blog(LOG_INFO, "[StreamUP] Studio Mode Enhancement: Found %d sliders in main window", (int)sliders.size());
-
-    for (QSlider* slider : sliders) {
-        if (!slider) continue;
-
-        QString objectName = slider->objectName();
-        QString toolTip = slider->toolTip();
-
-        // Log all sliders for debugging
-        blog(LOG_INFO, "[StreamUP] Studio Mode Enhancement: Checking slider - objectName: '%s', tooltip: '%s'",
-             objectName.toUtf8().constData(), toolTip.toUtf8().constData());
-
-        // The transition slider is typically named "transitionDuration" or similar
-        // Only install on transition-related sliders, not all horizontal sliders
+    for (QSlider* slider : mainWindow->findChildren<QSlider*>()) {
+        if (!slider || slider->property("streamup_midpoint").toBool())
+            continue;
+        const QString objectName = slider->objectName();
+        const QString toolTip = slider->toolTip();
+        // Only the transition slider, not every horizontal slider.
         if (objectName.contains("transition", Qt::CaseInsensitive) ||
             objectName.contains("duration", Qt::CaseInsensitive) ||
             toolTip.contains("transition", Qt::CaseInsensitive)) {
-
-            blog(LOG_INFO, "[StreamUP] Studio Mode Enhancement: Installing event filter on slider - objectName: '%s'",
-                 objectName.toUtf8().constData());
-
-            // Install our custom event filter to draw the midpoint marker
-            SliderMidpointFilter* filter = new SliderMidpointFilter(slider);
-            slider->installEventFilter(filter);
-
-            // Force the slider to repaint so the marker appears
+            slider->installEventFilter(new SliderMidpointFilter(slider));
+            slider->setProperty("streamup_midpoint", true);
+            g_markedSliders.append(slider);
             slider->update();
-
-            blog(LOG_INFO, "[StreamUP] Studio Mode Enhancement: Successfully installed midpoint marker on transition slider");
         }
     }
+}
+
+static void RemoveSliderMarkers()
+{
+    for (const QPointer<QSlider>& slider : g_markedSliders) {
+        if (!slider)
+            continue;
+        for (SliderMidpointFilter* f : slider->findChildren<SliderMidpointFilter*>(Qt::FindDirectChildrenOnly)) {
+            slider->removeEventFilter(f);
+            f->deleteLater();
+        }
+        slider->setProperty("streamup_midpoint", false);
+        slider->update();
+    }
+    g_markedSliders.clear();
 }
 
 void StyleProgramContainer()
@@ -254,12 +255,10 @@ static void OnStudioModeEvent(enum obs_frontend_event event, void *data)
     Q_UNUSED(data);
 
     if (event == OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED) {
-        blog(LOG_INFO, "[StreamUP] Studio Mode enabled - applying enhancements with delay");
         // Use a timer to delay applying enhancements, giving OBS time to create the programWidget
         QTimer::singleShot(100, []() {
             if (!g_studioModeActive)
                 return;
-            blog(LOG_INFO, "[StreamUP] Studio Mode: Applying delayed enhancements");
             EnhanceTransitionSlider();
             StyleProgramContainer();
         });
@@ -268,24 +267,32 @@ static void OnStudioModeEvent(enum obs_frontend_event event, void *data)
 
 void ApplyStudioModeEnhancements()
 {
-    blog(LOG_INFO, "[StreamUP] Registering Studio Mode event handler...");
+    if (g_studioModeActive || !ThemeEnhancements::IsTweakActive(ThemeEnhancements::Tweak::StudioMode))
+        return;
     g_studioModeActive = true;
 
-    // Check if studio mode is already enabled
     if (obs_frontend_preview_program_mode_active()) {
-        blog(LOG_INFO, "[StreamUP] Studio Mode already active - applying enhancements immediately");
         EnhanceTransitionSlider();
         StyleProgramContainer();
     }
-
-    // Register event callback to apply enhancements when studio mode is enabled
     obs_frontend_add_event_callback(OnStudioModeEvent, nullptr);
 }
 
 void CleanupStudioModeEnhancements()
 {
+    if (g_studioModeActive)
+        obs_frontend_remove_event_callback(OnStudioModeEvent, nullptr);
     g_studioModeActive = false;
-    obs_frontend_remove_event_callback(OnStudioModeEvent, nullptr);
+    RemoveSliderMarkers();
+}
+
+void RefreshStudioModeEnhancements()
+{
+    // On: the event callback and the marker. Off: neither, nothing left behind.
+    if (ThemeEnhancements::IsTweakActive(ThemeEnhancements::Tweak::StudioMode))
+        ApplyStudioModeEnhancements();
+    else
+        CleanupStudioModeEnhancements();
 }
 
 } // namespace StudioModeEnhancements

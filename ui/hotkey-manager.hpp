@@ -196,6 +196,11 @@ void UnregisterHotkeys();
  */
 void SetHotkeyGroupEnabled(bool enabled);
 
+// Start-up: the save callback (keeps bindings whether on or off), plus the
+// hotkeys themselves when enabled.
+void Initialise(bool enabled);
+void Shutdown();
+
 /**
  * Reset all StreamUP hotkeys to have no key combinations assigned
  */

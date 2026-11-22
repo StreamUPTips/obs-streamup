@@ -1,6 +1,7 @@
 # StreamUP v2.5.0 - Feature Update
 
 ## New Features
+- **The Features Page** Every part of StreamUP in one place, from StreamUP > Features. Each one gets a card with a preview, a line about what it does, a switch and a Show me button. It pops up for new users, and after an update that adds something, with the new bits marked New.
 - **The StreamUP Mixer** A new audio mixer dock with tabs. Put the sources you want on each tab, in the order you drag them into, so your main mix can sit on one tab and alerts and effects on others. New sources land in Unassigned, so nothing goes missing. Hold Ctrl as you drop to show a source on two tabs.
 - **Everything The OBS Mixer Does** Show or hide inactive and hidden sources, pin, hide, unhide all, lock volume, rename, filters, properties, copy and paste filters, Advanced Audio Properties and the layout switch, all in the same menus as OBS's own mixer. Hide, pin and lock are shared with OBS's mixer, so the two always agree.
 - **Per Tab Visibility** Each mixer tab can follow the mixer setting for inactive and hidden sources, or always show or always hide them.
@@ -8,7 +9,7 @@
 - **StreamUP Theme Settings** A new page in Settings turns each of the StreamUP theme's OBS tweaks on or off one by one. On any other theme the tweaks stay out of the way.
 - **Aitum Multistream Dock On The StreamUP Theme** Cards that follow the theme, a proper toolbar at the same height as the others, and long output names that shorten instead of pushing the stream buttons out of sight.
 - **Sources Dock Groups Like Scene Organiser Folders** On the StreamUP theme, groups in the Sources and Vertical Sources docks get the same folder icons and guide lines as the Scene Organiser.
-- **Jump To A Nested Scene** Right-click a nested scene, or a Source Clone of a scene, in the Sources or Vertical Sources dock and pick Switch to Scene to go straight there. In studio mode you can send it to preview or straight to program, and a vertical scene switches the vertical canvas. Turn it off in StreamUP Settings > Plugins if you don't want it.
+- **Jump To A Nested Scene** Right-click a nested scene, or a Source Clone of a scene, in the Sources or Vertical Sources dock and pick Switch to Scene to go straight there. In studio mode you can send it to preview or straight to program, and a vertical scene switches the vertical canvas. Turn it off in StreamUP > Features if you don't want it.
 - **Overlays Can Install Vertical Scenes** A .StreamUP file can carry scenes for Aitum Vertical now, and they install straight onto your vertical canvas. No Aitum Vertical installed? They're skipped and StreamUP tells you.
 - **Make A Group Over WebSocket** A new GroupSceneItems request. Give it a scene, the items and a name, and it groups them. Works on the vertical canvas too.
 - **Load An Overlay's Controls Over WebSocket** A new RegisterOverlay request loads an overlay's controls without installing it again.
@@ -23,6 +24,9 @@
 - **More WebSocket Requests** RunOverlayAction runs a product's button for you, like Use as My Transition, and GetMyProducts and OpenMyProducts cover the new My Products window.
 
 ## Improvements
+- **Off Really Means Off** Switch a part of StreamUP off and it stops costing OBS anything, with nothing left watching in the background. Most parts switch straight away; the docks and the Adjustment Layer tell you when they need a restart. The StreamUP menu only shows what you have switched on.
+- **No Surprises With The Adjustment Layer** Switching it off tells you how many scenes use it first, and that they come back as soon as you switch it on again.
+- **Clear WebSocket Errors** A request for a part that is switched off says so, instead of quietly doing nothing.
 - **Overlay Controls Reach The Vertical Canvas** Layout parts, nameplate cut-outs and the preview all work on vertical scenes, and the preview is the right shape for them.
 - **Layout Works Inside Groups** Overlay Controls can move and resize parts that sit in a group, so an overlay can keep each widget tidy in its own group.
 - **A Live Layout Preview** The Layout page draws the scene the same way OBS's own preview does, so it is smooth and sharp instead of choppy.
@@ -35,6 +39,9 @@
 - **Newer Products Still Load** A product built for a newer version of StreamUP still opens its controls. Anything this version doesn't know about yet is skipped, instead of the whole panel refusing to load.
 
 ## Bug Fixes
+- **Lost Hotkeys** Switching StreamUP Hotkeys off could wipe their key bindings. They're kept now and come back when you switch the hotkeys back on.
+- **Studio Mode Marker** The halfway mark on the transition slider was added again every time Studio Mode was turned on.
+- **Cut Off Slider Values** The box next to a slider cut off longer values like 2800 ms.
 - **The Layout Page Lagged** Moving parts on the Layout page made OBS stutter, and dragging felt sticky. It runs smoothly now and leaves OBS's own preview alone.
 - **Brighter Dots On Folder Lines** The guide lines in the Sources docks and the Scene Organiser were painted twice where they met, leaving bright dots at every corner.
 - **The Multistream Settings Window On The StreamUP Theme** Its tabs were white text on white and its outputs sat three boxes deep. Both are fixed.

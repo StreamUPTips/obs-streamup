@@ -458,6 +458,11 @@ bool SourceTreeFilter::eventFilter(QObject *watched, QEvent *event)
 
 void ApplySourceTreeEnhancements()
 {
+	// The guides hang off the folder layout, so with folders off there is
+	// nothing to draw and no reason to watch every event in OBS.
+	if (!IsActive()) {
+		return;
+	}
 	if (!g_filter) {
 		g_filter = new SourceTreeFilter();
 		// Application wide, so it sees each tree's viewport paint and also
@@ -475,6 +480,22 @@ void ApplySourceTreeEnhancements()
 
 void RefreshSourceTreeEnhancements()
 {
+	if (!IsActive()) {
+		if (g_filter) {
+			// Take the folder layout back off, then stop watching.
+			for (const QPointer<QListView> &tree : g_trees) {
+				if (tree && tree->model()) {
+					SyncTree(tree);
+				}
+			}
+			CleanupSourceTreeEnhancements();
+		}
+		return;
+	}
+	if (!g_filter) {
+		ApplySourceTreeEnhancements();
+		return;
+	}
 	// A repaint is enough: the paint draws or skips the guides and schedules
 	// the sync that puts the folder layout on or takes it off.
 	for (const QPointer<QListView> &tree : g_trees) {

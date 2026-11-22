@@ -1,3 +1,4 @@
+#include "features-page.hpp"
 #include "menu-manager.hpp"
 #include <streamup/debug-logger.hpp>
 #include <obs.h>
@@ -252,13 +253,20 @@ void LoadMenuItems(QMenu* menu)
     action = menu->addAction(obs_module_text("Menu.StreamUPTheme"));
     QObject::connect(action, &QAction::triggered, []() { StreamUP::ThemeWindow::ShowThemeWindow(); });
 
-    // WebSocket Commands is always visible — the vendor is always registered.
-    action = menu->addAction(obs_module_text("Menu.WebSocket"));
-    QObject::connect(action, &QAction::triggered, []() {
-        // Check if Shift is held to show internal tools
-        bool showInternalTools = QApplication::keyboardModifiers() & Qt::ShiftModifier;
-        StreamUP::WebSocketWindow::ShowWebSocketWindow(showInternalTools);
-    });
+    // WebSocket Commands, while the WebSocket API is switched on.
+    if (menuMod.websocketApi) {
+        action = menu->addAction(obs_module_text("Menu.WebSocket"));
+        QObject::connect(action, &QAction::triggered, []() {
+            // Check if Shift is held to show internal tools
+            bool showInternalTools = QApplication::keyboardModifiers() & Qt::ShiftModifier;
+            StreamUP::WebSocketWindow::ShowWebSocketWindow(showInternalTools);
+        });
+    }
+
+    // Features: every part of StreamUP, switched on and off in one place.
+    // Always here, so a part that is off can be found again.
+    action = menu->addAction(obs_module_text("Menu.Features"));
+    QObject::connect(action, &QAction::triggered, []() { StreamUP::FeaturesPage::Show(); });
 
     action = menu->addAction(obs_module_text("Menu.StreamUPSettings"));
     QObject::connect(action, &QAction::triggered, []() { SettingsDialog(); });

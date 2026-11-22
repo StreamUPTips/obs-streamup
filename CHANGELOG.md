@@ -6,6 +6,8 @@
 **Patch Focus:** The StreamUP Mixer, a tabbed audio mixer with everything OBS's mixer does, plus StreamUP theme settings, Multistream dock styling and Overlay Controls on the vertical canvas
 
 ### New Features
+- A Features page, from StreamUP > Features: every part of StreamUP as a card with a preview, one line about it, an on/off switch and a Show me button. It opens for new users, and after an update that adds a part, with the new parts marked New
+- Every WebSocket request answers "is switched off" when its part of StreamUP is off, so a Streamer.bot action says why it did nothing
 - The StreamUP Mixer: an audio mixer dock with tabs, your own order on each tab, and an Unassigned tab for new sources. Ctrl drop shows a source on two tabs
 - Everything OBS's own mixer does: show inactive, show hidden, pin, hide, unhide all, lock volume, rename, filters, properties, copy and paste filters, Advanced Audio Properties and the layout switch. Hide, pin and lock are shared with OBS's mixer
 - Each mixer tab can follow the mixer setting for inactive and hidden sources, or always show or always hide them
@@ -30,6 +32,10 @@
 - Install a Product asks for the file first, then only for the plugins that product uses. Any plugin it uses that is out of date still gets flagged, a product can name extra plugins it needs, and Shift still skips every check
 
 ### Improvements
+- A part that is switched off now costs OBS nothing: no event filters, timers, callbacks or scans left running. The Toolbar, Multi-Dock, Hotkeys, Switch to Nested Scene, Backup, WebSocket API and every StreamUP theme tweak switch on and off straight away; docks and the Adjustment Layer say when they need an OBS restart
+- The StreamUP menu only lists the parts that are switched on
+- Switching off the Adjustment Layer says how many scenes use it first, and that they stop showing until it is back on
+- The StreamUP Mixer's meters stop redrawing while the mixer is closed or hidden
 - Overlay Controls work on vertical scenes, including layout parts, nameplate cut-outs and the preview
 - Overlay Controls can move and resize parts inside a group
 - The Layout preview is a live OBS display, smooth and sharp
@@ -41,6 +47,10 @@
 - A product made for a newer StreamUP still loads its controls. Anything this version does not know yet is skipped instead of the whole panel failing
 
 ### Bug Fixes
+- Switching StreamUP Hotkeys off could lose their key bindings on the next save. They are now kept and come back when the hotkeys do
+- Studio Mode added another transition slider marker every time it was turned on
+- The Vertical Canvas buttons' style grew a little every time the dock refreshed
+- Slider value boxes cut off longer values such as "2800 ms"
 - Moving parts on the Layout page made OBS stutter
 - Folder guide lines were painted twice at every corner, leaving bright dots
 - The Multistream settings window had white on white tabs and outputs nested three boxes deep on the StreamUP theme

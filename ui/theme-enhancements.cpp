@@ -752,8 +752,14 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow)
 
 void ApplyThemeEnhancements()
 {
-    // Only apply if StreamUP theme is active
+    // Only apply if StreamUP theme is active. Away from it, the app-wide
+    // filter comes off, so nothing looks at every window shown in OBS.
     if (!IsUsingStreamUPTheme()) {
+        if (g_appFilter && QApplication::instance()) {
+            QApplication::instance()->removeEventFilter(g_appFilter);
+            delete g_appFilter;
+            g_appFilter = nullptr;
+        }
         return;
     }
 
@@ -1070,6 +1076,7 @@ void ReapplyThemeTweaks()
     StreamUP::MixerEnhancements::ApplyMixerEnhancements();
     StreamUP::VerticalCanvasEnhancements::ApplyVerticalCanvasEnhancements();
     StreamUP::MultistreamEnhancements::ApplyMultistreamEnhancements();
+    StreamUP::StudioModeEnhancements::RefreshStudioModeEnhancements();
     if (obs_frontend_preview_program_mode_active()) {
         StreamUP::StudioModeEnhancements::StyleProgramContainer();
     }

@@ -10,6 +10,8 @@
 #include <util/config-file.h>
 #include <util/platform.h>
 
+#include <algorithm>
+
 #include <QApplication>
 #include <QEvent>
 #include <QFocusEvent>
@@ -70,16 +72,29 @@ int convertToInt(float number)
 	return int(number);
 }
 
-// One shared redraw timer for every meter, as in OBS.
+// One shared redraw timer for every meter, as in OBS. It only runs while at
+// least one meter is on screen, so a closed or hidden mixer costs nothing.
 QTimer *meterTimer()
 {
 	static QPointer<QTimer> timer;
 	if (!timer) {
 		timer = new QTimer(qApp);
 		timer->setTimerType(Qt::PreciseTimer);
-		timer->start(16);
+		timer->setInterval(16);
 	}
 	return timer;
+}
+
+int g_visibleMeters = 0;
+
+void countMeter(bool shown)
+{
+	g_visibleMeters = std::max(0, g_visibleMeters + (shown ? 1 : -1));
+	QTimer *t = meterTimer();
+	if (g_visibleMeters > 0 && !t->isActive())
+		t->start();
+	else if (g_visibleMeters == 0 && t->isActive())
+		t->stop();
 }
 
 QString plainText(const QString &text)
@@ -97,6 +112,30 @@ QString plainText(const QString &text)
 // ============================================================================
 // VolumeMeter
 // ============================================================================
+
+void VolumeMeter::showEvent(QShowEvent *event)
+{
+	QWidget::showEvent(event);
+	if (!m_counted) {
+		m_counted = true;
+		countMeter(true);
+	}
+}
+
+void VolumeMeter::hideEvent(QHideEvent *event)
+{
+	QWidget::hideEvent(event);
+	if (m_counted) {
+		m_counted = false;
+		countMeter(false);
+	}
+}
+
+VolumeMeter::~VolumeMeter()
+{
+	if (m_counted)
+		countMeter(false);
+}
 
 void VolumeMeter::setBackgroundNominalColor(QColor c)
 {

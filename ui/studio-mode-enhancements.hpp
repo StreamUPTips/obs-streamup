@@ -51,5 +51,8 @@ void StyleProgramContainer();
  */
 void CleanupStudioModeEnhancements();
 
+// Applies or removes everything to match the switch and the theme.
+void RefreshStudioModeEnhancements();
+
 } // namespace StudioModeEnhancements
 } // namespace StreamUP
