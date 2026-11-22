@@ -1,5 +1,7 @@
 #include "patch-notes-window.hpp"
 #include "ui-helpers.hpp"
+#include "streamup-kit.hpp"
+#include <QGridLayout>
 #include <streamup/ui/window-chrome.hpp> // ShadowDialog, makeWindow, WindowShell
 #include <streamup/ui/pill-button.hpp>   // PillButton
 #include <streamup/ui/labels.hpp>        // makeLabel
@@ -223,45 +225,89 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 
 } // namespace
 
+// The headline changes of this release: a picture, a name and one line each.
+// Pictures go in data/whatsnew/<id>.webp (or .gif or .png).
+struct Headline {
+	const char *id;
+	const char *nameKey;
+	const char *lineKey;
+};
+
+static const Headline kHeadlines[] = {
+	{"features", "WhatsNew.Features.Name", "WhatsNew.Features.Line"},
+	{"my-products", "WhatsNew.MyProducts.Name", "WhatsNew.MyProducts.Line"},
+	{"mixer", "WhatsNew.Mixer.Name", "WhatsNew.Mixer.Line"},
+	{"product-check", "WhatsNew.ProductCheck.Name", "WhatsNew.ProductCheck.Line"},
+	{"font-picker", "WhatsNew.FontPicker.Name", "WhatsNew.FontPicker.Line"},
+	{"cleaner", "WhatsNew.Cleaner.Name", "WhatsNew.Cleaner.Line"},
+};
+
+static QString Tx(const char *key)
+{
+	return QString::fromUtf8(obs_module_text(key));
+}
+
 void CreatePatchNotesDialog()
 {
 	UIHelpers::ShowSingletonDialogOnUIThread("patch-notes", []() -> QDialog * {
 		UIStyles::WindowShell shell =
-			UIStyles::makeWindow("Patch Notes", "v" PROJECT_VERSION, nullptr,
+			UIStyles::makeWindow(Tx("WhatsNew.Title"), "v" PROJECT_VERSION, nullptr,
 					     /*brandFooter=*/true, "StreamUP");
 		QDialog *dialog = shell.dialog;
-		dialog->resize(UIStyles::S(720) + 2 * UIStyles::S(UIStyles::ShadowDialog::kShadowMargin),
-			       UIStyles::S(720) + 2 * UIStyles::S(UIStyles::ShadowDialog::kShadowMargin));
 
 		QVBoxLayout *mainLayout = shell.content;
-		mainLayout->setContentsMargins(UIStyles::S(20), UIStyles::S(16), UIStyles::S(20), UIStyles::S(16));
+		mainLayout->setContentsMargins(UIStyles::S(20), UIStyles::S(16), UIStyles::S(20), UIStyles::S(8));
 
-		// Scrollable content
 		QScrollArea *scrollArea = new QScrollArea();
 		scrollArea->setFrameShape(QFrame::NoFrame);
 		UIStyles::useScrollBars(scrollArea);
 		QWidget *contentWidget = new QWidget();
-		contentWidget->setStyleSheet(QString("background: %1;").arg(UIStyles::Colors::BG_DARKEST));
+		contentWidget->setObjectName("wnPage");
+		contentWidget->setStyleSheet(UIStyles::scale_qss(QString("QWidget#wnPage{background:%1;}"
+									 "QFrame#wnCard{background:%2;border-radius:16px;}")
+									 .arg(UIStyles::Colors::BG_DARKEST, UIStyles::Colors::BG_PRIMARY)));
 		QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
-		contentLayout->setContentsMargins(UIStyles::S(16), UIStyles::S(16), UIStyles::S(16), UIStyles::S(16));
+		contentLayout->setContentsMargins(UIStyles::S(4), UIStyles::S(4), UIStyles::S(4), UIStyles::S(16));
 		contentLayout->setSpacing(UIStyles::S(12));
 
-		// Subtitle
-		QString subtitle = QString("Latest updates and improvements in v%1").arg(PROJECT_VERSION);
-		contentLayout->addWidget(UIStyles::makeLabel(subtitle, 13, 500, UIStyles::Colors::TEXT_SECONDARY));
+		contentLayout->addWidget(UIStyles::sectionHeader(QString(Tx("WhatsNew.Heading")).arg(PROJECT_VERSION_MAJOR)));
 
-		// Per-version collapsible cards — latest expanded, rest collapsed.
+		// Picture cards, two to a row.
+		auto *grid = new QGridLayout();
+		grid->setHorizontalSpacing(UIStyles::S(12));
+		grid->setVerticalSpacing(UIStyles::S(12));
+		int n = 0;
+		for (const Headline &h : kHeadlines) {
+			auto *card = new QFrame();
+			card->setObjectName("wnCard");
+			auto *v = new QVBoxLayout(card);
+			v->setContentsMargins(UIStyles::S(10), UIStyles::S(10), UIStyles::S(10), UIStyles::S(12));
+			v->setSpacing(UIStyles::S(6));
+			auto *pic = new StreamUP::Kit::PreviewSlot(QStringLiteral("whatsnew"), QString::fromUtf8(h.id), 130);
+			pic->setPlaying(true);
+			v->addWidget(pic);
+			v->addWidget(UIStyles::makeLabel(Tx(h.nameKey), UIStyles::Sizes::FONT_SIZE_NORMAL, 700,
+							 UIStyles::Colors::TEXT_PRIMARY));
+			QLabel *line = UIStyles::makeLabel(Tx(h.lineKey), UIStyles::Sizes::FONT_SIZE_SMALL, 400,
+							   UIStyles::Colors::TEXT_SECONDARY);
+			line->setWordWrap(true);
+			v->addWidget(line);
+			v->addStretch(1);
+			grid->addWidget(card, n / 2, n % 2);
+			++n;
+		}
+		contentLayout->addLayout(grid);
+
+		// Every change, version by version, folded until asked for.
+		auto *all = new StreamUP::Kit::MoreOptions(QStringLiteral("whatsnew.all"), Tx("WhatsNew.AllChanges"));
 		QVector<VersionBlock> blocks = LoadVersionBlocks();
 		if (blocks.isEmpty()) {
-			QLabel *fallback = new QLabel("Unable to load patch notes.");
-			fallback->setStyleSheet(QString("QLabel { color: %1; }").arg(UIStyles::Colors::COLOR_WARNING));
-			contentLayout->addWidget(fallback);
+			all->body()->addWidget(UIStyles::makeLabel(Tx("WhatsNew.LoadFailed"), 13, 500, UIStyles::Colors::COLOR_WARNING));
 		} else {
-			for (int i = 0; i < blocks.size(); ++i) {
-				contentLayout->addWidget(BuildVersionCard(blocks[i], i == 0));
-			}
+			for (int i = 0; i < blocks.size(); ++i)
+				all->body()->addWidget(BuildVersionCard(blocks[i], i == 0));
 		}
-
+		contentLayout->addWidget(all);
 		contentLayout->addStretch();
 
 		scrollArea->setWidget(contentWidget);
@@ -270,76 +316,22 @@ void CreatePatchNotesDialog()
 		scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 		mainLayout->addWidget(scrollArea);
 
-		// Footer extra rows: support row + links row (above the brand/button line).
-		QVBoxLayout *footerLayout = shell.footer;
+		// Membership once, at the foot; the beer link stays in the brand line.
+		if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Strip))
+			shell.footer->insertWidget(0, member);
 
-		// Support This Project row
-		QHBoxLayout *supportLay = new QHBoxLayout();
-		supportLay->setSpacing(UIStyles::S(8));
-		supportLay->addStretch();
-
-		auto *patreonBtn = new UIStyles::PillButton("Patreon", "neutral");
-		patreonBtn->setLeadingIcon(QIcon(":images/icons/social/patreon.svg"), 16);
-		QObject::connect(patreonBtn, &QPushButton::clicked, []() {
-			QDesktopServices::openUrl(QUrl("https://www.patreon.com/streamup"));
-		});
-
-		auto *kofiBtn = new UIStyles::PillButton("Ko-Fi", "neutral");
-		kofiBtn->setLeadingIcon(QIcon(":images/icons/social/kofi.svg"), 16);
-		QObject::connect(kofiBtn, &QPushButton::clicked, []() {
-			QDesktopServices::openUrl(QUrl("https://ko-fi.com/streamup"));
-		});
-
-		auto *beerBtn = new UIStyles::PillButton("Buy a Beer", "neutral");
-		beerBtn->setLeadingIcon(QIcon(":images/icons/social/beer.svg"), 16);
-		QObject::connect(beerBtn, &QPushButton::clicked, []() {
-			QDesktopServices::openUrl(QUrl("https://paypal.me/andilippi"));
-		});
-
-		supportLay->addWidget(patreonBtn);
-		supportLay->addWidget(kofiBtn);
-		supportLay->addWidget(beerBtn);
-		supportLay->addStretch();
-		footerLayout->addLayout(supportLay);
-
-		// Links + close row
-		QHBoxLayout *linksLay = new QHBoxLayout();
-		linksLay->setSpacing(UIStyles::S(8));
-		linksLay->addStretch();
-
-		auto *docsBtn = new UIStyles::PillButton("Documentation", "success");
-		QObject::connect(docsBtn, &QPushButton::clicked, []() {
-			QDesktopServices::openUrl(QUrl("https://streamup.doras.click/docs"));
-		});
-
-		auto *discordBtn = new UIStyles::PillButton("Discord", "primary");
-		discordBtn->setLeadingIcon(QIcon(":images/icons/social/discord.svg"), 16);
-		QObject::connect(discordBtn, &QPushButton::clicked, []() {
-			QDesktopServices::openUrl(QUrl("https://discord.com/invite/RnDKRaVCEu"));
-		});
-
-		auto *websiteBtn = new UIStyles::PillButton("Website", "outline");
-		QObject::connect(websiteBtn, &QPushButton::clicked, []() {
-			QDesktopServices::openUrl(QUrl("https://streamup.tips"));
-		});
-
-		auto *closeButton = new UIStyles::PillButton("Close", "outline");
+		auto *docsBtn = new UIStyles::PillButton(Tx("WhatsNew.Docs"), "neutral");
+		QObject::connect(docsBtn, &QPushButton::clicked,
+				 []() { QDesktopServices::openUrl(QUrl("https://streamup.doras.click/docs")); });
+		auto *closeButton = new UIStyles::PillButton(Tx("UI.Button.Done"), "primary");
 		QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
-
-		linksLay->addWidget(docsBtn);
-		linksLay->addWidget(discordBtn);
-		linksLay->addWidget(websiteBtn);
-		linksLay->addStretch();
-		footerLayout->addLayout(linksLay);
-
-		// Close action button right-anchored, inline with the brand line.
+		shell.footerButtons->addWidget(docsBtn);
 		shell.footerButtons->addWidget(closeButton);
 
-		dialog->resize(UIStyles::S(720), UIStyles::S(820));
-		UIHelpers::CenterDialog(dialog);
-		// The singleton DialogManager stores the dialog but does not show it; every
-		// other SoT window calls show() itself. Without this the patch-notes window
-		// is constructed but stays invisible (the post-migration regression).
+		const int m = UIStyles::S(UIStyles::ShadowDialog::kShadowMargin);
+		dialog->resize(UIStyles::S(760) + 2 * m, UIStyles::S(780) + 2 * m);
+		UIHelpers::PlaceOverMainWindow(dialog);
+		// The singleton DialogManager stores the dialog but does not show it.
 		dialog->show();
 		dialog->raise();
 		dialog->activateWindow();

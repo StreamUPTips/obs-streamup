@@ -1,4 +1,5 @@
 #include "splash-screen.hpp"
+#include "streamup-kit.hpp"
 #include "ui-helpers.hpp"
 #include <streamup/ui/window-chrome.hpp> // ShadowDialog, RoundedContainer, makeWindow, WindowShell
 #include <streamup/ui/pill-button.hpp>   // PillButton
@@ -1344,7 +1345,8 @@ void CreateSplashDialog(ShowCondition condition)
 
         bannerLayout->addWidget(bannerText, 1);
 
-        mainLayout->addWidget(earlyAccessBanner);
+        // 3.0: the Early Access banner gave way to the membership card below.
+        earlyAccessBanner->deleteLater();
 
         // Header section: 3-column row [left spacer | centered logo+version stack | patch notes].
         // The left spacer is sized to the button's width so the centered stack
@@ -1418,7 +1420,7 @@ void CreateSplashDialog(ShowCondition condition)
         versionLabel->setWordWrap(false); // single line under the logo
         versionLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
-        QPushButton* patchNotesBtn = new StreamUP::UIStyles::PillButton("View Patch Notes", "success");
+        QPushButton* patchNotesBtn = new StreamUP::UIStyles::PillButton(obs_module_text("About.WhatsNew"), "neutral");
         QObject::connect(patchNotesBtn, &QPushButton::clicked, []() {
             StreamUP::PatchNotesWindow::ShowPatchNotesWindow();
         });
@@ -1464,15 +1466,27 @@ void CreateSplashDialog(ShowCondition condition)
         // Header (logo + version + patch notes button) inline at the top
         contentLayout->addWidget(headerWidget);
 
+        // One line about StreamUP, the membership card, and the long welcome
+        // letter folded under "Learn more".
+        QLabel *aboutLine = StreamUP::UIStyles::makeLabel(obs_module_text("About.Line"), StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL,
+                                                          500, StreamUP::UIStyles::Colors::TEXT_SECONDARY);
+        aboutLine->setAlignment(Qt::AlignCenter);
+        aboutLine->setWordWrap(true);
+        contentLayout->addWidget(aboutLine);
+        if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Card))
+            contentLayout->addWidget(member);
+        auto *learnMore = new StreamUP::Kit::MoreOptions(QStringLiteral("about.learnmore"), obs_module_text("About.LearnMore"));
+        contentLayout->addWidget(learnMore);
+
         // Welcome section — the HTML body has its own h2, no duplicate header.
         std::string welcomeMessage = GetWelcomeMessage();
         QLabel* mainContentLabel = UIHelpers::CreateRichTextLabel(QString::fromStdString(welcomeMessage), false, true, Qt::Alignment(), true);
-        contentLayout->addWidget(mainContentLabel);
+        learnMore->body()->addWidget(mainContentLabel);
 
         // Support section — same, HTML carries its own heading.
         std::string supportContent = LoadLocalSupportInfo();
         QLabel* supportLabel = UIHelpers::CreateRichTextLabel(QString::fromStdString(supportContent), false, true, Qt::Alignment(), true);
-        contentLayout->addWidget(supportLabel);
+        learnMore->body()->addWidget(supportLabel);
         
         // More compact donation buttons
         QHBoxLayout* donationLayout = new QHBoxLayout();
@@ -1511,7 +1525,7 @@ void CreateSplashDialog(ShowCondition condition)
         donationLayout->addWidget(githubBtn);
         donationLayout->addStretch();
         
-        contentLayout->addLayout(donationLayout);
+        learnMore->body()->addLayout(donationLayout);
 
         // === Supporters section — real widgets, FlowLayout, proper pills ===
         // Wrapper card so the section reads as a distinct panel.
@@ -1670,18 +1684,18 @@ void CreateSplashDialog(ShowCondition condition)
         QHBoxLayout* linksRow = new QHBoxLayout();
         linksRow->setSpacing(StreamUP::UIStyles::S(8));
 
-        auto* docsBtn = new StreamUP::UIStyles::PillButton("Documentation", "success");
+        auto* docsBtn = new StreamUP::UIStyles::PillButton(obs_module_text("About.Docs"), "neutral");
         QObject::connect(docsBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.doras.click/docs"));
         });
 
-        auto* discordBtn = new StreamUP::UIStyles::PillButton("Discord", "primary");
+        auto* discordBtn = new StreamUP::UIStyles::PillButton("Discord", "neutral");
         discordBtn->setLeadingIcon(QIcon(":images/icons/social/discord.svg"), 14);
         QObject::connect(discordBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://discord.com/invite/RnDKRaVCEu"));
         });
 
-        auto* websiteBtn = new StreamUP::UIStyles::PillButton("Website", "outline");
+        auto* websiteBtn = new StreamUP::UIStyles::PillButton(obs_module_text("About.Website"), "neutral");
         QObject::connect(websiteBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.tips"));
         });
@@ -1691,14 +1705,16 @@ void CreateSplashDialog(ShowCondition condition)
         // (PillButton is custom-painted and ignores per-widget fill QSS).
         auto makeSocialButton = [](const QString &text, const QString &iconPath,
                                    const QString &bg, const QString &hover, const QString &fg) {
-            QPushButton *btn = new QPushButton(text);
+            QPushButton *btn = new QPushButton();
+            btn->setToolTip(text);
+            btn->setAccessibleName(text);
             btn->setCursor(Qt::PointingHandCursor);
             btn->setIcon(QIcon(iconPath));
             btn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
             btn->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
                 "QPushButton { background: %1; color: %3; border: 1px solid %1;"
                 "  border-radius: 12px; font-weight: bold; font-size: 11px;"
-                "  padding: 0 14px; min-height: 22px; max-height: 22px; min-width: 80px; }"
+                "  padding: 0 6px; min-height: 26px; max-height: 26px; min-width: 26px; max-width: 26px; }"
                 "QPushButton:hover { background: %2; border: 1px solid %2; }")
                 .arg(bg, hover, fg)));
             return btn;
@@ -1736,12 +1752,12 @@ void CreateSplashDialog(ShowCondition condition)
         QHBoxLayout* actionRow = new QHBoxLayout();
         actionRow->setSpacing(StreamUP::UIStyles::S(12));
 
-        auto* updateBtn = new StreamUP::UIStyles::PillButton(obs_module_text("StreamUP.SplashScreen.CheckForUpdate"), "primary");
+        auto* updateBtn = new StreamUP::UIStyles::PillButton(obs_module_text("StreamUP.SplashScreen.CheckForUpdate"), "neutral");
         QObject::connect(updateBtn, &QPushButton::clicked, []() {
             StreamUP::PluginManager::ShowCachedPluginUpdatesDialog();
         });
 
-        auto* closeBtn = new StreamUP::UIStyles::PillButton(obs_module_text("Close"), "outline");
+        auto* closeBtn = new StreamUP::UIStyles::PillButton(obs_module_text("UI.Button.Done"), "primary");
         closeBtn->setDefault(true);
         QObject::connect(closeBtn, &QPushButton::clicked, [dialog]() {
             dialog->close();

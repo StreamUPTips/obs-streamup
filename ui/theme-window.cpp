@@ -3,6 +3,7 @@
 #include "ui-helpers.hpp"
 #include <streamup/ui/window-chrome.hpp> // ShadowDialog, RoundedContainer, makeWindow, WindowShell
 #include <streamup/ui/pill-button.hpp>   // PillButton
+#include "streamup-kit.hpp"
 #include <streamup/ui/labels.hpp>        // makeLabel, sectionHeader
 #include <streamup/ui/ui-scrollbar.hpp>  // useScrollBars
 #include <streamup/ui/image-carousel.hpp> // su::ImageCarousel (SoT carousel look)
@@ -373,89 +374,30 @@ void CreateThemeDialog()
         contentLayout->setSpacing(StreamUP::UIStyles::S(20));
 
         // Modern header inside scrollable area
-        QWidget* headerSection = new QWidget();
-        QVBoxLayout* headerLayout = new QVBoxLayout(headerSection);
-        headerLayout->setContentsMargins(0, 0, 0, 0);
-        headerLayout->setSpacing(StreamUP::UIStyles::S(8));
+        // The pictures lead; one line under them; the way to get it.
+        ThemeImageCarousel* carousel = new ThemeImageCarousel();
+        contentLayout->addWidget(carousel);
 
-        // Brief subtitle (title already in frameless chrome header)
-        QLabel* subtitleLabel = StreamUP::UIStyles::makeLabel(
-            "The cleanest OBS theme out there - available to all supporters of any tier", 13, 500,
-            StreamUP::UIStyles::Colors::TEXT_SECONDARY);
+        QLabel* subtitleLabel = StreamUP::UIStyles::makeLabel(obs_module_text("ThemeWindow.Line"), 14, 500,
+                                                              StreamUP::UIStyles::Colors::TEXT_SECONDARY);
         subtitleLabel->setWordWrap(true);
         subtitleLabel->setAlignment(Qt::AlignCenter);
+        contentLayout->addWidget(subtitleLabel);
 
-        headerLayout->addWidget(subtitleLabel);
+        if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Strip,
+                                                             obs_module_text("ThemeWindow.Membership")))
+            contentLayout->addWidget(member);
+        contentLayout->addStretch(1);
 
-        contentLayout->addWidget(headerSection);
-        
-        // Description section
-        contentLayout->addWidget(StreamUP::UIStyles::sectionHeader("About the StreamUP Theme"));
-        QWidget* descriptionGroup = new QWidget();
-        QVBoxLayout* descriptionLayout = new QVBoxLayout(descriptionGroup);
-        descriptionLayout->setContentsMargins(0, 0, 0, 0);
-        descriptionLayout->setSpacing(StreamUP::UIStyles::S(12));
-
-        QLabel* descriptionText = StreamUP::UIStyles::makeLabel(
-            "The StreamUP OBS Theme is carefully crafted to provide the cleanest and most "
-            "professional OBS Studio experience. This theme perfectly matches the StreamUP plugin's "
-            "design language, creating a seamless and cohesive interface throughout OBS Studio. "
-            "Featuring modern design elements, improved readability, and streamlined interfaces - "
-            "it's the perfect companion to your streaming setup.", 14, 500,
-            StreamUP::UIStyles::Colors::TEXT_PRIMARY);
-        descriptionText->setWordWrap(true);
-        descriptionLayout->addWidget(descriptionText);
-
-        contentLayout->addWidget(descriptionGroup);
-
-        // Theme images carousel section
-        contentLayout->addWidget(StreamUP::UIStyles::sectionHeader("Theme Preview"));
-        QWidget* previewGroup = new QWidget();
-        QVBoxLayout* previewLayout = new QVBoxLayout(previewGroup);
-        previewLayout->setContentsMargins(0, 0, 0, 0);
-        previewLayout->setSpacing(StreamUP::UIStyles::S(12));
-
-        // The SoT-styled carousel paints its own circular nav arrows + accent
-        // dots internally and slides between the real theme screenshots, so it
-        // fills the full preview width (no external pill buttons needed).
-        ThemeImageCarousel* carousel = new ThemeImageCarousel();
-        previewLayout->addWidget(carousel);
-
-        contentLayout->addWidget(previewGroup);
-        
-        // Access information section
-        contentLayout->addWidget(StreamUP::UIStyles::sectionHeader("How to Get the Theme"));
-        QWidget* accessGroup = new QWidget();
-        QVBoxLayout* accessLayout = new QVBoxLayout(accessGroup);
-        accessLayout->setContentsMargins(0, 0, 0, 0);
-        accessLayout->setSpacing(StreamUP::UIStyles::S(12));
-
-        QLabel* accessText = StreamUP::UIStyles::makeLabel(
-            "The StreamUP OBS Theme is available to all StreamUP supporters of any tier. "
-            "Simply become a supporter and you'll gain access to download and use this "
-            "professional theme for your OBS Studio setup.", 14, 500,
-            StreamUP::UIStyles::Colors::TEXT_PRIMARY);
-        accessText->setWordWrap(true);
-        accessLayout->addWidget(accessText);
-
-        // Support button
-        QPushButton* supportButton = new StreamUP::UIStyles::PillButton("Become a Supporter", "primary");
-        QObject::connect(supportButton, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://streamup.tips/premium"));
-        });
-        accessLayout->addWidget(supportButton);
-        
-        contentLayout->addWidget(accessGroup);
-        
         scrollArea->setWidget(contentWidget);
         mainLayout->addWidget(scrollArea);
 
         // Action/close buttons in footer (right-anchored, inline with brand line)
-        QPushButton* visitButton = new StreamUP::UIStyles::PillButton("Visit StreamUP.tips", "primary");
+        QPushButton* visitButton = new StreamUP::UIStyles::PillButton(obs_module_text("ThemeWindow.Get"), "primary");
         QObject::connect(visitButton, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://streamup.tips/"));
+            QDesktopServices::openUrl(QUrl("https://streamup.tips/product/streamup-obs-theme"));
         });
-        QPushButton* closeButton = new StreamUP::UIStyles::PillButton("Close", "outline");
+        QPushButton* closeButton = new StreamUP::UIStyles::PillButton(obs_module_text("UI.Button.Done"), "outline");
         QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
         shell.footerButtons->addWidget(closeButton);
         shell.footerButtons->addWidget(visitButton);
