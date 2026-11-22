@@ -779,10 +779,40 @@ void StreamUPDock::showContextMenu(const QPoint& position)
 {
 	QMenu contextMenu(this);
 
+	// Pick the buttons right here: tick to show, untick to hide.
+	using DTS = StreamUP::SettingsManager::DockToolSettings;
+	const DTS current = StreamUP::SettingsManager::GetDockToolSettings();
+	struct Choice {
+		const char *key;
+		bool DTS::*field;
+	};
+	static const Choice choices[] = {
+		{"Dock.Tool.LockAllSources.Title", &DTS::showLockAllSources},
+		{"Dock.Tool.LockCurrentSources.Title", &DTS::showLockCurrentSources},
+		{"Dock.Tool.RefreshBrowserSources.Title", &DTS::showRefreshBrowserSources},
+		{"Dock.Tool.RefreshAudioMonitoring.Title", &DTS::showRefreshAudioMonitoring},
+		{"Dock.Tool.VideoCaptureOptions.Title", &DTS::showVideoCaptureOptions},
+		{"Dock.Tool.GroupSelectedSources.Title", &DTS::showGroupSelectedSources},
+		{"Dock.Tool.ToggleVisibilitySelectedSources.Title", &DTS::showToggleVisibilitySelectedSources},
+	};
+	QAction *heading = contextMenu.addAction(obs_module_text("Dock.ContextMenu.Buttons"));
+	heading->setEnabled(false);
+	for (const Choice &c : choices) {
+		QAction *a = contextMenu.addAction(obs_module_text(c.key));
+		a->setCheckable(true);
+		a->setChecked(current.*(c.field));
+		const auto field = c.field;
+		connect(a, &QAction::toggled, [field](bool on) {
+			DTS s = StreamUP::SettingsManager::GetDockToolSettings();
+			s.*field = on;
+			StreamUP::SettingsManager::UpdateDockToolSettings(s);
+		});
+	}
+	contextMenu.addSeparator();
+
 	QAction* configureAction = contextMenu.addAction(obs_module_text("Dock.ContextMenu.Configure"));
 	connect(configureAction, &QAction::triggered, []() {
-		// Open Settings window on Dock Configuration tab (index 5)
-		StreamUP::SettingsManager::ShowSettingsDialog(5);
+		StreamUP::SettingsManager::ShowSettingsDialog(StreamUP::SettingsManager::SettingsTabDockConfig);
 	});
 
 	contextMenu.exec(mapToGlobal(position));
