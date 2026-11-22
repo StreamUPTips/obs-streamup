@@ -1,53 +1,44 @@
-# StreamUP v2.5.0 - Feature Update
+# StreamUP v3.0.0 - Major Update
+
+## Headlines
+- **The Features Page** Every part of StreamUP on one page, each with a picture, one line and a switch. Turn off what you don't use and it costs OBS nothing at all.
+- **My Products** Everything StreamUP has installed in your scene collection, with its picture and its controls one click away.
+- **The StreamUP Mixer** An audio mixer dock with tabs, so your main mix, your alerts and your music each get their own page.
+- **Only The Plugins You Need** Installing a product checks just the plugins that product uses, then shows what went in and the next step.
+- **Pick Any Font** Every font you have, plus all of Google Fonts, each shown in its own style. Pick a Google font and it installs for you.
+- **Calmer Windows** Less reading, more seeing. One line per setting with the rest behind a ?, coloured pills for status, and small messages inside OBS instead of Windows pop-ups.
 
 ## New Features
-- **The Features Page** Every part of StreamUP in one place, from StreamUP > Features. Each one gets a card with a preview, a line about what it does, a switch and a Show me button. It pops up for new users, and after an update that adds something, with the new bits marked New.
-- **The StreamUP Mixer** A new audio mixer dock with tabs. Put the sources you want on each tab, in the order you drag them into, so your main mix can sit on one tab and alerts and effects on others. New sources land in Unassigned, so nothing goes missing. Hold Ctrl as you drop to show a source on two tabs.
-- **Everything The OBS Mixer Does** Show or hide inactive and hidden sources, pin, hide, unhide all, lock volume, rename, filters, properties, copy and paste filters, Advanced Audio Properties and the layout switch, all in the same menus as OBS's own mixer. Hide, pin and lock are shared with OBS's mixer, so the two always agree.
-- **Per Tab Visibility** Each mixer tab can follow the mixer setting for inactive and hidden sources, or always show or always hide them.
-- **Looks Like OBS In Any Theme** Mixer channels are built from the same parts as OBS's own, so Yami, the light themes, System and the StreamUP theme all style them exactly as they style the native mixer.
-- **StreamUP Theme Settings** A new page in Settings turns each of the StreamUP theme's OBS tweaks on or off one by one. On any other theme the tweaks stay out of the way.
-- **Aitum Multistream Dock On The StreamUP Theme** Cards that follow the theme, a proper toolbar at the same height as the others, and long output names that shorten instead of pushing the stream buttons out of sight.
-- **Sources Dock Groups Like Scene Organiser Folders** On the StreamUP theme, groups in the Sources and Vertical Sources docks get the same folder icons and guide lines as the Scene Organiser.
-- **Jump To A Nested Scene** Right-click a nested scene, or a Source Clone of a scene, in the Sources or Vertical Sources dock and pick Switch to Scene to go straight there. In studio mode you can send it to preview or straight to program, and a vertical scene switches the vertical canvas. Turn it off in StreamUP > Features if you don't want it.
-- **Overlays Can Install Vertical Scenes** A .StreamUP file can carry scenes for Aitum Vertical now, and they install straight onto your vertical canvas. No Aitum Vertical installed? They're skipped and StreamUP tells you.
-- **Make A Group Over WebSocket** A new GroupSceneItems request. Give it a scene, the items and a name, and it groups them. Works on the vertical canvas too.
-- **Load An Overlay's Controls Over WebSocket** A new RegisterOverlay request loads an overlay's controls without installing it again.
-- **One Windows Download** A single Windows download covers every OBS version, with the installer and both plugin folders ready to go.
-- **My Products** A new window in the StreamUP menu lists every StreamUP product in your scene collection, sorted into Alerts, Transitions, Effects, Widgets and the rest, each with its own little icon. The icon comes inside the product file, so it's there however you install it. There's a search box for when you've got loads installed. Hit Adjust on any of them and its controls open, so you never have to remember where a setting lives. It replaces the old Overlays menu.
-- **Use As My Transition** Transition products come with a button that adds them to your transitions in one click, already pointed at the right scene with the right timing, and picks it for you. No more making a Scene as Transition by hand.
-- **Transition Timing Sliders** A transition product can give you sliders for how long it runs and when the scenes swap over, right in its controls.
-- **Pick Any Font** Font settings open a proper font picker now: every font you have installed plus the whole Google Fonts library, each shown in its own style, with search. Choose a Google font and it downloads and installs for you. OBS's own text needs a restart to show a brand new font, and the picker tells you exactly what to do.
-- **Type In Slider Values** The number next to every slider is now a box you can type into, so you can hit an exact value without nudging.
-- **Your Own Logo** Overlay Controls can have an image picker now. Browse for your logo, see a little preview, and it lands straight in the overlay.
-- **Only The Plugins A Product Needs** Install a Product now asks for the file first, then checks just the plugins that product actually uses. No more being told to install ten plugins for a transition that needs two. Anything it uses that's out of date still gets flagged, a plugin it doesn't recognise is named so you can find it with the Pluginstaller, and holding Shift still skips the lot.
-- **More WebSocket Requests** RunOverlayAction runs a product's button for you, like Use as My Transition, and GetMyProducts and OpenMyProducts cover the new My Products window.
+- **Tidier StreamUP Menu** Products first, then Quick Actions, Multi-Dock, Backup and plugin updates, then Features and Settings, with Help in its own submenu.
+- **Installed Card** Every install ends on a card with the product's picture and the one thing to do next: Adjust it, or go to its scene.
+- **Mixer Tabs Your Way** Put sources on the tabs you want, in your own order. New sources land in Unassigned, and holding Ctrl as you drop shows a source on two tabs.
+- **Everything The OBS Mixer Does** Hide, pin, lock, rename, filters, properties and Advanced Audio Properties, in the same menus as OBS's own mixer.
+- **Use As My Transition** Transition products add themselves to your transitions in one click, already set up.
+- **Your Own Logo** Pick a picture for a product's logo and see it straight away.
+- **Type In Slider Values** The box next to every slider takes a typed number.
+- **Jump To A Nested Scene** Right-click a nested scene in the Sources dock and pick Go to this scene.
+- **Pick Your Dock Buttons** Right-click the StreamUP Dock to choose which buttons it shows.
+- **Vertical Scenes** A .StreamUP file can install scenes onto your Aitum Vertical canvas.
+- **More WebSocket Requests** GroupSceneItems, RegisterOverlay, RunOverlayAction, GetMyProducts and OpenMyProducts.
+- **One Windows Download** A single download covers every OBS version.
 
 ## Improvements
-- **Off Really Means Off** Switch a part of StreamUP off and it stops costing OBS anything, with nothing left watching in the background. Most parts switch straight away; the docks and the Adjustment Layer tell you when they need a restart. The StreamUP menu only shows what you have switched on.
-- **No Surprises With The Adjustment Layer** Switching it off tells you how many scenes use it first, and that they come back as soon as you switch it on again.
-- **Clear WebSocket Errors** A request for a part that is switched off says so, instead of quietly doing nothing.
-- **Overlay Controls Reach The Vertical Canvas** Layout parts, nameplate cut-outs and the preview all work on vertical scenes, and the preview is the right shape for them.
-- **Layout Works Inside Groups** Overlay Controls can move and resize parts that sit in a group, so an overlay can keep each widget tidy in its own group.
-- **A Live Layout Preview** The Layout page draws the scene the same way OBS's own preview does, so it is smooth and sharp instead of choppy.
-- **A Tidier Scene Organiser Tree** Scenes line up under their folder's icon like groups do in the Sources list, without a big gap to the right. The guide lines drop from each folder's arrow and run unbroken to the last thing inside it, even when a folder sits inside another folder.
-- **Smoother Sliders** Dragging a slider or picking a colour in Overlay Controls no longer bogs OBS down on overlays with lots of linked settings.
-- **Tidier Controls** The little reset arrows are proper buttons now, and they only show up on settings you've actually changed.
-- **My Products For Big Collections** A sidebar sorts your products by category, cards fold away and remember it, and search finds anything across the lot.
-- **Product Settings Open Fast** Opening a product's controls used to take a second or two. It's about five times quicker now, and the All Settings tab is gone to keep it lean.
-- **Windows Open Where OBS Is** Product controls, My Products and the floating StreamUP Mixer open over OBS on the screen OBS is on, instead of turning up on another monitor. If you dock the mixer, it stays docked where you put it.
-- **Newer Products Still Load** A product built for a newer version of StreamUP still opens its controls. Anything this version doesn't know about yet is skipped, instead of the whole panel refusing to load.
+- **Off Really Means Off** A part you switch off stops running completely. Most switch straight away; the docks and the Adjustment Layer tell you when they need a restart.
+- **Settings Made Simple** Fewer tabs, one line per setting, and the rare options folded away. Your set hotkeys come first, and Backup tells you when your last backup was made.
+- **Clear Plugin Checks** One row per plugin with a Get button, and coloured pills saying what needs doing.
+- **Messages Where You Are Looking** Quick Actions and StreamUP messages show a small note in the corner of OBS.
+- **WebSocket Commands** Search for a command and copy it in one click, as OBS Raw or Streamer.bot code.
+- **Faster Product Controls** They open about five times quicker.
+- **Windows Open Where OBS Is** StreamUP windows and the floating mixer open on the screen OBS is on.
+- **No Surprises With The Adjustment Layer** Switching it off tells you how many scenes use it first.
 
 ## Bug Fixes
-- **Lost Hotkeys** Switching StreamUP Hotkeys off could wipe their key bindings. They're kept now and come back when you switch the hotkeys back on.
+- **Lost Hotkeys** Switching StreamUP Hotkeys off could wipe their key bindings. They're kept now.
+- **A Raw Menu Label** The Scene Organiser right-click menu showed a text key instead of Adjust.
+- **Cut Off Slider Values** Value boxes cut off longer values like 2800 ms and 2.00×.
 - **Studio Mode Marker** The halfway mark on the transition slider was added again every time Studio Mode was turned on.
-- **Cut Off Slider Values** The box next to a slider cut off longer values like 2800 ms.
-- **The Layout Page Lagged** Moving parts on the Layout page made OBS stutter, and dragging felt sticky. It runs smoothly now and leaves OBS's own preview alone.
-- **Brighter Dots On Folder Lines** The guide lines in the Sources docks and the Scene Organiser were painted twice where they met, leaving bright dots at every corner.
-- **The Multistream Settings Window On The StreamUP Theme** Its tabs were white text on white and its outputs sat three boxes deep. Both are fixed.
-- **Numbers Sort Properly In The Scene Organiser** Sorting A to Z put Scene 10 before Scene 2. Numbers in scene and folder names now sort the way you read them.
-
----
+- **Layout Page Lag** Moving parts on the Layout page made OBS stutter.
+- **Brighter Dots On Folder Lines** Guide lines were painted twice where they met.
 
 # StreamUP v2.4.1 - Patch Update
 
