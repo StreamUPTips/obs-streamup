@@ -16,6 +16,8 @@
 - **My Products** A new window in the StreamUP menu lists every StreamUP product in your scene collection, sorted into Alerts, Transitions, Effects, Widgets and the rest, each with its own little icon. The icon comes inside the product file, so it's there however you install it. There's a search box for when you've got loads installed. Hit Adjust on any of them and its controls open, so you never have to remember where a setting lives. It replaces the old Overlays menu.
 - **Use As My Transition** Transition products come with a button that adds them to your transitions in one click, already pointed at the right scene with the right timing, and picks it for you. No more making a Scene as Transition by hand.
 - **Transition Timing Sliders** A transition product can give you sliders for how long it runs and when the scenes swap over, right in its controls.
+- **Pick Any Font** Font settings open a proper font picker now: every font you have installed plus the whole Google Fonts library, each shown in its own style, with search. Choose a Google font and it downloads and installs for you. OBS's own text needs a restart to show a brand new font, and the picker tells you exactly what to do.
+- **Type In Slider Values** The number next to every slider is now a box you can type into, so you can hit an exact value without nudging.
 - **Your Own Logo** Overlay Controls can have an image picker now. Browse for your logo, see a little preview, and it lands straight in the overlay.
 - **Only The Plugins A Product Needs** Install a Product now asks for the file first, then checks just the plugins that product actually uses. No more being told to install ten plugins for a transition that needs two. Anything it uses that's out of date still gets flagged, a plugin it doesn't recognise is named so you can find it with the Pluginstaller, and holding Shift still skips the lot.
 - **More WebSocket Requests** RunOverlayAction runs a product's button for you, like Use as My Transition, and GetMyProducts and OpenMyProducts cover the new My Products window.
@@ -26,6 +28,8 @@
 - **A Live Layout Preview** The Layout page draws the scene the same way OBS's own preview does, so it is smooth and sharp instead of choppy.
 - **A Tidier Scene Organiser Tree** Scenes line up under their folder's icon like groups do in the Sources list, without a big gap to the right. The guide lines drop from each folder's arrow and run unbroken to the last thing inside it, even when a folder sits inside another folder.
 - **Smoother Sliders** Dragging a slider or picking a colour in Overlay Controls no longer bogs OBS down on overlays with lots of linked settings.
+- **Tidier Controls** The little reset arrows are proper buttons now, and they only show up on settings you've actually changed.
+- **My Products For Big Collections** A sidebar sorts your products by category, cards fold away and remember it, and search finds anything across the lot.
 - **Product Settings Open Fast** Opening a product's controls used to take a second or two. It's about five times quicker now, and the All Settings tab is gone to keep it lean.
 - **Windows Open Where OBS Is** Product controls, My Products and the floating StreamUP Mixer open over OBS on the screen OBS is on, instead of turning up on another monitor. If you dock the mixer, it stays docked where you put it.
 - **Newer Products Still Load** A product built for a newer version of StreamUP still opens its controls. Anything this version doesn't know about yet is skipped, instead of the whole panel refusing to load.

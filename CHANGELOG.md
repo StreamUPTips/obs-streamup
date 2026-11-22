@@ -18,6 +18,9 @@
 - New WebSocket requests: GroupSceneItems to group items in a scene, and RegisterOverlay to load an overlay's controls without installing it
 - One Windows download for every OBS version
 - My Products: every StreamUP product in your scene collection in one list, from the StreamUP menu, grouped by category with a search box, each with its own icon (or its initials) and an Adjust button that opens its controls. It replaces the Overlays menu, and its row menu has Use as My Transition and Remove Controls
+- My Products has a sidebar with each category and its count, category cards that fold away and stay folded, and a search that looks across everything
+- Font controls open a font picker: every installed font and the Google Fonts catalogue, each drawn in its own face, with search. Picking a Google font downloads and installs it for you. OBS's GDI+ text shows a new font after OBS restarts, FreeType 2 text needs it installed for all users too, and the picker says which applies
+- Slider values can be typed: the number beside each slider is an editable box with the unit, kept in step with the slider
 - Products can ship an icon and a category in their manifest. The icon can be embedded in the .StreamUP file itself (a PNG, JPEG or WebP data URI, up to 256 KB), so it always travels with the product, and it is kept with the plugin after the download is deleted. A bad or oversized icon is skipped, never stopping the install
 - Transition products get a Use as My Transition button that adds them to OBS's transitions as a Scene as Transition, set up and picked, with no setup by hand
 - Overlay Controls can drive a transition's own settings, so a product can offer sliders for its duration and swap point
@@ -33,6 +36,7 @@
 - A tighter Scene Organiser tree, with guide lines that join up
 - Sliders and colour pickers in Overlay Controls no longer slow OBS down
 - Product controls open about five times faster (Aura: 1.7 s down to 0.3 s). Tabs are built when you first open them, font lists fill when you open them, and a slow step that made every slider cost 70 ms is gone. The All Settings tab is gone too
+- Reset, reorder and more buttons in Overlay Controls and My Products are proper icon buttons. A reset button only shows on a row that differs from its default
 - StreamUP windows (product controls, My Products) and the floating StreamUP Mixer open over OBS, on the screen OBS is on. A floating mixer saved on another screen, or off every screen, comes back over OBS. A docked mixer stays where it is
 - A product made for a newer StreamUP still loads its controls. Anything this version does not know yet is skipped instead of the whole panel failing
 
