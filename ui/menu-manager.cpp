@@ -1,5 +1,6 @@
 #include "features-page.hpp"
 #include "menu-manager.hpp"
+#include "notification-manager.hpp"
 #include <streamup/debug-logger.hpp>
 #include <obs.h>
 #include "source-manager.hpp"
@@ -149,11 +150,15 @@ void LoadMenuItems(QMenu* menu)
         action = quickMenu->addAction(obs_module_text("Menu.Source.RefreshAudioMonitoring"));
         QObject::connect(action, &QAction::triggered, []() {
             obs_enum_sources(StreamUP::SourceManager::RefreshAudioMonitoring, nullptr);
+            StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Feature.AudioMonitoring.Title"),
+                                                                obs_module_text("Feature.AudioMonitoring.Notification"));
         });
 
         action = quickMenu->addAction(obs_module_text("Menu.Source.RefreshBrowserSources"));
         QObject::connect(action, &QAction::triggered, []() {
             obs_enum_sources(StreamUP::SourceManager::RefreshBrowserSources, nullptr);
+            StreamUP::NotificationManager::SendInfoNotification(obs_module_text("Feature.BrowserSources.Title"),
+                                                                obs_module_text("Feature.BrowserSources.Notification"));
         });
 
         QMenu* videoDeviceMenu = quickMenu->addMenu(obs_module_text("Menu.VideoCapture.Root"));

@@ -1,6 +1,7 @@
 #include "notification-manager.hpp"
 #include "settings-manager.hpp"
 #include "error-handler.hpp"
+#include "streamup-kit.hpp"
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <QSystemTrayIcon>
@@ -8,33 +9,21 @@
 namespace StreamUP {
 namespace NotificationManager {
 
+// Every StreamUP message is a small toast inside OBS now, not a Windows tray
+// balloon: it appears where you are looking and says what happened in a few
+// words. The body is that short line; the title only stands in when there is
+// no body. "Mute StreamUP messages" still silences them.
 void SendTrayNotification(QSystemTrayIcon::MessageIcon icon, const QString& title, const QString& body)
 {
     if (StreamUP::SettingsManager::AreNotificationsMuted()) {
-        StreamUP::ErrorHandler::LogInfo("Notifications are muted, skipping tray notification", StreamUP::ErrorHandler::Category::UI);
+        StreamUP::ErrorHandler::LogInfo("Notifications are muted, skipping toast", StreamUP::ErrorHandler::Category::UI);
         return;
     }
 
-    if (!QSystemTrayIcon::isSystemTrayAvailable() || !QSystemTrayIcon::supportsMessages()) {
-        StreamUP::ErrorHandler::LogWarning("System tray notifications not available on this platform", StreamUP::ErrorHandler::Category::UI);
-        return;
-    }
-
-    SystemTrayNotification* notification = new SystemTrayNotification{icon, title, body};
-
-    obs_queue_task(
-        OBS_TASK_UI,
-        [](void* param) {
-            auto notification = static_cast<SystemTrayNotification*>(param);
-            void* systemTrayPtr = obs_frontend_get_system_tray();
-            if (systemTrayPtr) {
-                auto systemTray = static_cast<QSystemTrayIcon*>(systemTrayPtr);
-                QString prefixedTitle = QString("[%1] %2").arg(obs_module_text("App.Name")).arg(notification->title);
-                systemTray->showMessage(prefixedTitle, notification->body, notification->icon);
-            }
-            delete notification;
-        },
-        (void*)notification, false);
+    const StreamUP::Kit::Status status = icon == QSystemTrayIcon::Critical ? StreamUP::Kit::Status::Bad
+                                       : icon == QSystemTrayIcon::Warning  ? StreamUP::Kit::Status::Warn
+                                                                           : StreamUP::Kit::Status::Ok;
+    StreamUP::Kit::Toast(body.isEmpty() ? title : body, status);
 }
 
 bool IsSystemTrayAvailable()

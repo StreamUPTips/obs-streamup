@@ -293,6 +293,7 @@ public:
 		h->addWidget(icon);
 		QLabel *label = su::makeLabel(text, su::Sizes::FONT_SIZE_NORMAL, 600, su::Colors::TEXT_PRIMARY);
 		label->setStyleSheet(label->styleSheet() + "background:transparent;");
+		label->setWordWrap(false);
 		h->addWidget(label);
 		adjustSize();
 	}
