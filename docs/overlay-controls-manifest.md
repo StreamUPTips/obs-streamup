@@ -128,18 +128,38 @@ it in its private settings, which travel inside the scene collection:
 "product": { "id": "logo-card-sup076", "name": "Logo Card", "version": "1.0.0" }
 ```
 
+Two optional keys next to it (top level of the manifest, or inside `product`):
+
+```json
+"icon": "Resources/Icons/Logo Card - Icon.png",
+"category": "transitions"
+```
+
+- `icon` is a path relative to the `.StreamUP` file: a square PNG or JPG of
+  about 256 px works best (it is shown at 36 px, cropped to a square). It is
+  copied at install into the plugin's config folder (`product-icons/`), so it
+  survives the user deleting or moving the download. Adding controls from a
+  file, or `RegisterOverlay`, copies it too.
+- `category` groups the product in My Products: `overlays`, `alerts`,
+  `transitions`, `effects`, `widgets`, `games` or `tools`. Without it the
+  category is read from the file name (`StreamUP Alerts - ...`,
+  `StreamUP FX - ...`), then from the product (a transition action means
+  Transitions, controls mean Overlays), else Other.
+
 Stored on each scene as:
 
 ```json
 "streamup_product": {
   "id": "logo-card-sup076", "name": "Logo Card", "version": "1.0.0",
-  "overlay": "logo-card", "installed": "2026-11-21T21:37:28Z"
+  "overlay": "logo-card", "category": "transitions", "installed": "2026-11-21T21:37:28Z"
 }
 ```
 
 - Any key left out falls back to the manifest's own `id`, `name` and
   `version`. A manifest with no `product` object still stamps its scenes.
-- A file with no `streamup_overlay` block at all stamps nothing.
+- A file with no `streamup_overlay` block is stamped too, with a name and
+  category from its file name ("StreamUP FX - GTA Wasted" is GTA Wasted in
+  Effects), so older products show in My Products once installed again.
 - Only scenes listed in the file's `sources` (type `scene`) are stamped, on
   any canvas, including Aitum Vertical.
 - Reinstalling restamps the scenes with the new version.
@@ -186,17 +206,22 @@ An older StreamUP plugin ignores `requires`.
 ## My Products
 
 **StreamUP > My Products...** lists every StreamUP product in the current scene
-collection, from two places:
+collection. It replaced the Overlays submenu. Products come from:
 
 1. the Overlay Controls registry (products whose controls are saved in the
-   collection), and
-2. scenes carrying a `streamup_product` stamp.
+   collection),
+2. scenes carrying a `streamup_product` stamp, and
+3. scenes installed before stamps existed, recognised by StreamUP's scene
+   naming (`StreamUP Alerts • Minim`).
 
-Each product shows its version, whether it is a transition or an overlay, and
-its scenes. **Adjust** opens its controls. A product found only by its stamp
-(its controls were removed, or came from a build that did not save them) is
-listed with a note and an **Add Controls** button, which attaches controls
-from its `.StreamUP` file.
+Products are grouped by category, each card showing a count, with a search
+box that matches names, categories and scene names. Each row shows the
+product's icon (or its initials on its category's colour), its version and
+scene count. **Adjust** opens its controls; the **⋯** menu also has Use as My
+Transition (transition products) and Remove Controls. A product whose file
+shipped controls that are not saved here says so and offers **Add Controls**.
+**Add From File** attaches controls from a `.StreamUP` file without
+installing it.
 
 ## WebSocket
 

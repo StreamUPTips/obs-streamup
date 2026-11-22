@@ -17,7 +17,8 @@
 - A .StreamUP file can install scenes onto the Aitum Vertical canvas
 - New WebSocket requests: GroupSceneItems to group items in a scene, and RegisterOverlay to load an overlay's controls without installing it
 - One Windows download for every OBS version
-- My Products: every StreamUP product in your scene collection in one list, from the StreamUP menu, each with an Adjust button that opens its controls
+- My Products: every StreamUP product in your scene collection in one list, from the StreamUP menu, grouped by category with a search box, each with its own icon (or its initials) and an Adjust button that opens its controls. It replaces the Overlays menu, and its row menu has Use as My Transition and Remove Controls
+- Products can ship an icon and a category in their manifest. The icon is kept with the plugin, so it stays after the download is deleted
 - Transition products get a Use as My Transition button that adds them to OBS's transitions as a Scene as Transition, set up and picked, with no setup by hand
 - Overlay Controls can drive a transition's own settings, so a product can offer sliders for its duration and swap point
 - A new image control in Overlay Controls: pick your own logo or picture from a file browser, with a preview
@@ -31,6 +32,8 @@
 - The Layout preview is a live OBS display, smooth and sharp
 - A tighter Scene Organiser tree, with guide lines that join up
 - Sliders and colour pickers in Overlay Controls no longer slow OBS down
+- Product controls open about five times faster (Aura: 1.7 s down to 0.3 s). Tabs are built when you first open them, font lists fill when you open them, and a slow step that made every slider cost 70 ms is gone. The All Settings tab is gone too
+- StreamUP windows (product controls, My Products) and the floating StreamUP Mixer open over OBS, on the screen OBS is on. A floating mixer saved on another screen, or off every screen, comes back over OBS. A docked mixer stays where it is
 - A product made for a newer StreamUP still loads its controls. Anything this version does not know yet is skipped instead of the whole panel failing
 
 ### Bug Fixes
