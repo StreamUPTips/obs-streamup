@@ -676,7 +676,17 @@ private:
 			row.sliderSpin->setSingleStep(c.step);
 			row.sliderSpin->setSuffix(c.unit);
 			row.sliderSpin->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-			row.sliderSpin->setFixedWidth(su::S(128));
+			// Wide enough for the longest value this control can hold, unit
+			// included, plus the field's padding and its arrow column.
+			{
+				row.sliderSpin->ensurePolished();
+				const QFontMetrics fm(row.sliderSpin->font());
+				int text = 0;
+				for (double v : {c.min, c.max})
+					text = std::max(text, fm.horizontalAdvance(
+								      QString::number(v, 'f', c.decimals) + c.unit + "0"));
+				row.sliderSpin->setFixedWidth(text + su::S(10 + 28 + 12));
+			}
 			row.sliderSpin->setAccessibleName(T("OverlayControls.Slider.Value").arg(c.label));
 			grid->addWidget(labelBox, r, 0, Qt::AlignVCenter);
 			grid->addWidget(row.slider, r, 1);
