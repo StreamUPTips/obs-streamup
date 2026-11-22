@@ -231,6 +231,11 @@ bool HasSnapshot(const QString &overlayId, const QString &sourceName);
 
 QString FormatValue(const ControlInfo &control, const QJsonValue &value);
 
+// The source types a control's links point at ("text_gdiplus",
+// "text_ft2_source", ...), unversioned, without duplicates. Lets the font
+// picker say what a newly installed font needs to show up.
+QStringList BoundSourceKinds(const QString &overlayId, const QString &controlId);
+
 // Runs one of a product's actions. UI thread only: it drives OBS's transition
 // list. On success *message says what happened, in words for the user.
 bool RunAction(const QString &overlayId, const QString &actionId, QString *message = nullptr,

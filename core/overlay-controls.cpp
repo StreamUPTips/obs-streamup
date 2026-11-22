@@ -1328,6 +1328,29 @@ QString FormatValue(const ControlInfo &control, const QJsonValue &value)
 	return QString();
 }
 
+QStringList BoundSourceKinds(const QString &overlayId, const QString &controlId)
+{
+	QStringList kinds;
+	std::lock_guard<std::recursive_mutex> lock(g_mutex);
+	Overlay *o = FindOverlay(overlayId);
+	Control *c = o ? FindControl(*o, controlId) : nullptr;
+	if (!c)
+		return kinds;
+	for (Binding &b : c->bindings) {
+		obs_source_t *target = ResolveBinding(b);
+		if (!target)
+			continue;
+		// A filter's settings belong to the filter, the text to its parent.
+		obs_source_t *owner = obs_source_get_type(target) == OBS_SOURCE_TYPE_FILTER ? obs_filter_get_parent(target)
+											      : target;
+		const char *id = owner ? obs_source_get_unversioned_id(owner) : nullptr;
+		if (id && !kinds.contains(QString::fromUtf8(id)))
+			kinds.append(QString::fromUtf8(id));
+		obs_source_release(target);
+	}
+	return kinds;
+}
+
 bool RunAction(const QString &overlayId, const QString &actionId, QString *message, QString *error)
 {
 	ActionInfo action;

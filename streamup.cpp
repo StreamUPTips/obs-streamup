@@ -11,6 +11,7 @@
 #include "core/backup-manager.hpp"
 #include "core/restore-manager.hpp"
 #include "core/overlay-controls.hpp"
+#include "core/google-fonts.hpp"
 #include "ui/restore-dialog.hpp"
 #include "integrations/websocket-api.hpp"
 #include "utilities/path-utils.hpp"
@@ -1529,6 +1530,8 @@ void obs_module_unload()
 		obs_frontend_remove_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
 		StreamUP::SceneOrganiser::CollectionData::Unregister();
 		StreamUP::OverlayControls::Shutdown();
+		// Font downloads still running are given a moment, then let go.
+		StreamUP::GoogleFonts::Shutdown();
 
 		blog(LOG_INFO, "[StreamUP] Unload step 3/8: Unregistering hotkeys");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Unregistering hotkeys");

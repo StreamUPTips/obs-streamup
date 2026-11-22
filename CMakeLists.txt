@@ -148,7 +148,9 @@ target_sources(${PROJECT_NAME} PRIVATE
   core/product-registry.hpp
   core/product-registry.cpp
   core/product-requirements.hpp
-  core/product-requirements.cpp)
+  core/product-requirements.cpp
+  core/google-fonts.hpp
+  core/google-fonts.cpp)
 
 # Utilities module files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -226,6 +228,8 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/overlay-layout-page.cpp
   ui/my-products-window.hpp
   ui/my-products-window.cpp
+  ui/font-picker.hpp
+  ui/font-picker.cpp
   ui/dock/streamup-dock.hpp
   ui/dock/streamup-dock.cpp
   ui/scene-organiser/scene-organiser-dock.hpp
@@ -327,7 +331,9 @@ source_group("Core" FILES
   core/product-registry.hpp
   core/product-registry.cpp
   core/product-requirements.hpp
-  core/product-requirements.cpp)
+  core/product-requirements.cpp
+  core/google-fonts.hpp
+  core/google-fonts.cpp)
 
 source_group("Utilities" FILES
   utilities/path-utils.hpp
@@ -402,7 +408,9 @@ source_group("UI" FILES
   ui/overlay-layout-page.hpp
   ui/overlay-layout-page.cpp
   ui/my-products-window.hpp
-  ui/my-products-window.cpp)
+  ui/my-products-window.cpp
+  ui/font-picker.hpp
+  ui/font-picker.cpp)
 
 source_group("UI\\Dock" FILES
   ui/dock/streamup-dock.hpp

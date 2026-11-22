@@ -6,6 +6,7 @@
 #include "overlay-layout-page.hpp"
 #include "overlay-platforms-editor.hpp"
 #include "overlay-ui-common.hpp"
+#include "font-picker.hpp"
 #include "ui-helpers.hpp"
 #include <streamup/debug-logger.hpp>
 #include "version.h"
@@ -26,6 +27,7 @@
 
 #include <QApplication>
 #include <QFileDialog>
+#include <QDesktopServices>
 #include <QFileInfo>
 #include <QElapsedTimer>
 #include <QFontDatabase>
@@ -94,8 +96,8 @@ QString HexText(const QColor &c)
 struct Row {
 	oc::ControlInfo info;
 	QLabel *drift = nullptr;
-	QLabel *value = nullptr;
-	QToolButton *reset = nullptr;
+	OverlayUI::PanelDoubleSpin *sliderSpin = nullptr; // a slider's typed value
+	OverlayUI::GlyphButton *reset = nullptr;
 	OverlayUI::PanelSlider *slider = nullptr;
 	OverlayUI::PanelDoubleSpin *number = nullptr;
 	QPushButton *swatch = nullptr;
@@ -103,49 +105,24 @@ struct Row {
 	QLineEdit *text = nullptr;
 	QPlainTextEdit *area = nullptr;
 	QComboBox *combo = nullptr;
+	FontPicker::FontButton *font = nullptr;
 	OverlayUI::PlatformsEditor *platforms = nullptr;
 	QLineEdit *imagePath = nullptr;
 	QLabel *thumb = nullptr;
 };
 
-// Fills a font combo with every installed family the first time its list is
-// opened, keeping whatever is selected or typed.
-class FontListFiller : public QObject {
-public:
-	FontListFiller(QComboBox *combo, bool separator) : QObject(combo), m_combo(combo), m_separator(separator) {}
-
-	bool eventFilter(QObject *obj, QEvent *e) override
-	{
-		const QEvent::Type t = e->type();
-		if (obj == m_combo && (t == QEvent::MouseButtonPress || t == QEvent::KeyPress || t == QEvent::Wheel || t == QEvent::FocusIn))
-			fill();
-		return false;
-	}
-
-private:
-	void fill()
-	{
-		if (m_filled)
-			return;
-		m_filled = true;
-		const QSignalBlocker block(m_combo);
-		const QString text = m_combo->currentText();
-		const int index = m_combo->currentIndex();
-		if (m_separator)
-			m_combo->insertSeparator(m_combo->count());
-		for (const QString &family : QFontDatabase::families())
-			if (m_combo->findData(family) < 0)
-				m_combo->addItem(family, family);
-		if (m_combo->isEditable())
-			m_combo->setEditText(text);
-		else
-			m_combo->setCurrentIndex(index);
-	}
-
-	QComboBox *m_combo;
-	bool m_separator;
-	bool m_filled = false;
-};
+// Whether a value is anything other than the control's default, so its reset
+// button has something to do. Numbers compare within a hair of each other.
+bool DiffersFromDefault(const oc::ControlInfo &c, const QJsonValue &value)
+{
+	const QJsonValue &d = c.defaultValue;
+	if (value.isDouble() || d.isDouble())
+		return std::fabs(value.toDouble() - d.toDouble()) > 1e-9 * std::max(1.0, std::fabs(d.toDouble()));
+	if (value.isString() && d.isString())
+		return value.toString().compare(d.toString(), c.type == oc::ControlType::Colour ? Qt::CaseInsensitive
+													 : Qt::CaseSensitive) != 0;
+	return value != d;
+}
 
 // One of the product's actions, as a row with a button.
 struct ActionRow {
@@ -659,14 +636,13 @@ private:
 		lb->addStretch();
 		labelBox->setMinimumWidth(su::S(170));
 
-		row.value = su::makeLabel(QString(), su::Sizes::FONT_SIZE_SMALL, 600, su::Colors::TEXT_SECONDARY);
-		row.value->setWordWrap(false);
-		row.value->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-		row.value->setMinimumWidth(su::S(54));
-		row.value->hide();
-
-		row.reset = OverlayUI::IconButton(QString::fromUtf8("↺"), T("OverlayControls.Reset.Tooltip"),
-						  T("OverlayControls.Reset.Accessible").arg(c.label));
+		row.reset = new OverlayUI::GlyphButton(OverlayUI::GlyphButton::Glyph::Reset, T("OverlayControls.Reset.Tooltip"),
+						       T("OverlayControls.Reset.Accessible").arg(c.label));
+		// Shown only while the value differs from the default; its column
+		// keeps its width so the rows never shift.
+		QSizePolicy keep = row.reset->sizePolicy();
+		keep.setRetainSizeWhenHidden(true);
+		row.reset->setSizePolicy(keep);
 		QObject::connect(row.reset, &QToolButton::clicked, this, [this, id]() {
 			oc::ResetControl(m_id, id);
 			refreshControl(id);
@@ -680,7 +656,7 @@ private:
 			row.swatch->setFixedWidth(su::S(132));
 			row.swatch->setToolTip(c.help);
 			row.swatch->setAccessibleName(c.label);
-			grid->addWidget(labelBox, r, 0);
+			grid->addWidget(labelBox, r, 0, Qt::AlignVCenter);
 			grid->addWidget(row.swatch, r, 1, Qt::AlignLeft);
 			QObject::connect(row.swatch, &QPushButton::clicked, this, [this, id]() { pickColour(id); });
 			break;
@@ -692,21 +668,41 @@ private:
 			row.slider->setPageStep(std::max(1, steps / 10));
 			row.slider->setToolTip(c.help);
 			row.slider->setAccessibleName(c.label);
-			grid->addWidget(labelBox, r, 0);
+			// The value beside it can be typed: Enter or leaving the field
+			// applies it, the arrows and the wheel (when focused) step it.
+			row.sliderSpin = new OverlayUI::PanelDoubleSpin();
+			row.sliderSpin->setRange(c.min, c.max);
+			row.sliderSpin->setDecimals(c.decimals);
+			row.sliderSpin->setSingleStep(c.step);
+			row.sliderSpin->setSuffix(c.unit);
+			row.sliderSpin->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+			row.sliderSpin->setFixedWidth(su::S(128));
+			row.sliderSpin->setAccessibleName(T("OverlayControls.Slider.Value").arg(c.label));
+			grid->addWidget(labelBox, r, 0, Qt::AlignVCenter);
 			grid->addWidget(row.slider, r, 1);
-			grid->addWidget(row.value, r, 2);
-			// Only once it has a parent. show() on a widget with none makes
-			// it a top-level window for a moment, ~70 ms a slider, which is
-			// most of what made the panel slow to open.
-			row.value->show();
+			grid->addWidget(row.sliderSpin, r, 2, Qt::AlignVCenter);
 			QObject::connect(row.slider, &QSlider::valueChanged, this, [this, id](int pos) {
 				if (m_updating)
 					return;
 				Row &rw = m_rows[id];
 				const double v = rw.info.min + pos * rw.info.step;
-				rw.value->setText(oc::FormatValue(rw.info, v));
+				{
+					const QSignalBlocker block(rw.sliderSpin);
+					rw.sliderSpin->setValue(v);
+				}
 				write(id, v);
 			});
+			QObject::connect(row.sliderSpin, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
+					 [this, id](double v) {
+						 if (m_updating)
+							 return;
+						 Row &rw = m_rows[id];
+						 {
+							 const QSignalBlocker block(rw.slider);
+							 rw.slider->setValue(int(std::lround((v - rw.info.min) / rw.info.step)));
+						 }
+						 write(id, v);
+					 });
 			break;
 		}
 		case oc::ControlType::Number: {
@@ -718,7 +714,7 @@ private:
 			row.number->setFixedWidth(su::S(160));
 			row.number->setToolTip(c.help);
 			row.number->setAccessibleName(c.label);
-			grid->addWidget(labelBox, r, 0);
+			grid->addWidget(labelBox, r, 0, Qt::AlignVCenter);
 			grid->addWidget(row.number, r, 1, Qt::AlignLeft);
 			QObject::connect(row.number, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this,
 					 [this, id](double v) {
@@ -731,7 +727,7 @@ private:
 			row.toggle = new su::SwitchButton();
 			row.toggle->setToolTip(c.help);
 			row.toggle->setAccessibleName(c.label);
-			grid->addWidget(labelBox, r, 0);
+			grid->addWidget(labelBox, r, 0, Qt::AlignVCenter);
 			grid->addWidget(row.toggle, r, 1, Qt::AlignLeft);
 			QObject::connect(row.toggle, &su::SwitchButton::toggled, this, [this, id](bool on) {
 				if (!m_updating)
@@ -745,7 +741,7 @@ private:
 			row.text->setFixedHeight(su::S(28));
 			row.text->setToolTip(c.help);
 			row.text->setAccessibleName(c.label);
-			grid->addWidget(labelBox, r, 0);
+			grid->addWidget(labelBox, r, 0, Qt::AlignVCenter);
 			grid->addWidget(row.text, r, 1);
 			auto *timer = new QTimer(row.text);
 			timer->setSingleShot(true);
@@ -780,8 +776,42 @@ private:
 			QObject::connect(timer, &QTimer::timeout, this, [this, id, edit]() { write(id, edit->toPlainText()); });
 			break;
 		}
-		case oc::ControlType::Select:
 		case oc::ControlType::Font: {
+			row.font = new FontPicker::FontButton();
+			row.font->setToolTip(c.help);
+			row.font->setAccessibleName(c.label);
+			grid->addWidget(labelBox, r, 0, Qt::AlignVCenter);
+			grid->addWidget(row.font, r, 1);
+			QStringList suggested;
+			for (const oc::SelectOption &o : c.options)
+				suggested.append(o.value);
+			QObject::connect(row.font, &QPushButton::clicked, this, [this, id, suggested]() {
+				QPointer<OverlayPanel> self(this);
+				const QStringList kinds = oc::BoundSourceKinds(m_id, id);
+				FontPicker::Open(this, m_rows[id].font->family(), suggested, kinds,
+						 [self, id, kinds](const FontPicker::Picked &p) {
+							 if (!self || !self->m_rows.contains(id))
+								 return;
+							 self->m_rows[id].font->setFamily(p.family);
+							 self->write(id, p.family);
+							 if (!p.installed)
+								 return;
+							 if (kinds.contains("text_ft2_source")) {
+								 // FreeType 2 only reads fonts installed for
+								 // everyone: show the file so they can.
+								 self->showStatus(T("FontPicker.InstalledFt2").arg(p.family));
+								 QDesktopServices::openUrl(
+									 QUrl::fromLocalFile(QFileInfo(p.file).absolutePath()));
+							 } else if (kinds.contains("text_gdiplus")) {
+								 self->showStatus(T("FontPicker.InstalledRestart").arg(p.family));
+							 } else {
+								 self->showStatus(T("FontPicker.Installed").arg(p.family));
+							 }
+						 });
+			});
+			break;
+		}
+		case oc::ControlType::Select: {
 			QComboBox *combo = nullptr;
 			if (c.editable) {
 				combo = OverlayUI::EditableCombo(true);
@@ -796,16 +826,9 @@ private:
 			combo->setAccessibleName(c.label);
 			for (const oc::SelectOption &o : c.options)
 				combo->addItem(o.label, o.value);
-			if (c.type == oc::ControlType::Font) {
-				// Suggested fonts first, then everything installed. The
-				// installed list (hundreds of families) is added the first
-				// time the list is opened: filling it up front cost ~60 ms
-				// per font control.
-				combo->installEventFilter(new FontListFiller(combo, !c.options.isEmpty()));
-			}
 			combo->setMaxVisibleItems(16);
 			row.combo = combo;
-			grid->addWidget(labelBox, r, 0);
+			grid->addWidget(labelBox, r, 0, Qt::AlignVCenter);
 			grid->addWidget(combo, r, 1);
 			QObject::connect(combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, id, combo](int i) {
 				if (m_updating || i < 0)
@@ -849,7 +872,7 @@ private:
 			h->addWidget(row.thumb);
 			h->addWidget(row.imagePath, 1);
 			h->addWidget(browse);
-			grid->addWidget(labelBox, r, 0);
+			grid->addWidget(labelBox, r, 0, Qt::AlignVCenter);
 			grid->addWidget(box, r, 1);
 			QLineEdit *edit = row.imagePath;
 			QLabel *thumb = row.thumb;
@@ -875,8 +898,8 @@ private:
 		case oc::ControlType::Platforms: {
 			// A list needs the full width: label and reset on their own
 			// line above it.
-			grid->addWidget(labelBox, r, 0);
-			grid->addWidget(row.reset, r, 3);
+			grid->addWidget(labelBox, r, 0, Qt::AlignVCenter);
+			grid->addWidget(row.reset, r, 3, Qt::AlignVCenter | Qt::AlignRight);
 			row.platforms = new OverlayUI::PlatformsEditor(c);
 			row.platforms->onChanged = [this, id](const QJsonArray &rows) { write(id, rows); };
 			grid->addWidget(row.platforms, r + 1, 0, 1, 4);
@@ -887,7 +910,7 @@ private:
 			break;
 		}
 		if (c.type != oc::ControlType::Platforms)
-			grid->addWidget(row.reset, r, 3);
+			grid->addWidget(row.reset, r, 3, Qt::AlignVCenter | Qt::AlignRight);
 
 		m_rows.insert(id, row);
 		showValue(m_rows[id]);
@@ -906,7 +929,8 @@ private:
 			break;
 		case oc::ControlType::Slider:
 			row.slider->setValue(int(std::lround((c.value.toDouble() - c.min) / c.step)));
-			row.value->setText(oc::FormatValue(c, c.value));
+			if (!row.sliderSpin->hasFocus())
+				row.sliderSpin->setValue(c.value.toDouble());
 			break;
 		case oc::ControlType::Number:
 			row.number->setValue(c.value.toDouble());
@@ -923,8 +947,10 @@ private:
 			if (!row.area->hasFocus() && row.area->toPlainText() != c.value.toString())
 				row.area->setPlainText(c.value.toString());
 			break;
-		case oc::ControlType::Select:
-		case oc::ControlType::Font: {
+		case oc::ControlType::Font:
+			row.font->setFamily(c.value.toString());
+			break;
+		case oc::ControlType::Select: {
 			const QString v = c.value.toString();
 			const int i = row.combo->findData(v);
 			if (i >= 0)
@@ -949,7 +975,7 @@ private:
 		case oc::ControlType::Layout:
 			break;
 		}
-		row.reset->setEnabled(c.applied);
+		row.reset->setVisible(c.applied && DiffersFromDefault(c, c.value));
 		m_updating = false;
 	}
 
@@ -990,7 +1016,7 @@ private:
 			Row &row = m_rows[controlId];
 			row.info.value = value;
 			row.info.applied = true;
-			row.reset->setEnabled(true);
+			row.reset->setVisible(DiffersFromDefault(row.info, value));
 			row.drift->hide();
 		}
 	}

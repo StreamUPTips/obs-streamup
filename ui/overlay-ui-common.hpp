@@ -14,6 +14,8 @@
 #include <QToolButton>
 #include <QWheelEvent>
 
+#include <algorithm>
+
 #include <obs-module.h>
 
 namespace StreamUP {
@@ -145,23 +147,135 @@ inline QComboBox *EditableCombo(bool onCard = true)
 	return combo;
 }
 
-// A small round icon-text button: row resets, list reorder and remove.
-inline QToolButton *IconButton(const QString &glyph, const QString &tooltip, const QString &accessibleName,
-			       const char *hover = su::Colors::TEXT_PRIMARY)
-{
-	auto *b = new QToolButton();
-	b->setText(glyph);
-	b->setToolTip(tooltip);
-	b->setAccessibleName(accessibleName);
-	b->setCursor(Qt::PointingHandCursor);
-	b->setFixedSize(su::S(26), su::S(26));
-	b->setStyleSheet(su::scale_qss(
-		QString("QToolButton{color:%1;background:transparent;border:none;border-radius:13px;font-size:14px;}"
-			"QToolButton:hover{color:%2;background:rgba(255,255,255,0.08);}"
-			"QToolButton:disabled{color:transparent;}")
-			.arg(su::Colors::TEXT_MUTED, hover)));
-	return b;
-}
+// A small icon button with a painted vector icon: row resets, list reorder,
+// remove, and "more". One size, a hover and pressed state, a tooltip, and a
+// disabled look that stays visible. "Filled" draws it as a round neutral pill
+// so it sits beside a PillButton at the same height.
+class GlyphButton : public QToolButton {
+public:
+	enum class Glyph { Reset, Up, Down, Remove, More };
+
+	GlyphButton(Glyph glyph, const QString &tooltip, const QString &accessibleName, bool filled = false)
+		: m_glyph(glyph), m_filled(filled)
+	{
+		setToolTip(tooltip);
+		setAccessibleName(accessibleName);
+		setCursor(Qt::PointingHandCursor);
+		setAttribute(Qt::WA_Hover, true);
+		setFocusPolicy(Qt::TabFocus);
+		const int side = filled ? su::S(30) : su::S(28);
+		setFixedSize(side, side);
+		setAutoRaise(true);
+		setStyleSheet("QToolButton{border:none;background:transparent;}");
+	}
+
+protected:
+	void paintEvent(QPaintEvent *) override
+	{
+		QPainter p(this);
+		p.setRenderHint(QPainter::Antialiasing, true);
+		const QRectF r = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+		const bool hover = underMouse() && isEnabled();
+		const bool down = isDown();
+
+		// Background: a filled pill always, a plain button only on hover.
+		QColor bg = Qt::transparent;
+		if (m_filled)
+			bg = down ? QColor("#3a3a4e") : hover ? QColor("#34344a") : QColor("#2a2a3a");
+		else if (down)
+			bg = QColor(255, 255, 255, 36);
+		else if (hover)
+			bg = QColor(255, 255, 255, 20);
+		if (bg.alpha() > 0) {
+			p.setPen(Qt::NoPen);
+			p.setBrush(bg);
+			const qreal rad = m_filled ? r.height() / 2.0 : su::S(8);
+			p.drawRoundedRect(r, rad, rad);
+		}
+		if (hasFocus()) {
+			QPen fp{QColor(su::Colors::PRIMARY_COLOR)};
+			fp.setWidthF(1.5);
+			p.setPen(fp);
+			p.setBrush(Qt::NoBrush);
+			const qreal rad = m_filled ? r.height() / 2.0 : su::S(8);
+			p.drawRoundedRect(r.adjusted(1, 1, -1, -1), rad, rad);
+		}
+
+		QColor ink(su::Colors::TEXT_SECONDARY);
+		if (!isEnabled())
+			ink = QColor(su::Colors::TEXT_MUTED);
+		else if (hover)
+			ink = m_glyph == Glyph::Remove ? QColor(su::Colors::COLOR_DANGER) : QColor(su::Colors::TEXT_PRIMARY);
+		if (m_filled && isEnabled())
+			ink = QColor(205, 214, 244);
+		QPen pen(ink);
+		pen.setWidthF(std::max(1.4, su::S(2) * 0.8));
+		pen.setCapStyle(Qt::RoundCap);
+		pen.setJoinStyle(Qt::RoundJoin);
+		p.setPen(pen);
+		p.setBrush(Qt::NoBrush);
+
+		const QPointF c = r.center();
+		const qreal u = su::S(16) / 16.0; // icons are drawn on a 16 px grid
+		switch (m_glyph) {
+		case Glyph::Reset: {
+			// Lucide rotate-ccw: an open arc with an arrowhead at its start.
+			const QRectF arc(c.x() - 5.5 * u, c.y() - 5.5 * u, 11 * u, 11 * u);
+			QPainterPath path;
+			path.arcMoveTo(arc, 150);
+			path.arcTo(arc, 150, -280);
+			p.drawPath(path);
+			QPointF tip;
+			{
+				QPainterPath t;
+				t.arcMoveTo(arc, 150);
+				tip = t.currentPosition();
+			}
+			QPainterPath head;
+			head.moveTo(tip + QPointF(-0.5 * u, -4.2 * u));
+			head.lineTo(tip);
+			head.lineTo(tip + QPointF(4.2 * u, -0.6 * u));
+			p.drawPath(head);
+			break;
+		}
+		case Glyph::Up:
+		case Glyph::Down: {
+			const qreal dir = m_glyph == Glyph::Up ? -1.0 : 1.0;
+			QPainterPath path;
+			path.moveTo(c + QPointF(-4 * u, -2 * u * dir));
+			path.lineTo(c + QPointF(0, 2 * u * dir));
+			path.lineTo(c + QPointF(4 * u, -2 * u * dir));
+			p.drawPath(path);
+			break;
+		}
+		case Glyph::Remove:
+			p.drawLine(c + QPointF(-3.8 * u, -3.8 * u), c + QPointF(3.8 * u, 3.8 * u));
+			p.drawLine(c + QPointF(3.8 * u, -3.8 * u), c + QPointF(-3.8 * u, 3.8 * u));
+			break;
+		case Glyph::More:
+			p.setPen(Qt::NoPen);
+			p.setBrush(ink);
+			for (int i = -1; i <= 1; ++i)
+				p.drawEllipse(c + QPointF(i * 5.0 * u, 0), 1.6 * u, 1.6 * u);
+			break;
+		}
+	}
+
+	void enterEvent(QEnterEvent *e) override
+	{
+		update();
+		QToolButton::enterEvent(e);
+	}
+	void leaveEvent(QEvent *e) override
+	{
+		update();
+		QToolButton::leaveEvent(e);
+	}
+
+private:
+	Glyph m_glyph;
+	bool m_filled;
+};
 
 inline QLabel *RowLabel(const QString &text, const QString &tooltip = QString())
 {

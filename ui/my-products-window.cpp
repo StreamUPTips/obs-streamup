@@ -9,7 +9,9 @@
 #include "version.h"
 
 #include <streamup/ui/dialogs.hpp>
+#include <streamup/ui/gallery-style.hpp>
 #include <streamup/ui/labels.hpp>
+#include <streamup/ui/mac-inputs.hpp>
 #include <streamup/ui/pill-button.hpp>
 #include <streamup/ui/search-field.hpp>
 #include <streamup/ui/section-card.hpp>
@@ -18,8 +20,21 @@
 
 #include <obs-frontend-api.h>
 #include <obs-module.h>
+#include <util/bmem.h>
 
 #include <QApplication>
+#include <QAbstractButton>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QFrame>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QListWidget>
+#include <QScrollBar>
+#include <QSet>
+#include <QStyledItemDelegate>
 #include <QHBoxLayout>
 #include <QHash>
 #include <QRegularExpression>
@@ -119,20 +134,176 @@ QPixmap Tile(const pr::ProductEntry &p, qreal dpr)
 	return pm;
 }
 
+// A category card's header: the range's name and count as the house section
+// header (a real sectionHeader() label, so it matches every other StreamUP
+// window), with a painted chevron that shows whether the card is open.
+class SectionHeader : public QAbstractButton {
+public:
+	explicit SectionHeader(QWidget *parent = nullptr) : QAbstractButton(parent)
+	{
+		setCursor(Qt::PointingHandCursor);
+		setAttribute(Qt::WA_Hover, true);
+		setFocusPolicy(Qt::TabFocus);
+		auto *h = new QHBoxLayout(this);
+		h->setContentsMargins(0, 0, su::S(28), 0);
+		h->setSpacing(su::S(8));
+		m_title = su::sectionHeader(QString());
+		m_title->setContentsMargins(0, 0, 0, 0);
+		m_title->setWordWrap(false);
+		m_count = su::makeLabel(QString(), su::Sizes::FONT_SIZE_TINY, 700, su::Colors::TEXT_MUTED);
+		for (QLabel *l : {m_title, m_count})
+			l->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+		h->addWidget(m_title);
+		h->addWidget(m_count, 0, Qt::AlignVCenter);
+		h->addStretch(1);
+		setFixedHeight(su::S(34));
+	}
+	void setLabel(const QString &label, int count)
+	{
+		m_title->setText(label.toUpper());
+		m_count->setText(QString::number(count));
+		setAccessibleName(QString("%1 %2").arg(label).arg(count));
+	}
+	void setExpanded(bool on)
+	{
+		m_expanded = on;
+		update();
+	}
+	void setCollapsible(bool on)
+	{
+		m_collapsible = on;
+		setCursor(on ? Qt::PointingHandCursor : Qt::ArrowCursor);
+		setEnabled(on);
+		update();
+	}
+	QSize sizeHint() const override { return QSize(su::S(200), su::S(34)); }
+
+protected:
+	void paintEvent(QPaintEvent *) override
+	{
+		if (!m_collapsible)
+			return;
+		QPainter p(this);
+		p.setRenderHint(QPainter::Antialiasing, true);
+		const QRectF r = QRectF(rect());
+		QPen pen(QColor(underMouse() ? su::Colors::TEXT_PRIMARY : su::Colors::TEXT_SECONDARY),
+			 std::max(1.3, su::S(2) * 0.8));
+		pen.setCapStyle(Qt::RoundCap);
+		pen.setJoinStyle(Qt::RoundJoin);
+		p.setPen(pen);
+		p.save();
+		p.translate(QPointF(r.right() - su::S(12), r.center().y()));
+		p.rotate(m_expanded ? 0.0 : -90.0); // down open, right closed
+		su::detail::drawChevron(p, QPointF(0, 0), su::S(8), /*up=*/false);
+		p.restore();
+	}
+
+private:
+	QLabel *m_title = nullptr;
+	QLabel *m_count = nullptr;
+	bool m_expanded = true;
+	bool m_collapsible = true;
+};
+
+// The sidebar's rows: the name on the left, its count on the right.
+class CountDelegate : public QStyledItemDelegate {
+public:
+	using QStyledItemDelegate::QStyledItemDelegate;
+	void paint(QPainter *p, const QStyleOptionViewItem &option, const QModelIndex &index) const override
+	{
+		QStyledItemDelegate::paint(p, option, index);
+		const QVariant count = index.data(Qt::UserRole + 1);
+		if (!count.isValid())
+			return;
+		p->save();
+		QFont f = option.font;
+		f.setPixelSize(su::S(12));
+		f.setBold(true);
+		p->setFont(f);
+		const bool selected = option.state & QStyle::State_Selected;
+		p->setPen(QColor(selected ? "#ffffff" : su::Colors::TEXT_MUTED));
+		p->drawText(option.rect.adjusted(0, 0, -su::S(16), 0), Qt::AlignVCenter | Qt::AlignRight,
+			    QString::number(count.toInt()));
+		p->restore();
+	}
+};
+
+// Which categories are folded away, kept between sessions.
+QString ViewStatePath()
+{
+	char *path = obs_module_config_path("my-products.json");
+	const QString p = path ? QString::fromUtf8(path) : QString();
+	bfree(path);
+	return p;
+}
+
+QSet<QString> LoadCollapsed()
+{
+	QSet<QString> out;
+	QFile f(ViewStatePath());
+	if (f.open(QIODevice::ReadOnly))
+		for (const QJsonValue v : QJsonDocument::fromJson(f.readAll()).object().value("collapsed").toArray())
+			out.insert(v.toString());
+	return out;
+}
+
+void SaveCollapsed(const QSet<QString> &collapsed)
+{
+	const QString path = ViewStatePath();
+	if (path.isEmpty())
+		return;
+	QDir().mkpath(QFileInfo(path).absolutePath());
+	QJsonArray arr;
+	for (const QString &c : collapsed)
+		arr.append(c);
+	QFile f(path);
+	if (f.open(QIODevice::WriteOnly))
+		f.write(QJsonDocument(QJsonObject{{"collapsed", arr}}).toJson(QJsonDocument::Compact));
+}
+
 class MyProductsDialog : public su::ShadowDialog {
 public:
 	explicit MyProductsDialog(QWidget *parent) : su::ShadowDialog(parent)
 	{
 		setAttribute(Qt::WA_DeleteOnClose, true);
+		m_collapsed = LoadCollapsed();
 		auto shell = su::applyChrome(this, T("MyProducts.Title"), "v" PROJECT_VERSION, /*brandFooter=*/true,
 					     "StreamUP");
 
-		// Search and the file-based extras sit above the list.
+		// Sidebar + content, the layout of StreamUP Settings and the controls window.
+		auto *body = new QWidget();
+		body->setObjectName("mpBody");
+		body->setStyleSheet(QString("QWidget#mpBody{background:%1;}").arg(su::Colors::BG_DARKEST));
+		auto *row = new QHBoxLayout(body);
+		row->setContentsMargins(su::S(16), su::S(16), 0, 0);
+		row->setSpacing(0);
+
+		m_rail = new QFrame();
+		m_rail->setObjectName("mpRail");
+		m_rail->setFixedWidth(su::S(180));
+		m_rail->setStyleSheet(su::scale_qss(
+			QString("QFrame#mpRail{background:%1;border-radius:22px;}").arg(su::Colors::BG_PRIMARY)));
+		auto *rl = new QVBoxLayout(m_rail);
+		rl->setContentsMargins(su::S(6), su::S(6), su::S(6), su::S(6));
+		m_nav = new QListWidget();
+		m_nav->setStyleSheet(OverlayUI::NavListStyle());
+		m_nav->setItemDelegate(new CountDelegate(m_nav));
+		m_nav->setAccessibleName(T("MyProducts.Categories"));
+		rl->addWidget(m_nav);
+		m_railBox = new QWidget();
+		auto *railTop = new QVBoxLayout(m_railBox);
+		railTop->setContentsMargins(0, 0, 0, su::S(16));
+		railTop->addWidget(m_rail);
+		row->addWidget(m_railBox);
+
+		auto *right = new QVBoxLayout();
+		right->setContentsMargins(0, 0, 0, 0);
+		right->setSpacing(0);
+		row->addLayout(right, 1);
+
 		auto *bar = new QWidget();
-		bar->setObjectName("mpBar");
-		bar->setStyleSheet(QString("QWidget#mpBar{background:%1;}").arg(su::Colors::BG_DARKEST));
 		auto *barRow = new QHBoxLayout(bar);
-		barRow->setContentsMargins(su::S(16), su::S(14), su::S(16), su::S(2));
+		barRow->setContentsMargins(su::S(16), 0, su::S(16), su::S(4));
 		barRow->setSpacing(su::S(10));
 		m_search = new su::SearchField();
 		m_search->setPlaceholderText(T("MyProducts.Search"));
@@ -142,7 +313,7 @@ public:
 		auto *attach = new su::PillButton(T("MyProducts.AddControlsFromFile"), "neutral");
 		attach->setToolTip(T("MyProducts.AddControlsFromFileTip"));
 		barRow->addWidget(attach);
-		shell.content->addWidget(bar);
+		right->addWidget(bar);
 		QObject::connect(attach, &QPushButton::clicked, this,
 				 []() { StreamUP::OverlayControlsWindow::AttachFromFile(); });
 
@@ -152,18 +323,21 @@ public:
 		scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 		scroll->setStyleSheet("QScrollArea{background:transparent;border:none;}");
 		su::useScrollBars(scroll);
+		m_scroll = scroll;
 		auto *page = new QWidget();
 		page->setObjectName("mpPage");
-		// Row dividers live here, switched per row by a property, so filtering
-		// never restyles widgets one by one.
-		page->setStyleSheet(QString("QWidget#mpPage{background:%1;}"
-					    "QWidget#mpRow[divider=\"true\"]{border-top:1px solid %2;}")
-					    .arg(su::Colors::BG_DARKEST, su::Colors::SEPARATOR));
+		// Row dividers and cards live here, switched per row by a property,
+		// so filtering never restyles widgets one by one.
+		page->setStyleSheet(su::scale_qss(QString("QWidget#mpPage{background:%1;}"
+							  "QFrame#mpCard{background:%2;border-radius:18px;}"
+							  "QWidget#mpRow[divider=\"true\"]{border-top:1px solid %3;}")
+							  .arg(su::Colors::BG_DARKEST, su::Colors::BG_PRIMARY, su::Colors::SEPARATOR)));
 		m_list = new QVBoxLayout(page);
-		m_list->setContentsMargins(su::S(16), su::S(10), su::S(16), su::S(16));
+		m_list->setContentsMargins(su::S(16), su::S(8), su::S(16), su::S(16));
 		m_list->setSpacing(su::S(12));
 		scroll->setWidget(page);
-		shell.content->addWidget(scroll, 1);
+		right->addWidget(scroll, 1);
+		shell.content->addWidget(body, 1);
 
 		m_status = su::makeLabel(QString(), su::Sizes::FONT_SIZE_TINY, 500, su::Colors::TEXT_MUTED);
 		m_status->setWordWrap(false);
@@ -187,12 +361,37 @@ public:
 		m_rebuild->setInterval(150);
 		QObject::connect(m_rebuild, &QTimer::timeout, this, [this]() { rebuild(); });
 		QObject::connect(oc::GetNotifier(), &oc::Notifier::overlaysChanged, this, [this]() { m_rebuild->start(); });
-		QObject::connect(m_search, &QLineEdit::textChanged, this, [this]() { applyFilter(); });
+		QObject::connect(m_search, &QLineEdit::textChanged, this, [this]() {
+			// Search always runs across everything.
+			if (!m_search->text().trimmed().isEmpty() && m_nav->currentRow() > 0) {
+				const QSignalBlocker block(m_nav);
+				m_nav->setCurrentRow(0);
+				m_category.clear();
+			}
+			applyFilter();
+		});
+		// Screen readers select a row without making it current; follow them.
+		QObject::connect(m_nav, &QListWidget::itemSelectionChanged, this, [this]() {
+			const QList<QListWidgetItem *> sel = m_nav->selectedItems();
+			if (!sel.isEmpty() && m_nav->row(sel.first()) != m_nav->currentRow())
+				m_nav->setCurrentRow(m_nav->row(sel.first()));
+		});
+		QObject::connect(m_nav, &QListWidget::currentRowChanged, this, [this](int r) {
+			if (r < 0)
+				return;
+			m_category = m_nav->item(r)->data(Qt::UserRole + 2).toString();
+			if (!m_category.isEmpty() && !m_search->text().isEmpty()) {
+				const QSignalBlocker block(m_search);
+				m_search->clear();
+			}
+			applyFilter();
+			m_scroll->verticalScrollBar()->setValue(0);
+		});
 		obs_frontend_add_event_callback(OnEvent, this);
 
 		rebuild();
 		const int m = su::S(su::ShadowDialog::kShadowMargin);
-		resize(su::S(620) + 2 * m, su::S(640) + 2 * m);
+		resize(su::S(m_railBox->isHidden() ? 660 : 860) + 2 * m, su::S(660) + 2 * m);
 	}
 
 	~MyProductsDialog() override { obs_frontend_remove_event_callback(OnEvent, this); }
@@ -203,9 +402,11 @@ private:
 		QString haystack; // name, range and scenes, lower case
 	};
 	struct Section {
-		QWidget *card;
-		QLabel *heading;
+		QString key;
 		QString label;
+		QFrame *card;
+		SectionHeader *header;
+		QWidget *body;
 		QList<RowRef> rows;
 	};
 
@@ -234,6 +435,35 @@ private:
 		const QList<pr::ProductEntry> products = pr::ListProducts();
 		m_total = int(products.size());
 
+		// Sidebar: All, then each category in display order.
+		{
+			const QSignalBlocker block(m_nav);
+			m_nav->clear();
+			auto *all = new QListWidgetItem(T("MyProducts.All"));
+			all->setData(Qt::UserRole + 1, m_total);
+			all->setData(Qt::UserRole + 2, QString());
+			m_nav->addItem(all);
+			for (const QString &key : pr::CategoryOrder()) {
+				int count = 0;
+				for (const pr::ProductEntry &p : products)
+					count += p.category == key;
+				if (!count)
+					continue;
+				auto *item = new QListWidgetItem(pr::CategoryLabel(key));
+				item->setData(Qt::UserRole + 1, count);
+				item->setData(Qt::UserRole + 2, key);
+				m_nav->addItem(item);
+			}
+			int select = 0;
+			for (int i = 0; i < m_nav->count(); ++i)
+				if (m_nav->item(i)->data(Qt::UserRole + 2).toString() == m_category)
+					select = i;
+			m_nav->setCurrentRow(select);
+			m_category = m_nav->item(select)->data(Qt::UserRole + 2).toString();
+		}
+		// One category needs no sidebar.
+		m_railBox->setVisible(m_nav->count() > 2);
+
 		if (products.isEmpty()) {
 			buildEmptyState();
 			m_search->setEnabled(false);
@@ -241,25 +471,35 @@ private:
 		}
 		m_search->setEnabled(true);
 
-		QString current;
 		Section *section = nullptr;
-		QVBoxLayout *card = nullptr;
 		for (const pr::ProductEntry &p : products) {
-			if (p.category != current) {
-				current = p.category;
-				int count = 0;
-				for (const pr::ProductEntry &q : products)
-					count += q.category == current;
-				card = su::sectionCard(m_list, QString("%1  %2").arg(pr::CategoryLabel(current)).arg(count));
-				card->setSpacing(0);
-				QLabel *heading = card->count() ? qobject_cast<QLabel *>(card->itemAt(0)->widget()) : nullptr;
-				m_sections.append(Section{card->parentWidget(), heading, pr::CategoryLabel(current), {}});
+			if (!section || section->key != p.category) {
+				Section s;
+				s.key = p.category;
+				s.label = pr::CategoryLabel(p.category);
+				s.card = new QFrame();
+				s.card->setObjectName("mpCard");
+				s.card->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+				auto *cardLay = new QVBoxLayout(s.card);
+				cardLay->setContentsMargins(su::S(16), su::S(8), su::S(16), su::S(10));
+				cardLay->setSpacing(0);
+				s.header = new SectionHeader();
+				cardLay->addWidget(s.header);
+				s.body = new QWidget();
+				auto *bodyLay = new QVBoxLayout(s.body);
+				bodyLay->setContentsMargins(0, 0, 0, 0);
+				bodyLay->setSpacing(0);
+				cardLay->addWidget(s.body);
+				m_list->addWidget(s.card);
+				const QString key = s.key;
+				QObject::connect(s.header, &QAbstractButton::clicked, this, [this, key]() { toggle(key); });
+				m_sections.append(s);
 				section = &m_sections.last();
 			}
-			QWidget *row = buildRow(p);
-			card->addWidget(row);
-			QString hay = p.name + " " + pr::CategoryLabel(p.category) + " " + p.scenes.join(" ");
-			section->rows.append(RowRef{row, hay.toLower()});
+			QWidget *rowWidget = buildRow(p);
+			section->body->layout()->addWidget(rowWidget);
+			const QString hay = p.name + " " + pr::CategoryLabel(p.category) + " " + p.scenes.join(" ");
+			section->rows.append(RowRef{rowWidget, hay.toLower()});
 		}
 		m_emptyNote = su::makeLabel(QString(), su::CardText::kBody, 400, su::Colors::TEXT_SECONDARY);
 		m_emptyNote->setAlignment(Qt::AlignCenter);
@@ -267,6 +507,16 @@ private:
 		m_emptyNote->hide();
 		m_list->addWidget(m_emptyNote);
 		m_list->addStretch(1);
+		applyFilter();
+	}
+
+	void toggle(const QString &key)
+	{
+		if (m_collapsed.contains(key))
+			m_collapsed.remove(key);
+		else
+			m_collapsed.insert(key);
+		SaveCollapsed(m_collapsed);
 		applyFilter();
 	}
 
@@ -316,7 +566,7 @@ private:
 		}
 		QLabel *meta = su::makeLabel(metaText, su::Sizes::FONT_SIZE_TINY, 500, metaColour);
 		meta->setWordWrap(false);
-		meta->setToolTip(p.overlayId.isEmpty() && p.shippedControls ?T("MyProducts.NoControls") : p.scenes.join("\n"));
+		meta->setToolTip(p.overlayId.isEmpty() && p.shippedControls ? T("MyProducts.NoControls") : p.scenes.join("\n"));
 		text->addWidget(meta);
 		h->addLayout(text, 1);
 
@@ -327,6 +577,12 @@ private:
 			QObject::connect(adjust, &QPushButton::clicked, this,
 					 [id]() { StreamUP::OverlayControlsWindow::Show(id); });
 			h->addWidget(adjust, 0, Qt::AlignVCenter);
+			// Everything the old Overlays menu offered, per product.
+			auto *more = new OverlayUI::GlyphButton(OverlayUI::GlyphButton::Glyph::More, T("MyProducts.More"),
+								T("MyProducts.MoreAccessible").arg(p.name), /*filled=*/true);
+			const pr::ProductEntry product = p;
+			QObject::connect(more, &QToolButton::clicked, this, [this, more, product]() { showMenu(more, product); });
+			h->addWidget(more, 0, Qt::AlignVCenter);
 		} else if (p.shippedControls) {
 			auto *attach = new su::PillButton(T("MyProducts.AddControls"), "neutral");
 			attach->setToolTip(T("MyProducts.NoControls"));
@@ -334,19 +590,10 @@ private:
 					 []() { StreamUP::OverlayControlsWindow::AttachFromFile(); });
 			h->addWidget(attach, 0, Qt::AlignVCenter);
 		}
-
-		// Everything the old Overlays menu offered, per product.
-		if (!p.overlayId.isEmpty()) {
-			QToolButton *more = OverlayUI::IconButton(QString::fromUtf8("⋯"), T("MyProducts.More"),
-								  T("MyProducts.MoreAccessible").arg(p.name));
-			const pr::ProductEntry product = p;
-			QObject::connect(more, &QToolButton::clicked, this, [this, more, product]() { showMenu(more, product); });
-			h->addWidget(more, 0, Qt::AlignVCenter);
-		}
 		return row;
 	}
 
-	void showMenu(QToolButton *anchor, const pr::ProductEntry &p)
+	void showMenu(QWidget *anchor, const pr::ProductEntry &p)
 	{
 		QMenu menu(this);
 		menu.setStyleSheet(su::menuStyle());
@@ -366,17 +613,21 @@ private:
 		menu.addSeparator();
 		menu.addAction(T("Menu.Overlays.Remove"), this,
 			       [overlay]() { StreamUP::OverlayControlsWindow::ConfirmRemove(overlay); });
-		menu.exec(anchor->mapToGlobal(QPoint(0, anchor->height())));
+		menu.exec(anchor->mapToGlobal(QPoint(0, anchor->height() + su::S(4))));
 	}
 
+	// One pass for search, the chosen category and folded cards.
 	void applyFilter()
 	{
 		const QString needle = m_search->text().trimmed().toLower();
+		const bool searching = !needle.isEmpty();
+		const bool single = !m_category.isEmpty();
 		int shown = 0;
 		for (Section &s : m_sections) {
+			const bool inView = !single || s.key == m_category;
 			int inSection = 0;
 			for (RowRef &r : s.rows) {
-				const bool match = needle.isEmpty() || r.haystack.contains(needle);
+				const bool match = inView && (!searching || r.haystack.contains(needle));
 				r.row->setVisible(match);
 				// A hairline between visible rows, none above the first.
 				const bool divider = match && inSection > 0;
@@ -388,8 +639,14 @@ private:
 				inSection += match;
 			}
 			s.card->setVisible(inSection > 0);
-			if (s.heading)
-				s.heading->setText(QString("%1  %2").arg(s.label.toUpper()).arg(inSection)); // as sectionHeader() shows it
+			// A category page and search results are always open; on All,
+			// a card can be folded away and stays that way.
+			const bool collapsible = !single && !searching;
+			const bool expanded = !collapsible || !m_collapsed.contains(s.key);
+			s.header->setLabel(s.label, inSection);
+			s.header->setCollapsible(collapsible);
+			s.header->setExpanded(expanded);
+			s.body->setVisible(expanded);
 			shown += inSection;
 		}
 		if (m_emptyNote) {
@@ -410,11 +667,17 @@ private:
 	}
 
 	QVBoxLayout *m_list = nullptr;
+	QScrollArea *m_scroll = nullptr;
+	QFrame *m_rail = nullptr;
+	QWidget *m_railBox = nullptr;
+	QListWidget *m_nav = nullptr;
 	su::SearchField *m_search = nullptr;
 	QLabel *m_status = nullptr;
 	QLabel *m_emptyNote = nullptr;
 	QTimer *m_rebuild = nullptr;
 	QList<Section> m_sections;
+	QSet<QString> m_collapsed;
+	QString m_category; // empty: All
 	int m_total = 0;
 };
 
