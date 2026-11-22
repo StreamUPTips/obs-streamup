@@ -17,6 +17,7 @@
 - **Use As My Transition** Transition products come with a button that adds them to your transitions in one click, already pointed at the right scene with the right timing, and picks it for you. No more making a Scene as Transition by hand.
 - **Transition Timing Sliders** A transition product can give you sliders for how long it runs and when the scenes swap over, right in its controls.
 - **Your Own Logo** Overlay Controls can have an image picker now. Browse for your logo, see a little preview, and it lands straight in the overlay.
+- **Only The Plugins A Product Needs** Install a Product now asks for the file first, then checks just the plugins that product actually uses. No more being told to install ten plugins for a transition that needs two. Anything it uses that's out of date still gets flagged, a plugin it doesn't recognise is named so you can find it with the Pluginstaller, and holding Shift still skips the lot.
 - **More WebSocket Requests** RunOverlayAction runs a product's button for you, like Use as My Transition, and GetMyProducts and OpenMyProducts cover the new My Products window.
 
 ## Improvements

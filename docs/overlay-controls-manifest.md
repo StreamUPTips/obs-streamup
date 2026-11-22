@@ -9,6 +9,7 @@ StreamUP 2.5.0 adds for product authors:
 - bindings that drive a scene transition's settings,
 - `actions`, starting with `use_as_transition`,
 - a `product` object that stamps every installed scene,
+- a `requires` list for plugins the product needs that the file cannot show,
 - My Products, which lists them.
 
 All of it is optional. A manifest without these keys reads exactly as before.
@@ -142,6 +143,45 @@ Stored on each scene as:
 - Only scenes listed in the file's `sources` (type `scene`) are stamped, on
   any canvas, including Aitum Vertical.
 - Reinstalling restamps the scenes with the new version.
+
+## Plugin requirements and `requires`
+
+Install a Product picks the file first, then checks only what that file uses.
+Every source, filter, group and transition in the file names its type; a type
+OBS has not registered means its plugin is missing. A built-in table in
+`core/product-requirements.cpp` turns type ids into plugin names and links
+(taken from the StreamUP plugin list where it knows the plugin). A type the
+table does not know still blocks, shown as "Unknown plugin (type ...)" with a
+link to the StreamUP Pluginstaller. OBS's own types never block. Plugins the
+file uses that are older than the StreamUP plugin list wants show as updates.
+Holding Shift skips every check. `docs/plugin-requirements-scan.md` has the
+scan of every existing product behind the table.
+
+A product with a `use_as_transition` action needs Scene as Transition even
+though no transition is in the file, so the check adds it automatically.
+
+For anything else that adds no source types (a dock, a frontend tool) or an
+exact minimum version, list it in `requires`:
+
+```json
+"requires": [
+  {
+    "name": "Advanced Scene Switcher",
+    "url": "https://obsproject.com/forum/resources/advanced-scene-switcher.395/",
+    "min_version": "1.30.0",
+    "search_string": "[adv-ss] version:"
+  }
+]
+```
+
+| Key | Meaning |
+| --- | --- |
+| `name` | Shown in the window. When it matches a plugin in the StreamUP plugin list, that entry fills in anything left out. |
+| `url` | Where to get it. |
+| `min_version` | Older than this shows as an update. Defaults to the plugin list's version. |
+| `search_string` | The text the plugin writes to the OBS log just before its version, which is how StreamUP finds the installed version. Defaults to the plugin list's. Without one from either place the entry cannot be checked and is skipped with a log warning. |
+
+An older StreamUP plugin ignores `requires`.
 
 ## My Products
 

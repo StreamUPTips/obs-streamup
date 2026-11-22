@@ -23,6 +23,7 @@
 - A new image control in Overlay Controls: pick your own logo or picture from a file browser, with a preview
 - Every scene a .StreamUP file installs remembers which product it came from, so My Products finds it again later
 - New WebSocket requests: RunOverlayAction, GetMyProducts and OpenMyProducts
+- Install a Product asks for the file first, then only for the plugins that product uses. Any plugin it uses that is out of date still gets flagged, a product can name extra plugins it needs, and Shift still skips every check
 
 ### Improvements
 - Overlay Controls work on vertical scenes, including layout parts, nameplate cut-outs and the preview
