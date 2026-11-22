@@ -77,7 +77,7 @@ const std::vector<Entry> &Entries()
 	static const std::vector<Entry> list = {
 		// Products
 		core("install-product", Group::Products, "InstallProduct"),
-		core("my-products", Group::Products, "MyProducts", "2.5.0"),
+		core("my-products", Group::Products, "MyProducts", "3.0.0"),
 		core("plugin-check", Group::Products, "PluginCheck"),
 
 		// Docks & Layout
@@ -86,19 +86,19 @@ const std::vector<Entry> &Entries()
 		mod("multidock", Group::Docks, "MultiDock", &MS::multiDock, true),
 		mod("toolbar", Group::Docks, "Toolbar", &MS::toolbar, true),
 		tweak("vertical-canvas", Group::Docks, "VerticalCanvas", &PS::themeVerticalCanvas, TW::VerticalCanvas),
-		tweak("multistream", Group::Docks, "Multistream", &PS::themeMultistream, TW::Multistream, "2.5.0"),
+		tweak("multistream", Group::Docks, "Multistream", &PS::themeMultistream, TW::Multistream, "3.0.0"),
 		tweak("dock-spacing", Group::Docks, "DockSpacing", &PS::themeSpacing, TW::Spacing),
 		tweak("window-polish", Group::Docks, "WindowPolish", &PS::themeWindowPolish, TW::WindowPolish),
 
 		// Mixer & Audio
-		mod("mixer-dock", Group::Mixer, "MixerDock", &MS::mixerDock, false, "2.5.0"),
+		mod("mixer-dock", Group::Mixer, "MixerDock", &MS::mixerDock, false, "3.0.0"),
 		tweak("mixer-layout", Group::Mixer, "MixerLayout", &PS::themeMixer, TW::Mixer),
 
 		// Sources
 		mod("adjustment-layer", Group::Sources, "AdjustmentLayer", &MS::adjustmentLayerSource, false),
-		mod("scene-switch", Group::Sources, "SceneSwitch", &MS::sourceMenuSceneSwitch, true, "2.5.0"),
+		mod("scene-switch", Group::Sources, "SceneSwitch", &MS::sourceMenuSceneSwitch, true, "3.0.0"),
 		tweak("source-folders", Group::Sources, "SourceFolders", &PS::themeSourceFolders, TW::SourceFolders,
-		      "2.5.0"),
+		      "3.0.0"),
 		tweak("source-guides", Group::Sources, "SourceGuides", &PS::themeSourceGuides, TW::SourceGuides),
 
 		// Hotkeys & Control

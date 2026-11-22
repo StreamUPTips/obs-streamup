@@ -3,7 +3,7 @@
 A `.StreamUP` file can carry a `streamup_overlay` block that gives the product
 its own control panel (see `core/overlay-controls.hpp` for the full format:
 controls, bindings, outputs, layout parts, presets). This page covers what
-StreamUP 2.5.0 adds for product authors:
+StreamUP 3.0.0 adds for product authors:
 
 - an `image` control,
 - bindings that drive a scene transition's settings,
@@ -21,7 +21,7 @@ All of it is optional. A manifest without these keys reads exactly as before.
   - an unknown control `type` is skipped, with a warning in the OBS log,
   - a binding with no `source` (a transition binding) is skipped the same way,
   - unknown top-level keys (`actions`, `product`) are ignored.
-- From 2.5.0, a manifest with a higher `format` than the plugin knows is no
+- From 3.0.0, a manifest with a higher `format` than the plugin knows is no
   longer refused. It loads with a warning, and anything the plugin does not
   understand is skipped. Format 1 and 2 files read as before.
 - Unknown action types are skipped with a warning. A manifest whose every
