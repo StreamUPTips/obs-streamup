@@ -18,7 +18,7 @@
 - New WebSocket requests: GroupSceneItems to group items in a scene, and RegisterOverlay to load an overlay's controls without installing it
 - One Windows download for every OBS version
 - My Products: every StreamUP product in your scene collection in one list, from the StreamUP menu, grouped by category with a search box, each with its own icon (or its initials) and an Adjust button that opens its controls. It replaces the Overlays menu, and its row menu has Use as My Transition and Remove Controls
-- Products can ship an icon and a category in their manifest. The icon is kept with the plugin, so it stays after the download is deleted
+- Products can ship an icon and a category in their manifest. The icon can be embedded in the .StreamUP file itself (a PNG, JPEG or WebP data URI, up to 256 KB), so it always travels with the product, and it is kept with the plugin after the download is deleted. A bad or oversized icon is skipped, never stopping the install
 - Transition products get a Use as My Transition button that adds them to OBS's transitions as a Scene as Transition, set up and picked, with no setup by hand
 - Overlay Controls can drive a transition's own settings, so a product can offer sliders for its duration and swap point
 - A new image control in Overlay Controls: pick your own logo or picture from a file browser, with a preview

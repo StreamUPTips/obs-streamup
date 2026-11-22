@@ -135,11 +135,38 @@ Two optional keys next to it (top level of the manifest, or inside `product`):
 "category": "transitions"
 ```
 
-- `icon` is a path relative to the `.StreamUP` file: a square PNG or JPG of
-  about 256 px works best (it is shown at 36 px, cropped to a square). It is
-  copied at install into the plugin's config folder (`product-icons/`), so it
-  survives the user deleting or moving the download. Adding controls from a
-  file, or `RegisterOverlay`, copies it too.
+- `icon` is either an image embedded in the file or a path:
+  - **Embedded** (what the packager writes, and the preferred form):
+    `"icon": "data:image/png;base64,iVBORw0..."`. PNG, JPEG (`image/jpeg`) or
+    WebP (`image/webp`). PNG is the safe choice: every OBS platform can read
+    it. Anything over 256 KB decoded, anything that is not one of those three,
+    or anything that does not decode as an image is skipped with a line in the
+    OBS log, and the product installs as normal with its initials instead.
+  - **Path**: relative to the `.StreamUP` file. Note the packager only ships
+    `Resources/Image Sources`, `Media Sources` and `Shader Filters`, so a path
+    elsewhere never reaches customers; the packager replaces it with the
+    embedded form anyway.
+  - A square image of about 256 px works best (it is shown at 36 px, cropped to
+    a square). At install, when controls are attached, and on
+    `RegisterOverlay`, the icon is written to the plugin's config folder
+    (`product-icons/`), so it survives the user deleting or moving the
+    download.
+  - The StreamUP-Products packager embeds an icon in every `.StreamUP` it puts
+    in a ZIP (from `dev/marketing/icon.png`, or cropped from the cover with a
+    warning), and gives a product with no manifest a minimal identity block:
+
+    ```json
+    "streamup_overlay": {
+      "format": 2, "id": "minim-alerts-sup003", "name": "Minim Alerts",
+      "version": "3.0.3", "category": "alerts",
+      "product": { "id": "minim-alerts-sup003", "name": "Minim Alerts", "version": "3.0.3" },
+      "icon": "data:image/png;base64,..."
+    }
+    ```
+
+    A block with no `groups` and no `actions` registers no controls and logs
+    nothing in 2.5; 2.4.1 logs "no usable controls" and installs as normal;
+    2.4.0 and older ignore the key.
 - `category` groups the product in My Products: `overlays`, `alerts`,
   `transitions`, `effects`, `widgets`, `games` or `tools`. Without it the
   category is read from the file name (`StreamUP Alerts - ...`,
