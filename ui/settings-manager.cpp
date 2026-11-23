@@ -963,27 +963,9 @@ void ShowSettingsDialog(int tabIndex)
 			categoryList->addItem(category);
 		}
 
-		// Gray out sidebar entries for plugins that are currently disabled.
-		// We keep the entries in the list (preserving fixed indices used by
-		// other callers) but strip ItemIsEnabled so the row paints muted and
-		// can't be clicked — making disabled plugins feel uninstalled
-		// without breaking ShowSettingsDialog(int) callers.
-		{
-			PluginSettings dimSettings = GetCurrentSettings();
-			auto setEnabled = [categoryList](int row, bool enabled) {
-				if (auto *item = categoryList->item(row); item) {
-					Qt::ItemFlags f = item->flags();
-					if (enabled) f |= Qt::ItemIsEnabled;
-					else         f &= ~Qt::ItemIsEnabled;
-					item->setFlags(f);
-				}
-			};
-			setEnabled(1, dimSettings.modules.toolbar);        // Toolbar
-			setEnabled(2, dimSettings.modules.sceneOrganiser); // Scene Organiser
-			setEnabled(4, dimSettings.modules.hotkeys);        // Hotkeys
-			setEnabled(5, dimSettings.modules.streamupDock);   // Dock Configuration
-			setEnabled(7, dimSettings.modules.backup);         // Backup
-		}
+		// Tabs for parts switched off on the Features page stay clickable but
+		// read as off: a muted entry here, and on the page a line saying so
+		// above greyed-out settings (see markSwitchedOff below).
 		// Tabs whose contents moved: Plugin Management is a button on General,
 		// Plugins and the StreamUP Theme switches live on the Features page.
 		// The rows stay (hidden) so the fixed tab indices keep working.
@@ -1015,17 +997,11 @@ void ShowSettingsDialog(int tabIndex)
 		// Create scrollable container with dialog box styling
 		QScrollArea *generalScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 		generalScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		generalScrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(generalScrollArea->styleSheet() + QString(
-			"QScrollArea {"
-			"    background-color: %1;"
-			"    border: none;"
-			"    border-radius: %2px;"
-			"}"
-			"QScrollArea > QWidget > QWidget {"
-			"    background: transparent;"
-			"}"
-		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-		 .arg(22)));
+		// Boxed sections on the window background, like the Backup tab: the
+		// page itself has no panel, each group is its own rounded card.
+		generalScrollArea->setStyleSheet(generalScrollArea->styleSheet() + QString(
+			"QScrollArea { background: transparent; border: none; }"
+			"QScrollArea > QWidget > QWidget { background: transparent; }"));
 		
 		// Create content container with dialog box background
 		QWidget *generalContentContainer = new QWidget();
@@ -1036,9 +1012,8 @@ void ShowSettingsDialog(int tabIndex)
 		));
 		
 		QVBoxLayout *generalContentLayout = new QVBoxLayout(generalContentContainer);
-		generalContentLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-							 StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-		generalContentLayout->setSpacing(StreamUP::UIStyles::S(16));
+		generalContentLayout->setContentsMargins( 0, 0, StreamUP::UIStyles::S(8), 0);
+		generalContentLayout->setSpacing(StreamUP::UIStyles::S(10));
 
 		// One card, one line per setting; the longer explanation is behind "?".
 		{
@@ -1093,17 +1068,11 @@ void ShowSettingsDialog(int tabIndex)
 		// Create scrollable container with dialog box styling
 		QScrollArea *toolbarScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 		toolbarScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		toolbarScrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(toolbarScrollArea->styleSheet() + QString(
-			"QScrollArea {"
-			"    background-color: %1;"
-			"    border: none;"
-			"    border-radius: %2px;"
-			"}"
-			"QScrollArea > QWidget > QWidget {"
-			"    background: transparent;"
-			"}"
-		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-		 .arg(22)));
+		// Boxed sections on the window background, like the Backup tab: the
+		// page itself has no panel, each group is its own rounded card.
+		toolbarScrollArea->setStyleSheet(toolbarScrollArea->styleSheet() + QString(
+			"QScrollArea { background: transparent; border: none; }"
+			"QScrollArea > QWidget > QWidget { background: transparent; }"));
 		
 		// Create content container with dialog box background
 		QWidget *toolbarContentContainer = new QWidget();
@@ -1114,14 +1083,11 @@ void ShowSettingsDialog(int tabIndex)
 		));
 		
 		QVBoxLayout *toolbarContentLayout = new QVBoxLayout(toolbarContentContainer);
-		toolbarContentLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-							 StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-		toolbarContentLayout->setSpacing(StreamUP::UIStyles::S(16));
+		toolbarContentLayout->setContentsMargins( 0, 0, StreamUP::UIStyles::S(8), 0);
+		toolbarContentLayout->setSpacing(StreamUP::UIStyles::S(10));
 
-		QWidget *toolbarSettingsWidget = new QWidget();
-
-		QVBoxLayout *toolbarLayout = new QVBoxLayout(toolbarSettingsWidget);
-		toolbarLayout->setSpacing(StreamUP::UIStyles::S(12));
+		// Boxed sections: how the toolbar looks, then its buttons.
+		QVBoxLayout *toolbarLayout = StreamUP::UIStyles::sectionCard(toolbarContentLayout, obs_module_text("Settings.Toolbar.Look"));
 
 		// On and off is the Toolbar switch on the Features page.
 
@@ -1263,8 +1229,7 @@ void ShowSettingsDialog(int tabIndex)
 		toolbarAlignLayout->addWidget(alignComboBox);
 		toolbarLayout->addLayout(toolbarAlignLayout);
 
-	// Add spacing between sections
-	toolbarLayout->addSpacing(StreamUP::UIStyles::S(16));
+		toolbarLayout = StreamUP::UIStyles::sectionCard(toolbarContentLayout, obs_module_text("Settings.Toolbar.Buttons"));
 
 		// Add "Configure Toolbar" button
 		QHBoxLayout *configureToolbarLayout = new QHBoxLayout();
@@ -1299,7 +1264,6 @@ void ShowSettingsDialog(int tabIndex)
 		configureToolbarLayout->addWidget(configureToolbarButton);
 		toolbarLayout->addLayout(configureToolbarLayout);
 
-		toolbarContentLayout->addWidget(toolbarSettingsWidget);
 		toolbarContentLayout->addStretch();
 		
 		toolbarScrollArea->setWidget(toolbarContentContainer);
@@ -1315,17 +1279,11 @@ void ShowSettingsDialog(int tabIndex)
 		// Create scrollable container with dialog box styling
 		QScrollArea *sceneOrganiserScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 		sceneOrganiserScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		sceneOrganiserScrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(sceneOrganiserScrollArea->styleSheet() + QString(
-			"QScrollArea {"
-			"    background-color: %1;"
-			"    border: none;"
-			"    border-radius: %2px;"
-			"}"
-			"QScrollArea > QWidget > QWidget {"
-			"    background: transparent;"
-			"}"
-		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-		 .arg(22)));
+		// Boxed sections on the window background, like the Backup tab: the
+		// page itself has no panel, each group is its own rounded card.
+		sceneOrganiserScrollArea->setStyleSheet(sceneOrganiserScrollArea->styleSheet() + QString(
+			"QScrollArea { background: transparent; border: none; }"
+			"QScrollArea > QWidget > QWidget { background: transparent; }"));
 
 		// Create content container with dialog box background
 		QWidget *sceneOrganiserContentContainer = new QWidget();
@@ -1336,13 +1294,13 @@ void ShowSettingsDialog(int tabIndex)
 		));
 
 		QVBoxLayout *sceneOrganiserContentLayout = new QVBoxLayout(sceneOrganiserContentContainer);
-		sceneOrganiserContentLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-							 StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-		sceneOrganiserContentLayout->setSpacing(StreamUP::UIStyles::S(16));
+		sceneOrganiserContentLayout->setContentsMargins( 0, 0, StreamUP::UIStyles::S(8), 0);
+		sceneOrganiserContentLayout->setSpacing(StreamUP::UIStyles::S(10));
 
 		QWidget *sceneOrganiserSettingsWidget = new QWidget();
 		QVBoxLayout *sceneOrganiserLayout = new QVBoxLayout(sceneOrganiserSettingsWidget);
-		sceneOrganiserLayout->setSpacing(StreamUP::UIStyles::S(12));
+		sceneOrganiserLayout->setContentsMargins(0, 0, 0, 0);
+		sceneOrganiserLayout->setSpacing(StreamUP::UIStyles::S(10));
 
 		// Description header
 		QLabel *sceneOrganiserDescription = new QLabel(obs_module_text("SceneOrganiser.Settings.Description"));
@@ -1360,12 +1318,12 @@ void ShowSettingsDialog(int tabIndex)
 		auto *soMore = new StreamUP::Kit::MoreOptions(QStringLiteral("settings.sceneorganiser"),
 							      obs_module_text("SceneOrganiser.Settings.More"));
 		sceneOrganiserLayout->addWidget(soMore);
-		QVBoxLayout *soMoreL = soMore->body();
+		// The folded settings sit in a card of their own, like the rest.
+		QVBoxLayout *soMoreL = StreamUP::UIStyles::sectionCard(soMore->body());
 		QVBoxLayout *tabTarget = soTabs;
 
 
 		// Show Icons setting
-		sceneOrganiserLayout->addSpacing(StreamUP::UIStyles::S(16));
 		QHBoxLayout *showIconsLayout = new QHBoxLayout();
 
 		QLabel *showIconsLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.ShowIcons"));
@@ -1876,17 +1834,11 @@ void ShowSettingsDialog(int tabIndex)
 		// Create scrollable container with dialog box styling
 		QScrollArea *hotkeysScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 		hotkeysScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		hotkeysScrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(hotkeysScrollArea->styleSheet() + QString(
-			"QScrollArea {"
-			"    background-color: %1;"
-			"    border: none;"
-			"    border-radius: %2px;"
-			"}"
-			"QScrollArea > QWidget > QWidget {"
-			"    background: transparent;"
-			"}"
-		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-		 .arg(22)));
+		// Boxed sections on the window background, like the Backup tab: the
+		// page itself has no panel, each group is its own rounded card.
+		hotkeysScrollArea->setStyleSheet(hotkeysScrollArea->styleSheet() + QString(
+			"QScrollArea { background: transparent; border: none; }"
+			"QScrollArea > QWidget > QWidget { background: transparent; }"));
 		
 		// Create content container with dialog box background
 		QWidget *hotkeysContentContainer = new QWidget();
@@ -1897,15 +1849,14 @@ void ShowSettingsDialog(int tabIndex)
 		));
 		
 		QVBoxLayout *hotkeysMainLayout = new QVBoxLayout(hotkeysContentContainer);
-		hotkeysMainLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-						      StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-		hotkeysMainLayout->setSpacing(StreamUP::UIStyles::S(16));
+		hotkeysMainLayout->setContentsMargins(0, 0, StreamUP::UIStyles::S(8), 0);
+		hotkeysMainLayout->setSpacing(StreamUP::UIStyles::S(10));
 		
 		// Add hotkeys content directly
 		QWidget *hotkeysContentWidget = new QWidget();
 		QVBoxLayout *hotkeysContentLayout = new QVBoxLayout(hotkeysContentWidget);
 		hotkeysContentLayout->setContentsMargins(0, 0, 0, 0);
-		hotkeysContentLayout->setSpacing(StreamUP::UIStyles::S(16));
+		hotkeysContentLayout->setSpacing(StreamUP::UIStyles::S(10));
 
 		// Define hotkey information structure
 		struct HotkeyInfo {
@@ -1918,19 +1869,13 @@ void ShowSettingsDialog(int tabIndex)
 		// Matches the WebSocket Commands window so both dialogs feel like the
 		// same product. Returns the card's layout so the existing
 		// buildHotkeySection helper can populate it unchanged.
+		// Each group is a boxed section with its title inside, the same card
+		// as every other Settings tab.
 		auto makeHotkeySection = [](QVBoxLayout *parentLayout, const QString &title) -> QVBoxLayout * {
-			parentLayout->addWidget(StreamUP::UIStyles::sectionHeader(title));
-			QFrame *card = new QFrame();
-			card->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
-				"QFrame { background: %1; border-radius: %2px; border: 1px solid %3; }")
-				.arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-				.arg(10)
-				.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)));
-			QVBoxLayout *cardLay = new QVBoxLayout(card);
-			cardLay->setContentsMargins(StreamUP::UIStyles::S(12), 0,
-						     StreamUP::UIStyles::S(12), 0);
+			QVBoxLayout *cardLay = StreamUP::UIStyles::sectionCard(parentLayout, title);
+			cardLay->setContentsMargins(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(12),
+						    StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(6));
 			cardLay->setSpacing(0);
-			parentLayout->addWidget(card);
 			return cardLay;
 		};
 		std::vector<HotkeyInfo> lockingHotkeys = {
@@ -2122,17 +2067,11 @@ void ShowSettingsDialog(int tabIndex)
 		// Create scrollable container with dialog box styling
 		QScrollArea *dockScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 		dockScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		dockScrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(dockScrollArea->styleSheet() + QString(
-			"QScrollArea {"
-			"    background-color: %1;"
-			"    border: none;"
-			"    border-radius: %2px;"
-			"}"
-			"QScrollArea > QWidget > QWidget {"
-			"    background: transparent;"
-			"}"
-		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-		 .arg(22)));
+		// Boxed sections on the window background, like the Backup tab: the
+		// page itself has no panel, each group is its own rounded card.
+		dockScrollArea->setStyleSheet(dockScrollArea->styleSheet() + QString(
+			"QScrollArea { background: transparent; border: none; }"
+			"QScrollArea > QWidget > QWidget { background: transparent; }"));
 		
 		// Create content container with dialog box background
 		QWidget *dockContentContainer = new QWidget();
@@ -2143,23 +2082,20 @@ void ShowSettingsDialog(int tabIndex)
 		));
 		
 		QVBoxLayout *dockMainLayout = new QVBoxLayout(dockContentContainer);
-		dockMainLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-						   StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-		dockMainLayout->setSpacing(StreamUP::UIStyles::S(16));
+		dockMainLayout->setContentsMargins(0, 0, StreamUP::UIStyles::S(8), 0);
+		dockMainLayout->setSpacing(StreamUP::UIStyles::S(10));
 		
 		// Add dock config content directly
 		QWidget *dockContentWidget = new QWidget();
 		QVBoxLayout *dockContentLayout = new QVBoxLayout(dockContentWidget);
 		dockContentLayout->setContentsMargins(0, 0, 0, 0);
-		dockContentLayout->setSpacing(StreamUP::UIStyles::S(16));
+		dockContentLayout->setSpacing(StreamUP::UIStyles::S(10));
 
-		// Section: dock tools (header + plain section widget, SoT house style).
-		dockContentLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("Settings.Dock.ToolsGroupTitle")));
-		QWidget *toolsGroup = new QWidget();
-		toolsGroup->setStyleSheet(QString("background: transparent;"));
-
-		QVBoxLayout *toolsGroupLayout = new QVBoxLayout(toolsGroup);
-		toolsGroupLayout->setContentsMargins(StreamUP::UIStyles::S(12), 0, StreamUP::UIStyles::S(12), 0);
+		// Section: dock tools, a boxed section like every other tab.
+		QVBoxLayout *toolsGroupLayout =
+			StreamUP::UIStyles::sectionCard(dockContentLayout, obs_module_text("Settings.Dock.ToolsGroupTitle"));
+		toolsGroupLayout->setContentsMargins(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(12),
+						     StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(6));
 		toolsGroupLayout->setSpacing(0);
 
 		// Get current dock settings
@@ -2280,8 +2216,6 @@ void ShowSettingsDialog(int tabIndex)
 				toolsGroupLayout->addWidget(separator);
 			}
 		}
-		
-		dockContentLayout->addWidget(toolsGroup);
 		
 		dockMainLayout->addWidget(dockContentWidget);
 		dockMainLayout->addStretch();
@@ -2453,6 +2387,31 @@ void ShowSettingsDialog(int tabIndex)
 		// 9. StreamUP Theme: its switches moved to the Features page, where each
 		// has a picture. The slot stays (empty, its row hidden) for the indices.
 		stackedWidget->addWidget(new QWidget());
+
+		// A tab whose part is switched off on the Features page: one line
+		// saying so (with the way there), and the settings greyed out under it.
+		{
+			const PluginSettings offSettings = GetCurrentSettings();
+			auto markSwitchedOff = [&](int row, bool on, const char *nameKey) {
+				if (on)
+					return;
+				if (auto *item = categoryList->item(row))
+					item->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
+				QWidget *page = stackedWidget->widget(row);
+				auto *layout = page ? qobject_cast<QVBoxLayout *>(page->layout()) : nullptr;
+				if (!layout)
+					return;
+				for (QWidget *child : page->findChildren<QWidget *>(Qt::FindDirectChildrenOnly))
+					StreamUP::Kit::DimForSwitchedOff(child, true);
+				layout->insertWidget(0, StreamUP::Kit::SwitchedOffBanner(obs_module_text(nameKey)));
+				layout->insertSpacing(1, StreamUP::UIStyles::S(10));
+			};
+			markSwitchedOff(1, offSettings.modules.toolbar, "Features.Toolbar.Name");
+			markSwitchedOff(2, offSettings.modules.sceneOrganiser, "Features.SceneOrganiser.Name");
+			markSwitchedOff(4, offSettings.modules.hotkeys, "Features.Hotkeys.Name");
+			markSwitchedOff(5, offSettings.modules.streamupDock, "Features.StreamupDock.Name");
+			markSwitchedOff(7, offSettings.modules.backup, "Features.Backup.Name");
+		}
 
 		// Connect category selection to page switching
 		QObject::connect(categoryList, &QListWidget::currentRowChanged, [stackedWidget](int index) {
