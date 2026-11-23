@@ -116,8 +116,10 @@ void ToolbarEditPanel::buildUi()
 
 	// 1. Heading and guidance.
 	auto *heading = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.Heading")), card);
-	heading->setFont(UIStyles::displayFont(16, 700));
-	heading->setStyleSheet(QString("QLabel{color:%1;background:transparent;}").arg(UIStyles::Colors::PRIMARY_COLOR));
+	// A window title on the type scale (14, semibold, primary text), not an
+	// accent-coloured label.
+	heading->setFont(UIStyles::displayFont(14, 600));
+	heading->setStyleSheet(QString("QLabel{color:%1;background:transparent;}").arg(UIStyles::Colors::TEXT_PRIMARY));
 	// The heading doubles as the drag handle, since a frameless tool window has
 	// no titlebar to grab.
 	heading->installEventFilter(new UIStyles::DragFilter(heading));
