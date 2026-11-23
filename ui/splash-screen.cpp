@@ -1566,15 +1566,22 @@ void CreateSplashDialog(ShowCondition condition)
             g.badgeBg = badgeBg;
             g.badgeFg = badgeFg;
             g.card = new QFrame();
-            g.card->setStyleSheet(QString("QFrame { background: transparent; border: none; }"));
+            g.card->setObjectName("supportersGroup");
+            g.card->setStyleSheet(QString("QFrame#supportersGroup { background: transparent; border: none; }"));
             g.cardLay = new QVBoxLayout(g.card);
             g.cardLay->setContentsMargins(0, 0, 0, 0);
             g.cardLay->setSpacing(StreamUP::UIStyles::S(10));
             QLabel *t = new QLabel(title);
             t->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 12px; font-weight: 600; background: transparent;").arg(accent)));
             g.cardLay->addWidget(t);
+            // Scoped by object name so the chips' own rules never reach the
+            // host: an unscoped rule here let one chip's fill paint the whole
+            // flow area as a tinted band behind the names.
             g.flowHost = new QWidget();
-            g.flowHost->setStyleSheet("background: transparent;");
+            g.flowHost->setObjectName("supportersFlow");
+            g.flowHost->setAttribute(Qt::WA_StyledBackground, true);
+            g.flowHost->setAutoFillBackground(false);
+            g.flowHost->setStyleSheet("QWidget#supportersFlow { background: transparent; }");
             g.flow = new FlowLayout(g.flowHost, 0, 8, 8);
             g.cardLay->addWidget(g.flowHost);
             supportersCardLay->addWidget(g.card);
@@ -1650,12 +1657,13 @@ void CreateSplashDialog(ShowCondition condition)
             };
             auto addBadges = [](const SupporterGroup &g, const std::vector<Supporter> &list) {
                 const QString style = QString(
-                    "QLabel { background: %1; color: %2; padding: 5px 12px;"
+                    "QLabel#supporterChip { background: %1; color: %2; padding: 5px 12px;"
                     "  border: 1px solid rgba(255, 255, 255, 0.08);"
                     "  border-radius: 12px; font-size: 12px; font-weight: 400; }")
                     .arg(g.badgeBg, g.badgeFg);
                 for (const auto &supporter : list) {
                     QLabel *badge = new QLabel(supporter.displayName);
+                    badge->setObjectName("supporterChip");
                     badge->setStyleSheet(StreamUP::UIStyles::scale_qss(style));
                     g.flow->addWidget(badge);
                 }
