@@ -211,7 +211,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		// Second info text
 		QLabel *info2 = CreateRichTextLabel(infoText2Str, false, true, Qt::AlignCenter);
 		info2->setStyleSheet(scale_qss(QString(
-			"QLabel{color:%1;font-size:%2px;background:transparent;border:none;}")
+			"QLabel{color:%1;font-size:%2px; font-weight: 400;background:transparent;border:none;}")
 			.arg(Colors::TEXT_MUTED)
 			.arg(Sizes::FONT_SIZE_SMALL)));
 		shell.content->addWidget(info2);
@@ -219,7 +219,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		// Third info text
 		QLabel *info3 = CreateRichTextLabel(infoText3Str, false, true, Qt::AlignCenter);
 		info3->setStyleSheet(scale_qss(QString(
-			"QLabel{color:%1;font-size:%2px;background:transparent;border:none;}")
+			"QLabel{color:%1;font-size:%2px; font-weight: 400;background:transparent;border:none;}")
 			.arg(Colors::TEXT_MUTED)
 			.arg(Sizes::FONT_SIZE_SMALL)));
 		shell.content->addWidget(info3);

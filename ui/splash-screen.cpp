@@ -1653,7 +1653,7 @@ void CreateSplashDialog(ShowCondition condition)
             .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)));
         QLabel *optInBody = new QLabel(obs_module_text("About.OptIn.Line"));
         optInBody->setWordWrap(true);
-        optInBody->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 12px;")
+        optInBody->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 12px; font-weight: 400;")
             .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)));
         QLabel *optInLink = new QLabel(QString(R"(<a href="https://streamup.tips/Identity/Account/Manage" style="color: %1; text-decoration: underline;">https://streamup.tips/Identity/Account/Manage</a>)")
             .arg(StreamUP::UIStyles::Colors::PRIMARY_LIGHT));

@@ -104,8 +104,8 @@ inline QString dimLabelStyle()
 // input inside a form.
 inline QString formLabelStyle()
 {
-	return scale_qss(QString("color:%1;font-size:11px;font-weight:700;"
-				 "text-transform:uppercase;background:transparent;")
+	return scale_qss(QString("color:%1;font-size:12px;font-weight:600;"
+				 "background:transparent;")
 				 .arg(Colors::TEXT_MUTED));
 }
 

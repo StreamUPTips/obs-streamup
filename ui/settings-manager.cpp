@@ -1095,7 +1095,7 @@ void ShowSettingsDialog(int tabIndex)
 		QHBoxLayout *toolbarPositionLayout = new QHBoxLayout();
 
 		QLabel *toolbarPositionLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarPosition"));
-		toolbarPositionLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		toolbarPositionLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							    .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							    .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		toolbarPositionLabel->setToolTip(obs_module_text("StreamUP.Settings.ToolbarPositionTooltip"));
@@ -1152,7 +1152,7 @@ void ShowSettingsDialog(int tabIndex)
 		QHBoxLayout *toolbarSizeLayout = new QHBoxLayout();
 
 		QLabel *toolbarSizeLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarSize"));
-		toolbarSizeLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		toolbarSizeLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							  .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							  .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		toolbarSizeLabel->setToolTip(obs_module_text("StreamUP.Settings.ToolbarSizeDesc"));
@@ -1192,7 +1192,7 @@ void ShowSettingsDialog(int tabIndex)
 		QHBoxLayout *toolbarAlignLayout = new QHBoxLayout();
 
 		QLabel *toolbarAlignLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarAlignment"));
-		toolbarAlignLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		toolbarAlignLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 								   .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 								   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		toolbarAlignLabel->setToolTip(obs_module_text("StreamUP.Settings.ToolbarAlignmentDesc"));
@@ -1229,13 +1229,13 @@ void ShowSettingsDialog(int tabIndex)
 		toolbarAlignLayout->addWidget(alignComboBox);
 		toolbarLayout->addLayout(toolbarAlignLayout);
 
-		toolbarLayout = StreamUP::UIStyles::sectionCard(toolbarContentLayout, obs_module_text("Settings.Toolbar.Buttons"));
+		toolbarLayout = StreamUP::UIStyles::sectionCard(toolbarContentLayout);
 
 		// Add "Configure Toolbar" button
 		QHBoxLayout *configureToolbarLayout = new QHBoxLayout();
 		
 		QLabel *configureToolbarLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarConfiguration"));
-		configureToolbarLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		configureToolbarLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							    .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							    .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		configureToolbarLabel->setToolTip(obs_module_text("StreamUP.Settings.ConfigureToolbarTooltip"));
@@ -1304,7 +1304,7 @@ void ShowSettingsDialog(int tabIndex)
 
 		// Description header
 		QLabel *sceneOrganiserDescription = new QLabel(obs_module_text("SceneOrganiser.Settings.Description"));
-		sceneOrganiserDescription->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; margin-bottom: 16px; background: transparent;")
+		sceneOrganiserDescription->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; margin-bottom: 16px; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		sceneOrganiserDescription->setWordWrap(true);
@@ -1327,7 +1327,7 @@ void ShowSettingsDialog(int tabIndex)
 		QHBoxLayout *showIconsLayout = new QHBoxLayout();
 
 		QLabel *showIconsLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.ShowIcons"));
-		showIconsLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		showIconsLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 						.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		showIconsLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.ShowIconsDesc"));
@@ -1356,7 +1356,7 @@ void ShowSettingsDialog(int tabIndex)
 			QHBoxLayout *row = new QHBoxLayout();
 
 			QLabel *label = new QLabel(obs_module_text(labelKey));
-			label->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+			label->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 					.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 					.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 			label->setToolTip(obs_module_text(descKey));
@@ -1402,7 +1402,7 @@ void ShowSettingsDialog(int tabIndex)
 		rememberFolderStateLayout->setSpacing(StreamUP::UIStyles::S(12));
 
 		QLabel *rememberFolderStateLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.AutoSorting.RememberFolderState"));
-		rememberFolderStateLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		rememberFolderStateLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		rememberFolderStateLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.AutoSorting.RememberFolderStateDesc"));
@@ -1428,7 +1428,7 @@ void ShowSettingsDialog(int tabIndex)
 		disablePreviewSwitchingLayout->setSpacing(StreamUP::UIStyles::S(12));
 
 		QLabel *disablePreviewSwitchingLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.DisablePreviewSwitchingInStudioMode"));
-		disablePreviewSwitchingLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		disablePreviewSwitchingLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		disablePreviewSwitchingLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.DisablePreviewSwitchingInStudioModeDesc"));
@@ -1455,7 +1455,7 @@ void ShowSettingsDialog(int tabIndex)
 		disableTransitionLayout->setSpacing(StreamUP::UIStyles::S(12));
 
 		QLabel *disableTransitionLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.DisableTransitionInStudioMode"));
-		disableTransitionLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		disableTransitionLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		disableTransitionLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.DisableTransitionInStudioModeDesc"));
@@ -1482,7 +1482,7 @@ void ShowSettingsDialog(int tabIndex)
 		switchToNewSceneLayout->setSpacing(StreamUP::UIStyles::S(12));
 
 		QLabel *switchToNewSceneLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.SwitchToNewScene"));
-		switchToNewSceneLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		switchToNewSceneLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		switchToNewSceneLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.SwitchToNewSceneDesc"));
@@ -1508,7 +1508,7 @@ void ShowSettingsDialog(int tabIndex)
 		itemHeightLayout->setSpacing(StreamUP::UIStyles::S(12));
 
 		QLabel *itemHeightLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.ItemHeight"));
-		itemHeightLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		itemHeightLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		itemHeightLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.ItemHeightDesc"));
@@ -1523,7 +1523,7 @@ void ShowSettingsDialog(int tabIndex)
 		itemHeightSlider->setMaximumWidth(StreamUP::UIStyles::S(200));
 
 		QLabel *itemHeightValueLabel = new QLabel(QString::number(currentSettings.sceneOrganiserItemHeight) + "px");
-		itemHeightValueLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent; min-width: 40px;")
+		itemHeightValueLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent; min-width: 40px;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		itemHeightValueLabel->setAlignment(Qt::AlignCenter);
@@ -1547,7 +1547,7 @@ void ShowSettingsDialog(int tabIndex)
 		switchModeLayout->setContentsMargins(0, 0, 0, 0);
 
 		QLabel *switchModeLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.SwitchMode"));
-		switchModeLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		switchModeLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		switchModeLabel->setWordWrap(true);
@@ -1607,7 +1607,7 @@ void ShowSettingsDialog(int tabIndex)
 		sortMethodLayout->setContentsMargins(0, 0, 0, 0);
 
 		QLabel *sortMethodLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.AutoSorting.Method"));
-		sortMethodLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		sortMethodLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 
@@ -1664,7 +1664,7 @@ void ShowSettingsDialog(int tabIndex)
 		groupFoldersLayout->setContentsMargins(0, 0, 0, 0);
 
 		QLabel *groupFoldersLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.AutoSorting.GroupFolders"));
-		groupFoldersLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		groupFoldersLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		groupFoldersLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.AutoSorting.GroupFoldersDesc"));
@@ -1702,7 +1702,7 @@ void ShowSettingsDialog(int tabIndex)
 							StreamUP::UIStyles::S(12));
 
 		QLabel *migrationText = new QLabel(obs_module_text("SceneOrganiser.Settings.MigrationText"));
-		migrationText->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: %3; padding: %4px; border-radius: %5px;")
+		migrationText->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: %3; padding: %4px; border-radius: %5px;")
 						.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
 						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
 						.arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
@@ -1796,7 +1796,7 @@ void ShowSettingsDialog(int tabIndex)
 		creditLayout->setSpacing(StreamUP::UIStyles::S(12));
 
 		QLabel *creditText = new QLabel(obs_module_text("SceneOrganiser.Settings.CreditText"));
-		creditText->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: %3; padding: %4px; border-radius: %5px;")
+		creditText->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: %3; padding: %4px; border-radius: %5px;")
 						.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
 						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
 						.arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
@@ -1940,7 +1940,7 @@ void ShowSettingsDialog(int tabIndex)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 				
 				QLabel *descLabel = new QLabel(hotkey.description);
-				descLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { color: %1; font-size: %2px; background: transparent; }")
+				descLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { color: %1; font-size: %2px; font-weight: 400; background: transparent; }")
 							.arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
 				descLabel->setWordWrap(true);

@@ -664,7 +664,7 @@ private:
 		lb->addWidget(OverlayUI::RowLabel(c.label, c.help));
 		row.drift = new QLabel(QString::fromUtf8("●"));
 		row.drift->setStyleSheet(su::scale_qss(
-			QString("QLabel{color:%1;font-size: 12px;background:transparent;}").arg(su::Colors::COLOR_WARNING)));
+			QString("QLabel{color:%1;font-size: 12px; font-weight: 400;background:transparent;}").arg(su::Colors::COLOR_WARNING)));
 		row.drift->setToolTip(T("OverlayControls.Drift.Tooltip"));
 		row.drift->hide();
 		lb->addWidget(row.drift);

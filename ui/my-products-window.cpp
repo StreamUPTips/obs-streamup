@@ -125,16 +125,18 @@ QPixmap Tile(const pr::ProductEntry &p, qreal dpr, int designW = kTileW, int des
 	g.setClipPath(clip);
 
 	QImage img;
-	if (!p.iconPath.isEmpty()) {
-		QImageReader reader(p.iconPath);
-		const QSize full = reader.size();
-		if (full.isValid()) // cover: fill the box, crop the overflow evenly
-			reader.setScaledSize(full.scaled(w, h, Qt::KeepAspectRatioByExpanding));
-		img = reader.read();
-	}
+	if (!p.iconPath.isEmpty())
+		img = QImageReader(p.iconPath).read();
 	if (!img.isNull()) {
-		g.fillRect(QRect(0, 0, w, h), QColor(su::Colors::BG_SECONDARY));
-		g.drawImage(QPointF((w - img.width()) / 2.0, (h - img.height()) / 2.0), img);
+		// The whole picture, never cropped: drawn to fit, over a blurred,
+		// dimmed copy of itself so a wide or tall picture has no bare bars.
+		const QImage cover = img.scaled(qMax(1, w / 16), qMax(1, h / 16), Qt::KeepAspectRatioByExpanding,
+						Qt::SmoothTransformation)
+					     .scaled(w, h, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+		g.drawImage(QPointF((w - cover.width()) / 2.0, (h - cover.height()) / 2.0), cover);
+		g.fillRect(QRect(0, 0, w, h), QColor(17, 17, 27, 190));
+		const QImage fit = img.scaled(w, h, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+		g.drawImage(QPointF((w - fit.width()) / 2, (h - fit.height()) / 2), fit);
 	} else {
 		g.fillRect(QRect(0, 0, w, h), CategoryColour(p.category));
 		QFont f = qApp->font();

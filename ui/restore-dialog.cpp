@@ -320,7 +320,7 @@ void ShowRestoreDialog(QWidget *over)
 		auto *rowLayout = new QHBoxLayout(row);
 		rowLayout->setContentsMargins(0, 0, 0, 0);
 		auto *text = new QLabel(label);
-		text->setStyleSheet(scale_qss(QString("QLabel{color:%1;font-size:%2px;background:transparent;}")
+		text->setStyleSheet(scale_qss(QString("QLabel{color:%1;font-size:%2px; font-weight: 400;background:transparent;}")
 						      .arg(QString(enabled ? Colors::TEXT_PRIMARY : Colors::TEXT_MUTED))
 						      .arg(CardText::kBody)));
 		rowLayout->addWidget(text, 1);
