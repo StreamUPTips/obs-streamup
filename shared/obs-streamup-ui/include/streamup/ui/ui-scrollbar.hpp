@@ -44,12 +44,9 @@ protected:
 		QPainter p(this);
 		p.setRenderHint(QPainter::Antialiasing, true);
 
-		// Channel — full-length rounded capsule (radius = half thickness).
-		const QRectF groove(rect());
-		const qreal trad = (vert ? groove.width() : groove.height()) / 2.0;
+		// No channel: just a quiet grey thumb that firms up on hover and drag,
+		// so a scrollable list reads calm and the accent stays for actions.
 		p.setPen(Qt::NoPen);
-		p.setBrush(QColor(Colors::BG_SECONDARY));
-		p.drawRoundedRect(groove, trad, trad);
 
 		if (maximum() <= minimum())
 			return; // nothing to scroll → no handle
@@ -66,11 +63,11 @@ protected:
 
 		const qreal inset = S(2);
 		const QRectF h = QRectF(hr).adjusted(inset, inset, -inset, -inset);
-		QColor c(Colors::PRIMARY_COLOR);
+		QColor c(255, 255, 255, 46);
 		if (isSliderDown())
-			c = QColor(Colors::PRIMARY_LIGHT);
+			c.setAlpha(110);
 		else if (underMouse())
-			c = QColor(Colors::PRIMARY_HOVER);
+			c.setAlpha(80);
 		const qreal hrad = (vert ? h.width() : h.height()) / 2.0;
 		p.setBrush(c);
 		p.drawRoundedRect(h, hrad, hrad);

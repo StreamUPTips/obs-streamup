@@ -38,7 +38,7 @@ inline void drawChevron(QPainter &p, const QPointF &c, qreal w, bool up)
 }
 } // namespace detail
 
-// macOS NSPopUpButton style: subtle field + accent chevron box on the right.
+// A quiet field with a hairline and one muted chevron, like Linear or Raycast.
 class MacComboBox : public QComboBox {
 public:
 	explicit MacComboBox(QWidget *parent = nullptr) : QComboBox(parent)
@@ -70,50 +70,36 @@ protected:
 
 		const QRectF r = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
 		const qreal rad = S(8);
-		const qreal bw = S(22); // accent drop-down block width (matches theme)
+		const qreal bw = S(26); // chevron column
 		QPainterPath fp;
 		fp.addRoundedRect(r, rad, rad);
 
-		// Field fill
+		// Quiet field: fill, a hairline that brightens on hover, one muted
+		// down chevron. No accent block; the accent is kept for focus.
 		p.setPen(Qt::NoPen);
 		p.setBrush(QColor(m_onCard ? Colors::INPUT_ON_CARD : Colors::INPUT_ON_BASE));
 		p.drawPath(fp);
+		if (m_hover && isEnabled())
+			p.fillPath(fp, QColor(255, 255, 255, 10));
 
-		// Accent block on the right, clipped to the field's rounded corners
-		// (so its right corners follow the field radius) — matches the theme's
-		// QComboBox::drop-down { background: primary_color }.
-		p.save();
-		p.setClipPath(fp);
-		p.setPen(Qt::NoPen);
-		p.setBrush(QColor(m_hover ? Colors::PRIMARY_HOVER : Colors::PRIMARY_COLOR));
-		p.drawRect(QRectF(r.right() - bw, r.top(), bw + 1, r.height()));
-		p.restore();
+		QPen hp(hasFocus() ? QColor(Colors::PRIMARY_COLOR)
+				   : QColor(255, 255, 255, m_hover && isEnabled() ? 40 : 22));
+		hp.setWidthF(hasFocus() ? 1.5 : 1.0);
+		p.setPen(hp);
+		p.setBrush(Qt::NoBrush);
+		p.drawRoundedRect(r, rad, rad);
 
-		// White up/down chevrons centred in the accent block
-		QPen cp{QColor(255, 255, 255)};
-		cp.setWidthF(std::max(1.2, S(2) * 0.75));
+		QPen cp{QColor(m_hover && isEnabled() ? Colors::TEXT_PRIMARY : Colors::TEXT_SECONDARY)};
+		cp.setWidthF(std::max(1.2, S(2) * 0.7));
 		cp.setCapStyle(Qt::RoundCap);
 		cp.setJoinStyle(Qt::RoundJoin);
 		p.setPen(cp);
-		p.setBrush(Qt::NoBrush);
-		const qreal cw = S(7);
-		const QPointF cc(r.right() - bw / 2.0, r.center().y());
-		detail::drawChevron(p, cc + QPointF(0, -S(5)), cw, /*up=*/true);
-		detail::drawChevron(p, cc + QPointF(0, S(5)), cw, /*up=*/false);
-
-		// Flat by default (no border); only a 2px accent ring on focus.
-		if (hasFocus()) {
-			QPen fpen{QColor(Colors::PRIMARY_COLOR)};
-			fpen.setWidthF(2);
-			p.setPen(fpen);
-			p.setBrush(Qt::NoBrush);
-			p.drawRoundedRect(r, rad, rad);
-		}
+		detail::drawChevron(p, QPointF(r.right() - bw / 2.0, r.center().y() + S(1)), S(8), /*up=*/false);
 
 		// Current text (elided)
-		p.setPen(QColor(Colors::TEXT_PRIMARY));
+		p.setPen(QColor(isEnabled() ? Colors::TEXT_PRIMARY : Colors::TEXT_MUTED));
 		p.setFont(font());
-		QRectF tr(S(12), 0, width() - bw - S(18), height());
+		QRectF tr(S(12), 0, width() - bw - S(14), height());
 		const QFontMetrics fm(font());
 		p.drawText(tr, Qt::AlignLeft | Qt::AlignVCenter,
 			   fm.elidedText(currentText(), Qt::ElideRight, (int)tr.width()));
@@ -154,42 +140,25 @@ protected:
 		const QRectF r = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
 		const qreal rad = S(8);
 		const qreal bw = S(22);
-		QPainterPath fp;
-		fp.addRoundedRect(r, rad, rad);
 
-		// Accent column clipped to the field (so it never extends outside),
-		// split by a centre divider into up (top) / down (bottom).
-		const QRectF col(r.right() - bw, r.top(), bw + 1, r.height());
-		p.save();
-		p.setClipPath(fp);
-		p.setPen(Qt::NoPen);
-		p.setBrush(QColor(Colors::PRIMARY_COLOR));
-		p.drawRect(col);
-		QPen dv(QColor(255, 255, 255, 90));
-		dv.setWidthF(std::max(1.6, S(2) * 0.9));
-		p.setPen(dv);
-		p.drawLine(QPointF(col.left(), r.center().y()), QPointF(col.right(), r.center().y()));
-		p.restore();
+		// Two small muted steppers on the right and a hairline round the
+		// field; the accent only shows as the focus ring.
+		const QRectF col(r.right() - bw, r.top(), bw, r.height());
+		QPen hp(hasFocus() ? QColor(Colors::PRIMARY_COLOR) : QColor(255, 255, 255, 22));
+		hp.setWidthF(hasFocus() ? 1.5 : 1.0);
+		p.setPen(hp);
+		p.setBrush(Qt::NoBrush);
+		p.drawRoundedRect(r, rad, rad);
 
-		// White chevrons centred in each half.
-		QPen cp{QColor(255, 255, 255)};
-		cp.setWidthF(std::max(1.2, S(2) * 0.75));
+		QPen cp{QColor(Colors::TEXT_SECONDARY)};
+		cp.setWidthF(std::max(1.2, S(2) * 0.7));
 		cp.setCapStyle(Qt::RoundCap);
 		cp.setJoinStyle(Qt::RoundJoin);
 		p.setPen(cp);
 		const qreal cw = S(6);
 		const qreal cx = col.center().x();
-		detail::drawChevron(p, QPointF(cx, r.top() + r.height() * 0.25), cw, /*up=*/true);
-		detail::drawChevron(p, QPointF(cx, r.top() + r.height() * 0.75), cw, /*up=*/false);
-
-		// Focus ring only (flat otherwise).
-		if (hasFocus()) {
-			QPen fpen{QColor(Colors::PRIMARY_COLOR)};
-			fpen.setWidthF(2);
-			p.setPen(fpen);
-			p.setBrush(Qt::NoBrush);
-			p.drawRoundedRect(r, rad, rad);
-		}
+		detail::drawChevron(p, QPointF(cx, r.center().y() - S(4)), cw, /*up=*/true);
+		detail::drawChevron(p, QPointF(cx, r.center().y() + S(4)), cw, /*up=*/false);
 	}
 
 private:
