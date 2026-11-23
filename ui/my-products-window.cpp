@@ -138,12 +138,24 @@ QPixmap Tile(const pr::ProductEntry &p, qreal dpr, int designW = kTileW, int des
 		const QImage fit = img.scaled(w, h, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 		g.drawImage(QPointF((w - fit.width()) / 2, (h - fit.height()) / 2), fit);
 	} else {
-		g.fillRect(QRect(0, 0, w, h), CategoryColour(p.category));
+		// A tinted tile, not a solid pastel block: the range's colour at low
+		// strength with a hairline and the initials in that colour.
+		const QColor accent = CategoryColour(p.category);
+		QColor tint = accent;
+		tint.setAlpha(38);
+		g.fillRect(QRect(0, 0, w, h), QColor("#24243a"));
+		g.fillRect(QRect(0, 0, w, h), tint);
+		QColor edge = accent;
+		edge.setAlpha(70);
+		g.setClipping(false);
+		g.setPen(QPen(edge, dpr));
+		g.setBrush(Qt::NoBrush);
+		g.drawRoundedRect(QRectF(0.5 * dpr, 0.5 * dpr, w - dpr, h - dpr), radius, radius);
 		QFont f = qApp->font();
-		f.setPixelSize(int(h * 0.42));
-		f.setBold(true);
+		f.setPixelSize(int(h * 0.36));
+		f.setWeight(QFont::DemiBold);
 		g.setFont(f);
-		g.setPen(QColor("#11111b"));
+		g.setPen(accent);
 		g.drawText(QRect(0, 0, w, h), Qt::AlignCenter, Initials(p.name));
 	}
 	g.end();
