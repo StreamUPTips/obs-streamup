@@ -336,9 +336,40 @@ void FitToContent(QWidget *window, int designWidth)
 		return;
 	const int shadow = 2 * S(su::ShadowDialog::kShadowMargin);
 	const int w = S(designWidth) + shadow;
+	QScreen *scr = window->screen() ? window->screen() : QGuiApplication::primaryScreen();
+	const int maxHeight = scr ? int(scr->availableGeometry().height() * 0.85) : S(800);
+	// Already on screen with a scrolling body: grow or shrink by exactly the
+	// difference between what the body holds now and what it shows. The
+	// layouts' cached size hints are not trusted for this.
+	if (window->isVisible() && window->width() == w) {
+		for (QScrollArea *area : window->findChildren<QScrollArea *>()) {
+			QWidget *inner = area->widget();
+			if (!inner || inner->objectName() != QLatin1String("suScrollBody") || !inner->layout())
+				continue;
+			QLayout *il = inner->layout();
+			il->invalidate();
+			const int vw = area->viewport()->width();
+			const int want = il->hasHeightForWidth() ? il->totalHeightForWidth(vw) : il->totalSizeHint().height();
+			const int h = window->height() + (want - area->viewport()->height());
+			window->resize(w, std::clamp(h, window->minimumHeight(), maxHeight));
+			return;
+		}
+	}
 	window->resize(w, window->height());
+	// The layouts cache their children's sizes: after something inside a
+	// scrolling body changed (a fold opened, a row appeared) those numbers
+	// are stale until told otherwise.
+	for (QScrollArea *area : window->findChildren<QScrollArea *>()) {
+		if (QWidget *inner = area->widget()) {
+			if (inner->layout())
+				inner->layout()->invalidate();
+			inner->updateGeometry();
+		}
+		area->updateGeometry();
+	}
 	int h = window->sizeHint().height();
 	if (QLayout *l = window->layout()) {
+		l->invalidate();
 		l->activate();
 		h = l->hasHeightForWidth() ? l->totalHeightForWidth(w) : l->totalSizeHint().height();
 	}
@@ -437,6 +468,8 @@ void MoreOptions::setOpen(bool open, bool save)
 	if (save) {
 		if (config_t *cfg = obs_frontend_get_user_config())
 			config_set_bool(cfg, "StreamUP", ("More." + m_key).toUtf8().constData(), open);
+		if (m_onToggled)
+			m_onToggled(open);
 	}
 }
 

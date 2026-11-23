@@ -2378,8 +2378,8 @@ void ShowSettingsDialog(int tabIndex)
 		manualButtons->addWidget(backupNowButton);
 		manualCard->addLayout(manualButtons);
 
-		QObject::connect(backupNowButton, &QPushButton::clicked, []() { StreamUP::Backup::ShowCreateBackupDialog(); });
-		QObject::connect(restoreButton, &QPushButton::clicked, []() { StreamUP::Restore::ShowRestoreDialog(); });
+		QObject::connect(backupNowButton, &QPushButton::clicked, [dialog]() { StreamUP::Backup::ShowCreateBackupDialog(dialog); });
+		QObject::connect(restoreButton, &QPushButton::clicked, [dialog]() { StreamUP::Restore::ShowRestoreDialog(dialog); });
 
 		backupPageLayout->addStretch();
 		stackedWidget->addWidget(backupPage);

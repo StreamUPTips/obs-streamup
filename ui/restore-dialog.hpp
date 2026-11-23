@@ -1,6 +1,8 @@
 #ifndef STREAMUP_RESTORE_DIALOG_HPP
 #define STREAMUP_RESTORE_DIALOG_HPP
 
+#include <QWidget>
+
 namespace StreamUP {
 namespace Restore {
 
@@ -8,7 +10,7 @@ namespace Restore {
  * Pick a backup, show what is inside it and what is missing on this machine,
  * then stage the restore. UI thread only.
  */
-void ShowRestoreDialog();
+void ShowRestoreDialog(QWidget *over = nullptr);
 
 /**
  * Show the outcome of a restore that was applied during the last shutdown.

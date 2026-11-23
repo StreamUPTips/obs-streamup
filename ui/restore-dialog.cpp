@@ -20,6 +20,7 @@
 #include <obs-module.h>
 
 #include <QApplication>
+#include <QPointer>
 #include <QDateTime>
 #include <QDir>
 #include <QFileDialog>
@@ -135,9 +136,11 @@ void ShowAppliedReportIfAny()
 	dialog->show();
 }
 
-void ShowRestoreDialog()
+void ShowRestoreDialog(QWidget *over)
 {
-	QWidget *parent = static_cast<QWidget *>(obs_frontend_get_main_window());
+	// Opened from Settings: the file picker and this window sit over Settings,
+	// so Settings is not pushed behind OBS, and comes back to the front after.
+	QWidget *parent = over ? over : static_cast<QWidget *>(obs_frontend_get_main_window());
 
 	// Start where the backups actually are. Automatic backups live in the
 	// configured folder, and opening in Documents made them hard to find.
@@ -532,6 +535,15 @@ void ShowRestoreDialog()
 		StreamUP::BackupUI::fitWindowToScreen(dialog, layout);
 	});
 
+	if (over) {
+		QPointer<QWidget> back(over);
+		QObject::connect(dialog, &QObject::destroyed, qApp, [back]() {
+			if (back) {
+				back->raise();
+				back->activateWindow();
+			}
+		});
+	}
 	dialog->show();
 }
 

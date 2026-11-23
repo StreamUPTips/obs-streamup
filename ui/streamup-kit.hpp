@@ -84,6 +84,8 @@ public:
 	explicit MoreOptions(const QString &key, const QString &label = QString(), QWidget *parent = nullptr);
 	QVBoxLayout *body() const { return m_bodyLayout; }
 	void setCountHint(int count);
+	// Runs after the person opens or closes it, so a window can refit.
+	void onToggled(std::function<void(bool)> fn) { m_onToggled = std::move(fn); }
 
 private:
 	void setOpen(bool open, bool save);
@@ -94,6 +96,7 @@ private:
 	QWidget *m_body = nullptr;
 	QVBoxLayout *m_bodyLayout = nullptr;
 	bool m_open = false;
+	std::function<void(bool)> m_onToggled;
 };
 
 // An empty list: a large icon, one line, and the next step as a button.

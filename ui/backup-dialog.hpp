@@ -1,6 +1,8 @@
 #ifndef STREAMUP_BACKUP_DIALOG_HPP
 #define STREAMUP_BACKUP_DIALOG_HPP
 
+#include <QWidget>
+
 namespace StreamUP {
 namespace Backup {
 
@@ -8,7 +10,7 @@ namespace Backup {
  * Ask what to include, pick a destination, then write the archive.
  * Safe to call from the UI thread only.
  */
-void ShowCreateBackupDialog();
+void ShowCreateBackupDialog(QWidget *over = nullptr);
 
 } // namespace Backup
 } // namespace StreamUP
