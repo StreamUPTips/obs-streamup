@@ -81,7 +81,7 @@ protected:
 			p.setClipping(false);
 			QFont f = font();
 			f.setPixelSize(S(11));
-			f.setWeight(QFont::Weight(700));
+			f.setWeight(QFont::Weight(600));
 			p.setPen(QColor(Colors::TEXT_PRIMARY));
 			drawCentredText(p, f, QString::number((int)std::lround(frac * 100.0)) + "%", r);
 		} else {

@@ -38,6 +38,8 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#include <dwmapi.h>
+#pragma comment(lib, "dwmapi.lib")
 #endif
 
 #include <QAbstractItemView>
@@ -111,6 +113,10 @@ private:
 	void applyMask()
 	{
 		const int r = S(m_radius);
+		if (r <= 0) {
+			clearMask();
+			return;
+		}
 		QPainterPath path;
 		path.addRoundedRect(QRectF(rect()), r, r);
 		setMask(QRegion(path.toFillPolygon().toPolygon()));
@@ -145,7 +151,17 @@ inline void installTooltipFix();
 // stacked dark windows read as elevated rather than merging.
 class ShadowDialog : public QDialog {
 public:
+#ifdef Q_OS_WIN
+	// Windows: the window is opaque and Windows draws the rounded corners and
+	// the shadow (DWM). A translucent window (needed to paint our own shadow)
+	// forces Qt to draw every glyph with greyscale antialiasing instead of
+	// ClearType, which is why StreamUP text looked soft next to OBS's.
+	static constexpr int kShadowMargin = 0;
+	static constexpr int kWindowRadius = 0;
+#else
 	static constexpr int kShadowMargin = 20;
+	static constexpr int kWindowRadius = 18;
+#endif
 	// Thickness (design px) of the grab zone along each card edge for resizing.
 	static constexpr int kResizeGrip = 8;
 	explicit ShadowDialog(QWidget *parent = nullptr) : QDialog(parent)
@@ -153,7 +169,14 @@ public:
 		// Qt::Window (not Qt::Dialog) so each custom window is a real top-level
 		// window OBS can show in the taskbar (see makeWindow's WS_EX_APPWINDOW).
 		setWindowFlags(Qt::FramelessWindowHint | Qt::Window);
+#ifdef Q_OS_WIN
+		setAutoFillBackground(true);
+		QPalette pal = palette();
+		pal.setColor(QPalette::Window, QColor(Colors::BG_DARKEST));
+		setPalette(pal);
+#else
 		setAttribute(Qt::WA_TranslucentBackground, true);
+#endif
 		// Tooltips show even while another window has focus (a "?" is often
 		// hovered straight after opening the window from a menu or a dock).
 		setAttribute(Qt::WA_AlwaysShowToolTips, true);
@@ -213,6 +236,15 @@ protected:
 
 	void showEvent(QShowEvent *e) override
 	{
+#ifdef Q_OS_WIN
+		if (const HWND hwnd = reinterpret_cast<HWND>(winId())) {
+			// Rounded corners (Windows 11) and the system window shadow.
+			const DWORD round = 2; // DWMWCP_ROUND
+			DwmSetWindowAttribute(hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &round, sizeof(round));
+			const MARGINS m{0, 0, 0, 1};
+			DwmExtendFrameIntoClientArea(hwnd, &m);
+		}
+#endif
 		if (!m_shownOnce) {
 			m_shownOnce = true;
 			if (!m_selfSized && m_openingSize.isValid()) {
@@ -337,6 +369,8 @@ protected:
 		// applyChrome — so paint and layout agree). radius = S(18) matches the
 		// RoundedContainer card body (which paints with S(18)).
 		const int sm = S(kShadowMargin);
+		if (sm <= 0)
+			return;
 		const QRectF card = QRectF(rect()).adjusted(sm, sm, -sm, -sm);
 		const int radius = S(18);
 		for (int i = sm; i >= 1; --i) {
@@ -610,7 +644,7 @@ inline WindowShell applyChrome(ShadowDialog *dlg, const QString &title,
 	outer->setContentsMargins(m, m, m, m);
 	outer->setSpacing(0);
 
-	auto *card = new RoundedContainer(18, dlg);
+	auto *card = new RoundedContainer(ShadowDialog::kWindowRadius, dlg);
 	outer->addWidget(card);
 
 	auto *cardLay = new QVBoxLayout(card);
@@ -622,9 +656,10 @@ inline WindowShell applyChrome(ShadowDialog *dlg, const QString &title,
 	header->setObjectName("suHeader");
 	header->setFixedHeight(S(48));
 	header->setStyleSheet(scale_qss(
-		QString("QWidget#suHeader{background:%1;border-top-left-radius:18px;"
-			"border-top-right-radius:18px;border-bottom:1px solid %2;}")
-			.arg(Colors::SIDEBAR_BG, Colors::SEPARATOR)));
+		QString("QWidget#suHeader{background:%1;border-top-left-radius:%3px;"
+			"border-top-right-radius:%3px;border-bottom:1px solid %2;}")
+			.arg(Colors::SIDEBAR_BG, "rgba(255,255,255,0.06)")
+			.arg(ShadowDialog::kWindowRadius)));
 	auto *hl = new QHBoxLayout(header);
 	hl->setContentsMargins(S(18), 0, S(10), 0);
 	hl->setSpacing(S(8));
@@ -667,7 +702,12 @@ inline WindowShell applyChrome(ShadowDialog *dlg, const QString &title,
 
 	auto *titleLbl = new QLabel(headerText, header);
 	titleLbl->setObjectName("suTitle");
-	titleLbl->setFont(displayFont(22, 700));
+	{
+		QFont tf = brandFont();
+		tf.setPixelSize(S(Type::Body));
+		tf.setWeight(QFont::Weight(Type::Semibold));
+		titleLbl->setFont(tf);
+	}
 	titleLbl->setStyleSheet(
 		QString("color:%1;background:transparent;").arg(Colors::TEXT_PRIMARY));
 	hl->addWidget(titleLbl);
@@ -716,8 +756,9 @@ inline WindowShell applyChrome(ShadowDialog *dlg, const QString &title,
 	footerWidget->setObjectName("suFooter");
 	footerWidget->setStyleSheet(scale_qss(
 		QString("QWidget#suFooter{background:%1;border-top:1px solid %2;"
-			"border-bottom-left-radius:18px;border-bottom-right-radius:18px;}")
-			.arg(Colors::SIDEBAR_BG, Colors::SEPARATOR)));
+			"border-bottom-left-radius:%3px;border-bottom-right-radius:%3px;}")
+			.arg(Colors::SIDEBAR_BG, "rgba(255,255,255,0.06)")
+			.arg(ShadowDialog::kWindowRadius)));
 	auto *footer = new QVBoxLayout(footerWidget);
 	footer->setContentsMargins(S(16), S(10), S(16), S(10));
 	footer->setSpacing(S(8));
@@ -753,7 +794,7 @@ inline WindowShell applyChrome(ShadowDialog *dlg, const QString &title,
 				"text-decoration:none;'>Send us a beer!</a>")
 				.arg(nameHtml, Colors::TAG_COLOR, verSeg));
 		brand->setStyleSheet(scale_qss(
-			QString("color:%1;font-size:12px;background:transparent;").arg(Colors::TEXT_SECONDARY)));
+			QString("color:%1;font-size:12px;background:transparent;").arg(Colors::TEXT_MUTED)));
 		brandRow->addWidget(brand, 1); // stretch=1 → takes the slack, wraps; pushes buttons right
 	} else {
 		brandRow->addStretch();

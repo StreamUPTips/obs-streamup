@@ -122,7 +122,7 @@ private:
 	{
 		QFont f = font();
 		f.setPixelSize(S(12));
-		f.setWeight(QFont::Weight(700));
+		f.setWeight(QFont::Weight(600));
 		return f;
 	}
 

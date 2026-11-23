@@ -65,7 +65,7 @@ protected:
 		// Title
 		QFont tf = font();
 		tf.setPixelSize(S(13));
-		tf.setWeight(QFont::Weight(800));
+		tf.setWeight(QFont::Weight(600));
 		p.setFont(tf);
 		p.setPen(QColor(Colors::TEXT_PRIMARY));
 		const QFontMetricsF fm(tf);

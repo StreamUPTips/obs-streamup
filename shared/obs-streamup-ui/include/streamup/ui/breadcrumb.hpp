@@ -48,7 +48,7 @@ protected:
 		for (int i = 0; i < m_segments.size(); ++i) {
 			const bool last = (i == m_segments.size() - 1);
 			QFont sf = f;
-			sf.setWeight(last ? QFont::Weight(800) : QFont::Weight(500));
+			sf.setWeight(last ? QFont::Weight(600) : QFont::Weight(500));
 			p.setFont(sf);
 			p.setPen(QColor(last ? Colors::TEXT_PRIMARY : Colors::TEXT_SECONDARY));
 			p.drawText(QPointF(x, y), m_segments[i]);

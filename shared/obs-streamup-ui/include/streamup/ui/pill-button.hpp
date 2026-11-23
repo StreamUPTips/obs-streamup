@@ -6,6 +6,7 @@
 // warning|outline|neutral.
 
 #include <QPushButton>
+#include <cmath>
 #include <QPainter>
 #include <QFontMetrics>
 #include <QPaintEvent>
@@ -75,15 +76,16 @@ protected:
 		}
 
 		if (outline && isEnabled()) {
-			QColor accent(Colors::PRIMARY_COLOR);
-			QColor f(0, 118, 223);
-			f.setAlphaF(isDown() ? 0.16f : (underMouse() ? 0.08f : 0.0f));
+			// Ghost: no fill, a hairline, ordinary text. The accent stays on
+			// the one primary action, so the two never clash side by side.
+			QColor f(255, 255, 255);
+			f.setAlphaF(isDown() ? 0.10f : (underMouse() ? 0.06f : 0.0f));
 			p.setBrush(f);
-			QPen pen(accent);
-			pen.setWidthF(1.2);
+			QPen pen(QColor(255, 255, 255, underMouse() ? 56 : 36));
+			pen.setWidthF(1.0);
 			p.setPen(pen);
 			p.drawRoundedRect(r, rad, rad);
-			textc = accent;
+			textc = QColor(Colors::TEXT_PRIMARY);
 		} else {
 			p.setPen(Qt::NoPen);
 			p.setBrush(fill);
@@ -111,8 +113,8 @@ protected:
 			const qreal x0 = r.center().x() - groupW / 2.0;
 
 			// Icon square, vertically centred. Dim with the label when disabled.
-			const QRectF iconRect(x0, r.center().y() - iconSz / 2.0, iconSz, iconSz);
-			QPixmap pm = m_icon.pixmap(QSize(iconSz, iconSz));
+			const QRectF iconRect(std::round(x0), std::round(r.center().y() - iconSz / 2.0), iconSz, iconSz);
+			QPixmap pm = m_icon.pixmap(QSize(iconSz, iconSz), devicePixelRatioF());
 			if (!pm.isNull()) {
 				p.save();
 				if (!isEnabled())
@@ -122,17 +124,17 @@ protected:
 			}
 
 			// Label, on the same cap-height baseline used everywhere else.
-			const qreal baseline = r.center().y() + fm.capHeight() / 2.0;
-			p.drawText(QPointF(x0 + iconSz + gap, baseline), text());
+			const qreal baseline = std::round(r.center().y() + fm.capHeight() / 2.0);
+			p.drawText(QPointF(std::round(x0 + iconSz + gap), baseline), text());
 		}
 	}
 
 private:
 	QFont buttonFont() const
 	{
-		QFont f = font();
-		f.setPixelSize(S(11));
-		f.setWeight(QFont::Weight(800));
+		QFont f = brandFont();
+		f.setPixelSize(S(Type::Body));
+		f.setWeight(QFont::Weight(Type::Semibold));
 		return f;
 	}
 	void resolve(QColor &fill, QColor &textc) const
@@ -147,7 +149,7 @@ private:
 			fill = QColor(Colors::COLOR_WARNING);
 			textc = QColor("#11111b"); // dark ink on amber, like success
 		} else if (m_variant == "neutral") {
-			fill = QColor(Colors::BG_TERTIARY);
+			fill = QColor(255, 255, 255, 20);
 			textc = QColor(Colors::TEXT_PRIMARY);
 		} else if (m_variant == "outline") {
 			fill = QColor(0, 0, 0, 0);
@@ -166,7 +168,7 @@ private:
 		if (m_variant == "warning")
 			return QColor("#fbc4a0"); // slightly lighter amber
 		if (m_variant == "neutral")
-			return QColor(Colors::BG_TERTIARY).lighter(125);
+			return QColor(255, 255, 255, 34);
 		return QColor(Colors::PRIMARY_HOVER);
 	}
 	QColor pressedColor() const
@@ -178,7 +180,7 @@ private:
 		if (m_variant == "warning")
 			return QColor("#e89b6f"); // slightly darker amber
 		if (m_variant == "neutral")
-			return QColor(Colors::BG_TERTIARY).lighter(110);
+			return QColor(255, 255, 255, 14);
 		return QColor(Colors::PRIMARY_PRESSED);
 	}
 
@@ -412,9 +414,9 @@ protected:
 private:
 	QFont badgeFont() const
 	{
-		QFont f = font();
-		f.setPixelSize(S(11));
-		f.setWeight(QFont::Weight(800));
+		QFont f = brandFont();
+		f.setPixelSize(S(Type::Small));
+		f.setWeight(QFont::Weight(Type::Semibold));
 		return f;
 	}
 	QString m_text;

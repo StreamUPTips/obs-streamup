@@ -122,7 +122,7 @@ private:
 		p.fillRect(r, g);
 		QFont f = font();
 		f.setPixelSize(S(20));
-		f.setWeight(QFont::Weight(800));
+		f.setWeight(QFont::Weight(600));
 		p.setPen(QColor(255, 255, 255, 230));
 		drawCentredText(p, f, QString("Slide %1").arg(idx + 1), r);
 	}

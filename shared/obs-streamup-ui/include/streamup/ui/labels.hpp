@@ -11,6 +11,7 @@
 
 #include <QLabel>
 #include <QString>
+#include <QStringList>
 
 namespace StreamUP {
 namespace UIStyles {
@@ -21,23 +22,60 @@ inline QLabel *makeLabel(const QString &text, int px, int weight,
 			 const char *color = Colors::TEXT_PRIMARY)
 {
 	auto *l = new QLabel(text);
+	// Snapped onto the type scale, so no window invents its own size.
 	l->setStyleSheet(scale_qss(
 		QString("QLabel{color:%1;font-size:%2px;font-weight:%3;background:transparent;}")
 			.arg(color)
-			.arg(px)
-			.arg(weight)));
+			.arg(Type::size(px))
+			.arg(Type::weight(weight))));
 	l->setWordWrap(true);
 	return l;
+}
+
+// "WHAT'S NEW IN 3.0" / "Docks & Layout" -> "What's new in 3.0" / "Docks & layout".
+// Words that are names (StreamUP, OBS, a capital in the middle) keep their case.
+inline QString sentenceCase(const QString &text)
+{
+	static const QStringList keep = {"StreamUP", "OBS", "Google", "Aitum", "Streamer.bot", "WebSocket", "Multi-Dock",
+					 "Scene", "Organiser", "ProText", "I"};
+	const QStringList words = text.split(QLatin1Char(' '));
+	QStringList out;
+	for (int i = 0; i < words.size(); ++i) {
+		const QString &w = words[i];
+		QString k;
+		for (const QString &name : keep)
+			if (w.compare(name, Qt::CaseInsensitive) == 0)
+				k = name;
+		if (!k.isEmpty() && ((k != "Scene" && k != "Organiser") || text.contains("Scene Organiser", Qt::CaseInsensitive))) {
+			out << k;
+			continue;
+		}
+		bool innerCap = false;
+		for (int c = 1; c < w.size(); ++c)
+			innerCap = innerCap || (w[c].isUpper() && w[c - 1].isLower());
+		if (innerCap) {
+			out << w;
+			continue;
+		}
+		QString lw = w.toLower();
+		if (i == 0 && !lw.isEmpty())
+			lw[0] = lw[0].toUpper();
+		out << lw;
+	}
+	return out.join(QLatin1Char(' '));
 }
 
 // Accent display-font section header (all-caps, Bebas/condensed). Use above a
 // group of rows inside a custom window — the StreamUP house "section" title.
 inline QLabel *sectionHeader(const QString &text)
 {
-	auto *l = new QLabel(text.toUpper());
-	l->setFont(displayFont(16, 700));
-	l->setStyleSheet(
-		QString("QLabel{color:%1;background:transparent;}").arg(Colors::PRIMARY_COLOR));
+	// A quiet label above a group: sentence case, small, semibold, muted. The
+	// accent colour is kept for actions, so it is not spent on labels.
+	auto *l = new QLabel(sentenceCase(text));
+	l->setStyleSheet(scale_qss(QString("QLabel{color:%1;font-size:%2px;font-weight:%3;background:transparent;}")
+					   .arg("#a6adc8")
+					   .arg(Type::Small)
+					   .arg(Type::Semibold)));
 	l->setContentsMargins(0, S(10), 0, S(2));
 	l->setWordWrap(true);
 	return l;

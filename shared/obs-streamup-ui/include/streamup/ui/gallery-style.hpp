@@ -73,8 +73,10 @@ inline void drawCentredText(QPainter &p, const QFont &f, const QString &text, co
 	if (text.isEmpty())
 		return;
 	const QFontMetricsF fm(f);
-	const qreal x = rect.left() + (rect.width() - fm.horizontalAdvance(text)) / 2.0;
-	const qreal baseline = rect.center().y() + fm.capHeight() / 2.0;
+	// Whole pixels: a glyph run that starts on a fractional pixel is
+	// resampled and reads soft.
+	const qreal x = std::round(rect.left() + (rect.width() - fm.horizontalAdvance(text)) / 2.0);
+	const qreal baseline = std::round(rect.center().y() + fm.capHeight() / 2.0);
 	p.setFont(f);
 	p.drawText(QPointF(x, baseline), text);
 }
@@ -85,40 +87,24 @@ inline bool fontInstalled(const QString &fam)
 	return fams.contains(fam, Qt::CaseInsensitive);
 }
 
-// Branded BODY font for StreamUP custom windows — modern Apple-style.
-// Prefers SF Pro, else Inter (closest free substitute), else clean Windows UI.
-// Only applied to our custom windows — never docks / native OBS surfaces.
+// The one font family for StreamUP windows: OBS's own UI font, so our text
+// renders exactly like the OBS windows around it (same face, same hinting).
+// Earlier this preferred SF Pro / Inter / Segoe UI Variable, which on Windows
+// drew softer and heavier than OBS's text and never matched it.
 inline QFont brandFont()
 {
 	QFont f = QApplication::font();
-	for (const QString &fam : {QStringLiteral("SF Pro Text"), QStringLiteral("SF Pro Display"),
-				   QStringLiteral("Inter"), QStringLiteral("Segoe UI Variable Text"),
-				   QStringLiteral("Segoe UI")}) {
-		if (fontInstalled(fam)) {
-			f.setFamily(fam);
-			break;
-		}
-	}
 	f.setStyleStrategy(QFont::PreferAntialias);
 	return f;
 }
 
-// Branded DISPLAY font for titles / section headers — Bebas Neue (condensed,
-// all-caps, modern). Falls back to a condensed face, else bold body font.
-inline QFont displayFont(int px, int weight = 700)
+// Titles use the same family, just bigger and semibold. (This used to swap in
+// Bebas Neue for all-caps section labels; those labels are sentence case now.)
+inline QFont displayFont(int px, int weight = 600)
 {
 	QFont f = brandFont();
-	for (const QString &fam : {QStringLiteral("Bebas Neue Pro"), QStringLiteral("Bebas Neue"),
-				   QStringLiteral("Oswald")}) {
-		if (fontInstalled(fam)) {
-			f.setFamily(fam);
-			break;
-		}
-	}
 	f.setPixelSize(S(px));
-	f.setWeight(QFont::Weight(weight));
-	f.setLetterSpacing(QFont::PercentageSpacing, 102);
-	f.setStyleStrategy(QFont::PreferAntialias);
+	f.setWeight(QFont::Weight(std::min(weight, 600)));
 	return f;
 }
 
@@ -186,17 +172,32 @@ namespace Colors {
 }
 
 // ── Size tokens (minimal set used by gallery + switch-button) ─────────────────
-namespace Sizes {
-	constexpr int FONT_SIZE_LARGE = 18;
-	constexpr int FONT_SIZE_HEADING = 14;
-	constexpr int FONT_SIZE_NORMAL = 14;
-	constexpr int FONT_SIZE_SMALL = 13;
-	constexpr int FONT_SIZE_TINY = 12;
-	constexpr int FONT_SIZE_BUTTON = 11;
-	constexpr int FONT_WEIGHT_NORMAL = 500;
-	constexpr int FONT_WEIGHT_BOLD = 800;
+// One type scale for every StreamUP window: one family (brandFont), four
+// sizes, three weights. Everything else maps onto these.
+namespace Type {
+	constexpr int Title = 18;   // a window's own heading
+	constexpr int Heading = 14; // a card or section title
+	constexpr int Body = 13;    // labels, rows, buttons
+	constexpr int Small = 12;   // detail lines, captions, pills
+	constexpr int Regular = 400;
+	constexpr int Medium = 500;
+	constexpr int Semibold = 600;
+	// Nearest step on the scale for any older px / weight value.
+	constexpr int size(int px) { return px >= 17 ? Title : px >= 14 ? Heading : px == 13 ? Body : Small; }
+	constexpr int weight(int w) { return w >= 600 ? Semibold : w >= 500 ? Medium : Regular; }
+}
 
-	constexpr int RADIUS_CARD = 18;   // decision #10
+namespace Sizes {
+	constexpr int FONT_SIZE_LARGE = Type::Title;
+	constexpr int FONT_SIZE_HEADING = Type::Heading;
+	constexpr int FONT_SIZE_NORMAL = Type::Body;
+	constexpr int FONT_SIZE_SMALL = Type::Small;
+	constexpr int FONT_SIZE_TINY = Type::Small;
+	constexpr int FONT_SIZE_BUTTON = Type::Body;
+	constexpr int FONT_WEIGHT_NORMAL = Type::Regular;
+	constexpr int FONT_WEIGHT_BOLD = Type::Semibold;
+
+	constexpr int RADIUS_CARD = 12;   // every card, one radius
 	constexpr int RADIUS_INPUT = 8;   // decision #7
 	constexpr int RADIUS_SMALL = 4;   // dock-native / scrollbar handle
 	constexpr int BUTTON_HEIGHT = 28; // decision #5
@@ -430,7 +431,7 @@ inline QString treeStyle()
 inline QString cardStyle(const char *fill = Colors::BG_PRIMARY, int radius = Sizes::RADIUS_CARD)
 {
 	const QString qss = QString(
-		"QFrame#card{background:%1;border:none;border-radius:%2px;}")
+		"QFrame#card{background:%1;border:1px solid rgba(255,255,255,0.06);border-radius:%2px;}")
 		.arg(fill).arg(radius);
 	return scale_qss(qss);
 }
