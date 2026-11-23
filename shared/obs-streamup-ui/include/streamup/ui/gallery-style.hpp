@@ -297,8 +297,8 @@ inline QString comboStyle(bool onCard = false)
 		"border-radius:9px;padding:4px;outline:none;}"
 		"QComboBox QAbstractItemView::item{border-radius:7px;padding:3px 10px;"
 		"margin:1px 4px;min-height:18px;}"
-		"QComboBox QAbstractItemView::item:selected{background:%4;color:#ffffff;}")
-		.arg(popupBg, Colors::TEXT_PRIMARY, Colors::POPUP_BORDER, Colors::SELECTION);
+		"QComboBox QAbstractItemView::item:selected{background:%4;color:%2;}")
+		.arg(popupBg, Colors::TEXT_PRIMARY, Colors::POPUP_BORDER, QStringLiteral("rgba(255,255,255,0.08)"));
 	return scale_qss(qss);
 }
 
@@ -310,11 +310,11 @@ inline QString menuStyle()
 		"QMenu{background:%1;color:%2;"
 		"border:1px solid %3;border-radius:9px;padding:4px;}"
 		"QMenu::item{padding:5px 12px;border-radius:7px;margin:1px 4px;}"
-		"QMenu::item:selected{background:%4;color:#ffffff;}"
+		"QMenu::item:selected{background:%4;color:%2;}"
 		"QMenu::item:disabled{color:%5;}"
 		"QMenu::separator{height:1px;background:%6;margin:4px 8px;}")
 		.arg(Colors::POPUP_BG, Colors::TEXT_PRIMARY, Colors::POPUP_BORDER,
-		     Colors::SELECTION, Colors::TEXT_MUTED, Colors::SEPARATOR);
+		     QStringLiteral("rgba(255,255,255,0.08)"), Colors::TEXT_MUTED, Colors::SEPARATOR);
 	return scale_qss(qss);
 }
 
