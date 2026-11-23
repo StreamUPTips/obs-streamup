@@ -247,6 +247,37 @@ the handful that matter.
 A product's `description` shows as a **?** at the top of the first tab, not as
 a paragraph, so keep it to two short sentences.
 
+## Slider ranges
+
+Since 3.0 a `slider` or `number` can leave out `min` and `max`. The window
+then uses the range OBS gives the setting the control is linked to (the first
+plain `set` link to a number setting it can find), and that setting's step
+when `step` is left out too. A `min`, `max` or `step` in the manifest always
+wins, so give them only to narrow the range on purpose. For a transition
+link the range is filled in once the transition exists (after "Use as my
+transition").
+
+```json
+{ "id": "swap", "type": "slider", "label": "Swap point", "unit": "%",
+  "bindings": [{ "transition": "Logo Card", "key": "transition_point" }] }
+```
+
+## Fonts
+
+A product can list the fonts its scenes need, with where to get each one:
+
+```json
+"fonts": [
+  { "name": "Pricedown Bl", "url": "https://www.dafont.com/pricedown.font" }
+]
+```
+
+It sits in the manifest (or its `product` block). When one of these fonts is
+not installed, the install shows it in the Fonts window with a Get button that
+opens the link. Fonts used by OBS text sources are found on their own; the
+list adds a link for those and covers fonts used in places StreamUP cannot
+see, such as ProText.
+
 ## My Products
 
 **StreamUP > My Products…** lists every StreamUP product in the current scene
