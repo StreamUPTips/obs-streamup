@@ -560,71 +560,42 @@ void LoadSupportersData()
         });
 }
 
-QString GenerateSupportersHTML() 
+QString GenerateSupportersHTML()
 {
-    if (!supportersData.loaded) {
-        return R"(
-<div style="color: #e9d5ff; line-height: 1.4; font-size: 13px;">
-    <p style="margin: 0; color: #d8b4fe;">Loading supporters...</p>
-</div>
-        )";
-    }
+    // One calm palette: quiet grey group labels, neutral name chips, a hairline
+    // opt-in card. No gold or purple, so it sits with the rest of the window.
+    const QString wrap = R"(<div style="color: #cdd6f4; line-height: 1.4; font-size: 13px;">)";
+    if (!supportersData.loaded)
+        return wrap + R"(<p style="margin: 0; color: #a6adc8;">Loading supporters…</p></div>)";
 
-    if (!supportersData.errorMessage.isEmpty()) {
-        return QString(R"(
-<div style="color: #e9d5ff; line-height: 1.4; font-size: 13px;">
-    <p style="margin: 0; color: #fca5a5;">Unable to load supporters at this time.</p>
-</div>
-        )");
-    }
+    if (!supportersData.errorMessage.isEmpty())
+        return wrap + R"(<p style="margin: 0; color: #a6adc8;">Supporters could not be loaded right now.</p></div>)";
 
-    QString html = R"(<div style="color: #e9d5ff; line-height: 1.4; font-size: 13px;">)";
-
-    // Andi's supporters section
-    if (!supportersData.andiSupporters.empty()) {
-        html += R"(<h4 style="color: #fbbf24; margin: 14px 0 10px 0; font-size: 14px; font-weight: 600;">Andi's Supporters</h4>)";
-        html += R"(<p style="margin: 8px 0; line-height: 2.4;">)";
-
-        for (size_t i = 0; i < supportersData.andiSupporters.size(); ++i) {
-            const auto& supporter = supportersData.andiSupporters[i];
-            html += QString(R"(<span style="background-color: rgba(251, 191, 36, 0.18); color: #fde68a; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap;">%1</span>)")
-                .arg(supporter.displayName.toHtmlEscaped());
-
-            if (i < supportersData.andiSupporters.size() - 1) {
-                html += " &nbsp; ";
-            }
+    QString html = wrap;
+    auto group = [&html](const char *title, const std::vector<Supporter> &list) {
+        if (list.empty())
+            return;
+        html += QString(R"(<p style="color: #9399b2; margin: 16px 0 8px 0; font-size: 12px; font-weight: 600;">%1</p>)")
+                    .arg(QString::fromUtf8(title));
+        html += R"(<p style="margin: 0; line-height: 2.2;">)";
+        for (size_t i = 0; i < list.size(); ++i) {
+            html += QString(R"(<span style="background-color: #313244; color: #cdd6f4; font-size: 12px; white-space: nowrap;">&nbsp;&nbsp;%1&nbsp;&nbsp;</span>)")
+                        .arg(list[i].displayName.toHtmlEscaped());
+            if (i + 1 < list.size())
+                html += " &nbsp;";
         }
         html += R"(</p>)";
-    }
+    };
+    group("Andi's supporters", supportersData.andiSupporters);
+    group("StreamUP supporters", supportersData.streamupSupporters);
 
-    // StreamUP supporters section
-    if (!supportersData.streamupSupporters.empty()) {
-        html += R"(<h4 style="color: #a855f7; margin: 14px 0 10px 0; font-size: 14px; font-weight: 600;">StreamUP Supporters</h4>)";
-        html += R"(<p style="margin: 8px 0; line-height: 2.4;">)";
+    if (supportersData.andiSupporters.empty() && supportersData.streamupSupporters.empty())
+        html += R"(<p style="margin: 0; color: #a6adc8;">No public supporters to show yet.</p>)";
 
-        for (size_t i = 0; i < supportersData.streamupSupporters.size(); ++i) {
-            const auto& supporter = supportersData.streamupSupporters[i];
-            html += QString(R"(<span style="background-color: rgba(168, 85, 247, 0.18); color: #e9d5ff; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap;">%1</span>)")
-                .arg(supporter.displayName.toHtmlEscaped());
-
-            if (i < supportersData.streamupSupporters.size() - 1) {
-                html += " &nbsp; ";
-            }
-        }
-        html += R"(</p>)";
-    }
-
-    // If both lists are empty
-    if (supportersData.andiSupporters.empty() && supportersData.streamupSupporters.empty()) {
-        html += R"(<p style="margin: 0; color: #d8b4fe; font-style: italic;">No public supporters to display at this time.</p>)";
-    }
-
-    // Opt-in message — modern card with rounded edges and generous padding
-    html += R"(<div style="margin: 18px 0 0 0; padding: 16px 20px; background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 14px;">)";
-    html += R"(<p style="margin: 0 0 6px 0; color: #f5d0fe; font-size: 13px; font-weight: 600;">If you're a supporter and your name is not here</p>)";
-    html += R"(<p style="margin: 0 0 4px 0; color: #e9d5ff; font-size: 12px; line-height: 1.6;">This is an opt-in feature which you can enable in your account settings. You can opt-in right now and choose exactly how your name will appear.</p>)";
-    html += R"(<p style="margin: 8px 0 0 0;"><a href="https://streamup.tips/Identity/Account/Manage" style="color: #c4b5fd; text-decoration: underline; font-size: 12px;">https://streamup.tips/Identity/Account/Manage</a></p>)";
-    html += R"(</div>)";
+    html += R"(<table width="100%" cellpadding="14" cellspacing="0" style="margin-top: 18px; background-color: #24273a; border: 1px solid #45475a;"><tr><td>)";
+    html += R"(<p style="margin: 0 0 4px 0; color: #cdd6f4; font-size: 13px; font-weight: 600;">Supporter but not listed?</p>)";
+    html += R"(<p style="margin: 0; color: #a6adc8; font-size: 12px; line-height: 1.5;">Showing your name is opt-in. Turn it on and choose how it appears in your <a href="https://streamup.tips/Identity/Account/Manage" style="color: #89b4fa; text-decoration: none;">account settings</a>.</p>)";
+    html += R"(</td></tr></table>)";
 
     html += R"(</div>)";
     return html;
@@ -1600,7 +1571,7 @@ void CreateSplashDialog(ShowCondition condition)
             g.cardLay->setContentsMargins(0, 0, 0, 0);
             g.cardLay->setSpacing(StreamUP::UIStyles::S(10));
             QLabel *t = new QLabel(title);
-            t->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 13px; font-weight: 600; background: transparent;").arg(accent)));
+            t->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 12px; font-weight: 600; background: transparent;").arg(accent)));
             g.cardLay->addWidget(t);
             g.flowHost = new QWidget();
             g.flowHost->setStyleSheet("background: transparent;");
@@ -1610,10 +1581,13 @@ void CreateSplashDialog(ShowCondition condition)
             return g;
         };
 
-        SupporterGroup andiGroup = buildGroup("Andi's Supporters", "#fbbf24",
-                                               "rgba(251, 191, 36, 0.15)", "#fde68a");
-        SupporterGroup streamupGroup = buildGroup("StreamUP Supporters", "#a855f7",
-                                                   "rgba(168, 85, 247, 0.15)", "#e9d5ff");
+        // Both groups share one calm look: a quiet grey label and neutral
+        // hairline chips, so neither fights the rest of the window.
+        const QString chipBg = "rgba(255, 255, 255, 0.06)";
+        SupporterGroup andiGroup = buildGroup("Andi's supporters", StreamUP::UIStyles::Colors::TEXT_MUTED,
+                                               chipBg, StreamUP::UIStyles::Colors::TEXT_PRIMARY);
+        SupporterGroup streamupGroup = buildGroup("StreamUP supporters", StreamUP::UIStyles::Colors::TEXT_MUTED,
+                                                   chipBg, StreamUP::UIStyles::Colors::TEXT_PRIMARY);
 
         // While nothing has loaded: grey placeholder pills, the shape of the
         // list to come, instead of a "Loading" line.
@@ -1676,8 +1650,9 @@ void CreateSplashDialog(ShowCondition condition)
             };
             auto addBadges = [](const SupporterGroup &g, const std::vector<Supporter> &list) {
                 const QString style = QString(
-                    "QLabel { background: %1; color: %2; padding: 6px 14px;"
-                    "  border-radius: 12px; font-size: 12px; font-weight: 600; }")
+                    "QLabel { background: %1; color: %2; padding: 5px 12px;"
+                    "  border: 1px solid rgba(255, 255, 255, 0.08);"
+                    "  border-radius: 12px; font-size: 12px; font-weight: 400; }")
                     .arg(g.badgeBg, g.badgeFg);
                 for (const auto &supporter : list) {
                     QLabel *badge = new QLabel(supporter.displayName);
@@ -1735,9 +1710,7 @@ void CreateSplashDialog(ShowCondition condition)
             QDesktopServices::openUrl(QUrl("https://streamup.tips"));
         });
 
-        // Brand-coloured social buttons. Each keeps its own filled stylesheet
-        // matching the platform's primary colour, so these stay plain QPushButtons
-        // (PillButton is custom-painted and ignores per-widget fill QSS).
+        // Round icon buttons for the socials, on the neutral pill surface.
         auto makeSocialButton = [](const QString &text, const QString &iconPath,
                                    const QString &bg, const QString &hover, const QString &fg) {
             QPushButton *btn = new QPushButton();
@@ -1746,12 +1719,17 @@ void CreateSplashDialog(ShowCondition condition)
             btn->setCursor(Qt::PointingHandCursor);
             btn->setIcon(QIcon(iconPath));
             btn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
+            // Same soft surface as the pills beside them, so the row reads as
+            // one set rather than three brand blocks.
+            Q_UNUSED(bg);
+            Q_UNUSED(hover);
             btn->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
-                "QPushButton { background: %1; color: %3; border: 1px solid %1;"
-                "  border-radius: 12px; font-weight: 600; font-size: 12px;"
-                "  padding: 0 6px; min-height: 26px; max-height: 26px; min-width: 26px; max-width: 26px; }"
-                "QPushButton:hover { background: %2; border: 1px solid %2; }")
-                .arg(bg, hover, fg)));
+                "QPushButton { background: rgba(255,255,255,0.07); color: %1; border: none;"
+                "  border-radius: 13px; padding: 0;"
+                "  min-height: 26px; max-height: 26px; min-width: 26px; max-width: 26px; }"
+                "QPushButton:hover { background: rgba(255,255,255,0.13); }"
+                "QPushButton:pressed { background: rgba(255,255,255,0.05); }")
+                .arg(fg)));
             return btn;
         };
 
