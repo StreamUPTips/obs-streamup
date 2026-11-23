@@ -43,6 +43,7 @@ struct ProductEntry {
 	bool shippedControls = false; // its file had controls, so they can be added back from it
 	bool isTransition = false; // offers "use as my transition"
 	QString transitionAction;  // that action's id
+	bool usedAsTransition = false; // its transition is in OBS's list right now
 };
 
 // Stamps every scene the .StreamUP file at path describes and caches its icon.

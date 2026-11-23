@@ -632,48 +632,22 @@ void PluginsUpToDateOutput(bool manuallyTriggered)
 		StreamUP::Kit::Toast(obs_module_text("Plugin.Status.AllUpToDate"), StreamUP::Kit::Status::Ok);
 }
 
-// One plugin per row: its name (with a StreamUP badge when we made it), a
-// status pill, the versions in small text, and one Get button.
+// One plugin per row in the shared row style: name, versions underneath, a
+// status pill and one Get button on the right.
 static QWidget *PluginRowsCard(const std::vector<PluginRow> &rows, bool outdated)
 {
-	auto *card = new QFrame();
-	card->setObjectName("suPlugins");
-	card->setStyleSheet(scale_qss(QString("QFrame#suPlugins{background:%1;border-radius:14px;}").arg(Colors::BG_PRIMARY)));
-	auto *v = new QVBoxLayout(card);
-	v->setContentsMargins(S(14), S(6), S(10), S(6));
-	v->setSpacing(0);
-	for (size_t i = 0; i < rows.size(); ++i) {
-		const PluginRow &r = rows[i];
-		auto *row = new QWidget();
-		auto *h = new QHBoxLayout(row);
-		h->setContentsMargins(0, S(6), 0, S(6));
-		h->setSpacing(S(10));
+	namespace kit = StreamUP::Kit;
+	auto *list = new kit::RowList();
+	for (const PluginRow &r : rows) {
 		const QString name = QString::fromStdString(r.name);
-		auto *text = new QVBoxLayout();
-		text->setSpacing(S(1));
-		auto *nameRow = new QHBoxLayout();
-		nameRow->setSpacing(S(6));
-		QLabel *nameLabel = su::makeLabel(name, Sizes::FONT_SIZE_NORMAL, 700, Colors::TEXT_PRIMARY);
-		nameLabel->setWordWrap(false);
-		nameRow->addWidget(nameLabel);
-		if (name.startsWith("StreamUP", Qt::CaseInsensitive)) {
-			auto *badge = new su::Badge(obs_module_text("Plugin.Badge.StreamUP"), QColor(Colors::PRIMARY_COLOR), QColor("#ffffff"));
-			badge->setToolTip(obs_module_text("Plugin.Badge.StreamUPTooltip"));
-			nameRow->addWidget(badge);
-		}
-		nameRow->addStretch(1);
-		text->addLayout(nameRow);
 		QString detail;
 		if (outdated && !r.installedVersion.empty() && !r.requiredVersion.empty())
 			detail = QString::fromStdString(r.installedVersion) + QString::fromUtf8(" \xe2\x86\x92 ") +
 				 QString::fromStdString(r.requiredVersion);
 		else if (!r.requiredVersion.empty())
 			detail = QString::fromStdString(r.requiredVersion);
-		if (!detail.isEmpty())
-			text->addWidget(su::makeLabel(detail, Sizes::FONT_SIZE_TINY, 500, Colors::TEXT_MUTED));
-		h->addLayout(text, 1);
-		h->addWidget(StreamUP::Kit::StatusPill(outdated ? StreamUP::Kit::Status::Warn : StreamUP::Kit::Status::Bad,
-						       obs_module_text(outdated ? "Plugin.Pill.Update" : "Plugin.Pill.Missing")));
+		QWidget *pill = kit::StatusPill(outdated ? kit::Status::Warn : kit::Status::Bad,
+						obs_module_text(outdated ? "Plugin.Pill.Update" : "Plugin.Pill.Missing"));
 		const QString url = QString::fromStdString(!r.downloadUrl.empty() ? r.downloadUrl : r.websiteUrl);
 		auto *get = new su::PillButton(obs_module_text("Plugin.Button.Get"), "primary");
 		get->setEnabled(!url.isEmpty());
@@ -681,16 +655,96 @@ static QWidget *PluginRowsCard(const std::vector<PluginRow> &rows, bool outdated
 		if (!r.websiteUrl.empty())
 			get->setToolTip(QString::fromStdString(r.websiteUrl));
 		QObject::connect(get, &QPushButton::clicked, [url]() { QDesktopServices::openUrl(QUrl(url)); });
-		h->addWidget(get);
-		v->addWidget(row);
-		if (i + 1 < rows.size()) {
-			auto *line = new QFrame();
-			line->setFixedHeight(1);
-			line->setStyleSheet(QString("background:%1;").arg(Colors::SEPARATOR));
-			v->addWidget(line);
-		}
+		list->addRow(name, detail, {pill, get});
 	}
-	return card;
+	return list;
+}
+
+// Plugins OBS found but could not load: the reason underneath, a pill, and the
+// two ways out (get a fresh copy, or open the folder to remove it).
+static QWidget *FailedRowsCard(const std::vector<std::string> &failed_modules)
+{
+	namespace kit = StreamUP::Kit;
+	auto *list = new kit::RowList();
+	const auto &allPlugins = StreamUP::GetAllPlugins();
+	std::map<std::string, ModuleLoadFailure> loadFailures;
+	if (char *logPath = StreamUP::PathUtils::GetOBSLogPath()) {
+		loadFailures = GetModuleLoadFailures(logPath);
+		bfree(logPath);
+	}
+	for (const std::string &module_name : failed_modules) {
+		const StreamUP::PluginInfo *info = nullptr;
+		std::string friendly;
+		for (const auto &plugin : allPlugins) {
+			if (plugin.second.moduleName == module_name) {
+				friendly = plugin.first;
+				info = &plugin.second;
+				break;
+			}
+		}
+		const QString name = QString::fromStdString(info ? friendly : module_name);
+		auto fit = loadFailures.find(module_name);
+		const ModuleLoadFailure *failure = fit != loadFailures.end() ? &fit->second : nullptr;
+		QString reason;
+		if (failure && !failure->reason.empty())
+			reason = QString::fromStdString(failure->reason);
+		QList<QWidget *> trailing;
+		trailing << kit::StatusPill(kit::Status::Bad, obs_module_text("Plugin.Pill.NotLoading"));
+		if (failure && !failure->absoluteFolder.empty()) {
+			auto *folder = new su::PillButton(obs_module_text("Plugin.Button.Folder"), "neutral");
+			folder->setToolTip(QString::fromStdString(failure->absoluteFolder));
+			const QString module = QString::fromStdString(failure->absoluteModulePath);
+			const QString dir = QString::fromStdString(failure->absoluteFolder);
+			QObject::connect(folder, &QPushButton::clicked, [module, dir]() {
+				if (!module.isEmpty())
+					RevealFileInFileManager(module);
+				else
+					QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
+			});
+			trailing << folder;
+		}
+		QString url = QStringLiteral("https://obsproject.com/forum/resources/");
+		if (info)
+			url = StringUtils::GetPlatformURL(QString::fromStdString(info->windowsURL),
+							  QString::fromStdString(info->macURL),
+							  QString::fromStdString(info->linuxURL),
+							  QString::fromStdString(info->generalURL));
+		auto *get = new su::PillButton(obs_module_text("Plugin.Button.Get"), "primary");
+		get->setToolTip(url);
+		get->setAccessibleName(QString(obs_module_text("Plugin.Button.GetAccessible")).arg(name));
+		QObject::connect(get, &QPushButton::clicked, [url]() { QDesktopServices::openUrl(QUrl(url)); });
+		trailing << get;
+		list->addRow(name, reason.isEmpty() ? QString(obs_module_text("Plugin.Line.NoReason")) : reason, trailing,
+			     nullptr, reason);
+	}
+	return list;
+}
+
+// Plugins switched off in OBS: nothing to download, so the line says where the
+// switch is.
+static QWidget *DisabledRowsCard(const std::map<std::string, bool> &disabled_modules)
+{
+	namespace kit = StreamUP::Kit;
+	auto *list = new kit::RowList();
+	const auto &allPlugins = StreamUP::GetAllPlugins();
+	for (const auto &module : disabled_modules) {
+		const bool safeMode = module.second;
+		QList<QWidget *> trailing;
+		trailing << kit::StatusPill(kit::Status::Neutral,
+					    obs_module_text(safeMode ? "Plugin.Pill.SafeMode" : "Plugin.Pill.Off"));
+		auto it = allPlugins.find(module.first);
+		if (it != allPlugins.end() && !it->second.generalURL.empty()) {
+			const QString url = QString::fromStdString(it->second.generalURL);
+			auto *site = new su::PillButton(obs_module_text("Plugin.Button.Website"), "neutral");
+			site->setToolTip(url);
+			QObject::connect(site, &QPushButton::clicked, [url]() { QDesktopServices::openUrl(QUrl(url)); });
+			trailing << site;
+		}
+		list->addRow(QString::fromStdString(module.first),
+			     obs_module_text(safeMode ? "Plugin.Message.DisabledSafeModeFix" : "Plugin.Message.DisabledFix"),
+			     trailing);
+	}
+	return list;
 }
 
 void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback, bool isStartupCheck, const std::map<std::string, bool>& disabled_modules)
@@ -754,109 +808,75 @@ void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continue
 		QDialog *dialog = shell.dialog;
 		QVBoxLayout *dialogLayout = shell.content;
 
-		// Header: a pill per kind of problem, then one short line.
-		QWidget *headerWidget = new QWidget();
-		QVBoxLayout *headerLayout = new QVBoxLayout(headerWidget);
-		headerLayout->setContentsMargins(S(25), S(18), S(25), 0);
-		headerLayout->setSpacing(S(8));
-		auto *pills = new QHBoxLayout();
-		pills->setSpacing(S(6));
-		auto pillCount = [&](StreamUP::Kit::Status st, const char *key, size_t n) {
-			if (n)
-				pills->addWidget(StreamUP::Kit::StatusPill(st, QString(obs_module_text(key)).arg(n)));
-		};
-		pillCount(StreamUP::Kit::Status::Bad, "Plugin.Count.Missing", issues.missing.size());
-		pillCount(StreamUP::Kit::Status::Warn, "Plugin.Count.Update", issues.outdated.size());
-		pillCount(StreamUP::Kit::Status::Bad, "Plugin.Count.Failed", failed_to_load_modules.size());
-		pillCount(StreamUP::Kit::Status::Neutral, "Plugin.Count.Off", disabled_modules.size());
-		pills->addStretch(1);
-		headerLayout->addLayout(pills);
+		namespace kit = StreamUP::Kit;
+		// Everything sits in one scrolling column on the shared spacing scale,
+		// so the window opens as tall as its rows and never clips them.
+		QVBoxLayout *body = kit::ScrollingBody(dialogLayout);
 
+		// Header: a pill per kind of problem, then one short line.
+		auto *pills = new QHBoxLayout();
+		pills->setSpacing(S(kit::Space::Gap));
+		auto pillCount = [&](kit::Status st, const char *key, size_t n) {
+			if (n)
+				pills->addWidget(kit::StatusPill(st, QString(obs_module_text(key)).arg(n)));
+		};
+		pillCount(kit::Status::Bad, "Plugin.Count.Missing", issues.missing.size());
+		pillCount(kit::Status::Warn, "Plugin.Count.Update", issues.outdated.size());
+		pillCount(kit::Status::Bad, "Plugin.Count.Failed", failed_to_load_modules.size());
+		pillCount(kit::Status::Neutral, "Plugin.Count.Off", disabled_modules.size());
+		pills->addStretch(1);
+		auto *header = new QVBoxLayout();
+		header->setSpacing(S(kit::Space::Gap));
+		header->addLayout(pills);
 		QString descText = issues.description;
 		if (descText.isEmpty())
 			descText = obs_module_text(installing ? "Plugin.Line.Install" : "Plugin.Line.Check");
-		QLabel *subtitleLabel = su::makeLabel(descText, 13, 500, Colors::TEXT_SECONDARY);
+		QLabel *subtitleLabel = su::makeLabel(descText, Sizes::FONT_SIZE_NORMAL, 500, Colors::TEXT_SECONDARY);
 		subtitleLabel->setWordWrap(true);
-		headerLayout->addWidget(subtitleLabel);
+		header->addWidget(subtitleLabel);
+		body->addLayout(header);
 
-		dialogLayout->addWidget(headerWidget);
-
-		// Content area - direct layout without main scrolling
-		QVBoxLayout *contentLayout = new QVBoxLayout();
-		contentLayout->setContentsMargins(S(25), S(14), S(25), S(14));
-		contentLayout->setSpacing(S(10));
-
-		dialogLayout->addLayout(contentLayout);
-
-		// Track the widest table so the window can size to fit its content
-		// (columns clip horizontally if the window is narrower than the table).
-		int widestTable = 0;
-
-		// Section helper: accent sectionHeader + a plain widget holding the table
-		// (replaces the legacy CreateStyledGroupBox frame).
-		auto addTableSection = [&](const char *headerKey, QTableWidget *table) {
-			widestTable = std::max(widestTable,
-					       table->property("streamup_table_natural_width").toInt());
-
-			QWidget *section = new QWidget();
-			section->setMinimumWidth(S(500));
-			section->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-			QVBoxLayout *secLay = new QVBoxLayout(section);
-			secLay->setContentsMargins(S(8), S(8), S(8), S(8));
-			secLay->setSpacing(S(4));
-			secLay->addWidget(su::sectionHeader(obs_module_text(headerKey)));
-
-			ApplyDialogTableSizingLocal(table);
-			QObject::connect(table, &QTableWidget::cellClicked,
-					 [table](int row, int column) { HandleTableCellClickLocal(table, row, column); });
-			secLay->addWidget(GetTableContainerLocal(table));
-			contentLayout->addWidget(section);
-		};
-
+		// Each kind of problem: a section title, then its rows.
 		auto addRows = [&](const char *headerKey, QWidget *card) {
-			contentLayout->addWidget(su::sectionHeader(obs_module_text(headerKey)));
-			contentLayout->addWidget(card);
-			widestTable = std::max(widestTable, S(560));
+			auto *section = new QVBoxLayout();
+			section->setSpacing(S(kit::Space::Gap));
+			QLabel *title = su::sectionHeader(obs_module_text(headerKey));
+			title->setContentsMargins(0, 0, 0, 0);
+			section->addWidget(title);
+			section->addWidget(card);
+			body->addLayout(section);
 		};
 		if (hasMissing)
 			addRows("Plugin.Dialog.MissingGroup", PluginRowsCard(issues.missing, false));
 		if (hasUpdates)
 			addRows("Plugin.Dialog.UpdateGroup", PluginRowsCard(issues.outdated, true));
 		if (hasFailedToLoad)
-			addTableSection("Plugin.Dialog.FailedToLoadGroup", CreateFailedToLoadPluginsTable(failed_to_load_modules));
+			addRows("Plugin.Dialog.FailedToLoadGroup", FailedRowsCard(failed_to_load_modules));
 		if (hasDisabled)
-			addTableSection("Plugin.Dialog.DisabledGroup", CreateDisabledPluginsTable(disabled_modules));
+			addRows("Plugin.Dialog.DisabledGroup", DisabledRowsCard(disabled_modules));
 
-		// Add warning message above buttons if there's a continue callback (meaning this is for install product)
-		if (continueCallback) {
-			dialogLayout->addSpacing(S(12));
+		// Installing a product: what "Install anyway" means, as a note.
+		if (continueCallback)
+			body->addWidget(kit::Note(kit::Status::Warn,
+						  issues.warning.isEmpty() ? QString(obs_module_text("Plugin.Dialog.WarningContinue"))
+									   : issues.warning));
 
-			QLabel *warningLabel = su::makeLabel(issues.warning.isEmpty() ? QString(obs_module_text("Plugin.Dialog.WarningContinue"))
-										       : issues.warning,
-							     Sizes::FONT_SIZE_SMALL, 600, Colors::COLOR_WARNING);
-			warningLabel->setWordWrap(true);
-			warningLabel->setContentsMargins(S(25), 0, S(25), 0);
-			dialogLayout->addWidget(warningLabel);
-		}
-
-		// Add skip checkbox for startup checks (only if there are updates/failures
-		// or deliberately switched-off plugins, and no missing plugins).
-		// A switched-off plugin gets its own wording when that's all the dialog
-		// is reporting: "these updates" reads wrong for something the user turned
-		// off themselves, which is the whole reason they want it to stop asking.
+		// Start-up only: stop showing these. Updates keep their own wording;
+		// anything that is not loading or switched off is about the plugins.
 		IOSCheckBox *skipCheckbox = nullptr;
 		if (isStartupCheck && !hasMissing && (hasUpdates || hasFailedToLoad || hasDisabled)) {
-			dialogLayout->addSpacing(S(12));
-			const bool disabledOnly = hasDisabled && !hasUpdates && !hasFailedToLoad;
-			skipCheckbox = new IOSCheckBox(obs_module_text(disabledOnly ? "Plugin.Dialog.SkipTheseDisabled"
-										 : "Plugin.Dialog.SkipTheseUpdates"));
-			QWidget *skipRow = new QWidget();
-			QHBoxLayout *skipLay = new QHBoxLayout(skipRow);
-			skipLay->setContentsMargins(S(25), 0, S(25), 0);
-			skipLay->addWidget(skipCheckbox);
-			skipLay->addStretch();
-			dialogLayout->addWidget(skipRow);
+			const bool updatesOnly = hasUpdates && !hasFailedToLoad && !hasDisabled;
+			skipCheckbox = new IOSCheckBox(obs_module_text(updatesOnly ? "Plugin.Dialog.SkipTheseUpdates"
+										  : "Plugin.Dialog.SkipThesePlugins"));
+			body->addWidget(skipCheckbox);
 		}
+
+		// A manual check is a calm moment to mention membership, once.
+		if (!installing && !isStartupCheck) {
+			if (QWidget *member = kit::MembershipCard(kit::MemberStyle::Strip))
+				body->addWidget(member);
+		}
+		body->addStretch(1);
 
 		// Action buttons → footer's right-anchored slot.
 		// Continue Anyway is a risky action → "primary"; OK is the neutral dismiss.
@@ -916,40 +936,8 @@ void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continue
 		});
 		shell.footerButtons->addWidget(okButton);
 
-		// A manual check is a calm moment to mention membership, once.
-		if (!installing && !isStartupCheck) {
-			if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Strip)) {
-				auto *wrap = new QHBoxLayout();
-				wrap->setContentsMargins(S(25), S(4), S(25), S(4));
-				wrap->addWidget(member);
-				dialogLayout->addLayout(wrap);
-			}
-		}
-
-		// Pool any spare height at the bottom. Without this the layout shares it
-		// out between the header, the sections and the tables, which is why a
-		// single-row dialog used to open with big gaps down the middle.
-		dialogLayout->addStretch();
-
-		// Size the window to fit its widest table so columns aren't clipped
-		// horizontally. The table sits inside: content margins (S(25)*2) +
-		// section margins (S(8)*2) + container border (S(1)*2). Clamp to a sane
-		// range so the window never opens too small to show its table, nor wider
-		// than the screen. A horizontal scrollbar remains only as a fallback.
-		const int sideChrome = 2 * (S(25) + S(8) + S(1));
-		int contentW = widestTable + sideChrome;
-		contentW = std::clamp(contentW, S(640), S(1100));
-
-		// Height follows the content instead of a fixed S(620): one plugin gets a
-		// short window, a long list gets a tall one. Clamped to 85% of the screen
-		// so a big list can't open taller than the display.
-		const int shadow = 2 * S(su::ShadowDialog::kShadowMargin);
-		dialog->resize(contentW + shadow, S(620) + shadow);
-		int wantedH = dialog->sizeHint().height();
-		int maxH = shadow + S(620);
-		if (QScreen *screen = parent && parent->screen() ? parent->screen() : QGuiApplication::primaryScreen())
-			maxH = static_cast<int>(screen->availableGeometry().height() * 0.85);
-		dialog->resize(contentW + shadow, std::clamp(wantedH, dialog->minimumHeight(), maxH));
+		kit::FitToContent(dialog, 600);
+		StreamUP::UIHelpers::PlaceOverMainWindow(dialog);
 		dialog->show();
 	});
 }

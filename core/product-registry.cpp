@@ -274,9 +274,12 @@ QList<ProductEntry> ListProducts()
 		e.hasControls = o.hasControls;
 		e.shippedControls = true;
 		for (const oc::ActionInfo &a : o.actions) {
-			if (a.type == oc::ActionType::UseAsTransition && !e.isTransition) {
-				e.isTransition = true;
-				e.transitionAction = a.id;
+			if (a.type == oc::ActionType::UseAsTransition) {
+				if (!e.isTransition) {
+					e.isTransition = true;
+					e.transitionAction = a.id;
+				}
+				e.usedAsTransition = e.usedAsTransition || a.exists;
 			}
 		}
 		// The manifest's own scene list, while those scenes still exist.
@@ -335,6 +338,13 @@ QList<ProductEntry> ListProducts()
 		}
 		e->scenes.append(scene);
 	}
+
+	// Saved controls outlive the scenes: a product whose scenes have all been
+	// deleted is no longer in this collection, unless OBS still has its
+	// transition, in which case it is listed as used as a transition.
+	out.erase(std::remove_if(out.begin(), out.end(),
+				 [](const ProductEntry &e) { return e.scenes.isEmpty() && !e.usedAsTransition; }),
+		  out.end());
 
 	const QStringList order = CategoryOrder();
 	for (ProductEntry &e : out) {

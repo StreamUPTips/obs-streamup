@@ -1,3 +1,4 @@
+#include "../ui/streamup-kit.hpp"
 #include "file-manager.hpp"
 #include "../ui/my-products-window.hpp"
 #include "streamup-common.hpp"
@@ -22,6 +23,7 @@
 #include <streamup/ui/ui-scrollbar.hpp>
 #include <streamup/ui/gallery-style.hpp>
 #include <obs-module.h>
+#include <obs-frontend-api.h>
 #include <QFile>
 #include <QFileInfo>
 #include <QFileDialog>
@@ -193,6 +195,51 @@ std::vector<FontInfo> ExtractFontsFromStreamupData(obs_data_t *data)
 	}
 
 	obs_data_array_release(sources);
+
+	// The product's own font list: "fonts": [{"name": "...", "url": "..."}] in
+	// its manifest (or its "product" block). It names fonts the scenes need
+	// that are not in an OBS text source (ProText, for one) and gives each a
+	// download link, which the Missing Fonts window shows as a Get button.
+	auto readList = [&fonts](obs_data_t *owner) {
+		obs_data_array_t *list = owner ? obs_data_get_array(owner, "fonts") : nullptr;
+		if (!list)
+			return;
+		const size_t n = obs_data_array_count(list);
+		for (size_t i = 0; i < n; i++) {
+			obs_data_t *item = obs_data_array_item(list, i);
+			const char *name = obs_data_get_string(item, "name");
+			const char *url = obs_data_get_string(item, "url");
+			if (name && *name) {
+				bool merged = false;
+				for (FontInfo &f : fonts) {
+					if (QString::fromStdString(f.face).compare(QString::fromUtf8(name), Qt::CaseInsensitive) == 0) {
+						if (f.url.empty() && url && *url)
+							f.url = url;
+						merged = true;
+						break;
+					}
+				}
+				if (!merged) {
+					FontInfo info;
+					info.face = name;
+					if (url && *url)
+						info.url = url;
+					fonts.push_back(info);
+				}
+			}
+			obs_data_release(item);
+		}
+		obs_data_array_release(list);
+	};
+	obs_data_t *manifest = obs_data_get_obj(data, "streamup_overlay");
+	if (manifest) {
+		readList(manifest);
+		obs_data_t *product = obs_data_get_obj(manifest, "product");
+		readList(product);
+		obs_data_release(product);
+		obs_data_release(manifest);
+	}
+	readList(data);
 	return fonts;
 }
 
@@ -253,84 +300,68 @@ void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
 {
     StreamUP::UIHelpers::ShowDialogOnUIThread([missingFonts, continueCallback]() {
         QString titleText = obs_module_text("Font.Status.MissingFonts");
-        su::WindowShell shell = su::makeWindow(titleText, "v" PROJECT_VERSION, nullptr,
-            /*brandFooter=*/false, "StreamUP");
+        su::WindowShell shell = su::makeWindow(titleText, "v" PROJECT_VERSION,
+            static_cast<QWidget *>(obs_frontend_get_main_window()), /*brandFooter=*/true, "StreamUP");
         QDialog *dialog = shell.dialog;
+        namespace kit = StreamUP::Kit;
 
-        QVBoxLayout *dialogLayout = shell.content;
-        dialogLayout->setContentsMargins(S(20), S(16), S(20), S(16));
-
-        // Header section
-        QLabel* subtitleLabel = su::makeLabel(obs_module_text("Font.Message.RequiredNotInstalled"),
-            13, 500, su::Colors::TEXT_SECONDARY);
+        // The same layout as the plugin window: a pill and one line, then one
+        // row per font with a Get button when the product says where it is.
+        QVBoxLayout *body = kit::ScrollingBody(shell.content);
+        auto *pills = new QHBoxLayout();
+        pills->addWidget(kit::StatusPill(kit::Status::Bad,
+            QString(obs_module_text("Font.Count.Missing")).arg(missingFonts.size())));
+        pills->addStretch(1);
+        auto *header = new QVBoxLayout();
+        header->setSpacing(S(kit::Space::Gap));
+        header->addLayout(pills);
+        QLabel *subtitleLabel = su::makeLabel(obs_module_text("Font.Message.RequiredNotInstalled"),
+            su::Sizes::FONT_SIZE_NORMAL, 500, su::Colors::TEXT_SECONDARY);
         subtitleLabel->setWordWrap(true);
-        dialogLayout->addWidget(subtitleLabel);
+        header->addWidget(subtitleLabel);
+        body->addLayout(header);
 
-        // Content area with fonts table
-        QVBoxLayout *contentLayout = new QVBoxLayout();
-        contentLayout->setContentsMargins(0, S(12), 0, S(12));
-        contentLayout->setSpacing(S(8));
+        auto *section = new QVBoxLayout();
+        section->setSpacing(S(kit::Space::Gap));
+        QLabel *title = su::sectionHeader(obs_module_text("Font.Dialog.MissingGroup"));
+        title->setContentsMargins(0, 0, 0, 0);
+        section->addWidget(title);
+        auto *list = new kit::RowList();
+        for (const FontInfo &f : missingFonts) {
+            const QString name = QString::fromStdString(f.face);
+            const QString url = QString::fromStdString(f.url);
+            QList<QWidget *> trailing;
+            trailing << kit::StatusPill(kit::Status::Bad, obs_module_text("Plugin.Pill.Missing"));
+            if (!url.isEmpty()) {
+                auto *get = new su::PillButton(obs_module_text("Plugin.Button.Get"), "primary");
+                get->setToolTip(url);
+                get->setAccessibleName(QString(obs_module_text("Plugin.Button.GetAccessible")).arg(name));
+                QObject::connect(get, &QPushButton::clicked, [url]() { QDesktopServices::openUrl(QUrl(url)); });
+                trailing << get;
+            }
+            list->addRow(name, url.isEmpty() ? QString(obs_module_text("Font.Message.NoDownloadAvailable"))
+                                             : QUrl(url).host(), trailing);
+        }
+        section->addWidget(list);
+        body->addLayout(section);
+        body->addWidget(kit::Note(kit::Status::Warn, obs_module_text("Font.Dialog.WarningContinue")));
+        body->addStretch(1);
 
-        dialogLayout->addLayout(contentLayout);
-
-        // Section header + table card (replaces the styled GroupBox)
-        contentLayout->addWidget(su::sectionHeader(obs_module_text("Font.Dialog.MissingGroup")));
-
-        QTableWidget *fontTable = CreateMissingFontsTable(missingFonts);
-        fontTable->setMinimumWidth(S(400));
-        fontTable->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-        fontTable->setMinimumHeight(S(180));
-
-        su::RoundedContainer *tableCard = new su::RoundedContainer(18);
-        QVBoxLayout *tableCardLay = new QVBoxLayout(tableCard);
-        tableCardLay->setContentsMargins(S(8), S(8), S(8), S(8));
-        tableCardLay->setSpacing(0);
-        tableCardLay->addWidget(fontTable);
-        contentLayout->addWidget(tableCard);
-
-        // Warning message (same pattern as PluginsHaveIssue)
-        dialogLayout->addSpacing(S(12));
-
-        QLabel *warningLabel = new QLabel(QString::fromUtf8("\xe2\x9a\xa0\xef\xb8\x8f ") +
-            QString(obs_module_text("Font.Dialog.WarningContinue")));
-        warningLabel->setWordWrap(true);
-        warningLabel->setStyleSheet(su::scale_qss(QString(
-            "QLabel {"
-            "background: rgba(45, 55, 72, 0.8);"
-            "color: #fbbf24;"
-            "border: 1px solid #f59e0b;"
-            "border-radius: %1px;"
-            "padding: %2px;"
-            "margin: %3px %4px;"
-            "font-size: %5px;"
-            "line-height: 1.4;"
-            "}")
-            .arg(S(6))
-            .arg(S(12))
-            .arg(S(8))
-            .arg(S(20) + 5)
-            .arg(su::Sizes::FONT_SIZE_SMALL)));
-        dialogLayout->addWidget(warningLabel);
-
-        // Continue Anyway button
+        // The same pair as the plugin window: install anyway, or stop here.
         su::PillButton *continueButton = new su::PillButton(
-            obs_module_text("UI.Message.ContinueAnyway"), "primary");
+            obs_module_text("Plugin.Button.InstallAnyway"), "outline");
         QObject::connect(continueButton, &QPushButton::clicked, [dialog, continueCallback]() {
             dialog->close();
             continueCallback();
         });
-
-        // Cancel button
         su::PillButton *cancelButton = new su::PillButton(
-            obs_module_text("UI.Button.Cancel"), "outline");
+            obs_module_text("UI.Button.Cancel"), "primary");
         QObject::connect(cancelButton, &QPushButton::clicked, dialog, &QDialog::close);
-
-        shell.footerButtons->addWidget(cancelButton);
         shell.footerButtons->addWidget(continueButton);
+        shell.footerButtons->addWidget(cancelButton);
 
-        // Reasonable fixed size (replaces ApplyAutoSizing 500..800 x 200..600)
-        dialog->resize(S(560) + 2 * S(su::ShadowDialog::kShadowMargin),
-                       S(520) + 2 * S(su::ShadowDialog::kShadowMargin));
+        kit::FitToContent(dialog, 560);
+        StreamUP::UIHelpers::PlaceOverMainWindow(dialog);
         dialog->show();
     });
 }

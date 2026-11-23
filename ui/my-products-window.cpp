@@ -574,7 +574,10 @@ private:
 		QStringList facts;
 		if (!p.version.isEmpty())
 			facts.append("v" + p.version);
-		facts.append(p.scenes.size() == 1 ? T("MyProducts.OneScene") : T("MyProducts.Scenes").arg(p.scenes.size()));
+		if (p.scenes.isEmpty() && p.usedAsTransition)
+			facts.append(T("MyProducts.UsedAsTransition"));
+		else
+			facts.append(p.scenes.size() == 1 ? T("MyProducts.OneScene") : T("MyProducts.Scenes").arg(p.scenes.size()));
 		QString metaText = facts.join(QString::fromUtf8("  ·  "));
 		const char *metaColour = su::Colors::TEXT_MUTED;
 		if (p.overlayId.isEmpty() && p.shippedControls) {
@@ -752,30 +755,41 @@ void ShowInstalledOnUiThread(const QString &productId, const QString &productNam
 					       "StreamUP");
 	QDialog *dlg = shell.dialog;
 	dlg->setAttribute(Qt::WA_DeleteOnClose, true);
-	auto *body = new QVBoxLayout();
-	body->setContentsMargins(su::S(24), su::S(20), su::S(24), su::S(12));
-	body->setSpacing(su::S(10));
-	shell.content->addLayout(body);
-
+	// One row: the product's picture, its name, one line under it. The same
+	// layout and spacing as the other product windows.
+	namespace kit = StreamUP::Kit;
+	QVBoxLayout *body = kit::ScrollingBody(shell.content);
+	auto *row = new QHBoxLayout();
+	row->setSpacing(su::S(16));
 	auto *tile = new QLabel();
-	tile->setFixedSize(su::S(256), su::S(144));
-	tile->setPixmap(Tile(product, dlg->devicePixelRatioF(), 256, 144));
+	tile->setFixedSize(su::S(176), su::S(99));
+	tile->setPixmap(Tile(product, dlg->devicePixelRatioF(), 176, 99));
 	tile->setAccessibleName(product.name);
-	body->addWidget(tile, 0, Qt::AlignHCenter);
+	row->addWidget(tile, 0, Qt::AlignVCenter);
+	auto *text = new QVBoxLayout();
+	text->setSpacing(su::S(6));
+	text->addStretch(1);
 	QLabel *name = su::makeLabel(product.name, su::Sizes::FONT_SIZE_LARGE, 700, su::Colors::TEXT_PRIMARY);
-	name->setAlignment(Qt::AlignCenter);
-	body->addWidget(name);
-	auto *pills = new QHBoxLayout();
-	pills->addStretch(1);
-	pills->addWidget(StreamUP::Kit::StatusPill(StreamUP::Kit::Status::Ok, T("MyProducts.Installed.Pill")));
+	name->setWordWrap(true);
+	text->addWidget(name);
+	QStringList meta;
+	if (!product.version.isEmpty())
+		meta << "v" + product.version;
 	if (!product.scenes.isEmpty())
-		pills->addWidget(StreamUP::Kit::StatusPill(StreamUP::Kit::Status::Neutral,
-							   product.scenes.size() == 1 ? T("MyProducts.OneScene")
-										       : T("MyProducts.Scenes").arg(product.scenes.size())));
-	pills->addStretch(1);
-	body->addLayout(pills);
-	body->addSpacing(su::S(6));
-	if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Strip, T("MyProducts.Installed.MoreLikeThis")))
+		meta << (product.scenes.size() == 1 ? T("MyProducts.OneScene") : T("MyProducts.Scenes").arg(product.scenes.size()));
+	if (!product.category.isEmpty())
+		meta << pr::CategoryLabel(product.category);
+	if (!meta.isEmpty())
+		text->addWidget(su::makeLabel(meta.join(QStringLiteral(" · ")), su::Sizes::FONT_SIZE_SMALL, 500,
+					      su::Colors::TEXT_MUTED));
+	auto *pillRow = new QHBoxLayout();
+	pillRow->addWidget(kit::StatusPill(kit::Status::Ok, T("MyProducts.Installed.Pill")));
+	pillRow->addStretch(1);
+	text->addLayout(pillRow);
+	text->addStretch(1);
+	row->addLayout(text, 1);
+	body->addLayout(row);
+	if (QWidget *member = kit::MembershipCard(kit::MemberStyle::Strip, T("MyProducts.Installed.MoreLikeThis")))
 		body->addWidget(member);
 
 	auto *done = new su::PillButton(T("OverlayControls.Button.Done"), "outline");
@@ -798,8 +812,7 @@ void ShowInstalledOnUiThread(const QString &productId, const QString &productNam
 		});
 		shell.footerButtons->addWidget(go);
 	}
-	const int m = su::S(su::ShadowDialog::kShadowMargin);
-	dlg->resize(su::S(500) + 2 * m, dlg->sizeHint().height());
+	StreamUP::Kit::FitToContent(dlg, 560);
 	StreamUP::UIHelpers::PlaceOverMainWindow(dlg);
 	dlg->show();
 	dlg->raise();
