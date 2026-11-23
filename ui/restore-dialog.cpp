@@ -127,7 +127,10 @@ void ShowAppliedReportIfAny()
 	dialog->resize(S(560) + 2 * S(su::ShadowDialog::kShadowMargin), dialog->sizeHint().height());
 	// Shrink to the content's real height once it has been laid out. See
 	// fitWindowToContent: no size hint matches what actually gets drawn here.
-	QTimer::singleShot(0, dialog, [dialog, layout]() { fitWindowToContent(dialog, layout); });
+	QTimer::singleShot(0, dialog, [dialog, layout]() {
+		fitWindowToContent(dialog, layout);
+		StreamUP::BackupUI::fitWindowToScreen(dialog, layout);
+	});
 
 	dialog->show();
 }
@@ -471,9 +474,18 @@ void ShowRestoreDialog()
 		restoreButton->setEnabled(false);
 		cancelButton->setEnabled(false);
 
-		const int grow = progressArea->sizeHint().height() + layout->spacing();
+		// Grow for the progress bar only as far as the screen allows; past that the
+		// content scrolls, and the bar is scrolled into view below.
+		const int grow = qMin(progressArea->sizeHint().height() + layout->spacing(),
+				      StreamUP::BackupUI::roomBelowWindow(dialog));
 		progressArea->setVisible(true);
 		dialog->resize(dialog->width(), dialog->height() + grow);
+		for (QWidget *w = progressArea->parentWidget(); w; w = w->parentWidget()) {
+			if (auto *scroller = qobject_cast<QScrollArea *>(w)) {
+				scroller->ensureWidgetVisible(progressArea);
+				break;
+			}
+		}
 		progress->setRange(0, 0); // indeterminate until the file count is known
 		status->setText(obs_module_text("Restore.Status.SafetyBackup"));
 		QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
@@ -515,7 +527,10 @@ void ShowRestoreDialog()
 	dialog->resize(S(1000) + 2 * S(su::ShadowDialog::kShadowMargin), dialog->sizeHint().height());
 	// Shrink to the content's real height once it has been laid out. See
 	// fitWindowToContent: no size hint matches what actually gets drawn here.
-	QTimer::singleShot(0, dialog, [dialog, layout]() { fitWindowToContent(dialog, layout); });
+	QTimer::singleShot(0, dialog, [dialog, layout]() {
+		fitWindowToContent(dialog, layout);
+		StreamUP::BackupUI::fitWindowToScreen(dialog, layout);
+	});
 
 	dialog->show();
 }

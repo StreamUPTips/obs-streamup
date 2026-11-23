@@ -317,6 +317,21 @@ QString ExtractDomainFromUrl(const QString& url) {
 	
 	return host;
 }
+// The plugin list links the OBS 33+ build where a plugin ships separate OBS 33 and OBS 30-32
+// ("Legacy") builds. On older OBS the Download button installs a build that never loads, so the
+// old copy keeps loading and the update prompt never clears (feedback 2026-11-18). On OBS < 33 the
+// dialog says to use the Website Link instead, and the Download cells carry the same tooltip.
+static bool IsObsOlderThan33()
+{
+	return (obs_get_version() >> 24) < 33;
+}
+
+static void MarkDownloadForOldObs(QTableWidgetItem *downloadItem)
+{
+	if (IsObsOlderThan33())
+		downloadItem->setToolTip(obs_module_text("Plugin.Dialog.OldObsDownloadTip"));
+}
+
 PluginRow RowForListedPlugin(const std::string &name, const std::string &installedVersion)
 {
 	PluginRow row;
@@ -371,6 +386,7 @@ QTableWidget* CreateMissingRowsTable(const std::vector<PluginRow>& rows) {
 		downloadItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 		if (!download.empty())
 			downloadItem->setData(Qt::UserRole, QString::fromStdString(download));
+		MarkDownloadForOldObs(downloadItem);
 		table->setItem(row, 3, downloadItem);
 
 		// Website Link column - show domain name
@@ -425,6 +441,7 @@ QTableWidget* CreateUpdatesRowsTable(const std::vector<PluginRow>& rows) {
 		QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
 		downloadItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 		downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
+		MarkDownloadForOldObs(downloadItem);
 		table->setItem(row, 3, downloadItem);
 		
 		// Website Link column - show domain name
@@ -566,6 +583,7 @@ QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& fai
 			QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
 			downloadItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
 			downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
+		MarkDownloadForOldObs(downloadItem);
 			table->setItem(row, 2, downloadItem);
 
 			// Website Link column - show domain name
@@ -648,7 +666,9 @@ static QWidget *PluginRowsCard(const std::vector<PluginRow> &rows, bool outdated
 			detail = QString::fromStdString(r.requiredVersion);
 		QWidget *pill = kit::StatusPill(outdated ? kit::Status::Warn : kit::Status::Bad,
 						obs_module_text(outdated ? "Plugin.Pill.Update" : "Plugin.Pill.Missing"));
-		const QString url = QString::fromStdString(!r.downloadUrl.empty() ? r.downloadUrl : r.websiteUrl);
+		// On OBS 30-32 the download link can be an OBS 33 build: open the page.
+		const bool pageOnly = IsObsOlderThan33() && !r.websiteUrl.empty();
+		const QString url = QString::fromStdString(!pageOnly && !r.downloadUrl.empty() ? r.downloadUrl : r.websiteUrl);
 		auto *get = new su::PillButton(obs_module_text("Plugin.Button.Get"), "primary");
 		get->setEnabled(!url.isEmpty());
 		get->setAccessibleName(QString(obs_module_text("Plugin.Button.GetAccessible")).arg(name));
@@ -704,7 +724,9 @@ static QWidget *FailedRowsCard(const std::vector<std::string> &failed_modules)
 			trailing << folder;
 		}
 		QString url = QStringLiteral("https://obsproject.com/forum/resources/");
-		if (info)
+		if (info && IsObsOlderThan33() && !info->generalURL.empty())
+			url = QString::fromStdString(info->generalURL);
+		else if (info)
 			url = StringUtils::GetPlatformURL(QString::fromStdString(info->windowsURL),
 							  QString::fromStdString(info->macURL),
 							  QString::fromStdString(info->linuxURL),
@@ -854,6 +876,15 @@ void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continue
 			addRows("Plugin.Dialog.FailedToLoadGroup", FailedRowsCard(failed_to_load_modules));
 		if (hasDisabled)
 			addRows("Plugin.Dialog.DisabledGroup", DisabledRowsCard(disabled_modules));
+
+		// OBS 30-32: the plugin list's download links can be OBS 33 builds that
+		// never load there, so Get opens each plugin's page instead and a note
+		// says to pick the build for this OBS (from release/2.4.2).
+		if ((hasMissing || hasUpdates || hasFailedToLoad) && IsObsOlderThan33()) {
+			const uint32_t v = obs_get_version();
+			const QString obsVer = QString("%1.%2").arg(v >> 24).arg((v >> 16) & 0xFF);
+			body->addWidget(kit::Note(kit::Status::Warn, QString(obs_module_text("Plugin.Dialog.OldObsNote")).arg(obsVer)));
+		}
 
 		// Installing a product: what "Install anyway" means, as a note.
 		if (continueCallback)

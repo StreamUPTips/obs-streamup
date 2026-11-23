@@ -2,6 +2,10 @@
 #define STREAMUP_MULTIDOCK_DOCK_HPP
 
 #include <QFrame>
+#include <QPointer>
+#include <QDockWidget>
+#include <QToolBar>
+#include <string>
 #include <QEvent>
 #include <QList>
 #include <QColor>
@@ -105,8 +109,15 @@ public:
     // No slots needed - we save on OBS shutdown
 
 protected:
-    // Keeps the corner cover sized to the container it sits in front of.
+    // Keeps the corner cover sized to the container it sits in front of, and
+    // opens the controls menu on a right-click of the title bar or the body.
     bool eventFilter(QObject* watched, QEvent* event) override;
+    // Finds the OBS dock this frame is put in, for the title bar right-click.
+    bool event(QEvent* event) override;
+
+private slots:
+    // OBS's View > Show toolbars, heard through OBSBasic::userSettingChanged.
+    void obsUserSettingChanged(const std::string& category, const std::string& name);
 
 private:
     // Paint the body's rounded corners over the top of the dock host. Four small
@@ -122,6 +133,14 @@ private:
 
     void SetupUi();
     void CreateBottomToolbar(QVBoxLayout* layout);
+    // The toolbar follows OBS's "Show toolbars" like every other list toolbar.
+    void ApplyToolbarVisibility();
+    // Add Dock and Lock Docks, so they are still there with the toolbar hidden.
+    void ShowControlsMenu(const QPoint& globalPos);
+    void HookOuterDock();
+
+    QToolBar* m_toolBar = nullptr;
+    QPointer<QDockWidget> m_outerDock;
 
     QString m_id;
     QString m_name;
