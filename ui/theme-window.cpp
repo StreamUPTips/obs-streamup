@@ -113,13 +113,12 @@ private:
     void loadImages()
     {
         // Load theme images
-        QStringList imageFiles = {"obs-theme-1.png", "obs-theme-2.png", "obs-theme-3.png", "obs-theme-4.png"};
-
-        for (const QString& fileName : imageFiles) {
-            QString imagePath = QString(":/images/misc/%1").arg(fileName);
-            QPixmap pixmap(imagePath);
-            if (!pixmap.isNull())
-                images.append(pixmap);
+        // obs-theme-1.png, -2, ... one per colourway, as many as are bundled.
+        for (int i = 1; i <= 12; ++i) {
+            QPixmap pixmap(QString(":/images/misc/obs-theme-%1.png").arg(i));
+            if (pixmap.isNull())
+                break;
+            images.append(pixmap);
         }
     }
 
@@ -352,30 +351,10 @@ void CreateThemeDialog()
         dialog->setModal(false);
         dialog->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 
-        QVBoxLayout* mainLayout = shell.content;
-        mainLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(16),
-                                       StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(16));
-
-        // Modern unified content area with scroll - everything inside
-        QScrollArea* scrollArea = new QScrollArea();
-        scrollArea->setFrameShape(QFrame::NoFrame);
-        StreamUP::UIStyles::useScrollBars(scrollArea);
-        scrollArea->setWidgetResizable(true); // Ensure this is set for proper alignment
-        scrollArea->setAlignment(Qt::AlignTop | Qt::AlignHCenter); // Keep content top-aligned when shorter than viewport
-        scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // Disable horizontal scrolling
-
-        QWidget* contentWidget = new QWidget();
-        contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
-        contentWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        contentWidget->setMaximumWidth(StreamUP::UIStyles::S(900)); // Match dialog width minus padding
-        QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
-        contentLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-                                          StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-        contentLayout->setSpacing(StreamUP::UIStyles::S(20));
-
-        // Modern header inside scrollable area
-        // The pictures lead; one line under them; the way to get it.
-        ThemeImageCarousel* carousel = new ThemeImageCarousel();
+        // One column the window fits to: the pictures (16:9), one line, the
+        // membership strip. No spare space under them.
+        QVBoxLayout* contentLayout = StreamUP::Kit::ScrollingBody(shell.content);
+        ThemeImageCarousel* carousel = new ThemeImageCarousel(nullptr, 390);
         contentLayout->addWidget(carousel);
 
         QLabel* subtitleLabel = StreamUP::UIStyles::makeLabel(obs_module_text("ThemeWindow.Line"), 14, 500,
@@ -387,10 +366,6 @@ void CreateThemeDialog()
         if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Strip,
                                                              obs_module_text("ThemeWindow.Membership")))
             contentLayout->addWidget(member);
-        contentLayout->addStretch(1);
-
-        scrollArea->setWidget(contentWidget);
-        mainLayout->addWidget(scrollArea);
 
         // Action/close buttons in footer (right-anchored, inline with brand line)
         QPushButton* visitButton = new StreamUP::UIStyles::PillButton(obs_module_text("ThemeWindow.Get"), "primary");
@@ -402,8 +377,8 @@ void CreateThemeDialog()
         shell.footerButtons->addWidget(closeButton);
         shell.footerButtons->addWidget(visitButton);
 
-        // Flexible sizing that fits content - made wider for carousel (preferred width + height)
-        dialog->resize(StreamUP::UIStyles::S(900), StreamUP::UIStyles::S(820));
+        StreamUP::Kit::FitToContent(dialog, 720);
+        StreamUP::UIHelpers::PlaceOverMainWindow(dialog);
 
         // Show dialog
         dialog->show();
