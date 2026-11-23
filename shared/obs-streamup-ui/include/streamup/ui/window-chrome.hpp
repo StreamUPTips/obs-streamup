@@ -25,6 +25,9 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QToolTip>
+#include <QHelpEvent>
+#include <QTextDocument>
+#include <QApplication>
 #include <functional>
 
 #ifdef Q_OS_WIN
@@ -42,6 +45,7 @@
 
 #include "gallery-style.hpp"
 #include "ui-scrollbar.hpp"
+#include "svg-icon.hpp"
 
 namespace StreamUP {
 namespace UIStyles {
@@ -134,6 +138,9 @@ inline RoundedContainer *makeTableCard(TableT *table, int radius = Sizes::RADIUS
 	return card;
 }
 
+class ShadowDialog;
+inline void installTooltipFix();
+
 // Frameless host that paints a soft ambient shadow into a transparent margin so
 // stacked dark windows read as elevated rather than merging.
 class ShadowDialog : public QDialog {
@@ -147,6 +154,10 @@ public:
 		// window OBS can show in the taskbar (see makeWindow's WS_EX_APPWINDOW).
 		setWindowFlags(Qt::FramelessWindowHint | Qt::Window);
 		setAttribute(Qt::WA_TranslucentBackground, true);
+		// Tooltips show even while another window has focus (a "?" is often
+		// hovered straight after opening the window from a menu or a dock).
+		setAttribute(Qt::WA_AlwaysShowToolTips, true);
+		installTooltipFix();
 		// Track the mouse so the resize cursor updates as it nears an edge
 		// (used by the non-Windows startSystemResize fallback below).
 		setMouseTracking(true);
@@ -345,6 +356,57 @@ private:
 	QSize m_openingSize;
 };
 
+// Tooltips inside our windows. On Windows Qt parents the tooltip label to the
+// hovered widget, so the tooltip inherits every style sheet above it. Our pages
+// set blanket rules such as "QWidget { background: transparent; }", which the
+// tooltip picks up and then never paints. This shows the text as a plain
+// top-level tooltip instead (styled by the OBS theme), for any widget in a
+// ShadowDialog, including item-view rows that carry a ToolTipRole.
+class TooltipFix : public QObject {
+public:
+	using QObject::QObject;
+
+protected:
+	bool eventFilter(QObject *obj, QEvent *e) override
+	{
+		if (e->type() != QEvent::ToolTip || !obj->isWidgetType())
+			return false;
+		auto *w = static_cast<QWidget *>(obj);
+		if (!dynamic_cast<ShadowDialog *>(w->window()))
+			return false;
+		auto *he = static_cast<QHelpEvent *>(e);
+		QString tip = w->toolTip();
+		if (tip.isEmpty()) {
+			if (auto *view = qobject_cast<QAbstractItemView *>(w->parentWidget());
+			    view && view->viewport() == w) {
+				const QModelIndex idx = view->indexAt(he->pos());
+				if (idx.isValid())
+					tip = idx.data(Qt::ToolTipRole).toString();
+				if (tip.isEmpty()) {
+					QToolTip::hideText();
+					return true;
+				}
+			}
+		}
+		if (tip.isEmpty())
+			return false; // let Qt hand it to the parent
+		// Long plain text wraps into a few short lines instead of one wide strip.
+		if (tip.size() > 60 && !Qt::mightBeRichText(tip))
+			tip = QStringLiteral("<p>") + tip.toHtmlEscaped().replace(QLatin1Char('\n'), QStringLiteral("<br>")) + QStringLiteral("</p>");
+		QToolTip::showText(he->globalPos(), tip, nullptr, QRect(), w->toolTipDuration());
+		return true;
+	}
+};
+
+inline void installTooltipFix()
+{
+	static bool installed = false;
+	if (installed || !qApp)
+		return;
+	installed = true;
+	qApp->installEventFilter(new TooltipFix(qApp));
+}
+
 #ifdef Q_OS_WIN
 // Re-asserts WS_EX_APPWINDOW on the FIRST show. Qt can drop the ex-style set off
 // winId() before show() when it (re)creates the native window, so the taskbar
@@ -462,35 +524,11 @@ protected:
 		p.setBrush(bg);
 		p.drawRoundedRect(r, S(8), S(8));
 
-		QColor ink = underMouse() ? QColor("#ffffff") : QColor(Colors::TEXT_PRIMARY);
-		QPen pen(ink, std::max(1.4, S(2) * 0.8));
-		pen.setCapStyle(Qt::RoundCap);
-		pen.setJoinStyle(Qt::RoundJoin);
-		p.setPen(pen);
-		p.setBrush(Qt::NoBrush);
-
-		const QPointF c = r.center();
-		const qreal d = S(5);
-		// Speech bubble (rounded rect) + tail + three dots — matches IconButton's
-		// Feedback glyph so the header button and any in-content feedback icon read
-		// identically.
-		const qreal bw = d * 1.5;
-		const qreal bh = d * 1.1;
-		const qreal by = c.y() - d * 0.25;
-		const QRectF bubble(c.x() - bw, by - bh, bw * 2, bh * 2);
-		QPainterPath path;
-		path.addRoundedRect(bubble, S(3), S(3));
-		QPolygonF tail;
-		tail << QPointF(c.x() - bw * 0.35, by + bh - 0.5)
-		     << QPointF(c.x() - bw * 0.65, by + bh + d * 0.7)
-		     << QPointF(c.x() - bw * 0.02, by + bh - 0.5);
-		path.addPolygon(tail);
-		p.drawPath(path.simplified());
-		p.setPen(Qt::NoPen);
-		p.setBrush(ink);
-		const qreal dot = std::max(1.0, S(1) * 0.95);
-		for (int i = -1; i <= 1; ++i)
-			p.drawEllipse(QPointF(c.x() + i * d * 0.62, by), dot, dot);
+		// Tabler "message" glyph, drawn like every other icon in our windows.
+		const QColor ink = underMouse() ? QColor("#ffffff") : QColor(Colors::TEXT_PRIMARY);
+		const QPixmap glyph = svgIcon(QStringLiteral("message"), ink, 16, devicePixelRatioF());
+		const QSizeF gs = QSizeF(glyph.size()) / glyph.devicePixelRatio();
+		p.drawPixmap(QPointF(r.center().x() - gs.width() / 2, r.center().y() - gs.height() / 2), glyph);
 	}
 	QSize sizeHint() const override { return QSize(S(30), S(30)); }
 };
@@ -628,6 +666,7 @@ inline WindowShell applyChrome(ShadowDialog *dlg, const QString &title,
 		headerText += QStringLiteral(" (") + version + QStringLiteral(")");
 
 	auto *titleLbl = new QLabel(headerText, header);
+	titleLbl->setObjectName("suTitle");
 	titleLbl->setFont(displayFont(22, 700));
 	titleLbl->setStyleSheet(
 		QString("color:%1;background:transparent;").arg(Colors::TEXT_PRIMARY));

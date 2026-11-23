@@ -5,6 +5,7 @@
 #include <streamup/ui/gallery-style.hpp>
 #include <streamup/ui/labels.hpp>
 #include <streamup/ui/mac-inputs.hpp>
+#include <streamup/ui/svg-icon.hpp>
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -219,23 +220,10 @@ protected:
 		const qreal u = su::S(16) / 16.0; // icons are drawn on a 16 px grid
 		switch (m_glyph) {
 		case Glyph::Reset: {
-			// Lucide rotate-ccw: an open arc with an arrowhead at its start.
-			const QRectF arc(c.x() - 5.5 * u, c.y() - 5.5 * u, 11 * u, 11 * u);
-			QPainterPath path;
-			path.arcMoveTo(arc, 150);
-			path.arcTo(arc, 150, -280);
-			p.drawPath(path);
-			QPointF tip;
-			{
-				QPainterPath t;
-				t.arcMoveTo(arc, 150);
-				tip = t.currentPosition();
-			}
-			QPainterPath head;
-			head.moveTo(tip + QPointF(-0.5 * u, -4.2 * u));
-			head.lineTo(tip);
-			head.lineTo(tip + QPointF(4.2 * u, -0.6 * u));
-			p.drawPath(head);
+			// Tabler "restore", the same set as every other icon in our windows.
+			const QPixmap glyph = su::svgIcon(QStringLiteral("restore"), ink, 16, devicePixelRatioF());
+			const QSizeF gs = QSizeF(glyph.size()) / glyph.devicePixelRatio();
+			p.drawPixmap(QPointF(c.x() - gs.width() / 2, c.y() - gs.height() / 2), glyph);
 			break;
 		}
 		case Glyph::Up:

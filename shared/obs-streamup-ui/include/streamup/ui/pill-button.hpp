@@ -15,6 +15,7 @@
 #include <QPixmap>
 
 #include "gallery-style.hpp"
+#include "svg-icon.hpp"
 
 namespace StreamUP {
 namespace UIStyles {
@@ -247,6 +248,26 @@ protected:
 		p.setBrush(Qt::NoBrush);
 
 		const QPointF c = r.center();
+		// Icons that exist in the Tabler set are drawn from it so every window
+		// uses the same glyphs; the rest keep their painted shapes.
+		const char *tabler = nullptr;
+		switch (m_glyph) {
+		case Glyph::Plus: tabler = "plus"; break;
+		case Glyph::Minus: tabler = "minus"; break;
+		case Glyph::More: tabler = "dots"; break;
+		case Glyph::Refresh: tabler = "refresh"; break;
+		case Glyph::Trash: tabler = "trash-tabler"; break;
+		case Glyph::Feedback: tabler = "message"; break;
+		case Glyph::Activate: tabler = "eye-tabler"; break;
+		case Glyph::Deactivate: tabler = "eye-off"; break;
+		default: break;
+		}
+		if (tabler) {
+			const QPixmap glyph = svgIcon(QString::fromLatin1(tabler), ink, 16, devicePixelRatioF());
+			const QSizeF gs = QSizeF(glyph.size()) / glyph.devicePixelRatio();
+			p.drawPixmap(QPointF(c.x() - gs.width() / 2, c.y() - gs.height() / 2), glyph);
+			return;
+		}
 		const qreal d = S(5);
 		switch (m_glyph) {
 		case Glyph::Plus:
