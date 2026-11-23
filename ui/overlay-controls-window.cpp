@@ -26,6 +26,9 @@
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 
+#include <QPainter>
+#include <QPixmap>
+#include <QPushButton>
 #include <QApplication>
 #include <QFileDialog>
 #include <QDesktopServices>
@@ -63,18 +66,32 @@ QWidget *MainWindow()
 	return static_cast<QWidget *>(obs_frontend_get_main_window());
 }
 
-QString SwatchStyle(const QColor &c)
+// A colour control reads as a field: a round dot of the colour, then its hex
+// code in regular text. Not a block of solid colour with bold ink on it.
+void ApplySwatch(QPushButton *b, const QColor &c, const QString &text)
 {
-	// Dark ink on light colours, white on dark, judged on perceived brightness.
-	const double luma = (0.299 * c.redF() + 0.587 * c.greenF() + 0.114 * c.blueF()) * c.alphaF() +
-			    (1.0 - c.alphaF()) * 0.15;
-	const QString ink = luma > 0.55 ? QStringLiteral("#11111b") : QStringLiteral("#ffffff");
-	return su::scale_qss(
-		QString("QPushButton{background:%1;color:%2;border:1px solid rgba(255,255,255,0.14);"
-			"border-radius:8px;min-height:26px;padding:0 12px;font-size: 12px;font-weight: 600;"
-			"}"
-			"QPushButton:hover{border:1px solid %3;}")
-			.arg(c.name(QColor::HexArgb), ink, su::Colors::PRIMARY_LIGHT));
+	const qreal dpr = b->devicePixelRatioF();
+	const int d = su::S(14);
+	QPixmap pm(int(d * dpr), int(d * dpr));
+	pm.fill(Qt::transparent);
+	{
+		QPainter p(&pm);
+		p.setRenderHint(QPainter::Antialiasing, true);
+		p.setBrush(c);
+		p.setPen(QPen(QColor(255, 255, 255, 70), dpr));
+		p.drawEllipse(QRectF(0.5 * dpr, 0.5 * dpr, pm.width() - dpr, pm.height() - dpr));
+	}
+	pm.setDevicePixelRatio(dpr);
+	b->setIcon(QIcon(pm));
+	b->setIconSize(QSize(d, d));
+	b->setText(QStringLiteral("  ") + text.toUpper());
+	b->setStyleSheet(su::scale_qss(
+		QString("QPushButton{background:%1;color:%2;border:1px solid rgba(255,255,255,0.09);"
+			"border-radius:8px;min-height:28px;max-height:28px;padding:0 10px;text-align:left;"
+			"font-size: 12px;font-weight: 400;}"
+			"QPushButton:hover{border:1px solid rgba(255,255,255,0.22);}"
+			"QPushButton:focus{border:1px solid %3;}")
+			.arg(su::Colors::INPUT_ON_CARD, su::Colors::TEXT_PRIMARY, su::Colors::PRIMARY_COLOR)));
 }
 
 QColor ParseHex(const QString &text)
@@ -501,7 +518,7 @@ private:
 			ar.state->setWordWrap(false);
 			text->addWidget(ar.state);
 			row->addLayout(text, 1);
-			ar.button = new su::PillButton(T("OverlayControls.Action.Use"), "primary");
+			ar.button = new su::PillButton(T("OverlayControls.Action.Use"), "neutral");
 			ar.button->setAccessibleName(title);
 			row->addWidget(ar.button, 0, Qt::AlignVCenter);
 			card->addLayout(row);
@@ -980,8 +997,7 @@ private:
 		const oc::ControlInfo &c = row.info;
 		switch (c.type) {
 		case oc::ControlType::Colour:
-			row.swatch->setText(c.value.toString());
-			row.swatch->setStyleSheet(SwatchStyle(ParseHex(c.value.toString())));
+			ApplySwatch(row.swatch, ParseHex(c.value.toString()), c.value.toString());
 			break;
 		case oc::ControlType::Slider:
 			row.slider->setValue(int(std::lround((c.value.toDouble() - c.min) / c.step)));

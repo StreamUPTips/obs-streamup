@@ -97,35 +97,23 @@ protected:
 		const QRectF r = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
 		const qreal rad = su::S(8);
 		const qreal bw = su::S(22);
-		QPainterPath fp;
-		fp.addRoundedRect(r, rad, rad);
-		const QRectF col(r.right() - bw, r.top(), bw + 1, r.height());
-		p.save();
-		p.setClipPath(fp);
-		p.setPen(Qt::NoPen);
-		p.setBrush(QColor(su::Colors::PRIMARY_COLOR));
-		p.drawRect(col);
-		QPen dv(QColor(255, 255, 255, 90));
-		dv.setWidthF(std::max(1.6, su::S(2) * 0.9));
-		p.setPen(dv);
-		p.drawLine(QPointF(col.left(), r.center().y()), QPointF(col.right(), r.center().y()));
-		p.restore();
-		QPen cp{QColor(255, 255, 255)};
-		cp.setWidthF(std::max(1.2, su::S(2) * 0.75));
+		// Same quiet field as the kit's MacSpinBox: a hairline, two muted
+		// steppers, the accent only as the focus ring.
+		const QRectF col(r.right() - bw, r.top(), bw, r.height());
+		QPen hp(hasFocus() ? QColor(su::Colors::PRIMARY_COLOR) : QColor(255, 255, 255, 22));
+		hp.setWidthF(hasFocus() ? 1.5 : 1.0);
+		p.setPen(hp);
+		p.setBrush(Qt::NoBrush);
+		p.drawRoundedRect(r, rad, rad);
+		QPen cp{QColor(su::Colors::TEXT_SECONDARY)};
+		cp.setWidthF(std::max(1.2, su::S(2) * 0.7));
 		cp.setCapStyle(Qt::RoundCap);
 		cp.setJoinStyle(Qt::RoundJoin);
 		p.setPen(cp);
 		const qreal cw = su::S(6);
 		const qreal cx = col.center().x();
-		su::detail::drawChevron(p, QPointF(cx, r.top() + r.height() * 0.25), cw, /*up=*/true);
-		su::detail::drawChevron(p, QPointF(cx, r.top() + r.height() * 0.75), cw, /*up=*/false);
-		if (hasFocus()) {
-			QPen fpen{QColor(su::Colors::PRIMARY_COLOR)};
-			fpen.setWidthF(2);
-			p.setPen(fpen);
-			p.setBrush(Qt::NoBrush);
-			p.drawRoundedRect(r, rad, rad);
-		}
+		su::detail::drawChevron(p, QPointF(cx, r.center().y() - su::S(4)), cw, /*up=*/true);
+		su::detail::drawChevron(p, QPointF(cx, r.center().y() + su::S(4)), cw, /*up=*/false);
 	}
 };
 
@@ -269,7 +257,7 @@ private:
 
 inline QLabel *RowLabel(const QString &text, const QString &tooltip = QString())
 {
-	auto *l = su::makeLabel(text, su::Sizes::FONT_SIZE_SMALL, 600, su::Colors::TEXT_PRIMARY);
+	auto *l = su::makeLabel(text, su::Sizes::FONT_SIZE_SMALL, 400, su::Colors::TEXT_PRIMARY);
 	l->setWordWrap(false);
 	l->setToolTip(tooltip);
 	return l;
