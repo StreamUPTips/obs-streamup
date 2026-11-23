@@ -2,8 +2,11 @@
 
 #include "../core/features.hpp"
 #include "overlay-ui-common.hpp"
+#include "patch-notes-window.hpp"
 #include "settings-manager.hpp"
+#include "splash-screen.hpp"
 #include "streamup-kit.hpp"
+#include "theme-window.hpp"
 #include "ui-helpers.hpp"
 #include "version.h"
 
@@ -11,6 +14,7 @@
 #include <streamup/ui/labels.hpp>
 #include <streamup/ui/pill-button.hpp>
 #include <streamup/ui/section-card.hpp>
+#include <streamup/ui/svg-icon.hpp>
 #include <streamup/ui/switch-button.hpp>
 #include <streamup/ui/ui-scrollbar.hpp>
 #include <streamup/ui/window-chrome.hpp>
@@ -20,6 +24,8 @@
 #include <util/bmem.h>
 
 #include <QApplication>
+#include <QDesktopServices>
+#include <QDir>
 #include <QFileInfo>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -28,16 +34,21 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPointer>
+#include <QProcess>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QStackedWidget>
 #include <QTimer>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include <functional>
+#include <set>
 #include <utility>
 
 namespace su = StreamUP::UIStyles;
 namespace ft = StreamUP::Features;
+namespace kit = StreamUP::Kit;
 using StreamUP::OverlayUI::T;
 
 namespace StreamUP {
@@ -53,97 +64,133 @@ QWidget *MainWindow()
 	return static_cast<QWidget *>(obs_frontend_get_main_window());
 }
 
+QString Name(const ft::Feature &f)
+{
+	return T(f.nameKey.toUtf8().constData());
+}
+
+// Restarts OBS the way OBS does after a settings change that needs it: OBS
+// closes normally (and saves), then starts again with the same arguments. A
+// small hidden helper waits for this OBS to exit before starting the new one,
+// and gives up after two minutes if OBS was not closed after all.
+void RestartObs()
+{
+	const QString exe = QCoreApplication::applicationFilePath();
+	const QString dir = QCoreApplication::applicationDirPath();
+	QStringList args = QCoreApplication::arguments();
+	if (!args.isEmpty())
+		args.removeFirst();
+	const qint64 pid = QCoreApplication::applicationPid();
+#ifdef _WIN32
+	auto quote = [](QString v) { return "'" + v.replace("'", "''") + "'"; };
+	QStringList quoted;
+	for (const QString &a : args)
+		quoted << quote(a);
+	QString script = QString("Wait-Process -Id %1 -Timeout 120 -ErrorAction SilentlyContinue; "
+				 "if (-not (Get-Process -Id %1 -ErrorAction SilentlyContinue)) { "
+				 "Start-Process -FilePath %2 -WorkingDirectory %3")
+				 .arg(pid)
+				 .arg(quote(QDir::toNativeSeparators(exe)), quote(QDir::toNativeSeparators(dir)));
+	if (!quoted.isEmpty())
+		script += " -ArgumentList " + quoted.join(',');
+	script += " }";
+	QProcess::startDetached("powershell.exe",
+				{"-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script});
+#else
+	QString cmd = QString("while kill -0 %1 2>/dev/null; do sleep 0.3; done; cd \"%2\" && exec \"%3\"")
+			      .arg(pid)
+			      .arg(dir, exe);
+	for (const QString &a : args)
+		cmd += " '" + QString(a).replace("'", "'\\''") + "'";
+	QProcess::startDetached("/bin/sh", {"-c", cmd});
+#endif
+	if (QWidget *main = MainWindow())
+		QMetaObject::invokeMethod(main, "close", Qt::QueuedConnection);
+}
+
 struct Card {
 	QString id;
 	QFrame *frame = nullptr;
-	StreamUP::Kit::PreviewSlot *demo = nullptr;
+	kit::PreviewSlot *demo = nullptr;
 	su::SwitchButton *toggle = nullptr;
 	QLabel *note = nullptr; // "applies after restart"
 };
+
+// A page in the stack: its scroll area, so demos can play only while seen.
+QScrollArea *MakeScroll(QWidget *content)
+{
+	auto *scroll = new QScrollArea();
+	scroll->setWidgetResizable(true);
+	scroll->setFrameShape(QFrame::NoFrame);
+	scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	scroll->setStyleSheet("QScrollArea{background:transparent;border:none;}");
+	scroll->viewport()->setAutoFillBackground(false);
+	su::useScrollBars(scroll);
+	scroll->setWidget(content);
+	return scroll;
+}
 
 class Page : public su::ShadowDialog {
 public:
 	explicit Page(QWidget *parent) : su::ShadowDialog(parent)
 	{
 		setAttribute(Qt::WA_DeleteOnClose, true);
-		auto shell = su::applyChrome(this, T("Features.Title"), "v" PROJECT_VERSION, /*brandFooter=*/true, "StreamUP");
-
-		auto *scroll = new QScrollArea();
-		scroll->setWidgetResizable(true);
-		scroll->setFrameShape(QFrame::NoFrame);
-		scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-		scroll->setStyleSheet("QScrollArea{background:transparent;border:none;}");
-		su::useScrollBars(scroll);
-		m_scroll = scroll;
-		auto *page = new QWidget();
-		page->setObjectName("ftPage");
-		page->setStyleSheet(su::scale_qss(QString("QWidget#ftPage{background:%1;}"
-							  "QFrame#ftCard{background:%2;border-radius:18px;}")
-							  .arg(su::Colors::BG_DARKEST, su::Colors::BG_PRIMARY)));
-		auto *v = new QVBoxLayout(page);
-		v->setContentsMargins(su::S(20), su::S(16), su::S(20), su::S(20));
-		v->setSpacing(su::S(10));
-		scroll->setWidget(page);
-		shell.content->addWidget(scroll, 1);
-
-		QLabel *intro = su::makeLabel(T("Features.Intro"), su::CardText::kBody, 400, su::Colors::TEXT_SECONDARY);
-		intro->setWordWrap(true);
-		v->addWidget(intro);
-
-		const QStringList fresh =
-			ft::NewSince(ft::LastSeenVersion());
-		for (ft::Group g : {ft::Group::Products, ft::Group::Docks, ft::Group::Mixer, ft::Group::Sources,
-				    ft::Group::Hotkeys, ft::Group::Safety}) {
-			QList<const ft::Feature *> features;
-			for (const ft::Feature &f : ft::All())
-				if (f.group == g)
-					features.append(&f);
-			if (features.isEmpty())
-				continue;
-			QLabel *heading = su::sectionHeader(ft::GroupLabel(g));
-			v->addWidget(heading);
-			auto *grid = new QGridLayout();
-			grid->setHorizontalSpacing(su::S(14));
-			grid->setVerticalSpacing(su::S(14));
-			for (int i = 0; i < features.size(); ++i)
-				grid->addWidget(buildCard(*features[i], fresh.contains(features[i]->id)), i / 3, i % 3,
-						Qt::AlignTop | Qt::AlignLeft);
-			grid->setColumnStretch(3, 1);
-			v->addLayout(grid);
-		}
-		// Membership, once, at the foot of the list.
-		if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Strip)) {
-			v->addSpacing(su::S(6));
-			v->addWidget(member);
-		}
-		v->addStretch(1);
+		m_shell = su::applyChrome(this, T("Features.Title"), "v" PROJECT_VERSION, /*brandFooter=*/true, "StreamUP");
+		m_stack = new QStackedWidget();
+		m_stack->setStyleSheet("QStackedWidget{background:transparent;}");
+		m_shell.content->addWidget(m_stack, 1);
 
 		m_status = su::makeLabel(QString(), su::Sizes::FONT_SIZE_TINY, 500, su::Colors::TEXT_MUTED);
 		m_status->setWordWrap(false);
-		shell.footer->insertWidget(0, m_status);
+		m_shell.footer->insertWidget(0, m_status);
 		m_status->hide();
-		auto *done = new su::PillButton(T("OverlayControls.Button.Done"), "primary");
-		shell.footerButtons->addWidget(done);
-		QObject::connect(done, &QPushButton::clicked, this, &QDialog::close);
 
 		// Demos play only while their card is on screen.
 		m_visibility = new QTimer(this);
 		m_visibility->setSingleShot(true);
 		m_visibility->setInterval(80);
 		QObject::connect(m_visibility, &QTimer::timeout, this, [this]() { updatePlaying(); });
-		QObject::connect(scroll->verticalScrollBar(), &QScrollBar::valueChanged, m_visibility,
-				 qOverload<>(&QTimer::start));
 
 		const int m = su::S(su::ShadowDialog::kShadowMargin);
 		resize(su::S(3 * kCardW + 2 * 14 + 2 * 20 + 24) + 2 * m, su::S(760) + 2 * m);
 
-		// The page counts as seen once it has been opened.
-		StreamUP::SettingsManager::PluginSettings s = StreamUP::SettingsManager::GetCurrentSettings();
-		s.featuresVersionSeen = PROJECT_VERSION;
-		StreamUP::SettingsManager::UpdateSettings(s);
+		// Restart parts already pending before this window opened do not
+		// count towards the prompt when it closes.
+		for (const ft::Feature &f : ft::All())
+			if (!f.live && ft::IsOn(f.id) != ft::IsActive(f.id))
+				m_pendingAtOpen.insert(f.id);
 	}
 
 	std::function<void()> onClosed;
+
+	void showMode(Mode mode)
+	{
+		m_mode = mode;
+		QWidget *page = nullptr;
+		QString title;
+		switch (mode) {
+		case Mode::Welcome:
+			page = m_stack->widget(indexOf(Mode::Welcome));
+			title = T("Welcome.Title");
+			break;
+		case Mode::WhatsNew:
+			page = m_stack->widget(indexOf(Mode::WhatsNew));
+			title = T("WhatsNew.Title");
+			break;
+		case Mode::Features:
+			page = m_stack->widget(indexOf(Mode::Features));
+			title = T("Features.Title");
+			// The page counts as seen once it has been opened.
+			StreamUP::SettingsManager::PluginSettings s = StreamUP::SettingsManager::GetCurrentSettings();
+			s.featuresVersionSeen = PROJECT_VERSION;
+			StreamUP::SettingsManager::UpdateSettings(s);
+			break;
+		}
+		m_stack->setCurrentWidget(page);
+		setTitle(title);
+		rebuildFooter();
+		m_visibility->start();
+	}
 
 protected:
 	void showEvent(QShowEvent *e) override
@@ -159,15 +206,231 @@ protected:
 	}
 	void closeEvent(QCloseEvent *e) override
 	{
+		su::ShadowDialog::closeEvent(e);
+		askToRestart();
 		if (onClosed) {
 			auto cb = std::move(onClosed);
 			onClosed = nullptr;
 			QTimer::singleShot(0, qApp, cb);
 		}
-		su::ShadowDialog::closeEvent(e);
 	}
 
 private:
+	// Pages are built on first use, so the window opens fast whichever page
+	// it opens on.
+	int indexOf(Mode mode)
+	{
+		int &slot = mode == Mode::Welcome ? m_welcomeIndex : mode == Mode::WhatsNew ? m_whatsNewIndex : m_featuresIndex;
+		if (slot < 0) {
+			QScrollArea *scroll = nullptr;
+			if (mode == Mode::Welcome)
+				scroll = MakeScroll(buildWelcome());
+			else if (mode == Mode::WhatsNew)
+				scroll = MakeScroll(PatchNotesWindow::BuildWhatsNewContent());
+			else
+				scroll = MakeScroll(buildFeatures());
+			QObject::connect(scroll->verticalScrollBar(), &QScrollBar::valueChanged, m_visibility,
+					 qOverload<>(&QTimer::start));
+			if (mode == Mode::Features)
+				m_featuresScroll = scroll;
+			slot = m_stack->addWidget(scroll);
+		}
+		return slot;
+	}
+
+	void setTitle(const QString &title)
+	{
+		setWindowTitle(title);
+		QString name = title;
+		if (name.startsWith(QStringLiteral("StreamUP ")))
+			name = name.mid(9);
+		if (auto *label = findChild<QLabel *>("suTitle"))
+			label->setText(QStringLiteral("StreamUP • ") + name + QStringLiteral(" (v" PROJECT_VERSION ")"));
+	}
+
+	void rebuildFooter()
+	{
+		while (QLayoutItem *item = m_shell.footerButtons->takeAt(0)) {
+			if (QWidget *w = item->widget())
+				w->deleteLater();
+			delete item;
+		}
+		auto add = [this](const QString &text, const char *kind, std::function<void()> fn) {
+			auto *b = new su::PillButton(text, kind);
+			QObject::connect(b, &QPushButton::clicked, this, fn);
+			m_shell.footerButtons->addWidget(b);
+			return b;
+		};
+		switch (m_mode) {
+		case Mode::Welcome:
+			add(T("Welcome.PickFeatures"), "primary", [this]() { showMode(Mode::Features); });
+			break;
+		case Mode::WhatsNew:
+			add(T("WhatsNew.Docs"), "neutral",
+			    []() { QDesktopServices::openUrl(QUrl("https://streamup.doras.click/docs")); });
+			add(T("WhatsNew.SeeFeatures"), "outline", [this]() { showMode(Mode::Features); });
+			add(T("UI.Button.Done"), "primary", [this]() { close(); });
+			break;
+		case Mode::Features:
+			add(T("OverlayControls.Button.Done"), "primary", [this]() { close(); });
+			break;
+		}
+	}
+
+	// First install: thank you, what StreamUP is in three lines, the
+	// membership card, then on to picking features.
+	QWidget *buildWelcome()
+	{
+		auto *page = new QWidget();
+		page->setObjectName("wlPage");
+		page->setStyleSheet("QWidget#wlPage{background:transparent;}");
+		auto *v = new QVBoxLayout(page);
+		v->setContentsMargins(su::S(28), su::S(22), su::S(28), su::S(22));
+		v->setSpacing(su::S(14));
+
+		QLabel *title = su::makeLabel(T("Welcome.Heading"), 22, 800, su::Colors::TEXT_PRIMARY);
+		title->setAlignment(Qt::AlignHCenter);
+		v->addWidget(title);
+		QLabel *line = su::makeLabel(T("Welcome.Line"), su::Sizes::FONT_SIZE_NORMAL, 500, su::Colors::TEXT_SECONDARY);
+		line->setAlignment(Qt::AlignHCenter);
+		line->setWordWrap(true);
+		v->addWidget(line);
+
+		auto *hero = new kit::PreviewSlot(QStringLiteral("whatsnew"), QStringLiteral("features"), 260);
+		hero->setZoom(T("Features.Title"), T("Features.Intro"));
+		hero->setPlaying(true);
+		v->addWidget(hero);
+
+		// Three things StreamUP does, each an icon and a few words.
+		auto *row = new QHBoxLayout();
+		row->setSpacing(su::S(12));
+		struct Pillar {
+			const char *icon;
+			const char *nameKey;
+			const char *lineKey;
+		};
+		const Pillar pillars[] = {{"package", "Welcome.Products", "Welcome.ProductsLine"},
+					  {"tools", "Welcome.Tools", "Welcome.ToolsLine"},
+					  {"sparkles", "Welcome.YourWay", "Welcome.YourWayLine"}};
+		for (const Pillar &p : pillars) {
+			auto *box = new QFrame();
+			box->setObjectName("wlPillar");
+			box->setStyleSheet(su::scale_qss(QString("QFrame#wlPillar{background:%1;border:1px solid rgba(255,255,255,0.06);"
+								 "border-radius:14px;}")
+								 .arg(su::Colors::BG_PRIMARY)));
+			auto *bv = new QVBoxLayout(box);
+			bv->setContentsMargins(su::S(14), su::S(12), su::S(14), su::S(12));
+			bv->setSpacing(su::S(6));
+			auto *icon = new QLabel();
+			icon->setStyleSheet("background:transparent;border:none;");
+			icon->setPixmap(su::svgIcon(QString::fromLatin1(p.icon), QColor(su::Colors::PRIMARY_LIGHT), 22,
+						    devicePixelRatioF()));
+			bv->addWidget(icon);
+			QLabel *n = su::makeLabel(T(p.nameKey), su::Sizes::FONT_SIZE_NORMAL, 700, su::Colors::TEXT_PRIMARY);
+			n->setStyleSheet(n->styleSheet() + "border:none;");
+			bv->addWidget(n);
+			QLabel *l = su::makeLabel(T(p.lineKey), su::Sizes::FONT_SIZE_SMALL, 400, su::Colors::TEXT_SECONDARY);
+			l->setWordWrap(true);
+			l->setStyleSheet(l->styleSheet() + "border:none;");
+			bv->addWidget(l);
+			bv->addStretch(1);
+			row->addWidget(box, 1);
+		}
+		v->addLayout(row);
+
+		if (QWidget *member = kit::MembershipCard(kit::MemberStyle::Strip))
+			v->addWidget(member);
+		v->addStretch(1);
+		return page;
+	}
+
+	QWidget *buildFeatures()
+	{
+		auto *page = new QWidget();
+		page->setObjectName("ftPage");
+		page->setStyleSheet(su::scale_qss(QString("QWidget#ftPage{background:transparent;}"
+							  "QFrame#ftCard{background:%1;border:1px solid rgba(255,255,255,0.06);"
+							  "border-radius:18px;}")
+							  .arg(su::Colors::BG_PRIMARY)));
+		auto *v = new QVBoxLayout(page);
+		v->setContentsMargins(su::S(20), su::S(16), su::S(20), su::S(20));
+		v->setSpacing(su::S(10));
+
+		QLabel *intro = su::makeLabel(T("Features.Intro"), su::CardText::kBody, 400, su::Colors::TEXT_SECONDARY);
+		intro->setWordWrap(true);
+		v->addWidget(intro);
+
+		const QStringList fresh = ft::NewSince(ft::LastSeenVersion());
+		for (ft::Group g : {ft::Group::Products, ft::Group::Docks, ft::Group::Mixer, ft::Group::Sources,
+				    ft::Group::Hotkeys, ft::Group::Safety, ft::Group::Theme}) {
+			QList<const ft::Feature *> features;
+			for (const ft::Feature &f : ft::All())
+				if (f.group == g)
+					features.append(&f);
+			if (features.isEmpty())
+				continue;
+			v->addWidget(su::sectionHeader(ft::GroupLabel(g)));
+			if (g == ft::Group::Theme) {
+				// What these need, said once, while the theme is not in use.
+				if (!ft::ThemeActive())
+					v->addWidget(themeNeededCard());
+				else
+					v->addWidget(su::makeLabel(T("Features.Theme.Active"), su::CardText::kBody, 400,
+								   su::Colors::TEXT_SECONDARY));
+			}
+			auto *grid = new QGridLayout();
+			grid->setHorizontalSpacing(su::S(14));
+			grid->setVerticalSpacing(su::S(14));
+			for (int i = 0; i < features.size(); ++i)
+				grid->addWidget(buildCard(*features[i], fresh.contains(features[i]->id)), i / 3, i % 3,
+						Qt::AlignTop | Qt::AlignLeft);
+			grid->setColumnStretch(3, 1);
+			v->addLayout(grid);
+		}
+		// Membership, once, at the foot of the list.
+		if (QWidget *member = kit::MembershipCard(kit::MemberStyle::Strip)) {
+			v->addSpacing(su::S(6));
+			v->addWidget(member);
+		}
+		v->addStretch(1);
+		return page;
+	}
+
+	QWidget *themeNeededCard()
+	{
+		auto *box = new QFrame();
+		box->setObjectName("ftTheme");
+		box->setStyleSheet(su::scale_qss(QString("QFrame#ftTheme{background:%1;border:1px solid rgba(137,180,250,0.22);"
+							 "border-radius:14px;}")
+							 .arg(su::Colors::BG_PRIMARY)));
+		auto *h = new QHBoxLayout(box);
+		h->setContentsMargins(su::S(14), su::S(12), su::S(12), su::S(12));
+		h->setSpacing(su::S(12));
+		auto *icon = new QLabel();
+		icon->setStyleSheet("background:transparent;border:none;");
+		icon->setPixmap(su::svgIcon("palette", QColor(su::Colors::PRIMARY_LIGHT), 22, devicePixelRatioF()));
+		h->addWidget(icon, 0, Qt::AlignTop);
+		auto *text = new QVBoxLayout();
+		text->setSpacing(su::S(2));
+		QLabel *t = su::makeLabel(T("Features.Theme.Needed"), su::Sizes::FONT_SIZE_NORMAL, 700, su::Colors::TEXT_PRIMARY);
+		t->setStyleSheet(t->styleSheet() + "border:none;");
+		text->addWidget(t);
+		QLabel *l = su::makeLabel(T("Features.Theme.NeededLine"), su::Sizes::FONT_SIZE_SMALL, 400,
+					  su::Colors::TEXT_SECONDARY);
+		l->setWordWrap(true);
+		l->setStyleSheet(l->styleSheet() + "border:none;");
+		text->addWidget(l);
+		h->addLayout(text, 1);
+		auto *see = new su::PillButton(T("Features.Theme.See"), "neutral");
+		QObject::connect(see, &QPushButton::clicked, this, []() { StreamUP::ThemeWindow::ShowThemeWindow(); });
+		h->addWidget(see, 0, Qt::AlignVCenter);
+		auto *member = new su::PillButton(T("Kit.Membership.Button"), "primary");
+		QObject::connect(member, &QPushButton::clicked, this,
+				 []() { QDesktopServices::openUrl(QUrl(kit::MembershipUrl())); });
+		h->addWidget(member, 0, Qt::AlignVCenter);
+		return box;
+	}
+
 	QWidget *buildCard(const ft::Feature &f, bool isNew)
 	{
 		Card card;
@@ -179,7 +442,8 @@ private:
 		v->setContentsMargins(su::S(12), su::S(12), su::S(12), su::S(12));
 		v->setSpacing(su::S(8));
 
-		card.demo = new StreamUP::Kit::PreviewSlot(QStringLiteral("demos"), f.id, kDemoH);
+		card.demo = new kit::PreviewSlot(QStringLiteral("demos"), f.id, kDemoH);
+		card.demo->setZoom(Name(f), T(f.howKey.toUtf8().constData()));
 		v->addWidget(card.demo);
 
 		// A fixed-height row, so a card with a badge lines up with one without.
@@ -188,7 +452,7 @@ private:
 		auto *titleRow = new QHBoxLayout(titleBox);
 		titleRow->setContentsMargins(0, 0, 0, 0);
 		titleRow->setSpacing(su::S(8));
-		QLabel *name = su::makeLabel(T(f.nameKey.toUtf8().constData()), su::CardText::kTitle, 700, su::Colors::TEXT_PRIMARY);
+		QLabel *name = su::makeLabel(Name(f), su::CardText::kTitle, 700, su::Colors::TEXT_PRIMARY);
 		name->setWordWrap(false);
 		titleRow->addWidget(name);
 		if (isNew)
@@ -213,7 +477,7 @@ private:
 		auto *show = new su::PillButton(T("Features.ShowMe"), "neutral");
 		show->setAccessibleName(T("Features.ShowMeAccessible").arg(name->text()));
 		const QString id = f.id;
-		QObject::connect(show, &QPushButton::clicked, this, [id]() { ft::ShowMe(id); });
+		QObject::connect(show, &QPushButton::clicked, this, [this, id]() { showMe(id); });
 		actions->addWidget(show);
 		actions->addStretch(1);
 		if (!f.core) {
@@ -223,13 +487,36 @@ private:
 			actions->addWidget(card.toggle, 0, Qt::AlignVCenter);
 			QObject::connect(card.toggle, &su::SwitchButton::toggled, this, [this, id](bool on) { flip(id, on); });
 		}
-		show->setEnabled(ft::IsActive(f.id));
-		card.frame->setProperty("showButton", QVariant::fromValue<QObject *>(show));
 		v->addLayout(actions);
 
 		m_cards.append(card);
 		refreshNote(m_cards.last());
 		return card.frame;
+	}
+
+	// Show me: the clip big, one line on how to turn it on, and the way to the
+	// place in OBS it lives (plus the video, when there is one).
+	void showMe(const QString &id)
+	{
+		const ft::Feature *f = ft::Find(id);
+		if (!f)
+			return;
+		QList<QWidget *> buttons;
+		auto *where = new su::PillButton(T("Features.ShowWhere"), "primary");
+		where->setEnabled(ft::IsActive(id));
+		if (!where->isEnabled())
+			where->setToolTip(T("Features.ShowWhereOff"));
+		QObject::connect(where, &QPushButton::clicked, this, [id]() {
+			QTimer::singleShot(160, qApp, [id]() { ft::ShowMe(id); });
+		});
+		buttons << where;
+		if (!f->video.isEmpty()) {
+			auto *video = new su::PillButton(T("Features.WatchVideo"), "neutral");
+			const QString url = f->video;
+			QObject::connect(video, &QPushButton::clicked, this, [url]() { QDesktopServices::openUrl(QUrl(url)); });
+			buttons << video;
+		}
+		kit::Lightbox(this, QStringLiteral("demos"), id, Name(*f), T(f->howKey.toUtf8().constData()), buttons);
 	}
 
 	Card *cardFor(const QString &id)
@@ -247,8 +534,6 @@ private:
 		const bool pending = f && !f->live && ft::IsOn(c.id) != ft::IsActive(c.id);
 		c.note->setText(ft::IsOn(c.id) ? T("Features.OnAfterRestart") : T("Features.OffAfterRestart"));
 		c.note->setVisible(pending);
-		if (auto *show = qobject_cast<QPushButton *>(c.frame->property("showButton").value<QObject *>()))
-			show->setEnabled(ft::IsActive(c.id));
 	}
 
 	void flip(const QString &id, bool on)
@@ -282,20 +567,47 @@ private:
 		}
 		ft::SetOn(id, on);
 		refreshNote(*c);
-		showStatus(on ? T("Features.TurnedOn").arg(T(ft::Find(id)->nameKey.toUtf8().constData()))
-			      : T("Features.TurnedOff").arg(T(ft::Find(id)->nameKey.toUtf8().constData())));
+		showStatus(on ? T("Features.TurnedOn").arg(Name(*ft::Find(id))) : T("Features.TurnedOff").arg(Name(*ft::Find(id))));
+	}
+
+	// A restart part changed here and now differs from what is running: offer
+	// to restart OBS now, like OBS's own settings do. Never while live.
+	void askToRestart()
+	{
+		QStringList changed;
+		for (const ft::Feature &f : ft::All())
+			if (!f.live && ft::IsOn(f.id) != ft::IsActive(f.id) && !m_pendingAtOpen.count(f.id))
+				changed << Name(f);
+		if (changed.isEmpty())
+			return;
+		if (obs_frontend_streaming_active() || obs_frontend_recording_active()) {
+			kit::Toast(T("Features.Restart.Later"), kit::Status::Info);
+			return;
+		}
+		QWidget *main = MainWindow();
+		su::ShadowDialog *ask = su::confirm(main, T("Features.Restart.Title"),
+						    T("Features.Restart.Line").arg(changed.join(", ")), T("Features.Restart.Now"),
+						    "primary", []() { RestartObs(); });
+		const QString now = T("Features.Restart.Now");
+		for (auto *b : ask->findChildren<QPushButton *>())
+			if (b->text() != now)
+				b->setText(T("Features.Restart.LaterButton"));
+		StreamUP::UIHelpers::PlaceOverMainWindow(ask);
 	}
 
 	void updatePlaying()
 	{
 		if (!isVisible())
 			return;
-		const QRect view(m_scroll->viewport()->mapToGlobal(QPoint(0, 0)), m_scroll->viewport()->size());
+		QScrollArea *scroll = qobject_cast<QScrollArea *>(m_stack->currentWidget());
+		const bool onFeatures = scroll && scroll == m_featuresScroll;
+		const QRect view = scroll ? QRect(scroll->viewport()->mapToGlobal(QPoint(0, 0)), scroll->viewport()->size())
+					  : QRect();
 		for (Card &c : m_cards) {
 			if (!c.demo->animated())
 				continue;
 			const QRect r(c.demo->mapToGlobal(QPoint(0, 0)), c.demo->size());
-			c.demo->setPlaying(view.intersects(r));
+			c.demo->setPlaying(onFeatures && view.intersects(r));
 		}
 	}
 
@@ -310,10 +622,17 @@ private:
 		});
 	}
 
-	QScrollArea *m_scroll = nullptr;
+	su::WindowShell m_shell{};
+	QStackedWidget *m_stack = nullptr;
+	QScrollArea *m_featuresScroll = nullptr;
 	QLabel *m_status = nullptr;
 	QTimer *m_visibility = nullptr;
 	QList<Card> m_cards;
+	Mode m_mode = Mode::Features;
+	int m_welcomeIndex = -1;
+	int m_whatsNewIndex = -1;
+	int m_featuresIndex = -1;
+	std::set<QString> m_pendingAtOpen;
 };
 
 QPointer<Page> &Open()
@@ -322,20 +641,32 @@ QPointer<Page> &Open()
 	return page;
 }
 
-void ShowOnUiThread(std::function<void()> onDone)
+std::vector<std::function<void()>> &AfterClose()
+{
+	static std::vector<std::function<void()>> list;
+	return list;
+}
+
+void ShowOnUiThread(Mode mode)
 {
 	QPointer<Page> &existing = Open();
 	if (existing) {
+		existing->showMode(mode);
 		existing->showNormal();
 		existing->raise();
 		existing->activateWindow();
-		if (onDone)
-			onDone();
 		return;
 	}
 	auto *page = new Page(MainWindow());
-	page->onClosed = std::move(onDone);
+	page->onClosed = []() {
+		auto list = std::move(AfterClose());
+		AfterClose().clear();
+		for (auto &fn : list)
+			if (fn)
+				fn();
+	};
 	existing = page;
+	page->showMode(mode);
 	StreamUP::UIHelpers::PlaceOverMainWindow(page);
 	page->show();
 	page->raise();
@@ -346,19 +677,52 @@ void ShowOnUiThread(std::function<void()> onDone)
 
 void Show()
 {
-	QMetaObject::invokeMethod(qApp, []() { ShowOnUiThread(nullptr); }, Qt::QueuedConnection);
+	QMetaObject::invokeMethod(qApp, []() { ShowOnUiThread(Mode::Features); }, Qt::QueuedConnection);
 }
 
-void ShowIfNeeded(std::function<void()> onDone)
+void ShowWhatsNew()
 {
-	const QString seen = ft::LastSeenVersion();
-	// New users (never seen it) and anyone this version gives a new part.
-	if (seen.isEmpty() || !ft::NewSince(seen).isEmpty()) {
-		ShowOnUiThread(std::move(onDone));
+	QMetaObject::invokeMethod(qApp, []() { ShowOnUiThread(Mode::WhatsNew); }, Qt::QueuedConnection);
+}
+
+bool IsOpen()
+{
+	return !Open().isNull();
+}
+
+void WhenClosed(std::function<void()> fn)
+{
+	if (!IsOpen()) {
+		if (fn)
+			fn();
 		return;
 	}
-	if (onDone)
-		onDone();
+	AfterClose().push_back(std::move(fn));
+}
+
+void ShowAtStartup()
+{
+	using SC = StreamUP::SplashScreen::ShowCondition;
+	const SC condition = StreamUP::SplashScreen::CheckSplashCondition();
+	bool quiet = false;
+	if (obs_data_t *settings = StreamUP::SettingsManager::LoadSettings()) {
+		quiet = obs_data_get_bool(settings, "splash_disabled");
+		obs_data_release(settings);
+	}
+	const QString seen = ft::LastSeenVersion();
+	const bool newParts = !seen.isEmpty() && !ft::NewSince(seen).isEmpty();
+	if (condition != SC::Never)
+		StreamUP::SplashScreen::UpdateVersionTracking();
+
+	// One window, whatever the reason: a first install gets the welcome page,
+	// an update gets what's new, and either leads on to the features.
+	if (condition == SC::FirstInstall || seen.isEmpty()) {
+		ShowOnUiThread(Mode::Welcome);
+	} else if (condition == SC::VersionUpdate && !quiet) {
+		ShowOnUiThread(Mode::WhatsNew);
+	} else if (newParts) {
+		ShowOnUiThread(Mode::Features);
+	}
 }
 
 } // namespace FeaturesPage

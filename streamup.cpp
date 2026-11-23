@@ -9,6 +9,7 @@
 #include "core/plugin-manager.hpp"
 #include "core/features.hpp"
 #include "ui/features-page.hpp"
+#include "ui/streamup-kit.hpp"
 #include "core/source-manager.hpp"
 #include "core/backup-manager.hpp"
 #include "core/restore-manager.hpp"
@@ -1236,6 +1237,7 @@ bool obs_module_load()
 	StreamUP::SettingsManager::PluginSettings moduleSettings = StreamUP::SettingsManager::GetCurrentSettings();
 	const StreamUP::SettingsManager::ModuleSettings &mod = moduleSettings.modules;
 	StreamUP::Features::MarkStartupState();
+	StreamUP::Kit::SetOpenFeaturesHook([]() { StreamUP::FeaturesPage::Show(); });
 
 	// Register source types (before frontend initialization)
 	if (mod.adjustmentLayerSource) {
@@ -1477,22 +1479,9 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 			StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
 				constexpr int STARTUP_DELAY_MS = 2000;
 				QTimer::singleShot(STARTUP_DELAY_MS, []() {
-					// Lambda that runs the existing splash/patch-notes flow.
-					// Defined first so it can be invoked directly OR chained
-					// after the first-launch wizard.
-					auto runSplashFlow = []() {
-						StreamUP::SplashScreen::ShowCondition condition = StreamUP::SplashScreen::CheckSplashCondition();
-						if (condition == StreamUP::SplashScreen::ShowCondition::FirstInstall) {
-							StreamUP::SplashScreen::ShowSplashScreenIfNeeded();
-						} else if (condition == StreamUP::SplashScreen::ShowCondition::VersionUpdate) {
-							StreamUP::SplashScreen::ShowSplashScreenIfNeeded();
-						}
-						// If Never, don't show anything.
-					};
-
-					// The Features page opens for a new user, and after an
-					// update that adds a part, then the welcome flow follows.
-					StreamUP::FeaturesPage::ShowIfNeeded(runSplashFlow);
+					// One window at start-up: Welcome, What's new or
+					// Features, changing page in place.
+					StreamUP::FeaturesPage::ShowAtStartup();
 				});
 			});
 			
@@ -1502,13 +1491,14 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 				QTimer::singleShot(PLUGIN_CHECK_DELAY_MS, []() {
 					// Check for plugin updates on startup if enabled, but stay silent if up to date
 					// Only show if no splash screen or patch notes window is open
-					if (!StreamUP::SplashScreen::IsSplashScreenOpen() && !StreamUP::PatchNotesWindow::IsPatchNotesWindowOpen()) {
+					// Never on top of the start-up window: wait for it to close.
+					StreamUP::FeaturesPage::WhenClosed([]() {
 						StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 						if (settings.runAtStartup) {
 							// Use the silent version that only shows dialogs if there are actual updates
 							StreamUP::PluginManager::ShowCachedPluginUpdatesDialogSilent();
 						}
-					}
+					});
 				});
 			});
 		});

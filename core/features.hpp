@@ -18,7 +18,7 @@
 namespace StreamUP {
 namespace Features {
 
-enum class Group { Products, Docks, Mixer, Sources, Hotkeys, Safety };
+enum class Group { Products, Docks, Mixer, Sources, Hotkeys, Safety, Theme };
 
 struct Feature {
 	QString id;        // stable, used in demos/<id>.webp and the websocket error
@@ -28,6 +28,9 @@ struct Feature {
 	bool core = false; // always on, no switch
 	bool live = false; // switches without a restart
 	QString since;     // version that added it, for the "New" badge
+	QString howKey;    // one line on how to turn it on and find it
+	QString video;     // optional: a YouTube link, shown as "Watch the video"
+	bool needsTheme = false; // only does anything on the StreamUP theme
 };
 
 const std::vector<Feature> &All();
@@ -43,8 +46,11 @@ bool IsActive(const QString &id);
 // Saves the setting and, for a live part, starts or stops it now.
 void SetOn(const QString &id, bool on);
 
-// Opens or points at the part ("Show me").
+// Opens or points at the part ("Show me where").
 void ShowMe(const QString &id);
+
+// Whether the StreamUP theme (or one of its colourways) is in use.
+bool ThemeActive();
 
 // The version the user last saw the Features page in (or, from before it
 // existed, last ran the setup wizard in). Empty for a new user.

@@ -10,14 +10,26 @@
 namespace StreamUP {
 namespace FeaturesPage {
 
-// Opens (or raises) the page. Safe from any thread.
+// The one StreamUP window for welcome, what's new and features. It changes
+// page in place, so start-up never opens two windows.
+enum class Mode { Welcome, WhatsNew, Features };
+
+// Opens (or raises) it on the Features page. Safe from any thread.
 void Show();
 
-// At start-up: opens the page for a new user, or when this version adds a
-// part the user has not seen, and otherwise does nothing. onDone runs after
-// the page closes (or straight away when it does not open), so the welcome
-// flow can follow it.
-void ShowIfNeeded(std::function<void()> onDone);
+// Opens (or raises) it on What's new (Help > Patch Notes).
+void ShowWhatsNew();
+
+// At start-up: Welcome for a first install, What's new after an update, the
+// Features page when this version adds a part the user has not seen, and
+// otherwise nothing.
+void ShowAtStartup();
+
+bool IsOpen();
+
+// Runs fn once the window has closed (straight away when it is not open), so
+// a start-up check never stacks a second window on top of it.
+void WhenClosed(std::function<void()> fn);
 
 } // namespace FeaturesPage
 } // namespace StreamUP

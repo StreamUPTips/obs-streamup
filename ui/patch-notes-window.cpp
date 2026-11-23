@@ -7,6 +7,7 @@
 #include <streamup/ui/labels.hpp>        // makeLabel
 #include <streamup/ui/ui-scrollbar.hpp>  // useScrollBars
 #include "splash-screen.hpp"
+#include "features-page.hpp"
 #include "../utilities/error-handler.hpp"
 #include "../version.h"
 #include <obs-module.h>
@@ -247,107 +248,81 @@ static QString Tx(const char *key)
 	return QString::fromUtf8(obs_module_text(key));
 }
 
+QWidget *BuildWhatsNewContent()
+{
+	QWidget *contentWidget = new QWidget();
+	contentWidget->setObjectName("wnPage");
+	contentWidget->setStyleSheet(UIStyles::scale_qss(QString("QWidget#wnPage{background:transparent;}"
+								 "QFrame#wnCard{background:%1;border:1px solid rgba(255,255,255,0.06);"
+								 "border-radius:16px;}")
+								 .arg(UIStyles::Colors::BG_PRIMARY)));
+	QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
+	contentLayout->setContentsMargins(UIStyles::S(20), UIStyles::S(16), UIStyles::S(20), UIStyles::S(16));
+	contentLayout->setSpacing(UIStyles::S(12));
+
+	QLabel *heading = UIStyles::sectionHeader(QString(Tx("WhatsNew.Heading")).arg(PROJECT_VERSION_MAJOR));
+	heading->setContentsMargins(0, 0, 0, 0);
+	contentLayout->addWidget(heading);
+
+	// Picture cards, two to a row. A click on a picture shows it big.
+	auto *grid = new QGridLayout();
+	grid->setHorizontalSpacing(UIStyles::S(12));
+	grid->setVerticalSpacing(UIStyles::S(12));
+	int n = 0;
+	for (const Headline &h : kHeadlines) {
+		auto *card = new QFrame();
+		card->setObjectName("wnCard");
+		auto *v = new QVBoxLayout(card);
+		v->setContentsMargins(UIStyles::S(10), UIStyles::S(10), UIStyles::S(10), UIStyles::S(12));
+		v->setSpacing(UIStyles::S(6));
+		auto *pic = new StreamUP::Kit::PreviewSlot(QStringLiteral("whatsnew"), QString::fromUtf8(h.id), 130);
+		pic->setZoom(Tx(h.nameKey), Tx(h.lineKey));
+		pic->setPlaying(true);
+		v->addWidget(pic);
+		v->addWidget(UIStyles::makeLabel(Tx(h.nameKey), UIStyles::Sizes::FONT_SIZE_NORMAL, 700,
+						 UIStyles::Colors::TEXT_PRIMARY));
+		QLabel *line = UIStyles::makeLabel(Tx(h.lineKey), UIStyles::Sizes::FONT_SIZE_SMALL, 400,
+						   UIStyles::Colors::TEXT_SECONDARY);
+		line->setWordWrap(true);
+		v->addWidget(line);
+		v->addStretch(1);
+		grid->addWidget(card, n / 2, n % 2);
+		++n;
+	}
+	contentLayout->addLayout(grid);
+
+	// Every change, version by version, folded until asked for.
+	auto *all = new StreamUP::Kit::MoreOptions(QStringLiteral("whatsnew.all"), Tx("WhatsNew.AllChanges"));
+	QVector<VersionBlock> blocks = LoadVersionBlocks();
+	if (blocks.isEmpty()) {
+		all->body()->addWidget(UIStyles::makeLabel(Tx("WhatsNew.LoadFailed"), 13, 500, UIStyles::Colors::COLOR_WARNING));
+	} else {
+		for (int i = 0; i < blocks.size(); ++i)
+			all->body()->addWidget(BuildVersionCard(blocks[i], i == 0));
+	}
+	contentLayout->addWidget(all);
+
+	// Membership once, at the foot.
+	if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Strip))
+		contentLayout->addWidget(member);
+	contentLayout->addStretch();
+	return contentWidget;
+}
+
 void CreatePatchNotesDialog()
 {
-	UIHelpers::ShowSingletonDialogOnUIThread("patch-notes", []() -> QDialog * {
-		UIStyles::WindowShell shell =
-			UIStyles::makeWindow(Tx("WhatsNew.Title"), "v" PROJECT_VERSION, nullptr,
-					     /*brandFooter=*/true, "StreamUP");
-		QDialog *dialog = shell.dialog;
-
-		QVBoxLayout *mainLayout = shell.content;
-		mainLayout->setContentsMargins(UIStyles::S(20), UIStyles::S(16), UIStyles::S(20), UIStyles::S(8));
-
-		QScrollArea *scrollArea = new QScrollArea();
-		scrollArea->setFrameShape(QFrame::NoFrame);
-		UIStyles::useScrollBars(scrollArea);
-		QWidget *contentWidget = new QWidget();
-		contentWidget->setObjectName("wnPage");
-		contentWidget->setStyleSheet(UIStyles::scale_qss(QString("QWidget#wnPage{background:%1;}"
-									 "QFrame#wnCard{background:%2;border-radius:16px;}")
-									 .arg(UIStyles::Colors::BG_DARKEST, UIStyles::Colors::BG_PRIMARY)));
-		QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
-		contentLayout->setContentsMargins(UIStyles::S(4), UIStyles::S(4), UIStyles::S(4), UIStyles::S(16));
-		contentLayout->setSpacing(UIStyles::S(12));
-
-		contentLayout->addWidget(UIStyles::sectionHeader(QString(Tx("WhatsNew.Heading")).arg(PROJECT_VERSION_MAJOR)));
-
-		// Picture cards, two to a row.
-		auto *grid = new QGridLayout();
-		grid->setHorizontalSpacing(UIStyles::S(12));
-		grid->setVerticalSpacing(UIStyles::S(12));
-		int n = 0;
-		for (const Headline &h : kHeadlines) {
-			auto *card = new QFrame();
-			card->setObjectName("wnCard");
-			auto *v = new QVBoxLayout(card);
-			v->setContentsMargins(UIStyles::S(10), UIStyles::S(10), UIStyles::S(10), UIStyles::S(12));
-			v->setSpacing(UIStyles::S(6));
-			auto *pic = new StreamUP::Kit::PreviewSlot(QStringLiteral("whatsnew"), QString::fromUtf8(h.id), 130);
-			pic->setPlaying(true);
-			v->addWidget(pic);
-			v->addWidget(UIStyles::makeLabel(Tx(h.nameKey), UIStyles::Sizes::FONT_SIZE_NORMAL, 700,
-							 UIStyles::Colors::TEXT_PRIMARY));
-			QLabel *line = UIStyles::makeLabel(Tx(h.lineKey), UIStyles::Sizes::FONT_SIZE_SMALL, 400,
-							   UIStyles::Colors::TEXT_SECONDARY);
-			line->setWordWrap(true);
-			v->addWidget(line);
-			v->addStretch(1);
-			grid->addWidget(card, n / 2, n % 2);
-			++n;
-		}
-		contentLayout->addLayout(grid);
-
-		// Every change, version by version, folded until asked for.
-		auto *all = new StreamUP::Kit::MoreOptions(QStringLiteral("whatsnew.all"), Tx("WhatsNew.AllChanges"));
-		QVector<VersionBlock> blocks = LoadVersionBlocks();
-		if (blocks.isEmpty()) {
-			all->body()->addWidget(UIStyles::makeLabel(Tx("WhatsNew.LoadFailed"), 13, 500, UIStyles::Colors::COLOR_WARNING));
-		} else {
-			for (int i = 0; i < blocks.size(); ++i)
-				all->body()->addWidget(BuildVersionCard(blocks[i], i == 0));
-		}
-		contentLayout->addWidget(all);
-		contentLayout->addStretch();
-
-		scrollArea->setWidget(contentWidget);
-		scrollArea->setWidgetResizable(true);
-		scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-		scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-		mainLayout->addWidget(scrollArea);
-
-		// Membership once, at the foot; the beer link stays in the brand line.
-		if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Strip))
-			shell.footer->insertWidget(0, member);
-
-		auto *docsBtn = new UIStyles::PillButton(Tx("WhatsNew.Docs"), "neutral");
-		QObject::connect(docsBtn, &QPushButton::clicked,
-				 []() { QDesktopServices::openUrl(QUrl("https://streamup.doras.click/docs")); });
-		auto *closeButton = new UIStyles::PillButton(Tx("UI.Button.Done"), "primary");
-		QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
-		shell.footerButtons->addWidget(docsBtn);
-		shell.footerButtons->addWidget(closeButton);
-
-		const int m = UIStyles::S(UIStyles::ShadowDialog::kShadowMargin);
-		dialog->resize(UIStyles::S(760) + 2 * m, UIStyles::S(780) + 2 * m);
-		UIHelpers::PlaceOverMainWindow(dialog);
-		// The singleton DialogManager stores the dialog but does not show it.
-		dialog->show();
-		dialog->raise();
-		dialog->activateWindow();
-		return dialog;
-	});
+	FeaturesPage::ShowWhatsNew();
 }
 
 void ShowPatchNotesWindow()
 {
-	CreatePatchNotesDialog();
+	FeaturesPage::ShowWhatsNew();
 	ErrorHandler::LogInfo("Patch notes window shown", ErrorHandler::Category::UI);
 }
 
 bool IsPatchNotesWindowOpen()
 {
-	return UIHelpers::DialogManager::IsSingletonDialogOpen("patch-notes");
+	return FeaturesPage::IsOpen();
 }
 
 } // namespace PatchNotesWindow

@@ -16,6 +16,8 @@
 #include <obs-module.h>
 
 #include <QDockWidget>
+#include <QList>
+#include <QPair>
 #include <QMainWindow>
 
 #include <cstring>
@@ -72,9 +74,33 @@ Entry core(const char *id, Group g, const char *key, const char *since = "")
 	return e;
 }
 
+// An optional video per part. When a link is set here the Show me view gets a
+// "Watch the video" button that opens it in the browser.
+QString VideoFor(const QString &id)
+{
+	static const QList<QPair<QString, QString>> videos = {
+		// {"multidock", "https://www.youtube.com/watch?v=..."},
+	};
+	for (const auto &v : videos)
+		if (v.first == id)
+			return v.second;
+	return {};
+}
+
+std::vector<Entry> Finish(std::vector<Entry> list)
+{
+	for (Entry &e : list) {
+		const QString key = e.f.nameKey.section('.', 1, 1);
+		e.f.howKey = QStringLiteral("Features.%1.How").arg(key);
+		e.f.video = VideoFor(e.f.id);
+		e.f.needsTheme = e.b.tweak != nullptr;
+	}
+	return list;
+}
+
 const std::vector<Entry> &Entries()
 {
-	static const std::vector<Entry> list = {
+	static const std::vector<Entry> list = Finish({
 		// Products
 		core("install-product", Group::Products, "InstallProduct"),
 		core("my-products", Group::Products, "MyProducts", "3.0.0"),
@@ -85,30 +111,32 @@ const std::vector<Entry> &Entries()
 		mod("streamup-dock", Group::Docks, "StreamupDock", &MS::streamupDock, false),
 		mod("multidock", Group::Docks, "MultiDock", &MS::multiDock, true),
 		mod("toolbar", Group::Docks, "Toolbar", &MS::toolbar, true),
-		tweak("vertical-canvas", Group::Docks, "VerticalCanvas", &PS::themeVerticalCanvas, TW::VerticalCanvas),
-		tweak("multistream", Group::Docks, "Multistream", &PS::themeMultistream, TW::Multistream, "3.0.0"),
-		tweak("dock-spacing", Group::Docks, "DockSpacing", &PS::themeSpacing, TW::Spacing),
-		tweak("window-polish", Group::Docks, "WindowPolish", &PS::themeWindowPolish, TW::WindowPolish),
 
 		// Mixer & Audio
 		mod("mixer-dock", Group::Mixer, "MixerDock", &MS::mixerDock, false, "3.0.0"),
-		tweak("mixer-layout", Group::Mixer, "MixerLayout", &PS::themeMixer, TW::Mixer),
 
 		// Sources
 		mod("adjustment-layer", Group::Sources, "AdjustmentLayer", &MS::adjustmentLayerSource, false),
 		mod("scene-switch", Group::Sources, "SceneSwitch", &MS::sourceMenuSceneSwitch, true, "3.0.0"),
-		tweak("source-folders", Group::Sources, "SourceFolders", &PS::themeSourceFolders, TW::SourceFolders,
-		      "3.0.0"),
-		tweak("source-guides", Group::Sources, "SourceGuides", &PS::themeSourceGuides, TW::SourceGuides),
 
 		// Hotkeys & Control
 		mod("hotkeys", Group::Hotkeys, "Hotkeys", &MS::hotkeys, true),
 		mod("websocket", Group::Hotkeys, "WebSocket", &MS::websocketApi, true),
-		tweak("studio-mode", Group::Hotkeys, "StudioMode", &PS::themeStudioMode, TW::StudioMode),
 
 		// Safety
 		mod("backup", Group::Safety, "Backup", &MS::backup, true),
-	};
+
+		// StreamUP Theme: tweaks that only do anything on the StreamUP theme.
+		tweak("dock-spacing", Group::Theme, "DockSpacing", &PS::themeSpacing, TW::Spacing),
+		tweak("window-polish", Group::Theme, "WindowPolish", &PS::themeWindowPolish, TW::WindowPolish),
+		tweak("mixer-layout", Group::Theme, "MixerLayout", &PS::themeMixer, TW::Mixer),
+		tweak("source-folders", Group::Theme, "SourceFolders", &PS::themeSourceFolders, TW::SourceFolders,
+		      "3.0.0"),
+		tweak("source-guides", Group::Theme, "SourceGuides", &PS::themeSourceGuides, TW::SourceGuides),
+		tweak("studio-mode", Group::Theme, "StudioMode", &PS::themeStudioMode, TW::StudioMode),
+		tweak("vertical-canvas", Group::Theme, "VerticalCanvas", &PS::themeVerticalCanvas, TW::VerticalCanvas),
+		tweak("multistream", Group::Theme, "Multistream", &PS::themeMultistream, TW::Multistream, "3.0.0"),
+	});
 	return list;
 }
 
@@ -287,6 +315,11 @@ void ShowMe(const QString &id)
 	}
 }
 
+bool ThemeActive()
+{
+	return ThemeEnhancements::IsUsingStreamUPTheme();
+}
+
 QString LastSeenVersion()
 {
 	const PS s = SettingsManager::GetCurrentSettings();
@@ -336,6 +369,8 @@ QString GroupLabel(Group g)
 		return obs_module_text("Features.Group.Hotkeys");
 	case Group::Safety:
 		return obs_module_text("Features.Group.Safety");
+	case Group::Theme:
+		return obs_module_text("Features.Group.Theme");
 	}
 	return {};
 }
