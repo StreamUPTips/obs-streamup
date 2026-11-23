@@ -664,18 +664,25 @@ static QWidget *PluginRowsCard(const std::vector<PluginRow> &rows, bool outdated
 				 QString::fromStdString(r.requiredVersion);
 		else if (!r.requiredVersion.empty())
 			detail = QString::fromStdString(r.requiredVersion);
-		QWidget *pill = kit::StatusPill(outdated ? kit::Status::Warn : kit::Status::Bad,
-						obs_module_text(outdated ? "Plugin.Pill.Update" : "Plugin.Pill.Missing"));
+		// The section header and the count pill at the top already say these
+		// are missing, so a red pill on every row only adds noise. An update
+		// keeps its pill: it is the one detail the row cannot show otherwise.
+		QWidget *pill = outdated ? kit::StatusPill(kit::Status::Warn, obs_module_text("Plugin.Pill.Update")) : nullptr;
 		// On OBS 30-32 the download link can be an OBS 33 build: open the page.
 		const bool pageOnly = IsObsOlderThan33() && !r.websiteUrl.empty();
 		const QString url = QString::fromStdString(!pageOnly && !r.downloadUrl.empty() ? r.downloadUrl : r.websiteUrl);
-		auto *get = new su::PillButton(obs_module_text("Plugin.Button.Get"), "primary");
+		// Soft-surface Get on every row; blue stays for the one footer action.
+		auto *get = new su::PillButton(obs_module_text("Plugin.Button.Get"), "neutral");
 		get->setEnabled(!url.isEmpty());
 		get->setAccessibleName(QString(obs_module_text("Plugin.Button.GetAccessible")).arg(name));
 		if (!r.websiteUrl.empty())
 			get->setToolTip(QString::fromStdString(r.websiteUrl));
 		QObject::connect(get, &QPushButton::clicked, [url]() { QDesktopServices::openUrl(QUrl(url)); });
-		list->addRow(name, detail, {pill, get});
+		QList<QWidget *> trailing;
+		if (pill)
+			trailing << pill;
+		trailing << get;
+		list->addRow(name, detail, trailing);
 	}
 	return list;
 }
@@ -731,7 +738,7 @@ static QWidget *FailedRowsCard(const std::vector<std::string> &failed_modules)
 							  QString::fromStdString(info->macURL),
 							  QString::fromStdString(info->linuxURL),
 							  QString::fromStdString(info->generalURL));
-		auto *get = new su::PillButton(obs_module_text("Plugin.Button.Get"), "primary");
+		auto *get = new su::PillButton(obs_module_text("Plugin.Button.Get"), "neutral");
 		get->setToolTip(url);
 		get->setAccessibleName(QString(obs_module_text("Plugin.Button.GetAccessible")).arg(name));
 		QObject::connect(get, &QPushButton::clicked, [url]() { QDesktopServices::openUrl(QUrl(url)); });
