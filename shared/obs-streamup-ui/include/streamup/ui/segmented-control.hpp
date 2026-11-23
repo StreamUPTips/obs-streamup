@@ -100,12 +100,12 @@ protected:
 		if (m_items.isEmpty())
 			return;
 
-		// Selected accent pill, drawn at the animated (fractional) position so it
-		// slides between segments.
+		// Selected raised pill (a soft lighter surface, not the accent), drawn at
+		// the animated (fractional) position so it slides between segments.
 		const qreal segW = r.width() / m_items.size();
 		const QRectF pill(r.left() + segW * m_pos + S(2), r.top() + S(2),
 				  segW - S(4), r.height() - S(4));
-		p.setBrush(QColor(Colors::PRIMARY_COLOR));
+		p.setBrush(QColor(Colors::BG_TERTIARY));
 		p.drawRoundedRect(pill, rad - S(2), rad - S(2));
 
 		// Labels (cap-height centred via drawCentredText, like the pill/badge).

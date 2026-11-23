@@ -224,7 +224,7 @@ void ShowManageMultiDocksDialog()
             if (MultiDockDock* md = manager->GetMultiDock(id))
                 if (md->GetInnerHost())
                     inside = md->GetInnerHost()->GetAllDocks().size();
-            auto* open = new PillButton(obs_module_text("UI.Button.Open"), "primary");
+            auto* open = new PillButton(obs_module_text("UI.Button.Open"), "neutral");
             QObject::connect(open, &QPushButton::clicked, &dialog, [id, &dialog]() {
                 if (QMainWindow* main = GetObsMainWindow()) {
                     if (QDockWidget* dock = main->findChild<QDockWidget*>(id)) {

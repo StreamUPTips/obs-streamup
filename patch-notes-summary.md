@@ -35,6 +35,7 @@
 - **Faster Product Controls** They open about five times quicker.
 - **Windows Open Where OBS Is** StreamUP windows and the floating mixer open on the screen OBS is on.
 - **No Surprises With The Adjustment Layer** Switching it off tells you how many scenes use it first.
+- **Calmer Look Everywhere** Drop-downs lose their blue arrow block, the current page in a sidebar is a soft highlight, scrollbars are a quiet grey and the About page drops its gold and purple.
 
 ## Bug Fixes
 - **Lost Hotkeys** Switching StreamUP Hotkeys off could wipe their key bindings. They're kept now.
