@@ -70,6 +70,11 @@ QWidget *SwitchedOffBanner(const QString &featureName);
 void DimForSwitchedOff(QWidget *content, bool off);
 void SetOpenFeaturesHook(std::function<void()> fn);
 
+// The navigation rail every sidebar window uses (Settings, My Products, the
+// controls window): a soft raised row for the current page, a fainter one on
+// hover, never a saturated accent block. The accent stays for the main action.
+QString NavListQss();
+
 // A small "?" that shows its text as a tooltip. Empty help returns nullptr.
 QLabel *HelpDot(const QString &help, QWidget *parent = nullptr);
 

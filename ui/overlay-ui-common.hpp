@@ -1,5 +1,7 @@
 #pragma once
 
+#include "streamup-kit.hpp"
+
 // Small widgets shared by the Overlay Controls window and its pages.
 
 #include <streamup/ui/gallery-style.hpp>
@@ -282,16 +284,7 @@ inline QLabel *DimLabel(const QString &text)
 // The rounded list used as a navigation rail, matching StreamUP Settings.
 inline QString NavListStyle()
 {
-	return su::scale_qss(QString("QListWidget{background-color:transparent;border:none;"
-				     ""
-				     "font-size: 14px;outline:none;}"
-				     "QListWidget::item{padding:11px 16px;border:none;color:%1;background:transparent;}"
-				     "QListWidget::item:selected{background-color:%2;color:%3;border-radius:14px;}"
-				     "QListWidget::item:hover:!selected{background-color:%4;color:%3;border-radius:14px;}")
-				     .arg(su::Colors::TEXT_SECONDARY)
-				     .arg(su::Colors::PRIMARY_COLOR)
-				     .arg(su::Colors::TEXT_PRIMARY)
-				     .arg(su::Colors::HOVER_ROW));
+	return StreamUP::Kit::NavListQss();
 }
 
 } // namespace OverlayUI

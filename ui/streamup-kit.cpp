@@ -691,6 +691,17 @@ bool IsMember()
 	return false;
 }
 
+QString NavListQss()
+{
+	return su::scale_qss(QString("QListWidget{background-color:transparent;border:none;font-size:13px;outline:none;}"
+				     "QListWidget::item{padding:9px 14px;margin:1px 0;border:none;border-radius:10px;"
+				     "color:%1;background:transparent;}"
+				     "QListWidget::item:selected{background-color:rgba(255,255,255,0.09);color:%2;}"
+				     "QListWidget::item:hover:!selected{background-color:rgba(255,255,255,0.04);color:%2;}")
+				     .arg(su::Colors::TEXT_SECONDARY)
+				     .arg(su::Colors::TEXT_PRIMARY));
+}
+
 QString MembershipUrl()
 {
 	return QStringLiteral("https://streamup.tips/premium");

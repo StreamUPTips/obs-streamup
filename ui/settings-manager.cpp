@@ -901,46 +901,7 @@ void ShowSettingsDialog(int tabIndex)
 		sidebarLayout->setSpacing(0);
 
 		QListWidget *categoryList = new QListWidget();
-		categoryList->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
-			"QListWidget {"
-			"    background-color: transparent;"
-			"    border: none;"
-			""
-			"    font-size: 13px;"
-			"    outline: none;"
-			"    border-radius: %5px;"
-			"}"
-			"QListWidget::item {"
-			"    padding: 12px 16px;"
-			"    border: none;"
-			"    color: %1;"
-			"    background-color: transparent;"
-			"}"
-			"QListWidget::item:selected {"
-			"    background-color: %2;"
-			"    color: %3;"
-			"    border: none;"
-			"    border-radius: %6px;"
-			"}"
-			"QListWidget::item:hover:!selected {"
-			"    background-color: %4;"
-			"    color: %3;"
-			"    border-radius: %6px;"
-			"}"
-			"QListWidget::item:first {"
-			"    border-top-left-radius: %5px;"
-			"    border-top-right-radius: %5px;"
-			"}"
-			"QListWidget::item:last {"
-			"    border-bottom-left-radius: %5px;"
-			"    border-bottom-right-radius: %5px;"
-			"}"
-		).arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-		 .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR)
-		 .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-		 .arg(StreamUP::UIStyles::Colors::HOVER_ROW)
-		 .arg(22)
-		 .arg(16)));
+		categoryList->setStyleSheet(StreamUP::Kit::NavListQss());
 
 		sidebarLayout->addWidget(categoryList);
 
@@ -1124,8 +1085,7 @@ void ShowSettingsDialog(int tabIndex)
 		positionComboBox->setFixedHeight(StreamUP::UIStyles::S(28));
 		StreamUP::UIStyles::makeComboAnimated(positionComboBox);
 		StreamUP::UIStyles::useScrollBars(positionComboBox->view());
-		positionComboBox->setMinimumWidth(StreamUP::UIStyles::S(100));
-		positionComboBox->setMaximumWidth(StreamUP::UIStyles::S(150));
+		positionComboBox->setFixedWidth(StreamUP::UIStyles::S(150));
 		positionComboBox->setToolTip(obs_module_text("StreamUP.Settings.ToolbarPositionComboTooltip"));
 
 		// Connect combobox selection change
@@ -1168,8 +1128,7 @@ void ShowSettingsDialog(int tabIndex)
 		sizeComboBox->setFixedHeight(StreamUP::UIStyles::S(28));
 		StreamUP::UIStyles::makeComboAnimated(sizeComboBox);
 		StreamUP::UIStyles::useScrollBars(sizeComboBox->view());
-		sizeComboBox->setMinimumWidth(StreamUP::UIStyles::S(100));
-		sizeComboBox->setMaximumWidth(StreamUP::UIStyles::S(150));
+		sizeComboBox->setFixedWidth(StreamUP::UIStyles::S(150));
 		sizeComboBox->setToolTip(obs_module_text("StreamUP.Settings.ToolbarSizeDesc"));
 
 		QObject::connect(sizeComboBox, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
@@ -1211,8 +1170,7 @@ void ShowSettingsDialog(int tabIndex)
 		alignComboBox->setFixedHeight(StreamUP::UIStyles::S(28));
 		StreamUP::UIStyles::makeComboAnimated(alignComboBox);
 		StreamUP::UIStyles::useScrollBars(alignComboBox->view());
-		alignComboBox->setMinimumWidth(StreamUP::UIStyles::S(100));
-		alignComboBox->setMaximumWidth(StreamUP::UIStyles::S(150));
+		alignComboBox->setFixedWidth(StreamUP::UIStyles::S(150));
 		alignComboBox->setToolTip(obs_module_text("StreamUP.Settings.ToolbarAlignmentDesc"));
 
 		QObject::connect(alignComboBox, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
@@ -1550,7 +1508,7 @@ void ShowSettingsDialog(int tabIndex)
 		switchModeLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-		switchModeLabel->setWordWrap(true);
+		switchModeLabel->setWordWrap(false);
 
 		// Create combobox for switch mode selection (MacComboBox = custom-painted field)
 		QComboBox *switchModeComboBox = new StreamUP::UIStyles::MacComboBox();
@@ -1567,8 +1525,7 @@ void ShowSettingsDialog(int tabIndex)
 		switchModeComboBox->setFixedHeight(StreamUP::UIStyles::S(28));
 		StreamUP::UIStyles::makeComboAnimated(switchModeComboBox);
 		StreamUP::UIStyles::useScrollBars(switchModeComboBox->view());
-		switchModeComboBox->setMinimumWidth(StreamUP::UIStyles::S(100));
-		switchModeComboBox->setMaximumWidth(StreamUP::UIStyles::S(150));
+		switchModeComboBox->setFixedWidth(StreamUP::UIStyles::S(150));
 
 		// Connect change handler
 		QObject::connect(switchModeComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -1638,8 +1595,7 @@ void ShowSettingsDialog(int tabIndex)
 		sortMethodComboBox->setFixedHeight(StreamUP::UIStyles::S(28));
 		StreamUP::UIStyles::makeComboAnimated(sortMethodComboBox);
 		StreamUP::UIStyles::useScrollBars(sortMethodComboBox->view());
-		sortMethodComboBox->setMinimumWidth(StreamUP::UIStyles::S(100));
-		sortMethodComboBox->setMaximumWidth(StreamUP::UIStyles::S(150));
+		sortMethodComboBox->setFixedWidth(StreamUP::UIStyles::S(150));
 
 		QObject::connect(sortMethodComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
 				 [sortMethodComboBox](int index) {
