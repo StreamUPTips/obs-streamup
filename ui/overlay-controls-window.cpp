@@ -724,7 +724,9 @@ private:
 				for (double v : {c.min, c.max})
 					text = std::max(text, fm.horizontalAdvance(
 								      QString::number(v, 'f', c.decimals) + c.unit + "0"));
-				row.sliderSpin->setFixedWidth(text + su::S(10 + 28 + 20));
+				// One width for every value box in a panel unless a value
+				// needs more, so the boxes and reset arrows line up.
+				row.sliderSpin->setFixedWidth(std::max(text + su::S(10 + 28 + 20), su::S(124)));
 			}
 			row.sliderSpin->setAccessibleName(T("OverlayControls.Slider.Value").arg(c.label));
 			grid->addWidget(labelBox, r, 0, Qt::AlignVCenter);
