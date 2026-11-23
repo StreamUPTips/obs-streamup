@@ -4,6 +4,8 @@
 #include <streamup/ui/labels.hpp>
 #include <streamup/ui/pill-button.hpp>
 #include <streamup/ui/svg-icon.hpp>
+#include <streamup/ui/window-chrome.hpp>
+#include <streamup/ui/ui-scrollbar.hpp>
 
 #include <obs-frontend-api.h>
 #include <obs-module.h>
@@ -27,6 +29,13 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
+#include <QVariantAnimation>
+#include <QScrollArea>
+#include <QGraphicsOpacityEffect>
+#include <algorithm>
+#include <QEasingCurve>
+#include <QKeyEvent>
+#include <QMouseEvent>
 
 namespace StreamUP {
 namespace Kit {
@@ -177,6 +186,212 @@ QWidget *SettingRow(const QString &label, QWidget *control, const QString &help,
 
 // ---------------------------------------------------------------------------
 
+RowList::RowList(QWidget *parent) : QFrame(parent)
+{
+	setObjectName("suRowList");
+	setStyleSheet(su::scale_qss(QString("QFrame#suRowList{background:%1;border-radius:14px;}").arg(su::Colors::BG_PRIMARY)));
+	setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+	m_v = new QVBoxLayout(this);
+	m_v->setContentsMargins(S(Space::CardX), S(Space::CardY), S(Space::CardX), S(Space::CardY));
+	m_v->setSpacing(0);
+}
+
+QWidget *RowList::addRow(const QString &title, const QString &detail, const QList<QWidget *> &trailing, QWidget *leading,
+			 const QString &detailTip)
+{
+	if (m_rows > 0) {
+		auto *line = new QFrame(this);
+		line->setFixedHeight(1);
+		line->setStyleSheet(QString("background:%1;border:none;").arg(su::Colors::SEPARATOR));
+		m_v->addWidget(line);
+	}
+	auto *row = new QWidget(this);
+	row->setAttribute(Qt::WA_StyledBackground, false);
+	auto *h = new QHBoxLayout(row);
+	h->setContentsMargins(0, S(Space::Row), 0, S(Space::Row));
+	h->setSpacing(S(Space::Gap + 2));
+	if (leading)
+		h->addWidget(leading, 0, Qt::AlignVCenter);
+	auto *text = new QVBoxLayout();
+	text->setContentsMargins(0, 0, 0, 0);
+	text->setSpacing(S(2));
+	QLabel *t = su::makeLabel(title, su::Sizes::FONT_SIZE_NORMAL, 700, su::Colors::TEXT_PRIMARY);
+	t->setWordWrap(false);
+	t->setStyleSheet(t->styleSheet() + "background:transparent;");
+	text->addWidget(t);
+	if (!detail.isEmpty()) {
+		QLabel *d = su::makeLabel(detail, su::Sizes::FONT_SIZE_SMALL, 500, su::Colors::TEXT_MUTED);
+		d->setWordWrap(true);
+		d->setStyleSheet(d->styleSheet() + "background:transparent;");
+		if (!detailTip.isEmpty())
+			d->setToolTip(detailTip);
+		text->addWidget(d);
+	}
+	h->addLayout(text, 1);
+	for (QWidget *w : trailing)
+		if (w)
+			h->addWidget(w, 0, Qt::AlignVCenter);
+	row->setAccessibleName(title);
+	m_v->addWidget(row);
+	++m_rows;
+	return row;
+}
+
+QWidget *Note(Status status, const QString &text, QWidget *parent)
+{
+	const Look look = LookFor(status);
+	auto *box = new QFrame(parent);
+	box->setObjectName("suNote");
+	const QColor fill = look.fill;
+	box->setStyleSheet(su::scale_qss(QString("QFrame#suNote{background:rgba(%1,%2,%3,%4);border-radius:12px;}")
+						 .arg(fill.red())
+						 .arg(fill.green())
+						 .arg(fill.blue())
+						 .arg(fill.alpha())));
+	box->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+	auto *h = new QHBoxLayout(box);
+	h->setContentsMargins(S(14), S(10), S(14), S(10));
+	h->setSpacing(S(10));
+	auto *icon = new QLabel(box);
+	icon->setStyleSheet("background:transparent;");
+	const char *glyph = status == Status::Ok     ? "circle-check"
+			    : status == Status::Warn ? "alert-triangle"
+			    : status == Status::Bad  ? "circle-x"
+						     : "info-circle";
+	icon->setPixmap(su::svgIcon(QString::fromLatin1(glyph), look.ink, 18, qApp->devicePixelRatio()));
+	h->addWidget(icon, 0, Qt::AlignTop);
+	QLabel *l = su::makeLabel(text, su::Sizes::FONT_SIZE_SMALL, 500, su::Colors::TEXT_PRIMARY);
+	l->setWordWrap(true);
+	l->setStyleSheet(l->styleSheet() + "background:transparent;");
+	h->addWidget(l, 1);
+	box->setAccessibleName(text);
+	return box;
+}
+
+namespace {
+
+// Reports the height of its contents for the width it is given, so the window
+// it sits in can be sized to fit and only scrolls when it has to.
+class FitScrollArea : public QScrollArea {
+public:
+	using QScrollArea::QScrollArea;
+	bool hasHeightForWidth() const override { return widget() != nullptr; }
+	int heightForWidth(int w) const override
+	{
+		QWidget *c = widget();
+		if (!c)
+			return QScrollArea::heightForWidth(w);
+		return c->hasHeightForWidth() ? c->heightForWidth(w) : c->sizeHint().height();
+	}
+	QSize sizeHint() const override
+	{
+		QWidget *c = widget();
+		if (!c)
+			return QScrollArea::sizeHint();
+		const int w = std::max(width(), c->sizeHint().width());
+		return QSize(c->sizeHint().width(), heightForWidth(w));
+	}
+	QSize minimumSizeHint() const override { return QSize(S(200), S(80)); }
+};
+
+std::function<void()> &OpenFeaturesHook()
+{
+	static std::function<void()> fn;
+	return fn;
+}
+
+} // namespace
+
+void SetOpenFeaturesHook(std::function<void()> fn)
+{
+	OpenFeaturesHook() = std::move(fn);
+}
+
+QVBoxLayout *ScrollingBody(QVBoxLayout *shellContent)
+{
+	auto *area = new FitScrollArea();
+	area->setWidgetResizable(true);
+	area->setFrameShape(QFrame::NoFrame);
+	area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	area->setStyleSheet("QScrollArea{background:transparent;border:none;}");
+	area->viewport()->setAutoFillBackground(false);
+	su::useScrollBars(area);
+	QSizePolicy sp(QSizePolicy::Preferred, QSizePolicy::Preferred);
+	sp.setHeightForWidth(true);
+	area->setSizePolicy(sp);
+	auto *inner = new QWidget();
+	inner->setObjectName("suScrollBody");
+	inner->setStyleSheet("QWidget#suScrollBody{background:transparent;}");
+	auto *v = new QVBoxLayout(inner);
+	v->setContentsMargins(S(Space::Page), S(Space::PageTop), S(Space::Page), S(Space::PageTop));
+	v->setSpacing(S(Space::Block));
+	area->setWidget(inner);
+	shellContent->addWidget(area, 1);
+	return v;
+}
+
+void FitToContent(QWidget *window, int designWidth)
+{
+	if (!window)
+		return;
+	const int shadow = 2 * S(su::ShadowDialog::kShadowMargin);
+	const int w = S(designWidth) + shadow;
+	window->resize(w, window->height());
+	int h = window->sizeHint().height();
+	if (QLayout *l = window->layout()) {
+		l->activate();
+		h = l->hasHeightForWidth() ? l->totalHeightForWidth(w) : l->totalSizeHint().height();
+	}
+	QScreen *screen = window->screen() ? window->screen() : QGuiApplication::primaryScreen();
+	const int maxH = screen ? int(screen->availableGeometry().height() * 0.85) : S(800);
+	window->resize(w, std::clamp(h, window->minimumHeight(), maxH));
+}
+
+QWidget *SwitchedOffBanner(const QString &featureName)
+{
+	auto *box = new QFrame();
+	box->setObjectName("suOffBanner");
+	box->setStyleSheet(su::scale_qss(QString("QFrame#suOffBanner{background:%1;border:1px solid rgba(255,255,255,0.08);"
+						 "border-radius:12px;}")
+						 .arg(su::Colors::BG_PRIMARY)));
+	box->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+	auto *h = new QHBoxLayout(box);
+	h->setContentsMargins(S(14), S(10), S(10), S(10));
+	h->setSpacing(S(10));
+	auto *icon = new QLabel(box);
+	icon->setStyleSheet("background:transparent;border:none;");
+	icon->setPixmap(su::svgIcon("eye-off", QColor(su::Colors::TEXT_MUTED), 18, qApp->devicePixelRatio()));
+	h->addWidget(icon);
+	QLabel *l = su::makeLabel(Tr("Kit.SwitchedOff").arg(featureName), su::Sizes::FONT_SIZE_SMALL, 600,
+				  su::Colors::TEXT_SECONDARY);
+	l->setWordWrap(true);
+	l->setStyleSheet(l->styleSheet() + "background:transparent;border:none;");
+	h->addWidget(l, 1);
+	auto *open = new su::PillButton(Tr("Kit.SwitchedOff.Open"), "neutral");
+	QObject::connect(open, &QPushButton::clicked, box, []() {
+		if (OpenFeaturesHook())
+			OpenFeaturesHook()();
+	});
+	h->addWidget(open);
+	return box;
+}
+
+void DimForSwitchedOff(QWidget *content, bool off)
+{
+	if (!content)
+		return;
+	content->setEnabled(!off);
+	if (off) {
+		auto *fx = new QGraphicsOpacityEffect(content);
+		fx->setOpacity(0.45);
+		content->setGraphicsEffect(fx);
+	} else {
+		content->setGraphicsEffect(nullptr);
+	}
+}
+
+// ---------------------------------------------------------------------------
+
 MoreOptions::MoreOptions(const QString &key, const QString &label, QWidget *parent)
 	: QWidget(parent),
 	  m_key(key),
@@ -268,34 +483,67 @@ QWidget *EmptyState(const QString &iconPath, const QString &line, const QString 
 
 namespace {
 
+const char *ToastGlyph(Status s)
+{
+	switch (s) {
+	case Status::Ok:
+		return "circle-check";
+	case Status::Warn:
+		return "alert-triangle";
+	case Status::Bad:
+		return "circle-x";
+	case Status::Info:
+	case Status::Neutral:
+	default:
+		return "info-circle";
+	}
+}
+
+// A rounded pill: icon, one short line. Fades and rises a few pixels in, fades
+// out. Never takes focus.
 class ToastWidget : public QWidget {
 public:
 	ToastWidget(const QString &text, Status s, const QString &iconPath, QWidget *anchor)
-		: QWidget(anchor, Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowDoesNotAcceptFocus),
-		  m_look(LookFor(s))
+		: QWidget(anchor, Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowDoesNotAcceptFocus)
 	{
 		setAttribute(Qt::WA_TranslucentBackground);
 		setAttribute(Qt::WA_ShowWithoutActivating);
 		setAttribute(Qt::WA_DeleteOnClose);
 		setAccessibleName(text);
 		auto *h = new QHBoxLayout(this);
-		h->setContentsMargins(S(16), S(10), S(18), S(10));
-		h->setSpacing(S(10));
+		h->setContentsMargins(S(14), S(9), S(18), S(9));
+		h->setSpacing(S(9));
 		auto *icon = new QLabel(this);
-		if (!iconPath.isEmpty()) {
+		icon->setStyleSheet("background:transparent;");
+		if (!iconPath.isEmpty())
 			icon->setPixmap(QIcon(iconPath).pixmap(S(18), S(18)));
-		} else {
-			icon->setText(m_look.glyph.isEmpty() ? QStringLiteral("•") : m_look.glyph);
-			icon->setStyleSheet(QString("color:%1;font-weight:900;font-size:%2px;background:transparent;")
-						    .arg(m_look.ink.name())
-						    .arg(S(15)));
-		}
+		else
+			icon->setPixmap(su::svgIcon(QString::fromLatin1(ToastGlyph(s)), LookFor(s).ink, 18,
+						    qApp->devicePixelRatio()));
 		h->addWidget(icon);
 		QLabel *label = su::makeLabel(text, su::Sizes::FONT_SIZE_NORMAL, 600, su::Colors::TEXT_PRIMARY);
 		label->setStyleSheet(label->styleSheet() + "background:transparent;");
 		label->setWordWrap(false);
 		h->addWidget(label);
 		adjustSize();
+	}
+
+	// Fade in while rising S(8) into place.
+	void showAt(const QPoint &home)
+	{
+		m_home = home;
+		setWindowOpacity(0.0);
+		move(home + QPoint(0, S(8)));
+		show();
+		animate(true);
+	}
+
+	void dismiss()
+	{
+		if (m_leaving)
+			return;
+		m_leaving = true;
+		animate(false);
 	}
 
 protected:
@@ -305,16 +553,33 @@ protected:
 		p.setRenderHint(QPainter::Antialiasing, true);
 		const QRectF r = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
 		QPainterPath path;
-		path.addRoundedRect(r, S(12), S(12));
+		path.addRoundedRect(r, r.height() / 2, r.height() / 2);
 		p.fillPath(path, QColor(su::Colors::POPUP_BG));
-		p.setPen(QPen(QColor(255, 255, 255, 30), 1));
+		p.setPen(QPen(QColor(255, 255, 255, 28), 1));
 		p.drawPath(path);
-		p.setClipPath(path);
-		p.fillRect(QRectF(r.left(), r.top(), S(4), r.height()), m_look.ink);
 	}
 
 private:
-	Look m_look;
+	void animate(bool in)
+	{
+		auto *a = new QVariantAnimation(this);
+		a->setDuration(in ? 180 : 160);
+		a->setStartValue(in ? 0.0 : 1.0);
+		a->setEndValue(in ? 1.0 : 0.0);
+		a->setEasingCurve(in ? QEasingCurve::OutCubic : QEasingCurve::InCubic);
+		QObject::connect(a, &QVariantAnimation::valueChanged, this, [this, in](const QVariant &v) {
+			const double t = v.toDouble();
+			setWindowOpacity(t);
+			if (in)
+				move(m_home + QPoint(0, qRound((1.0 - t) * S(8))));
+		});
+		if (!in)
+			QObject::connect(a, &QVariantAnimation::finished, this, [this]() { close(); });
+		a->start(QAbstractAnimation::DeleteWhenStopped);
+	}
+
+	QPoint m_home;
+	bool m_leaving = false;
 };
 
 QPointer<ToastWidget> &CurrentToast()
@@ -333,12 +598,11 @@ void ShowToastNow(const QString &text, Status s, const QString &iconPath)
 	QRect area = main ? main->geometry() : QGuiApplication::primaryScreen()->availableGeometry();
 	if (main && main->isMinimized())
 		area = main->screen()->availableGeometry();
-	t->move(area.right() - t->width() - S(24), area.bottom() - t->height() - S(56));
-	t->show();
+	t->showAt(QPoint(area.right() - t->width() - S(24), area.bottom() - t->height() - S(56)));
 	QPointer<ToastWidget> guard(t);
-	QTimer::singleShot(2400, t, [guard]() {
+	QTimer::singleShot(2600, t, [guard]() {
 		if (guard)
-			guard->close();
+			guard->dismiss();
 	});
 }
 
@@ -390,9 +654,11 @@ QWidget *MembershipCard(MemberStyle style, const QString &line)
 		auto *h = new QHBoxLayout(card);
 		h->setContentsMargins(S(12), S(8), S(10), S(8));
 		h->setSpacing(S(10));
-		logo->setPixmap(QIcon(":images/icons/social/streamup-logo-button.svg").pixmap(S(20), S(20)));
-		h->addWidget(logo);
+		logo->setFixedSize(S(22), S(22));
+		logo->setPixmap(QIcon(":images/icons/social/streamup-logo-button.svg").pixmap(QSize(S(22), S(22)), qApp->devicePixelRatio()));
+		h->addWidget(logo, 0, Qt::AlignVCenter);
 		QLabel *t = su::makeLabel(text, su::Sizes::FONT_SIZE_SMALL, 600, su::Colors::TEXT_SECONDARY);
+		t->setWordWrap(false);
 		t->setStyleSheet(t->styleSheet() + "background:transparent;border:none;");
 		h->addWidget(t, 1);
 		h->addWidget(button);
@@ -404,16 +670,20 @@ QWidget *MembershipCard(MemberStyle style, const QString &line)
 	v->setSpacing(S(8));
 	auto *top = new QHBoxLayout();
 	top->setSpacing(S(10));
-	logo->setPixmap(QIcon(":images/icons/social/streamup-logo-button.svg").pixmap(S(28), S(28)));
-	top->addWidget(logo);
+	logo->setFixedSize(S(30), S(30));
+	logo->setPixmap(QIcon(":images/icons/social/streamup-logo-button.svg").pixmap(QSize(S(30), S(30)), qApp->devicePixelRatio()));
+	top->addWidget(logo, 0, Qt::AlignVCenter);
 	QLabel *title = su::makeLabel(Tr("Kit.Membership.Name"), su::Sizes::FONT_SIZE_HEADING, 700, su::Colors::TEXT_PRIMARY);
 	title->setStyleSheet(title->styleSheet() + "background:transparent;border:none;");
 	top->addWidget(title, 1);
 	v->addLayout(top);
 	QLabel *t = su::makeLabel(text, su::Sizes::FONT_SIZE_SMALL, 500, su::Colors::TEXT_SECONDARY);
-	t->setWordWrap(true);
+	// One short line: no wrapping, so the card is always wide enough for it
+	// (a wrapped label in a centred card was measured too short and clipped).
+	t->setWordWrap(false);
 	t->setStyleSheet(t->styleSheet() + "background:transparent;border:none;");
 	v->addWidget(t);
+	card->setMinimumWidth(S(340));
 	auto *h = new QHBoxLayout();
 	h->addWidget(button);
 	h->addStretch(1);
@@ -425,7 +695,9 @@ QWidget *MembershipCard(MemberStyle style, const QString &line)
 
 PreviewSlot::PreviewSlot(const QString &folder, const QString &id, int height, const QString &placeholder, QWidget *parent)
 	: QWidget(parent),
-	  m_placeholder(placeholder.isEmpty() ? Tr("Kit.Preview.Soon") : placeholder)
+	  m_placeholder(placeholder.isEmpty() ? Tr("Kit.Preview.Soon") : placeholder),
+	  m_folder(folder),
+	  m_id(id)
 {
 	setFixedHeight(S(height));
 	QString anim = DataFile(folder, id, "webp");
@@ -471,9 +743,16 @@ void PreviewSlot::paintEvent(QPaintEvent *)
 	if (frame.isNull() && m_movie)
 		frame = m_still;
 	if (!frame.isNull()) {
-		const QSizeF s = QSizeF(frame.size()).scaled(r.size(), Qt::KeepAspectRatioByExpanding);
+		const QSizeF s = QSizeF(frame.size()).scaled(r.size(), m_fit ? Qt::KeepAspectRatio
+									    : Qt::KeepAspectRatioByExpanding);
 		p.drawImage(QRectF(r.center().x() - s.width() / 2, r.center().y() - s.height() / 2, s.width(), s.height()),
 			    frame);
+		if (m_outline) {
+			p.setClipping(false);
+			p.setPen(QPen(QColor(255, 255, 255, 34), 1));
+			p.setBrush(Qt::NoBrush);
+			p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), S(12), S(12));
+		}
 		return;
 	}
 	p.setPen(QColor(su::Colors::TEXT_MUTED));
@@ -481,6 +760,187 @@ void PreviewSlot::paintEvent(QPaintEvent *)
 	f.setPixelSize(S(12));
 	p.setFont(f);
 	p.drawText(r, Qt::AlignCenter, m_placeholder);
+}
+
+void PreviewSlot::setZoom(const QString &title, const QString &line)
+{
+	m_zoom = hasPicture();
+	m_zoomTitle = title;
+	m_zoomLine = line;
+	setCursor(m_zoom ? Qt::PointingHandCursor : Qt::ArrowCursor);
+	if (m_zoom)
+		setToolTip(Tr("Kit.Preview.Zoom"));
+}
+
+void PreviewSlot::mouseReleaseEvent(QMouseEvent *e)
+{
+	if (m_zoom && e->button() == Qt::LeftButton && rect().contains(e->pos())) {
+		Lightbox(window(), m_folder, m_id, m_zoomTitle, m_zoomLine);
+		return;
+	}
+	QWidget::mouseReleaseEvent(e);
+}
+
+namespace {
+
+class LightboxOverlay : public QWidget {
+public:
+	LightboxOverlay(QWidget *window, const QString &folder, const QString &id, const QString &title,
+			const QString &line, const QList<QWidget *> &buttons)
+		: QWidget(window),
+		  m_window(window)
+	{
+		setAttribute(Qt::WA_DeleteOnClose, true);
+		setFocusPolicy(Qt::StrongFocus);
+		setAccessibleName(title);
+		auto *v = new QVBoxLayout(this);
+		v->setContentsMargins(S(40), S(28), S(40), S(28));
+		v->setSpacing(S(12));
+		auto *top = new QHBoxLayout();
+		top->addStretch(1);
+		auto *x = new su::CloseButton(this);
+		x->setAccessibleName(Tr("Kit.Lightbox.Close"));
+		QObject::connect(x, &QAbstractButton::clicked, this, [this]() { dismiss(); });
+		top->addWidget(x);
+		v->addLayout(top);
+		v->addStretch(1);
+		m_pic = new PreviewSlot(folder, id, 200, QString(), this);
+		m_pic->setFit(true);
+		m_pic->setOutline(false);
+		v->addWidget(m_pic, 0, Qt::AlignHCenter);
+		if (!title.isEmpty()) {
+			QLabel *t = su::makeLabel(title, su::Sizes::FONT_SIZE_LARGE, 700, su::Colors::TEXT_PRIMARY);
+			t->setAlignment(Qt::AlignHCenter);
+			t->setStyleSheet(t->styleSheet() + "background:transparent;");
+			v->addWidget(t);
+		}
+		if (!line.isEmpty()) {
+			QLabel *l = su::makeLabel(line, su::Sizes::FONT_SIZE_NORMAL, 500, su::Colors::TEXT_SECONDARY);
+			l->setAlignment(Qt::AlignHCenter);
+			l->setWordWrap(true);
+			l->setStyleSheet(l->styleSheet() + "background:transparent;");
+			v->addWidget(l);
+		}
+		if (!buttons.isEmpty()) {
+			auto *row = new QHBoxLayout();
+			row->setSpacing(S(10));
+			row->addStretch(1);
+			for (QWidget *b : buttons) {
+				b->setParent(this);
+				row->addWidget(b);
+				if (auto *pb = qobject_cast<QPushButton *>(b))
+					QObject::connect(pb, &QPushButton::clicked, this, [this]() { dismiss(); });
+			}
+			row->addStretch(1);
+			v->addLayout(row);
+		}
+		v->addStretch(1);
+		window->installEventFilter(this);
+		place();
+		m_pic->setPlaying(true);
+
+		fade(true);
+		show();
+		raise();
+		setFocus();
+	}
+
+	void dismiss()
+	{
+		if (m_leaving)
+			return;
+		m_leaving = true;
+		m_pic->setPlaying(false);
+		fade(false);
+	}
+
+protected:
+	bool eventFilter(QObject *o, QEvent *e) override
+	{
+		if (o == m_window && e->type() == QEvent::Resize)
+			place();
+		return QWidget::eventFilter(o, e);
+	}
+	void paintEvent(QPaintEvent *) override
+	{
+		QPainter p(this);
+		p.setRenderHint(QPainter::Antialiasing, true);
+		QPainterPath path;
+		path.addRoundedRect(QRectF(rect()), S(18), S(18));
+		p.fillPath(path, QColor(10, 10, 16, 238));
+	}
+	void mousePressEvent(QMouseEvent *e) override
+	{
+		if (!m_pic->geometry().contains(e->pos()))
+			dismiss();
+		e->accept();
+	}
+	void keyPressEvent(QKeyEvent *e) override
+	{
+		if (e->key() == Qt::Key_Escape) {
+			dismiss();
+			return;
+		}
+		QWidget::keyPressEvent(e);
+	}
+
+private:
+	void place()
+	{
+		QRect r = m_window->rect();
+		if (dynamic_cast<su::ShadowDialog *>(m_window)) {
+			const int m = S(su::ShadowDialog::kShadowMargin);
+			r.adjust(m, m, -m, -m);
+		}
+		setGeometry(r);
+		// The picture as big as fits, 16:9, leaving room for the words.
+		const int maxW = std::max(S(200), r.width() - S(80));
+		const int maxH = std::max(S(120), r.height() - S(220));
+		int w = std::min(maxW, S(1100));
+		int h = w * 9 / 16;
+		if (h > maxH) {
+			h = maxH;
+			w = h * 16 / 9;
+		}
+		m_pic->setFixedSize(w, h);
+	}
+	void fade(bool in)
+	{
+		auto *fx = new QGraphicsOpacityEffect(this);
+		fx->setOpacity(in ? 0.0 : 1.0);
+		setGraphicsEffect(fx);
+		QPointer<QGraphicsOpacityEffect> guard(fx);
+		auto *a = new QVariantAnimation(this);
+		a->setDuration(in ? 170 : 140);
+		a->setStartValue(in ? 0.0 : 1.0);
+		a->setEndValue(in ? 1.0 : 0.0);
+		a->setEasingCurve(QEasingCurve::OutCubic);
+		QObject::connect(a, &QVariantAnimation::valueChanged, this, [guard](const QVariant &v) {
+			if (guard)
+				guard->setOpacity(v.toDouble());
+		});
+		QObject::connect(a, &QVariantAnimation::finished, this, [this, in]() {
+			if (in)
+				setGraphicsEffect(nullptr); // paint the clip at full quality
+			else
+				close();
+		});
+		a->start(QAbstractAnimation::DeleteWhenStopped);
+	}
+
+	QWidget *m_window = nullptr;
+	PreviewSlot *m_pic = nullptr;
+	bool m_leaving = false;
+};
+
+} // namespace
+
+QWidget *Lightbox(QWidget *window, const QString &folder, const QString &id, const QString &title, const QString &line,
+		  const QList<QWidget *> &buttons)
+{
+	if (!window)
+		return nullptr;
+	return new LightboxOverlay(window, folder, id, title, line, buttons);
 }
 
 } // namespace Kit

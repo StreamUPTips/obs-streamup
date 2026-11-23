@@ -8,6 +8,8 @@
 #include <QImage>
 #include <QString>
 #include <QWidget>
+#include <QFrame>
+#include <QList>
 
 #include <functional>
 
@@ -23,6 +25,50 @@ enum class Status { Ok, Warn, Bad, Info, Neutral };
 
 // A coloured pill with an icon and a few words: "✓ Up to date".
 QWidget *StatusPill(Status status, const QString &text, QWidget *parent = nullptr);
+
+// One spacing scale for every StreamUP window (design px, pass through S()).
+namespace Space {
+constexpr int Page = 20;    // window content, left and right
+constexpr int PageTop = 16; // window content, top and bottom
+constexpr int Block = 12;   // between blocks (header, a section, a note)
+constexpr int CardX = 16;   // inside a card, left and right
+constexpr int CardY = 6;    // inside a card, top and bottom (rows add their own)
+constexpr int Row = 10;     // a row's own top and bottom padding
+constexpr int Gap = 8;      // between widgets on one row
+} // namespace Space
+
+// A rounded card of rows, one thin line between them. Every list of plugins,
+// fonts or products uses this so their rows look and line up the same:
+// [leading] title + small detail line ......... [trailing widgets]
+class RowList : public QFrame {
+public:
+	explicit RowList(QWidget *parent = nullptr);
+	QWidget *addRow(const QString &title, const QString &detail, const QList<QWidget *> &trailing = {},
+			QWidget *leading = nullptr, const QString &detailTip = QString());
+	int count() const { return m_rows; }
+
+private:
+	QVBoxLayout *m_v = nullptr;
+	int m_rows = 0;
+};
+
+// A short note in a tinted box with an icon, e.g. what "Install anyway" means.
+QWidget *Note(Status status, const QString &text, QWidget *parent = nullptr);
+
+// A scroll area that asks for the height of its contents, so a window opens
+// exactly as tall as it needs and only scrolls when the screen runs out.
+// Returns the layout to fill; the page margins are already set.
+QVBoxLayout *ScrollingBody(QVBoxLayout *shellContent);
+
+// Sizes a window to its contents at the given design width: as tall as it
+// needs, at most 85% of the screen.
+void FitToContent(QWidget *window, int designWidth);
+
+// A settings page whose feature is switched off on the Features page: one line
+// saying so with a button to go there, and the settings below greyed out.
+QWidget *SwitchedOffBanner(const QString &featureName);
+void DimForSwitchedOff(QWidget *content, bool off);
+void SetOpenFeaturesHook(std::function<void()> fn);
 
 // A small "?" that shows its text as a tooltip. Empty help returns nullptr.
 QLabel *HelpDot(const QString &help, QWidget *parent = nullptr);
@@ -77,15 +123,34 @@ public:
 	void setPlaying(bool on);
 	bool animated() const { return m_movie != nullptr; }
 	bool hasPicture() const;
+	// Click to see it big in a lightbox over the window, with a title and a line.
+	void setZoom(const QString &title, const QString &line = QString());
+	// Show the whole picture (letterboxed) instead of filling the slot.
+	void setFit(bool fit) { m_fit = fit; update(); }
+	// A thin outline round the picture so it stands off the card behind it.
+	void setOutline(bool on) { m_outline = on; update(); }
 
 protected:
 	void paintEvent(QPaintEvent *) override;
+	void mouseReleaseEvent(QMouseEvent *e) override;
 
 private:
 	QMovie *m_movie = nullptr;
 	QImage m_still;
 	QString m_placeholder;
+	QString m_folder;
+	QString m_id;
+	QString m_zoomTitle;
+	QString m_zoomLine;
+	bool m_zoom = false;
+	bool m_fit = false;
+	bool m_outline = true;
 };
+
+// Opens a picture or clip big over a window and dims the rest of it. A click
+// outside it, the X or Esc closes it. Buttons go in a row under the line.
+QWidget *Lightbox(QWidget *window, const QString &folder, const QString &id, const QString &title,
+		  const QString &line = QString(), const QList<QWidget *> &buttons = {});
 
 } // namespace Kit
 } // namespace StreamUP
