@@ -162,6 +162,7 @@ void ShowWebSocketWindow(bool showInternalTools)
 		CopyKind() = 0;
 		contentLayout->addLayout(tools);
 		QList<QPair<QWidget *, QString>> rows;    // command row, lower-case name and description
+		QList<QWidget *> separators;              // hairlines between rows; hidden while searching
 		QList<QPair<QWidget *, QWidget *>> cards; // section header, card
 
 		// Group commands by category, filtering out internal tools if Shift is not held
@@ -214,6 +215,8 @@ void ShowWebSocketWindow(bool showInternalTools)
 				QWidget *commandWidget = CreateCommandWidget(cmd.name, translatedDescription);
 				categoryLayout->addWidget(commandWidget);
 				commandWidget->setProperty("su_card", QVariant::fromValue<QObject *>(categoryCard));
+				// Rows keep their own height when a search hides their neighbours.
+				commandWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 				rows.append({commandWidget, (cmd.name + " " + translatedDescription).toLower()});
 
 				// Add separator line between commands (but not after the last one)
@@ -229,16 +232,20 @@ void ShowWebSocketWindow(bool showInternalTools)
 									 "max-height: 1px;"
 									 "}")));
 					categoryLayout->addWidget(separator);
+					separators.append(separator);
 				}
 			}
 
+			categoryCard->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
 			contentLayout->addWidget(categoryCard);
 			cards.append({sectionLabel, categoryCard});
 		}
 
 		// Filter rows as you type; a section with nothing left hides.
-		QObject::connect(search, &QLineEdit::textChanged, dialog, [rows, cards](const QString &text) {
+		QObject::connect(search, &QLineEdit::textChanged, dialog, [rows, cards, separators](const QString &text) {
 			const QString needle = text.trimmed().toLower();
+			for (QWidget *line : separators)
+				line->setVisible(needle.isEmpty());
 			for (const auto &r : rows)
 				r.first->setVisible(needle.isEmpty() || r.second.contains(needle));
 			for (const auto &c : cards) {
