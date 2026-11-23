@@ -201,7 +201,7 @@ void HotkeyButtonConfigDialog::updateHotkeyDisplay() {
         hotkeyDescriptionLabel->clear();
     } else {
         selectedHotkeyLabel->setText(selectedHotkey.name);
-        selectedHotkeyLabel->setStyleSheet(QString("color: %1; font-weight: bold;").arg(UIStyles::Colors::TEXT_PRIMARY));
+        selectedHotkeyLabel->setStyleSheet(QString("color: %1; font-weight: 600;").arg(UIStyles::Colors::TEXT_PRIMARY));
         hotkeyDescriptionLabel->setText(StreamUP::OBSHotkeyManager::displayLabel(selectedHotkey));
 
         // Auto-fill button text and tooltip if empty. The caption wants to be

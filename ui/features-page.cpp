@@ -288,7 +288,7 @@ private:
 		v->setContentsMargins(su::S(28), su::S(22), su::S(28), su::S(22));
 		v->setSpacing(su::S(14));
 
-		QLabel *title = su::makeLabel(T("Welcome.Heading"), 22, 800, su::Colors::TEXT_PRIMARY);
+		QLabel *title = su::makeLabel(T("Welcome.Heading"), su::Type::Title, su::Type::Semibold, su::Colors::TEXT_PRIMARY);
 		title->setAlignment(Qt::AlignHCenter);
 		v->addWidget(title);
 		QLabel *line = su::makeLabel(T("Welcome.Line"), su::Sizes::FONT_SIZE_NORMAL, 500, su::Colors::TEXT_SECONDARY);
@@ -296,8 +296,10 @@ private:
 		line->setWordWrap(true);
 		v->addWidget(line);
 
-		auto *hero = new kit::PreviewSlot(QStringLiteral("whatsnew"), QStringLiteral("features"), 260);
-		hero->setZoom(T("Features.Title"), T("Features.Intro"));
+		// One full picture, nothing cut off: drawn whole at the page width.
+		auto *hero = new kit::PreviewSlot(QStringLiteral("welcome"), QStringLiteral("hero"), 260);
+		hero->setNaturalAspect();
+		hero->setOutline(false); // drawn on the window's own background: no frame
 		hero->setPlaying(true);
 		v->addWidget(hero);
 
@@ -316,7 +318,7 @@ private:
 			auto *box = new QFrame();
 			box->setObjectName("wlPillar");
 			box->setStyleSheet(su::scale_qss(QString("QFrame#wlPillar{background:%1;border:1px solid rgba(255,255,255,0.06);"
-								 "border-radius:14px;}")
+								 "border-radius:12px;}")
 								 .arg(su::Colors::BG_PRIMARY)));
 			auto *bv = new QVBoxLayout(box);
 			bv->setContentsMargins(su::S(14), su::S(12), su::S(14), su::S(12));
@@ -350,7 +352,7 @@ private:
 		page->setObjectName("ftPage");
 		page->setStyleSheet(su::scale_qss(QString("QWidget#ftPage{background:transparent;}"
 							  "QFrame#ftCard{background:%1;border:1px solid rgba(255,255,255,0.06);"
-							  "border-radius:18px;}")
+							  "border-radius:12px;}")
 							  .arg(su::Colors::BG_PRIMARY)));
 		auto *v = new QVBoxLayout(page);
 		v->setContentsMargins(su::S(20), su::S(16), su::S(20), su::S(20));
@@ -400,8 +402,8 @@ private:
 	{
 		auto *box = new QFrame();
 		box->setObjectName("ftTheme");
-		box->setStyleSheet(su::scale_qss(QString("QFrame#ftTheme{background:%1;border:1px solid rgba(137,180,250,0.22);"
-							 "border-radius:14px;}")
+		box->setStyleSheet(su::scale_qss(QString("QFrame#ftTheme{background:%1;border:1px solid rgba(255,255,255,0.08);"
+							 "border-radius:12px;}")
 							 .arg(su::Colors::BG_PRIMARY)));
 		auto *h = new QHBoxLayout(box);
 		h->setContentsMargins(su::S(14), su::S(12), su::S(12), su::S(12));

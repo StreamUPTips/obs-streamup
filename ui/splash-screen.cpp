@@ -582,7 +582,7 @@ QString GenerateSupportersHTML()
 
     // Andi's supporters section
     if (!supportersData.andiSupporters.empty()) {
-        html += R"(<h4 style="color: #fbbf24; margin: 14px 0 10px 0; font-size: 14px; font-weight: 700;">Andi's Supporters</h4>)";
+        html += R"(<h4 style="color: #fbbf24; margin: 14px 0 10px 0; font-size: 14px; font-weight: 600;">Andi's Supporters</h4>)";
         html += R"(<p style="margin: 8px 0; line-height: 2.4;">)";
 
         for (size_t i = 0; i < supportersData.andiSupporters.size(); ++i) {
@@ -599,7 +599,7 @@ QString GenerateSupportersHTML()
 
     // StreamUP supporters section
     if (!supportersData.streamupSupporters.empty()) {
-        html += R"(<h4 style="color: #a855f7; margin: 14px 0 10px 0; font-size: 14px; font-weight: 700;">StreamUP Supporters</h4>)";
+        html += R"(<h4 style="color: #a855f7; margin: 14px 0 10px 0; font-size: 14px; font-weight: 600;">StreamUP Supporters</h4>)";
         html += R"(<p style="margin: 8px 0; line-height: 2.4;">)";
 
         for (size_t i = 0; i < supportersData.streamupSupporters.size(); ++i) {
@@ -621,7 +621,7 @@ QString GenerateSupportersHTML()
 
     // Opt-in message — modern card with rounded edges and generous padding
     html += R"(<div style="margin: 18px 0 0 0; padding: 16px 20px; background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 14px;">)";
-    html += R"(<p style="margin: 0 0 6px 0; color: #f5d0fe; font-size: 13px; font-weight: 700;">If you're a supporter and your name is not here</p>)";
+    html += R"(<p style="margin: 0 0 6px 0; color: #f5d0fe; font-size: 13px; font-weight: 600;">If you're a supporter and your name is not here</p>)";
     html += R"(<p style="margin: 0 0 4px 0; color: #e9d5ff; font-size: 12px; line-height: 1.6;">This is an opt-in feature which you can enable in your account settings. You can opt-in right now and choose exactly how your name will appear.</p>)";
     html += R"(<p style="margin: 8px 0 0 0;"><a href="https://streamup.tips/Identity/Account/Manage" style="color: #c4b5fd; text-decoration: underline; font-size: 12px;">https://streamup.tips/Identity/Account/Manage</a></p>)";
     html += R"(</div>)";
@@ -686,11 +686,11 @@ std::string LoadLocalSupportInfo()
             std::string headerText = line.substr(3);
             // Use different colors for "What Your Support" vs "Monthly Supporter Benefits"
             if (headerText.find("What Your Support") != std::string::npos) {
-                result += "<h3 style=\"color: #fbbf24; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+                result += "<h3 style=\"color: #fbbf24; margin: 16px 0 8px 0; font-size: 14px;\">" + headerText + "</h3>\n";
             } else if (headerText.find("Monthly Supporter") != std::string::npos) {
-                result += "<h3 style=\"color: #a78bfa; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+                result += "<h3 style=\"color: #a78bfa; margin: 16px 0 8px 0; font-size: 14px;\">" + headerText + "</h3>\n";
             } else {
-                result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+                result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 14px;\">" + headerText + "</h3>\n";
             }
         }
         else if (line.length() >= 2 && line.substr(0, 2) == "# ") {
@@ -794,7 +794,7 @@ std::string LoadLocalPluginInfo()
                 inList = false;
             }
             std::string headerText = line.substr(3);
-            result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+            result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 14px;\">" + headerText + "</h3>\n";
         }
         else if (line.length() >= 2 && line.substr(0, 2) == "# ") {
             if (inList) {
@@ -847,18 +847,18 @@ std::string GetWelcomeMessage()
 {
     return std::string(R"(
 <div style="color: #cdd6f4; line-height: 1.4; font-size: 14px;">
-    <h2 style="color: #89b4fa; margin: 18px 0 12px 0; font-size: 20px; font-weight: 600;">Welcome to StreamUP</h2>
+    <h2 style="color: #89b4fa; margin: 18px 0 12px 0; font-size: 18px; font-weight: 600;">Welcome to StreamUP</h2>
 
-    <p style="margin: 12px 0; color: #cdd6f4; font-size: 15px;">
+    <p style="margin: 12px 0; color: #cdd6f4; font-size: 14px;">
         <strong>Thank you for installing StreamUP.</strong> You've just unlocked a powerful toolkit designed to supercharge your OBS Studio experience.
     </p>
 
-    <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;">What is StreamUP?</h3>
+    <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 14px;">What is StreamUP?</h3>
     <p style="margin: 8px 0;">
         StreamUP is an advanced plugin that provides essential tools for content creators, streamers, and anyone using OBS Studio. From source management and plugin updates to WebSocket API control and automated workflows — StreamUP streamlines your creative process.
     </p>
 
-    <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;">Getting Started</h3>
+    <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 14px;">Getting Started</h3>
     <p style="margin: 8px 0;">
         Ready to dive in? Check out our comprehensive documentation to learn about all the features at your fingertips:
     </p>
@@ -866,7 +866,7 @@ std::string GetWelcomeMessage()
         <a href="https://streamup.doras.click/docs" style="color: #89b4fa; text-decoration: underline; font-weight: 500;">Read the Documentation</a>
     </p>
 
-    <h3 style="color: #fbbf24; margin: 16px 0 8px 0; font-size: 16px;">Support Our Development</h3>
+    <h3 style="color: #fbbf24; margin: 16px 0 8px 0; font-size: 14px;">Support Our Development</h3>
     <p style="margin: 8px 0;">
         StreamUP is a passion project created for the OBS community. If you find it useful, please consider supporting our development efforts. Your support helps us continue adding new features and maintaining compatibility with the latest OBS versions.
     </p>
@@ -938,7 +938,7 @@ std::string LoadLocalPatchNotes()
                 inList = false;
             }
             std::string headerText = line.substr(3);
-            result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+            result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 14px;\">" + headerText + "</h3>\n";
         }
         else if (line.length() >= 2 && line.substr(0, 2) == "# ") {
             if (inList) {
@@ -1127,8 +1127,8 @@ void CreateSplashDialog(ShowCondition condition)
                     // Header - using HTML like the about window
                     QString headerHTML = R"(
 <div style="color: #cdd6f4; line-height: 1.4; font-size: 14px;">
-    <h2 style="color: #fbbf24; margin: 18px 0 12px 0; font-size: 20px; font-weight: 600; text-align: center;">Get Exclusive Early Access to New Features</h2>
-    <p style="margin: 12px 0; color: #cdd6f4; font-size: 15px; text-align: center;">
+    <h2 style="color: #fbbf24; margin: 18px 0 12px 0; font-size: 18px; font-weight: 600; text-align: center;">Get Exclusive Early Access to New Features</h2>
+    <p style="margin: 12px 0; color: #cdd6f4; font-size: 14px; text-align: center;">
         Support StreamUP development and unlock cutting-edge features before they're released to the public:
     </p>
 </div>
@@ -1414,7 +1414,7 @@ void CreateSplashDialog(ShowCondition condition)
             textLogoLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
                 "QLabel {"
                 "font-size: %1px;"
-                "font-weight: bold;"
+                "font-weight: 600;"
                 "color: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
                 "    stop:0 #f472b6, stop:0.25 #a855f7, stop:0.5 #89b4fa, stop:1 #06b6d4);"
                 "margin: 0;"
@@ -1519,7 +1519,7 @@ void CreateSplashDialog(ShowCondition condition)
                 auto *box = new QFrame();
                 box->setObjectName("aboutChunk");
                 box->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
-                    "QFrame#aboutChunk{background:%1;border:1px solid rgba(255,255,255,0.06);border-radius:14px;}"
+                    "QFrame#aboutChunk{background:%1;border:1px solid rgba(255,255,255,0.06);border-radius:12px;}"
                     "QFrame#aboutChunk QLabel{background:transparent;border:none;}")
                     .arg(StreamUP::UIStyles::Colors::BG_PRIMARY)));
                 auto *v = new QVBoxLayout(box);
@@ -1569,7 +1569,7 @@ void CreateSplashDialog(ShowCondition condition)
         supportersCardLay->setSpacing(StreamUP::UIStyles::S(12));
 
         QLabel *supportersTitle = new QLabel(obs_module_text("About.Supporters.Title"));
-        supportersTitle->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 16px; font-weight: 700; background: transparent;")
+        supportersTitle->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 14px; font-weight: 600; background: transparent;")
             .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)));
         supportersCardLay->addWidget(supportersTitle);
 
@@ -1600,7 +1600,7 @@ void CreateSplashDialog(ShowCondition condition)
             g.cardLay->setContentsMargins(0, 0, 0, 0);
             g.cardLay->setSpacing(StreamUP::UIStyles::S(10));
             QLabel *t = new QLabel(title);
-            t->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;").arg(accent)));
+            t->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 13px; font-weight: 600; background: transparent;").arg(accent)));
             g.cardLay->addWidget(t);
             g.flowHost = new QWidget();
             g.flowHost->setStyleSheet("background: transparent;");
@@ -1649,7 +1649,7 @@ void CreateSplashDialog(ShowCondition condition)
         optInLay->setContentsMargins(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(14), StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(14));
         optInLay->setSpacing(StreamUP::UIStyles::S(6));
         QLabel *optInTitle = new QLabel(obs_module_text("About.OptIn.Title"));
-        optInTitle->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 13px; font-weight: 700;")
+        optInTitle->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 13px; font-weight: 600;")
             .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)));
         QLabel *optInBody = new QLabel(obs_module_text("About.OptIn.Line"));
         optInBody->setWordWrap(true);
@@ -1748,7 +1748,7 @@ void CreateSplashDialog(ShowCondition condition)
             btn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
             btn->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
                 "QPushButton { background: %1; color: %3; border: 1px solid %1;"
-                "  border-radius: 12px; font-weight: bold; font-size: 11px;"
+                "  border-radius: 12px; font-weight: 600; font-size: 12px;"
                 "  padding: 0 6px; min-height: 26px; max-height: 26px; min-width: 26px; max-width: 26px; }"
                 "QPushButton:hover { background: %2; border: 1px solid %2; }")
                 .arg(bg, hover, fg)));

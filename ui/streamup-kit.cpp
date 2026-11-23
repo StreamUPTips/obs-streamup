@@ -33,6 +33,7 @@
 #include <QScrollArea>
 #include <QGraphicsOpacityEffect>
 #include <algorithm>
+#include <cmath>
 #include <QEasingCurve>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -104,7 +105,7 @@ protected:
 		int x = S(10);
 		if (!m_look.glyph.isEmpty()) {
 			QFont g = m_font;
-			g.setWeight(QFont::Black);
+			g.setWeight(QFont::DemiBold);
 			p.setFont(g);
 			p.drawText(QRect(x, 0, S(12), height()), Qt::AlignCenter, m_look.glyph);
 			p.setFont(m_font);
@@ -150,7 +151,7 @@ QLabel *HelpDot(const QString &help, QWidget *parent)
 	dot->setFixedSize(S(16), S(16));
 	dot->setCursor(Qt::WhatsThisCursor);
 	dot->setStyleSheet(su::scale_qss(QString("QLabel{background:rgba(255,255,255,0.08);color:%1;border-radius:8px;"
-						 "font-size:10px;font-weight:700;}"
+						 "font-size: 12px;font-weight: 600;}"
 						 "QLabel:hover{background:rgba(255,255,255,0.16);color:%2;}")
 						 .arg(su::Colors::TEXT_MUTED, su::Colors::TEXT_PRIMARY)));
 	dot->setAccessibleName(help);
@@ -170,7 +171,7 @@ QWidget *SettingRow(const QString &label, QWidget *control, const QString &help,
 		icon->setFixedSize(S(20), S(20));
 		h->addWidget(icon);
 	}
-	QLabel *name = su::makeLabel(label, su::Sizes::FONT_SIZE_NORMAL, 600, su::Colors::TEXT_PRIMARY);
+	QLabel *name = su::makeLabel(label, su::Type::Body, su::Type::Regular, su::Colors::TEXT_PRIMARY);
 	name->setWordWrap(false);
 	h->addWidget(name);
 	if (QLabel *dot = HelpDot(help))
@@ -189,7 +190,7 @@ QWidget *SettingRow(const QString &label, QWidget *control, const QString &help,
 RowList::RowList(QWidget *parent) : QFrame(parent)
 {
 	setObjectName("suRowList");
-	setStyleSheet(su::scale_qss(QString("QFrame#suRowList{background:%1;border-radius:14px;}").arg(su::Colors::BG_PRIMARY)));
+	setStyleSheet(su::scale_qss(QString("QFrame#suRowList{background:%1;border:1px solid rgba(255,255,255,0.06);border-radius:12px;}").arg(su::Colors::BG_PRIMARY)));
 	setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
 	m_v = new QVBoxLayout(this);
 	m_v->setContentsMargins(S(Space::CardX), S(Space::CardY), S(Space::CardX), S(Space::CardY));
@@ -407,18 +408,52 @@ QWidget *SwitchedOffBanner(const QString &featureName)
 	return box;
 }
 
+namespace {
+
+// A veil over switched-off settings. Painted on top rather than with an
+// opacity effect: an effect renders the text into an offscreen picture first,
+// which loses ClearType and makes it soft.
+class DimVeil : public QWidget {
+public:
+	explicit DimVeil(QWidget *over) : QWidget(over)
+	{
+		setObjectName("suDimVeil");
+		over->installEventFilter(this);
+		setGeometry(over->rect());
+		raise();
+		show();
+	}
+
+protected:
+	bool eventFilter(QObject *o, QEvent *e) override
+	{
+		if (o == parent() && (e->type() == QEvent::Resize || e->type() == QEvent::ChildAdded)) {
+			setGeometry(parentWidget()->rect());
+			raise();
+		}
+		return QWidget::eventFilter(o, e);
+	}
+	void paintEvent(QPaintEvent *) override
+	{
+		QPainter p(this);
+		QColor c(su::Colors::BG_DARKEST);
+		c.setAlpha(150);
+		p.fillRect(rect(), c);
+	}
+};
+
+} // namespace
+
 void DimForSwitchedOff(QWidget *content, bool off)
 {
 	if (!content)
 		return;
 	content->setEnabled(!off);
-	if (off) {
-		auto *fx = new QGraphicsOpacityEffect(content);
-		fx->setOpacity(0.45);
-		content->setGraphicsEffect(fx);
-	} else {
-		content->setGraphicsEffect(nullptr);
-	}
+	QWidget *veil = content->findChild<QWidget *>("suDimVeil", Qt::FindDirectChildrenOnly);
+	if (off && !veil)
+		new DimVeil(content);
+	else if (!off && veil)
+		veil->deleteLater();
 }
 
 // ---------------------------------------------------------------------------
@@ -435,9 +470,9 @@ MoreOptions::MoreOptions(const QString &key, const QString &label, QWidget *pare
 	m_header->setCursor(Qt::PointingHandCursor);
 	m_header->setFlat(true);
 	m_header->setStyleSheet(su::scale_qss(QString("QPushButton{color:%1;background:transparent;border:none;text-align:left;"
-						      "font-size:13px;font-weight:600;padding:4px 2px;}"
+						      "font-size: 13px;font-weight:600;padding:4px 2px;}"
 						      "QPushButton:hover{color:%2;}")
-						      .arg(su::Colors::TAG_COLOR, su::Colors::TEXT_PRIMARY)));
+						      .arg(su::Colors::TEXT_SECONDARY, su::Colors::TEXT_PRIMARY)));
 	v->addWidget(m_header);
 	m_body = new QWidget(this);
 	m_bodyLayout = new QVBoxLayout(m_body);
@@ -672,7 +707,7 @@ QWidget *MembershipCard(MemberStyle style, const QString &line)
 		return nullptr;
 	auto *card = new QFrame();
 	card->setObjectName("suMember");
-	card->setStyleSheet(su::scale_qss(QString("QFrame#suMember{background:%1;border:1px solid rgba(137,180,250,0.22);"
+	card->setStyleSheet(su::scale_qss(QString("QFrame#suMember{background:%1;border:1px solid rgba(255,255,255,0.08);"
 						  "border-radius:%2px;}")
 						  .arg(su::Colors::BG_PRIMARY)
 						  .arg(style == MemberStyle::Card ? 16 : 12)));
@@ -778,11 +813,22 @@ void PreviewSlot::paintEvent(QPaintEvent *)
 	if (!frame.isNull()) {
 		const QSizeF s = QSizeF(frame.size()).scaled(r.size(), m_fit ? Qt::KeepAspectRatio
 									    : Qt::KeepAspectRatioByExpanding);
-		p.drawImage(QRectF(r.center().x() - s.width() / 2, r.center().y() - s.height() / 2, s.width(), s.height()),
-			    frame);
+		// Scale once to the exact device pixels with a proper (area-averaged)
+		// filter, then draw 1:1. Drawing a 2x picture straight into a small
+		// rect only gets bilinear filtering, which looks rough and shimmers.
+		const qreal dpr = devicePixelRatioF();
+		const QSize px(qRound(s.width() * dpr), qRound(s.height() * dpr));
+		const qint64 key = frame.cacheKey();
+		if (m_scaled.isNull() || m_scaledKey != key || m_scaled.size() != px) {
+			m_scaled = frame.size() == px ? frame : frame.scaled(px, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+			m_scaled.setDevicePixelRatio(dpr);
+			m_scaledKey = key;
+		}
+		p.drawImage(QPointF(std::round(r.center().x() - s.width() / 2), std::round(r.center().y() - s.height() / 2)),
+			    m_scaled);
 		if (m_outline) {
 			p.setClipping(false);
-			p.setPen(QPen(QColor(255, 255, 255, 34), 1));
+			p.setPen(QPen(QColor(255, 255, 255, m_zoom && underMouse() ? 80 : 30), 1));
 			p.setBrush(Qt::NoBrush);
 			p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), S(12), S(12));
 		}
@@ -795,9 +841,32 @@ void PreviewSlot::paintEvent(QPaintEvent *)
 	p.drawText(r, Qt::AlignCenter, m_placeholder);
 }
 
+void PreviewSlot::setNaturalAspect()
+{
+	m_natural = true;
+	m_fit = true;
+	setMinimumHeight(0);
+	setMaximumHeight(QWIDGETSIZE_MAX);
+	QSizePolicy sp(QSizePolicy::Preferred, QSizePolicy::Preferred);
+	sp.setHeightForWidth(true);
+	setSizePolicy(sp);
+	updateGeometry();
+}
+
+int PreviewSlot::heightForWidth(int w) const
+{
+	QSize size = m_still.size();
+	if (m_movie && !m_movie->currentImage().isNull())
+		size = m_movie->currentImage().size();
+	if (size.isEmpty())
+		return S(240);
+	return w * size.height() / size.width();
+}
+
 void PreviewSlot::setZoom(const QString &title, const QString &line)
 {
 	m_zoom = hasPicture();
+	setAttribute(Qt::WA_Hover, m_zoom);
 	m_zoomTitle = title;
 	m_zoomLine = line;
 	setCursor(m_zoom ? Qt::PointingHandCursor : Qt::ArrowCursor);

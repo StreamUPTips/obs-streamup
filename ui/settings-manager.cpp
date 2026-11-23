@@ -905,8 +905,8 @@ void ShowSettingsDialog(int tabIndex)
 			"QListWidget {"
 			"    background-color: transparent;"
 			"    border: none;"
-			"    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
-			"    font-size: 14px;"
+			""
+			"    font-size: 13px;"
 			"    outline: none;"
 			"    border-radius: %5px;"
 			"}"
@@ -1713,7 +1713,7 @@ void ShowSettingsDialog(int tabIndex)
 
 		// Warning label
 		QLabel *warningLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.MigrationWarning"));
-		warningLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: rgba(255, 159, 10, 0.15); padding: %3px; border-radius: %4px; border: 1px solid %5; font-weight: bold;")
+		warningLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: rgba(255, 159, 10, 0.15); padding: %3px; border-radius: %4px; border: 1px solid %5; font-weight: 600;")
 						.arg(StreamUP::UIStyles::Colors::COLOR_WARNING)
 						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
 						.arg(12)
@@ -1935,7 +1935,7 @@ void ShowSettingsDialog(int tabIndex)
 				textLayout->setContentsMargins(0, 0, 0, 0);
 				
 				QLabel *nameLabel = new QLabel(hotkey.name);
-				nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { color: %1; font-size: %2px; font-weight: bold; background: transparent; }")
+				nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { color: %1; font-size: %2px; font-weight: 400; background: transparent; }")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 				
@@ -2137,7 +2137,7 @@ void ShowSettingsDialog(int tabIndex)
 			textLayout->setContentsMargins(0, 0, 0, 0);
 			
 			QLabel *nameLabel = new QLabel(tool.name);
-			nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { color: %1; font-size: %2px; font-weight: bold; background: transparent; }")
+			nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { color: %1; font-size: %2px; font-weight: 400; background: transparent; }")
 						.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 			
@@ -2267,7 +2267,7 @@ void ShowSettingsDialog(int tabIndex)
 		QHBoxLayout *autoRow = new QHBoxLayout();
 		QLabel *autoLabel = new QLabel(obs_module_text("Settings.Backup.Automatic"));
 		autoLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(
-			QString("color: %1; font-size: %2px; background: transparent;")
+			QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 				.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		StreamUP::UIStyles::SwitchButton *autoSwitch =
@@ -2288,7 +2288,7 @@ void ShowSettingsDialog(int tabIndex)
 		QHBoxLayout *keepRow = new QHBoxLayout();
 		QLabel *keepLabel = new QLabel(obs_module_text("Settings.Backup.Keep"));
 		keepLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(
-			QString("color: %1; font-size: %2px; background: transparent;")
+			QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 				.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		StreamUP::UIStyles::MacSpinBox *keepSpin = new StreamUP::UIStyles::MacSpinBox();
@@ -2318,7 +2318,7 @@ void ShowSettingsDialog(int tabIndex)
 		QLabel *pathLabel = new QLabel();
 		showFolder(pathLabel);
 		pathLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(
-			QString("color: %1; font-size: 14px; font-weight: 600; background: transparent;")
+			QString("color: %1; font-size: 13px; font-weight: 400; background: transparent;")
 				.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)));
 
 		QHBoxLayout *pathButtons = new QHBoxLayout();
@@ -2880,7 +2880,7 @@ void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &compo
 		nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
 						 "color: %1;"
 						 "font-size: %2px;"
-						 "font-weight: bold;"
+						 "font-weight: 400;"
 						 "background: transparent;"
 						 "border: none;"
 						 "margin: 0px;"
@@ -3162,7 +3162,7 @@ void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &co
 		nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
 						 "color: %1;"
 						 "font-size: %2px;"
-						 "font-weight: bold;"
+						 "font-weight: 400;"
 						 "background: transparent;"
 						 "border: none;"
 						 "margin: 0px;"

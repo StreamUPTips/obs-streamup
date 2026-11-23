@@ -175,7 +175,7 @@ public:
 	}
 	void setLabel(const QString &label, int count)
 	{
-		m_title->setText(label.toUpper());
+		m_title->setText(su::sentenceCase(label));
 		m_count->setText(QString::number(count));
 		setAccessibleName(QString("%1 %2").arg(label).arg(count));
 	}
@@ -344,7 +344,7 @@ public:
 		// Row dividers and cards live here, switched per row by a property,
 		// so filtering never restyles widgets one by one.
 		page->setStyleSheet(su::scale_qss(QString("QWidget#mpPage{background:%1;}"
-							  "QFrame#mpCard{background:%2;border-radius:18px;}"
+							  "QFrame#mpCard{background:%2;border:1px solid rgba(255,255,255,0.06);border-radius:12px;}"
 							  "QWidget#mpRow[divider=\"true\"]{border-top:1px solid %3;}")
 							  .arg(su::Colors::BG_DARKEST, su::Colors::BG_PRIMARY, su::Colors::SEPARATOR)));
 		m_list = new QVBoxLayout(page);

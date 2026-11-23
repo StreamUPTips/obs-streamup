@@ -299,7 +299,7 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 	nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
 					 "color: %1;"
 					 "font-size: %2px;"
-					 "font-weight: bold;"
+					 "font-weight: 600;"
 					 "background: transparent;"
 					 "border: none;"
 					 "margin: 0px;"

@@ -58,15 +58,14 @@ void ApplyFace(QListWidgetItem *item, const QString &face)
 
 QListWidgetItem *Header(const QString &text)
 {
-	auto *item = new QListWidgetItem(text.toUpper());
+	auto *item = new QListWidgetItem(su::sentenceCase(text));
 	item->setFlags(Qt::NoItemFlags);
 	item->setData(kRoleHeader, true);
 	QFont f = qApp->font();
-	f.setPixelSize(su::S(11));
-	f.setBold(true);
-	f.setLetterSpacing(QFont::AbsoluteSpacing, 0.6);
+	f.setPixelSize(su::S(su::Type::Small));
+	f.setWeight(QFont::DemiBold);
 	item->setFont(f);
-	item->setForeground(QColor(su::Colors::PRIMARY_COLOR));
+	item->setForeground(QColor("#a6adc8"));
 	item->setSizeHint(QSize(0, su::S(32)));
 	return item;
 }

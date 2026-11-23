@@ -67,7 +67,7 @@ public:
 		const char *bg = onCard ? su::Colors::INPUT_ON_CARD : su::Colors::INPUT_ON_BASE;
 		setStyleSheet(su::scale_qss(
 			QString("QDoubleSpinBox{background:%1;color:%2;border:none;"
-				"border-radius:8px;min-height:28px;max-height:28px;padding:0 28px 0 10px;font-size:13px;}"
+				"border-radius:8px;min-height:28px;max-height:28px;padding:0 28px 0 10px;font-size: 13px;}"
 				"QDoubleSpinBox::up-button{subcontrol-origin:border;subcontrol-position:top right;"
 				"width:22px;border:none;background:transparent;}"
 				"QDoubleSpinBox::down-button{subcontrol-origin:border;subcontrol-position:bottom right;"
@@ -139,7 +139,7 @@ inline QComboBox *EditableCombo(bool onCard = true)
 	const char *bg = onCard ? su::Colors::INPUT_ON_CARD : su::Colors::INPUT_ON_BASE;
 	combo->setStyleSheet(
 		su::scale_qss(QString("QComboBox{background:%1;color:%2;border:1px solid transparent;border-radius:8px;"
-				      "padding:0 6px 0 10px;font-size:13px;}"
+				      "padding:0 6px 0 10px;font-size: 13px;}"
 				      "QComboBox:focus{border:1px solid rgba(0,118,223,0.6);}"
 				      "QComboBox::drop-down{border:none;width:24px;}"
 				      "QComboBox QLineEdit{background:transparent;border:none;color:%2;padding:0;}")
@@ -283,8 +283,8 @@ inline QLabel *DimLabel(const QString &text)
 inline QString NavListStyle()
 {
 	return su::scale_qss(QString("QListWidget{background-color:transparent;border:none;"
-				     "font-family:Roboto,'Open Sans','.AppleSystemUIFont',Helvetica,Arial,sans-serif;"
-				     "font-size:14px;outline:none;}"
+				     ""
+				     "font-size: 14px;outline:none;}"
 				     "QListWidget::item{padding:11px 16px;border:none;color:%1;background:transparent;}"
 				     "QListWidget::item:selected{background-color:%2;color:%3;border-radius:14px;}"
 				     "QListWidget::item:hover:!selected{background-color:%4;color:%3;border-radius:14px;}")

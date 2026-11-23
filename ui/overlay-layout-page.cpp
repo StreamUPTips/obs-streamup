@@ -422,7 +422,7 @@ LayoutPage::LayoutPage(const QString &overlayId, const oc::OverlayInfo &info, QW
 
 	auto *partsCard = new QFrame();
 	partsCard->setObjectName("ocPartsCard");
-	partsCard->setStyleSheet(su::scale_qss(QString("QFrame#ocPartsCard{background:%1;border-radius:14px;}")
+	partsCard->setStyleSheet(su::scale_qss(QString("QFrame#ocPartsCard{background:%1;border:1px solid rgba(255,255,255,0.06);border-radius:12px;}")
 						       .arg(su::Colors::BG_PRIMARY)));
 	auto *pc = new QVBoxLayout(partsCard);
 	pc->setContentsMargins(su::S(4), su::S(4), su::S(4), su::S(4));
@@ -445,7 +445,7 @@ LayoutPage::LayoutPage(const QString &overlayId, const oc::OverlayInfo &info, QW
 
 	m_editor = new QFrame();
 	m_editor->setObjectName("ocPartEditor");
-	m_editor->setStyleSheet(su::scale_qss(QString("QFrame#ocPartEditor{background:%1;border-radius:14px;}")
+	m_editor->setStyleSheet(su::scale_qss(QString("QFrame#ocPartEditor{background:%1;border-radius:12px;}")
 						      .arg(su::Colors::BG_PRIMARY)));
 	auto *eg = new QGridLayout(m_editor);
 	eg->setContentsMargins(su::S(16), su::S(12), su::S(16), su::S(12));
@@ -711,7 +711,7 @@ void LayoutPage::showSelected()
 		return;
 	}
 	m_updating = true;
-	m_partTitle->setText(c->label.toUpper());
+	m_partTitle->setText(c->label);
 	const QJsonObject v = c->value.toObject();
 	m_x->setValue(v.value("x").toDouble());
 	m_y->setValue(v.value("y").toDouble());

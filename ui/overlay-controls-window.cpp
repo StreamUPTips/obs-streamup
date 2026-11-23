@@ -71,8 +71,8 @@ QString SwatchStyle(const QColor &c)
 	const QString ink = luma > 0.55 ? QStringLiteral("#11111b") : QStringLiteral("#ffffff");
 	return su::scale_qss(
 		QString("QPushButton{background:%1;color:%2;border:1px solid rgba(255,255,255,0.14);"
-			"border-radius:8px;min-height:26px;padding:0 12px;font-size:12px;font-weight:700;"
-			"font-family:Roboto,'Open Sans','.AppleSystemUIFont',Helvetica,Arial,sans-serif;}"
+			"border-radius:8px;min-height:26px;padding:0 12px;font-size: 12px;font-weight: 600;"
+			"}"
 			"QPushButton:hover{border:1px solid %3;}")
 			.arg(c.name(QColor::HexArgb), ink, su::Colors::PRIMARY_LIGHT));
 }
@@ -577,8 +577,8 @@ private:
 		m_deletePreset->setText(T("OverlayControls.Button.DeletePreset"));
 		m_deletePreset->setCursor(Qt::PointingHandCursor);
 		m_deletePreset->setStyleSheet(su::scale_qss(
-			QString("QToolButton{color:%1;background:transparent;border:none;font-size:12px;"
-				"font-weight:700;padding:0 4px;}QToolButton:hover{color:%2;}")
+			QString("QToolButton{color:%1;background:transparent;border:none;font-size: 12px;"
+				"font-weight: 600;padding:0 4px;}QToolButton:hover{color:%2;}")
 				.arg(su::Colors::TEXT_MUTED, su::Colors::COLOR_DANGER)));
 		// The stylesheet font only applies once polished; size from that,
 		// or the button keeps its pre-style hint and elides to "...".
@@ -664,7 +664,7 @@ private:
 		lb->addWidget(OverlayUI::RowLabel(c.label, c.help));
 		row.drift = new QLabel(QString::fromUtf8("●"));
 		row.drift->setStyleSheet(su::scale_qss(
-			QString("QLabel{color:%1;font-size:10px;background:transparent;}").arg(su::Colors::COLOR_WARNING)));
+			QString("QLabel{color:%1;font-size: 12px;background:transparent;}").arg(su::Colors::COLOR_WARNING)));
 		row.drift->setToolTip(T("OverlayControls.Drift.Tooltip"));
 		row.drift->hide();
 		lb->addWidget(row.drift);
@@ -910,7 +910,7 @@ private:
 			row.thumb->setFixedSize(su::S(96), su::S(54));
 			row.thumb->setAlignment(Qt::AlignCenter);
 			row.thumb->setStyleSheet(su::scale_qss(
-				QString("QLabel{background:%1;border-radius:6px;color:%2;font-size:12px;}")
+				QString("QLabel{background:%1;border-radius:6px;color:%2;font-size: 12px;}")
 					.arg(su::Colors::INPUT_ON_CARD, su::Colors::TEXT_MUTED)));
 			row.imagePath = new QLineEdit();
 			row.imagePath->setStyleSheet(su::lineEditStyle(true));

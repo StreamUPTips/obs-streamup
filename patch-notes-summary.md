@@ -1,12 +1,12 @@
 # StreamUP v3.0.0 - Major Update
 
 ## Headlines
-- **The Features Page** Every part of StreamUP on one page, each with a picture, one line and a switch. Turn off what you don't use and it costs OBS nothing at all.
-- **My Products** Everything StreamUP has installed in your scene collection, with its picture and its controls one click away.
-- **The StreamUP Mixer** An audio mixer dock with tabs, so your main mix, your alerts and your music each get their own page.
-- **Only The Plugins You Need** Installing a product checks just the plugins that product uses, then shows what went in and the next step.
-- **Pick Any Font** Every font you have, plus all of Google Fonts, each shown in its own style. Pick a Google font and it installs for you.
-- **Calmer Windows** Less reading, more seeing. One line per setting with the rest behind a ?, coloured pills for status, and small messages inside OBS instead of Windows pop-ups.
+- **Every feature on one page** Turn each part of StreamUP on or off. Anything off costs OBS nothing.
+- **All your products in one place** See every StreamUP product you've installed and adjust it in one click.
+- **A tabbed audio mixer** Give your mic, alerts and music their own tabs in the StreamUP Mixer.
+- **Google Fonts in the font picker** Choose any Google font and StreamUP installs it for you.
+- **Only the plugins a product needs** Installing a product checks just its plugins, with a link to each one.
+- **Calmer windows** One line per setting with the details behind a ?, and small notes inside OBS instead of Windows pop-ups.
 
 ## New Features
 - **Tidier StreamUP Menu** Products first, then Quick Actions, Multi-Dock, Backup and plugin updates, then Features and Settings, with Help in its own submenu.

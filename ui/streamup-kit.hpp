@@ -132,6 +132,10 @@ public:
 	void setFit(bool fit) { m_fit = fit; update(); }
 	// A thin outline round the picture so it stands off the card behind it.
 	void setOutline(bool on) { m_outline = on; update(); }
+	// As tall as the picture is for the width it gets, and drawn whole.
+	void setNaturalAspect();
+	bool hasHeightForWidth() const override { return m_natural; }
+	int heightForWidth(int w) const override;
 
 protected:
 	void paintEvent(QPaintEvent *) override;
@@ -148,6 +152,9 @@ private:
 	bool m_zoom = false;
 	bool m_fit = false;
 	bool m_outline = true;
+	bool m_natural = false;
+	QImage m_scaled;       // the current frame at this slot's device size
+	qint64 m_scaledKey = 0;
 };
 
 // Opens a picture or clip big over a window and dims the rest of it. A click

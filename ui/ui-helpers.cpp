@@ -203,7 +203,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		// First info text (main message) — emphasised
 		QLabel *info1 = CreateRichTextLabel(infoText1Str, false, true, Qt::AlignCenter);
 		info1->setStyleSheet(scale_qss(QString(
-			"QLabel{color:%1;font-size:%2px;font-weight:bold;background:transparent;border:none;}")
+			"QLabel{color:%1;font-size:%2px;font-weight: 600;background:transparent;border:none;}")
 			.arg(Colors::TEXT_SECONDARY)
 			.arg(Sizes::FONT_SIZE_NORMAL)));
 		shell.content->addWidget(info1);
@@ -261,7 +261,7 @@ QLabel *CreateRichTextLabel(const QString &text, bool bold, bool wrap, Qt::Align
 	}
 	
 	if (bold) {
-		styleSheet += "font-weight: bold; font-size: 14px;";
+		styleSheet += "font-weight: 600; font-size: 14px;";
 	}
 	
 	styleSheet += "}";

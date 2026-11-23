@@ -5,6 +5,7 @@
 #include <streamup/ui/window-chrome.hpp> // ShadowDialog, makeWindow, WindowShell
 #include <streamup/ui/pill-button.hpp>   // PillButton
 #include <streamup/ui/labels.hpp>        // makeLabel
+#include <streamup/ui/svg-icon.hpp>
 #include <streamup/ui/ui-scrollbar.hpp>  // useScrollBars
 #include "splash-screen.hpp"
 #include "features-page.hpp"
@@ -71,11 +72,11 @@ static QString MarkdownBodyToHtml(const QString &md)
 		if (line.startsWith("### ")) {
 			closeList();
 			out += QString("<h4 style=\"color: %1; margin: 10px 0 4px 0; font-size: 13px; font-weight: 600;\">%2</h4>\n")
-				.arg(UIStyles::Colors::TEXT_PRIMARY, line.mid(4));
+				.arg(UIStyles::Colors::TEXT_PRIMARY, UIStyles::sentenceCase(line.mid(4)));
 		} else if (line.startsWith("## ")) {
 			closeList();
-			out += QString("<h3 style=\"color: %1; margin: 22px 0 0 0; font-size: 15px; font-weight: 700;\">%2</h3>\n")
-				.arg(UIStyles::Colors::PRIMARY_LIGHT, line.mid(3));
+			out += QString("<h3 style=\"color: %1; margin: 22px 0 0 0; font-size: 14px; font-weight: 600;\">%2</h3>\n")
+				.arg(UIStyles::Colors::TEXT_PRIMARY, UIStyles::sentenceCase(line.mid(3)));
 		} else if (line.startsWith("- ")) {
 			// An entry is written as `- **Title** Body`. Rendered as one bullet
 			// that is a paragraph with a bold run buried at the front, and a
@@ -103,8 +104,8 @@ static QString MarkdownBodyToHtml(const QString &md)
 				// the work. The gap between entries hangs off the title's top
 				// margin rather than the detail's bottom one, which keeps a
 				// title tight to the text it introduces.
-				out += QString("<p style=\"margin: 16px 0 2px 0; color: %1; font-size: 13px; font-weight: 700;\">%2</p>\n")
-					.arg(UIStyles::Colors::TEXT_PRIMARY, ApplyInlineFormatting(title));
+				out += QString("<p style=\"margin: 16px 0 2px 0; color: %1; font-size: 13px; font-weight: 600;\">%2</p>\n")
+					.arg(UIStyles::Colors::TEXT_PRIMARY, ApplyInlineFormatting(UIStyles::sentenceCase(title)));
 				if (!detail.isEmpty()) {
 					out += QString("<p style=\"margin: 0; color: %1; font-weight: 400;\">%2</p>\n")
 						.arg(UIStyles::Colors::TEXT_SECONDARY, ApplyInlineFormatting(detail));
@@ -173,7 +174,7 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 		"QFrame#patchNotesCard { background: %1; border: 1px solid %2; border-radius: %3px; }")
 		.arg(UIStyles::Colors::BG_PRIMARY)
 		.arg(UIStyles::Colors::BORDER_SUBTLE)
-		.arg(10)));
+		.arg(12)));
 
 	QVBoxLayout *cardLay = new QVBoxLayout(card);
 	cardLay->setContentsMargins(0, 0, 0, 0);
@@ -185,7 +186,7 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 	header->setCheckable(true);
 	header->setChecked(expanded);
 	header->setCursor(Qt::PointingHandCursor);
-	header->setText(QString("  %1  %2").arg(expanded ? QChar(0x25BC) : QChar(0x25B6)).arg(block.versionLabel));
+	header->setText(QString("  %1  %2").arg(expanded ? QChar(0x2212) : QChar(0x002B)).arg(block.versionLabel));
 	header->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
 		"QPushButton {"
 		"  text-align: left;"
@@ -193,7 +194,7 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 		"  border: none;"
 		"  color: %1;"
 		"  font-size: 14px;"
-		"  font-weight: 700;"
+		"  font-weight: 600;"
 		"  padding: 12px 14px;"
 		"}"
 		"QPushButton:hover { color: %2; }")
@@ -217,7 +218,7 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 		int idx = label.indexOf(' ', 2);
 		if (idx > 0) {
 			QString tail = label.mid(idx);
-			header->setText(QString("  %1%2").arg(checked ? QChar(0x25BC) : QChar(0x25B6)).arg(tail));
+			header->setText(QString("  %1%2").arg(checked ? QChar(0x2212) : QChar(0x002B)).arg(tail));
 		}
 	});
 
@@ -226,21 +227,26 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 
 } // namespace
 
-// The headline changes of this release: a picture, a name and one line each.
-// Pictures go in data/whatsnew/<id>.webp (or .gif or .png).
+// What's new: the four biggest changes as picture cards, two smaller ones as
+// icon rows, then a button for every change. Pictures are in
+// data/whatsnew/<id>.webp|.gif|.png at 2x.
 struct Headline {
 	const char *id;
 	const char *nameKey;
 	const char *lineKey;
+	const char *icon; // for the small rows
 };
 
-static const Headline kHeadlines[] = {
-	{"features", "WhatsNew.Features.Name", "WhatsNew.Features.Line"},
-	{"my-products", "WhatsNew.MyProducts.Name", "WhatsNew.MyProducts.Line"},
-	{"mixer", "WhatsNew.Mixer.Name", "WhatsNew.Mixer.Line"},
-	{"product-check", "WhatsNew.ProductCheck.Name", "WhatsNew.ProductCheck.Line"},
-	{"font-picker", "WhatsNew.FontPicker.Name", "WhatsNew.FontPicker.Line"},
-	{"cleaner", "WhatsNew.Cleaner.Name", "WhatsNew.Cleaner.Line"},
+static const Headline kPictures[] = {
+	{"features", "WhatsNew.Features.Name", "WhatsNew.Features.Line", nullptr},
+	{"my-products", "WhatsNew.MyProducts.Name", "WhatsNew.MyProducts.Line", nullptr},
+	{"mixer", "WhatsNew.Mixer.Name", "WhatsNew.Mixer.Line", nullptr},
+	{"font-picker", "WhatsNew.FontPicker.Name", "WhatsNew.FontPicker.Line", nullptr},
+};
+static const Headline kRows[] = {
+	{"product-check", "WhatsNew.ProductCheck.Name", "WhatsNew.ProductCheck.Line", "package"},
+	{"cleaner", "WhatsNew.Cleaner.Name", "WhatsNew.Cleaner.Line", "sparkles"},
+	{"restart", "WhatsNew.Restart.Name", "WhatsNew.Restart.Line", "refresh"},
 };
 
 static QString Tx(const char *key)
@@ -250,39 +256,40 @@ static QString Tx(const char *key)
 
 QWidget *BuildWhatsNewContent()
 {
+	namespace su = StreamUP::UIStyles;
 	QWidget *contentWidget = new QWidget();
 	contentWidget->setObjectName("wnPage");
-	contentWidget->setStyleSheet(UIStyles::scale_qss(QString("QWidget#wnPage{background:transparent;}"
-								 "QFrame#wnCard{background:%1;border:1px solid rgba(255,255,255,0.06);"
-								 "border-radius:16px;}")
-								 .arg(UIStyles::Colors::BG_PRIMARY)));
+	contentWidget->setStyleSheet(su::scale_qss(QString("QWidget#wnPage{background:transparent;}"
+							   "QFrame#wnCard{background:%1;border:1px solid rgba(255,255,255,0.06);"
+							   "border-radius:12px;}")
+							   .arg(su::Colors::BG_PRIMARY)));
 	QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);
-	contentLayout->setContentsMargins(UIStyles::S(20), UIStyles::S(16), UIStyles::S(20), UIStyles::S(16));
-	contentLayout->setSpacing(UIStyles::S(12));
+	contentLayout->setContentsMargins(su::S(24), su::S(20), su::S(24), su::S(20));
+	contentLayout->setSpacing(su::S(14));
 
-	QLabel *heading = UIStyles::sectionHeader(QString(Tx("WhatsNew.Heading")).arg(PROJECT_VERSION_MAJOR));
-	heading->setContentsMargins(0, 0, 0, 0);
+	QLabel *heading = su::makeLabel(QString(Tx("WhatsNew.Heading")).arg(PROJECT_VERSION_MAJOR), su::Type::Title,
+					su::Type::Semibold, su::Colors::TEXT_PRIMARY);
 	contentLayout->addWidget(heading);
 
 	// Picture cards, two to a row. A click on a picture shows it big.
 	auto *grid = new QGridLayout();
-	grid->setHorizontalSpacing(UIStyles::S(12));
-	grid->setVerticalSpacing(UIStyles::S(12));
+	grid->setHorizontalSpacing(su::S(12));
+	grid->setVerticalSpacing(su::S(12));
 	int n = 0;
-	for (const Headline &h : kHeadlines) {
+	for (const Headline &h : kPictures) {
 		auto *card = new QFrame();
 		card->setObjectName("wnCard");
 		auto *v = new QVBoxLayout(card);
-		v->setContentsMargins(UIStyles::S(10), UIStyles::S(10), UIStyles::S(10), UIStyles::S(12));
-		v->setSpacing(UIStyles::S(6));
-		auto *pic = new StreamUP::Kit::PreviewSlot(QStringLiteral("whatsnew"), QString::fromUtf8(h.id), 130);
+		v->setContentsMargins(su::S(12), su::S(12), su::S(12), su::S(14));
+		v->setSpacing(su::S(6));
+		auto *pic = new StreamUP::Kit::PreviewSlot(QStringLiteral("whatsnew"), QString::fromUtf8(h.id), 140);
+		pic->setNaturalAspect(); // the whole picture, nothing cropped
 		pic->setZoom(Tx(h.nameKey), Tx(h.lineKey));
 		pic->setPlaying(true);
 		v->addWidget(pic);
-		v->addWidget(UIStyles::makeLabel(Tx(h.nameKey), UIStyles::Sizes::FONT_SIZE_NORMAL, 700,
-						 UIStyles::Colors::TEXT_PRIMARY));
-		QLabel *line = UIStyles::makeLabel(Tx(h.lineKey), UIStyles::Sizes::FONT_SIZE_SMALL, 400,
-						   UIStyles::Colors::TEXT_SECONDARY);
+		v->addSpacing(su::S(4));
+		v->addWidget(su::makeLabel(Tx(h.nameKey), su::Type::Body, su::Type::Semibold, su::Colors::TEXT_PRIMARY));
+		QLabel *line = su::makeLabel(Tx(h.lineKey), su::Type::Small, su::Type::Regular, su::Colors::TEXT_SECONDARY);
 		line->setWordWrap(true);
 		v->addWidget(line);
 		v->addStretch(1);
@@ -291,16 +298,43 @@ QWidget *BuildWhatsNewContent()
 	}
 	contentLayout->addLayout(grid);
 
-	// Every change, version by version, folded until asked for.
-	auto *all = new StreamUP::Kit::MoreOptions(QStringLiteral("whatsnew.all"), Tx("WhatsNew.AllChanges"));
+	// Smaller changes: an icon and one line each, in one card.
+	auto *list = new StreamUP::Kit::RowList();
+	for (const Headline &h : kRows) {
+		auto *icon = new QLabel();
+		icon->setStyleSheet("background:transparent;border:none;");
+		icon->setPixmap(su::svgIcon(QString::fromLatin1(h.icon), QColor(su::Colors::TEXT_SECONDARY), 20,
+					    qApp->devicePixelRatio()));
+		list->addRow(Tx(h.nameKey), Tx(h.lineKey), {}, icon);
+	}
+	contentLayout->addWidget(list);
+
+	// Every change, version by version, behind a button.
+	auto *allBox = new QWidget();
+	auto *allLay = new QVBoxLayout(allBox);
+	allLay->setContentsMargins(0, 0, 0, 0);
+	allLay->setSpacing(su::S(8));
 	QVector<VersionBlock> blocks = LoadVersionBlocks();
 	if (blocks.isEmpty()) {
-		all->body()->addWidget(UIStyles::makeLabel(Tx("WhatsNew.LoadFailed"), 13, 500, UIStyles::Colors::COLOR_WARNING));
+		allLay->addWidget(su::makeLabel(Tx("WhatsNew.LoadFailed"), su::Type::Body, su::Type::Regular, su::Colors::COLOR_WARNING));
 	} else {
 		for (int i = 0; i < blocks.size(); ++i)
-			all->body()->addWidget(BuildVersionCard(blocks[i], i == 0));
+			allLay->addWidget(BuildVersionCard(blocks[i], i == 0));
 	}
-	contentLayout->addWidget(all);
+	allBox->setVisible(false);
+	auto *allRow = new QHBoxLayout();
+	auto *allButton = new su::PillButton(Tx("WhatsNew.AllChanges"), "outline");
+	allButton->setAccessibleName(Tx("WhatsNew.AllChanges"));
+	QObject::connect(allButton, &QPushButton::clicked, allBox, [allBox, allButton]() {
+		const bool show = !allBox->isVisible();
+		allBox->setVisible(show);
+		allButton->setText(Tx(show ? "WhatsNew.HideChanges" : "WhatsNew.AllChanges"));
+		allButton->updateGeometry();
+	});
+	allRow->addWidget(allButton);
+	allRow->addStretch(1);
+	contentLayout->addLayout(allRow);
+	contentLayout->addWidget(allBox);
 
 	// Membership once, at the foot.
 	if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Strip))

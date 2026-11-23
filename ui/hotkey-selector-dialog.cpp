@@ -70,7 +70,7 @@ void HotkeySelectorDialog::setupUI() {
     QVBoxLayout* detailsLayout = new QVBoxLayout(detailsGroup);
 
     selectedHotkeyName = new QLabel(obs_module_text("HotkeySelector.Message.NoSelection"), detailsGroup);
-    selectedHotkeyName->setStyleSheet(scale_qss(QString("font-weight: bold; font-size: %1px; color: %2;")
+    selectedHotkeyName->setStyleSheet(scale_qss(QString("font-weight: 600; font-size: %1px; color: %2;")
         .arg(Sizes::FONT_SIZE_NORMAL)
         .arg(Colors::TEXT_PRIMARY)));
     detailsLayout->addWidget(selectedHotkeyName);
