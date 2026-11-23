@@ -29,6 +29,11 @@ public:
 		setCursor(Qt::PointingHandCursor);
 		setAttribute(Qt::WA_Hover, true); // repaint on hover
 		setMinimumHeight(S(30));
+		// The pill paints itself, so the OBS theme's button box model must
+		// not apply: Yami's margin-top/bottom and max-height pushed the pill
+		// off the row's centre line.
+		setStyleSheet(QStringLiteral("QPushButton{margin:0px;padding:0px;border:none;"
+					     "background:transparent;min-height:0px;max-height:16777215px;}"));
 	}
 
 	// Optional leading icon, painted to the LEFT of the label. The icon+gap+label
