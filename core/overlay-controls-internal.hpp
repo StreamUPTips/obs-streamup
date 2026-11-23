@@ -116,6 +116,12 @@ struct Control {
 	ControlType type = ControlType::Slider;
 	double min = 0.0;
 	double max = 1.0;
+	// A slider or number with no min/max in the manifest takes them from the
+	// OBS property it is linked to (once that is found); a manifest value
+	// always wins.
+	bool autoMin = false;
+	bool autoMax = false;
+	bool autoStep = false;
 	double step = 0.01;
 	int decimals = 2;
 	QString unit;
@@ -211,6 +217,9 @@ QJsonValue NormaliseValue(const Control &c, const QJsonValue &in);
 obs_source_t *ResolveTarget(QString &source, QString &sourceUuid, QString &filter, QString &filterUuid);
 // A link's target: a source, a filter or a transition. NEW reference.
 obs_source_t *ResolveBinding(Binding &b);
+// The min and max OBS gives the setting a "set" link writes, when it is a
+// number setting it can find. Used for sliders with no range in the manifest.
+bool PropertyRange(Binding &b, double *min, double *max, double *step);
 bool BindingTargetExists(Binding &b);
 bool CaptureBinding(Binding &b);
 bool WriteBinding(Binding &b, const Control &c);

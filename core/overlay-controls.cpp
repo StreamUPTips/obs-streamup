@@ -182,8 +182,14 @@ bool ParseControl(const QJsonObject &j, const QString &groupTab, Control &c, QSt
 			def = "#FFFFFF";
 	} else if (type == "slider" || type == "number") {
 		c.type = type == "slider" ? ControlType::Slider : ControlType::Number;
-		c.min = j.value("min").toDouble(0.0);
-		c.max = j.value("max").toDouble(1.0);
+		// No min or max: the linked OBS setting's own range is used once it
+		// is found (see MakeInfo). Until then a wide range keeps the default.
+		c.autoMin = !j.contains("min");
+		c.autoMax = !j.contains("max");
+		c.autoStep = !j.contains("step");
+		const double defNum = def.isDouble() ? def.toDouble() : 0.0;
+		c.min = j.value("min").toDouble(std::min(0.0, defNum));
+		c.max = j.value("max").toDouble(c.autoMin ? std::max({1.0, defNum, 100.0}) : std::max(1.0, defNum));
 		if (!(c.max > c.min)) {
 			*why = QString("control \"%1\" needs max above min").arg(c.id);
 			return false;
@@ -764,8 +770,32 @@ QString ResourcesBeside(const QString &filePath)
 
 // ---------------------------------------------------------------- info snapshots
 
+// Fills in a slider's range from the OBS setting it is linked to, for any end
+// the manifest left out.
+void ResolveAutoRange(Control &c)
+{
+	if (!(c.autoMin || c.autoMax) || (c.type != ControlType::Slider && c.type != ControlType::Number))
+		return;
+	for (Binding &b : c.bindings) {
+		double lo = 0.0, hi = 0.0, step = 0.0;
+		if (!PropertyRange(b, &lo, &hi, &step))
+			continue;
+		const double newMin = c.autoMin ? lo : c.min;
+		const double newMax = c.autoMax ? hi : c.max;
+		if (!(newMax > newMin))
+			continue;
+		c.min = newMin;
+		c.max = newMax;
+		if (c.autoStep && step > 0.0)
+			c.step = step;
+		c.autoMin = c.autoMax = false;
+		return;
+	}
+}
+
 ControlInfo MakeInfo(Overlay &o, Control &c)
 {
+	ResolveAutoRange(c);
 	ControlInfo i;
 	i.id = c.id;
 	i.label = c.label;

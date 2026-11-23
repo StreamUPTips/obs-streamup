@@ -384,7 +384,12 @@ void Open(QWidget *parent, const QString &current, const QStringList &suggested,
 
 	// Use: a Google font is downloaded and installed first.
 	auto busy = std::make_shared<bool>(false);
-	auto choose = [dlg, list, status, use, cancel, busy, onPicked]() {
+	// Only OBS's own text sources need the font installed in Windows. A
+	// control that only drives ProText reads the shared font cache, so the
+	// download is enough and nothing is installed.
+	const bool installNeeded = sourceKinds.isEmpty() || sourceKinds.contains("text_gdiplus") ||
+				   sourceKinds.contains("text_ft2_source");
+	auto choose = [dlg, list, status, use, cancel, busy, onPicked, installNeeded]() {
 		QListWidgetItem *item = list->currentItem();
 		if (*busy || !item || item->data(kRoleFamily).toString().isEmpty())
 			return;
@@ -401,19 +406,25 @@ void Open(QWidget *parent, const QString &current, const QStringList &suggested,
 		list->setEnabled(false);
 		status->setText(T("FontPicker.Installing").arg(family));
 		QPointer<su::ShadowDialog> guard(dlg);
-		gf::Pool()->start(new Job([guard, family, status, use, list, busy, onPicked]() {
+		gf::Pool()->start(new Job([guard, family, status, use, list, busy, onPicked, installNeeded]() {
 			QString error;
 			const QString file = gf::Download(family, &error, 30);
 			gf::InstallResult r;
-			if (!file.isEmpty())
-				r = gf::InstallForUser(family, file);
-			else
+			if (file.isEmpty()) {
 				r.error = error;
+			} else if (installNeeded) {
+				r = gf::InstallForUser(family, file);
+			} else {
+				r.ok = true;
+				r.family = gf::LoadForPreview(file);
+				if (r.family.isEmpty())
+					r.family = family;
+			}
 			Post([guard, r, status, use, list, busy, onPicked]() {
 				if (r.ok) {
 					Picked p;
 					p.family = r.family;
-					p.installed = true;
+					p.installed = !r.file.isEmpty();
 					p.file = r.file;
 					onPicked(p); // the panel stays, so this runs even if the picker closed
 					if (guard)

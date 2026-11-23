@@ -239,6 +239,40 @@ obs_source_t *ResolveBinding(Binding &b)
 	return t;
 }
 
+bool PropertyRange(Binding &b, double *min, double *max, double *step)
+{
+	if (b.mode != BindMode::Set || !b.scene.isEmpty() || b.key.isEmpty() || b.key.startsWith('@') ||
+	    b.key.contains('.'))
+		return false;
+	obs_source_t *src = ResolveBinding(b);
+	if (!src)
+		return false;
+	bool found = false;
+	obs_properties_t *props = obs_source_properties(src);
+	if (obs_property_t *prop = props ? obs_properties_get(props, b.key.toUtf8().constData()) : nullptr) {
+		switch (obs_property_get_type(prop)) {
+		case OBS_PROPERTY_INT:
+			*min = obs_property_int_min(prop);
+			*max = obs_property_int_max(prop);
+			*step = obs_property_int_step(prop);
+			found = true;
+			break;
+		case OBS_PROPERTY_FLOAT:
+			*min = obs_property_float_min(prop);
+			*max = obs_property_float_max(prop);
+			*step = obs_property_float_step(prop);
+			found = true;
+			break;
+		default:
+			break;
+		}
+	}
+	obs_properties_destroy(props);
+	obs_source_release(src);
+	// A huge "anything goes" range (INT_MAX and the like) is no use as a slider.
+	return found && *max > *min && (*max - *min) <= 1000000.0;
+}
+
 namespace {
 
 // The scene WithItem searched, while its fn runs. A part can sit inside a
