@@ -35,6 +35,12 @@
 - New WebSocket requests: GroupSceneItems, RegisterOverlay, RunOverlayAction, GetMyProducts and OpenMyProducts
 - Aitum Multistream dock styling, and Sources dock groups that look like Scene Organiser folders, on the StreamUP theme
 - One Windows download for every OBS version
+- One StreamUP window at start-up: a Welcome page on a first install, What's new after an update, either leading on to the Features page in the same window
+- Show me opens the part's clip big, says how to turn it on, and points at it in OBS. A part can link a video
+- A StreamUP Theme section on the Features page holds every theme-only tweak, and says when the theme is not in use
+- Closing the Features page after a change that needs a restart offers to restart OBS
+- Products can list the fonts they need with a link for each, shown as a Get button when one is missing
+- Product sliders with no range of their own use the range of the OBS setting they change
 
 ### Improvements
 - A part that is switched off now costs OBS nothing: no event filters, timers, callbacks or scans left running. Most parts switch straight away; the docks and the Adjustment Layer say when they need a restart
@@ -42,7 +48,11 @@
 - Settings has fewer tabs and one line per setting. The theme tweaks live on the Features page, the plugin check is a button on General, and the rare Scene Organiser settings fold away
 - Hotkeys you have set come first; the rest fold under Not set
 - Backup settings lead with when your last backup was made
-- The plugins window shows a pill per problem and one row per plugin with a Get button. Plugins made by StreamUP are marked
+- The plugins window shows a pill per problem and one row per plugin with a Get button, plugins that are not loading or switched off included
+- Every Settings tab is in boxed sections, and a tab whose part is switched off says so above its settings
+- Tooltips work in every StreamUP window, and the icons come from one icon set
+- Toasts are a small rounded pill that fades in
+- Multi-Docks open floating over OBS, and come back where they were when Multi-Dock is switched off and on
 - Quick Actions and every StreamUP message show a small toast inside OBS
 - About is one line, the StreamUP Membership card, and the rest under Learn more
 - WebSocket Commands has search and one Copy button, with OBS Raw or Streamer.bot picked at the top

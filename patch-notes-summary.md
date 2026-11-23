@@ -22,6 +22,10 @@
 - **More WebSocket Requests** GroupSceneItems, RegisterOverlay, RunOverlayAction, GetMyProducts and OpenMyProducts.
 - **One Windows Download** A single download covers every OBS version.
 
+- **One Window To Start** A Welcome page the first time, What's new after an update, and the Features page in the same window after either.
+- **Show Me** Each part's clip big, a line on how to turn it on, and a jump to where it lives in OBS.
+- **Restart When You Are Ready** Change a part that needs a restart and StreamUP offers to restart OBS for you.
+
 ## Improvements
 - **Off Really Means Off** A part you switch off stops running completely. Most switch straight away; the docks and the Adjustment Layer tell you when they need a restart.
 - **Settings Made Simple** Fewer tabs, one line per setting, and the rare options folded away. Your set hotkeys come first, and Backup tells you when your last backup was made.
