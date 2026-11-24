@@ -44,7 +44,7 @@ namespace ThemeWindow {
 // Adopts the SoT ImageCarousel visual language (su::ImageCarousel in
 // image-carousel.hpp): a rounded-clipped image area, a slide-across transition,
 // custom-painted circular nav arrows, and accent dot indicators. The SoT widget
-// only paints gradient placeholder slides and exposes no API to feed it real
+// only paints flat placeholder slides and exposes no API to feed it real
 // QPixmaps, so this consumer re-implements the same paint model but draws the
 // actual theme screenshots — preserving auto-advance, click-to-zoom and the real
 // preview images while matching the SoT carousel look.

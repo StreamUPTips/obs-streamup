@@ -2,14 +2,13 @@
 
 // ImageCarousel — prev/next image browser with a sliding transition, circular
 // nav arrows, and accent dot indicators. Header-only, custom-painted. The demo
-// paints gradient placeholder "slides"; a real consumer feeds it QPixmaps.
+// paints flat placeholder "slides"; a real consumer feeds it QPixmaps.
 
 #include <QWidget>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPaintEvent>
 #include <QMouseEvent>
-#include <QLinearGradient>
 #include <QLineF>
 #include <QVariantAnimation>
 #include <QEasingCurve>
@@ -115,11 +114,7 @@ protected:
 private:
 	void drawSlide(QPainter &p, int idx, const QRectF &r)
 	{
-		const qreal hue = (qreal)idx / m_count;
-		QLinearGradient g(r.topLeft(), r.bottomRight());
-		g.setColorAt(0, QColor::fromHsvF((float)std::clamp(hue, 0.0, 0.9999), 0.55f, 0.72f));
-		g.setColorAt(1, QColor::fromHsvF((float)std::clamp(hue + 0.08, 0.0, 0.9999), 0.7f, 0.5f));
-		p.fillRect(r, g);
+		p.fillRect(r, QColor(Colors::BG_PRIMARY)); // flat placeholder, no gradient
 		QFont f = font();
 		f.setPixelSize(S(20));
 		f.setWeight(QFont::Weight(600));

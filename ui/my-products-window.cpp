@@ -128,13 +128,9 @@ QPixmap Tile(const pr::ProductEntry &p, qreal dpr, int designW = kTileW, int des
 	if (!p.iconPath.isEmpty())
 		img = QImageReader(p.iconPath).read();
 	if (!img.isNull()) {
-		// The whole picture, never cropped: drawn to fit, over a blurred,
-		// dimmed copy of itself so a wide or tall picture has no bare bars.
-		const QImage cover = img.scaled(qMax(1, w / 16), qMax(1, h / 16), Qt::KeepAspectRatioByExpanding,
-						Qt::SmoothTransformation)
-					     .scaled(w, h, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-		g.drawImage(QPointF((w - cover.width()) / 2.0, (h - cover.height()) / 2.0), cover);
-		g.fillRect(QRect(0, 0, w, h), QColor(17, 17, 27, 190));
+		// The whole picture, never cropped: drawn to fit on a flat dark
+		// fill, so a wide or tall picture sits on plain bars (no blur).
+		g.fillRect(QRect(0, 0, w, h), QColor(su::Colors::BG_SECONDARY));
 		const QImage fit = img.scaled(w, h, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 		g.drawImage(QPointF((w - fit.width()) / 2, (h - fit.height()) / 2), fit);
 	} else {

@@ -1293,14 +1293,12 @@ void CreateSplashDialog(ShowCondition condition)
         earlyAccessBanner->setCursor(Qt::PointingHandCursor);
         earlyAccessBanner->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
             "QWidget#earlyAccessBanner {"
-            "    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "        stop:0 #f59e0b, stop:0.5 #fbbf24, stop:1 #f59e0b);"
+            "    background: #fbbf24;"
             "    padding: %1px %2px;"
             "    border-bottom: 2px solid #d97706;"
             "}"
             "QWidget#earlyAccessBanner:hover {"
-            "    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "        stop:0 #d97706, stop:0.5 #f59e0b, stop:1 #d97706);"
+            "    background: #f59e0b;"
             "}"
         ).arg(StreamUP::UIStyles::S(12))
          .arg(StreamUP::UIStyles::S(16))));
@@ -1386,8 +1384,7 @@ void CreateSplashDialog(ShowCondition condition)
                 "QLabel {"
                 "font-size: %1px;"
                 "font-weight: 600;"
-                "color: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-                "    stop:0 #f472b6, stop:0.25 #a855f7, stop:0.5 #89b4fa, stop:1 #06b6d4);"
+                "color: #cdd6f4;"
                 "margin: 0;"
                 "}")
                 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_LARGE)));

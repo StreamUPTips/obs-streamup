@@ -117,16 +117,8 @@ void SwitchButton::paintEvent(QPaintEvent *event)
 	QColor trackColorOff = m_hovered ? offBase.lighter(110) : offBase;
 	QColor trackColorOn = m_hovered ? onBase.lighter(110) : onBase;
 
-	QLinearGradient gradient(trackRect.topLeft(), trackRect.bottomLeft());
-	if (m_checked) {
-		gradient.setColorAt(0.0, trackColorOn.lighter(108));
-		gradient.setColorAt(1.0, trackColorOn.darker(105));
-	} else {
-		gradient.setColorAt(0.0, trackColorOff.lighter(110));
-		gradient.setColorAt(1.0, trackColorOff.darker(108));
-	}
-
-	painter.setBrush(gradient);
+	// Flat fill, no gradient.
+	painter.setBrush(m_checked ? trackColorOn : trackColorOff);
 	painter.drawRoundedRect(trackRect, switchH / 2, switchH / 2);
 
 	QRect knobRect(switchX + S(m_offset), switchY + margin, knobW, knobH);
@@ -135,11 +127,7 @@ void SwitchButton::paintEvent(QPaintEvent *event)
 	QRect shadowRect = knobRect.adjusted(0, 1, 0, 1);
 	painter.drawRoundedRect(shadowRect, knobH / 2, knobH / 2);
 
-	QLinearGradient knobGradient(knobRect.topLeft(), knobRect.bottomLeft());
-	knobGradient.setColorAt(0.0, QColor("#ffffff"));
-	knobGradient.setColorAt(1.0, QColor("#f8f9fa"));
-
-	painter.setBrush(knobGradient);
+	painter.setBrush(QColor("#ffffff"));
 	painter.drawRoundedRect(knobRect, knobH / 2, knobH / 2);
 }
 
