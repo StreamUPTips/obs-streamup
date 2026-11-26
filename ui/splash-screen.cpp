@@ -33,6 +33,7 @@
 #include <QJsonArray>
 #include <QTimer>
 #include <QSet>
+#include <QDateTime>
 #include <QFrame>
 #include <QPropertyAnimation>
 #include <QEasingCurve>
@@ -1031,8 +1032,14 @@ void CreateSplashDialog(ShowCondition condition)
         return; // Dialog already handled by DialogManager
     }
 
-    // Start loading supporters data if not already loaded or in progress
-    if (!supportersData.loaded && supportersData.errorMessage.isEmpty()) {
+    // Start loading supporters data if not already loaded or in progress.
+    // A list older than an hour is fetched again in the background, so an
+    // OBS left open for days still picks up new supporters.
+    static qint64 lastFetch = 0;
+    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    if ((!supportersData.loaded && supportersData.errorMessage.isEmpty()) ||
+        (supportersData.loaded && now - lastFetch > 3600)) {
+        lastFetch = now;
         LoadSupportersData();
     }
 
@@ -1462,8 +1469,11 @@ void CreateSplashDialog(ShowCondition condition)
         contentLayout->addWidget(aboutLine);
         if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Card))
             contentLayout->addWidget(member);
-        auto *learnMore = new StreamUP::Kit::MoreOptions(QStringLiteral("about.learnmore"), obs_module_text("About.LearnMore"));
-        contentLayout->addWidget(learnMore);
+        // Four small cards under a plain section title, always shown: a
+        // folded "Learn more" line read as a stray link rather than a part of
+        // the page.
+        contentLayout->addSpacing(StreamUP::UIStyles::S(4));
+        contentLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("About.MoreHeading")));
 
         // Learn more: four small cards, each an icon, a few words and at most a
         // button, instead of the old letter.
@@ -1529,7 +1539,7 @@ void CreateSplashDialog(ShowCondition condition)
                 grid->addWidget(box, n / 2, n % 2);
                 ++n;
             }
-            learnMore->body()->addLayout(grid);
+            contentLayout->addLayout(grid);
         }
 
         // === Supporters section — real widgets, FlowLayout, proper pills ===
