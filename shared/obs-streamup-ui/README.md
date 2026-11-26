@@ -7,6 +7,15 @@ straight into each plugin.
 
 Version: see `CHANGELOG.md`. Tags are `vMAJOR.MINOR.PATCH`.
 
+## Visibility
+
+The UI library is public (it already was, inside obs-streamup). Plugins may be
+private; nothing private goes in this repo.
+
+Rule: never put member-only code, keys or product logic in the UI library. It
+holds the look (styles, widgets, tokens, icons) and nothing a plugin sells or
+protects. Anything specific to one plugin stays in that plugin.
+
 ## What is in it
 
 All headers live under `include/streamup/ui/`. Include them as
@@ -123,8 +132,8 @@ git config --unset protocol.file.allow
 
 ### GitHub Actions
 
-The repo is public, so no token is needed. Every job that builds the plugin
-must check out submodules:
+This repo is public, so no token is needed, even in a private plugin's
+workflow. Every job that builds the plugin must check out submodules:
 
 ```yaml
 - uses: actions/checkout@v4
