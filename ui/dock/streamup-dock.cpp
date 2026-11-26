@@ -296,7 +296,9 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	applyFileIconToButton(toggleVisibilityButton, StreamUP::UIHelpers::GetThemedIconPath("visible"));
 
 	auto setButtonProperties = [](QPushButton *button) {
-		button->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));  // Smaller icon for smaller button
+		// 20 in a 28 button: a 4 px ring all round, whole pixels at 100%,
+		// 150% and 200%, and big enough for the outline glyphs to read.
+		button->setIconSize(QSize(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20)));
 		// Force square dimensions aggressively
 		button->setFixedSize(StreamUP::UIStyles::S(28), StreamUP::UIStyles::S(28));
 		button->setMinimumSize(StreamUP::UIStyles::S(28), StreamUP::UIStyles::S(28));

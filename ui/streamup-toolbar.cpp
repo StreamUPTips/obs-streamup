@@ -1187,13 +1187,15 @@ void StreamUPToolbar::applySizeClass()
 	// a centralWidget, and those buttons do NOT inherit the toolbar's
 	// iconSize. Without this loop, the toolbar's iconSize is purely cosmetic
 	// for our layout.
-	QSize fallbackIconSize(16, 16);
+	// Two px larger than the theme's tiers (12/16/22): the outline glyphs
+	// read clearly at 18 where 16 left their strokes thin.
+	QSize fallbackIconSize(18, 18);
 	switch (settings.toolbarSize) {
 	case StreamUP::SettingsManager::ToolbarSize::Small:
-		fallbackIconSize = QSize(12, 12);
+		fallbackIconSize = QSize(14, 14);
 		break;
 	case StreamUP::SettingsManager::ToolbarSize::Large:
-		fallbackIconSize = QSize(22, 22);
+		fallbackIconSize = QSize(24, 24);
 		break;
 	default:
 		break;
