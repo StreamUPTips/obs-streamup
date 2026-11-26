@@ -265,6 +265,9 @@ enum SettingsTab {
     SettingsTabDockConfig = 5,
     SettingsTabPlugins = 6,
     SettingsTabBackup = 7,
+    // Tools and tweaks (was the Features page). Shown first in the sidebar,
+    // but its page keeps the old Plugins slot so the indices stay put.
+    SettingsTabTools = SettingsTabPlugins,
 };
 
 /**

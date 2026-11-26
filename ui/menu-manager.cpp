@@ -237,11 +237,8 @@ void LoadMenuItems(QMenu* menu)
     menu->addSeparator();
 
     // -- Set-up -----------------------------------------------------------
-    // Features: every part of StreamUP switched on and off in one place.
-    // Always here, so a part that is off can be found again.
-    action = menu->addAction(obs_module_text("Menu.Features"));
-    QObject::connect(action, &QAction::triggered, []() { StreamUP::FeaturesPage::Show(); });
-
+    // Settings opens on Tools and tweaks (what was the Features page), so a
+    // part that is off can always be found again.
     action = menu->addAction(obs_module_text("Menu.Settings"));
     QObject::connect(action, &QAction::triggered, []() { SettingsDialog(); });
 

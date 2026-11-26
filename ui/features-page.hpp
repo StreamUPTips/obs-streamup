@@ -2,6 +2,8 @@
 
 #include <QString>
 
+class QWidget;
+
 #include <functional>
 
 // The Features page: every part of StreamUP as a card with a short demo, one
@@ -14,8 +16,14 @@ namespace FeaturesPage {
 // page in place, so start-up never opens two windows.
 enum class Mode { Welcome, WhatsNew, Features };
 
-// Opens (or raises) it on the Features page. Safe from any thread.
+// Opens StreamUP Settings on Tools and tweaks (what used to be the Features
+// page). Safe from any thread.
 void Show();
+
+// The Tools and tweaks panel itself, for the first tab of StreamUP Settings:
+// every part as a card with a demo, a switch and Show me. Offers an OBS
+// restart when its window closes after a change that needs one.
+QWidget *BuildToolsPanel();
 
 // Opens (or raises) it on What's new (Help > Patch Notes).
 void ShowWhatsNew();

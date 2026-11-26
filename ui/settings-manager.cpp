@@ -848,15 +848,38 @@ void InitializeSettingsSystem()
 
 void ShowSettingsDialog()
 {
-	ShowSettingsDialog(0); // Default to General Settings tab
+	ShowSettingsDialog(SettingsTabTools); // The first tab: Tools and tweaks
+}
+
+// The open Settings window's sidebar, so a second request switches its tab
+// instead of opening another window.
+static QPointer<QListWidget> g_settingsNav;
+
+// The sidebar row showing a page (rows are not in page order: Tools and
+// tweaks is listed first but keeps its old page slot).
+static int RowForPage(QListWidget *nav, int page)
+{
+	for (int row = 0; row < nav->count(); ++row)
+		if (nav->item(row)->data(Qt::UserRole).toInt() == page)
+			return row;
+	return -1;
 }
 
 void ShowSettingsDialog(int tabIndex)
 {
 	if (tabIndex == SettingsTabPluginManagement || tabIndex == 8)
 		tabIndex = SettingsTabGeneral;
-	if (tabIndex == SettingsTabPlugins) {
-		StreamUP::FeaturesPage::Show();
+	if (g_settingsNav) {
+		QMetaObject::invokeMethod(g_settingsNav, [tabIndex]() {
+			if (!g_settingsNav)
+				return;
+			g_settingsNav->setCurrentRow(RowForPage(g_settingsNav, tabIndex));
+			if (QWidget *w = g_settingsNav->window()) {
+				w->showNormal();
+				w->raise();
+				w->activateWindow();
+			}
+		}, Qt::QueuedConnection);
 		return;
 	}
 	StreamUP::UIHelpers::ShowSingletonDialogOnUIThread("settings", [tabIndex]() -> QDialog* {
@@ -915,14 +938,23 @@ void ShowSettingsDialog(int tabIndex)
 			obs_module_text("Settings.Group.PluginManagement"),
 			obs_module_text("Settings.Group.Hotkeys"),
 			obs_module_text("Settings.Group.DockConfig"),
-			obs_module_text("Settings.Group.Plugins"),
+			obs_module_text("Settings.Group.Tools"),
 			obs_module_text("Settings.Group.Backup"),
 			obs_module_text("Settings.Group.Theme")
 		};
 
-		for (const QString &category : categories) {
-			categoryList->addItem(category);
+		// Tools and tweaks leads the list; the rest follow in page order.
+		// Each row remembers its page, so the page indices never move.
+		QList<int> order = {SettingsTabTools};
+		for (int page = 0; page < categories.size(); ++page)
+			if (page != SettingsTabTools)
+				order << page;
+		for (int page : order) {
+			auto *item = new QListWidgetItem(categories.at(page));
+			item->setData(Qt::UserRole, page);
+			categoryList->addItem(item);
 		}
+		g_settingsNav = categoryList;
 
 		// Tabs for parts switched off on the Features page stay clickable but
 		// read as off: a muted entry here, and on the page a line saying so
@@ -930,12 +962,12 @@ void ShowSettingsDialog(int tabIndex)
 		// Tabs whose contents moved: Plugin Management is a button on General,
 		// Plugins and the StreamUP Theme switches live on the Features page.
 		// The rows stay (hidden) so the fixed tab indices keep working.
-		for (int hiddenRow : {(int)SettingsTabPluginManagement, (int)SettingsTabPlugins, 8}) {
-			if (auto *row = categoryList->item(hiddenRow); row)
+		for (int hiddenPage : {(int)SettingsTabPluginManagement, 8}) {
+			if (auto *row = categoryList->item(RowForPage(categoryList, hiddenPage)); row)
 				row->setHidden(true);
 		}
 
-		categoryList->setCurrentRow(tabIndex);
+		categoryList->setCurrentRow(RowForPage(categoryList, tabIndex));
 
 		// Right content area
 		// Note: No scroll area needed with stacked widget approach
@@ -1010,7 +1042,7 @@ void ShowSettingsDialog(int tabIndex)
 			more->addWidget(kit::SettingRow(obs_module_text("Settings.General.Plugins"), checkNow,
 							 obs_module_text("Settings.General.PluginsHelp")));
 			auto *openFeatures = new StreamUP::UIStyles::PillButton(obs_module_text("Settings.General.OpenFeatures"), "neutral");
-			QObject::connect(openFeatures, &QPushButton::clicked, []() { StreamUP::FeaturesPage::Show(); });
+			QObject::connect(openFeatures, &QPushButton::clicked, []() { ShowSettingsDialog(SettingsTabTools); });
 			more->addWidget(kit::SettingRow(obs_module_text("Settings.General.ThemeTweaks"), openFeatures,
 							 obs_module_text("Settings.General.ThemeTweaksHelp")));
 		}
@@ -2180,10 +2212,18 @@ void ShowSettingsDialog(int tabIndex)
 		dockPageLayout->addWidget(dockScrollArea);
 		stackedWidget->addWidget(dockPage);
 
-		// 7. Plugins: switching parts on and off moved to the Features page.
-		// The slot stays (empty, its sidebar row hidden) so the fixed page
-		// indices other callers use keep pointing at the right pages.
-		stackedWidget->addWidget(new QWidget());
+		// 7. Tools and tweaks: every part of StreamUP with its switch (what
+		// used to be the Features page), in the old Plugins slot.
+		{
+			QWidget *toolsPage = new QWidget();
+			// The stack's unscoped background would paint every plain child
+			// widget (a card's title row) in the window colour.
+			toolsPage->setStyleSheet(QStringLiteral("QWidget{background:transparent;}"));
+			auto *toolsLayout = new QVBoxLayout(toolsPage);
+			toolsLayout->setContentsMargins(0, 0, 0, 0);
+			toolsLayout->addWidget(StreamUP::FeaturesPage::BuildToolsPanel());
+			stackedWidget->addWidget(toolsPage);
+		}
 
 		// ── 8. Backup page ───────────────────────────────────────────────
 		QWidget *backupPage = new QWidget();
@@ -2351,7 +2391,7 @@ void ShowSettingsDialog(int tabIndex)
 			auto markSwitchedOff = [&](int row, bool on, const char *nameKey) {
 				if (on)
 					return;
-				if (auto *item = categoryList->item(row))
+				if (auto *item = categoryList->item(RowForPage(categoryList, row)))
 					item->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
 				QWidget *page = stackedWidget->widget(row);
 				auto *layout = page ? qobject_cast<QVBoxLayout *>(page->layout()) : nullptr;
@@ -2370,8 +2410,9 @@ void ShowSettingsDialog(int tabIndex)
 		}
 
 		// Connect category selection to page switching
-		QObject::connect(categoryList, &QListWidget::currentRowChanged, [stackedWidget](int index) {
-			stackedWidget->setCurrentIndex(index);
+		QObject::connect(categoryList, &QListWidget::currentRowChanged, [stackedWidget, categoryList](int row) {
+			if (QListWidgetItem *item = categoryList->item(row))
+				stackedWidget->setCurrentIndex(item->data(Qt::UserRole).toInt());
 		});
 		
 		// Set the stacked widget to show the correct page for the selected tab
