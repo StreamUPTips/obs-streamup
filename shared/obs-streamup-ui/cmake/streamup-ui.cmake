@@ -6,7 +6,7 @@
 # The library is compiled straight into the plugin (no shared sub-target, no
 # cross-plugin link), so each plugin stays self-contained and builds in any
 # config or order. The target must link libobs and obs-frontend-api; the call
-# turns AUTOMOC and AUTORCC on for it.
+# links Qt6::Svg and turns AUTOMOC and AUTORCC on for it.
 #
 # Plain (not cached) variables: several plugins in one OBS tree each include
 # their own copy, and each call must use the copy its plugin included.
@@ -16,6 +16,9 @@ set(STREAMUP_UI_VERSION "1.0.0")
 
 function(streamup_ui_add target)
   set_target_properties(${target} PROPERTIES AUTOMOC ON AUTORCC ON)
+  # The kit draws its icons with QtSvg.
+  find_package(Qt6 REQUIRED COMPONENTS Svg)
+  target_link_libraries(${target} PRIVATE Qt6::Svg)
   target_include_directories(${target} PRIVATE
     "${STREAMUP_UI_ROOT}/include"
     "${STREAMUP_UI_ROOT}/include/streamup/ui" # flat includes inside switch-button.cpp
