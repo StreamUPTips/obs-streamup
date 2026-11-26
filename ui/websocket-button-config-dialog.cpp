@@ -383,8 +383,10 @@ void WebSocketButtonConfigDialog::setupRequestSection()
 	obsPageLayout->setContentsMargins(0, 0, 0, 0);
 	obsSearch = new SearchField(obsPage);
 	obsSearch->setPlaceholderText(obs_module_text("StreamUP.Toolbar.WebSocket.Placeholder.Search"));
+	obsSearch->setOnCard(true);
 	obsRequestList = new QListWidget(obsPage);
-	obsRequestList->setStyleSheet(listStyle());
+	// Inside a card the list sits on the darker field colour, like the inputs.
+	obsRequestList->setStyleSheet(listStyle() + QString("QListWidget{background:%1;}").arg(Colors::INPUT_ON_CARD));
 	useScrollBars(obsRequestList);
 	obsRequestList->addItems(obsWebSocketRequests());
 	obsPageLayout->addWidget(obsSearch);
@@ -397,8 +399,10 @@ void WebSocketButtonConfigDialog::setupRequestSection()
 	supPageLayout->setContentsMargins(0, 0, 0, 0);
 	streamUPSearch = new SearchField(supPage);
 	streamUPSearch->setPlaceholderText(obs_module_text("StreamUP.Toolbar.WebSocket.Placeholder.Search"));
+	streamUPSearch->setOnCard(true);
 	streamUPRequestList = new QListWidget(supPage);
-	streamUPRequestList->setStyleSheet(listStyle());
+	// Inside a card the list sits on the darker field colour, like the inputs.
+	streamUPRequestList->setStyleSheet(listStyle() + QString("QListWidget{background:%1;}").arg(Colors::INPUT_ON_CARD));
 	useScrollBars(streamUPRequestList);
 	streamUPRequestList->addItems(StreamUP::ToolbarConfig::streamUPVendorRequests());
 	supPageLayout->addWidget(streamUPSearch);

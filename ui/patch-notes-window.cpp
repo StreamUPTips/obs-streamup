@@ -95,7 +95,7 @@ static QString EntryHtml(const QString &title, const QString &detail)
 		text += QString("<p style=\"margin: 0; color: %1; font-size: 13px; font-weight: 600; line-height: 140%;\">%2</p>")
 				.arg(UIStyles::Colors::TEXT_PRIMARY, ApplyInlineFormatting(UIStyles::sentenceCase(title)));
 	if (!detail.isEmpty())
-		text += QString("<p style=\"margin: %1 0 0 0; color: %2; font-size: 12px; line-height: 150%;\">%3</p>")
+		text += QString("<p style=\"margin: %1 0 0 0; color: %2; font-size: 12px; font-weight: 400; line-height: 150%;\">%3</p>")
 				.arg(title.isEmpty() ? "0" : "2px", UIStyles::Colors::TEXT_SECONDARY, ApplyInlineFormatting(detail));
 	return QString("<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"margin: 0 0 12px 0;\"><tr>"
 		       "<td width=\"14\"></td>"

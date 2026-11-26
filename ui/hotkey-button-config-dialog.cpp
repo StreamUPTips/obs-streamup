@@ -26,7 +26,7 @@ HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(QWidget* parent)
     mainLayout = chrome.content;
     footerButtons = chrome.footerButtons;
     setModal(true);
-    resize(S(540) + 2 * S(ShadowDialog::kShadowMargin), S(470) + 2 * S(ShadowDialog::kShadowMargin));
+    resize(S(540) + 2 * S(ShadowDialog::kShadowMargin), S(440) + 2 * S(ShadowDialog::kShadowMargin));
 
     setupUI();
     validateInput();
@@ -42,7 +42,7 @@ HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(std::shared_ptr<StreamUP::Too
     mainLayout = chrome.content;
     footerButtons = chrome.footerButtons;
     setModal(true);
-    resize(S(540) + 2 * S(ShadowDialog::kShadowMargin), S(470) + 2 * S(ShadowDialog::kShadowMargin));
+    resize(S(540) + 2 * S(ShadowDialog::kShadowMargin), S(440) + 2 * S(ShadowDialog::kShadowMargin));
 
     setupUI();
     setExistingItem(existingItem);
@@ -62,7 +62,8 @@ void HotkeyButtonConfigDialog::setupUI() {
     hotkeyText->setSpacing(S(2));
     selectedHotkeyLabel = makeLabel(obs_module_text("HotkeyButton.Message.NoSelection"), Type::Body, Type::Semibold,
                                     Colors::TEXT_PRIMARY);
-    hotkeyDescriptionLabel = makeLabel(QString(), Type::Small, Type::Regular, Colors::TEXT_SECONDARY);
+    hotkeyDescriptionLabel = makeLabel(obs_module_text("HotkeyButton.Message.NoSelectionLine"), Type::Small, Type::Regular,
+                                       Colors::TEXT_SECONDARY);
     hotkeyDescriptionLabel->setWordWrap(true);
     hotkeyText->addWidget(selectedHotkeyLabel);
     hotkeyText->addWidget(hotkeyDescriptionLabel);

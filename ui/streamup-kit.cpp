@@ -757,13 +757,13 @@ QWidget *FieldRow(const QString &label, const QString &placeholder, QLineEdit **
 	QLabel *name = su::makeLabel(label, su::Type::Body, su::Type::Regular, su::Colors::TEXT_PRIMARY);
 	name->setWordWrap(false);
 	name->setFixedWidth(S(110));
-	h->addWidget(name);
+	h->addWidget(name, 0, Qt::AlignVCenter);
 	auto *field = new QLineEdit(row);
 	field->setPlaceholderText(placeholder);
 	field->setStyleSheet(su::lineEditStyle(true));
 	field->setMinimumHeight(S(30));
 	field->setAccessibleName(label);
-	h->addWidget(field, 1);
+	h->addWidget(field, 1, Qt::AlignVCenter);
 	if (edit)
 		*edit = field;
 	return row;
