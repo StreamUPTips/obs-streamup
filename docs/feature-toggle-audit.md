@@ -283,13 +283,13 @@ Still running on purpose (Core):
 - The menu itself.
 
 The StreamUP menu lists Backup, Quick Actions, Multi-Dock and WebSocket Commands (under Help) only while their part
-is on. Features is always there.
+is on. Settings is always there, and opens on Tools and tweaks.
 
 ### Checked by hand (dev OBS, Main Stream)
 
 - **Toolbar:** off removes it from the window; on builds it again, live.
 - **Backup off:** `GetBackupInfo` and `CreateBackup` answer
-  `{"success": false, "error": "Backup is switched off in StreamUP > Features", "feature": "backup"}`.
+  `{"success": false, "error": "Backup is switched off in StreamUP Settings > Tools and tweaks", "feature": "backup"}`.
 - **WebSocket API off:** every request answers the same way with `"feature": "websocket"`.
 - **Hotkeys off at start-up:** a binding in the collection survives a save. With hotkeys back
   on, it loads and survives a save again.
@@ -300,13 +300,16 @@ is on. Features is always there.
     collection, so nothing is lost.
 - **Restart parts** show "Turns off after an OBS restart" as soon as they are flipped.
 
-## Features page
+## Tools and tweaks (was the Features page)
 
-Replaces the first-run module wizard and Settings > Plugins. That settings row is hidden, and a
-call for it opens the page.
+Replaces the first-run module wizard and Settings > Plugins. Since 3.0 it is the first tab of
+StreamUP Settings (it keeps the old Plugins page slot, `SettingsTabTools`, so tab indices are
+unchanged). The menu has no Features entry any more.
 
 - **Where it opens:**
-  - StreamUP > Features.
+  - StreamUP > Settings (its first tab), and every "Open Tools and tweaks" link.
+  - Welcome's "Pick your features" and What's new's "See every feature", which close the
+    start-up window and open Settings on this tab.
   - On first run (no version stamp).
   - After an update that adds a part the user has not seen, with "New" on those cards. The stamp
     is `features_version_seen`; an upgrader from before the page falls back to

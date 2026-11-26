@@ -28,7 +28,7 @@ Built for [StreamUP](https://streamup.tips) products but genuinely useful even i
 
 ## The StreamUP Menu
 
-StreamUP gets its own menu in the OBS menu bar, next to Help. Everything hangs off it. Parts you switch off on the Features page drop out of the menu.
+StreamUP gets its own menu in the OBS menu bar, next to Help. Everything hangs off it. Parts you switch off in Settings > Tools and tweaks drop out of the menu.
 
 - **My Products…** Every StreamUP product in your scene collection, each with its controls one click away.
 - **Install a Product…** Pick a `.StreamUP` file and it handles the rest. Hold Shift to skip the plugin check.
@@ -42,8 +42,7 @@ StreamUP gets its own menu in the OBS menu bar, next to Help. Everything hangs o
 - **Multi-Dock submenu:** New Multi-Dock, Manage Multi-Docks, and a toggle for each Multi-Dock you've created.
 - **Backup submenu:** Backup OBS, Restore From Backup, and Backup Settings.
 - **Check for Plugin Updates…** Lists every out of date OBS plugin with direct download links. Also runs at launch so you don't get caught out.
-- **Features…** Every part of StreamUP as a card with a switch, so you only run what you use.
-- **Settings…** The main settings dialog (see below).
+- **Settings…** The main settings dialog (see below). It opens on Tools and tweaks: every part of StreamUP as a card with a switch, so you only run what you use.
 - **Help submenu:**
   - Patch Notes: a collapsible card view of every version's changes.
   - WebSocket Commands: the full reference for every StreamUP WebSocket vendor command. Copy OBS Raw requests straight out of it, or Streamer.Bot CPH code if you've got that enabled.

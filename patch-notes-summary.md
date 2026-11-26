@@ -9,7 +9,7 @@
 - **Calmer windows** One line per setting with the details behind a ?, and small notes inside OBS instead of Windows pop-ups.
 
 ## New Features
-- **Tidier StreamUP Menu** Products first, then Quick Actions, Multi-Dock, Backup and plugin updates, then Features and Settings, with Help in its own submenu.
+- **Tidier StreamUP Menu** Products first, then Quick Actions, Multi-Dock, Backup and plugin updates, then Settings, with Help in its own submenu.
 - **Installed Card** Every install ends on a card with the product's picture and the one thing to do next: Adjust it, or go to its scene.
 - **Mixer Tabs Your Way** Put sources on the tabs you want, in your own order. New sources land in Unassigned, and holding Ctrl as you drop shows a source on two tabs.
 - **Everything The OBS Mixer Does** Hide, pin, lock, rename, filters, properties and Advanced Audio Properties, in the same menus as OBS's own mixer.
@@ -22,7 +22,7 @@
 - **More WebSocket Requests** GroupSceneItems, RegisterOverlay, RunOverlayAction, GetMyProducts and OpenMyProducts.
 - **One Windows Download** A single download covers every OBS version.
 
-- **One Window To Start** A Welcome page the first time, What's new after an update, and the Features page in the same window after either.
+- **One Window To Start** A Welcome page the first time, What's new after an update, then Tools and tweaks in Settings after either.
 - **Show Me** Each part's clip big, a line on how to turn it on, and a jump to where it lives in OBS.
 - **Restart When You Are Ready** Change a part that needs a restart and StreamUP offers to restart OBS for you.
 
@@ -35,6 +35,8 @@
 - **Faster Product Controls** They open about five times quicker.
 - **Windows Open Where OBS Is** StreamUP windows and the floating mixer open on the screen OBS is on.
 - **No Surprises With The Adjustment Layer** Switching it off tells you how many scenes use it first.
+- **Feels Like StreamUP** Every StreamUP window takes its colours from the StreamUP theme you have on, and The StreamUP's pink and navy under any other theme. Drop-downs open as one rounded panel, toolbar icons sit dead centre, and the Edit toolbar window has room to breathe.
+- **Tools And Tweaks** Switching parts of StreamUP on and off now lives in Settings, as its first tab, so the menu is one entry shorter.
 - **Calmer Look Everywhere** Drop-downs lose their blue arrow block, the current page in a sidebar is a soft highlight, scrollbars are a quiet grey and the About page drops its gold and purple.
 
 ## Bug Fixes

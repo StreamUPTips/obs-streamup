@@ -3,10 +3,10 @@
 ---
 
 ## v3.0.0 (22 Nov '26)
-**Patch Focus:** StreamUP 3.0, a major update. Every part of StreamUP on one Features page, My Products, the StreamUP Mixer, installs that only check the plugins a product needs, and calmer windows throughout: less text, more pictures
+**Patch Focus:** StreamUP 3.0, a major update. Every part of StreamUP on one Tools and tweaks page in Settings, My Products, the StreamUP Mixer, installs that only check the plugins a product needs, and calmer windows throughout: less text, more pictures
 
 ### Headlines
-- **The Features page.** Every part of StreamUP as a card with a preview, one line and a switch. A part that is off costs OBS nothing
+- **Tools and tweaks.** The first tab of Settings: every part of StreamUP as a card with a preview, one line and a switch. A part that is off costs OBS nothing
 - **My Products.** Every StreamUP product in your collection in one list, with its picture and its controls one click away
 - **The StreamUP Mixer.** An audio mixer dock with tabs, so each group of sources has its own page
 - **Only the plugins you need.** Installing a product checks just the plugins that product uses, and ends on an Installed card with the next step
@@ -14,7 +14,7 @@
 - **Calmer windows.** One line per setting with the detail behind a ?, status shown as coloured pills, and small toasts inside OBS instead of tray balloons
 
 ### New Features
-- The Features page, from StreamUP > Features: every part of StreamUP as a card with a preview, one line, a switch and a Show me button. It opens for new users and after an update that adds a part, with the new parts marked New
+- Tools and tweaks, the first tab of StreamUP Settings: every part of StreamUP as a card with a preview, one line, a switch and a Show me button. It opens for new users and after an update that adds a part, with the new parts marked New
 - Every WebSocket request answers "is switched off" when its part of StreamUP is off
 - The StreamUP Mixer: tabs, your own order on each tab, an Unassigned tab for new sources, and Ctrl drop to show a source on two tabs
 - The mixer does everything OBS's own mixer does, with the same parts, so every theme styles it like the native mixer
@@ -35,17 +35,19 @@
 - New WebSocket requests: GroupSceneItems, RegisterOverlay, RunOverlayAction, GetMyProducts and OpenMyProducts
 - Aitum Multistream dock styling, and Sources dock groups that look like Scene Organiser folders, on the StreamUP theme
 - One Windows download for every OBS version
-- One StreamUP window at start-up: a Welcome page on a first install, What's new after an update, either leading on to the Features page in the same window
+- One StreamUP window at start-up: a Welcome page on a first install, What's new after an update, either leading on to Tools and tweaks in Settings
 - Show me opens the part's clip big, says how to turn it on, and points at it in OBS. A part can link a video
-- A StreamUP Theme section on the Features page holds every theme-only tweak, and says when the theme is not in use
-- Closing the Features page after a change that needs a restart offers to restart OBS
+- A StreamUP Theme section in Tools and tweaks holds every theme-only tweak, and says when the theme is not in use
+- Closing Settings after a change in Tools and tweaks that needs a restart offers to restart OBS
 - Products can list the fonts they need with a link for each, shown as a Get button when one is missing
 - Product sliders with no range of their own use the range of the OBS setting they change
 
 ### Improvements
 - A part that is switched off now costs OBS nothing: no event filters, timers, callbacks or scans left running. Most parts switch straight away; the docks and the Adjustment Layer say when they need a restart
-- The StreamUP menu is tidier: products first, then Quick Actions, Multi-Dock, Backup and plugin updates, then Features and Settings, with Help in its own submenu. Parts that are off drop out of it
-- Settings has fewer tabs and one line per setting. The theme tweaks live on the Features page, the plugin check is a button on General, and the rare Scene Organiser settings fold away
+- The StreamUP menu is tidier: products first, then Quick Actions, Multi-Dock, Backup and plugin updates, then Settings, with Help in its own submenu. Parts that are off drop out of it
+- Settings has fewer tabs and one line per setting. The theme tweaks live in Tools and tweaks, the plugin check is a button on General, and the rare Scene Organiser settings fold away
+- Every StreamUP window follows the active StreamUP theme variant (surfaces, accent, borders, menus), with The StreamUP's colours under any other theme
+- Drop-downs open as one rounded panel; toolbar icons sit centred on whole pixels; the Edit toolbar window is roomier with sections, drag grips and a panel for the selected item
 - Hotkeys you have set come first; the rest fold under Not set
 - Backup settings lead with when your last backup was made
 - The plugins window shows a pill per problem and one row per plugin with a Get button, plugins that are not loading or switched off included
