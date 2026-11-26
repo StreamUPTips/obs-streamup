@@ -32,8 +32,11 @@ public:
 		// The pill paints itself, so the OBS theme's button box model must
 		// not apply: Yami's margin-top/bottom and max-height pushed the pill
 		// off the row's centre line.
-		setStyleSheet(QStringLiteral("QPushButton{margin:0px;padding:0px;border:none;"
-					     "background:transparent;min-height:0px;max-height:16777215px;}"));
+		// The height is pinned here too: Yami's QPushButton height and
+		// max-height otherwise squash the pill to a thin bar.
+		setStyleSheet(QStringLiteral("QPushButton{margin:0px;padding:0px;border:none;background:transparent;"
+					     "min-height:%1px;max-height:%1px;height:%1px;}")
+				      .arg(S(30)));
 	}
 
 	// Optional leading icon, painted to the LEFT of the label. The icon+gap+label
