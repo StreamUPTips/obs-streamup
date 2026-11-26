@@ -5,6 +5,7 @@
 #include <streamup/ui/window-chrome.hpp>
 #include <streamup/ui/pill-button.hpp>
 #include <streamup/ui/labels.hpp>
+#include <streamup/ui/section-card.hpp>
 #include "version.h"
 #include <QMessageBox>
 #include <QUuid>
@@ -25,7 +26,7 @@ HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(QWidget* parent)
     mainLayout = chrome.content;
     footerButtons = chrome.footerButtons;
     setModal(true);
-    resize(500 + 2 * ShadowDialog::kShadowMargin, 400 + 2 * ShadowDialog::kShadowMargin);
+    resize(S(540) + 2 * S(ShadowDialog::kShadowMargin), S(470) + 2 * S(ShadowDialog::kShadowMargin));
 
     setupUI();
     validateInput();
@@ -41,7 +42,7 @@ HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(std::shared_ptr<StreamUP::Too
     mainLayout = chrome.content;
     footerButtons = chrome.footerButtons;
     setModal(true);
-    resize(500 + 2 * ShadowDialog::kShadowMargin, 400 + 2 * ShadowDialog::kShadowMargin);
+    resize(S(540) + 2 * S(ShadowDialog::kShadowMargin), S(470) + 2 * S(ShadowDialog::kShadowMargin));
 
     setupUI();
     setExistingItem(existingItem);
@@ -49,80 +50,57 @@ HotkeyButtonConfigDialog::HotkeyButtonConfigDialog(std::shared_ptr<StreamUP::Too
 }
 
 void HotkeyButtonConfigDialog::setupUI() {
-    // Hotkey selection section (sectionHeader + plain QWidget section — no group frame)
-    mainLayout->addWidget(sectionHeader(obs_module_text("HotkeyButton.Group.Hotkey")));
+    mainLayout->setSpacing(S(12));
+
+    // 1. Which hotkey: what is chosen, with the way to choose it.
+    QVBoxLayout *hotkeyCard = sectionCard(mainLayout, obs_module_text("HotkeyButton.Group.Hotkey"));
     hotkeyGroup = new QWidget(this);
-    hotkeyFormLayout = new QFormLayout(hotkeyGroup);
-
-    selectedHotkeyLabel = new QLabel(obs_module_text("HotkeyButton.Message.NoSelection"), hotkeyGroup);
-    selectedHotkeyLabel->setStyleSheet(QString("color: %1; font-style: italic;").arg(Colors::TEXT_MUTED));
-
-    hotkeyDescriptionLabel = new QLabel("", hotkeyGroup);
+    auto *hotkeyRow = new QHBoxLayout(hotkeyGroup);
+    hotkeyRow->setContentsMargins(0, S(4), 0, S(2));
+    hotkeyRow->setSpacing(S(12));
+    auto *hotkeyText = new QVBoxLayout();
+    hotkeyText->setSpacing(S(2));
+    selectedHotkeyLabel = makeLabel(obs_module_text("HotkeyButton.Message.NoSelection"), Type::Body, Type::Semibold,
+                                    Colors::TEXT_PRIMARY);
+    hotkeyDescriptionLabel = makeLabel(QString(), Type::Small, Type::Regular, Colors::TEXT_SECONDARY);
     hotkeyDescriptionLabel->setWordWrap(true);
-    hotkeyDescriptionLabel->setStyleSheet(QString("color: %1;").arg(Colors::TEXT_PRIMARY));
-
-    selectHotkeyButton = new PillButton(obs_module_text("HotkeyButton.Button.SelectHotkey"), "primary");
-
-    hotkeyFormLayout->addRow(QString(obs_module_text("HotkeyButton.Label.Selected")), selectedHotkeyLabel);
-    hotkeyFormLayout->addRow(QString(obs_module_text("HotkeyButton.Label.Description")), hotkeyDescriptionLabel);
-    hotkeyFormLayout->addRow("", selectHotkeyButton);
-
-    mainLayout->addWidget(hotkeyGroup);
-
+    hotkeyText->addWidget(selectedHotkeyLabel);
+    hotkeyText->addWidget(hotkeyDescriptionLabel);
+    hotkeyRow->addLayout(hotkeyText, 1);
+    selectHotkeyButton = new PillButton(obs_module_text("HotkeyButton.Button.SelectHotkey"), "neutral");
+    hotkeyRow->addWidget(selectHotkeyButton, 0, Qt::AlignVCenter);
+    hotkeyCard->addWidget(hotkeyGroup);
     connect(selectHotkeyButton, &QPushButton::clicked, this, &HotkeyButtonConfigDialog::onSelectHotkeyClicked);
 
-    // Icon selection section
-    mainLayout->addWidget(sectionHeader(obs_module_text("HotkeyButton.Group.Icon")));
+    // 2. The button: a live preview, its icon, its caption and its tooltip.
+    QVBoxLayout *buttonCard = sectionCard(mainLayout, obs_module_text("HotkeyButton.Group.Button"));
     iconGroup = new QWidget(this);
-    iconLayout = new QVBoxLayout(iconGroup);
-
-    // Icon preview section
-    iconPreviewLayout = new QHBoxLayout();
-    iconPreviewLabel = new QLabel(obs_module_text("HotkeyButton.Label.Preview"), iconGroup);
-    iconPreview = new QLabel(iconGroup);
-    iconPreview->setFixedHeight(S(32));
-    iconPreview->setMinimumWidth(S(32));
-    iconPreview->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    iconPreview->setStyleSheet(scale_qss(QString("border: 1px solid %1;").arg(Colors::POPUP_BORDER)));
-    iconPreview->setAlignment(Qt::AlignCenter);
-    iconPreview->setScaledContents(true);
-
-    selectIconButton = new PillButton(obs_module_text("HotkeyButton.Button.SelectIcon"), "primary");
-
-    iconPreviewLayout->addWidget(iconPreviewLabel);
-    iconPreviewLayout->addWidget(iconPreview);
-    iconPreviewLayout->addWidget(selectIconButton);
-    iconPreviewLayout->addStretch();
-
-    iconLayout->addLayout(iconPreviewLayout);
-
-    mainLayout->addWidget(iconGroup);
-
+    auto *previewRow = new QHBoxLayout(iconGroup);
+    previewRow->setContentsMargins(0, S(6), 0, S(6));
+    previewRow->setSpacing(S(12));
+    m_preview = new StreamUP::Kit::ButtonPreview(iconGroup);
+    previewRow->addWidget(m_preview, 1);
+    selectIconButton = new PillButton(obs_module_text("HotkeyButton.Button.SelectIcon"), "neutral");
+    previewRow->addWidget(selectIconButton, 0, Qt::AlignVCenter);
+    buttonCard->addWidget(iconGroup);
     connect(selectIconButton, &QPushButton::clicked, this, &HotkeyButtonConfigDialog::onSelectIconClicked);
+    // Kept for the code that still reports to it; the preview tile shows the icon.
+    iconPreview = new QLabel(this);
+    iconPreview->hide();
 
-    // Button customization section
-    mainLayout->addWidget(sectionHeader(obs_module_text("HotkeyButton.Group.Customization")));
-    customizationGroup = new QWidget(this);
-    customizationLayout = new QFormLayout(customizationGroup);
-
-    buttonTextEdit = new QLineEdit(customizationGroup);
-    buttonTextEdit->setPlaceholderText(obs_module_text("HotkeyButton.Placeholder.ButtonText"));
-    buttonTextEdit->setStyleSheet(lineEditStyle());
-
-    tooltipEdit = new QLineEdit(customizationGroup);
-    tooltipEdit->setPlaceholderText(obs_module_text("HotkeyButton.Placeholder.Tooltip"));
-    tooltipEdit->setStyleSheet(lineEditStyle());
-
-    customizationLayout->addRow(obs_module_text("HotkeyButton.Label.ButtonText"), buttonTextEdit);
-    customizationLayout->addRow(obs_module_text("HotkeyButton.Label.Tooltip"), tooltipEdit);
-
-    mainLayout->addWidget(customizationGroup);
+    buttonCard->addWidget(StreamUP::Kit::FieldRow(obs_module_text("HotkeyButton.Label.ButtonText"),
+                                                  obs_module_text("HotkeyButton.Placeholder.ButtonText"), &buttonTextEdit));
+    buttonCard->addWidget(StreamUP::Kit::FieldRow(obs_module_text("HotkeyButton.Label.Tooltip"),
+                                                  obs_module_text("HotkeyButton.Placeholder.Tooltip"), &tooltipEdit));
+    connect(buttonTextEdit, &QLineEdit::textChanged, this, [this]() { refreshPreview(); });
+    connect(tooltipEdit, &QLineEdit::textChanged, this, [this]() { refreshPreview(); });
+    mainLayout->addStretch(1);
 
     // Dialog buttons in footer (right-anchored action slot)
     okButton = new PillButton(
         isEditMode ? obs_module_text("HotkeyButton.Button.Update") : obs_module_text("HotkeyButton.Button.Add"),
         "primary");
-    cancelButton = new PillButton(obs_module_text("UI.Button.Cancel"), "outline");
+    cancelButton = new PillButton(obs_module_text("UI.Button.Cancel"), "neutral");
 
     okButton->setDefault(true);
     okButton->setEnabled(false);
@@ -133,8 +111,22 @@ void HotkeyButtonConfigDialog::setupUI() {
     connect(okButton, &QPushButton::clicked, this, &QDialog::accept);
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
 
-    // Initial validation
+    refreshPreview();
     validateInput();
+}
+
+// The preview shows exactly what Add will make: the typed caption and tooltip,
+// or what they fall back to when left empty.
+void HotkeyButtonConfigDialog::refreshPreview() {
+    if (!m_preview)
+        return;
+    const QString fallback = selectedHotkey.name.isEmpty() ? QString()
+                                                           : StreamUP::OBSHotkeyManager::displayLabel(selectedHotkey);
+    const QString caption = buttonTextEdit && !buttonTextEdit->text().trimmed().isEmpty()
+                                ? buttonTextEdit->text().trimmed() : fallback;
+    const QString tip = tooltipEdit && !tooltipEdit->text().trimmed().isEmpty() ? tooltipEdit->text().trimmed() : fallback;
+    m_preview->setText(caption, tip);
+    m_preview->setIconPath(selectedIconPath);
 }
 
 void HotkeyButtonConfigDialog::setExistingItem(std::shared_ptr<StreamUP::ToolbarConfig::HotkeyButtonItem> item) {
@@ -197,12 +189,11 @@ void HotkeyButtonConfigDialog::onSelectIconClicked() {
 void HotkeyButtonConfigDialog::updateHotkeyDisplay() {
     if (selectedHotkey.name.isEmpty()) {
         selectedHotkeyLabel->setText(obs_module_text("HotkeyButton.Message.NoSelection"));
-        selectedHotkeyLabel->setStyleSheet(QString("color: %1; font-style: italic;").arg(UIStyles::Colors::TEXT_MUTED));
-        hotkeyDescriptionLabel->clear();
+        hotkeyDescriptionLabel->setText(obs_module_text("HotkeyButton.Message.NoSelectionLine"));
     } else {
-        selectedHotkeyLabel->setText(selectedHotkey.name);
-        selectedHotkeyLabel->setStyleSheet(QString("color: %1; font-weight: 600;").arg(UIStyles::Colors::TEXT_PRIMARY));
-        hotkeyDescriptionLabel->setText(StreamUP::OBSHotkeyManager::displayLabel(selectedHotkey));
+        // What it does, in words, first; the raw hotkey name under it.
+        selectedHotkeyLabel->setText(StreamUP::OBSHotkeyManager::displayLabel(selectedHotkey));
+        hotkeyDescriptionLabel->setText(selectedHotkey.name);
 
         // Auto-fill button text and tooltip if empty. The caption wants to be
         // short, so it takes the source name where there is one ("Main Cam"
@@ -217,10 +208,15 @@ void HotkeyButtonConfigDialog::updateHotkeyDisplay() {
     }
     
     // Validate after updating display
+    refreshPreview();
     validateInput();
 }
 
 void HotkeyButtonConfigDialog::updateIconDisplay() {
+    // A hotkey with a default icon gets it until another is chosen.
+    if (selectedIconPath.isEmpty() && !selectedHotkey.name.isEmpty())
+        selectedIconPath = StreamUP::OBSHotkeyManager::getDefaultHotkeyIcon(selectedHotkey.name);
+    refreshPreview();
     iconPreview->clear();
     iconPreview->setContentsMargins(S(6), 0, S(6), 0);
 

@@ -1,4 +1,5 @@
 #include "streamup-kit.hpp"
+#include "ui-helpers.hpp"
 
 #include <streamup/ui/gallery-style.hpp>
 #include <streamup/ui/labels.hpp>
@@ -37,6 +38,8 @@
 #include <QEasingCurve>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include <QLineEdit>
+#include <QFileInfo>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -694,6 +697,76 @@ bool IsMember()
 	// No sign-in exists in the plugin yet, so there is nothing to check.
 	// When there is, members see a thank-you instead of the pitch.
 	return false;
+}
+
+ButtonPreview::ButtonPreview(QWidget *parent) : QFrame(parent)
+{
+	setObjectName("suButtonPreview");
+	setStyleSheet(su::scale_qss(QString("QFrame#suButtonPreview{background:%1;border:1px solid %2;border-radius:12px;}"
+					     "QFrame#suButtonPreview QLabel{background:transparent;border:none;}")
+					     .arg(su::Colors::INPUT_ON_CARD, su::Colors::BORDER_SUBTLE)));
+	auto *h = new QHBoxLayout(this);
+	h->setContentsMargins(S(12), S(10), S(12), S(10));
+	h->setSpacing(S(12));
+	m_tile = new QLabel(this);
+	m_tile->setFixedSize(S(40), S(40));
+	m_tile->setAlignment(Qt::AlignCenter);
+	h->addWidget(m_tile, 0, Qt::AlignVCenter);
+	auto *text = new QVBoxLayout();
+	text->setSpacing(S(2));
+	m_caption = su::makeLabel(QString(), su::Type::Body, su::Type::Semibold, su::Colors::TEXT_PRIMARY);
+	m_tooltip = su::makeLabel(QString(), su::Type::Small, su::Type::Regular, su::Colors::TEXT_MUTED);
+	m_caption->setWordWrap(false);
+	m_tooltip->setWordWrap(false);
+	text->addWidget(m_caption);
+	text->addWidget(m_tooltip);
+	h->addLayout(text, 1);
+	setIconPath(QString());
+}
+
+void ButtonPreview::setIconPath(const QString &path)
+{
+	QPixmap pm;
+	if (!path.isEmpty()) {
+		const QString file = QFileInfo(path).isAbsolute() ? path : StreamUP::UIHelpers::GetThemedIconPath(path);
+		const qreal dpr = devicePixelRatioF();
+		pm = QIcon(file).pixmap(QSize(S(20), S(20)), dpr);
+	}
+	// The tile is the toolbar button: the hover fill and radius of the theme's
+	// toolbar buttons, the icon centred at its toolbar size.
+	m_tile->setStyleSheet(su::scale_qss(pm.isNull() ? QString("QLabel{background:transparent;border:1px dashed %1;border-radius:8px;}")
+								  .arg(su::Colors::TEXT_MUTED)
+							: QString("QLabel{background:%1;border:none;border-radius:8px;}")
+								  .arg(su::Colors::BG_TERTIARY)));
+	m_tile->setPixmap(pm);
+}
+
+void ButtonPreview::setText(const QString &caption, const QString &tooltip)
+{
+	m_caption->setText(caption.isEmpty() ? Tr("Kit.ButtonPreview.NoCaption") : caption);
+	m_tooltip->setText(tooltip.isEmpty() ? QString() : Tr("Kit.ButtonPreview.Tooltip").arg(tooltip));
+	m_tooltip->setVisible(!tooltip.isEmpty());
+}
+
+QWidget *FieldRow(const QString &label, const QString &placeholder, QLineEdit **edit)
+{
+	auto *row = new QWidget();
+	auto *h = new QHBoxLayout(row);
+	h->setContentsMargins(0, S(3), 0, S(3));
+	h->setSpacing(S(12));
+	QLabel *name = su::makeLabel(label, su::Type::Body, su::Type::Regular, su::Colors::TEXT_PRIMARY);
+	name->setWordWrap(false);
+	name->setFixedWidth(S(110));
+	h->addWidget(name);
+	auto *field = new QLineEdit(row);
+	field->setPlaceholderText(placeholder);
+	field->setStyleSheet(su::lineEditStyle(true));
+	field->setMinimumHeight(S(30));
+	field->setAccessibleName(label);
+	h->addWidget(field, 1);
+	if (edit)
+		*edit = field;
+	return row;
 }
 
 QString NavListQss()

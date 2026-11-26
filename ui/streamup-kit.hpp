@@ -17,6 +17,7 @@ class QLabel;
 class QVBoxLayout;
 class QMovie;
 class QPushButton;
+class QLineEdit;
 
 namespace StreamUP {
 namespace Kit {
@@ -69,6 +70,26 @@ void FitToContent(QWidget *window, int designWidth);
 QWidget *SwitchedOffBanner(const QString &featureName);
 void DimForSwitchedOff(QWidget *content, bool off);
 void SetOpenFeaturesHook(std::function<void()> fn);
+
+// How a toolbar button will look: its icon on a rounded tile the size of a
+// toolbar button, with the caption and tooltip beside it. The Hotkey and
+// WebSocket button windows show it live as you type.
+class ButtonPreview : public QFrame {
+public:
+	explicit ButtonPreview(QWidget *parent = nullptr);
+	// An empty path shows a dashed empty tile.
+	void setIconPath(const QString &path);
+	void setText(const QString &caption, const QString &tooltip);
+
+private:
+	QLabel *m_tile = nullptr;
+	QLabel *m_caption = nullptr;
+	QLabel *m_tooltip = nullptr;
+};
+
+// A labelled text field for a form card: the label on the left, the field
+// filling the rest. Returns the row; the field comes back through *edit.
+QWidget *FieldRow(const QString &label, const QString &placeholder, QLineEdit **edit);
 
 // The navigation rail every sidebar window uses (Settings, My Products, the
 // controls window): a soft raised row for the current page, a fainter one on
