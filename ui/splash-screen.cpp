@@ -32,6 +32,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QTimer>
+#include <QSet>
 #include <QFrame>
 #include <QPropertyAnimation>
 #include <QEasingCurve>
@@ -498,13 +499,20 @@ static SupportersData ParseSupporters(const QJsonObject &root)
     SupportersData out;
     auto read = [&root](const char *key, std::vector<Supporter> &into) {
         const QJsonObject obj = root.value(key).toObject();
+        // One chip per name: a supporter on two tiers is still one person.
+        QSet<QString> seen;
         for (const QJsonValue value : obj.value("supporters").toArray()) {
             const QJsonObject o = value.toObject();
             Supporter s;
             s.userId = o.value("userId").toString();
-            s.displayName = o.value("displayName").toString();
-            if (!s.displayName.isEmpty())
-                into.push_back(s);
+            s.displayName = o.value("displayName").toString().trimmed();
+            if (s.displayName.isEmpty())
+                continue;
+            const QString k = s.displayName.toCaseFolded();
+            if (seen.contains(k))
+                continue;
+            seen.insert(k);
+            into.push_back(s);
         }
         std::sort(into.begin(), into.end());
     };
@@ -1384,7 +1392,7 @@ void CreateSplashDialog(ShowCondition condition)
                 "QLabel {"
                 "font-size: %1px;"
                 "font-weight: 600;"
-                "color: #cdd6f4;"
+                "color: #ffffff;"
                 "margin: 0;"
                 "}")
                 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_LARGE)));
@@ -1487,7 +1495,7 @@ void CreateSplashDialog(ShowCondition condition)
                 auto *box = new QFrame();
                 box->setObjectName("aboutChunk");
                 box->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
-                    "QFrame#aboutChunk{background:%1;border:1px solid rgba(255,255,255,0.06);border-radius:12px;}"
+                    "QFrame#aboutChunk{background:%1;border:1px solid " + QString(StreamUP::UIStyles::Colors::BORDER_SUBTLE) + ";border-radius:12px;}"
                     "QFrame#aboutChunk QLabel{background:transparent;border:none;}")
                     .arg(StreamUP::UIStyles::Colors::BG_PRIMARY)));
                 auto *v = new QVBoxLayout(box);
