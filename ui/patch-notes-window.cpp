@@ -52,38 +52,72 @@ static QString ApplyInlineFormatting(QString line)
 	return line;
 }
 
+// A colour flattened onto the card surface, as #rrggbb: rich text has no
+// alpha, so the tinted section labels are mixed here.
+static QString Tint(const QColor &c, double amount)
+{
+	const QColor bg(UIStyles::Colors::BG_PRIMARY);
+	return QColor(int(c.red() * amount + bg.red() * (1 - amount)), int(c.green() * amount + bg.green() * (1 - amount)),
+		      int(c.blue() * amount + bg.blue() * (1 - amount)))
+		.name();
+}
+
+// A section heading as a small coloured label: New in the accent, Improved
+// in green, Fixed in amber, so a version's notes can be scanned by kind.
+static QString SectionLabel(const QString &heading)
+{
+	const QString h = heading.toLower();
+	QString text = UIStyles::sentenceCase(heading);
+	QColor colour(UIStyles::Colors::PRIMARY_COLOR);
+	if (h.contains("fix")) {
+		text = QStringLiteral("Fixed");
+		colour = QColor(UIStyles::Colors::COLOR_WARNING);
+	} else if (h.contains("improve")) {
+		text = QStringLiteral("Improved");
+		colour = QColor(UIStyles::Colors::COLOR_SUCCESS);
+	} else if (h.contains("new")) {
+		text = QStringLiteral("New");
+	} else if (h.contains("headline")) {
+		text = QStringLiteral("Highlights");
+	}
+	return QString("<table cellspacing=\"0\" cellpadding=\"4\" style=\"margin: 20px 0 6px 0;\"><tr>"
+		       "<td style=\"background-color: %1; color: %2; font-size: 11px; font-weight: 600;\">&nbsp;%3&nbsp;</td>"
+		       "</tr></table>\n")
+		.arg(Tint(colour, 0.18), colour.name(), text.toHtmlEscaped());
+}
+
+// One entry, indented under its section: an accent dot, the title on its own
+// line and the detail under it, with room between lines.
+static QString EntryHtml(const QString &title, const QString &detail)
+{
+	QString text;
+	if (!title.isEmpty())
+		text += QString("<p style=\"margin: 0; color: %1; font-size: 13px; font-weight: 600; line-height: 140%;\">%2</p>")
+				.arg(UIStyles::Colors::TEXT_PRIMARY, ApplyInlineFormatting(UIStyles::sentenceCase(title)));
+	if (!detail.isEmpty())
+		text += QString("<p style=\"margin: %1 0 0 0; color: %2; font-size: 12px; line-height: 150%;\">%3</p>")
+				.arg(title.isEmpty() ? "0" : "2px", UIStyles::Colors::TEXT_SECONDARY, ApplyInlineFormatting(detail));
+	return QString("<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"margin: 0 0 12px 0;\"><tr>"
+		       "<td width=\"14\"></td>"
+		       "<td width=\"16\" valign=\"top\" style=\"color: %1; font-size: 13px; font-weight: 600;\">&#8226;</td>"
+		       "<td valign=\"top\">%2</td></tr></table>\n")
+		.arg(UIStyles::Colors::PRIMARY_COLOR, text);
+}
+
 // Convert a single version's markdown body (no h1) to inline-styled HTML.
 static QString MarkdownBodyToHtml(const QString &md)
 {
 	QString out;
-	bool inList = false;
 	const QStringList lines = md.split('\n');
 	for (const QString &raw : lines) {
-		QString line = raw;
-		if (line.trimmed().isEmpty()) continue;
-
-		auto closeList = [&]() {
-			if (inList) {
-				out += "</ul>\n";
-				inList = false;
-			}
-		};
-
-		if (line.startsWith("### ")) {
-			closeList();
-			out += QString("<h4 style=\"color: %1; margin: 10px 0 4px 0; font-size: 13px; font-weight: 600;\">%2</h4>\n")
-				.arg(UIStyles::Colors::TEXT_PRIMARY, UIStyles::sentenceCase(line.mid(4)));
-		} else if (line.startsWith("## ")) {
-			closeList();
-			out += QString("<h3 style=\"color: %1; margin: 22px 0 0 0; font-size: 14px; font-weight: 600;\">%2</h3>\n")
-				.arg(UIStyles::Colors::TEXT_PRIMARY, UIStyles::sentenceCase(line.mid(3)));
+		const QString line = raw.trimmed();
+		if (line.isEmpty())
+			continue;
+		if (line.startsWith("## ") || line.startsWith("### ")) {
+			out += SectionLabel(line.mid(line.indexOf(' ') + 1));
 		} else if (line.startsWith("- ")) {
-			// An entry is written as `- **Title** Body`. Rendered as one bullet
-			// that is a paragraph with a bold run buried at the front, and a
-			// page of them reads as a wall. The title goes on its own line
-			// instead, with the detail under it, so the list can be skimmed by
-			// title alone and only the interesting ones get read.
-			closeList();
+			// An entry is written as `- **Title** Body`: the title goes on its
+			// own line with the detail under it, so the list skims by title.
 			const QString entry = line.mid(2).trimmed();
 			QString title;
 			QString detail = entry;
@@ -94,32 +128,12 @@ static QString MarkdownBodyToHtml(const QString &md)
 					detail = entry.mid(close + 2).trimmed();
 				}
 			}
-
-			if (title.isEmpty()) {
-				out += QString("<p style=\"margin: 0 0 12px 0;\">%1</p>\n")
-					.arg(ApplyInlineFormatting(entry));
-			} else {
-				// The title has to win against the detail under it, and the two
-				// text colours are a shade apart, so the weight and the size do
-				// the work. The gap between entries hangs off the title's top
-				// margin rather than the detail's bottom one, which keeps a
-				// title tight to the text it introduces.
-				out += QString("<p style=\"margin: 16px 0 2px 0; color: %1; font-size: 13px; font-weight: 600;\">%2</p>\n")
-					.arg(UIStyles::Colors::TEXT_PRIMARY, ApplyInlineFormatting(UIStyles::sentenceCase(title)));
-				if (!detail.isEmpty()) {
-					out += QString("<p style=\"margin: 0; color: %1; font-weight: 400;\">%2</p>\n")
-						.arg(UIStyles::Colors::TEXT_SECONDARY, ApplyInlineFormatting(detail));
-				}
-			}
+			out += EntryHtml(title, detail);
 		} else {
-			closeList();
-			out += QString("<p style=\"margin: 6px 0;\">%1</p>\n").arg(ApplyInlineFormatting(line));
+			out += QString("<p style=\"margin: 6px 0; line-height: 150%;\">%1</p>\n").arg(ApplyInlineFormatting(line));
 		}
 	}
-	if (inList) out += "</ul>\n";
-
-	return QString("<div style=\"color: %1; line-height: 1.5; font-size: 12px;\">%2</div>")
-		.arg(UIStyles::Colors::TEXT_SECONDARY, out);
+	return QString("<div style=\"color: %1; font-size: 12px;\">%2</div>").arg(UIStyles::Colors::TEXT_SECONDARY, out);
 }
 
 // Read the raw patch notes markdown and split into per-version blocks.
@@ -198,7 +212,7 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 		"  padding: 12px 14px;"
 		"}"
 		"QPushButton:hover { color: %2; }")
-		.arg(UIStyles::Colors::TEXT_PRIMARY)
+		.arg(UIStyles::Colors::PRIMARY_COLOR)
 		.arg(UIStyles::Colors::PRIMARY_LIGHT)));
 	cardLay->addWidget(header);
 
@@ -206,7 +220,7 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 	body->setTextFormat(Qt::RichText);
 	body->setWordWrap(true);
 	body->setOpenExternalLinks(true);
-	body->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { background: transparent; color: %1; padding: 4px 14px 12px 14px; }")
+	body->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { background: transparent; color: %1; padding: 0px 18px 10px 18px; }")
 		.arg(UIStyles::Colors::TEXT_SECONDARY)));
 	body->setVisible(expanded);
 	cardLay->addWidget(body);
