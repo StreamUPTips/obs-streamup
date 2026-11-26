@@ -1,4 +1,5 @@
 #include "ui-helpers.hpp"
+#include <streamup/ui/kit.hpp>
 #include <streamup/ui/window-chrome.hpp>
 #include <streamup/ui/pill-button.hpp>
 #include <streamup/ui/labels.hpp>
@@ -415,37 +416,14 @@ void ApplyVisibilityTheme(QAbstractButton *btn, bool visible)
 
 QString GetThemedIconPath(const QString &iconName)
 {
-	bool isDarkTheme = obs_frontend_is_theme_dark();
-	StreamUP::DebugLogger::LogDebugFormat("UI", "Theme Detection", "obs_frontend_is_theme_dark() returned: %s", isDarkTheme ? "true" : "false");
-
-	// Use appropriate suffix based on theme for custom icons
-	QString themeSuffix = isDarkTheme ? "-dark" : "-light";
-	QString iconPath = QString(":images/icons/ui/%1%2.svg").arg(iconName).arg(themeSuffix);
-
-	StreamUP::DebugLogger::LogDebugFormat("UI", "Icon Path", "Icon '%s' -> %s theme -> %s",
-		iconName.toUtf8().constData(), isDarkTheme ? "dark" : "light", iconPath.toUtf8().constData());
-
-	return iconPath;
+	// One resolver for every StreamUP icon: the shared kit's Tabler set first,
+	// then this plugin's own :images/icons/ui files.
+	return StreamUP::Kit::IconPath(iconName);
 }
 
 QIcon CreateThemedIcon(const QString &baseName)
 {
-	// Create a QIcon that can handle theme changes automatically
-	// This approach is more Qt-standard and handles theme switching better
-	QIcon icon;
-	
-	// Add both light and dark variants to the icon
-	// Qt and OBS can then automatically choose the appropriate one
-	QString lightIconPath = QString(":images/icons/ui/%1-light.svg").arg(baseName);
-	QString darkIconPath = QString(":images/icons/ui/%1-dark.svg").arg(baseName);
-	
-	// Add the current theme's icon as the default
-	bool isDarkTheme = obs_frontend_is_theme_dark();
-	QString currentIconPath = isDarkTheme ? darkIconPath : lightIconPath;
-	
-	icon.addFile(currentIconPath);
-	
-	return icon;
+	return QIcon(StreamUP::Kit::IconPath(baseName));
 }
 
 bool IsOBSThemeDark()

@@ -20,70 +20,18 @@
 		<file>images/icons/ui/status-message-dark.svg</file>
 
 		<!-- Streaming Icons -->
-		<file>images/icons/ui/streaming-inactive-light.svg</file>
-		<file>images/icons/ui/streaming-inactive-dark.svg</file>
-		<file>images/icons/ui/streaming-light.svg</file>
-		<file>images/icons/ui/streaming-dark.svg</file>
 
 		<!-- Recording Icons -->
-		<file>images/icons/ui/record-off-light.svg</file>
-		<file>images/icons/ui/record-off-dark.svg</file>
-		<file>images/icons/ui/record-on-light.svg</file>
-		<file>images/icons/ui/record-on-dark.svg</file>
-		<file>images/icons/ui/pause-light.svg</file>
-		<file>images/icons/ui/pause-dark.svg</file>
 
 		<!-- Replay Buffer Icons -->
-		<file>images/icons/ui/replay-buffer-off-light.svg</file>
-		<file>images/icons/ui/replay-buffer-off-dark.svg</file>
-		<file>images/icons/ui/replay-buffer-on-light.svg</file>
-		<file>images/icons/ui/replay-buffer-on-dark.svg</file>
-		<file>images/icons/ui/save-replay-light.svg</file>
-		<file>images/icons/ui/save-replay-dark.svg</file>
 
 		<!-- Virtual Camera Icons -->
-		<file>images/icons/ui/virtual-camera-on-light.svg</file>
-		<file>images/icons/ui/virtual-camera-on-dark.svg</file>
-		<file>images/icons/ui/virtual-camera-light.svg</file>
-		<file>images/icons/ui/virtual-camera-dark.svg</file>
-		<file>images/icons/ui/virtual-camera-settings-light.svg</file>
-		<file>images/icons/ui/virtual-camera-settings-dark.svg</file>
 
 		<!-- Studio Mode & Settings Icons -->
-		<file>images/icons/ui/studio-mode-light.svg</file>
-		<file>images/icons/ui/studio-mode-dark.svg</file>
-		<file>images/icons/ui/settings-light.svg</file>
-		<file>images/icons/ui/settings-dark.svg</file>
 
 		<!-- Source Management Icons -->
-		<file>images/icons/ui/all-scene-source-locked-light.svg</file>
-		<file>images/icons/ui/all-scene-source-locked-dark.svg</file>
-		<file>images/icons/ui/all-scene-source-unlocked-light.svg</file>
-		<file>images/icons/ui/all-scene-source-unlocked-dark.svg</file>
-		<file>images/icons/ui/current-scene-source-locked-light.svg</file>
-		<file>images/icons/ui/current-scene-source-locked-dark.svg</file>
-		<file>images/icons/ui/current-scene-source-unlocked-light.svg</file>
-		<file>images/icons/ui/current-scene-source-unlocked-dark.svg</file>
 
 		<!-- Device & Refresh Icons -->
-		<file>images/icons/ui/camera-light.svg</file>
-		<file>images/icons/ui/camera-dark.svg</file>
-		<file>images/icons/ui/video-capture-device-activate-light.svg</file>
-		<file>images/icons/ui/video-capture-device-activate-dark.svg</file>
-		<file>images/icons/ui/video-capture-device-deactivate-light.svg</file>
-		<file>images/icons/ui/video-capture-device-deactivate-dark.svg</file>
-		<file>images/icons/ui/video-capture-device-refresh-light.svg</file>
-		<file>images/icons/ui/video-capture-device-refresh-dark.svg</file>
-		<file>images/icons/ui/refresh-browser-sources-light.svg</file>
-		<file>images/icons/ui/refresh-browser-sources-dark.svg</file>
-		<file>images/icons/ui/refresh-audio-monitoring-light.svg</file>
-		<file>images/icons/ui/refresh-audio-monitoring-dark.svg</file>
-		<file>images/icons/ui/add-sources-to-group-light.svg</file>
-		<file>images/icons/ui/add-sources-to-group-dark.svg</file>
-		<file>images/icons/ui/visible-light.svg</file>
-		<file>images/icons/ui/visible-dark.svg</file>
-		<file>images/icons/ui/visible-off-light.svg</file>
-		<file>images/icons/ui/visible-off-dark.svg</file>
 
 		<!-- Form Control Icons -->
 		<file>images/icons/ui/dropdown-arrow-light.svg</file>

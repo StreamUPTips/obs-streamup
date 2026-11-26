@@ -51,21 +51,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/multidock
     ${CMAKE_CURRENT_SOURCE_DIR}/sources)
 
-# Shared StreamUP custom-window UI design system (obs-streamup-ui-gallery),
-# vendored under shared/obs-streamup-ui/. Compiled directly into the plugin
-# (header-only + one moc'd .cpp) so each plugin is self-contained: no shared
-# sub-target, no cross-plugin link, builds in any config/order.
-set(STREAMUP_UI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shared/obs-streamup-ui")
-target_include_directories(${PROJECT_NAME} PRIVATE
-  "${STREAMUP_UI_DIR}/include"
-  "${STREAMUP_UI_DIR}/include/streamup/ui" # flat includes inside switch-button.cpp
-)
-target_sources(${PROJECT_NAME} PRIVATE
-  "${STREAMUP_UI_DIR}/src/switch-button.cpp"
-  "${STREAMUP_UI_DIR}/src/feedback.cpp" # shared in-app feedback dialog
-  "${STREAMUP_UI_DIR}/include/streamup/ui/switch-button.hpp" # Q_OBJECT -> AUTOMOC
-  "${STREAMUP_UI_DIR}/include/streamup/ui/ios-checkbox.hpp"  # Q_OBJECT -> AUTOMOC
-)
+# Shared StreamUP UI library (shared/obs-streamup-ui): the 3.0 look, theme
+# tokens, the kit and the icon set. Compiled straight into the plugin.
+include("${CMAKE_CURRENT_SOURCE_DIR}/shared/obs-streamup-ui/cmake/streamup-ui.cmake")
+streamup_ui_add(${PROJECT_NAME})
 
 # Shared StreamUP utilities (debug logger + undo/redo helpers), vendored under
 # shared/obs-streamup-utils/. Compiled directly into the plugin for the same

@@ -2107,18 +2107,14 @@ void ShowSettingsDialog(int tabIndex)
 						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 			
 			// The button's own icon, its name, and "?" for the detail.
-			static const char *const kToolIcons[] = {
-				":images/icons/ui/all-scene-source-locked-dark.svg",
-				":images/icons/ui/current-scene-source-locked-dark.svg",
-				":images/icons/ui/refresh-browser-sources-dark.svg",
-				":images/icons/ui/refresh-audio-monitoring-dark.svg",
-				":images/icons/ui/camera-dark.svg",
-				":images/icons/ui/add-sources-to-group-dark.svg",
-				":images/icons/ui/visible-dark.svg"};
+			static const char *const kToolIcons[] = {"all-scene-source-locked", "current-scene-source-locked",
+								  "refresh-browser-sources", "refresh-audio-monitoring",
+								  "camera", "add-sources-to-group", "visible"};
 			QHBoxLayout *nameRow = new QHBoxLayout();
 			nameRow->setSpacing(StreamUP::UIStyles::S(8));
 			QLabel *toolIcon = new QLabel();
-			toolIcon->setPixmap(QIcon(kToolIcons[tool.toolIndex]).pixmap(StreamUP::UIStyles::S(18), StreamUP::UIStyles::S(18)));
+			toolIcon->setPixmap(QIcon(StreamUP::Kit::IconPath(QString::fromLatin1(kToolIcons[tool.toolIndex])))
+						    .pixmap(StreamUP::UIStyles::S(18), StreamUP::UIStyles::S(18)));
 			nameRow->addWidget(toolIcon);
 			nameRow->addWidget(nameLabel);
 			if (QLabel *dot = StreamUP::Kit::HelpDot(tool.description))
