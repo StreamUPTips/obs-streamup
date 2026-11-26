@@ -13,6 +13,8 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QMimeData>
+#include <QPainter>
+#include <QStyledItemDelegate>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
@@ -22,6 +24,8 @@
 #include <streamup/ui/labels.hpp>
 #include <streamup/ui/mac-inputs.hpp>
 #include <streamup/ui/pill-button.hpp>
+#include <streamup/ui/svg-icon.hpp>
+#include <streamup/ui/ui-scrollbar.hpp>
 #include <streamup/ui/tree-widget.hpp>
 #include <streamup/ui/window-chrome.hpp>
 
@@ -33,17 +37,90 @@ using UIStyles::S;
 
 constexpr int kDescriptorRole = Qt::UserRole + 1;
 
+// Draws the palette as the theme's lists do: a quiet grey label for each
+// section, then roomy rows with a drag grip, the item's icon and its name, and
+// a soft rounded highlight on hover.
+class PaletteDelegate : public QStyledItemDelegate {
+public:
+	using QStyledItemDelegate::QStyledItemDelegate;
+
+	QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override
+	{
+		const bool section = !index.parent().isValid();
+		return QSize(option.rect.width(), S(section ? (index.row() == 0 ? 26 : 38) : 34));
+	}
+
+	void paint(QPainter *p, const QStyleOptionViewItem &option, const QModelIndex &index) const override
+	{
+		p->save();
+		p->setRenderHint(QPainter::Antialiasing, true);
+		const QRect r = option.rect;
+		const QString text = index.data(Qt::DisplayRole).toString();
+		QFont f = option.font;
+		if (!index.parent().isValid()) {
+			f.setPixelSize(S(12));
+			f.setWeight(QFont::DemiBold);
+			p->setFont(f);
+			p->setPen(QColor(UIStyles::Colors::TEXT_MUTED));
+			p->drawText(r.adjusted(S(10), 0, -S(10), -S(6)), Qt::AlignLeft | Qt::AlignBottom, text);
+			p->restore();
+			return;
+		}
+		const bool hover = option.state & QStyle::State_MouseOver;
+		const bool selected = option.state & QStyle::State_Selected;
+		const QRectF pill = QRectF(r).adjusted(S(2), S(1), -S(2), -S(1));
+		if (hover || selected) {
+			p->setPen(Qt::NoPen);
+			p->setBrush(QColor(255, 255, 255, selected ? 26 : 16));
+			p->drawRoundedRect(pill, S(8), S(8));
+		}
+		// Grip: two columns of three dots, brighter on hover.
+		p->setPen(Qt::NoPen);
+		p->setBrush(QColor(255, 255, 255, hover ? 150 : 70));
+		const qreal gx = r.left() + S(12), gy = r.center().y();
+		for (int col = 0; col < 2; ++col)
+			for (int row = -1; row <= 1; ++row)
+				p->drawEllipse(QPointF(gx + col * S(4), gy + row * S(4)), S(1) * 1.1, S(1) * 1.1);
+		const QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
+		const int is = S(18);
+		const QRect iconRect(r.left() + S(28), r.center().y() - is / 2, is, is);
+		if (!icon.isNull())
+			icon.paint(p, iconRect);
+		f.setPixelSize(S(13));
+		f.setWeight(QFont::Normal);
+		p->setFont(f);
+		p->setPen(QColor(UIStyles::Colors::TEXT_PRIMARY));
+		p->drawText(QRect(iconRect.right() + S(12), r.top(), r.right() - iconRect.right() - S(20), r.height()),
+			    Qt::AlignLeft | Qt::AlignVCenter, text);
+		p->restore();
+	}
+};
+
 // The palette is drag-only: a row is a template, never a destination, so the
 // tree's own internal-move handling is switched off entirely.
-class PaletteTree : public UIStyles::TreeWidget {
+class PaletteTree : public QTreeWidget {
 public:
-	explicit PaletteTree(QWidget *parent = nullptr) : UIStyles::TreeWidget(parent)
+	explicit PaletteTree(QWidget *parent = nullptr) : QTreeWidget(parent)
 	{
 		setDragEnabled(true);
 		setAcceptDrops(false);
 		setDragDropMode(QAbstractItemView::DragOnly);
 		setDefaultDropAction(Qt::CopyAction);
 		setSelectionMode(QAbstractItemView::SingleSelection);
+		setHeaderHidden(true);
+		setIndentation(0);
+		setRootIsDecorated(false);
+		setItemsExpandable(false);
+		setFrameShape(QFrame::NoFrame);
+		setMouseTracking(true);
+		setFocusPolicy(Qt::NoFocus);
+		setItemDelegate(new PaletteDelegate(this));
+		setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+		setStyleSheet(QStringLiteral("QTreeWidget{background:transparent;border:none;outline:none;}"
+					     "QTreeWidget::item{background:transparent;border:none;}"));
+		viewport()->setAutoFillBackground(false);
+		UIStyles::useScrollBars(this);
+		setCursor(Qt::OpenHandCursor);
 	}
 
 protected:
@@ -68,12 +145,27 @@ QTreeWidgetItem *makeGroup(QTreeWidget *tree, const QString &title)
 {
 	auto *group = new QTreeWidgetItem(tree, {title});
 	group->setFlags(Qt::ItemIsEnabled);
-	QFont f = group->font(0);
-	f.setBold(true);
-	group->setFont(0, f);
-	group->setForeground(0, QColor(UIStyles::Colors::TEXT_MUTED));
 	group->setExpanded(true);
 	return group;
+}
+
+// A rounded card on the panel, the theme's settings-group look.
+QFrame *makeCard(QWidget *parent, const char *name)
+{
+	auto *card = new QFrame(parent);
+	card->setObjectName(QString::fromLatin1(name));
+	card->setStyleSheet(UIStyles::scale_qss(QString("QFrame#%1{background:%2;border:1px solid %3;border-radius:12px;}")
+						     .arg(QString::fromLatin1(name), UIStyles::Colors::BG_PRIMARY,
+							  UIStyles::Colors::BORDER_SUBTLE)));
+	return card;
+}
+
+QLabel *sectionLabel(const char *key, QWidget *parent)
+{
+	auto *l = new QLabel(QString::fromUtf8(obs_module_text(key)), parent);
+	l->setStyleSheet(UIStyles::scale_qss(QString("QLabel{color:%1;font-size:12px;font-weight:600;background:transparent;}")
+						  .arg(UIStyles::Colors::TEXT_MUTED)));
+	return l;
 }
 
 } // namespace
@@ -106,37 +198,59 @@ void ToolbarEditPanel::buildUi()
 	auto *outer = new QVBoxLayout(this);
 	outer->setContentsMargins(0, 0, 0, 0);
 
-	auto *card = new UIStyles::RoundedContainer(UIStyles::Sizes::RADIUS_CARD, this,
-						    QColor(UIStyles::Colors::BG_DARKEST));
+	auto *card = new UIStyles::RoundedContainer(16, this, QColor(UIStyles::Colors::BG_DARKEST));
+	card->setObjectName("tbEditCard");
+	card->setStyleSheet(UIStyles::scale_qss(
+		QString("QWidget#tbEditCard{border:1px solid %1;border-radius:16px;}").arg(UIStyles::Colors::BORDER_SUBTLE)));
 	outer->addWidget(card);
 
 	auto *root = new QVBoxLayout(card);
-	root->setContentsMargins(S(14), S(12), S(14), S(12));
-	root->setSpacing(S(8));
+	root->setContentsMargins(S(20), S(16), S(20), S(16));
+	root->setSpacing(S(14));
 
-	// 1. Heading and guidance.
-	auto *heading = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.Heading")), card);
-	// A window title on the type scale (14, semibold, primary text), not an
-	// accent-coloured label.
-	heading->setFont(UIStyles::displayFont(14, 600));
-	heading->setStyleSheet(QString("QLabel{color:%1;background:transparent;}").arg(UIStyles::Colors::TEXT_PRIMARY));
-	// The heading doubles as the drag handle, since a frameless tool window has
-	// no titlebar to grab.
-	heading->installEventFilter(new UIStyles::DragFilter(heading));
-	heading->setCursor(Qt::SizeAllCursor);
-	root->addWidget(heading);
-
-	auto *guidance = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.Guidance")), card);
-	guidance->setStyleSheet(UIStyles::dimLabelStyle());
+	// 1. Header: a grip and the title, both a handle to move the window.
+	auto *header = new QWidget(card);
+	header->setCursor(Qt::SizeAllCursor);
+	header->installEventFilter(new UIStyles::DragFilter(header));
+	auto *headerRow = new QHBoxLayout(header);
+	headerRow->setContentsMargins(0, 0, 0, 0);
+	headerRow->setSpacing(S(10));
+	auto *grip = new QLabel(header);
+	grip->setPixmap(UIStyles::svgIcon(QStringLiteral("dots"), QColor(UIStyles::Colors::TEXT_MUTED), 18,
+					  devicePixelRatioF()));
+	grip->setStyleSheet("QLabel{background:transparent;}");
+	headerRow->addWidget(grip);
+	auto *titles = new QVBoxLayout();
+	titles->setSpacing(S(2));
+	auto *heading = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.Heading")), header);
+	heading->setStyleSheet(UIStyles::scale_qss(QString("QLabel{color:%1;font-size:18px;font-weight:600;background:transparent;}")
+							.arg(UIStyles::Colors::TEXT_PRIMARY)));
+	titles->addWidget(heading);
+	auto *guidance = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.Guidance")), header);
+	guidance->setStyleSheet(UIStyles::scale_qss(QString("QLabel{color:%1;font-size:13px;background:transparent;}")
+							 .arg(UIStyles::Colors::TEXT_SECONDARY)));
 	guidance->setWordWrap(true);
-	root->addWidget(guidance);
+	titles->addWidget(guidance);
+	headerRow->addLayout(titles, 1);
+	root->addWidget(header);
 
-	// 2. Palette.
-	palette_ = new PaletteTree(card);
+	// 2. Two columns: what you can add, and the selected item's settings.
+	auto *columns = new QHBoxLayout();
+	columns->setSpacing(S(16));
+	root->addLayout(columns, 1);
+
+	auto *left = new QVBoxLayout();
+	left->setSpacing(S(8));
+	left->addWidget(sectionLabel("StreamUP.Toolbar.Panel.AddSection", card));
+	auto *paletteCard = makeCard(card, "tbPaletteCard");
+	auto *paletteLayout = new QVBoxLayout(paletteCard);
+	paletteLayout->setContentsMargins(S(6), S(4), S(6), S(6));
+	palette_ = new PaletteTree(paletteCard);
 	palette_->setColumnCount(1);
-	palette_->setMinimumHeight(S(180));
-	palette_->setIconSize(QSize(S(16), S(16)));
-	root->addWidget(palette_, 1);
+	palette_->setMinimumHeight(S(300));
+	palette_->setIconSize(QSize(S(18), S(18)));
+	paletteLayout->addWidget(palette_);
+	left->addWidget(paletteCard, 1);
 
 	connect(palette_, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem *item, int) {
 		if (!editor_ || !item)
@@ -149,51 +263,66 @@ void ToolbarEditPanel::buildUi()
 			emit configurationChanged();
 	});
 
-	// 3. Hotkey button.
+	// Hotkey and WebSocket buttons are made in a dialog, so they sit under the
+	// list as two small secondary actions.
+	auto *makeRow = new QHBoxLayout();
+	makeRow->setSpacing(S(8));
+	const QIcon plus(UIStyles::svgIcon(QStringLiteral("plus"), QColor(UIStyles::Colors::TEXT_PRIMARY), 14,
+					   devicePixelRatioF()));
 	auto *hotkeyButton = new UIStyles::PillButton(
-		QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.AddHotkey")), "outline", card);
+		QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.AddHotkey")), "neutral", card);
+	hotkeyButton->setLeadingIcon(plus, 14);
 	connect(hotkeyButton, &QPushButton::clicked, this, &ToolbarEditPanel::showHotkeyDialog);
-
-	// 4. WebSocket button. Same shape as the hotkey one: it cannot be described
-	// as a palette descriptor because it only exists once the request, its
-	// arguments and an icon have been chosen.
 	auto *websocketButton = new UIStyles::PillButton(
-		QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.AddWebSocket")), "outline", card);
+		QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.AddWebSocket")), "neutral", card);
+	websocketButton->setLeadingIcon(plus, 14);
 	connect(websocketButton, &QPushButton::clicked, this, &ToolbarEditPanel::showWebSocketDialog);
-	root->addWidget(hotkeyButton);
-	root->addWidget(websocketButton);
+	makeRow->addWidget(hotkeyButton);
+	makeRow->addWidget(websocketButton);
+	makeRow->addStretch(1);
+	left->addLayout(makeRow);
+	columns->addLayout(left, 3);
 
-	// 4. Properties for the selection.
-	properties_ = new UIStyles::RoundedContainer(UIStyles::Sizes::RADIUS_INPUT, card,
-						     QColor(UIStyles::Colors::BG_PRIMARY));
+	// 3. Settings for the selection.
+	auto *right = new QVBoxLayout();
+	right->setSpacing(S(8));
+	right->addWidget(sectionLabel("StreamUP.Toolbar.Panel.SelectedSection", card));
+	properties_ = makeCard(card, "tbPropsCard");
 	propertiesLayout_ = new QVBoxLayout(properties_);
-	propertiesLayout_->setContentsMargins(S(10), S(10), S(10), S(10));
-	propertiesLayout_->setSpacing(S(8));
-	root->addWidget(properties_);
+	propertiesLayout_->setContentsMargins(S(16), S(14), S(16), S(14));
+	propertiesLayout_->setSpacing(S(12));
+	right->addWidget(properties_, 1);
+	columns->addLayout(right, 2);
 
 	auto *titleRow = new QHBoxLayout();
-	titleRow->setSpacing(S(8));
+	titleRow->setSpacing(S(10));
 	propertiesIcon_ = new QLabel(properties_);
-	propertiesIcon_->setFixedSize(S(18), S(18));
-	propertiesIcon_->setStyleSheet("QLabel{background:transparent;}");
+	propertiesIcon_->setFixedSize(S(32), S(32));
+	propertiesIcon_->setAlignment(Qt::AlignCenter);
+	propertiesIcon_->setStyleSheet(UIStyles::scale_qss(
+		QString("QLabel{background:%1;border-radius:8px;}").arg(UIStyles::Colors::BG_TERTIARY)));
 	titleRow->addWidget(propertiesIcon_);
 	propertiesTitle_ = UIStyles::makeLabel(QString(), UIStyles::Sizes::FONT_SIZE_HEADING,
 					       UIStyles::Sizes::FONT_WEIGHT_BOLD);
 	propertiesTitle_->setParent(properties_);
+	propertiesTitle_->setWordWrap(true);
 	titleRow->addWidget(propertiesTitle_, 1);
 	propertiesLayout_->addLayout(titleRow);
 
 	propertiesHint_ = new QLabel(QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.NoSelection")),
 				     properties_);
-	propertiesHint_->setStyleSheet(UIStyles::dimLabelStyle());
+	propertiesHint_->setStyleSheet(UIStyles::scale_qss(QString("QLabel{color:%1;font-size:13px;background:transparent;}")
+								.arg(UIStyles::Colors::TEXT_SECONDARY)));
 	propertiesHint_->setWordWrap(true);
+	propertiesHint_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 	propertiesLayout_->addWidget(propertiesHint_);
 
 	propertiesBody_ = new QWidget(properties_);
 	auto *body = new QVBoxLayout(propertiesBody_);
 	body->setContentsMargins(0, 0, 0, 0);
-	body->setSpacing(S(8));
+	body->setSpacing(S(10));
 	propertiesLayout_->addWidget(propertiesBody_);
+	propertiesLayout_->addStretch(1);
 
 	visibleCheck_ = new UIStyles::IOSCheckBox(
 		QString::fromUtf8(obs_module_text("StreamUP.Toolbar.Panel.Visible")), propertiesBody_);
@@ -299,7 +428,7 @@ void ToolbarEditPanel::buildUi()
 		emit configurationChanged();
 	});
 
-	// 5. Footer.
+	// 4. Footer.
 	auto *footer = new QHBoxLayout();
 	footer->setSpacing(S(8));
 	auto *resetButton = new UIStyles::PillButton(
@@ -313,9 +442,8 @@ void ToolbarEditPanel::buildUi()
 	footer->addWidget(doneButton);
 	root->addLayout(footer);
 
-	// Compact enough to sit beside a vertical toolbar without covering it.
-	setMinimumWidth(S(260));
-	resize(S(280), S(470));
+	setMinimumSize(S(600), S(480));
+	resize(S(640), S(520));
 }
 
 void ToolbarEditPanel::populatePalette()
@@ -383,7 +511,7 @@ void ToolbarEditPanel::onSelectionChanged(const QString &itemId)
 	if (!sameItem) {
 		propertiesTitle_->setText(ToolbarBuild::labelForItem(item));
 		const QIcon icon = ToolbarBuild::iconForItem(item);
-		propertiesIcon_->setPixmap(icon.isNull() ? QPixmap() : icon.pixmap(QSize(S(18), S(18))));
+		propertiesIcon_->setPixmap(icon.isNull() ? QPixmap() : icon.pixmap(QSize(S(18), S(18)), devicePixelRatioF()));
 	}
 
 	// The editor re-emits itemSelected on every step of a spacer resize drag, so
