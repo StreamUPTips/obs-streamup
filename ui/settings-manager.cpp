@@ -1300,16 +1300,13 @@ void ShowSettingsDialog(int tabIndex)
 		sceneOrganiserDescription->setWordWrap(true);
 		delete sceneOrganiserDescription; // the Features card says what it is
 
-		// Cards: how it looks, which tabs, how clicking switches. The rest
-		// (studio mode, sorting, the SceneTree import, credit) folds away.
+		// Cards: how it looks, which tabs, how clicking switches, then the
+		// rarely used ones as ordinary cards at the foot of the tab: studio
+		// mode, sorting, the SceneTree import and the credit.
 		QVBoxLayout *soLook = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.Card.Look"));
 		QVBoxLayout *soTabs = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.Card.Tabs"));
 		QVBoxLayout *soSwitch = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.Card.Switching"));
-		auto *soMore = new StreamUP::Kit::MoreOptions(QStringLiteral("settings.sceneorganiser"),
-							      obs_module_text("SceneOrganiser.Settings.More"));
-		sceneOrganiserLayout->addWidget(soMore);
-		// The folded settings sit in a card of their own, like the rest.
-		QVBoxLayout *soMoreL = StreamUP::UIStyles::sectionCard(soMore->body());
+		QVBoxLayout *soMoreL = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.Card.StudioMode"));
 		QVBoxLayout *tabTarget = soTabs;
 
 
@@ -1578,9 +1575,7 @@ void ShowSettingsDialog(int tabIndex)
 		soSwitch->addLayout(switchModeLayout);
 
 		// Sorting section
-		soMoreL->addSpacing(StreamUP::UIStyles::S(15));
-
-		soMoreL->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("SceneOrganiser.Settings.AutoSorting.Title")));
+		QVBoxLayout *soSortL = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.AutoSorting.Title"));
 		QWidget *sortingGroup = new QWidget();
 		sortingGroup->setStyleSheet(QString("background: transparent;"));
 
@@ -1673,12 +1668,10 @@ void ShowSettingsDialog(int tabIndex)
 		groupFoldersLayout->addWidget(groupFoldersSwitch);
 		sortingLayout->addLayout(groupFoldersLayout);
 
-		soMoreL->addWidget(sortingGroup);
+		soSortL->addWidget(sortingGroup);
 
 		// Manual Migration Section
-		soMoreL->addSpacing(StreamUP::UIStyles::S(20));
-
-		soMoreL->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("SceneOrganiser.Settings.Migration")));
+		QVBoxLayout *soImportL = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.Migration"));
 		QWidget *migrationGroup = new QWidget();
 		migrationGroup->setStyleSheet(QString("background: transparent;"));
 
@@ -1772,12 +1765,10 @@ void ShowSettingsDialog(int tabIndex)
 		});
 
 		migrationLayout->addWidget(migrationButton);
-		soMoreL->addWidget(migrationGroup);
+		soImportL->addWidget(migrationGroup);
 
 		// Credit section
-		soMoreL->addSpacing(StreamUP::UIStyles::S(20));
-
-		soMoreL->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("SceneOrganiser.Settings.Credit")));
+		QVBoxLayout *soCreditL = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.Credit"));
 		QWidget *creditGroup = new QWidget();
 		creditGroup->setStyleSheet(QString("background: transparent;"));
 		QVBoxLayout *creditLayout = new QVBoxLayout(creditGroup);
@@ -1801,7 +1792,7 @@ void ShowSettingsDialog(int tabIndex)
 		});
 
 		creditLayout->addWidget(creditButton);
-		soMoreL->addWidget(creditGroup);
+		soCreditL->addWidget(creditGroup);
 
 		sceneOrganiserContentLayout->addWidget(sceneOrganiserSettingsWidget);
 		sceneOrganiserContentLayout->addStretch();
@@ -2020,14 +2011,13 @@ void ShowSettingsDialog(int tabIndex)
 				hotkeysContentLayout->addWidget(none);
 			}
 
-			// With nothing set yet the list is the whole point, so it is open.
+			// The ones not set yet follow as ordinary sections, under a
+			// plain heading with their count; nothing folds away.
 			QVBoxLayout *unsetTarget = hotkeysContentLayout;
-			if (!yours.empty()) {
-				auto *more = new StreamUP::Kit::MoreOptions(QStringLiteral("settings.hotkeys.unset"),
-									    obs_module_text("Hotkey.Group.NotSet"));
-				more->setCountHint(unsetCount);
-				hotkeysContentLayout->addWidget(more);
-				unsetTarget = more->body();
+			if (!yours.empty() && unsetCount > 0) {
+				hotkeysContentLayout->addSpacing(StreamUP::UIStyles::S(6));
+				hotkeysContentLayout->addWidget(StreamUP::UIStyles::sectionHeader(
+					QString("%1 (%2)").arg(QString::fromUtf8(obs_module_text("Hotkey.Group.NotSet"))).arg(unsetCount)));
 			}
 			for (const auto &g : groups) {
 				std::vector<HotkeyInfo> unset;
