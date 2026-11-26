@@ -1079,30 +1079,30 @@ struct ThemeFile {
 	Vars vars;
 };
 
-// The StreamUP base theme plus The StreamUP variant, for when the active
-// theme is not a StreamUP one (or its files cannot be read).
+// The StreamUP base theme plus The Andi variant (StreamUP_TheAndi.ovt), for
+// when the active theme is not a StreamUP one (or its files cannot be read).
 Vars BuiltIn()
 {
 	return {
-		{"bg_darkest", "#0E0E1A"},
-		{"bg_primary", "#17172F"},
-		{"bg_secondary", "#222246"},
-		{"bg_tertiary", "#2E2E60"},
-		{"primary_color", "#FF86BD"},
-		{"primary_hover", "#FF9FCA"},
-		{"primary_light", "#FFC4E0"},
-		{"secondary_color", "#6AF4FF"},
+		{"bg_darkest", "#0E0E0E"},
+		{"bg_primary", "#1A1A1A"},
+		{"bg_secondary", "#222222"},
+		{"bg_tertiary", "#2E2E2E"},
+		{"primary_color", "#D4A843"},
+		{"primary_hover", "#E0B85A"},
+		{"primary_light", "#EDD07E"},
+		{"secondary_color", "#EDD07E"},
 		{"text_primary", "#ffffff"},
 		{"text_secondary", "rgba(255, 255, 255, 0.65)"},
 		{"text_disabled", "rgba(255, 255, 255, 0.35)"},
 		{"text_on_primary", "#1a1a1a"},
 		{"color_warning", "#ff9f0a"},
 		{"color_danger", "#ff453a"},
-		{"border_subtle", "rgba(255, 134, 189, 0.22)"},
-		{"border_soft", "rgba(255, 134, 189, 0.32)"},
-		{"surface_subtle", "rgba(255, 134, 189, 0.12)"},
-		{"menu_overlay", "rgba(15, 15, 30, 0.96)"},
-		{"selection_bg", "rgba(255, 134, 189, 0.30)"},
+		{"border_subtle", "rgba(255, 255, 255, 0.07)"},
+		{"border_soft", "rgba(255, 255, 255, 0.10)"},
+		{"surface_subtle", "rgba(212, 168, 67, 0.08)"},
+		{"menu_overlay", "rgba(16, 16, 16, 0.96)"},
+		{"selection_bg", "rgba(212, 168, 67, 0.28)"},
 	};
 }
 

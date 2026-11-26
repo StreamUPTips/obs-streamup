@@ -46,7 +46,7 @@
 - A part that is switched off now costs OBS nothing: no event filters, timers, callbacks or scans left running. Most parts switch straight away; the docks and the Adjustment Layer say when they need a restart
 - The StreamUP menu is tidier: products first, then Quick Actions, Multi-Dock, Backup and plugin updates, then Settings, with Help in its own submenu. Parts that are off drop out of it
 - Settings has fewer tabs and one line per setting. The theme tweaks live in Tools and tweaks, the plugin check is a button on General, and the rare Scene Organiser settings fold away
-- Every StreamUP window follows the active StreamUP theme variant (surfaces, accent, borders, menus), with The StreamUP's colours under any other theme
+- Every StreamUP window follows the active StreamUP theme variant (surfaces, accent, borders, menus), with The Andi's gold and charcoal under any other theme
 - Drop-downs open as one rounded panel; toolbar icons sit centred on whole pixels; the Edit toolbar window is roomier with sections, drag grips and a panel for the selected item
 - Hotkeys you have set come first; the rest fold under Not set
 - Backup settings lead with when your last backup was made

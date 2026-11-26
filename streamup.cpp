@@ -1184,7 +1184,7 @@ bool obs_module_load()
 	StreamUP::Restore::VerifyPending();
 
 	// Every StreamUP window takes its colours from the active StreamUP theme
-	// variant (or The StreamUP's when another theme is on).
+	// variant (or The Andi's gold when another theme is on).
 	StreamUP::Kit::Theme::LoadTokens();
 #ifdef _WIN32
 	blog(LOG_INFO, "[StreamUP] Platform: Windows");

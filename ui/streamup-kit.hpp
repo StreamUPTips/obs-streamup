@@ -185,7 +185,7 @@ constexpr int CardSpacing = 16;    // --settings_group_content_spacing
 
 // Points the shared colour tokens at the active StreamUP theme variant
 // (The StreamUP, The Andi, Silverlink, ...), read from the theme's own
-// variables. Any other theme gets The StreamUP's values. Call at load and
+// variables. Any other theme gets The Andi's gold values. Call at load and
 // whenever OBS's theme changes; windows opened afterwards follow it.
 void LoadTokens();
 // The theme the tokens came from, e.g. "com.streamup.andi", or "built-in".

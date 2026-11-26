@@ -35,7 +35,7 @@
 - **Faster Product Controls** They open about five times quicker.
 - **Windows Open Where OBS Is** StreamUP windows and the floating mixer open on the screen OBS is on.
 - **No Surprises With The Adjustment Layer** Switching it off tells you how many scenes use it first.
-- **Feels Like StreamUP** Every StreamUP window takes its colours from the StreamUP theme you have on, and The StreamUP's pink and navy under any other theme. Drop-downs open as one rounded panel, toolbar icons sit dead centre, and the Edit toolbar window has room to breathe.
+- **Feels Like StreamUP** Every StreamUP window takes its colours from the StreamUP theme you have on, and The Andi's gold and charcoal under any other theme. Drop-downs open as one rounded panel, toolbar icons sit dead centre, and the Edit toolbar window has room to breathe.
 - **Tools And Tweaks** Switching parts of StreamUP on and off now lives in Settings, as its first tab, so the menu is one entry shorter.
 - **Calmer Look Everywhere** Drop-downs lose their blue arrow block, the current page in a sidebar is a soft highlight, scrollbars are a quiet grey and the About page drops its gold and purple.
 
