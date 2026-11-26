@@ -161,7 +161,7 @@ private:
 			textc = QColor(Colors::PRIMARY_COLOR);
 		} else { // primary
 			fill = QColor(Colors::PRIMARY_COLOR);
-			textc = QColor("#ffffff");
+			textc = QColor(Colors::TEXT_ON_PRIMARY);
 		}
 	}
 	QColor hoverColor() const

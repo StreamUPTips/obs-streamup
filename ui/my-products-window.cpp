@@ -139,7 +139,7 @@ QPixmap Tile(const pr::ProductEntry &p, qreal dpr, int designW = kTileW, int des
 		const QColor accent = CategoryColour(p.category);
 		QColor tint = accent;
 		tint.setAlpha(38);
-		g.fillRect(QRect(0, 0, w, h), QColor("#24243a"));
+		g.fillRect(QRect(0, 0, w, h), QColor(su::Colors::BG_PRIMARY));
 		g.fillRect(QRect(0, 0, w, h), tint);
 		QColor edge = accent;
 		edge.setAlpha(70);
@@ -354,7 +354,7 @@ public:
 		// Row dividers and cards live here, switched per row by a property,
 		// so filtering never restyles widgets one by one.
 		page->setStyleSheet(su::scale_qss(QString("QWidget#mpPage{background:%1;}"
-							  "QFrame#mpCard{background:%2;border:1px solid rgba(255,255,255,0.06);border-radius:12px;}"
+							  "QFrame#mpCard{background:%2;border:1px solid " + QString(StreamUP::UIStyles::Colors::BORDER_SUBTLE) + ";border-radius:12px;}"
 							  "QWidget#mpRow[divider=\"true\"]{border-top:1px solid %3;}")
 							  .arg(su::Colors::BG_DARKEST, su::Colors::BG_PRIMARY, su::Colors::SEPARATOR)));
 		m_list = new QVBoxLayout(page);

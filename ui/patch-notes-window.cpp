@@ -260,7 +260,7 @@ QWidget *BuildWhatsNewContent()
 	QWidget *contentWidget = new QWidget();
 	contentWidget->setObjectName("wnPage");
 	contentWidget->setStyleSheet(su::scale_qss(QString("QWidget#wnPage{background:transparent;}"
-							   "QFrame#wnCard{background:%1;border:1px solid rgba(255,255,255,0.06);"
+							   "QFrame#wnCard{background:%1;border:1px solid " + QString(StreamUP::UIStyles::Colors::BORDER_SUBTLE) + ";"
 							   "border-radius:12px;}")
 							   .arg(su::Colors::BG_PRIMARY)));
 	QVBoxLayout *contentLayout = new QVBoxLayout(contentWidget);

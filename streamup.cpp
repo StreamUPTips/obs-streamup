@@ -1182,6 +1182,10 @@ bool obs_module_load()
 	// (OBSBasic::OBSInit loads modules at line ~1056, scene collections at
 	// ~1120), so this is the last safe moment to put files right.
 	StreamUP::Restore::VerifyPending();
+
+	// Every StreamUP window takes its colours from the active StreamUP theme
+	// variant (or The StreamUP's when another theme is on).
+	StreamUP::Kit::Theme::LoadTokens();
 #ifdef _WIN32
 	blog(LOG_INFO, "[StreamUP] Platform: Windows");
 #elif defined(__APPLE__)
@@ -1372,6 +1376,7 @@ static void OnOBSShutdown(enum obs_frontend_event event, void *private_data)
 		// one self-gates, so switching to the theme styles OBS straight away
 		// and switching away puts back what can be put back live.
 		StreamUP::ThemeEnhancements::ReapplyThemeTweaks();
+		StreamUP::Kit::Theme::LoadTokens();
 		return;
 	}
 

@@ -65,7 +65,7 @@ QListWidgetItem *Header(const QString &text)
 	f.setPixelSize(su::S(su::Type::Small));
 	f.setWeight(QFont::DemiBold);
 	item->setFont(f);
-	item->setForeground(QColor("#a6adc8"));
+	item->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_SECONDARY));
 	item->setSizeHint(QSize(0, su::S(32)));
 	return item;
 }

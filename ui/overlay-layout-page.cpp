@@ -422,7 +422,7 @@ LayoutPage::LayoutPage(const QString &overlayId, const oc::OverlayInfo &info, QW
 
 	auto *partsCard = new QFrame();
 	partsCard->setObjectName("ocPartsCard");
-	partsCard->setStyleSheet(su::scale_qss(QString("QFrame#ocPartsCard{background:%1;border:1px solid rgba(255,255,255,0.06);border-radius:12px;}")
+	partsCard->setStyleSheet(su::scale_qss(QString("QFrame#ocPartsCard{background:%1;border:1px solid " + QString(StreamUP::UIStyles::Colors::BORDER_SUBTLE) + ";border-radius:12px;}")
 						       .arg(su::Colors::BG_PRIMARY)));
 	auto *pc = new QVBoxLayout(partsCard);
 	pc->setContentsMargins(su::S(4), su::S(4), su::S(4), su::S(4));

@@ -130,43 +130,47 @@ inline QString scale_qss(const QString &qss)
 
 // ── Locked colour tokens (decisions #1, #6) ──────────────────────────────────
 namespace Colors {
-	constexpr const char *BG_DARKEST = "#1e1e2e";   // base / window
-	constexpr const char *BG_PRIMARY = "#272738";   // card surface + input-on-base
-	constexpr const char *BG_SECONDARY = "#1a1a2a"; // code block + input-on-card
-	constexpr const char *BG_TERTIARY = "#313244";  // hover surface
-	constexpr const char *SIDEBAR_BG = "#181825";   // nav rail
+	// Not constexpr: a plugin may point these at the active OBS theme's own
+	// palette at load (StreamUP's kit reads the StreamUP theme's variables).
+	// The values here are the built-in fallback.
+	inline const char *BG_DARKEST = "#1e1e2e";   // base / window
+	inline const char *BG_PRIMARY = "#272738";   // card surface + input-on-base
+	inline const char *BG_SECONDARY = "#1a1a2a"; // code block + input-on-card
+	inline const char *BG_TERTIARY = "#313244";  // hover surface
+	inline const char *SIDEBAR_BG = "#181825";   // nav rail
 
 	// Input surface is context-aware (decision #7): an input must always
 	// contrast the surface it sits on. On the base background use the lighter
 	// grey so it reads as an input while staying flat; inside a card/group use
 	// the darker grey so it contrasts the (lighter) card.
-	constexpr const char *INPUT_ON_BASE = "#272738"; // input on #1e1e2e base
-	constexpr const char *INPUT_ON_CARD = "#1a1a2a"; // input inside a #272738 card
+	inline const char *INPUT_ON_BASE = "#272738"; // input on #1e1e2e base
+	inline const char *INPUT_ON_CARD = "#1a1a2a"; // input inside a #272738 card
 
-	constexpr const char *PRIMARY_COLOR = "#0076df";   // accent
-	constexpr const char *PRIMARY_HOVER = "#1f8ce8";   // lighter than base
-	constexpr const char *PRIMARY_PRESSED = "#005abb";
-	constexpr const char *PRIMARY_LIGHT = "#2997ff";   // lighter blue (selection)
-	constexpr const char *TAG_COLOR = "#89b4fa";       // link/tag text only
+	inline const char *PRIMARY_COLOR = "#0076df";   // accent
+	inline const char *PRIMARY_HOVER = "#1f8ce8";   // lighter than base
+	inline const char *PRIMARY_PRESSED = "#005abb";
+	inline const char *PRIMARY_LIGHT = "#2997ff";   // lighter blue (selection)
+	inline const char *TAG_COLOR = "#89b4fa";       // link/tag text only
+	inline const char *TEXT_ON_PRIMARY = "#ffffff"; // label ink on an accent fill
 
-	constexpr const char *COLOR_SUCCESS = "#65c466";   // iOS green
-	constexpr const char *COLOR_WARNING = "#fab387";
-	constexpr const char *COLOR_DANGER = "#e35d55";    // softened red (was iOS #ff453a)
+	inline const char *COLOR_SUCCESS = "#65c466";   // iOS green
+	inline const char *COLOR_WARNING = "#fab387";
+	inline const char *COLOR_DANGER = "#e35d55";    // softened red (was iOS #ff453a)
 
-	constexpr const char *TEXT_PRIMARY = "#cdd6f4";
-	constexpr const char *TEXT_SECONDARY = "#bac2de";
-	constexpr const char *TEXT_MUTED = "#6c7086";
-	constexpr const char *TEXT_PLACEHOLDER = "rgba(205,214,244,0.35)";
+	inline const char *TEXT_PRIMARY = "#cdd6f4";
+	inline const char *TEXT_SECONDARY = "#bac2de";
+	inline const char *TEXT_MUTED = "#6c7086";
+	inline const char *TEXT_PLACEHOLDER = "rgba(205,214,244,0.35)";
 
-	constexpr const char *SWITCH_TRACK_OFF = "#3a3a3d";
-	constexpr const char *SEPARATOR = "#313244";        // 1px hairline divider
+	inline const char *SWITCH_TRACK_OFF = "#3a3a3d";
+	inline const char *SEPARATOR = "#313244";        // 1px hairline divider
 
 	// Consolidated literals that used to be inlined in several helpers.
-	constexpr const char *POPUP_BG = "#1a1c32";         // opaque popup / menu fill
-	constexpr const char *POPUP_BORDER = "rgba(255,255,255,0.12)"; // popup hairline
-	constexpr const char *SELECTION = "rgba(41,151,255,0.55)";     // lighter-blue (PRIMARY_LIGHT) row/menu/combo selection
-	constexpr const char *HOVER_ROW = "rgba(255,255,255,0.05)";    // list/menu item hover
-	constexpr const char *BORDER_SUBTLE = "rgba(255,255,255,0.06)"; // version badge / neutral-btn hover
+	inline const char *POPUP_BG = "#1a1c32";         // opaque popup / menu fill
+	inline const char *POPUP_BORDER = "rgba(255,255,255,0.12)"; // popup hairline
+	inline const char *SELECTION = "rgba(41,151,255,0.55)";     // lighter-blue (PRIMARY_LIGHT) row/menu/combo selection
+	inline const char *HOVER_ROW = "rgba(255,255,255,0.05)";    // list/menu item hover
+	inline const char *BORDER_SUBTLE = "rgba(255,255,255,0.06)"; // version badge / neutral-btn hover
 	// Scrollbar handle uses the accent (matches StreamUP.obt: handle =
 	// --primary_color, hover = --primary_hover, pressed = --primary_light).
 }
@@ -215,7 +219,7 @@ inline QString buttonStyle(const QString &variant = "primary")
 {
 	QString fill, text, hover, pressed, border;
 	if (variant == "primary") {
-		fill = Colors::PRIMARY_COLOR; text = "#ffffff";
+		fill = Colors::PRIMARY_COLOR; text = Colors::TEXT_ON_PRIMARY;
 		hover = Colors::PRIMARY_HOVER; pressed = Colors::PRIMARY_PRESSED;
 		border = QString("1px solid %1").arg(fill);
 	} else if (variant == "danger") {
@@ -286,6 +290,12 @@ inline QString comboStyle(bool onCard = false)
 	// Opaque popup fill (matches menuStyle()); the field surface is painted by
 	// MacComboBox itself and is unaffected by this popup-only stylesheet.
 	const QString popupBg = QString(Colors::POPUP_BG);
+	// The popup window is translucent (rounded corners), so the list paints
+	// only solid colours: a translucent highlight would come out white.
+	const QColor pb(Colors::POPUP_BG);
+	const QString rowHighlight = QColor(pb.red() + (255 - pb.red()) * 9 / 100, pb.green() + (255 - pb.green()) * 9 / 100,
+					    pb.blue() + (255 - pb.blue()) * 9 / 100)
+					     .name();
 	// IMPORTANT: no QComboBox{...} field rules. MacComboBox custom-paints the
 	// field, and a field-level QSS makes QStyleSheetStyle's polish recompute the
 	// combo height (QSS height + native combo frame), overwriting setFixedHeight
@@ -293,12 +303,11 @@ inline QString comboStyle(bool onCard = false)
 	// the popup here; the field height is controlled purely by setFixedHeight.
 	const QString qss = QString(
 		"QComboBox QAbstractItemView{background:%1;color:%2;"
-		"border:1px solid %3;"
-		"border-radius:9px;padding:4px;outline:none;}"
-		"QComboBox QAbstractItemView::item{border-radius:7px;padding:3px 10px;"
-		"margin:1px 4px;min-height:18px;}"
-		"QComboBox QAbstractItemView::item:selected{background:%4;color:%2;}")
-		.arg(popupBg, Colors::TEXT_PRIMARY, Colors::POPUP_BORDER, QStringLiteral("rgba(255,255,255,0.08)"));
+		"border:none;padding:2px;outline:none;}"
+		"QComboBox QAbstractItemView::item{border-radius:6px;padding:4px 10px;"
+		"margin:1px 0px;min-height:20px;color:%2;}"
+		"QComboBox QAbstractItemView::item:selected,QComboBox QAbstractItemView::item:hover{background:%4;color:%2;}")
+		.arg(popupBg, Colors::TEXT_PRIMARY, Colors::POPUP_BORDER, rowHighlight);
 	return scale_qss(qss);
 }
 
@@ -308,8 +317,8 @@ inline QString menuStyle()
 {
 	const QString qss = QString(
 		"QMenu{background:%1;color:%2;"
-		"border:1px solid %3;border-radius:9px;padding:4px;}"
-		"QMenu::item{padding:5px 12px;border-radius:7px;margin:1px 4px;}"
+		"border:1px solid %3;border-radius:12px;padding:6px;}"
+		"QMenu::item{padding:6px 14px;border-radius:6px;margin:1px 0px;}"
 		"QMenu::item:selected{background:%4;color:%2;}"
 		"QMenu::item:disabled{color:%5;}"
 		"QMenu::separator{height:1px;background:%6;margin:4px 8px;}")
@@ -431,7 +440,7 @@ inline QString treeStyle()
 inline QString cardStyle(const char *fill = Colors::BG_PRIMARY, int radius = Sizes::RADIUS_CARD)
 {
 	const QString qss = QString(
-		"QFrame#card{background:%1;border:1px solid rgba(255,255,255,0.06);border-radius:%2px;}")
+		"QFrame#card{background:%1;border:1px solid " + QString(Colors::BORDER_SUBTLE) + ";border-radius:%2px;}")
 		.arg(fill).arg(radius);
 	return scale_qss(qss);
 }
