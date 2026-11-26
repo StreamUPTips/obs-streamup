@@ -1580,11 +1580,9 @@ void ShowSettingsDialog(int tabIndex)
 		sortingGroup->setStyleSheet(QString("background: transparent;"));
 
 		QVBoxLayout *sortingLayout = new QVBoxLayout(sortingGroup);
-		sortingLayout->setSpacing(StreamUP::UIStyles::S(12));
-		sortingLayout->setContentsMargins(StreamUP::UIStyles::S(12),
-							StreamUP::UIStyles::S(12),
-							StreamUP::UIStyles::S(12),
-							StreamUP::UIStyles::S(12));
+		// The card already pads its rows; no second inset.
+		sortingLayout->setSpacing(StreamUP::UIStyles::S(6));
+		sortingLayout->setContentsMargins(0, StreamUP::UIStyles::S(4), 0, 0);
 
 		// Sort method dropdown
 		QHBoxLayout *sortMethodLayout = new QHBoxLayout();
@@ -1676,34 +1674,21 @@ void ShowSettingsDialog(int tabIndex)
 		migrationGroup->setStyleSheet(QString("background: transparent;"));
 
 		QVBoxLayout *migrationLayout = new QVBoxLayout(migrationGroup);
-		migrationLayout->setSpacing(StreamUP::UIStyles::S(12));
-		migrationLayout->setContentsMargins(StreamUP::UIStyles::S(12),
-							StreamUP::UIStyles::S(12),
-							StreamUP::UIStyles::S(12),
-							StreamUP::UIStyles::S(12));
+		migrationLayout->setSpacing(StreamUP::UIStyles::S(10));
+		migrationLayout->setContentsMargins(0, StreamUP::UIStyles::S(4), 0, StreamUP::UIStyles::S(4));
 
 		QLabel *migrationText = new QLabel(obs_module_text("SceneOrganiser.Settings.MigrationText"));
-		migrationText->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: %3; padding: %4px; border-radius: %5px;")
+		migrationText->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 						.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
-						.arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
-						.arg(12)
-						.arg(8)));
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		migrationText->setWordWrap(true);
 		migrationLayout->addWidget(migrationText);
 
-		// Warning label
-		QLabel *warningLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.MigrationWarning"));
-		warningLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: rgba(255, 159, 10, 0.15); padding: %3px; border-radius: %4px; border: 1px solid %5; font-weight: 600;")
-						.arg(StreamUP::UIStyles::Colors::COLOR_WARNING)
-						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
-						.arg(12)
-						.arg(8)
-						.arg(StreamUP::UIStyles::Colors::COLOR_WARNING)));
-		warningLabel->setWordWrap(true);
-		migrationLayout->addWidget(warningLabel);
+		// The kit's warning note, the same as every other window's.
+		migrationLayout->addWidget(StreamUP::Kit::Note(StreamUP::Kit::Status::Warn,
+							       obs_module_text("SceneOrganiser.Settings.MigrationWarning")));
 
-		QPushButton *migrationButton = new StreamUP::UIStyles::PillButton(obs_module_text("SceneOrganiser.Settings.MigrationButton"), "primary");
+		QPushButton *migrationButton = new StreamUP::UIStyles::PillButton(obs_module_text("SceneOrganiser.Settings.MigrationButton"), "neutral");
 
 		QObject::connect(migrationButton, &QPushButton::clicked, [dialog]() {
 			QPointer<QDialog> dlg(dialog);
@@ -1764,25 +1749,27 @@ void ShowSettingsDialog(int tabIndex)
 				});
 		});
 
-		migrationLayout->addWidget(migrationButton);
+		auto *migrationRow = new QHBoxLayout();
+		migrationRow->addStretch(1);
+		migrationRow->addWidget(migrationButton);
+		migrationLayout->addLayout(migrationRow);
 		soImportL->addWidget(migrationGroup);
 
 		// Credit section
 		QVBoxLayout *soCreditL = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.Credit"));
 		QWidget *creditGroup = new QWidget();
 		creditGroup->setStyleSheet(QString("background: transparent;"));
-		QVBoxLayout *creditLayout = new QVBoxLayout(creditGroup);
+		// One line and a link button on the right, like any other row.
+		QHBoxLayout *creditLayout = new QHBoxLayout(creditGroup);
+		creditLayout->setContentsMargins(0, StreamUP::UIStyles::S(4), 0, StreamUP::UIStyles::S(2));
 		creditLayout->setSpacing(StreamUP::UIStyles::S(12));
 
 		QLabel *creditText = new QLabel(obs_module_text("SceneOrganiser.Settings.CreditText"));
-		creditText->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: %3; padding: %4px; border-radius: %5px;")
+		creditText->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 						.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
-						.arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
-						.arg(12)
-						.arg(8)));
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		creditText->setWordWrap(true);
-		creditLayout->addWidget(creditText);
+		creditLayout->addWidget(creditText, 1);
 
 		QPushButton *creditButton = new StreamUP::UIStyles::PillButton(obs_module_text("SceneOrganiser.Settings.CreditLink"), "neutral");
 		creditButton->setToolTip("https://github.com/DigitOtter/obs_scene_tree_view");
@@ -1791,7 +1778,7 @@ void ShowSettingsDialog(int tabIndex)
 			QDesktopServices::openUrl(QUrl("https://github.com/DigitOtter/obs_scene_tree_view"));
 		});
 
-		creditLayout->addWidget(creditButton);
+		creditLayout->addWidget(creditButton, 0, Qt::AlignVCenter);
 		soCreditL->addWidget(creditGroup);
 
 		sceneOrganiserContentLayout->addWidget(sceneOrganiserSettingsWidget);
