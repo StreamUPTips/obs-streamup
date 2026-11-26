@@ -1,4 +1,6 @@
 #include "streamup-toolbar.hpp"
+#include <cmath>
+#include <algorithm>
 #include <streamup/debug-logger.hpp>
 #include "streamup-toolbar-edit-panel.hpp"
 #include "dock/streamup-dock.hpp"
@@ -1201,6 +1203,23 @@ void StreamUPToolbar::applySizeClass()
 		if (b) {
 			b->setIconSize(fallbackIconSize);
 		}
+	}
+
+	// Centre every glyph on whole pixels. The theme's padding left a button
+	// one pixel larger than icon + padding on some tiers, an odd gap that Qt
+	// floors, so the icon sat half a pixel up and left. Keep the gap round the
+	// icon a multiple of 4 px, so it splits evenly at 100%, 150% and 200%.
+	for (QToolButton *b : buttons) {
+		if (!b || b->toolButtonStyle() != Qt::ToolButtonIconOnly || b->icon().isNull())
+			continue;
+		b->setMinimumSize(0, 0);
+		b->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+		const QSize icon = b->iconSize();
+		const QSize hint = b->sizeHint();
+		auto even = [](int gap) { return std::max(4, int(std::lround(gap / 4.0)) * 4); };
+		const int side = std::max(icon.width() + even(hint.width() - icon.width()),
+					  icon.height() + even(hint.height() - icon.height()));
+		b->setFixedSize(side, side);
 	}
 
 	// Layout may need to re-measure after icon size change
