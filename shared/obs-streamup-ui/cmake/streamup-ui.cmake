@@ -5,13 +5,17 @@
 #
 # The library is compiled straight into the plugin (no shared sub-target, no
 # cross-plugin link), so each plugin stays self-contained and builds in any
-# config or order. The target must link libobs and obs-frontend-api and have
-# AUTOMOC and AUTORCC on.
+# config or order. The target must link libobs and obs-frontend-api; the call
+# turns AUTOMOC and AUTORCC on for it.
+#
+# Plain (not cached) variables: several plugins in one OBS tree each include
+# their own copy, and each call must use the copy its plugin included.
 
-set(STREAMUP_UI_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." CACHE INTERNAL "StreamUP UI library root")
-set(STREAMUP_UI_VERSION "1.0.0" CACHE INTERNAL "StreamUP UI library version")
+set(STREAMUP_UI_ROOT "${CMAKE_CURRENT_LIST_DIR}/..")
+set(STREAMUP_UI_VERSION "1.0.0")
 
 function(streamup_ui_add target)
+  set_target_properties(${target} PROPERTIES AUTOMOC ON AUTORCC ON)
   target_include_directories(${target} PRIVATE
     "${STREAMUP_UI_ROOT}/include"
     "${STREAMUP_UI_ROOT}/include/streamup/ui" # flat includes inside switch-button.cpp
