@@ -1,0 +1,3 @@
+[submodule "shared/obs-streamup-ui"]
+	path = shared/obs-streamup-ui
+	url = https://github.com/StreamUPTips/obs-streamup-ui.git
