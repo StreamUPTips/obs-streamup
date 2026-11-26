@@ -16,6 +16,7 @@
 #include <QPaintEvent>
 
 #include "gallery-style.hpp"
+#include "glass.hpp"
 
 namespace StreamUP {
 namespace UIStyles {
@@ -47,6 +48,7 @@ public:
 		setAttribute(Qt::WA_Hover, true);
 		QObject::connect(this, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
 				 [this](int) { update(); });
+		makeComboAnimated(this);
 	}
 	void setOnCard(bool onCard) { m_onCard = onCard; update(); }
 

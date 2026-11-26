@@ -22,6 +22,8 @@
 #include <QPoint>
 #include <QEasingCurve>
 #include <QApplication>
+#include <QPainter>
+#include <QPainterPath>
 
 #include "gallery-style.hpp"
 
@@ -111,6 +113,49 @@ inline void disableNativePopupEffects()
 	QApplication::setEffectEnabled(Qt::UI_FadeMenu, false);
 }
 
+// Paints a combo popup's window as one rounded, flat panel with a hairline.
+// The window itself is frameless and translucent, so nothing square shows
+// outside the rounded corners (the black corners Qt's popup window had).
+class RoundPopupPanel : public QObject {
+public:
+	using QObject::QObject;
+
+protected:
+	bool eventFilter(QObject *obj, QEvent *e) override
+	{
+		if (e->type() == QEvent::Paint) {
+			auto *w = static_cast<QWidget *>(obj);
+			QPainter p(w);
+			p.setRenderHint(QPainter::Antialiasing, true);
+			const qreal r = S(12);
+			const QRectF rect = QRectF(w->rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+			p.setPen(QPen(QColor(255, 255, 255, 28), 1.0));
+			p.setBrush(QColor(Colors::POPUP_BG));
+			p.drawRoundedRect(rect, r, r);
+			return true;
+		}
+		return QObject::eventFilter(obj, e);
+	}
+};
+
+inline void makeComboPopupRound(QComboBox *combo)
+{
+	QAbstractItemView *v = combo->view();
+	QWidget *container = v ? v->parentWidget() : nullptr;
+	if (!container || container->property("suRoundPopup").toBool())
+		return;
+	container->setProperty("suRoundPopup", true);
+	container->setWindowFlag(Qt::FramelessWindowHint, true);
+	container->setWindowFlag(Qt::NoDropShadowWindowHint, true);
+	container->setAttribute(Qt::WA_TranslucentBackground, true);
+	container->setAutoFillBackground(false);
+	container->installEventFilter(new RoundPopupPanel(container));
+	// The list stays opaque and sits a few px inside the rounded panel, so its
+	// square corners never reach the curve.
+	if (auto *frame = qobject_cast<QFrame *>(container))
+		frame->setContentsMargins(S(4), S(5), S(4), S(5));
+}
+
 // Give a combo box's dropdown the slide+fade open animation, and remove the
 // popup frame so the QSS-rounded item view shows cleanly. Opaque (no glass).
 // Idempotent: guarded by a dynamic property so re-calling won't double-install
@@ -123,10 +168,9 @@ inline void makeComboAnimated(QComboBox *combo)
 	QAbstractItemView *v = combo->view();
 	if (auto *frame = qobject_cast<QFrame *>(v))
 		frame->setFrameShape(QFrame::NoFrame);
-	if (auto *container = qobject_cast<QFrame *>(v->parentWidget())) {
+	if (auto *container = qobject_cast<QFrame *>(v->parentWidget()))
 		container->setFrameShape(QFrame::NoFrame);
-		container->setContentsMargins(0, 0, 0, 0);
-	}
+	makeComboPopupRound(combo);
 	if (v->property("suPopupAnimated").toBool())
 		return;
 	v->setProperty("suPopupAnimated", true);

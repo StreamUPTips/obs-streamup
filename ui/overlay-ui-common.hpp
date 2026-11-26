@@ -130,11 +130,12 @@ inline QComboBox *EditableCombo(bool onCard = true)
 	combo->setStyleSheet(
 		su::scale_qss(QString("QComboBox{background:%1;color:%2;border:1px solid transparent;border-radius:8px;"
 				      "padding:0 6px 0 10px;font-size: 13px;}"
-				      "QComboBox:focus{border:1px solid rgba(0,118,223,0.6);}"
+				      "QComboBox:focus{border:1px solid %3;}"
 				      "QComboBox::drop-down{border:none;width:24px;}"
 				      "QComboBox QLineEdit{background:transparent;border:none;color:%2;padding:0;}")
-					  .arg(bg, su::Colors::TEXT_PRIMARY)) +
+					  .arg(bg, su::Colors::TEXT_PRIMARY, su::Colors::PRIMARY_COLOR)) +
 		su::comboStyle(onCard));
+	su::makeComboAnimated(combo);
 	return combo;
 }
 
