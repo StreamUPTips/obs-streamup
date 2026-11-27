@@ -1059,6 +1059,7 @@ bool GetOverlay(const QString &overlayId, OverlayInfo &out)
 
 bool GetControlValue(const QString &overlayId, const QString &controlId, QJsonValue &out)
 {
+	SyncFromSources(overlayId); // a hand edit is the value now, for WebSocket readers too
 	std::lock_guard<std::recursive_mutex> lock(g_mutex);
 	Overlay *o = FindOverlay(overlayId);
 	Control *c = o ? FindControl(*o, controlId) : nullptr;
@@ -1277,6 +1278,41 @@ QStringList DriftedControls(const QString &overlayId)
 	return out;
 }
 
+QStringList SyncFromSources(const QString &overlayId)
+{
+	QStringList changed;
+	{
+		std::lock_guard<std::recursive_mutex> lock(g_mutex);
+		Overlay *o = FindOverlay(overlayId);
+		if (!o)
+			return changed;
+		for (Group &g : o->groups) {
+			for (Control &c : g.controls) {
+				if (c.type == ControlType::Layout || c.type == ControlType::Platforms || c.bindings.isEmpty())
+					continue;
+				// The first link speaks for the control. Read only when it no
+				// longer holds what the control would write, so a mapping that
+				// rounds or clamps never nudges a value that is still right.
+				Binding &b = c.bindings.first();
+				if (!BindingDrifted(b, c))
+					continue;
+				const QJsonValue v = NormaliseValue(c, ReadBack(b, c));
+				if (v.isUndefined() || v == c.value)
+					continue;
+				c.value = v;
+				c.applied = true;
+				changed.append(c.id);
+			}
+		}
+	}
+	if (!changed.isEmpty()) {
+		RequestSave();
+		for (const QString &id : changed)
+			emit g_notifier->controlChanged(overlayId, id);
+	}
+	return changed;
+}
+
 QString OverlayForScene(obs_source_t *scene)
 {
 	if (!scene)
@@ -1299,65 +1335,6 @@ QRectF LayoutFrame(const QString &overlayId, const QString &controlId, const QSt
 		return QRectF();
 	CaptureRig(*o, *c);
 	return FrameInScene(*c, sceneName);
-}
-
-bool ResetSource(const QString &overlayId, const QString &sourceName)
-{
-	{
-		std::lock_guard<std::recursive_mutex> lock(g_mutex);
-		Overlay *o = FindOverlay(overlayId);
-		if (!o || !o->snapshotTaken)
-			return false;
-		RestoreSnapshot(*o, sourceName);
-		// The panel's own controls stay in charge: a moved part stays moved
-		// and a nameplate keeps the platforms it was given.
-		ApplyLayout(*o);
-		RenderOutputs(*o);
-	}
-	emit g_notifier->sourceReset(overlayId, sourceName);
-	return true;
-}
-
-bool HasSnapshot(const QString &overlayId, const QString &sourceName)
-{
-	std::lock_guard<std::recursive_mutex> lock(g_mutex);
-	Overlay *o = FindOverlay(overlayId);
-	if (!o || !o->snapshotTaken)
-		return false;
-	for (const SnapSource &s : o->snapSources)
-		if (s.name == sourceName)
-			return true;
-	return false;
-}
-
-QString FormatValue(const ControlInfo &control, const QJsonValue &value)
-{
-	switch (control.type) {
-	case ControlType::Colour:
-		return value.toString();
-	case ControlType::Slider:
-	case ControlType::Number:
-		return QString::number(value.toDouble(), 'f', control.decimals) + control.unit;
-	case ControlType::Toggle:
-		return value.toBool() ? QStringLiteral("On") : QStringLiteral("Off");
-	case ControlType::Text:
-	case ControlType::TextArea:
-	case ControlType::Select:
-	case ControlType::Font:
-		return value.toString();
-	case ControlType::Image:
-		return QFileInfo(value.toString()).fileName();
-	case ControlType::Platforms:
-		return QString::number(value.toArray().size());
-	case ControlType::Layout: {
-		const QJsonObject v = value.toObject();
-		return QString("%1, %2 @ %3x")
-			.arg(value.toObject().value("x").toDouble(), 0, 'f', 0)
-			.arg(v.value("y").toDouble(), 0, 'f', 0)
-			.arg(v.value("scale").toDouble(1.0), 0, 'f', 2);
-	}
-	}
-	return QString();
 }
 
 QStringList BoundSourceKinds(const QString &overlayId, const QString &controlId)

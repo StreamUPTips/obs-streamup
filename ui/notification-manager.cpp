@@ -26,11 +26,6 @@ void SendTrayNotification(QSystemTrayIcon::MessageIcon icon, const QString& titl
     StreamUP::Kit::Toast(body.isEmpty() ? title : body, status);
 }
 
-bool IsSystemTrayAvailable()
-{
-    return QSystemTrayIcon::isSystemTrayAvailable() && QSystemTrayIcon::supportsMessages();
-}
-
 void SendInfoNotification(const QString& title, const QString& body)
 {
     SendTrayNotification(QSystemTrayIcon::Information, title, body);
@@ -39,11 +34,6 @@ void SendInfoNotification(const QString& title, const QString& body)
 void SendWarningNotification(const QString& title, const QString& body)
 {
     SendTrayNotification(QSystemTrayIcon::Warning, title, body);
-}
-
-void SendCriticalNotification(const QString& title, const QString& body)
-{
-    SendTrayNotification(QSystemTrayIcon::Critical, title, body);
 }
 
 } // namespace NotificationManager

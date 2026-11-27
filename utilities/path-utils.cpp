@@ -61,17 +61,6 @@ QString GetMostRecentFile(const QString &directoryPath, const QString &filePatte
 	return QString();
 }
 
-bool PathExists(const QString &path)
-{
-	return QFileInfo::exists(path);
-}
-
-QString ToAbsolutePath(const QString &relativePath)
-{
-	QFileInfo fileInfo(relativePath);
-	return fileInfo.absoluteFilePath();
-}
-
 std::string GetMostRecentTxtFile(const std::string &directoryPath)
 {
 	auto it = std::filesystem::directory_iterator(directoryPath);

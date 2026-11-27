@@ -18,7 +18,7 @@
 // Use the following namespace pattern to access functionality:
 //   StreamUP::SourceManager::ToggleLockAllSources()
 //   StreamUP::FileManager::LoadStreamupFile()
-//   StreamUP::PluginManager::CheckAllPluginsForUpdates()
+//   StreamUP::PluginManager::PerformPluginCheckAndCache()
 //   StreamUP::WebSocketAPI::WebsocketRequestVersion()
 //   StreamUP::HotkeyManager::RegisterHotkeys()
 //   StreamUP::UIHelpers::ShowDialogOnUIThread()

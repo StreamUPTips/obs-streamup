@@ -53,16 +53,11 @@ void LogCritical(const std::string& message, Category category = Category::Gener
 ErrorResult Success(const std::string& message = "");
 ErrorResult Failure(const std::string& message, Category category = Category::General, 
                    Severity severity = Severity::Error);
-ErrorResult NetworkError(const std::string& message);
-ErrorResult FileSystemError(const std::string& message);
-ErrorResult PluginError(const std::string& message);
 ErrorResult SourceError(const std::string& message);
-ErrorResult UIError(const std::string& message);
 
 // Dialog display functions for UI errors
 void ShowErrorDialog(const std::string& title, const std::string& message);
 void ShowWarningDialog(const std::string& title, const std::string& message);
-void ShowInfoDialog(const std::string& title, const std::string& message);
 
 // Template function for safe operations with error handling
 template<typename T, typename Func>
@@ -97,7 +92,6 @@ ErrorResult SafeExecute(Func&& func, const std::string& operation_name,
 
 // Utility functions for common error checking patterns
 bool ValidateSource(obs_source_t* source, const std::string& operation = "");
-bool ValidateString(const char* str, const std::string& field_name = "string");
 bool ValidatePointer(void* ptr, const std::string& pointer_name = "pointer");
 bool ValidateFile(const QString& file_path);
 
@@ -106,9 +100,6 @@ class ErrorContext {
 public:
     explicit ErrorContext(const std::string& context_name, Category category = Category::General);
     ~ErrorContext();
-    
-    void AddDetail(const std::string& detail);
-    ErrorResult CreateError(const std::string& message, Severity severity = Severity::Error);
     
 private:
     std::string m_context_name;

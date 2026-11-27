@@ -35,6 +35,11 @@ void ShowAtStartup();
 
 bool IsOpen();
 
+// "Restart OBS now?" with the given line, Restart now and Later, the way OBS's
+// own settings ask. While streaming or recording it only shows a toast. Safe
+// from any thread.
+void OfferRestart(const QString &line);
+
 // Runs fn once the window has closed (straight away when it is not open), so
 // a start-up check never stacks a second window on top of it.
 void WhenClosed(std::function<void()> fn);

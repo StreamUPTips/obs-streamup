@@ -22,20 +22,6 @@ QString GetLocalAppDataPath();
 QString GetMostRecentFile(const QString &directoryPath, const QString &filePattern = "*");
 
 /**
- * Check if a file or directory exists
- * @param path Path to check
- * @return bool true if path exists
- */
-bool PathExists(const QString &path);
-
-/**
- * Convert a relative path to absolute path
- * @param relativePath The relative path to convert
- * @return QString containing the absolute path
- */
-QString ToAbsolutePath(const QString &relativePath);
-
-/**
  * Get the most recent .txt file from a directory (specifically for log files)
  * @param directoryPath Directory to search in
  * @return std::string containing the most recent .txt file path

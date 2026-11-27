@@ -772,37 +772,6 @@ void UnregisterHotkeys()
 		*id = OBS_INVALID_HOTKEY_ID;
 }
 
-void ResetAllHotkeys()
-{
-	// Create empty data arrays to clear hotkey assignments
-	obs_data_array_t *emptyArray = obs_data_array_create();
-
-	// Reset all StreamUP hotkeys to empty assignments
-	obs_hotkey_load(refresh_browser_sources_hotkey_id, emptyArray);
-	obs_hotkey_load(refresh_audio_monitoring_hotkey_id, emptyArray);
-	obs_hotkey_load(lock_all_sources_hotkey_id, emptyArray);
-	obs_hotkey_load(lock_current_sources_hotkey_id, emptyArray);
-	obs_hotkey_load(open_source_properties_hotkey_id, emptyArray);
-	obs_hotkey_load(open_source_filters_hotkey_id, emptyArray);
-	obs_hotkey_load(open_source_interact_hotkey_id, emptyArray);
-	obs_hotkey_load(open_scene_filters_hotkey_id, emptyArray);
-	obs_hotkey_load(activate_video_capture_devices_hotkey_id, emptyArray);
-	obs_hotkey_load(deactivate_video_capture_devices_hotkey_id, emptyArray);
-	obs_hotkey_load(refresh_video_capture_devices_hotkey_id, emptyArray);
-	obs_hotkey_load(copy_show_transition_hotkey_id, emptyArray);
-	obs_hotkey_load(copy_hide_transition_hotkey_id, emptyArray);
-	obs_hotkey_load(paste_show_transition_hotkey_id, emptyArray);
-	obs_hotkey_load(paste_hide_transition_hotkey_id, emptyArray);
-	obs_hotkey_load(group_selected_sources_hotkey_id, emptyArray);
-	obs_hotkey_load(toggle_visibility_selected_sources_hotkey_id, emptyArray);
-	obs_hotkey_load(focus_scene_organiser_search_hotkey_id, emptyArray);
-	obs_hotkey_load(focus_scene_organiser_search_vertical_hotkey_id, emptyArray);
-
-	obs_data_array_release(emptyArray);
-
-	StreamUP::DebugLogger::LogDebug("Hotkeys", "Reset", "All hotkeys have been reset to no key assignments");
-}
-
 obs_hotkey_id GetHotkeyId(const char* hotkeyName)
 {
 	if (strcmp(hotkeyName, "streamup_refresh_browser_sources") == 0)

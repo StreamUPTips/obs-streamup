@@ -20,21 +20,6 @@ extern void CreateToolDialog(const char *infoText1, const char *infoText2, const
 namespace StreamUP {
 namespace SourceManager {
 
-// Helper function to convert monitoring type to string
-const char *MonitoringTypeToString(obs_monitoring_type type)
-{
-	switch (type) {
-	case OBS_MONITORING_TYPE_NONE:
-		return "None";
-	case OBS_MONITORING_TYPE_MONITOR_ONLY:
-		return "Monitor Only";
-	case OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT:
-		return "Monitor and Output";
-	default:
-		return "Unknown";
-	}
-}
-
 // Structure to hold data for finding selected items
 struct SceneFindBoxData {
 	std::vector<obs_sceneitem_t *> sceneItems;
@@ -68,24 +53,6 @@ bool RefreshAudioMonitoring(void *data, obs_source_t *source)
 	return true;
 }
 
-void RefreshAudioMonitoringDialog()
-{
-	CreateToolDialog(
-		"Feature.AudioMonitoring.Info1", "Feature.AudioMonitoring.Info2", "Feature.AudioMonitoring.Info3",
-		"Feature.AudioMonitoring.Title", []() { obs_enum_sources(RefreshAudioMonitoring, nullptr); },
-		R"(
-                    {
-                        "requestType": "CallVendorRequest",
-                        "requestData": {
-                            "vendorName": "streamup",
-                            "requestType": "refresh_audio_monitoring",
-                            "requestData": null
-                        }
-                    })",
-		"Feature.AudioMonitoring.HowTo1", "Feature.AudioMonitoring.HowTo2", "Feature.AudioMonitoring.HowTo3",
-		"Feature.AudioMonitoring.HowTo4", "Feature.AudioMonitoring.Notification");
-}
-
 //-------------------BROWSER SOURCE FUNCTIONS-------------------
 bool RefreshBrowserSources(void *data, obs_source_t *source)
 {
@@ -110,25 +77,6 @@ bool RefreshBrowserSources(void *data, obs_source_t *source)
 	}
 
 	return true;
-}
-
-void RefreshBrowserSourcesDialog()
-{
-	CreateToolDialog(
-		"Feature.BrowserSources.Info1", "Feature.BrowserSources.Info2", "Feature.BrowserSources.Info3",
-		"Feature.BrowserSources.Title",
-		[]() { obs_enum_sources(RefreshBrowserSources, nullptr); },
-		R"(
-                    {
-                        "requestType": "CallVendorRequest",
-                        "requestData": {
-                            "vendorName": "streamup",
-                            "requestType": "refresh_browser_sources",
-                            "requestData": null
-                        }
-                    })",
-		"Feature.BrowserSources.HowTo1", "Feature.BrowserSources.HowTo2", "Feature.BrowserSources.HowTo3",
-		"Feature.BrowserSources.HowTo4", "Feature.BrowserSources.Notification");
 }
 
 //-------------------SELECTED SOURCE FUNCTIONS-------------------
@@ -387,14 +335,6 @@ bool CheckIfAnyUnlockedInAllScenes()
 	return data.any_unlocked;
 }
 
-static void ToggleLockSourcesInAllScenes(bool lock)
-{
-	LockOperationData data;
-	data.lock_determined = true;
-	data.lock_state = lock;
-	EnumScenesOnAllCanvases(OptimizedLockCallback, &data);
-}
-
 bool ToggleLockAllSources(bool sendNotification)
 {
 	// Optimized single-pass operation
@@ -427,44 +367,6 @@ bool ToggleLockAllSources(bool sendNotification)
 	}
 
 	return data.any_unlocked;
-}
-
-void LockAllSourcesDialog()
-{
-	CreateToolDialog(
-		"Feature.SourceLock.All.Info1", "Feature.SourceLock.All.Info2", "Feature.SourceLock.All.Info3",
-		"Feature.SourceLock.All.Title",
-		[]() { ToggleLockAllSources(); },
-		R"(
-                    {
-                        "requestType": "CallVendorRequest",
-                        "requestData": {
-                            "vendorName": "streamup",
-                            "requestType": "toggleLockAllSources",
-                            "requestData": null
-                        }
-                    })",
-		"Feature.SourceLock.All.HowTo1", "Feature.SourceLock.All.HowTo2", "Feature.SourceLock.All.HowTo3",
-		"Feature.SourceLock.All.HowTo4", NULL);
-}
-
-void LockAllCurrentSourcesDialog()
-{
-	CreateToolDialog(
-		"Feature.SourceLock.Current.Info1", "Feature.SourceLock.Current.Info2", "Feature.SourceLock.Current.Info3",
-		"Feature.SourceLock.Current.Title",
-		[]() { ToggleLockSourcesInCurrentScene(); },
-		R"(
-                    {
-                        "requestType": "CallVendorRequest",
-                        "requestData": {
-                            "vendorName": "streamup",
-                            "requestType": "toggleLockCurrentSources",
-                            "requestData": null
-                        }
-                    })",
-		"Feature.SourceLock.Current.HowTo1", "Feature.SourceLock.Current.HowTo2", "Feature.SourceLock.Current.HowTo3",
-		"Feature.SourceLock.Current.HowTo4", NULL);
 }
 
 //-------------------ADDITIONAL HELPER FUNCTIONS-------------------
@@ -808,42 +710,6 @@ bool RefreshAllVideoCaptureDevices(bool sendNotification)
 	StreamUP::DebugLogger::LogInfoFormat("VideoCapture", "Started refresh process for %d video capture devices", 
 		 static_cast<int>(activeSources.size()));
 	return true;
-}
-
-void ActivateAllVideoCaptureDevicesDialog()
-{
-	CreateToolDialog("Feature.VideoCapture.Activate.Info1", "Feature.VideoCapture.Activate.Info2",
-			 "Feature.VideoCapture.Activate.Info3",
-			 QString("Feature.VideoCapture.Activate.Title"),
-			 []() { ActivateAllVideoCaptureDevices(true); },
-			 QString(), // No JSON needed for this action
-			 "Feature.VideoCapture.Activate.HowTo1", "Feature.VideoCapture.Activate.HowTo2",
-			 "Feature.VideoCapture.Activate.HowTo3", "Feature.VideoCapture.Activate.HowTo4",
-			 "Feature.VideoCapture.Activate.Notification");
-}
-
-void DeactivateAllVideoCaptureDevicesDialog()
-{
-	CreateToolDialog("Feature.VideoCapture.Deactivate.Info1", "Feature.VideoCapture.Deactivate.Info2",
-			 "Feature.VideoCapture.Deactivate.Info3",
-			 QString("Feature.VideoCapture.Deactivate.Title"),
-			 []() { DeactivateAllVideoCaptureDevices(true); },
-			 QString(), // No JSON needed for this action
-			 "Feature.VideoCapture.Deactivate.HowTo1", "Feature.VideoCapture.Deactivate.HowTo2",
-			 "Feature.VideoCapture.Deactivate.HowTo3", "Feature.VideoCapture.Deactivate.HowTo4",
-			 "Feature.VideoCapture.Deactivate.Notification");
-}
-
-void RefreshAllVideoCaptureDevicesDialog()
-{
-	CreateToolDialog("Feature.VideoCapture.Refresh.Info1", "Feature.VideoCapture.Refresh.Info2",
-			 "Feature.VideoCapture.Refresh.Info3",
-			 QString("Feature.VideoCapture.Refresh.Title"),
-			 []() { RefreshAllVideoCaptureDevices(true); },
-			 QString(), // No JSON needed for this action
-			 "Feature.VideoCapture.Refresh.HowTo1", "Feature.VideoCapture.Refresh.HowTo2",
-			 "Feature.VideoCapture.Refresh.HowTo3", "Feature.VideoCapture.Refresh.HowTo4",
-			 "Feature.VideoCapture.Refresh.Notification");
 }
 
 //-------------------GROUP MANAGEMENT FUNCTIONS-------------------

@@ -7,6 +7,7 @@
 #include "overlay-layout-page.hpp"
 #include "overlay-platforms-editor.hpp"
 #include "overlay-ui-common.hpp"
+#include "features-page.hpp"
 #include "font-picker.hpp"
 #include "ui-helpers.hpp"
 #include <streamup/debug-logger.hpp>
@@ -296,10 +297,6 @@ public:
 					 m_refreshTimer->start();
 				 });
 		QObject::connect(n, &oc::Notifier::overlayReset, this, [this](const QString &overlayId) {
-			if (overlayId == m_id)
-				refreshAll(true);
-		});
-		QObject::connect(n, &oc::Notifier::sourceReset, this, [this](const QString &overlayId, const QString &) {
 			if (overlayId == m_id)
 				refreshAll(true);
 		});
@@ -870,8 +867,10 @@ private:
 								 self->showStatus(T("FontPicker.InstalledFt2").arg(p.family));
 								 QDesktopServices::openUrl(
 									 QUrl::fromLocalFile(QFileInfo(p.file).absolutePath()));
+								 FeaturesPage::OfferRestart(T("FontPicker.InstalledFt2").arg(p.family));
 							 } else if (kinds.contains("text_gdiplus")) {
 								 self->showStatus(T("FontPicker.InstalledRestart").arg(p.family));
+								 FeaturesPage::OfferRestart(T("FontPicker.InstalledRestart").arg(p.family));
 							 } else {
 								 self->showStatus(T("FontPicker.Installed").arg(p.family));
 							 }
@@ -1240,6 +1239,9 @@ private:
 
 	void refreshDrift()
 	{
+		// A setting changed by hand shows here as its new value. What cannot
+		// be read back (a second link that disagrees) keeps the drift dot.
+		oc::SyncFromSources(m_id);
 		const QStringList drifted = oc::DriftedControls(m_id);
 		for (auto it = m_rows.begin(); it != m_rows.end(); ++it)
 			it->drift->setVisible(drifted.contains(it.key()));
@@ -1329,22 +1331,6 @@ void ShowOnUiThread(const QString &overlayId)
 void Show(const QString &overlayId)
 {
 	QMetaObject::invokeMethod(qApp, [overlayId]() { ShowOnUiThread(overlayId); }, Qt::QueuedConnection);
-}
-
-void OfferAfterInstall(const QString &overlayId)
-{
-	QMetaObject::invokeMethod(
-		qApp,
-		[overlayId]() {
-			oc::OverlayInfo info;
-			if (!oc::GetOverlay(overlayId, info))
-				return;
-			su::confirm(MainWindow(), T("OverlayControls.Installed.Title"),
-				    T("OverlayControls.Installed.Message").arg(info.name.toHtmlEscaped()),
-				    T("OverlayControls.Installed.Open"), "primary",
-				    [overlayId]() { ShowOnUiThread(overlayId); });
-		},
-		Qt::QueuedConnection);
 }
 
 void AttachFromFile()

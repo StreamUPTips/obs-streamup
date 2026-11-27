@@ -43,11 +43,6 @@ QString MembershipUrl()
 	return QStringLiteral("https://streamup.tips/premium");
 }
 
-QString SupportUrl()
-{
-	return QStringLiteral("https://paypal.me/andilippi");
-}
-
 QWidget *MembershipCard(MemberStyle style, const QString &line)
 {
 	if (IsMember())

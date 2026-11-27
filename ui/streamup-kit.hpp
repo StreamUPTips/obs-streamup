@@ -16,7 +16,6 @@ enum class MemberStyle { Strip, Card };
 QWidget *MembershipCard(MemberStyle style = MemberStyle::Strip, const QString &line = QString());
 bool IsMember();
 QString MembershipUrl();
-QString SupportUrl();
 
 } // namespace Kit
 } // namespace StreamUP

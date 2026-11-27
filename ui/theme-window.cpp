@@ -388,11 +388,6 @@ void CreateThemeDialog()
     });
 }
 
-QWidget* CreateThemePreviewCarousel(int height, QWidget* parent)
-{
-    return new ThemeImageCarousel(parent, height);
-}
-
 void ShowThemeWindow()
 {
     try {
@@ -400,11 +395,6 @@ void ShowThemeWindow()
     } catch (const std::exception& e) {
         StreamUP::ErrorHandler::LogError("Failed to show theme window: " + std::string(e.what()), StreamUP::ErrorHandler::Category::UI);
     }
-}
-
-bool IsThemeWindowOpen()
-{
-    return UIHelpers::DialogManager::IsSingletonDialogOpen("theme");
 }
 
 } // namespace ThemeWindow

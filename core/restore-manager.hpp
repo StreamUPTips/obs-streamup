@@ -122,9 +122,6 @@ QString DefaultMediaFolder();
 /** Is a staged restore waiting to be applied? */
 bool HasPending();
 
-/** Drop a staged restore without applying it. */
-void CancelPending();
-
 /**
  * Apply a staged restore. Called from obs_module_unload, which runs after OBS
  * has written its final state, so nothing overwrites what we put down.
@@ -136,9 +133,6 @@ void ApplyPending();
  * incomplete. Called from obs_module_load, before OBS reads scene collections.
  */
 void VerifyPending();
-
-/** Human-readable description of the last completed restore, for the UI. */
-QString LastRestoreSummary();
 
 /** Outcome of the restore applied during the last shutdown. */
 struct AppliedReport {

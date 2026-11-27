@@ -62,11 +62,6 @@ void PluginState::SetPluginStatus(const PluginCheckResults& results) {
     m_cachedStatus.isValid = true;
 }
 
-void PluginState::InvalidatePluginStatus() {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_cachedStatus.isValid = false;
-}
-
 bool PluginState::IsPluginStatusCached() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_cachedStatus.isValid;

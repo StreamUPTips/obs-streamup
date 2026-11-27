@@ -6,18 +6,6 @@
 #include <string>
 #include <vector>
 
-// Forward declarations
-class QScrollArea;
-class QWidget;
-class QDialog;
-class QTableWidget;
-
-namespace StreamUP {
-namespace UIStyles {
-    struct StandardDialogComponents;
-}
-}
-
 namespace StreamUP {
 namespace SettingsManager {
 
@@ -283,12 +271,6 @@ void ShowSettingsDialog(int tabIndex);
 bool AreNotificationsMuted();
 
 /**
- * @brief Set notification mute state
- * @param muted True to mute notifications, false to enable them
- */
-void SetNotificationsMuted(bool muted);
-
-/**
  * @brief Check if CPH integration is enabled
  * @return bool True if CPH integration should be shown
  */
@@ -301,30 +283,6 @@ bool IsCPHIntegrationEnabled();
 bool IsDebugLoggingEnabled();
 
 /**
- * @brief Set debug logging state
- * @param enabled True to enable debug logging, false to disable it
- */
-void SetDebugLoggingEnabled(bool enabled);
-
-/**
- * @brief Show the installed plugins page inline within the same window
- * @param components The dialog components from the template system
- */
-void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponents& components);
-
-/**
- * @brief Show the installed plugins page in a separate window
- * @param parentWidget Optional parent widget for proper positioning
- */
-void ShowInstalledPluginsPage(QWidget* parentWidget = nullptr);
-
-/**
- * @brief Show the hotkeys management page inline within the same window
- * @param components The dialog components from the template system
- */
-void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents& components);
-
-/**
  * @brief Get current dock tool settings
  * @return DockToolSettings Current dock tool visibility configuration
  */
@@ -335,17 +293,6 @@ DockToolSettings GetDockToolSettings();
  * @param dockSettings The new dock tool settings to apply
  */
 void UpdateDockToolSettings(const DockToolSettings& dockSettings);
-
-/**
- * @brief Show dock configuration settings inline within the same window
- * @param components The dialog components from the template system
- */
-void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents& components);
-
-/**
- * Invalidate settings cache (forces reload on next access)
- */
-void InvalidateSettingsCache();
 
 /**
  * Clean up cached settings on plugin shutdown
@@ -413,14 +360,6 @@ AppliedModuleSnapshot GetAppliedModuleSnapshot();
  * (called from streamup.cpp at the end of obs_module_load and OnOBSFinishedLoading).
  */
 void CommitAppliedModuleSnapshot(const AppliedModuleSnapshot& snapshot);
-
-/**
- * @brief Whether any pre-existing StreamUP settings key is present in the
- * config file. Used by the first-launch wizard to distinguish a fresh install
- * (no keys) from an upgrade from an older version (keys present, but no
- * module_setup_complete flag yet).
- */
-bool HasAnyExistingSettings();
 
 } // namespace SettingsManager
 } // namespace StreamUP

@@ -626,12 +626,6 @@ bool HasPending()
 	return QFileInfo::exists(journalPath());
 }
 
-void CancelPending()
-{
-	removeDirectory(stagingRoot());
-	StreamUP::DebugLogger::LogInfo("Restore", "Pending restore cancelled");
-}
-
 /**
  * @param lateCatchUp true when this is the module-load pass finishing a restore
  *        the shutdown pass could not complete. OBS has already chosen its theme
@@ -850,18 +844,6 @@ void MarkReportSeen()
 	QJsonObject result = readJson(resultPath);
 	result[QStringLiteral("reported")] = true;
 	writeJson(resultPath, result);
-}
-
-QString LastRestoreSummary()
-{
-	const QString resultPath = lastResultPath();
-	if (!QFileInfo::exists(resultPath))
-		return {};
-
-	const QJsonObject result = readJson(resultPath);
-	return QStringLiteral("%1 files restored on %2")
-		.arg(result.value(QStringLiteral("applied")).toInt())
-		.arg(result.value(QStringLiteral("applied_at")).toString());
 }
 
 } // namespace Restore

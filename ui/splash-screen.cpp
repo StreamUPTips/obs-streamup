@@ -569,47 +569,6 @@ void LoadSupportersData()
         });
 }
 
-QString GenerateSupportersHTML()
-{
-    // One calm palette: quiet grey group labels, neutral name chips, a hairline
-    // opt-in card. No gold or purple, so it sits with the rest of the window.
-    const QString wrap = R"(<div style="color: #cdd6f4; line-height: 1.4; font-size: 13px;">)";
-    if (!supportersData.loaded)
-        return wrap + R"(<p style="margin: 0; color: #a6adc8;">Loading supporters…</p></div>)";
-
-    if (!supportersData.errorMessage.isEmpty())
-        return wrap + R"(<p style="margin: 0; color: #a6adc8;">Supporters could not be loaded right now.</p></div>)";
-
-    QString html = wrap;
-    auto group = [&html](const char *title, const std::vector<Supporter> &list) {
-        if (list.empty())
-            return;
-        html += QString(R"(<p style="color: #9399b2; margin: 16px 0 8px 0; font-size: 12px; font-weight: 600;">%1</p>)")
-                    .arg(QString::fromUtf8(title));
-        html += R"(<p style="margin: 0; line-height: 2.2;">)";
-        for (size_t i = 0; i < list.size(); ++i) {
-            html += QString(R"(<span style="background-color: #313244; color: #cdd6f4; font-size: 12px; white-space: nowrap;">&nbsp;&nbsp;%1&nbsp;&nbsp;</span>)")
-                        .arg(list[i].displayName.toHtmlEscaped());
-            if (i + 1 < list.size())
-                html += " &nbsp;";
-        }
-        html += R"(</p>)";
-    };
-    group("Andi's supporters", supportersData.andiSupporters);
-    group("StreamUP supporters", supportersData.streamupSupporters);
-
-    if (supportersData.andiSupporters.empty() && supportersData.streamupSupporters.empty())
-        html += R"(<p style="margin: 0; color: #a6adc8;">No public supporters to show yet.</p>)";
-
-    html += R"(<table width="100%" cellpadding="14" cellspacing="0" style="margin-top: 18px; background-color: #24273a; border: 1px solid #45475a;"><tr><td>)";
-    html += R"(<p style="margin: 0 0 4px 0; color: #cdd6f4; font-size: 13px; font-weight: 600;">Supporter but not listed?</p>)";
-    html += R"(<p style="margin: 0; color: #a6adc8; font-size: 12px; line-height: 1.5;">Showing your name is opt-in. Turn it on and choose how it appears in your <a href="https://streamup.tips/Identity/Account/Manage" style="color: #89b4fa; text-decoration: none;">account settings</a>.</p>)";
-    html += R"(</td></tr></table>)";
-
-    html += R"(</div>)";
-    return html;
-}
-
 std::string LoadLocalSupportInfo()
 {
     QFile file(":support-info.md");
@@ -1801,47 +1760,9 @@ void CreateSplashDialog(ShowCondition condition)
     });
 }
 
-void ShowSplashScreenIfNeeded()
-{
-    ShowCondition condition = CheckSplashCondition();
-    if (condition == ShowCondition::Never) {
-        return;
-    }
-
-    // Check if user disabled splash screen
-    obs_data_t* settings = SettingsManager::LoadSettings();
-    if (settings && obs_data_get_bool(settings, "splash_disabled")) {
-        // Still update version tracking even if splash is disabled
-        UpdateVersionTracking();
-        if (settings) obs_data_release(settings);
-        return;
-    }
-    if (settings) obs_data_release(settings);
-
-    if (condition == ShowCondition::VersionUpdate) {
-        // For version updates, show patch notes directly instead of the welcome splash
-        UpdateVersionTracking();
-        PatchNotesWindow::ShowPatchNotesWindow();
-
-        ErrorHandler::LogInfo("Patch notes shown for version update to " + std::string(PROJECT_VERSION),
-                             ErrorHandler::Category::UI);
-    } else {
-        // For first install, show the full welcome splash screen
-        CreateSplashDialog(condition);
-
-        ErrorHandler::LogInfo("Welcome splash shown for first install of version " + std::string(PROJECT_VERSION),
-                             ErrorHandler::Category::UI);
-    }
-}
-
 void ShowSplashScreen()
 {
     CreateSplashDialog(ShowCondition::VersionUpdate);
-}
-
-bool IsSplashScreenOpen()
-{
-    return UIHelpers::DialogManager::IsSingletonDialogOpen("splash");
 }
 
 } // namespace SplashScreen

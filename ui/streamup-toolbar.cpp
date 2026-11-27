@@ -597,12 +597,6 @@ void StreamUPToolbar::OnFrontendEvent(enum obs_frontend_event event, void *data)
 	}
 }
 
-QString StreamUPToolbar::getThemedIconPath(const QString& iconName)
-{
-	// Use the centralized theme-aware icon helper
-	return StreamUP::UIHelpers::GetThemedIconPath(iconName);
-}
-
 QIcon StreamUPToolbar::getCachedIcon(const QString& iconName)
 {
 	// Always use the reliable UI helpers approach instead of caching
@@ -1630,21 +1624,6 @@ void StreamUPToolbar::onWebSocketButtonClicked()
 	}
 }
 
-void StreamUPToolbar::updateButtonSizes()
-{
-	// No custom sizing — OBS theme CSS handles icon sizes and button dimensions.
-	// Just refresh geometry so the theme can reapply.
-	if (centralWidget) {
-		centralWidget->updateGeometry();
-	}
-	updateGeometry();
-	style()->unpolish(this);
-	style()->polish(this);
-
-	// Force repaint
-	update();
-}
-
 void StreamUPToolbar::refreshFromConfiguration()
 {
 	// Clear the current toolbar state
@@ -1674,21 +1653,6 @@ void StreamUPToolbar::refreshFromConfiguration()
 	updateAllButtons();
 	updateIconsForTheme();
 	updatePositionAwareTheme();
-}
-
-void StreamUPToolbar::clearLayout()
-{
-	if (mainLayout) {
-		// Delete all widgets in the layout
-		while (QLayoutItem* item = mainLayout->takeAt(0)) {
-			if (QWidget* widget = item->widget()) {
-				widget->deleteLater();
-			}
-			delete item;
-		}
-	}
-	
-	dynamicButtons.clear();
 }
 
 void StreamUPToolbar::onToolbarSettingsClicked()

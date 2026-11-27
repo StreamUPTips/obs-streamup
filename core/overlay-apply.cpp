@@ -59,17 +59,6 @@ qint64 ToObsColour(const QColor &c)
 	       (static_cast<qint64>(c.green()) << 8) | static_cast<qint64>(c.red());
 }
 
-bool IsNumeric(ControlType t)
-{
-	return t == ControlType::Slider || t == ControlType::Number;
-}
-
-bool IsString(ControlType t)
-{
-	return t == ControlType::Text || t == ControlType::TextArea || t == ControlType::Select || t == ControlType::Font ||
-	       t == ControlType::Image;
-}
-
 QJsonValue NormaliseValue(const Control &c, const QJsonValue &in)
 {
 	const QJsonValue undefined(QJsonValue::Undefined);
@@ -844,6 +833,107 @@ bool BindingDrifted(Binding &b, const Control &c)
 	return drifted;
 }
 
+// What the control would have to be for this link to write what the setting
+// holds now: the link's mapping run backwards. Used when a setting was changed
+// by hand, so the panel shows what is really there. Undefined when the setting
+// cannot be read or the mapping cannot be undone.
+QJsonValue ReadBack(Binding &b, const Control &c)
+{
+	const QJsonValue none(QJsonValue::Undefined);
+	if (!b.captured)
+		return none;
+	if (!b.scene.isEmpty()) {
+		if (c.type != ControlType::Toggle)
+			return none;
+		bool visible = true;
+		qint64 id = 0;
+		if (!WithItem(b.scene, b.sceneUuid, b.source, b.sourceUuid, &id,
+			      [&](obs_sceneitem_t *item) { visible = obs_sceneitem_visible(item); }))
+			return none;
+		return ToggleResult(b, visible);
+	}
+	obs_source_t *target = ResolveBinding(b);
+	if (!target)
+		return none;
+	QJsonValue out = none;
+	if (b.key == kEnabledKey) {
+		if (c.type == ControlType::Toggle)
+			out = ToggleResult(b, obs_source_enabled(target));
+		obs_source_release(target);
+		return out;
+	}
+	QString leaf;
+	obs_data_t *container = Container(target, b.key, leaf);
+	const QByteArray k = leaf.toUtf8();
+	obs_data_item_t *item = container ? obs_data_item_byname(container, k.constData()) : nullptr;
+	if (item) {
+		switch (c.type) {
+		case ControlType::Colour: {
+			QColor live = FromObsColour(obs_data_get_int(container, k.constData()));
+			if (b.lighten != 0.0) {
+				const double t = std::fabs(b.lighten);
+				const double target = b.lighten > 0.0 ? 255.0 : 0.0;
+				if (t >= 1.0)
+					break; // fully white or black: the colour is gone
+				auto undo = [&](int v) {
+					return std::clamp(static_cast<int>(std::lround((v - target * t) / (1.0 - t))), 0, 255);
+				};
+				live.setRgb(undo(live.red()), undo(live.green()), undo(live.blue()), live.alpha());
+			}
+			const int installAlpha = static_cast<int>((static_cast<quint32>(b.baseColour) >> 24) & 0xff);
+			live.setAlpha(installAlpha > 0 ? std::clamp(static_cast<int>(std::lround(255.0 * live.alpha() / installAlpha)), 0, 255)
+						       : 255);
+			out = ColourText(live);
+			break;
+		}
+		case ControlType::Slider:
+		case ControlType::Number: {
+			const double live = obs_data_get_double(container, k.constData());
+			switch (b.mode) {
+			case BindMode::Set:
+				out = live;
+				break;
+			case BindMode::Multiply:
+				if (b.base != 0.0)
+					out = live / b.base;
+				break;
+			case BindMode::Map:
+				if (b.mapTo1 != b.mapTo0)
+					out = c.min + (live - b.mapTo0) / (b.mapTo1 - b.mapTo0) * (c.max - c.min);
+				break;
+			}
+			break;
+		}
+		case ControlType::Toggle:
+			out = ToggleResult(b, obs_data_get_bool(container, k.constData()));
+			break;
+		case ControlType::Text:
+		case ControlType::TextArea:
+		case ControlType::Select:
+		case ControlType::Font:
+		case ControlType::Image: {
+			QString live = QString::fromUtf8(obs_data_get_string(container, k.constData()));
+			if (b.letterSpace) {
+				QStringList words;
+				for (QString w : live.split(QStringLiteral("   "), Qt::SkipEmptyParts))
+					words.append(w.remove(QLatin1Char(' ')));
+				live = words.join(QLatin1Char(' '));
+			}
+			// Upper or lower case cannot be undone; the panel shows it as it is.
+			out = live;
+			break;
+		}
+		case ControlType::Platforms:
+		case ControlType::Layout:
+			break;
+		}
+	}
+	obs_data_item_release(&item);
+	obs_data_release(container);
+	obs_source_release(target);
+	return out;
+}
+
 // ================================================================ templates
 
 namespace {
@@ -1325,16 +1415,6 @@ void ApplyLayout(Overlay &o, const QString &changedPart)
 					if (changedPart.isEmpty() || affected(c) || moved.contains(l.scene + '\n' + l.of) ||
 					    moved.contains(l.scene + '\n' + l.within))
 						UpdateGeoLink(l, o);
-}
-
-QRectF CurrentFrame(Overlay &o, Control &c)
-{
-	CaptureRig(o, c);
-	if (!c.rig.frameCaptured)
-		return QRectF();
-	const Affine xf = FullTransform(o, c);
-	const QRectF f = c.rig.installFrame;
-	return QRectF(xf.a * f.x() + xf.bx, xf.a * f.y() + xf.by, f.width() * xf.a, f.height() * xf.a);
 }
 
 QRectF FrameInScene(Control &c, const QString &scene)

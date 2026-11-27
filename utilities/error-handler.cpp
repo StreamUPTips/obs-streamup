@@ -85,24 +85,8 @@ ErrorResult Failure(const std::string& message, Category category, Severity seve
     return ErrorResult(false, message, category, severity);
 }
 
-ErrorResult NetworkError(const std::string& message) {
-    return Failure(message, Category::Network, Severity::Error);
-}
-
-ErrorResult FileSystemError(const std::string& message) {
-    return Failure(message, Category::FileSystem, Severity::Error);
-}
-
-ErrorResult PluginError(const std::string& message) {
-    return Failure(message, Category::Plugin, Severity::Error);
-}
-
 ErrorResult SourceError(const std::string& message) {
     return Failure(message, Category::Source, Severity::Error);
-}
-
-ErrorResult UIError(const std::string& message) {
-    return Failure(message, Category::UI, Severity::Error);
 }
 
 // Dialog display functions
@@ -128,14 +112,6 @@ void ShowWarningDialog(const std::string& title, const std::string& message) {
     });
 }
 
-void ShowInfoDialog(const std::string& title, const std::string& message) {
-    StreamUP::UIHelpers::ShowDialogOnUIThread([title, message]() {
-        QWidget* parent = static_cast<QWidget*>(obs_frontend_get_main_window());
-        su::info(parent, QString::fromStdString(title), QString::fromStdString(message),
-                 obs_module_text("OK"));
-    });
-}
-
 // Validation functions
 bool ValidateSource(obs_source_t* source, const std::string& operation) {
     if (!source) {
@@ -144,14 +120,6 @@ bool ValidateSource(obs_source_t* source, const std::string& operation) {
             message += " for operation: " + operation;
         }
         LogError(message, Category::Source);
-        return false;
-    }
-    return true;
-}
-
-bool ValidateString(const char* str, const std::string& field_name) {
-    if (!str || strlen(str) == 0) {
-        LogError("Invalid or empty string for field: " + field_name, Category::General);
         return false;
     }
     return true;
@@ -193,27 +161,6 @@ ErrorContext::ErrorContext(const std::string& context_name, Category category)
 
 ErrorContext::~ErrorContext() {
     LogInfo("Exiting context: " + m_context_name, m_category);
-}
-
-void ErrorContext::AddDetail(const std::string& detail) {
-    m_details.push_back(detail);
-    LogInfo("Context detail [" + m_context_name + "]: " + detail, m_category);
-}
-
-ErrorResult ErrorContext::CreateError(const std::string& message, Severity severity) {
-    std::string full_message = "Error in " + m_context_name + ": " + message;
-    
-    // Add details if any
-    if (!m_details.empty()) {
-        full_message += " (Details: ";
-        for (size_t i = 0; i < m_details.size(); ++i) {
-            if (i > 0) full_message += ", ";
-            full_message += m_details[i];
-        }
-        full_message += ")";
-    }
-    
-    return Failure(full_message, m_category, severity);
 }
 
 } // namespace ErrorHandler

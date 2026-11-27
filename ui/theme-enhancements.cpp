@@ -797,21 +797,6 @@ void ApplyThemeEnhancements()
     }
 }
 
-void RefreshThemeEnhancements()
-{
-    // Re-apply to all open windows
-    if (!IsUsingStreamUPTheme()) {
-        return;
-    }
-
-    QWidgetList topLevelWidgets = QApplication::topLevelWidgets();
-    for (QWidget* widget : topLevelWidgets) {
-        if (widget && widget->isVisible()) {
-            ApplyColorPreviewStyling(widget);
-        }
-    }
-}
-
 // ============================================================================
 // Advanced Audio Properties Enhancements
 // ============================================================================

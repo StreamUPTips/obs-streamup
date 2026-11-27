@@ -27,13 +27,6 @@ obs_data_t* LoadSettingsWithDefaults(const char* filename, const std::function<v
  */
 bool SaveSettingsToFile(obs_data_t* settings, const char* filename);
 
-/**
- * Get the standard StreamUP config file path
- * @param filename The config filename (e.g., "configs.json")
- * @return char* Full path (caller must call bfree)
- */
-char* GetConfigFilePath(const char* filename);
-
 //-------------------SAFE GETTERS WITH DEFAULTS-------------------
 
 /**
@@ -63,26 +56,7 @@ const char* GetStringWithDefault(obs_data_t* data, const char* key, const char* 
  */
 int GetIntWithDefault(obs_data_t* data, const char* key, int defaultValue);
 
-/**
- * Get double value with fallback default
- * @param data The obs_data object
- * @param key The key to look up
- * @param defaultValue Value to return if key not found or data is null
- * @return double The value or default
- */
-double GetDoubleWithDefault(obs_data_t* data, const char* key, double defaultValue);
-
 //-------------------SAFE SETTERS WITH VALIDATION-------------------
-
-/**
- * Set string value with null/empty checking
- * @param data The obs_data object
- * @param key The key to set
- * @param value The string value (can be null)
- * @param allowEmpty If false, null/empty strings won't be set
- * @return bool True if value was set
- */
-bool SetStringIfValid(obs_data_t* data, const char* key, const char* value, bool allowEmpty = true);
 
 //-------------------HOTKEY HELPERS-------------------
 
@@ -106,51 +80,7 @@ bool LoadHotkeyFromData(obs_data_t* data, const char* key, obs_hotkey_id hotkeyI
 
 //-------------------WEBSOCKET RESPONSE HELPERS-------------------
 
-/**
- * Set a standardized error response
- * @param response The response data object
- * @param errorMessage The error message to include
- */
-void SetErrorResponse(obs_data_t* response, const char* errorMessage);
-
-/**
- * Set a standardized success response
- * @param response The response data object
- * @param statusMessage Optional status message (can be null)
- */
-void SetSuccessResponse(obs_data_t* response, const char* statusMessage = nullptr);
-
-/**
- * Set a boolean response with optional success flag
- * @param response The response data object
- * @param key The key to set
- * @param value The boolean value
- * @param includeSuccess Whether to include success=true field
- */
-void SetBoolResponse(obs_data_t* response, const char* key, bool value, bool includeSuccess = true);
-
 //-------------------SOURCE VALIDATION HELPERS-------------------
-
-/**
- * Validate and get a source from WebSocket request data
- * Automatically sets error response if validation fails
- * @param request The request data object
- * @param response The response data object (for error messages)
- * @param paramName The parameter name to check (default: "sourceName")
- * @return obs_source_t* Valid source or nullptr (caller must release if non-null)
- */
-obs_source_t* ValidateAndGetSource(obs_data_t* request, obs_data_t* response, const char* paramName = "sourceName");
-
-/**
- * Validate and get a scene from WebSocket request data
- * Automatically sets error response if validation fails
- * @param request The request data object
- * @param response The response data object (for error messages)  
- * @param paramName The parameter name to check (default: "sceneName")
- * @return obs_scene_t* Valid scene or nullptr. Caller must call
- *         obs_source_release(obs_scene_get_source(scene)) when done.
- */
-obs_scene_t* ValidateAndGetScene(obs_data_t* request, obs_data_t* response, const char* paramName = "sceneName");
 
 } // namespace OBSDataHelpers
 } // namespace StreamUP

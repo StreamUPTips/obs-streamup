@@ -202,11 +202,6 @@ void Initialise(bool enabled);
 void Shutdown();
 
 /**
- * Reset all StreamUP hotkeys to have no key combinations assigned
- */
-void ResetAllHotkeys();
-
-/**
  * Get the current hotkey combination for a specific StreamUP hotkey
  * @param hotkeyName The OBS hotkey name (e.g., "streamup_refresh_browser_sources")
  * @return obs_data_array_t* Array containing the current key combination (caller must release)

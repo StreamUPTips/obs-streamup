@@ -94,7 +94,7 @@ struct ControlInfo {
 	QList<SelectOption> options;       // select
 	QList<PlatformDef> platforms;      // platforms
 	LayoutInfo layout;                 // layout
-	QJsonValue value;                  // shape depends on type, see FormatValue
+	QJsonValue value;                  // shape depends on type
 	QJsonValue defaultValue;
 	bool applied = false;              // written since install or the last reset
 	int links = 0;
@@ -173,7 +173,6 @@ signals:
 	void overlaysChanged();
 	void controlChanged(const QString &overlayId, const QString &controlId);
 	void overlayReset(const QString &overlayId);
-	void sourceReset(const QString &overlayId, const QString &sourceName);
 };
 
 Notifier *GetNotifier();
@@ -219,18 +218,17 @@ bool DeletePreset(const QString &overlayId, const QString &presetName);
 
 QStringList DriftedControls(const QString &overlayId);
 
+// Takes what each control's setting holds now as the control's value, for
+// settings changed by hand outside the panel, so the panel shows what is really
+// there. Writes nothing to OBS. Returns the controls whose value changed (they
+// also get controlChanged).
+QStringList SyncFromSources(const QString &overlayId);
+
 QString OverlayForScene(obs_source_t *scene);
 
 // Current frame of a layout part in one of its scenes (canvas pixels). Empty
 // when the part has nothing in that scene.
 QRectF LayoutFrame(const QString &overlayId, const QString &controlId, const QString &sceneName);
-
-// Snapshot-backed reset of a single source: its settings, its filters and its
-// transform in every overlay scene.
-bool ResetSource(const QString &overlayId, const QString &sourceName);
-bool HasSnapshot(const QString &overlayId, const QString &sourceName);
-
-QString FormatValue(const ControlInfo &control, const QJsonValue &value);
 
 // The source types a control's links point at ("text_gdiplus",
 // "text_ft2_source", ...), unversioned, without duplicates. Lets the font

@@ -20,9 +20,6 @@ enum class ShowCondition {
     Never
 };
 
-// Show splash screen on first install or version update
-void ShowSplashScreenIfNeeded();
-
 // Show splash screen manually (for testing/menu access)
 void ShowSplashScreen();
 
@@ -31,9 +28,6 @@ ShowCondition CheckSplashCondition();
 
 // Update version tracking after splash is shown
 void UpdateVersionTracking();
-
-// Check if splash screen is currently open
-bool IsSplashScreenOpen();
 
 // Internal dialog creation
 void CreateSplashDialog(ShowCondition condition = ShowCondition::VersionUpdate);

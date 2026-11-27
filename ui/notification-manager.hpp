@@ -27,12 +27,6 @@ struct SystemTrayNotification {
 void SendTrayNotification(QSystemTrayIcon::MessageIcon icon, const QString& title, const QString& body);
 
 /**
- * @brief Check if system tray notifications are available on this platform
- * @return bool True if system tray supports notifications, false otherwise
- */
-bool IsSystemTrayAvailable();
-
-/**
  * @brief Send an information notification
  * @param title The title of the notification
  * @param body The body text of the notification
@@ -45,13 +39,6 @@ void SendInfoNotification(const QString& title, const QString& body);
  * @param body The body text of the notification
  */
 void SendWarningNotification(const QString& title, const QString& body);
-
-/**
- * @brief Send a critical/error notification
- * @param title The title of the notification
- * @param body The body text of the notification
- */
-void SendCriticalNotification(const QString& title, const QString& body);
 
 } // namespace NotificationManager
 } // namespace StreamUP

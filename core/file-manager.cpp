@@ -78,60 +78,6 @@ QTableWidget* MakeStyledTable(const QStringList& headers, QWidget* parent = null
     return table;
 }
 
-// Inlined replacement for the legacy HandleTableCellClick: if the clicked cell
-// carries a URL in UserRole, open it.
-void HandleFontTableCellClick(QTableWidget* table, int row, int column) {
-    QTableWidgetItem* item = table->item(row, column);
-    if (!item)
-        return;
-    QVariant urlData = item->data(Qt::UserRole);
-    if (urlData.isValid() && !urlData.toString().isEmpty())
-        QDesktopServices::openUrl(QUrl(urlData.toString()));
-}
-
-// Create styled table for missing fonts display
-QTableWidget* CreateMissingFontsTable(const std::vector<FontInfo>& missingFonts) {
-    QStringList headers = {
-        obs_module_text("Font.Label.FontName"),
-        obs_module_text("Font.Label.DownloadLink")
-    };
-
-    QTableWidget* table = MakeStyledTable(headers);
-    table->setRowCount(static_cast<int>(missingFonts.size()));
-
-    int row = 0;
-    for (const auto& fontInfo : missingFonts) {
-        // Font Name column
-        QTableWidgetItem* nameItem = new QTableWidgetItem(
-            QString::fromStdString(fontInfo.face));
-        table->setItem(row, 0, nameItem);
-
-        // Download Link column
-        if (!fontInfo.url.empty()) {
-            QTableWidgetItem* downloadItem = new QTableWidgetItem(
-                obs_module_text("UI.Button.Download"));
-            downloadItem->setForeground(QColor(su::Colors::TAG_COLOR));
-            downloadItem->setData(Qt::UserRole, QString::fromStdString(fontInfo.url));
-            table->setItem(row, 1, downloadItem);
-        } else {
-            QTableWidgetItem* noLinkItem = new QTableWidgetItem(
-                obs_module_text("Font.Message.NoDownloadAvailable"));
-            noLinkItem->setForeground(QColor(su::Colors::TEXT_MUTED));
-            table->setItem(row, 1, noLinkItem);
-        }
-
-        row++;
-    }
-
-    // Connect click handler for download links
-    QObject::connect(table, &QTableWidget::cellClicked,
-        [table](int r, int c) {
-            HandleFontTableCellClick(table, r, c);
-        });
-
-    table->resizeColumnsToContents();
-    return table;
-}
 } // anonymous namespace
 
 //-------------------FONT EXTRACTION FUNCTIONS-------------------

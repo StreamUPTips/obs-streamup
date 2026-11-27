@@ -38,6 +38,7 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QStackedWidget>
+#include <QThread>
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -440,19 +441,7 @@ private:
 	{
 		if (changed.isEmpty())
 			return;
-		if (obs_frontend_streaming_active() || obs_frontend_recording_active()) {
-			kit::Toast(T("Features.Restart.Later"), kit::Status::Info);
-			return;
-		}
-		QWidget *main = MainWindow();
-		su::ShadowDialog *ask = su::confirm(main, T("Features.Restart.Title"),
-						    T("Features.Restart.Line").arg(changed.join(", ")), T("Features.Restart.Now"),
-						    "primary", []() { RestartObs(); });
-		const QString now = T("Features.Restart.Now");
-		for (auto *b : ask->findChildren<QPushButton *>())
-			if (b->text() != now)
-				b->setText(T("Features.Restart.LaterButton"));
-		StreamUP::UIHelpers::PlaceOverMainWindow(ask);
+		OfferRestart(T("Features.Restart.Line").arg(changed.join(", ")));
 	}
 
 	void updatePlaying()
@@ -681,6 +670,26 @@ void ShowOnUiThread(Mode mode)
 }
 
 } // namespace
+
+void OfferRestart(const QString &line)
+{
+	if (!QThread::isMainThread()) {
+		QMetaObject::invokeMethod(qApp, [line]() { OfferRestart(line); }, Qt::QueuedConnection);
+		return;
+	}
+	if (obs_frontend_streaming_active() || obs_frontend_recording_active()) {
+		kit::Toast(T("Features.Restart.Later"), kit::Status::Info);
+		return;
+	}
+	QWidget *main = MainWindow();
+	su::ShadowDialog *ask = su::confirm(main, T("Features.Restart.Title"), line, T("Features.Restart.Now"), "primary",
+					    []() { RestartObs(); });
+	const QString now = T("Features.Restart.Now");
+	for (auto *b : ask->findChildren<QPushButton *>())
+		if (b->text() != now)
+			b->setText(T("Features.Restart.LaterButton"));
+	StreamUP::UIHelpers::PlaceOverMainWindow(ask);
+}
 
 void Show()
 {

@@ -1588,11 +1588,6 @@ void MixerDock::showTabMenu(const QPoint &pos)
 	menu.exec(m_tabBar->mapToGlobal(pos));
 }
 
-void MixerDock::showOptionsMenu()
-{
-	m_optionsButton->showMenu();
-}
-
 // OBS's mixer Options menu, item for item, then this dock's tab options.
 void MixerDock::buildMixerMenu(QMenu *menu)
 {

@@ -37,12 +37,6 @@ public:
                                    bool bringToFront = true);
     
     /**
-     * Close a singleton dialog if it exists
-     * @param dialogId The dialog identifier to close
-     */
-    static void CloseSingletonDialog(const std::string& dialogId);
-    
-    /**
      * Check if a singleton dialog is currently open
      * @param dialogId The dialog identifier to check
      * @return true if dialog exists and is visible
@@ -73,26 +67,11 @@ void ShowSingletonDialogOnUIThread(const std::string& dialogId,
                                   bool bringToFront = true);
 
 /**
- * Create a standard dialog window with common properties
- * @param windowTitle The window title (obs_module_text key)
- * @param parentWidget Optional parent widget for positioning (defaults to OBS main window)
- * @return QDialog* Pointer to the created dialog
- */
-QDialog *CreateDialogWindow(const char *windowTitle, QWidget *parentWidget = nullptr);
-
-/**
  * Center a dialog on its parent widget or screen
  * @param dialog The dialog to center
  * @param parentWidget The parent widget to center on (nullptr for screen center)
  */
 void CenterDialog(QDialog *dialog, QWidget *parentWidget = nullptr);
-
-/**
- * Show a dialog with proper positioning after a brief delay to ensure proper sizing
- * @param dialog The dialog to show and center
- * @param parentWidget Optional parent widget for positioning
- */
-void ShowDialogCentered(QDialog *dialog, QWidget *parentWidget = nullptr);
 
 /**
  * Create a tool dialog with multiple information sections
@@ -132,32 +111,6 @@ QLabel *CreateIconLabel(const QStyle::StandardPixmap &iconName);
  */
 QHBoxLayout *AddIconAndText(const QStyle::StandardPixmap &iconText, const char *labelText);
 
-/**
- * Create a vertical box layout with standard margins
- * @param parent Parent widget
- * @return QVBoxLayout* Pointer to the created layout
- */
-QVBoxLayout *CreateVBoxLayout(QWidget *parent);
-
-//-------------------CONTROL CREATION FUNCTIONS-------------------
-/**
- * Create a clickable label with link functionality
- * @param layout The layout to add the label to
- * @param text The label text
- * @param url The URL to open when clicked
- * @param row Grid row position
- * @param column Grid column position
- */
-void CreateLabelWithLink(QLayout *layout, const QString &text, const QString &url, int row, int column);
-
-/**
- * Create a button with click handler
- * @param layout The layout to add the button to
- * @param text The button text
- * @param onClick The function to call when clicked
- */
-void CreateButton(QLayout *layout, const QString &text, const std::function<void()> &onClick);
-
 //-------------------UTILITY FUNCTIONS-------------------
 /**
  * Copy text to system clipboard
@@ -166,42 +119,11 @@ void CreateButton(QLayout *layout, const QString &text, const std::function<void
 void CopyToClipboard(const QString &text);
 
 /**
- * Apply OBS theme metadata so a button renders a standard themed icon (e.g., lock or visibility).
- * Typical usage: ApplyThemedIcon(button, "icon-button", "addIconSmall");
- */
-void ApplyThemedIcon(QAbstractButton *btn, const char *klass, const char *themeId, bool checkable = false, bool checked = false);
-
-/**
- * Remove theme metadata so file-based icons are not overridden by QSS.
- * Typical usage: ClearThemeIconProps(button);
- */
-void ClearThemeIconProps(QAbstractButton *btn);
-
-/**
- * Apply a file-based icon path after clearing theme metadata.
- * Typical usage: ApplyFileIcon(button, GetThemedIconPath("refresh"));
- */
-void ApplyFileIcon(QAbstractButton *btn, const QString &filePath);
-
-/**
- * Convenience helper for visibility toggles that rely on OBS theme eye icons.
- * Typical usage: ApplyVisibilityTheme(toggleVisibilityButton, true);
- */
-void ApplyVisibilityTheme(QAbstractButton *btn, bool visible);
-
-/**
  * Get theme-aware icon path for UI icons
  * @param iconName The base name of the icon (without suffix)
  * @return QString Full resource path to the appropriate light/dark icon
  */
 QString GetThemedIconPath(const QString &iconName);
-
-/**
- * Create a QIcon that automatically handles theme changes (preferred for new code)
- * @param baseName The base name of the icon (without suffix)
- * @return QIcon Icon that updates with OBS theme changes
- */
-QIcon CreateThemedIcon(const QString &baseName);
 
 /**
  * Check if OBS is using a dark theme

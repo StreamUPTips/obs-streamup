@@ -45,19 +45,5 @@ bool IsVersionLessThan(const std::string &version1, const std::string &version2)
 	return false; // Versions are equal
 }
 
-bool AreVersionsEqual(const std::string &version1, const std::string &version2)
-{
-	return !IsVersionLessThan(version1, version2) && !IsVersionLessThan(version2, version1);
-}
-
-std::string GetNewerVersion(const std::string &version1, const std::string &version2)
-{
-	if (IsVersionLessThan(version1, version2)) {
-		return version2;
-	} else {
-		return version1;
-	}
-}
-
 } // namespace VersionUtils
 } // namespace StreamUP

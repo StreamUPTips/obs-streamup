@@ -197,7 +197,6 @@ private:
 	void startStripDrag(MixerStrip *strip);
 	void showStripMenu(MixerStrip *strip, const QPoint &globalPos);
 	void showTabMenu(const QPoint &pos);
-	void showOptionsMenu();
 	void showAddMenu();
 	void promptNewTab(const QString &uuidToMove = QString(), int fromTab = -1);
 	void promptRenameTab(int index);

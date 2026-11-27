@@ -74,16 +74,6 @@ bool DialogManager::ShowSingletonDialog(const std::string& dialogId,
     return false;
 }
 
-void DialogManager::CloseSingletonDialog(const std::string& dialogId)
-{
-    std::lock_guard<std::mutex> lock(s_dialogsMutex);
-    auto it = s_dialogs.find(dialogId);
-    if (it != s_dialogs.end() && !it->second.isNull()) {
-        it->second->close();
-        s_dialogs.erase(it);
-    }
-}
-
 bool DialogManager::IsSingletonDialogOpen(const std::string& dialogId)
 {
     std::lock_guard<std::mutex> lock(s_dialogsMutex);
@@ -116,20 +106,6 @@ void ShowSingletonDialogOnUIThread(const std::string& dialogId,
     ShowDialogOnUIThread([dialogId, createFunction, bringToFront]() {
         DialogManager::ShowSingletonDialog(dialogId, createFunction, bringToFront);
     });
-}
-
-QDialog *CreateDialogWindow(const char *windowTitle, QWidget *parentWidget)
-{
-	// Use provided parent or fallback to OBS main window
-	QWidget *parent = parentWidget ? parentWidget : static_cast<QWidget *>(obs_frontend_get_main_window());
-	QDialog *dialog = new QDialog(parent);
-	dialog->setWindowTitle(obs_module_text(windowTitle));
-	dialog->setWindowFlags(Qt::Dialog); // Use Dialog instead of Window for better positioning
-	dialog->setAttribute(Qt::WA_DeleteOnClose);
-	
-	// Note: Positioning is deferred to CenterDialog() after dialog is properly sized
-	
-	return dialog;
 }
 
 void CenterDialog(QDialog *dialog, QWidget *parentWidget)
@@ -167,19 +143,6 @@ void CenterDialog(QDialog *dialog, QWidget *parentWidget)
 			dialog->move(x, y);
 		}
 	}
-}
-
-void ShowDialogCentered(QDialog *dialog, QWidget *parentWidget)
-{
-	if (!dialog) return;
-	
-	// Show the dialog first
-	dialog->show();
-	
-	// Use a small delay to ensure the dialog is properly sized before centering
-	QTimer::singleShot(10, [dialog, parentWidget]() {
-		CenterDialog(dialog, parentWidget);
-	});
 }
 
 void CreateToolDialog(const char *infoText1, const char *infoText2, const char *infoText3, const QString &titleText,
@@ -305,30 +268,6 @@ QHBoxLayout *AddIconAndText(const QStyle::StandardPixmap &iconText, const char *
 	return iconTextLayout;
 }
 
-QVBoxLayout *CreateVBoxLayout(QWidget *parent)
-{
-	QVBoxLayout *layout = new QVBoxLayout(parent);
-	layout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(15), StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(10));
-	return layout;
-}
-
-//-------------------CONTROL CREATION FUNCTIONS-------------------
-void CreateLabelWithLink(QLayout *layout, const QString &text, const QString &url, int row, int column)
-{
-	QLabel *label = CreateRichTextLabel(text, false, false, Qt::AlignCenter);
-	label->setTextInteractionFlags(Qt::TextBrowserInteraction);
-	label->setOpenExternalLinks(true);
-	QObject::connect(label, &QLabel::linkActivated, [url]() { QDesktopServices::openUrl(QUrl(url)); });
-	static_cast<QGridLayout *>(layout)->addWidget(label, row, column);
-}
-
-void CreateButton(QLayout *layout, const QString &text, const std::function<void()> &onClick)
-{
-	auto *button = new su::PillButton(text, "neutral");
-	QObject::connect(button, &QPushButton::clicked, onClick);
-	layout->addWidget(button);
-}
-
 //-------------------UTILITY FUNCTIONS-------------------
 void CopyToClipboard(const QString &text)
 {
@@ -336,94 +275,11 @@ void CopyToClipboard(const QString &text)
 	clipboard->setText(text);
 }
 
-// Applies OBS theme metadata to a button so it uses standard themed icons (e.g. lock, add).
-// Typical usage: ApplyThemedIcon(button, "icon-button", "addIconSmall");
-void ApplyThemedIcon(QAbstractButton *btn, const char *klass, const char *themeId, bool checkable, bool checked)
-{
-	if (!btn) {
-		return;
-	}
-
-	btn->setIcon(QIcon());
-
-	if (klass && *klass) {
-		btn->setProperty("class", QString::fromUtf8(klass));
-	} else {
-		btn->setProperty("class", QVariant());
-	}
-
-	if (themeId && *themeId) {
-		btn->setProperty("themeID", QString::fromUtf8(themeId));
-	} else {
-		btn->setProperty("themeID", QVariant());
-	}
-
-	btn->setCheckable(checkable);
-	if (checkable) {
-		btn->setChecked(checked);
-	} else if (btn->isChecked()) {
-		btn->setChecked(false);
-	}
-
-	if (QStyle *style = btn->style()) {
-		style->unpolish(btn);
-		style->polish(btn);
-	}
-	btn->update();
-}
-
-// Removes OBS theme metadata from a button so a file-based icon can be shown reliably.
-// Typical usage: ClearThemeIconProps(button);
-void ClearThemeIconProps(QAbstractButton *btn)
-{
-	if (!btn) {
-		return;
-	}
-
-	btn->setProperty("class", QVariant());
-	btn->setProperty("themeID", QVariant());
-	btn->setCheckable(false);
-	if (btn->isChecked()) {
-		btn->setChecked(false);
-	}
-
-	if (QStyle *style = btn->style()) {
-		style->unpolish(btn);
-		style->polish(btn);
-	}
-	btn->update();
-}
-
-// Applies a file-based icon to a button after clearing theme metadata.
-// Typical usage: ApplyFileIcon(button, GetThemedIconPath("refresh"));
-void ApplyFileIcon(QAbstractButton *btn, const QString &filePath)
-{
-	if (!btn) {
-		return;
-	}
-
-	ClearThemeIconProps(btn);
-	btn->setIcon(QIcon(filePath));
-	btn->update();
-}
-
-// Convenience helper for OBS-style visibility buttons with eye icons toggled by :checked.
-// Typical usage: ApplyVisibilityTheme(toggleVisibilityButton, true);
-void ApplyVisibilityTheme(QAbstractButton *btn, bool visible)
-{
-	ApplyThemedIcon(btn, "icon-button", "visibility", true, visible);
-}
-
 QString GetThemedIconPath(const QString &iconName)
 {
 	// One resolver for every StreamUP icon: the shared kit's Tabler set first,
 	// then this plugin's own :images/icons/ui files.
 	return StreamUP::Kit::IconPath(iconName);
-}
-
-QIcon CreateThemedIcon(const QString &baseName)
-{
-	return QIcon(StreamUP::Kit::IconPath(baseName));
 }
 
 bool IsOBSThemeDark()

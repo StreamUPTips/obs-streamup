@@ -93,13 +93,6 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow);
 void SetToolbarDockedEdge(Qt::ToolBarArea area);
 
 /**
- * @brief Refresh theme enhancements
- *
- * Call when dialogs are opened or theme changes to reapply enhancements.
- */
-void RefreshThemeEnhancements();
-
-/**
  * @brief Check if the current OBS theme is a StreamUP theme
  */
 bool IsUsingStreamUPTheme();

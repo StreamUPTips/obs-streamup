@@ -119,23 +119,6 @@ void HotkeyWidget::SetHotkey(obs_data_array_t* hotkeyData)
     UpdateDisplay();
 }
 
-obs_data_array_t* HotkeyWidget::GetHotkey() const
-{
-    if (!m_currentHotkeyData) {
-        return obs_data_array_create(); // Return empty array
-    }
-    
-    obs_data_array_t* copy = obs_data_array_create();
-    // Copy each item from the current array
-    size_t count = obs_data_array_count(m_currentHotkeyData);
-    for (size_t i = 0; i < count; i++) {
-        obs_data_t* item = obs_data_array_item(m_currentHotkeyData, i);
-        obs_data_array_push_back(copy, item);
-        obs_data_release(item);
-    }
-    return copy;
-}
-
 void HotkeyWidget::ClearHotkey()
 {
     if (m_currentHotkeyData) {

@@ -357,20 +357,10 @@ QWidget *BuildWhatsNewContent()
 	return contentWidget;
 }
 
-void CreatePatchNotesDialog()
-{
-	FeaturesPage::ShowWhatsNew();
-}
-
 void ShowPatchNotesWindow()
 {
 	FeaturesPage::ShowWhatsNew();
 	ErrorHandler::LogInfo("Patch notes window shown", ErrorHandler::Category::UI);
-}
-
-bool IsPatchNotesWindowOpen()
-{
-	return FeaturesPage::IsOpen();
 }
 
 } // namespace PatchNotesWindow

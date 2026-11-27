@@ -455,15 +455,6 @@ static QIcon CreateColoredIcon(const QString& svgPath, const QColor& color, cons
     return icon;
 }
 
-// Cache management functions
-static void ClearIconCaches()
-{
-    s_themeIconCache.clear();
-    s_coloredIconCache.clear();
-    s_cachedMainWindow = nullptr;
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Cache", "Cleared icon caches");
-}
-
 // OBS themes style list ROWS by the classes their own docks use - mostly
 // QListView::item / QListWidget::item, since SceneTree and SourceTree are both
 // QListView subclasses. Our organiser is a QTreeView, and two separate problems
@@ -1915,11 +1906,6 @@ void SceneOrganiserDock::sortManually(StreamUP::SettingsManager::SceneSortMethod
 
     sortItemsRecursive(parent, method);
     m_model->saveSceneTree();
-}
-
-void SceneOrganiserDock::updateFromObsScenes()
-{
-    refreshSceneList();
 }
 
 void SceneOrganiserDock::onSceneSelectionChanged(const QItemSelection &selected, const QItemSelection &deselected)
@@ -5108,12 +5094,6 @@ void SceneOrganiserDock::onShowInMultiviewClicked()
         QString("Toggled multiview for scene: %1 (now %2)").arg(sceneName, !showInMultiview ? "visible" : "hidden").toUtf8().constData());
 }
 
-void SceneOrganiserDock::onOpenProjectorClicked()
-{
-    // This would be called by monitor-specific projector actions
-    // Implementation would involve creating projectors for specific monitors
-}
-
 void SceneOrganiserDock::onOpenProjectorOnMonitorClicked()
 {
     if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
@@ -5952,17 +5932,6 @@ bool SceneTreeModel::isValidSceneForCanvas(obs_scene_t *scene)
 }
 
 
-QStandardItem *SceneTreeModel::findSceneItem(obs_weak_source_t *weak_source)
-{
-    auto it = m_scenesInTree.find(weak_source);
-    return (it != m_scenesInTree.end()) ? it->second : nullptr;
-}
-
-QStandardItem *SceneTreeModel::findFolderItem(const QString &folderName)
-{
-    return StreamUP::UIHelpers::FindItemRecursive(invisibleRootItem(), folderName, SceneFolderItem::UserType + 1);
-}
-
 QStandardItem *SceneTreeModel::createFolderItem(const QString &folderName)
 {
     if (folderName.isEmpty() || folderName.trimmed().isEmpty()) {
@@ -5971,31 +5940,6 @@ QStandardItem *SceneTreeModel::createFolderItem(const QString &folderName)
         return nullptr;
     }
     return new SceneFolderItem(folderName);
-}
-
-QStandardItem *SceneTreeModel::createSceneItem(const QString &sceneName, obs_weak_source_t *weak_source)
-{
-    if (sceneName.isEmpty() || sceneName.trimmed().isEmpty()) {
-        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Warning",
-            "Attempted to create scene item with empty name");
-        return nullptr;
-    }
-    return new SceneTreeItem(sceneName, weak_source);
-}
-
-void SceneTreeModel::moveSceneToFolder(obs_weak_source_t *weak_source, QStandardItem *folderItem)
-{
-    QStandardItem *sceneItem = findSceneItem(weak_source);
-    if (sceneItem && folderItem) {
-        QStandardItem *oldParent = sceneItem->parent();
-        if (!oldParent) oldParent = invisibleRootItem();
-
-        QStandardItem *movedItem = oldParent->takeChild(sceneItem->row());
-        if (movedItem) {
-            folderItem->appendRow(movedItem);
-            emit modelChanged();
-        }
-    }
 }
 
 // Depth-first lookup by display name, used when an item has to be re-found
@@ -6082,23 +6026,6 @@ void SceneTreeModel::cleanupEmptyItemsRecursive(QStandardItem *parent)
             parent->removeRow(i);
         }
     }
-}
-
-bool SceneTreeModel::isChildOf(QStandardItem *potentialChild, QStandardItem *potentialParent)
-{
-    if (!potentialChild || !potentialParent) {
-        return false;
-    }
-
-    // Check if potentialParent is an ancestor of potentialChild
-    QStandardItem *current = potentialChild->parent();
-    while (current) {
-        if (current == potentialParent) {
-            return true;
-        }
-        current = current->parent();
-    }
-    return false;
 }
 
 QString SceneTreeModel::createUniqueFolderName(const QString &baseName, QStandardItem *parentItem)
@@ -6347,80 +6274,6 @@ void SceneTreeModel::loadSceneTree()
     bfree(scene_collection);
 }
 
-bool SceneTreeModel::migrateFromOriginalPlugin(const QString &originalConfigPath)
-{
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
-        QString("Starting migration from: %1").arg(originalConfigPath).toUtf8().constData());
-
-    // Load the original plugin's config file
-    obs_data_t *original_data = obs_data_create_from_json_file(originalConfigPath.toUtf8().constData());
-    if (!original_data) {
-        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
-            "Failed to load original config file");
-        return false;
-    }
-
-    // Get our config path
-    char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
-    if (!configPath) {
-        obs_data_release(original_data);
-        return false;
-    }
-
-    QString configDir = QString::fromUtf8(configPath);
-    QString configFile = configDir + "/" + sceneTreeFileName(m_canvasType);
-    bfree(configPath);
-
-    // Load existing data (if any) to preserve what we have
-    obs_data_t *root_data = obs_data_create_from_json_file(configFile.toUtf8().constData());
-    if (!root_data) {
-        root_data = obs_data_create();
-    }
-
-    int migratedCollections = 0;
-
-    // Iterate through all scene collections in the original file
-    obs_data_item_t *item = obs_data_first(original_data);
-    while (item) {
-        const char *collection_name = obs_data_item_get_name(item);
-        obs_data_type type = obs_data_item_gettype(item);
-
-        if (type == OBS_DATA_ARRAY) {
-            obs_data_array_t *original_array = obs_data_item_get_array(item);
-            if (original_array) {
-                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
-                    QString("Migrating collection: %1").arg(collection_name).toUtf8().constData());
-
-                // Check if we already have data for this collection
-                obs_data_array_t *existing_array = obs_data_get_array(root_data, collection_name);
-                if (existing_array) {
-                    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
-                        QString("Collection '%1' already exists, skipping").arg(collection_name).toUtf8().constData());
-                    obs_data_array_release(existing_array);
-                } else {
-                    // Convert and migrate this collection
-                    obs_data_set_array(root_data, collection_name, original_array);
-                    migratedCollections++;
-                }
-
-                obs_data_array_release(original_array);
-            }
-        }
-
-        obs_data_item_next(&item);
-    }
-
-    // Save the migrated data
-    obs_data_save_json(root_data, configFile.toUtf8().constData());
-    obs_data_release(root_data);
-    obs_data_release(original_data);
-
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
-        QString("Migration complete. Migrated %1 scene collections.").arg(migratedCollections).toUtf8().constData());
-
-    return migratedCollections > 0;
-}
-
 bool SceneTreeModel::checkMigrationAvailable(const QString &sceneCollectionName, QString &outConfigPath)
 {
     // Get the streamup plugin config path to navigate to obs_scene_tree_view
@@ -6573,13 +6426,6 @@ bool SceneTreeModel::migrateCurrentCollection()
     obs_data_release(original_data);
 
     return true;
-}
-
-void SceneTreeModel::loadOriginalFolderArray(obs_data_array_t *folder_array, QStandardItem &parent)
-{
-    // This loads the original plugin's format which is already compatible
-    // The format is the same, so we can use the existing loadFolderArray
-    loadFolderArray(folder_array, parent);
 }
 
 void SceneTreeModel::removeSceneFromTracking(obs_weak_source_t *weak_source)
@@ -9450,11 +9296,6 @@ void StreamUP::SceneOrganiser::SceneOrganiserDock::processBatchedUpdates()
         m_treeView->viewport()->update();
         StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Batch Update", "Processed batched tree view update");
     }
-}
-
-void StreamUP::SceneOrganiser::SceneOrganiserDock::clearIconCaches()
-{
-    ClearIconCaches();
 }
 
 void StreamUP::SceneOrganiser::SceneOrganiserDock::applyThemeRowStyling()

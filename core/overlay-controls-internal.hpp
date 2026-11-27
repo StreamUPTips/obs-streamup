@@ -208,8 +208,6 @@ QColor ParseColour(const QString &text);
 QString ColourText(const QColor &c);
 QColor FromObsColour(qint64 v);
 qint64 ToObsColour(const QColor &c);
-bool IsNumeric(ControlType t);
-bool IsString(ControlType t);
 QJsonValue NormaliseValue(const Control &c, const QJsonValue &in);
 
 // ---------------------------------------------------------------- settings links
@@ -225,6 +223,7 @@ bool CaptureBinding(Binding &b);
 bool WriteBinding(Binding &b, const Control &c);
 void RestoreBinding(Binding &b);
 bool BindingDrifted(Binding &b, const Control &c);
+QJsonValue ReadBack(Binding &b, const Control &c);
 
 // ---------------------------------------------------------------- templates
 
@@ -236,7 +235,6 @@ bool CaptureRig(Overlay &o, Control &c);
 // Places the items of one part and every part riding on it (all parts when
 // changedPart is empty), then recomputes geometry links.
 void ApplyLayout(Overlay &o, const QString &changedPart = QString());
-QRectF CurrentFrame(Overlay &o, Control &c);
 QRectF FrameInScene(Control &c, const QString &scene);
 int RigMissing(Control &c);
 void RestoreGeoLinks(Overlay &o);
