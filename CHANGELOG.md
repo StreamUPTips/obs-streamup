@@ -88,6 +88,9 @@
 ### Bug Fixes
 - Restoring a backup with media made the window taller than a 1080p screen, so the Restore button was out of reach, even with Tab. The window fits your screen now and the middle scrolls, so the buttons always stay in view. The Backup window does the same
 - On OBS 30 to 32 the plugin check says not to press Download (those links can be OBS 33 builds that never load, so the update prompt never cleared) and to use the Website Link instead
+- With OBS on a smaller or scaled screen (1080p at 125%), the window listing the plugins a product needs ran off the bottom, so Install anyway and Cancel were out of reach. It fits the screen OBS is on now and the list scrolls. Every StreamUP window that sizes itself to its content does the same
+- The Restore window's contents tabs ran into each other once a backup carried media. The tabs use short names now
+- The plugin check is ready for plugins with separate OBS 33 and older builds: once the plugin list names the older build, OBS 30 to 32 is checked against it and Get downloads it, and a plugin whose newest build needs OBS 33 is no longer reported out of date there
 
 ---
 

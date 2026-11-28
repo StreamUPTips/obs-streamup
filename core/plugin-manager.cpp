@@ -159,6 +159,8 @@ PluginRow RowForListedPlugin(const std::string &name, const std::string &install
 	const StreamUP::PluginInfo &info = it->second;
 	row.requiredVersion = info.version;
 	row.websiteUrl = info.generalURL;
+	row.linksFitThisObs = info.linksFitThisObs;
+	row.needsObs = info.needsObs;
 	row.downloadUrl = StringUtils::GetPlatformURL(QString::fromStdString(info.windowsURL),
 						      QString::fromStdString(info.macURL),
 						      QString::fromStdString(info.linuxURL),
@@ -194,12 +196,15 @@ static QWidget *PluginRowsCard(const std::vector<PluginRow> &rows, bool outdated
 				 QString::fromStdString(r.requiredVersion);
 		else if (!r.requiredVersion.empty())
 			detail = QString::fromStdString(r.requiredVersion);
+		else if (r.needsObs > 0)
+			detail = QString(obs_module_text("Plugin.Line.NeedsObs")).arg(r.needsObs);
 		// The section header and the count pill at the top already say these
 		// are missing, so a red pill on every row only adds noise. An update
 		// keeps its pill: it is the one detail the row cannot show otherwise.
 		QWidget *pill = outdated ? kit::StatusPill(kit::Status::Warn, obs_module_text("Plugin.Pill.Update")) : nullptr;
 		// On OBS 30-32 the download link can be an OBS 33 build: open the page.
-		const bool pageOnly = IsObsOlderThan33() && !r.websiteUrl.empty();
+		// Not when the list names a build for this OBS (its "legacy" build).
+		const bool pageOnly = IsObsOlderThan33() && !r.linksFitThisObs && !r.websiteUrl.empty();
 		const QString url = QString::fromStdString(!pageOnly && !r.downloadUrl.empty() ? r.downloadUrl : r.websiteUrl);
 		// Soft-surface Get on every row; blue stays for the one footer action.
 		auto *get = new su::PillButton(obs_module_text("Plugin.Button.Get"), "neutral");
@@ -261,7 +266,7 @@ static QWidget *FailedRowsCard(const std::vector<std::string> &failed_modules)
 			trailing << folder;
 		}
 		QString url = QStringLiteral("https://obsproject.com/forum/resources/");
-		if (info && IsObsOlderThan33() && !info->generalURL.empty())
+		if (info && IsObsOlderThan33() && !info->linksFitThisObs && !info->generalURL.empty())
 			url = QString::fromStdString(info->generalURL);
 		else if (info)
 			url = StringUtils::GetPlatformURL(QString::fromStdString(info->windowsURL),
@@ -417,7 +422,12 @@ void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continue
 		// OBS 30-32: the plugin list's download links can be OBS 33 builds that
 		// never load there, so Get opens each plugin's page instead and a note
 		// says to pick the build for this OBS (from release/2.4.2).
-		if ((hasMissing || hasUpdates || hasFailedToLoad) && IsObsOlderThan33()) {
+		// Not needed when every row's Get already downloads a build for this OBS.
+		bool anyUnsureLink = hasFailedToLoad;
+		for (const auto *rows : {&issues.missing, &issues.outdated})
+			for (const PluginRow &r : *rows)
+				anyUnsureLink = anyUnsureLink || !r.linksFitThisObs;
+		if ((hasMissing || hasUpdates || hasFailedToLoad) && IsObsOlderThan33() && anyUnsureLink) {
 			const uint32_t v = obs_get_version();
 			const QString obsVer = QString("%1.%2").arg(v >> 24).arg((v >> 16) & 0xFF);
 			body->addWidget(kit::Note(kit::Status::Warn, QString(obs_module_text("Plugin.Dialog.OldObsNote")).arg(obsVer)));
@@ -513,12 +523,64 @@ void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continue
 
 // HTTP functionality moved to StreamUP::HttpClient module
 
+// Optional fields in the plugin list, for plugins whose newest build needs a
+// newer OBS than some users run (from 3.0.0; older StreamUP ignores them):
+//   "minObs": 33                      lowest OBS major the version/downloads above work on
+//   "legacy": { "version": "1.5.0",   newest build for older OBS
+//               "downloads": { "windows": "...", "macOS": "...", "linux": "..." } }
+// Without them nothing changes. With them, OBS older than minObs checks against
+// and downloads the legacy build, or, when there is none, is not told to update
+// to a build that cannot load (the old copy kept loading and the prompt never
+// cleared: NikNes, 18 Nov 2026).
+static void ResolveForThisObs(obs_data_t *plugin, StreamUP::PluginInfo &info)
+{
+	int minObs = static_cast<int>(obs_data_get_int(plugin, "minObs"));
+	if (minObs <= 0)
+		minObs = std::atoi(obs_data_get_string(plugin, "minObs"));
+	if (minObs <= 0)
+		return;
+	const int obsMajor = static_cast<int>(obs_get_version() >> 24);
+	if (obsMajor >= minObs) {
+		info.linksFitThisObs = true;
+		return;
+	}
+	auto legacy = OBSWrappers::GetObjectProperty(plugin, "legacy");
+	const std::string legacyVersion = legacy ? OBSWrappers::GetStringProperty(legacy.get(), "version") : std::string();
+	if (!legacyVersion.empty()) {
+		info.version = legacyVersion;
+		info.windowsURL.clear();
+		info.macURL.clear();
+		info.linuxURL.clear();
+		if (auto downloads = OBSWrappers::GetObjectProperty(legacy.get(), "downloads")) {
+			info.windowsURL = OBSWrappers::GetStringProperty(downloads.get(), "windows");
+			info.macURL = OBSWrappers::GetStringProperty(downloads.get(), "macOS");
+			info.linuxURL = OBSWrappers::GetStringProperty(downloads.get(), "linux");
+		}
+		info.linksFitThisObs = true;
+		return;
+	}
+	info.version.clear();
+	info.windowsURL.clear();
+	info.macURL.clear();
+	info.linuxURL.clear();
+	info.needsObs = minObs;
+}
+
 void InitialiseRequiredModules()
 {
 	std::string api_response;
 	const std::string url = "https://api.streamup.tips/plugins";
-	
-	if (!StreamUP::HttpClient::MakeGetRequest(url, api_response)) {
+
+	// Dev hook: STREAMUP_PLUGIN_LIST=<file> reads the list from a JSON file
+	// instead, to try list changes before the API serves them. Unset, it
+	// does nothing.
+	if (const char *listFile = std::getenv("STREAMUP_PLUGIN_LIST"); listFile && *listFile) {
+		if (char *text = os_quick_read_utf8_file(listFile)) {
+			api_response = text;
+			bfree(text);
+		}
+		blog(LOG_INFO, "[StreamUP] Plugin list read from %s (STREAMUP_PLUGIN_LIST)", listFile);
+	} else if (!StreamUP::HttpClient::MakeGetRequest(url, api_response)) {
 		return;
 	}
 
@@ -554,6 +616,7 @@ void InitialiseRequiredModules()
 		info.generalURL = OBSWrappers::GetStringProperty(plugin.get(), "url");
 		info.moduleName = OBSWrappers::GetStringProperty(plugin.get(), "moduleName");
 		info.required = OBSWrappers::GetBoolProperty(plugin.get(), "required");
+		ResolveForThisObs(plugin.get(), info);
 
 		StreamUP::PluginState::Instance().AddPlugin(name, info);
 

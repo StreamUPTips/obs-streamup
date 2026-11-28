@@ -49,6 +49,8 @@
 - **Studio Mode Marker** The halfway mark on the transition slider was added again every time Studio Mode was turned on.
 - **Layout Page Lag** Moving parts on the Layout page made OBS stutter.
 - **Brighter Dots On Folder Lines** Guide lines were painted twice where they met.
+- **Buttons Off A Small Screen** On a 1080p screen at 125%, the window listing the plugins a product needs ran off the bottom, so you could not reach Install anyway or Cancel. It fits your screen now and the list scrolls.
+- **Restore Tabs Running Together** With media in a backup, the tabs in the Restore window ran into each other. They fit now.
 
 ---
 

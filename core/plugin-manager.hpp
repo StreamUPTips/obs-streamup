@@ -43,6 +43,8 @@ struct PluginRow {
 	std::string installedVersion; // outdated rows
 	std::string downloadUrl;
 	std::string websiteUrl;
+	bool linksFitThisObs = false; // the download is a build for this OBS
+	int needsObs = 0;             // the listed build needs this OBS major or newer
 };
 
 // A row for a plugin in the StreamUP plugin list, with its links and version.

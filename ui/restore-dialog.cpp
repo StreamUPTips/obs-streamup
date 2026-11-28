@@ -204,8 +204,11 @@ void ShowRestoreDialog(QWidget *over)
 
 	if (QLabel *dot = StreamUP::Kit::HelpDot(obs_module_text("Restore.Section.ContentsHint"))) {
 		auto *hintRow = new QHBoxLayout();
-		hintRow->addWidget(su::makeLabel(obs_module_text("Restore.Section.ContentsShort"), CardText::kCaption, 500,
-						 Colors::TEXT_SECONDARY));
+		// One line: wrapped, it folded to two short lines beside the tabs.
+		QLabel *hint = su::makeLabel(obs_module_text("Restore.Section.ContentsShort"), CardText::kCaption, 500,
+					     Colors::TEXT_SECONDARY);
+		hint->setWordWrap(false);
+		hintRow->addWidget(hint);
 		hintRow->addWidget(dot);
 		hintRow->addStretch(1);
 		contentsCard->addLayout(hintRow);
@@ -279,7 +282,9 @@ void ShowRestoreDialog(QWidget *over)
 		return page;
 	};
 
-	pageLabels << QStringLiteral("%1 (%2)").arg(obs_module_text("Restore.Tab.Scenes")).arg(info.sceneCollections);
+	// The tabs take short names: with Media as a fifth tab, "Scene collections"
+	// and "Plugin settings" plus their counts ran the labels into each other.
+	pageLabels << QStringLiteral("%1 (%2)").arg(obs_module_text("Restore.Tab.Short.Scenes")).arg(info.sceneCollections);
 	collectionPage->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
 	pageWidgets << collectionPage;
 
@@ -292,7 +297,7 @@ void ShowRestoreDialog(QWidget *over)
 	};
 
 	addSimplePage(obs_module_text("Restore.Tab.Profiles"), info.profileNames, info.profiles);
-	addSimplePage(obs_module_text("Restore.Tab.Plugins"), info.pluginConfigNames, info.pluginConfigFiles);
+	addSimplePage(obs_module_text("Restore.Tab.Short.Plugins"), info.pluginConfigNames, info.pluginConfigFiles);
 	addSimplePage(obs_module_text("Restore.Tab.Themes"), info.themeNames, info.themeFiles);
 	if (info.mediaFiles > 0)
 		addSimplePage(obs_module_text("Restore.Tab.Media"), QStringList(), info.mediaFiles);
