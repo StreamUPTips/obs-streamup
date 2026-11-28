@@ -1,6 +1,7 @@
 #include "videos.hpp"
 
 #include "../utilities/http-client.hpp"
+#include "../version.h"
 
 #include <obs-module.h>
 #include <util/platform.h>
@@ -25,7 +26,7 @@ namespace {
 
 // Everything below is touched on the UI thread only; the downloads hand their
 // results over with QueuedConnection.
-std::optional<Video> g_master;
+QList<Video> g_masters;
 QList<Video> g_videos;
 QHash<QString, QImage> g_thumbs;
 QSet<QString> g_fetching;
@@ -72,6 +73,7 @@ bool SafeUrl(const QString &url)
 Video Parse(const QJsonObject &o)
 {
 	Video v;
+	v.release = o.value("release").toString();
 	v.title = o.value("title").toString();
 	for (const QJsonValue &p : o.value("parts").toArray())
 		v.parts << p.toString();
@@ -88,12 +90,12 @@ void Apply(const std::string &json)
 	if (!doc.isObject())
 		return;
 	const QJsonObject root = doc.object();
-	std::optional<Video> master;
-	if (root.value("master").isObject()) {
-		Video m = Parse(root.value("master").toObject());
+	QList<Video> masters;
+	for (const QJsonValue &v : root.value("masters").toArray()) {
+		Video m = Parse(v.toObject());
 		m.parts = {QStringLiteral("whats-new")};
 		if (SafeUrl(m.url) && ValidId(m.videoId))
-			master = m;
+			masters << m;
 	}
 	QList<Video> list;
 	for (const QJsonValue &v : root.value("videos").toArray()) {
@@ -101,9 +103,9 @@ void Apply(const std::string &json)
 		if (SafeUrl(video.url) && ValidId(video.videoId) && !video.parts.isEmpty())
 			list << video;
 	}
-	g_master = master;
+	g_masters = masters;
 	g_videos = list;
-	blog(LOG_INFO, "[StreamUP] Video links: %d%s", int(list.size()), master ? " plus the master video" : "");
+	blog(LOG_INFO, "[StreamUP] Video links: %d, master videos: %d", int(list.size()), int(masters.size()));
 	Notify();
 }
 
@@ -137,6 +139,21 @@ void FetchThumb(const QString &id, bool large)
 	});
 }
 
+// A release as a number to compare: "3.0" -> 3000, "3.12" -> 3012. Rows with
+// no release count as the oldest.
+int ReleaseKey(const QString &release)
+{
+	const QStringList bits = release.split('.');
+	if (bits.isEmpty() || bits[0].isEmpty())
+		return 0;
+	return bits.value(0).toInt() * 1000 + bits.value(1).toInt();
+}
+
+int ThisRelease()
+{
+	return PROJECT_VERSION_MAJOR * 1000 + PROJECT_VERSION_MINOR;
+}
+
 } // namespace
 
 void Refresh()
@@ -160,15 +177,23 @@ void Refresh()
 
 std::optional<Video> Master()
 {
-	return g_master;
+	for (const Video &m : g_masters)
+		if (ReleaseKey(m.release) == ThisRelease())
+			return m;
+	return std::nullopt;
 }
 
 std::optional<Video> ForPart(const QString &part)
 {
-	for (const Video &v : g_videos)
-		if (v.parts.contains(part))
-			return v;
-	return std::nullopt;
+	std::optional<Video> best;
+	for (const Video &v : g_videos) {
+		const int key = ReleaseKey(v.release);
+		if (!v.parts.contains(part) || key > ThisRelease())
+			continue;
+		if (!best || key > ReleaseKey(best->release))
+			best = v;
+	}
+	return best;
 }
 
 QImage Thumbnail(const QString &videoId)

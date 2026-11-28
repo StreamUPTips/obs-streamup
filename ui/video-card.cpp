@@ -34,7 +34,7 @@ QFont Font(const QFont &base, int px, int weight)
 // The line under a video's title: where it lives and how long it is.
 QString Detail(const Videos::Video &v)
 {
-	QString where = T(v.chapter ? "Videos.Chapter" : "Videos.OnYouTube");
+	QString where = v.chapter ? T("Videos.Chapter").arg(v.release) : T("Videos.OnYouTube");
 	if (!v.length.isEmpty())
 		where += QStringLiteral(" · ") + v.length;
 	return where;
@@ -210,7 +210,7 @@ void VideoCard::paintEvent(QPaintEvent *)
 	const QFont lf = Font(font(), 13, 400);
 	const QFont bf = Font(font(), 13, 600);
 	const QFontMetrics hfm(hf), lfm(lf), bfm(bf);
-	const QString line = T("WhatsNew.Video.Line");
+	const QString line = T("WhatsNew.Video.Line").arg(m_video.release);
 	const QRect lineBox = lfm.boundingRect(QRect(0, 0, text.width(), 10000), Qt::TextWordWrap, line);
 	const int pillH = su::S(34);
 	const int blockH = hfm.height() + su::S(6) + lineBox.height() + su::S(14) + pillH;

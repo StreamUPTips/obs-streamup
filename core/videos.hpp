@@ -15,6 +15,7 @@ namespace Videos {
 // from api.streamup.tips/videos (the Notion "StreamUP Plugin Videos" table), so
 // a new video shows up in everyone's OBS without a plugin update.
 struct Video {
+	QString release;   // the StreamUP release it covers, e.g. "3.0"
 	QString title;
 	QStringList parts; // the StreamUP parts that link to it, e.g. "mixer-dock"
 	QString url;       // opens on YouTube, already at the right time
@@ -28,10 +29,12 @@ struct Video {
 // before they are in Notion.
 void Refresh();
 
-// The master video ("whats-new"), or nothing until it is up.
+// This release's master video (the whole update in one video), or nothing
+// until it is up. A patch (3.0.2) shows its release's (3.0) video.
 std::optional<Video> Master();
 
-// The video for a part, or nothing if it has none yet.
+// The video for a part, or nothing if it has none yet. When a part has a video
+// for more than one release, the newest one this StreamUP is not older than.
 std::optional<Video> ForPart(const QString &part);
 
 // The video's thumbnail, or a null image while it is still downloading.
