@@ -252,15 +252,14 @@ struct Headline {
 };
 
 static const Headline kPictures[] = {
-	{"features", "WhatsNew.Features.Name", "WhatsNew.Features.Line", nullptr},
-	{"my-products", "WhatsNew.MyProducts.Name", "WhatsNew.MyProducts.Line", nullptr},
 	{"mixer", "WhatsNew.Mixer.Name", "WhatsNew.Mixer.Line", nullptr},
-	{"font-picker", "WhatsNew.FontPicker.Name", "WhatsNew.FontPicker.Line", nullptr},
+	{"adjust", "WhatsNew.Adjust.Name", "WhatsNew.Adjust.Line", nullptr},
+	{"my-products", "WhatsNew.MyProducts.Name", "WhatsNew.MyProducts.Line", nullptr},
+	{"tools", "WhatsNew.Tools.Name", "WhatsNew.Tools.Line", nullptr},
 };
 static const Headline kRows[] = {
 	{"product-check", "WhatsNew.ProductCheck.Name", "WhatsNew.ProductCheck.Line", "package"},
 	{"cleaner", "WhatsNew.Cleaner.Name", "WhatsNew.Cleaner.Line", "sparkles"},
-	{"restart", "WhatsNew.Restart.Name", "WhatsNew.Restart.Line", "refresh"},
 };
 
 static QString Tx(const char *key)

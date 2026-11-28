@@ -3,14 +3,14 @@
 ---
 
 ## v3.0.0 (22 Nov '26)
-**Patch Focus:** StreamUP 3.0, a major update. Every part of StreamUP on one Tools and tweaks page in Settings, My Products, the StreamUP Mixer, installs that only check the plugins a product needs, and calmer windows throughout: less text, more pictures
+**Patch Focus:** StreamUP 3.0, a major update. The StreamUP Mixer, products you can customise right inside OBS, My Products, every part of StreamUP on one Tools and tweaks page, installs that only check the plugins a product needs, and calmer windows throughout
 
 ### Headlines
+- **The StreamUP Mixer.** An audio mixer dock with tabs, so your mic, alerts and music each get their own page
+- **Adjust your products in OBS.** Newer StreamUP products can be customised right inside OBS, no Streamer.bot needed: colours, fonts (Google Fonts included), your own logo and timings, all in one window
+- **My Products.** Every StreamUP product in your collection in one list, with its picture and Adjust or Go to scene one click away
 - **Tools and tweaks.** The first tab of Settings: every part of StreamUP as a card with a preview, one line and a switch. A part that is off costs OBS nothing
-- **My Products.** Every StreamUP product in your collection in one list, with its picture and its controls one click away
-- **The StreamUP Mixer.** An audio mixer dock with tabs, so each group of sources has its own page
-- **Only the plugins you need.** Installing a product checks just the plugins that product uses, and ends on an Installed card with the next step
-- **Pick any font.** Every installed font and all of Google Fonts in one picker, each drawn in its own style
+- **Smarter installs.** Installing a product checks just the plugins that product uses, and ends on an Installed card with the next step
 - **Calmer windows.** One line per setting with the detail behind a ?, status shown as coloured pills, and small toasts inside OBS instead of tray balloons
 
 ### New Features

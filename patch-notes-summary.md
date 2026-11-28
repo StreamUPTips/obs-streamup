@@ -1,46 +1,30 @@
 # StreamUP v3.0.0 - Major Update
 
 ## Headlines
-- **Every feature on one page** Turn each part of StreamUP on or off. Anything off costs OBS nothing.
-- **All your products in one place** See every StreamUP product you've installed and adjust it in one click.
-- **A tabbed audio mixer** Give your mic, alerts and music their own tabs in the StreamUP Mixer.
-- **Google Fonts in the font picker** Choose any Google font and StreamUP installs it for you.
-- **Only the plugins a product needs** Installing a product checks just its plugins, with a link to each one.
-- **Calmer windows** One line per setting with the details behind a ?, and small notes inside OBS instead of Windows pop-ups.
+- **The StreamUP Mixer** An audio mixer dock with tabs, so your mic, alerts and music each get their own page.
+- **Adjust Your Products In OBS** Newer StreamUP products can be customised right inside OBS, no Streamer.bot needed. Colours, fonts, logos and timings, all in one window.
+- **My Products** Every StreamUP product you've installed in one list, with Adjust or Go to scene on each one.
+- **Tools And Tweaks** Every part of StreamUP on one page in Settings. Switch something off and it stops running completely, so it costs OBS nothing.
+- **Smarter Installs** Installing a product only checks the plugins it actually uses, then shows you the next step.
+- **A Calmer StreamUP** Every window redone. Less text, one line per setting, and small notes inside OBS instead of Windows pop-ups.
 
 ## New Features
-- **Tidier StreamUP Menu** Products first, then Quick Actions, Multi-Dock, Backup and plugin updates, then Settings, with Help in its own submenu.
-- **Installed Card** Every install ends on a card with the product's picture and the one thing to do next: Adjust it, or go to its scene.
-- **Mixer Tabs Your Way** Put sources on the tabs you want, in your own order. New sources land in Unassigned, and holding Ctrl as you drop shows a source on two tabs.
-- **Everything The OBS Mixer Does** Hide, pin, lock, rename, filters, properties and Advanced Audio Properties, in the same menus as OBS's own mixer.
-- **Use As My Transition** Transition products add themselves to your transitions in one click, already set up.
-- **Your Own Logo** Pick a picture for a product's logo and see it straight away.
-- **Type In Slider Values** The box next to every slider takes a typed number.
+- **The StreamUP Mixer** Make your own tabs and put sources on them in your own order. New sources land in Unassigned, and holding Ctrl as you drop shows a source on two tabs. It does everything the OBS mixer does too: hide, pin, lock, rename, filters, properties and Advanced Audio Properties.
+- **Adjust Your Products In OBS** Pick from every installed font or the whole Google Fonts library, and StreamUP installs the Google ones for you. Choose your own logo and see it straight away. Type exact numbers into any slider. Transition products set themselves up as your transition in one click. And it all opens about five times faster than before.
+- **My Products** Your products grouped by category, with a sidebar and search. Adjust opens a product's controls, Go to scene takes you straight to it. It replaces the old Overlays menu.
+- **Tools And Tweaks** Each part of StreamUP is a card with a preview and a switch. Show me plays its clip big and points at where it lives in OBS. If a change needs a restart, StreamUP offers to restart OBS for you. New installs start on a Welcome page, and updates open on What's new.
+- **Smarter Installs** Pick the product file first, then StreamUP checks only the plugins and fonts that product needs, with a Get button for anything missing. Every install ends on a card with the product's picture and what to do next. Products can now install scenes onto your Aitum Vertical canvas too.
+- **WebSocket** Five new requests: GroupSceneItems, RegisterOverlay, RunOverlayAction, GetMyProducts and OpenMyProducts. The WebSocket Commands window has search and copies a command in one click, as OBS Raw or Streamer.bot code.
 - **Jump To A Nested Scene** Right-click a nested scene in the Sources dock and pick Go to this scene.
 - **Pick Your Dock Buttons** Right-click the StreamUP Dock to choose which buttons it shows.
-- **Vertical Scenes** A .StreamUP file can install scenes onto your Aitum Vertical canvas.
-- **More WebSocket Requests** GroupSceneItems, RegisterOverlay, RunOverlayAction, GetMyProducts and OpenMyProducts.
 - **One Windows Download** A single download covers every OBS version.
 
-- **One Window To Start** A Welcome page the first time, What's new after an update, then Tools and tweaks in Settings after either.
-- **Show Me** Each part's clip big, a line on how to turn it on, and a jump to where it lives in OBS.
-- **Restart When You Are Ready** Change a part that needs a restart and StreamUP offers to restart OBS for you.
-
 ## Improvements
-- **Off Really Means Off** A part you switch off stops running completely. Most switch straight away; the docks and the Adjustment Layer tell you when they need a restart.
-- **Settings Made Simple** Fewer tabs, one line per setting, and the rare options folded away. Your set hotkeys come first, and Backup tells you when your last backup was made.
-- **Clear Plugin Checks** One row per plugin with a Get button, and coloured pills saying what needs doing.
-- **Messages Where You Are Looking** Quick Actions and StreamUP messages show a small note in the corner of OBS.
-- **WebSocket Commands** Search for a command and copy it in one click, as OBS Raw or Streamer.bot code.
-- **Faster Product Controls** They open about five times quicker.
+- **A Calmer StreamUP** Settings has fewer tabs, one line per setting and the rare options folded away. The hotkeys you've set come first, Backup tells you when your last backup was, and plugin problems show as coloured pills. Messages appear as a small note in the corner of OBS.
+- **Feels Like StreamUP** Every window takes its colours from the StreamUP theme you have on, or The Andi's gold and charcoal under any other theme. Rounded drop-downs, clearer toolbar icons, and a roomier Edit toolbar window.
 - **Windows Open Where OBS Is** StreamUP windows and the floating mixer open on the screen OBS is on.
+- **Hotkey And WebSocket Buttons** A live preview of the button as you set it up, with its icon, caption and tooltip.
 - **No Surprises With The Adjustment Layer** Switching it off tells you how many scenes use it first.
-- **Feels Like StreamUP** Every StreamUP window takes its colours from the StreamUP theme you have on, and The Andi's gold and charcoal under any other theme. Drop-downs open as one rounded panel, toolbar icons sit dead centre, and the Edit toolbar window has room to breathe.
-- **Tools And Tweaks** Switching parts of StreamUP on and off now lives in Settings, as its first tab, so the menu is one entry shorter.
-- **Clearer Toolbar Icons** One bold glyph per button, a size up and centred to the pixel.
-- **Better Hotkey And WebSocket Buttons** A live preview of the button as you set it up, with its icon, caption and tooltip.
-- **Easier Patch Notes** Each version's changes sit under coloured New, Improved and Fixed labels, indented and spaced out.
-- **Calmer Look Everywhere** Drop-downs lose their blue arrow block, the current page in a sidebar is a soft highlight, scrollbars are a quiet grey and the About page drops its gold and purple.
 
 ## Bug Fixes
 - **Lost Hotkeys** Switching StreamUP Hotkeys off could wipe their key bindings. They're kept now.
@@ -49,7 +33,7 @@
 - **Studio Mode Marker** The halfway mark on the transition slider was added again every time Studio Mode was turned on.
 - **Layout Page Lag** Moving parts on the Layout page made OBS stutter.
 - **Brighter Dots On Folder Lines** Guide lines were painted twice where they met.
-- **Buttons Off A Small Screen** On a 1080p screen at 125%, the window listing the plugins a product needs ran off the bottom, so you could not reach Install anyway or Cancel. It fits your screen now and the list scrolls.
+- **Buttons Off A Small Screen** On a 1080p screen at 125%, the window listing the plugins a product needs ran off the bottom. It fits your screen now and the list scrolls.
 - **Restore Tabs Running Together** With media in a backup, the tabs in the Restore window ran into each other. They fit now.
 
 ---
