@@ -298,7 +298,7 @@ public:
 				 });
 		QObject::connect(n, &oc::Notifier::overlayReset, this, [this](const QString &overlayId) {
 			if (overlayId == m_id)
-				refreshAll(true);
+				refreshAll();
 		});
 		QObject::connect(n, &oc::Notifier::overlaysChanged, this, [this]() {
 			oc::OverlayInfo info;
@@ -306,7 +306,7 @@ public:
 				close(); // removed, or the scene collection changed
 				return;
 			}
-			refreshAll(false);
+			refreshAll();
 		});
 
 		// Someone may change a linked filter by hand while this is open. A
@@ -1214,7 +1214,7 @@ private:
 			m_layout->refresh(info);
 	}
 
-	void refreshAll(bool sourcesChanged)
+	void refreshAll()
 	{
 		oc::OverlayInfo info;
 		if (!oc::GetOverlay(m_id, info))

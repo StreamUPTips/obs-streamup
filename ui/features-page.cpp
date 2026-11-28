@@ -673,7 +673,8 @@ void ShowOnUiThread(Mode mode)
 
 void OfferRestart(const QString &line)
 {
-	if (!QThread::isMainThread()) {
+	// QThread::isMainThread() is Qt 6.8+; Linux builds use older Qt.
+	if (QThread::currentThread() != qApp->thread()) {
 		QMetaObject::invokeMethod(qApp, [line]() { OfferRestart(line); }, Qt::QueuedConnection);
 		return;
 	}
