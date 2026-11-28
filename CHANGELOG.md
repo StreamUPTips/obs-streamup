@@ -2,7 +2,7 @@
 
 ---
 
-## v3.0.0 (22 Nov '26)
+## v3.0.0 (28 Nov '26)
 **Patch Focus:** StreamUP 3.0, a major update. The StreamUP Mixer, products you can customise right inside OBS, My Products, every part of StreamUP on one Tools and tweaks page, installs that only check the plugins a product needs, and calmer windows throughout
 
 ### Headlines
