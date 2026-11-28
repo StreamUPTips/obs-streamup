@@ -7,6 +7,7 @@
 #include "core/streamup-common.hpp"
 #include "core/plugin-state.hpp"
 #include "core/plugin-manager.hpp"
+#include "core/videos.hpp"
 #include "core/features.hpp"
 #include "ui/features-page.hpp"
 #include "ui/streamup-kit.hpp"
@@ -1468,6 +1469,9 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 			// Initialize plugin data from API
 			StreamUP::DebugLogger::LogDebug("Plugin", "Async Init", "Initializing required modules");
 			StreamUP::PluginManager::InitialiseRequiredModules();
+
+			// The tutorial video links, for Show me and What's new.
+			StreamUP::Videos::Refresh();
 
 			// Always perform initial plugin check and cache results for efficiency
 			// This ensures cached data is available even if startup check is disabled

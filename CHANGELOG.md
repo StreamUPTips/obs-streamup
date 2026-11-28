@@ -32,6 +32,7 @@
 - A .StreamUP file can install scenes onto the Aitum Vertical canvas
 - Choose the StreamUP Dock's buttons from the dock's own right-click
 - What's new opens on picture cards for this release, with every older version folded below
+- Video links: What's new and each part's Show me link to its video on YouTube. The links come from api.streamup.tips/videos, so new videos appear without an update
 - New WebSocket requests: GroupSceneItems, RegisterOverlay, RunOverlayAction, GetMyProducts and OpenMyProducts
 - Aitum Multistream dock styling, and Sources dock groups that look like Scene Organiser folders, on the StreamUP theme
 - One Windows download for every OBS version

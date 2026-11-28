@@ -1,4 +1,5 @@
 #include "features-page.hpp"
+#include "video-card.hpp"
 
 #include "../core/features.hpp"
 #include "overlay-ui-common.hpp"
@@ -366,12 +367,9 @@ private:
 			QTimer::singleShot(160, qApp, [id]() { ft::ShowMe(id); });
 		});
 		buttons << where;
-		if (!f->video.isEmpty()) {
-			auto *video = new su::PillButton(T("Features.WatchVideo"), "neutral");
-			const QString url = f->video;
-			QObject::connect(video, &QPushButton::clicked, this, [url]() { QDesktopServices::openUrl(QUrl(url)); });
-			buttons << video;
-		}
+		// The part's video on YouTube, from the StreamUP video list.
+		if (auto video = StreamUP::Videos::ForPart(id))
+			buttons << new StreamUP::VideoCard(*video, StreamUP::VideoCard::Style::Compact);
 		kit::Lightbox(window(), QStringLiteral("demos"), id, Name(*f), T(f->howKey.toUtf8().constData()), buttons);
 	}
 

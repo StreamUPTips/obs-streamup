@@ -194,6 +194,10 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/features-page.cpp
   core/features.hpp
   core/features.cpp
+  core/videos.hpp
+  core/videos.cpp
+  ui/video-card.hpp
+  ui/video-card.cpp
   ui/theme-window.hpp
   ui/theme-window.cpp
   ui/websocket-window.hpp
@@ -381,6 +385,10 @@ source_group("UI" FILES
   ui/features-page.cpp
   core/features.hpp
   core/features.cpp
+  core/videos.hpp
+  core/videos.cpp
+  ui/video-card.hpp
+  ui/video-card.cpp
   ui/websocket-window.hpp
   ui/websocket-window.cpp
   ui/studio-mode-enhancements.hpp
