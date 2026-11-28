@@ -75,7 +75,7 @@ Video Parse(const QJsonObject &o)
 	Video v;
 	v.release = o.value("release").toString();
 	v.title = o.value("title").toString();
-	for (const QJsonValue &p : o.value("parts").toArray())
+	for (const QJsonValue p : o.value("parts").toArray())
 		v.parts << p.toString();
 	v.url = o.value("url").toString();
 	v.videoId = o.value("videoId").toString();
@@ -91,14 +91,14 @@ void Apply(const std::string &json)
 		return;
 	const QJsonObject root = doc.object();
 	QList<Video> masters;
-	for (const QJsonValue &v : root.value("masters").toArray()) {
+	for (const QJsonValue v : root.value("masters").toArray()) {
 		Video m = Parse(v.toObject());
 		m.parts = {QStringLiteral("whats-new")};
 		if (SafeUrl(m.url) && ValidId(m.videoId))
 			masters << m;
 	}
 	QList<Video> list;
-	for (const QJsonValue &v : root.value("videos").toArray()) {
+	for (const QJsonValue v : root.value("videos").toArray()) {
 		Video video = Parse(v.toObject());
 		if (SafeUrl(video.url) && ValidId(video.videoId) && !video.parts.isEmpty())
 			list << video;
