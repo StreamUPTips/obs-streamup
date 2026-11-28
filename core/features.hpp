@@ -29,7 +29,6 @@ struct Feature {
 	bool live = false; // switches without a restart
 	QString since;     // version that added it, for the "New" badge
 	QString howKey;    // one line on how to turn it on and find it
-	QString video;     // optional: a YouTube link, shown as "Watch the video"
 	bool needsTheme = false; // only does anything on the StreamUP theme
 };
 

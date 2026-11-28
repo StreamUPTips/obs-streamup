@@ -74,25 +74,11 @@ Entry core(const char *id, Group g, const char *key, const char *since = "")
 	return e;
 }
 
-// An optional video per part. When a link is set here the Show me view gets a
-// "Watch the video" button that opens it in the browser.
-QString VideoFor(const QString &id)
-{
-	static const QList<QPair<QString, QString>> videos = {
-		// {"multidock", "https://www.youtube.com/watch?v=..."},
-	};
-	for (const auto &v : videos)
-		if (v.first == id)
-			return v.second;
-	return {};
-}
-
 std::vector<Entry> Finish(std::vector<Entry> list)
 {
 	for (Entry &e : list) {
 		const QString key = e.f.nameKey.section('.', 1, 1);
 		e.f.howKey = QStringLiteral("Features.%1.How").arg(key);
-		e.f.video = VideoFor(e.f.id);
 		e.f.needsTheme = e.b.tweak != nullptr;
 	}
 	return list;

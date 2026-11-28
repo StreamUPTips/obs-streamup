@@ -9,6 +9,7 @@
 #include <streamup/ui/ui-scrollbar.hpp>  // useScrollBars
 #include "splash-screen.hpp"
 #include "features-page.hpp"
+#include "video-card.hpp"
 #include "../utilities/error-handler.hpp"
 #include "../version.h"
 #include <obs-module.h>
@@ -246,20 +247,21 @@ static QWidget *BuildVersionCard(const VersionBlock &block, bool expanded)
 // data/whatsnew/<id>.webp|.gif|.png at 2x.
 struct Headline {
 	const char *id;
+	const char *part; // the part whose video the card links to
 	const char *nameKey;
 	const char *lineKey;
 	const char *icon; // for the small rows
 };
 
 static const Headline kPictures[] = {
-	{"mixer", "WhatsNew.Mixer.Name", "WhatsNew.Mixer.Line", nullptr},
-	{"adjust", "WhatsNew.Adjust.Name", "WhatsNew.Adjust.Line", nullptr},
-	{"my-products", "WhatsNew.MyProducts.Name", "WhatsNew.MyProducts.Line", nullptr},
-	{"tools", "WhatsNew.Tools.Name", "WhatsNew.Tools.Line", nullptr},
+	{"mixer", "mixer-dock", "WhatsNew.Mixer.Name", "WhatsNew.Mixer.Line", nullptr},
+	{"adjust", "adjust", "WhatsNew.Adjust.Name", "WhatsNew.Adjust.Line", nullptr},
+	{"my-products", "my-products", "WhatsNew.MyProducts.Name", "WhatsNew.MyProducts.Line", nullptr},
+	{"tools", "tools", "WhatsNew.Tools.Name", "WhatsNew.Tools.Line", nullptr},
 };
 static const Headline kRows[] = {
-	{"product-check", "WhatsNew.ProductCheck.Name", "WhatsNew.ProductCheck.Line", "package"},
-	{"cleaner", "WhatsNew.Cleaner.Name", "WhatsNew.Cleaner.Line", "sparkles"},
+	{"product-check", "install-product", "WhatsNew.ProductCheck.Name", "WhatsNew.ProductCheck.Line", "package"},
+	{"cleaner", nullptr, "WhatsNew.Cleaner.Name", "WhatsNew.Cleaner.Line", "sparkles"},
 };
 
 static QString Tx(const char *key)
@@ -284,6 +286,23 @@ QWidget *BuildWhatsNewContent()
 					su::Type::Semibold, su::Colors::TEXT_PRIMARY);
 	contentLayout->addWidget(heading);
 
+	// The master video, once it is up. The list can arrive after the window
+	// opens, so the card fills in when it does.
+	auto *heroBox = new QWidget();
+	heroBox->setStyleSheet("background:transparent;");
+	auto *heroLay = new QVBoxLayout(heroBox);
+	heroLay->setContentsMargins(0, 0, 0, 0);
+	contentLayout->addWidget(heroBox);
+	auto fillHero = [heroBox, heroLay]() {
+		if (heroLay->count() == 0) {
+			if (auto master = StreamUP::Videos::Master())
+				heroLay->addWidget(new StreamUP::VideoCard(*master, StreamUP::VideoCard::Style::Hero));
+		}
+		heroBox->setVisible(heroLay->count() > 0);
+	};
+	fillHero();
+	StreamUP::Videos::OnChanged(heroBox, fillHero);
+
 	// Picture cards, two to a row. A click on a picture shows it big.
 	auto *grid = new QGridLayout();
 	grid->setHorizontalSpacing(su::S(12));
@@ -306,6 +325,24 @@ QWidget *BuildWhatsNewContent()
 		line->setWordWrap(true);
 		v->addWidget(line);
 		v->addStretch(1);
+		// "Watch the video", once this part has one.
+		auto *watchBox = new QWidget();
+		watchBox->setStyleSheet("background:transparent;");
+		auto *watchLay = new QHBoxLayout(watchBox);
+		watchLay->setContentsMargins(0, su::S(4), 0, 0);
+		v->addWidget(watchBox);
+		const QString part = QString::fromUtf8(h.part);
+		auto fillWatch = [watchBox, watchLay, part]() {
+			if (watchLay->count() == 0) {
+				if (auto video = StreamUP::Videos::ForPart(part)) {
+					watchLay->addWidget(new StreamUP::WatchLink(*video));
+					watchLay->addStretch(1);
+				}
+			}
+			watchBox->setVisible(watchLay->count() > 0);
+		};
+		fillWatch();
+		StreamUP::Videos::OnChanged(watchBox, fillWatch);
 		grid->addWidget(card, n / 2, n % 2);
 		++n;
 	}
