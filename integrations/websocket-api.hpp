@@ -331,6 +331,10 @@ void WebsocketRequestGetBackupInfo(obs_data_t *request_data, obs_data_t *respons
 // Every request takes "overlay" (an overlay id or name). See
 // core/overlay-controls.hpp for what a control is.
 void WebsocketGetOverlays(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+void WebsocketRegisterOverlay(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+// "sceneUuid" (or "sceneName"), "sceneItemIds" and "groupName": puts those items in a new group,
+// on any canvas. The group sits where the topmost item was.
+void WebsocketGroupSceneItems(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 void WebsocketGetOverlayControls(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 // "control" + "value": a colour as "#RRGGBB", a slider number, or a toggle bool / "toggle".
 void WebsocketSetOverlayControl(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
@@ -339,6 +343,12 @@ void WebsocketResetOverlayControls(obs_data_t *request_data, obs_data_t *respons
 // "preset": a preset name.
 void WebsocketApplyOverlayPreset(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 void WebsocketOpenOverlayControls(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+// Optional "action" (an action id; the first one when left out): runs one of a
+// product's actions, e.g. "use as my transition".
+void WebsocketRunOverlayAction(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+// Every StreamUP product in the current scene collection (My Products).
+void WebsocketGetMyProducts(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
+void WebsocketOpenMyProducts(obs_data_t *request_data, obs_data_t *response_data, void *private_data);
 
 } // namespace WebSocketAPI
 } // namespace StreamUP

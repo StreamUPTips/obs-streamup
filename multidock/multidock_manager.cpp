@@ -9,6 +9,8 @@
 #include <QUuid>
 #include <QDockWidget>
 #include <QTimer>
+#include <QMap>
+#include <QMainWindow>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -125,17 +127,102 @@ void MultiDockManager::ReleaseAllCapturedDocks()
     }
 }
 
+namespace {
+
+// Where each Multi-Dock's outer dock was when Multi-Dock was switched off, so
+// switching it back on in the same session puts it back: floating with its
+// size and position, or docked on the same side (and tabbed with the same
+// dock), shown or hidden as it was. Across a restart OBS's own saved window
+// state does this.
+struct OuterState {
+    bool visible = false;
+    bool floating = false;
+    QRect geometry;
+    Qt::DockWidgetArea area = Qt::RightDockWidgetArea;
+    QString tabbedWith;
+};
+QMap<QString, OuterState> g_outerState;
+
+void RememberOuterDocks(MultiDockManager* manager)
+{
+    QMainWindow* main = GetObsMainWindow();
+    if (!manager || !main)
+        return;
+    g_outerState.clear();
+    for (MultiDockDock* md : manager->GetAllMultiDocks()) {
+        if (!md)
+            continue;
+        QDockWidget* dock = main->findChild<QDockWidget*>(md->GetId());
+        if (!dock)
+            continue;
+        OuterState st;
+        st.visible = dock->isVisible();
+        st.floating = dock->isFloating();
+        st.geometry = dock->geometry();
+        st.area = main->dockWidgetArea(dock);
+        for (QDockWidget* other : main->tabifiedDockWidgets(dock)) {
+            if (other && other->isVisible()) {
+                st.tabbedWith = other->objectName();
+                break;
+            }
+        }
+        g_outerState.insert(md->GetId(), st);
+    }
+}
+
+void RestoreOuterDocks(MultiDockManager* manager)
+{
+    QMainWindow* main = GetObsMainWindow();
+    if (!manager || !main)
+        return;
+    for (MultiDockDock* md : manager->GetAllMultiDocks()) {
+        if (!md || !g_outerState.contains(md->GetId()))
+            continue;
+        QDockWidget* dock = main->findChild<QDockWidget*>(md->GetId());
+        if (!dock)
+            continue;
+        const OuterState st = g_outerState.value(md->GetId());
+        if (st.floating) {
+            dock->setFloating(true);
+            dock->setGeometry(st.geometry);
+        } else {
+            main->addDockWidget(st.area, dock);
+            QDockWidget* other = st.tabbedWith.isEmpty() ? nullptr : main->findChild<QDockWidget*>(st.tabbedWith);
+            if (other && other != dock && !other->isFloating() && main->dockWidgetArea(other) == st.area)
+                main->tabifyDockWidget(other, dock);
+            else
+                main->resizeDocks({dock}, {st.area == Qt::LeftDockWidgetArea || st.area == Qt::RightDockWidgetArea
+                                               ? st.geometry.width() : st.geometry.height()},
+                                  st.area == Qt::LeftDockWidgetArea || st.area == Qt::RightDockWidgetArea
+                                      ? Qt::Horizontal : Qt::Vertical);
+        }
+        dock->setVisible(st.visible);
+        if (st.visible)
+            dock->raise();
+    }
+    g_outerState.clear();
+}
+
+} // namespace
+
 void MultiDockManager::SetGlobalEnabled(bool enabled)
 {
     if (enabled) {
         if (!s_instance) {
             Initialize();
+            // The docks are registered now; place them once Qt has laid them out.
+            QTimer::singleShot(0, s_instance, []() { RestoreOuterDocks(s_instance); });
         }
     } else {
         if (s_instance) {
             // Persist current dock layouts before tearing down so re-enabling
             // restores the user's existing multi-docks.
             s_instance->SaveAllMultiDocks();
+            RememberOuterDocks(s_instance);
+            // Hand captured OBS docks back to the main window first, as at
+            // exit: removing a Multi-Dock deletes its children, and OBS still
+            // owns those docks. They are captured again when it comes back on.
+            s_instance->ReleaseAllCapturedDocks();
             Shutdown();
         }
     }
@@ -171,11 +258,19 @@ QString MultiDockManager::CreateMultiDock(const QString& name)
     
     RegisterWithObs(multiDock);
     
-    // Auto-open the multidock after creation (mainWindow already verified above)
+    // Open the new Multi-Dock floating and centred over OBS's main window.
+    // Left to OBS it docked wherever the last dock went, which could be on
+    // another monitor and too small to grab and move.
     QDockWidget* obsDocWidget = mainWindow->findChild<QDockWidget*>(id);
     if (obsDocWidget) {
+        obsDocWidget->setFloating(true);
+        const QSize size(qMin(520, mainWindow->width() / 2), qMin(420, mainWindow->height() / 2));
+        obsDocWidget->resize(size);
+        const QRect over = mainWindow->frameGeometry();
+        obsDocWidget->move(over.center() - QPoint(size.width() / 2, size.height() / 2));
         obsDocWidget->show();
         obsDocWidget->raise();
+        obsDocWidget->activateWindow();
     }
     
     // Save the updated list

@@ -1,3 +1,55 @@
+# StreamUP v3.0.0 - Major Update
+
+## Headlines
+- **The StreamUP Mixer** An audio mixer dock with tabs, so your mic, alerts and music each get their own page.
+- **Adjust Your Products In OBS** Newer StreamUP products can be customised right inside OBS, no Streamer.bot needed. Colours, fonts, logos and timings, all in one window.
+- **My Products** Every StreamUP product you've installed in one list, with Adjust or Go to scene on each one.
+- **Tools And Tweaks** Every part of StreamUP on one page in Settings. Switch something off and it stops running completely, so it costs OBS nothing.
+- **Smarter Installs** Installing a product only checks the plugins it actually uses, then shows you the next step.
+- **A Calmer StreamUP** Every window redone. Less text, one line per setting, and small notes inside OBS instead of Windows pop-ups.
+
+## New Features
+- **The StreamUP Mixer** Make your own tabs and put sources on them in your own order. New sources land in Unassigned, and holding Ctrl as you drop shows a source on two tabs. It does everything the OBS mixer does too: hide, pin, lock, rename, filters, properties and Advanced Audio Properties.
+- **Adjust Your Products In OBS** Pick from every installed font or the whole Google Fonts library, and StreamUP installs the Google ones for you. Choose your own logo and see it straight away. Type exact numbers into any slider. Transition products set themselves up as your transition in one click. And it all opens about five times faster than before.
+- **My Products** Your products grouped by category, with a sidebar and search. Adjust opens a product's controls, Go to scene takes you straight to it. It replaces the old Overlays menu.
+- **Tools And Tweaks** Each part of StreamUP is a card with a preview and a switch. Show me plays its clip big and points at where it lives in OBS. If a change needs a restart, StreamUP offers to restart OBS for you. New installs start on a Welcome page, and updates open on What's new.
+- **Smarter Installs** Pick the product file first, then StreamUP checks only the plugins and fonts that product needs, with a Get button for anything missing. Every install ends on a card with the product's picture and what to do next. Products can now install scenes onto your Aitum Vertical canvas too.
+- **WebSocket** Five new requests: GroupSceneItems, RegisterOverlay, RunOverlayAction, GetMyProducts and OpenMyProducts. The WebSocket Commands window has search and copies a command in one click, as OBS Raw or Streamer.bot code.
+- **Jump To A Nested Scene** Right-click a nested scene in the Sources dock and pick Go to this scene.
+- **Pick Your Dock Buttons** Right-click the StreamUP Dock to choose which buttons it shows.
+- **One Windows Download** A single download covers every OBS version.
+
+## Improvements
+- **A Calmer StreamUP** Settings has fewer tabs, one line per setting and the rare options folded away. The hotkeys you've set come first, Backup tells you when your last backup was, and plugin problems show as coloured pills. Messages appear as a small note in the corner of OBS.
+- **Feels Like StreamUP** Every window takes its colours from the StreamUP theme you have on, or The Andi's gold and charcoal under any other theme. Rounded drop-downs, clearer toolbar icons, and a roomier Edit toolbar window.
+- **Windows Open Where OBS Is** StreamUP windows and the floating mixer open on the screen OBS is on.
+- **Hotkey And WebSocket Buttons** A live preview of the button as you set it up, with its icon, caption and tooltip.
+- **No Surprises With The Adjustment Layer** Switching it off tells you how many scenes use it first.
+
+## Bug Fixes
+- **Lost Hotkeys** Switching StreamUP Hotkeys off could wipe their key bindings. They're kept now.
+- **A Raw Menu Label** The Scene Organiser right-click menu showed a text key instead of Adjust.
+- **Cut Off Slider Values** Value boxes cut off longer values like 2800 ms and 2.00×.
+- **Studio Mode Marker** The halfway mark on the transition slider was added again every time Studio Mode was turned on.
+- **Layout Page Lag** Moving parts on the Layout page made OBS stutter.
+- **Brighter Dots On Folder Lines** Guide lines were painted twice where they met.
+- **Buttons Off A Small Screen** On a 1080p screen at 125%, the window listing the plugins a product needs ran off the bottom. It fits your screen now and the list scrolls.
+- **Restore Tabs Running Together** With media in a backup, the tabs in the Restore window ran into each other. They fit now.
+
+---
+
+# StreamUP v2.4.2 - Patch Update
+
+## Improvements
+- **The MultiDock Toolbar Follows OBS** Turn off View > Dock Toolbars (Show Toolbars on older OBS) and the bar with the + and lock buttons goes too, so a MultiDock takes up less room. Thanks for the suggestion.
+- **Right Click A MultiDock** Right click a MultiDock's title bar, or any empty space inside it, for Add Dock and Lock Docks. Both are still there with the toolbar hidden.
+
+## Bug Fixes
+- **Restore Button Off The Bottom Of The Screen** Restoring a backup with media made the window taller than a 1080p screen, so you could not reach the Restore button, not even with Tab. The window fits your screen now and the middle scrolls, so the buttons always stay in view. The Backup window does the same. Thanks for the report.
+- **Older OBS Gets The Right Plugin Download** On OBS 30 to 32, the plugin check now tells you to skip Download and use the Website Link, because some plugins' Download links are OBS 33 builds that won't load on your version. That was why some plugins kept asking to be updated after you updated them.
+
+---
+
 # StreamUP v2.4.1 - Patch Update
 
 ## Improvements

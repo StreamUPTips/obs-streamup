@@ -47,7 +47,6 @@ public:
     
     PluginCheckResults GetCachedPluginStatus() const;
     void SetPluginStatus(const PluginCheckResults& results);
-    void InvalidatePluginStatus();
     bool IsPluginStatusCached() const;
     
     // Prevent copying and assignment

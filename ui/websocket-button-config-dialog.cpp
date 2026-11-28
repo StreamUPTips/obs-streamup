@@ -4,6 +4,7 @@
 #include <streamup/ui/window-chrome.hpp>
 #include <streamup/ui/pill-button.hpp>
 #include <streamup/ui/labels.hpp>
+#include <streamup/ui/section-card.hpp>
 #include <streamup/ui/gallery-style.hpp>
 #include <streamup/ui/mac-inputs.hpp>
 #include <streamup/ui/ui-scrollbar.hpp>
@@ -312,7 +313,7 @@ WebSocketButtonConfigDialog::WebSocketButtonConfigDialog(QWidget *parent)
 	mainLayout = chrome.content;
 	footerButtons = chrome.footerButtons;
 	setModal(true);
-	resize(560 + 2 * ShadowDialog::kShadowMargin, 720 + 2 * ShadowDialog::kShadowMargin);
+	resize(S(600) + 2 * S(ShadowDialog::kShadowMargin), S(820) + 2 * S(ShadowDialog::kShadowMargin));
 
 	setupUI();
 	validateInput();
@@ -328,7 +329,7 @@ WebSocketButtonConfigDialog::WebSocketButtonConfigDialog(
 	mainLayout = chrome.content;
 	footerButtons = chrome.footerButtons;
 	setModal(true);
-	resize(560 + 2 * ShadowDialog::kShadowMargin, 720 + 2 * ShadowDialog::kShadowMargin);
+	resize(S(600) + 2 * S(ShadowDialog::kShadowMargin), S(820) + 2 * S(ShadowDialog::kShadowMargin));
 
 	setupUI();
 	setExistingItem(existingItem);
@@ -345,7 +346,7 @@ void WebSocketButtonConfigDialog::setupUI()
 	okButton = new PillButton(isEditMode ? obs_module_text("StreamUP.Toolbar.WebSocket.Button.Update")
 					     : obs_module_text("StreamUP.Toolbar.WebSocket.Button.Add"),
 				  "primary");
-	cancelButton = new PillButton(obs_module_text("UI.Button.Cancel"), "outline");
+	cancelButton = new PillButton(obs_module_text("UI.Button.Cancel"), "neutral");
 
 	okButton->setDefault(true);
 	okButton->setEnabled(false);
@@ -362,14 +363,16 @@ void WebSocketButtonConfigDialog::setupUI()
 
 void WebSocketButtonConfigDialog::setupRequestSection()
 {
-	mainLayout->addWidget(sectionHeader(obs_module_text("StreamUP.Toolbar.WebSocket.Group.Request")));
+	mainLayout->setSpacing(S(12));
+	QVBoxLayout *requestCard = sectionCard(mainLayout, obs_module_text("StreamUP.Toolbar.WebSocket.Group.Request"));
+	requestCard->setSpacing(S(8));
 
 	QStringList sources;
 	sources << obs_module_text("StreamUP.Toolbar.WebSocket.Source.ObsWebSocket")
 		<< obs_module_text("StreamUP.Toolbar.WebSocket.Source.StreamUP")
 		<< obs_module_text("StreamUP.Toolbar.WebSocket.Source.Vendor");
 	sourceSelector = new SegmentedControl(sources, this);
-	mainLayout->addWidget(sourceSelector);
+	requestCard->addWidget(sourceSelector);
 
 	requestStack = new QStackedWidget(this);
 	requestStack->setMinimumHeight(S(180));
@@ -380,8 +383,10 @@ void WebSocketButtonConfigDialog::setupRequestSection()
 	obsPageLayout->setContentsMargins(0, 0, 0, 0);
 	obsSearch = new SearchField(obsPage);
 	obsSearch->setPlaceholderText(obs_module_text("StreamUP.Toolbar.WebSocket.Placeholder.Search"));
+	obsSearch->setOnCard(true);
 	obsRequestList = new QListWidget(obsPage);
-	obsRequestList->setStyleSheet(listStyle());
+	// Inside a card the list sits on the darker field colour, like the inputs.
+	obsRequestList->setStyleSheet(listStyle() + QString("QListWidget{background:%1;}").arg(Colors::INPUT_ON_CARD));
 	useScrollBars(obsRequestList);
 	obsRequestList->addItems(obsWebSocketRequests());
 	obsPageLayout->addWidget(obsSearch);
@@ -394,8 +399,10 @@ void WebSocketButtonConfigDialog::setupRequestSection()
 	supPageLayout->setContentsMargins(0, 0, 0, 0);
 	streamUPSearch = new SearchField(supPage);
 	streamUPSearch->setPlaceholderText(obs_module_text("StreamUP.Toolbar.WebSocket.Placeholder.Search"));
+	streamUPSearch->setOnCard(true);
 	streamUPRequestList = new QListWidget(supPage);
-	streamUPRequestList->setStyleSheet(listStyle());
+	// Inside a card the list sits on the darker field colour, like the inputs.
+	streamUPRequestList->setStyleSheet(listStyle() + QString("QListWidget{background:%1;}").arg(Colors::INPUT_ON_CARD));
 	useScrollBars(streamUPRequestList);
 	streamUPRequestList->addItems(StreamUP::ToolbarConfig::streamUPVendorRequests());
 	supPageLayout->addWidget(streamUPSearch);
@@ -408,10 +415,10 @@ void WebSocketButtonConfigDialog::setupRequestSection()
 	vendorForm->setContentsMargins(0, 0, 0, 0);
 	vendorNameEdit = new QLineEdit(vendorPage);
 	vendorNameEdit->setPlaceholderText(obs_module_text("StreamUP.Toolbar.WebSocket.Placeholder.VendorName"));
-	vendorNameEdit->setStyleSheet(lineEditStyle());
+	vendorNameEdit->setStyleSheet(lineEditStyle(true));
 	vendorRequestEdit = new QLineEdit(vendorPage);
 	vendorRequestEdit->setPlaceholderText(obs_module_text("StreamUP.Toolbar.WebSocket.Placeholder.RequestType"));
-	vendorRequestEdit->setStyleSheet(lineEditStyle());
+	vendorRequestEdit->setStyleSheet(lineEditStyle(true));
 	vendorForm->addRow(QString(obs_module_text("StreamUP.Toolbar.WebSocket.Label.VendorName")), vendorNameEdit);
 	vendorForm->addRow(QString(obs_module_text("StreamUP.Toolbar.WebSocket.Label.RequestType")), vendorRequestEdit);
 	QLabel *vendorHint = new QLabel(obs_module_text("StreamUP.Toolbar.WebSocket.Message.VendorHint"), vendorPage);
@@ -420,7 +427,7 @@ void WebSocketButtonConfigDialog::setupRequestSection()
 	vendorForm->addRow("", vendorHint);
 	requestStack->addWidget(vendorPage);
 
-	mainLayout->addWidget(requestStack);
+	requestCard->addWidget(requestStack);
 
 	sourceSelector->onChanged([this](int index) { onSourceChanged(index); });
 	connect(obsSearch, &QLineEdit::textChanged, this,
@@ -435,32 +442,33 @@ void WebSocketButtonConfigDialog::setupRequestSection()
 
 void WebSocketButtonConfigDialog::setupArgumentsSection()
 {
-	mainLayout->addWidget(sectionHeader(obs_module_text("StreamUP.Toolbar.WebSocket.Group.Arguments")));
+	QVBoxLayout *argsCard = sectionCard(mainLayout, obs_module_text("StreamUP.Toolbar.WebSocket.Group.Arguments"));
+	argsCard->setSpacing(S(8));
 
 	rawJsonCheck = new IOSCheckBox(obs_module_text("StreamUP.Toolbar.WebSocket.Check.RawJson"), this);
-	mainLayout->addWidget(rawJsonCheck);
+	argsCard->addWidget(rawJsonCheck);
 
 	argsGroup = new QWidget(this);
 	argsForm = new QFormLayout(argsGroup);
 	argsForm->setContentsMargins(0, 0, 0, 0);
-	mainLayout->addWidget(argsGroup);
+	argsCard->addWidget(argsGroup);
 
 	noArgumentsLabel = new QLabel(obs_module_text("StreamUP.Toolbar.WebSocket.Message.NoArguments"), this);
 	noArgumentsLabel->setWordWrap(true);
 	noArgumentsLabel->setStyleSheet(dimLabelStyle());
-	mainLayout->addWidget(noArgumentsLabel);
+	argsCard->addWidget(noArgumentsLabel);
 
 	jsonEdit = new QPlainTextEdit(this);
-	jsonEdit->setStyleSheet(plainTextStyle());
+	jsonEdit->setStyleSheet(plainTextStyle(true));
 	jsonEdit->setPlaceholderText(obs_module_text("StreamUP.Toolbar.WebSocket.Placeholder.Json"));
 	jsonEdit->setFixedHeight(S(96));
-	mainLayout->addWidget(jsonEdit);
+	argsCard->addWidget(jsonEdit);
 
 	jsonErrorLabel = new QLabel("", this);
 	jsonErrorLabel->setWordWrap(true);
 	jsonErrorLabel->setStyleSheet(QString("color: %1;").arg(Colors::COLOR_DANGER));
 	jsonErrorLabel->hide();
-	mainLayout->addWidget(jsonErrorLabel);
+	argsCard->addWidget(jsonErrorLabel);
 
 	connect(rawJsonCheck, &QCheckBox::toggled, this, [this](bool raw) { onRawJsonToggled(raw); });
 	connect(jsonEdit, &QPlainTextEdit::textChanged, this, [this]() { validateInput(); });
@@ -468,54 +476,49 @@ void WebSocketButtonConfigDialog::setupArgumentsSection()
 
 void WebSocketButtonConfigDialog::setupIconSection()
 {
-	mainLayout->addWidget(sectionHeader(obs_module_text("StreamUP.Toolbar.WebSocket.Group.Icon")));
-
+	// The button: a live preview with its icon, then its caption and tooltip.
+	m_buttonCard = sectionCard(mainLayout, obs_module_text("StreamUP.Toolbar.WebSocket.Group.Button"));
 	QWidget *iconGroup = new QWidget(this);
-	QHBoxLayout *iconLayout = new QHBoxLayout(iconGroup);
-	iconLayout->setContentsMargins(0, 0, 0, 0);
-
-	QLabel *previewCaption = new QLabel(obs_module_text("StreamUP.Toolbar.WebSocket.Label.Preview"), iconGroup);
-	iconPreview = new QLabel(iconGroup);
-	iconPreview->setFixedHeight(S(32));
-	iconPreview->setMinimumWidth(S(32));
-	iconPreview->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-	iconPreview->setStyleSheet(scale_qss(QString("border: 1px solid %1;").arg(Colors::POPUP_BORDER)));
-	iconPreview->setAlignment(Qt::AlignCenter);
-	iconPreview->setScaledContents(true);
-
-	selectIconButton = new PillButton(obs_module_text("StreamUP.Toolbar.WebSocket.Button.SelectIcon"), "primary");
-
-	iconLayout->addWidget(previewCaption);
-	iconLayout->addWidget(iconPreview);
-	iconLayout->addWidget(selectIconButton);
-	iconLayout->addStretch();
-
-	mainLayout->addWidget(iconGroup);
+	QHBoxLayout *previewRow = new QHBoxLayout(iconGroup);
+	previewRow->setContentsMargins(0, S(6), 0, S(6));
+	previewRow->setSpacing(S(12));
+	m_preview = new StreamUP::Kit::ButtonPreview(iconGroup);
+	previewRow->addWidget(m_preview, 1);
+	selectIconButton = new PillButton(obs_module_text("StreamUP.Toolbar.WebSocket.Button.SelectIcon"), "neutral");
+	previewRow->addWidget(selectIconButton, 0, Qt::AlignVCenter);
+	m_buttonCard->addWidget(iconGroup);
+	// Kept for the code that still reports to it; the preview tile shows the icon.
+	iconPreview = new QLabel(this);
+	iconPreview->hide();
 
 	connect(selectIconButton, &QPushButton::clicked, this, &WebSocketButtonConfigDialog::onSelectIconClicked);
 }
 
 void WebSocketButtonConfigDialog::setupCustomisationSection()
 {
-	mainLayout->addWidget(sectionHeader(obs_module_text("StreamUP.Toolbar.WebSocket.Group.Customisation")));
-
-	QWidget *group = new QWidget(this);
-	QFormLayout *form = new QFormLayout(group);
-	form->setContentsMargins(0, 0, 0, 0);
-
-	displayNameEdit = new QLineEdit(group);
-	displayNameEdit->setPlaceholderText(obs_module_text("StreamUP.Toolbar.WebSocket.Placeholder.DisplayName"));
-	displayNameEdit->setStyleSheet(lineEditStyle());
-
-	tooltipEdit = new QLineEdit(group);
-	tooltipEdit->setPlaceholderText(obs_module_text("StreamUP.Toolbar.WebSocket.Placeholder.Tooltip"));
-	tooltipEdit->setStyleSheet(lineEditStyle());
-
-	form->addRow(QString(obs_module_text("StreamUP.Toolbar.WebSocket.Label.DisplayName")), displayNameEdit);
-	form->addRow(QString(obs_module_text("StreamUP.Toolbar.WebSocket.Label.Tooltip")), tooltipEdit);
-
-	mainLayout->addWidget(group);
+	m_buttonCard->addWidget(StreamUP::Kit::FieldRow(obs_module_text("StreamUP.Toolbar.WebSocket.Label.DisplayName"),
+							obs_module_text("StreamUP.Toolbar.WebSocket.Placeholder.DisplayName"),
+							&displayNameEdit));
+	m_buttonCard->addWidget(StreamUP::Kit::FieldRow(obs_module_text("StreamUP.Toolbar.WebSocket.Label.Tooltip"),
+							obs_module_text("StreamUP.Toolbar.WebSocket.Placeholder.Tooltip"), &tooltipEdit));
+	connect(displayNameEdit, &QLineEdit::textChanged, this, [this]() { refreshPreview(); });
+	connect(tooltipEdit, &QLineEdit::textChanged, this, [this]() { refreshPreview(); });
 	mainLayout->addStretch();
+}
+
+// The preview shows what Add will make: the typed caption and tooltip, or the
+// request name they fall back to.
+void WebSocketButtonConfigDialog::refreshPreview()
+{
+	if (!m_preview)
+		return;
+	const QString request = currentRequestType();
+	const QString caption = displayNameEdit && !displayNameEdit->text().trimmed().isEmpty()
+					? displayNameEdit->text().trimmed()
+					: request;
+	const QString tip = tooltipEdit && !tooltipEdit->text().trimmed().isEmpty() ? tooltipEdit->text().trimmed() : caption;
+	m_preview->setText(caption, tip);
+	m_preview->setIconPath(selectedIconPath);
 }
 
 void WebSocketButtonConfigDialog::filterList(QListWidget *list, const QString &needle)
@@ -550,6 +553,7 @@ void WebSocketButtonConfigDialog::onSourceChanged(int index)
 
 void WebSocketButtonConfigDialog::onRequestChanged()
 {
+	refreshPreview();
 	rebuildArgumentFields();
 
 	// Only ever a suggestion: once the user has typed a name of their own it stands.
@@ -811,6 +815,7 @@ void WebSocketButtonConfigDialog::onSelectIconClicked()
 
 void WebSocketButtonConfigDialog::updateIconDisplay()
 {
+	refreshPreview();
 	iconPreview->clear();
 	iconPreview->setContentsMargins(S(6), 0, S(6), 0);
 

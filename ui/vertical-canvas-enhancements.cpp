@@ -1,5 +1,7 @@
 #include "vertical-canvas-enhancements.hpp"
+#include "theme-enhancements.hpp"
 #include "mixer-enhancements.hpp"
+#include "multistream-enhancements.hpp"
 #include <streamup/debug-logger.hpp>
 
 #include <obs-frontend-api.h>
@@ -46,7 +48,6 @@ static const char *kSeparatorBefore[] = {"canvasRecord", "canvasVirtualCam"};
 
 static void NormaliseButtonCorners(QWidget *bar);
 static void ApplyPartnerBlockVisibility(QWidget *dock, QWidget *bar);
-static bool ShouldHidePartnerBlocks();
 static void WatchChildren(QWidget *dock, QObject *watcher);
 
 // Does this layout contain the given widget, at any depth?
@@ -227,8 +228,16 @@ static void NormaliseButtonCorners(QWidget *bar)
 			continue;
 		}
 
+		// Our own rule from the last pass comes off too, or each refresh
+		// would add another copy and the sheet would grow for ever.
+		static const QRegularExpression ourRule(QStringLiteral(R"(QPushButton\{border-radius: \d+px;\})"));
+		const QString before = sheet;
 		sheet.remove(radiusRule);
-		button->setStyleSheet(sheet + evenCorners);
+		sheet.remove(ourRule);
+		sheet += evenCorners;
+		if (sheet != before) {
+			button->setStyleSheet(sheet);
+		}
 	}
 }
 
@@ -241,7 +250,8 @@ static void NormaliseButtonCorners(QWidget *bar)
 //   [StreamUP]
 //   HideVerticalCanvasPartnerBlocks=true
 //
-static bool ShouldHidePartnerBlocks()
+// The key predates the Multistream dock, which follows it too.
+bool ShouldHidePartnerBlocks()
 {
 	config_t *config = obs_frontend_get_user_config();
 	if (!config) {
@@ -360,7 +370,8 @@ protected:
 private:
 	void Refresh()
 	{
-		if (!m_dock) {
+		if (!m_dock ||
+		    !StreamUP::ThemeEnhancements::IsTweakActive(StreamUP::ThemeEnhancements::Tweak::VerticalCanvas)) {
 			return;
 		}
 
@@ -458,7 +469,9 @@ void ApplyVerticalCanvasEnhancements()
 {
 	// Same gate as the mixer work: this is a StreamUP theme enhancement, and
 	// on any other theme the dock is left exactly as its plugin built it.
-	if (!StreamUP::MixerEnhancements::IsUsingStreamUPTheme()) {
+	if (!StreamUP::ThemeEnhancements::IsTweakActive(StreamUP::ThemeEnhancements::Tweak::VerticalCanvas)) {
+		// Switched off (or the theme changed): take it all back off.
+		CleanupVerticalCanvasEnhancements();
 		return;
 	}
 
@@ -470,6 +483,14 @@ void ApplyVerticalCanvasEnhancements()
 void CleanupVerticalCanvasEnhancements()
 {
 	for (QWidget *dock : FindCanvasDocks()) {
+		// The watchers go first; deleting one takes it off every widget it
+		// was watching.
+		for (QObject *child : dock->children()) {
+			if (dynamic_cast<DockWatcher *>(child)) {
+				child->deleteLater();
+			}
+		}
+
 		QWidget *bar = dock->findChild<QWidget *>(kToolbarObjectName);
 		QBoxLayout *dockLayout = bar ? qobject_cast<QBoxLayout *>(dock->layout()) : nullptr;
 		if (!bar || !dockLayout) {
@@ -509,6 +530,7 @@ void TogglePartnerBlocks()
 	for (QWidget *dock : FindCanvasDocks()) {
 		ApplyPartnerBlockVisibility(dock, dock->findChild<QWidget *>(kToolbarObjectName));
 	}
+	StreamUP::MultistreamEnhancements::RefreshPartnerBlocks();
 
 	StreamUP::DebugLogger::LogInfo("VerticalCanvas",
 		hide ? "Partner blocks hidden" : "Partner blocks shown");

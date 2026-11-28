@@ -10,10 +10,6 @@ namespace OverlayControlsWindow {
 // Opens (or raises) the panel for an overlay. Safe from any thread.
 void Show(const QString &overlayId);
 
-// After an install: tells the user the overlay has a panel and offers to open
-// it. Safe from any thread.
-void OfferAfterInstall(const QString &overlayId);
-
 // File picker for attaching controls to an overlay installed before this
 // feature existed. UI thread only.
 void AttachFromFile();

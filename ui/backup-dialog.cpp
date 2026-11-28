@@ -1,4 +1,7 @@
 #include "backup-dialog.hpp"
+#include "streamup-kit.hpp"
+#include "ui-helpers.hpp"
+#include <streamup/ui/flow-layout.hpp>
 
 #include "../core/backup-manager.hpp"
 #include <streamup/debug-logger.hpp>
@@ -47,14 +50,21 @@ su::SwitchButton *toggleRow(QVBoxLayout *layout, const QString &title, const QSt
 	auto *textLayout = new QVBoxLayout(textColumn);
 	textLayout->setContentsMargins(0, 0, 0, 0);
 	textLayout->setSpacing(S(1));
-	cardText(textLayout, title, Colors::TEXT_PRIMARY, CardText::kTitle, true);
-	cardText(textLayout, help, Colors::TEXT_SECONDARY, CardText::kCaption);
+	auto *titleRow = new QHBoxLayout();
+	titleRow->setSpacing(S(6));
+	QLabel *titleLabel = su::makeLabel(title, CardText::kTitle, 700, Colors::TEXT_PRIMARY);
+	titleLabel->setWordWrap(false);
+	titleRow->addWidget(titleLabel);
+	if (QLabel *dot = StreamUP::Kit::HelpDot(help))
+		titleRow->addWidget(dot);
+	titleRow->addStretch(1);
+	textLayout->addLayout(titleRow);
 
 	rowLayout->addWidget(textColumn, 1);
 	// Top-aligned, not centred: the help text can run to two or three lines and
 	// a centred switch then drifts away from the title it belongs to.
 	su::SwitchButton *toggle = su::CreateStyledSwitch("", initial);
-	rowLayout->addWidget(toggle, 0, Qt::AlignTop);
+	rowLayout->addWidget(toggle, 0, Qt::AlignVCenter);
 
 	layout->addWidget(row);
 	return toggle;
@@ -78,13 +88,18 @@ void showResult(QWidget *parent, const Result &result, const QString &archivePat
 	cardText(layout, QFileInfo(archivePath).fileName(), Colors::TEXT_PRIMARY, CardText::kTitle, true);
 	cardText(layout, QFileInfo(archivePath).absolutePath(), Colors::TEXT_SECONDARY, CardText::kCaption);
 
-	// Two columns: the short summary blocks on the left, the long file lists on
-	// the right where there is room for them to breathe.
-	// 3:7 and a wider window: the left column only holds short fact tables,
-	// while the right holds file paths that are unreadable when squeezed.
-	auto columns = cardColumns(layout, 3, 7);
-	QVBoxLayout *left = columns.first;
-	QVBoxLayout *right = columns.second;
+	// Two columns only when there are file lists to show: the short summary
+	// blocks on the left, the long lists on the right (3:7, a wide window).
+	// A clean backup has no lists, so it is one narrow column with no empty
+	// space beside it.
+	const bool hasLists = !result.missingMedia.isEmpty() || !result.skippedLargeFiles.isEmpty();
+	QVBoxLayout *left = layout;
+	QVBoxLayout *right = layout;
+	if (hasLists) {
+		auto columns = cardColumns(layout, 3, 7);
+		left = columns.first;
+		right = columns.second;
+	}
 
 	// What went in, broken down by area.
 	QVBoxLayout *saved = sectionCard(left, obs_module_text("Backup.Result.Section.Saved"));
@@ -170,8 +185,12 @@ void showResult(QWidget *parent, const Result &result, const QString &archivePat
 		skipped->addWidget(cardFileTable(rows, obs_module_text("Backup.Result.Column.Size"), 120));
 	}
 
-	left->addStretch();
-	right->addStretch();
+	if (hasLists) {
+		left->addStretch();
+		right->addStretch();
+	} else {
+		layout->addStretch();
+	}
 
 	auto *okButton = new su::PillButton(obs_module_text("UI.Button.OK"), "primary");
 	shell.footerButtons->addWidget(okButton);
@@ -182,31 +201,45 @@ void showResult(QWidget *parent, const Result &result, const QString &archivePat
 	// activate() first: sizeHint() is stale until the layout has run, so
 	// measuring before it leaves the window taller than its contents.
 	dialog->layout()->activate();
-	dialog->resize(S(1080) + 2 * S(su::ShadowDialog::kShadowMargin), dialog->sizeHint().height());
+	dialog->resize(S(hasLists ? 1080 : 520) + 2 * S(su::ShadowDialog::kShadowMargin), dialog->sizeHint().height());
 	// Shrink to the content's real height once it has been laid out. See
 	// fitWindowToContent: no size hint matches what actually gets drawn here.
-	QTimer::singleShot(0, dialog, [dialog, layout]() { fitWindowToContent(dialog, layout); });
+	QTimer::singleShot(0, dialog, [dialog, layout]() {
+		fitWindowToContent(dialog, layout);
+		StreamUP::BackupUI::fitWindowToScreen(dialog, layout);
+	});
 
 	dialog->show();
 }
 
 } // namespace
 
-void ShowCreateBackupDialog()
+void ShowCreateBackupDialog(QWidget *over)
 {
-	QWidget *parent = static_cast<QWidget *>(obs_frontend_get_main_window());
+	QWidget *parent = over ? over : static_cast<QWidget *>(obs_frontend_get_main_window());
 
 	su::WindowShell shell = su::makeWindow(obs_module_text("Backup.Dialog.Title"), "v" PROJECT_VERSION, parent,
 					       /*brandFooter=*/true, "StreamUP");
 	QDialog *dialog = shell.dialog;
-	QVBoxLayout *layout = shell.content;
-	layout->setContentsMargins(S(20), S(16), S(20), S(16));
+	// One scrolling column that the window fits to, so opening More options
+	// grows the window instead of squashing the cards above it.
+	QVBoxLayout *layout = StreamUP::Kit::ScrollingBody(shell.content);
 	layout->setSpacing(cardColumnSpacing());
 
 	// ── What a backup covers ───────────────────────────────────────────
 	QVBoxLayout *whatCard = sectionCard(layout, obs_module_text("Backup.Section.Includes"));
-	cardText(whatCard, obs_module_text("Backup.Includes.List"), Colors::TEXT_PRIMARY, CardText::kBody);
-	cardText(whatCard, obs_module_text("Backup.Includes.Excluded"), Colors::TEXT_SECONDARY, CardText::kCaption);
+	{
+		// Pills that wrap onto a second line rather than squeeze.
+		auto *pillBox = new QWidget();
+		auto *pills = new StreamUP::UIStyles::FlowLayout(pillBox, 6);
+		pills->setContentsMargins(0, 0, 0, 0);
+		for (const char *key : {"Backup.Item.Collections", "Backup.Item.Profiles", "Backup.Item.Plugins",
+					"Backup.Item.Themes", "Backup.Item.Settings"})
+			pills->addWidget(StreamUP::Kit::StatusPill(StreamUP::Kit::Status::Neutral, obs_module_text(key)));
+		if (QLabel *dot = StreamUP::Kit::HelpDot(obs_module_text("Backup.Includes.Excluded")))
+			pills->addWidget(dot);
+		whatCard->addWidget(pillBox);
+	}
 
 	// ── What this will produce, measured now ───────────────────────────
 	Options estimateOptions;
@@ -239,7 +272,12 @@ void ShowCreateBackupDialog()
 		     Colors::COLOR_WARNING);
 
 	// ── Options ────────────────────────────────────────────────────────
-	QVBoxLayout *optionsCard = sectionCard(layout, obs_module_text("Backup.Section.Options"));
+	auto *moreOptions = new StreamUP::Kit::MoreOptions(QStringLiteral("backup.create.options"));
+	layout->addWidget(moreOptions);
+	moreOptions->onToggled([dialog](bool) {
+		QTimer::singleShot(0, dialog, [dialog]() { StreamUP::Kit::FitToContent(dialog, 560); });
+	});
+	QVBoxLayout *optionsCard = sectionCard(moreOptions->body(), obs_module_text("Backup.Section.Options"));
 	su::SwitchButton *credentialsToggle = toggleRow(optionsCard, obs_module_text("Backup.Option.Credentials"),
 							obs_module_text("Backup.Option.CredentialsDesc"), false);
 	su::SwitchButton *mediaToggle = toggleRow(optionsCard, obs_module_text("Backup.Option.CollectMedia"),
@@ -294,9 +332,8 @@ void ShowCreateBackupDialog()
 		cancelButton->setEnabled(false);
 
 		// Grow to make room, rather than reserving the space up front.
-		const int grow = progressArea->sizeHint().height() + layout->spacing();
 		progressArea->setVisible(true);
-		dialog->resize(dialog->width(), dialog->height() + grow);
+		StreamUP::Kit::FitToContent(dialog, 560);
 
 		const Result result = CreateBackup(path, options, [=](const QString &file, int done, int total) {
 			progress->setMaximum(total);
@@ -307,7 +344,7 @@ void ShowCreateBackupDialog()
 		});
 
 		progressArea->setVisible(false);
-		dialog->resize(dialog->width(), qMax(0, dialog->height() - grow));
+		StreamUP::Kit::FitToContent(dialog, 560);
 		backupButton->setEnabled(true);
 		cancelButton->setEnabled(true);
 
@@ -321,14 +358,8 @@ void ShowCreateBackupDialog()
 		showResult(parent, result, path);
 	});
 
-	// activate() first: sizeHint() is stale until the layout has run, so
-	// measuring before it leaves the window taller than its contents.
-	dialog->layout()->activate();
-	dialog->resize(S(560) + 2 * S(su::ShadowDialog::kShadowMargin), dialog->sizeHint().height());
-	// Shrink to the content's real height once it has been laid out. See
-	// fitWindowToContent: no size hint matches what actually gets drawn here.
-	QTimer::singleShot(0, dialog, [dialog, layout]() { fitWindowToContent(dialog, layout); });
-
+	StreamUP::Kit::FitToContent(dialog, 560);
+	StreamUP::UIHelpers::PlaceOverMainWindow(dialog);
 	dialog->show();
 }
 

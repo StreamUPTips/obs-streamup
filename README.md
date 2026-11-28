@@ -28,24 +28,26 @@ Built for [StreamUP](https://streamup.tips) products but genuinely useful even i
 
 ## The StreamUP Menu
 
-StreamUP gets its own menu in the OBS menu bar, next to Help. Everything hangs off it.
+StreamUP gets its own menu in the OBS menu bar, next to Help. Everything hangs off it. Parts you switch off in Settings > Tools and tweaks drop out of the menu.
 
-- **Install a Product.** Drop in a `.streamup` file and it handles the rest. Hold Shift to force install if something's already there.
-- **Download Products.** Opens the StreamUP store.
-- **Check Product Requirements.** Scans what you've got and tells you if a StreamUP product needs a plugin you're missing. Hold Shift to refresh the cache.
-- **Check for OBS Plugin Updates.** Scans every OBS plugin you have installed and lists the out of date ones with direct download links. Also runs at launch so you don't get caught out.
-- **Backup submenu:** Backup OBS, and Restore From Backup.
-- **Tools submenu:**
+- **My Products…** Every StreamUP product in your scene collection, each with its controls one click away.
+- **Install a Product…** Pick a `.StreamUP` file and it handles the rest. Hold Shift to skip the plugin check.
+- **Check Product Requirements…** Tells you if a StreamUP product needs a plugin you're missing. Hold Shift to refresh the check.
+- **Browse Products.** Opens the StreamUP store in your browser.
+- **Quick Actions submenu:**
   - Lock or Unlock All Sources (everywhere, or just the current scene)
   - Refresh Audio Monitoring for all sources
   - Refresh All Browser Sources
   - Video Capture Devices: Activate All, Deactivate All, or Refresh All
 - **Multi-Dock submenu:** New Multi-Dock, Manage Multi-Docks, and a toggle for each Multi-Dock you've created.
-- **Theme.** Opens the theme window.
-- **WebSocket Commands.** Full browsable reference for every StreamUP WebSocket vendor command. Copy OBS Raw requests straight out of it, or copy Streamer.Bot CPH code if you've got that enabled.
-- **Settings.** Opens the main settings dialog (see below).
-- **Patch Notes.** Collapsible card view of every version's changes.
-- **About.** Version info, credits, and an update check button.
+- **Backup submenu:** Backup OBS, Restore From Backup, and Backup Settings.
+- **Check for Plugin Updates…** Lists every out of date OBS plugin with direct download links. Also runs at launch so you don't get caught out.
+- **Settings…** The main settings dialog (see below). It opens on Tools and tweaks: every part of StreamUP as a card with a switch, so you only run what you use.
+- **Help submenu:**
+  - Patch Notes: a collapsible card view of every version's changes.
+  - WebSocket Commands: the full reference for every StreamUP WebSocket vendor command. Copy OBS Raw requests straight out of it, or Streamer.Bot CPH code if you've got that enabled.
+  - StreamUP OBS Theme: the theme window.
+  - About: version info, credits and an update check button.
 
 ---
 

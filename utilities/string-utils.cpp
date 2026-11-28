@@ -94,15 +94,5 @@ QString GetPlatformURL(const QString &windowsURL, const QString &macURL,
 #endif
 }
 
-std::string QStringToStdString(const QString &qstr)
-{
-	return qstr.toStdString();
-}
-
-QString StdStringToQString(const std::string &str)
-{
-	return QString::fromStdString(str);
-}
-
 } // namespace StringUtils
 } // namespace StreamUP

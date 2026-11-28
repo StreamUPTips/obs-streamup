@@ -32,6 +32,7 @@ struct Binding {
 	QString filter;   // empty: the source's own settings
 	QString scene;    // set: a scene item in this scene (key must be @visible)
 	QString key;      // a setting key ("a.b" reaches into an object), @enabled or @visible
+	bool transition = false; // source names a scene transition, not a source
 	BindMode mode = BindMode::Set;
 	double mapTo0 = 0.0;
 	double mapTo1 = 1.0;
@@ -69,6 +70,7 @@ struct GeoLink {
 	bool captured = false;
 	QString sourceUuid;
 	QString filterUuid;
+	QString sceneUuid; // found once by name, then by UUID: works on every canvas
 	bool hadUserValue = false;
 	QJsonObject original;
 	double base = 0.0;
@@ -109,10 +111,17 @@ struct Control {
 	QString id;
 	QString label;
 	QString help;
+	bool advanced = false; // folded under More options in the window
 	QString tab;
 	ControlType type = ControlType::Slider;
 	double min = 0.0;
 	double max = 1.0;
+	// A slider or number with no min/max in the manifest takes them from the
+	// OBS property it is linked to (once that is found); a manifest value
+	// always wins.
+	bool autoMin = false;
+	bool autoMax = false;
+	bool autoStep = false;
 	double step = 0.01;
 	int decimals = 2;
 	QString unit;
@@ -185,6 +194,8 @@ struct Overlay {
 	QList<Group> groups;
 	QList<Preset> presets;
 	QList<Output> outputs;
+	QList<ActionInfo> actions;
+	ProductStamp product;
 	bool snapshotTaken = false;
 	QList<SnapSource> snapSources;
 	QList<SnapItem> snapItems;
@@ -197,18 +208,22 @@ QColor ParseColour(const QString &text);
 QString ColourText(const QColor &c);
 QColor FromObsColour(qint64 v);
 qint64 ToObsColour(const QColor &c);
-bool IsNumeric(ControlType t);
-bool IsString(ControlType t);
 QJsonValue NormaliseValue(const Control &c, const QJsonValue &in);
 
 // ---------------------------------------------------------------- settings links
 
 obs_source_t *ResolveTarget(QString &source, QString &sourceUuid, QString &filter, QString &filterUuid);
+// A link's target: a source, a filter or a transition. NEW reference.
+obs_source_t *ResolveBinding(Binding &b);
+// The min and max OBS gives the setting a "set" link writes, when it is a
+// number setting it can find. Used for sliders with no range in the manifest.
+bool PropertyRange(Binding &b, double *min, double *max, double *step);
 bool BindingTargetExists(Binding &b);
 bool CaptureBinding(Binding &b);
 bool WriteBinding(Binding &b, const Control &c);
 void RestoreBinding(Binding &b);
 bool BindingDrifted(Binding &b, const Control &c);
+QJsonValue ReadBack(Binding &b, const Control &c);
 
 // ---------------------------------------------------------------- templates
 
@@ -220,7 +235,6 @@ bool CaptureRig(Overlay &o, Control &c);
 // Places the items of one part and every part riding on it (all parts when
 // changedPart is empty), then recomputes geometry links.
 void ApplyLayout(Overlay &o, const QString &changedPart = QString());
-QRectF CurrentFrame(Overlay &o, Control &c);
 QRectF FrameInScene(Control &c, const QString &scene);
 int RigMissing(Control &c);
 void RestoreGeoLinks(Overlay &o);

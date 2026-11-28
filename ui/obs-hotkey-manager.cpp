@@ -49,19 +49,6 @@ QList<HotkeyInfo> OBSHotkeyManager::getAvailableHotkeys() {
     return hotkeys;
 }
 
-QList<HotkeyInfo> OBSHotkeyManager::getFrontendHotkeys() {
-    QList<HotkeyInfo> allHotkeys = getAvailableHotkeys();
-    QList<HotkeyInfo> frontendHotkeys;
-    
-    for (const auto& hotkey : allHotkeys) {
-        if (hotkey.registererType == OBS_HOTKEY_REGISTERER_FRONTEND) {
-            frontendHotkeys.append(hotkey);
-        }
-    }
-    
-    return frontendHotkeys;
-}
-
 bool OBSHotkeyManager::triggerHotkey(const QString& hotkeyName) {
     return triggerHotkey(hotkeyName, QString());
 }
@@ -94,20 +81,6 @@ bool OBSHotkeyManager::triggerHotkeyById(obs_hotkey_id hotkeyId) {
     obs_hotkey_trigger_routed_callback(hotkeyId, false); // Release
     
     return true;
-}
-
-QString OBSHotkeyManager::getHotkeyDescription(const QString& hotkeyName) {
-    obs_hotkey_t* hotkey = findHotkeyByName(hotkeyName);
-    if (!hotkey) {
-        return QString();
-    }
-    
-    const char* description = obs_hotkey_get_description(hotkey);
-    return description ? QString::fromUtf8(description) : QString();
-}
-
-bool OBSHotkeyManager::hotkeyExists(const QString& hotkeyName) {
-    return findHotkeyByName(hotkeyName) != nullptr;
 }
 
 QString OBSHotkeyManager::getDefaultHotkeyIcon(const QString& hotkeyName) {
@@ -205,39 +178,6 @@ QMap<QString, QList<HotkeyInfo>> OBSHotkeyManager::getCategorizedHotkeys() {
     }
     
     return categorized;
-}
-
-obs_hotkey_t* OBSHotkeyManager::findHotkeyByName(const QString& hotkeyName) {
-    struct EnumData {
-        QString targetName;
-        obs_hotkey_t* foundHotkey;
-    };
-    
-    EnumData enumData;
-    enumData.targetName = hotkeyName;
-    enumData.foundHotkey = nullptr;
-    
-    auto callback = [](void* data, obs_hotkey_id id, obs_hotkey_t* hotkey) -> bool {
-        Q_UNUSED(id);
-        EnumData* enumData = static_cast<EnumData*>(data);
-        
-        const char* name = obs_hotkey_get_name(hotkey);
-        if (name && QString::fromUtf8(name) == enumData->targetName) {
-            enumData->foundHotkey = hotkey;
-            return false; // Stop enumeration
-        }
-        return true; // Continue enumeration
-    };
-    
-    obs_enum_hotkeys(callback, &enumData);
-    return enumData.foundHotkey;
-}
-
-QString OBSHotkeyManager::formatHotkeyDescription(obs_hotkey_t* hotkey) {
-    if (!hotkey) return QString();
-    
-    const char* description = obs_hotkey_get_description(hotkey);
-    return description ? QString::fromUtf8(description) : QString();
 }
 
 QString OBSHotkeyManager::displayLabel(const HotkeyInfo& info) {

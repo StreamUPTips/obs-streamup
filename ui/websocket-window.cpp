@@ -1,5 +1,8 @@
 #include "websocket-window.hpp"
 #include "ui-helpers.hpp"
+#include "streamup-kit.hpp"
+#include <streamup/ui/search-field.hpp>
+#include <streamup/ui/segmented-control.hpp>
 #include <streamup/ui/window-chrome.hpp> // ShadowDialog, makeWindow, WindowShell
 #include <streamup/ui/pill-button.hpp>   // PillButton
 #include <streamup/ui/labels.hpp>        // makeLabel, sectionHeader
@@ -25,6 +28,13 @@
 
 namespace StreamUP {
 namespace WebSocketWindow {
+
+// 0: OBS Raw JSON, 1: Streamer.bot code. Picked at the top of the window.
+static int &CopyKind()
+{
+	static int kind = 0;
+	return kind;
+}
 
 // WebSocket dialogs are now managed by DialogManager in ui-helpers
 
@@ -133,28 +143,27 @@ void ShowWebSocketWindow(bool showInternalTools)
 						  StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
 		contentLayout->setSpacing(StreamUP::UIStyles::S(20));
 
-		// Modern header inside scrollable area
-		QWidget *headerSection = new QWidget();
-		QVBoxLayout *headerLayout = new QVBoxLayout(headerSection);
-		headerLayout->setContentsMargins(0, 0, 0, 0);
-		headerLayout->setSpacing(StreamUP::UIStyles::S(8));
-
-		// Title with modern styling
-		QLabel *titleLabel = StreamUP::UIStyles::makeLabel(obs_module_text("WebSocket.Window.Header"), 22, 700,
-								   StreamUP::UIStyles::Colors::TEXT_PRIMARY);
-		titleLabel->setAlignment(Qt::AlignCenter);
-
-		// Description with modern styling
-		QLabel *subtitleLabel = StreamUP::UIStyles::makeLabel(obs_module_text("WebSocket.Window.Description"), 13, 500,
-								      StreamUP::UIStyles::Colors::TEXT_SECONDARY);
-		subtitleLabel->setWordWrap(true);
-		subtitleLabel->setAlignment(Qt::AlignCenter);
-
-		headerLayout->addWidget(titleLabel);
-		headerLayout->addWidget(subtitleLabel);
-
-		contentLayout->addWidget(headerSection);
-		contentLayout->addSpacing(StreamUP::UIStyles::S(16));
+		// Search, and which kind of code the Copy buttons give you.
+		auto *tools = new QHBoxLayout();
+		tools->setSpacing(StreamUP::UIStyles::S(10));
+		auto *search = new StreamUP::UIStyles::SearchField();
+		search->setPlaceholderText(obs_module_text("WebSocket.Search"));
+		search->setAccessibleName(obs_module_text("WebSocket.Search"));
+		search->setFixedHeight(StreamUP::UIStyles::S(30));
+		tools->addWidget(search, 1);
+		if (StreamUP::SettingsManager::IsCPHIntegrationEnabled()) {
+			auto *kind = new StreamUP::UIStyles::SegmentedControl(
+				{obs_module_text("WebSocket.Kind.Raw"), obs_module_text("WebSocket.Kind.StreamerBot")});
+			kind->setFixedWidth(StreamUP::UIStyles::S(220));
+			kind->setCurrentIndex(0);
+			kind->onChanged([](int i) { CopyKind() = i; });
+			tools->addWidget(kind);
+		}
+		CopyKind() = 0;
+		contentLayout->addLayout(tools);
+		QList<QPair<QWidget *, QString>> rows;    // command row, lower-case name and description
+		QList<QWidget *> separators;              // hairlines between rows; hidden while searching
+		QList<QPair<QWidget *, QWidget *>> cards; // section header, card
 
 		// Group commands by category, filtering out internal tools if Shift is not held
 		QMap<QString, QList<WebSocketCommand>> commandsByCategory;
@@ -183,7 +192,8 @@ void ShowWebSocketWindow(bool showInternalTools)
 
 			// Section header with bottom divider — cleaner than a groupbox and
 			// reads as a proper section break
-			contentLayout->addWidget(StreamUP::UIStyles::sectionHeader(category));
+			QLabel *sectionLabel = StreamUP::UIStyles::sectionHeader(category);
+			contentLayout->addWidget(sectionLabel);
 
 			// Commands container — rounded card so the section reads as a distinct panel
 			QFrame *categoryCard = new QFrame();
@@ -204,6 +214,10 @@ void ShowWebSocketWindow(bool showInternalTools)
 				QString translatedDescription = obs_module_text(cmd.description.toUtf8().constData());
 				QWidget *commandWidget = CreateCommandWidget(cmd.name, translatedDescription);
 				categoryLayout->addWidget(commandWidget);
+				commandWidget->setProperty("su_card", QVariant::fromValue<QObject *>(categoryCard));
+				// Rows keep their own height when a search hides their neighbours.
+				commandWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+				rows.append({commandWidget, (cmd.name + " " + translatedDescription).toLower()});
 
 				// Add separator line between commands (but not after the last one)
 				if (i < commands.size() - 1) {
@@ -218,11 +232,31 @@ void ShowWebSocketWindow(bool showInternalTools)
 									 "max-height: 1px;"
 									 "}")));
 					categoryLayout->addWidget(separator);
+					separators.append(separator);
 				}
 			}
 
+			categoryCard->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
 			contentLayout->addWidget(categoryCard);
+			cards.append({sectionLabel, categoryCard});
 		}
+
+		// Filter rows as you type; a section with nothing left hides.
+		QObject::connect(search, &QLineEdit::textChanged, dialog, [rows, cards, separators](const QString &text) {
+			const QString needle = text.trimmed().toLower();
+			for (QWidget *line : separators)
+				line->setVisible(needle.isEmpty());
+			for (const auto &r : rows)
+				r.first->setVisible(needle.isEmpty() || r.second.contains(needle));
+			for (const auto &c : cards) {
+				bool any = false;
+				for (const auto &r : rows)
+					if (r.first->property("su_card").value<QObject *>() == c.second && r.first->isVisibleTo(c.second))
+						any = true;
+				c.first->setVisible(any);
+				c.second->setVisible(any);
+			}
+		});
 
 		// Add stretch to push content to top
 		contentLayout->addStretch();
@@ -252,8 +286,7 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 				      "}")));
 
 	QHBoxLayout *layout = new QHBoxLayout(widget);
-	layout->setContentsMargins(0, StreamUP::UIStyles::S(8) + 3, 0,
-				   StreamUP::UIStyles::S(8) + 3); // Add margin to layout instead
+	layout->setContentsMargins(0, StreamUP::UIStyles::S(6), 0, StreamUP::UIStyles::S(6));
 	layout->setSpacing(StreamUP::UIStyles::S(12));
 
 	// Command info section - use vertical layout but center it
@@ -266,7 +299,7 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 	nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
 					 "color: %1;"
 					 "font-size: %2px;"
-					 "font-weight: bold;"
+					 "font-weight: 600;"
 					 "background: transparent;"
 					 "border: none;"
 					 "margin: 0px;"
@@ -275,22 +308,14 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 					 .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 					 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 
-	// Command description
-	QLabel *descLabel = new QLabel(description);
-	descLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
-					 "color: %1;"
-					 "font-size: %2px;"
-					 "background: transparent;"
-					 "border: none;"
-					 "margin: 0px;"
-					 "padding: 0px;"
-					 "}")
-					 .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-					 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
-	descLabel->setWordWrap(true);
-
-	infoLayout->addWidget(nameLabel);
-	infoLayout->addWidget(descLabel);
+	// One line: the name, with what it does behind "?".
+	auto *nameRow = new QHBoxLayout();
+	nameRow->setSpacing(StreamUP::UIStyles::S(6));
+	nameRow->addWidget(nameLabel);
+	if (QLabel *dot = StreamUP::Kit::HelpDot(description))
+		nameRow->addWidget(dot);
+	nameRow->addStretch(1);
+	infoLayout->addLayout(nameRow);
 
 	// Create a wrapper widget for info that centers the content vertically
 	QWidget *infoWrapper = new QWidget();
@@ -309,70 +334,28 @@ QWidget *CreateCommandWidget(const QString &command, const QString &description)
 	buttonLayout->setSpacing(StreamUP::UIStyles::S(8));
 	buttonLayout->setContentsMargins(0, 0, 0, 0);
 
-	// OBS Raw copy button
-	QString obsRawJson =
+	// One Copy button. It copies OBS Raw JSON, or Streamer.bot code when that
+	// is picked at the top of the window.
+	const QString obsRawJson =
 		QString(R"({"requestType":"CallVendorRequest","requestData":{"vendorName":"streamup","requestType":"%1","requestData":{}}})")
 			.arg(command);
-	QPushButton *obsRawBtn = new QPushButton("Raw");
-	obsRawBtn->setCursor(Qt::PointingHandCursor);
-	obsRawBtn->setStyleSheet(StreamUP::UIStyles::buttonStyle("primary"));
-	obsRawBtn->setFixedSize(StreamUP::UIStyles::S(72), StreamUP::UIStyles::S(24));
-	obsRawBtn->setToolTip(obs_module_text("WebSocket.Button.OBSRaw.Tooltip"));
-	QObject::connect(obsRawBtn, &QPushButton::clicked, [obsRawBtn, obsRawJson]() {
-		QApplication::clipboard()->setText(obsRawJson);
-
-		// Visual feedback: briefly change button text and style
-		QString originalText = obsRawBtn->text();
-		obsRawBtn->setText(obs_module_text("WebSocket.Button.Copied"));
-		obsRawBtn->setEnabled(false);
-
-		// Change to success style temporarily
-		obsRawBtn->setStyleSheet(StreamUP::UIStyles::buttonStyle("success"));
-
-		// Restore button after 1 second
-		QTimer::singleShot(1000, [obsRawBtn, originalText]() {
-			obsRawBtn->setText(originalText);
-			obsRawBtn->setEnabled(true);
-			// Restore original blue style
-			obsRawBtn->setStyleSheet(StreamUP::UIStyles::buttonStyle("primary"));
-		});
-	});
-
-	// CPH copy button
-	QString cphCommand =
+	const QString cphCommand =
 		QString(R"(CPH.ObsSendRaw("CallVendorRequest", "{\"vendorName\":\"streamup\",\"requestType\":\"%1\",\"requestData\":{}}", 0);)")
 			.arg(command);
-	QPushButton *cphBtn = new QPushButton("CPH");
-	cphBtn->setCursor(Qt::PointingHandCursor);
-	cphBtn->setStyleSheet(StreamUP::UIStyles::buttonStyle("primary"));
-	cphBtn->setFixedSize(StreamUP::UIStyles::S(72), StreamUP::UIStyles::S(24));
-	cphBtn->setToolTip(obs_module_text("WebSocket.Button.CPH.Tooltip"));
-	QObject::connect(cphBtn, &QPushButton::clicked, [cphBtn, cphCommand]() {
-		QApplication::clipboard()->setText(cphCommand);
-
-		// Visual feedback: briefly change button text and style
-		QString originalText = cphBtn->text();
-		cphBtn->setText(obs_module_text("WebSocket.Button.Copied"));
-		cphBtn->setEnabled(false);
-
-		// Change to success style temporarily
-		cphBtn->setStyleSheet(StreamUP::UIStyles::buttonStyle("success"));
-
-		// Restore button after 1 second
-		QTimer::singleShot(1000, [cphBtn, originalText]() {
-			cphBtn->setText(originalText);
-			cphBtn->setEnabled(true);
-			// Restore original blue style
-			cphBtn->setStyleSheet(StreamUP::UIStyles::buttonStyle("primary"));
+	auto *copyBtn = new StreamUP::UIStyles::PillButton(obs_module_text("WebSocket.Button.Copy"), "neutral");
+	copyBtn->setAccessibleName(QString(obs_module_text("WebSocket.Button.CopyAccessible")).arg(command));
+	QPointer<QPushButton> guard(copyBtn);
+	QObject::connect(copyBtn, &QPushButton::clicked, [guard, obsRawJson, cphCommand]() {
+		QApplication::clipboard()->setText(CopyKind() == 1 ? cphCommand : obsRawJson);
+		if (!guard)
+			return;
+		guard->setText(obs_module_text("WebSocket.Button.Copied"));
+		QTimer::singleShot(1000, guard, [guard]() {
+			if (guard)
+				guard->setText(obs_module_text("WebSocket.Button.Copy"));
 		});
 	});
-
-	buttonLayout->addWidget(obsRawBtn);
-
-	// Only add CPH button if CPH integration is enabled
-	if (StreamUP::SettingsManager::IsCPHIntegrationEnabled()) {
-		buttonLayout->addWidget(cphBtn);
-	}
+	buttonLayout->addWidget(copyBtn);
 
 	buttonWrapperLayout->addLayout(buttonLayout);
 	buttonWrapperLayout->addStretch(); // Add stretch below

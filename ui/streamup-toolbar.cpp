@@ -1,4 +1,6 @@
 #include "streamup-toolbar.hpp"
+#include <cmath>
+#include <algorithm>
 #include <streamup/debug-logger.hpp>
 #include "streamup-toolbar-edit-panel.hpp"
 #include "dock/streamup-dock.hpp"
@@ -595,12 +597,6 @@ void StreamUPToolbar::OnFrontendEvent(enum obs_frontend_event event, void *data)
 	}
 }
 
-QString StreamUPToolbar::getThemedIconPath(const QString& iconName)
-{
-	// Use the centralized theme-aware icon helper
-	return StreamUP::UIHelpers::GetThemedIconPath(iconName);
-}
-
 QIcon StreamUPToolbar::getCachedIcon(const QString& iconName)
 {
 	// Always use the reliable UI helpers approach instead of caching
@@ -1185,13 +1181,15 @@ void StreamUPToolbar::applySizeClass()
 	// a centralWidget, and those buttons do NOT inherit the toolbar's
 	// iconSize. Without this loop, the toolbar's iconSize is purely cosmetic
 	// for our layout.
-	QSize fallbackIconSize(16, 16);
+	// Two px larger than the theme's tiers (12/16/22): the outline glyphs
+	// read clearly at 18 where 16 left their strokes thin.
+	QSize fallbackIconSize(18, 18);
 	switch (settings.toolbarSize) {
 	case StreamUP::SettingsManager::ToolbarSize::Small:
-		fallbackIconSize = QSize(12, 12);
+		fallbackIconSize = QSize(14, 14);
 		break;
 	case StreamUP::SettingsManager::ToolbarSize::Large:
-		fallbackIconSize = QSize(22, 22);
+		fallbackIconSize = QSize(24, 24);
 		break;
 	default:
 		break;
@@ -1201,6 +1199,23 @@ void StreamUPToolbar::applySizeClass()
 		if (b) {
 			b->setIconSize(fallbackIconSize);
 		}
+	}
+
+	// Centre every glyph on whole pixels. The theme's padding left a button
+	// one pixel larger than icon + padding on some tiers, an odd gap that Qt
+	// floors, so the icon sat half a pixel up and left. Keep the gap round the
+	// icon a multiple of 4 px, so it splits evenly at 100%, 150% and 200%.
+	for (QToolButton *b : buttons) {
+		if (!b || b->toolButtonStyle() != Qt::ToolButtonIconOnly || b->icon().isNull())
+			continue;
+		b->setMinimumSize(0, 0);
+		b->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+		const QSize icon = b->iconSize();
+		const QSize hint = b->sizeHint();
+		auto even = [](int gap) { return std::max(4, int(std::lround(gap / 4.0)) * 4); };
+		const int side = std::max(icon.width() + even(hint.width() - icon.width()),
+					  icon.height() + even(hint.height() - icon.height()));
+		b->setFixedSize(side, side);
 	}
 
 	// Layout may need to re-measure after icon size change
@@ -1609,21 +1624,6 @@ void StreamUPToolbar::onWebSocketButtonClicked()
 	}
 }
 
-void StreamUPToolbar::updateButtonSizes()
-{
-	// No custom sizing — OBS theme CSS handles icon sizes and button dimensions.
-	// Just refresh geometry so the theme can reapply.
-	if (centralWidget) {
-		centralWidget->updateGeometry();
-	}
-	updateGeometry();
-	style()->unpolish(this);
-	style()->polish(this);
-
-	// Force repaint
-	update();
-}
-
 void StreamUPToolbar::refreshFromConfiguration()
 {
 	// Clear the current toolbar state
@@ -1653,21 +1653,6 @@ void StreamUPToolbar::refreshFromConfiguration()
 	updateAllButtons();
 	updateIconsForTheme();
 	updatePositionAwareTheme();
-}
-
-void StreamUPToolbar::clearLayout()
-{
-	if (mainLayout) {
-		// Delete all widgets in the layout
-		while (QLayoutItem* item = mainLayout->takeAt(0)) {
-			if (QWidget* widget = item->widget()) {
-				widget->deleteLater();
-			}
-			delete item;
-		}
-	}
-	
-	dynamicButtons.clear();
 }
 
 void StreamUPToolbar::onToolbarSettingsClicked()

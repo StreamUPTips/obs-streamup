@@ -54,6 +54,20 @@
 #include <QDateTime>
 #include <util/platform.h>
 #include <functional>
+#include <QCollator>
+
+// Alphabetical sorts read numbers the way people do: "Scene 2" before
+// "Scene 10", rather than character by character (1, 10, 11, 2).
+static int NaturalCompare(const QString &a, const QString &b)
+{
+    static const QCollator collator = [] {
+        QCollator c;
+        c.setNumericMode(true);
+        c.setCaseSensitivity(Qt::CaseInsensitive);
+        return c;
+    }();
+    return collator.compare(a, b);
+}
 
 namespace su = StreamUP::UIStyles;
 using namespace StreamUP::UIStyles;
@@ -439,15 +453,6 @@ static QIcon CreateColoredIcon(const QString& svgPath, const QColor& color, cons
     s_coloredIconCache.insert(cacheKey, icon);
 
     return icon;
-}
-
-// Cache management functions
-static void ClearIconCaches()
-{
-    s_themeIconCache.clear();
-    s_coloredIconCache.clear();
-    s_cachedMainWindow = nullptr;
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Cache", "Cleared icon caches");
 }
 
 // OBS themes style list ROWS by the classes their own docks use - mostly
@@ -1666,7 +1671,7 @@ void SceneOrganiserDock::applySortingIfEnabled()
                     else if (item1IsFolder == item2IsFolder) {
                         if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ ||
                             sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA) {
-                            int comparison = QString::compare(item1->text(), item2->text(), Qt::CaseInsensitive);
+                            int comparison = NaturalCompare(item1->text(), item2->text());
                             if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ) {
                                 shouldSwap = (comparison > 0);
                             } else {
@@ -1701,7 +1706,7 @@ void SceneOrganiserDock::applySortingIfEnabled()
                     // Mix folders and scenes, sort by selected method
                     if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ ||
                         sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA) {
-                        int comparison = QString::compare(item1->text(), item2->text(), Qt::CaseInsensitive);
+                        int comparison = NaturalCompare(item1->text(), item2->text());
                         if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ) {
                             shouldSwap = (comparison > 0);
                         } else {
@@ -1812,7 +1817,7 @@ void SceneOrganiserDock::sortManually(StreamUP::SettingsManager::SceneSortMethod
                     else if (item1IsFolder == item2IsFolder) {
                         if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ ||
                             sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA) {
-                            int comparison = QString::compare(item1->text(), item2->text(), Qt::CaseInsensitive);
+                            int comparison = NaturalCompare(item1->text(), item2->text());
                             if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ) {
                                 shouldSwap = (comparison > 0);
                             } else {
@@ -1845,7 +1850,7 @@ void SceneOrganiserDock::sortManually(StreamUP::SettingsManager::SceneSortMethod
                     // Mix folders and scenes, sort by selected method
                     if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ ||
                         sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalZA) {
-                        int comparison = QString::compare(item1->text(), item2->text(), Qt::CaseInsensitive);
+                        int comparison = NaturalCompare(item1->text(), item2->text());
                         if (sortMethod == StreamUP::SettingsManager::SceneSortMethod::AlphabeticalAZ) {
                             shouldSwap = (comparison > 0);
                         } else {
@@ -1901,11 +1906,6 @@ void SceneOrganiserDock::sortManually(StreamUP::SettingsManager::SceneSortMethod
 
     sortItemsRecursive(parent, method);
     m_model->saveSceneTree();
-}
-
-void SceneOrganiserDock::updateFromObsScenes()
-{
-    refreshSceneList();
 }
 
 void SceneOrganiserDock::onSceneSelectionChanged(const QItemSelection &selected, const QItemSelection &deselected)
@@ -2129,7 +2129,7 @@ void SceneOrganiserDock::showSceneContextMenu(const QPoint &pos, const QModelInd
         m_customiseOverlayAction->setVisible(hasOverlay);
         if (hasOverlay)
             m_customiseOverlayAction->setText(
-                QString::fromUtf8(obs_module_text("Menu.Overlays.Customise")).arg(overlayInfo.name));
+                QString::fromUtf8(obs_module_text("SceneOrganiser.Menu.Adjust")).arg(overlayInfo.name));
     }
     if (m_customiseOverlaySeparator)
         m_customiseOverlaySeparator->setVisible(hasOverlay);
@@ -5094,12 +5094,6 @@ void SceneOrganiserDock::onShowInMultiviewClicked()
         QString("Toggled multiview for scene: %1 (now %2)").arg(sceneName, !showInMultiview ? "visible" : "hidden").toUtf8().constData());
 }
 
-void SceneOrganiserDock::onOpenProjectorClicked()
-{
-    // This would be called by monitor-specific projector actions
-    // Implementation would involve creating projectors for specific monitors
-}
-
 void SceneOrganiserDock::onOpenProjectorOnMonitorClicked()
 {
     if (!m_currentContextItem || m_currentContextItem->type() != SceneTreeItem::UserType + 2) return;
@@ -5938,17 +5932,6 @@ bool SceneTreeModel::isValidSceneForCanvas(obs_scene_t *scene)
 }
 
 
-QStandardItem *SceneTreeModel::findSceneItem(obs_weak_source_t *weak_source)
-{
-    auto it = m_scenesInTree.find(weak_source);
-    return (it != m_scenesInTree.end()) ? it->second : nullptr;
-}
-
-QStandardItem *SceneTreeModel::findFolderItem(const QString &folderName)
-{
-    return StreamUP::UIHelpers::FindItemRecursive(invisibleRootItem(), folderName, SceneFolderItem::UserType + 1);
-}
-
 QStandardItem *SceneTreeModel::createFolderItem(const QString &folderName)
 {
     if (folderName.isEmpty() || folderName.trimmed().isEmpty()) {
@@ -5957,31 +5940,6 @@ QStandardItem *SceneTreeModel::createFolderItem(const QString &folderName)
         return nullptr;
     }
     return new SceneFolderItem(folderName);
-}
-
-QStandardItem *SceneTreeModel::createSceneItem(const QString &sceneName, obs_weak_source_t *weak_source)
-{
-    if (sceneName.isEmpty() || sceneName.trimmed().isEmpty()) {
-        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Warning",
-            "Attempted to create scene item with empty name");
-        return nullptr;
-    }
-    return new SceneTreeItem(sceneName, weak_source);
-}
-
-void SceneTreeModel::moveSceneToFolder(obs_weak_source_t *weak_source, QStandardItem *folderItem)
-{
-    QStandardItem *sceneItem = findSceneItem(weak_source);
-    if (sceneItem && folderItem) {
-        QStandardItem *oldParent = sceneItem->parent();
-        if (!oldParent) oldParent = invisibleRootItem();
-
-        QStandardItem *movedItem = oldParent->takeChild(sceneItem->row());
-        if (movedItem) {
-            folderItem->appendRow(movedItem);
-            emit modelChanged();
-        }
-    }
 }
 
 // Depth-first lookup by display name, used when an item has to be re-found
@@ -6068,23 +6026,6 @@ void SceneTreeModel::cleanupEmptyItemsRecursive(QStandardItem *parent)
             parent->removeRow(i);
         }
     }
-}
-
-bool SceneTreeModel::isChildOf(QStandardItem *potentialChild, QStandardItem *potentialParent)
-{
-    if (!potentialChild || !potentialParent) {
-        return false;
-    }
-
-    // Check if potentialParent is an ancestor of potentialChild
-    QStandardItem *current = potentialChild->parent();
-    while (current) {
-        if (current == potentialParent) {
-            return true;
-        }
-        current = current->parent();
-    }
-    return false;
 }
 
 QString SceneTreeModel::createUniqueFolderName(const QString &baseName, QStandardItem *parentItem)
@@ -6333,80 +6274,6 @@ void SceneTreeModel::loadSceneTree()
     bfree(scene_collection);
 }
 
-bool SceneTreeModel::migrateFromOriginalPlugin(const QString &originalConfigPath)
-{
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
-        QString("Starting migration from: %1").arg(originalConfigPath).toUtf8().constData());
-
-    // Load the original plugin's config file
-    obs_data_t *original_data = obs_data_create_from_json_file(originalConfigPath.toUtf8().constData());
-    if (!original_data) {
-        StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
-            "Failed to load original config file");
-        return false;
-    }
-
-    // Get our config path
-    char *configPath = obs_module_get_config_path(obs_current_module(), "scene_organiser_configs");
-    if (!configPath) {
-        obs_data_release(original_data);
-        return false;
-    }
-
-    QString configDir = QString::fromUtf8(configPath);
-    QString configFile = configDir + "/" + sceneTreeFileName(m_canvasType);
-    bfree(configPath);
-
-    // Load existing data (if any) to preserve what we have
-    obs_data_t *root_data = obs_data_create_from_json_file(configFile.toUtf8().constData());
-    if (!root_data) {
-        root_data = obs_data_create();
-    }
-
-    int migratedCollections = 0;
-
-    // Iterate through all scene collections in the original file
-    obs_data_item_t *item = obs_data_first(original_data);
-    while (item) {
-        const char *collection_name = obs_data_item_get_name(item);
-        obs_data_type type = obs_data_item_gettype(item);
-
-        if (type == OBS_DATA_ARRAY) {
-            obs_data_array_t *original_array = obs_data_item_get_array(item);
-            if (original_array) {
-                StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
-                    QString("Migrating collection: %1").arg(collection_name).toUtf8().constData());
-
-                // Check if we already have data for this collection
-                obs_data_array_t *existing_array = obs_data_get_array(root_data, collection_name);
-                if (existing_array) {
-                    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
-                        QString("Collection '%1' already exists, skipping").arg(collection_name).toUtf8().constData());
-                    obs_data_array_release(existing_array);
-                } else {
-                    // Convert and migrate this collection
-                    obs_data_set_array(root_data, collection_name, original_array);
-                    migratedCollections++;
-                }
-
-                obs_data_array_release(original_array);
-            }
-        }
-
-        obs_data_item_next(&item);
-    }
-
-    // Save the migrated data
-    obs_data_save_json(root_data, configFile.toUtf8().constData());
-    obs_data_release(root_data);
-    obs_data_release(original_data);
-
-    StreamUP::DebugLogger::LogDebug("SceneOrganiser", "Migration",
-        QString("Migration complete. Migrated %1 scene collections.").arg(migratedCollections).toUtf8().constData());
-
-    return migratedCollections > 0;
-}
-
 bool SceneTreeModel::checkMigrationAvailable(const QString &sceneCollectionName, QString &outConfigPath)
 {
     // Get the streamup plugin config path to navigate to obs_scene_tree_view
@@ -6559,13 +6426,6 @@ bool SceneTreeModel::migrateCurrentCollection()
     obs_data_release(original_data);
 
     return true;
-}
-
-void SceneTreeModel::loadOriginalFolderArray(obs_data_array_t *folder_array, QStandardItem &parent)
-{
-    // This loads the original plugin's format which is already compatible
-    // The format is the same, so we can use the existing loadFolderArray
-    loadFolderArray(folder_array, parent);
 }
 
 void SceneTreeModel::removeSceneFromTracking(obs_weak_source_t *weak_source)
@@ -6824,26 +6684,49 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
 
     const int step = indentation();
 
-    // A folder sitting inside another folder gets no guide drawn on its own row,
-    // so the line breaks at each folder rather than running past it. The rows
-    // inside it still get theirs, which is what makes a nested folder read as a
-    // new heading rather than as another item in the list above it.
-    const bool nestedFolderRow = (depth > 0) && index.data(TabItemIsFolderRole).toBool();
+    // Every guide hangs from its folder's chevron: the centre of the indent step
+    // the chevron sits in. Opening a folder then reads as the arrow dropping a
+    // line down past everything inside it, and the line sits in the indent
+    // column, clear of the row's hover and selection pill.
+    const auto guideX = [&](int level) { return rect.left() + (level * step) + (step / 2); };
 
-    if (StreamUP::SettingsManager::GetCurrentSettings().sceneOrganiserShowIndentGuides && depth > 0 && !nestedFolderRow) {
-        // Derived from the theme's own text colour at low alpha rather than a
-        // fixed grey, so the guides sit a consistent distance from the
-        // background on a light theme and a dark one alike.
-        QColor guide = palette().color(branchRole);
-        guide.setAlpha(60);
+    const int rowTop = rect.top();
+    const int rowBottom = rect.bottom();
+    const int rowMiddle = rowTop + (rect.height() / 2);
 
+    // Sized off the row so it keeps its proportions as the row height setting
+    // changes, and kept small enough not to crowd the icon.
+    const qreal chevronSize = qBound(5, rect.height() / 4, 9);
+
+    // A folder inside another folder keeps its parent's guide running through
+    // its own row, so the line reads as one run from the parent's chevron to the
+    // parent's last item. Breaking it at each nested folder left a whole row of
+    // gap between a folder and its own guide.
+    const bool folderRow = index.data(TabItemIsFolderRole).toBool();
+    const bool openFolder = folderRow && isExpanded(index) && model()->hasChildren(index);
+    const bool showGuides = StreamUP::SettingsManager::GetCurrentSettings().sceneOrganiserShowIndentGuides;
+
+    // Derived from the theme's own text colour at low alpha rather than a fixed
+    // grey, so the guides sit a consistent distance from the background on a
+    // light theme and a dark one alike.
+    QColor guide = palette().color(branchRole);
+    guide.setAlpha(60);
+
+    if (showGuides && openFolder) {
+        // An open folder starts its own guide just under its chevron, meeting
+        // the line its first child picks up at the top of the next row.
         painter->save();
         painter->setPen(QPen(guide, 1));
+        const int stubTop = rowMiddle + qRound(chevronSize / 2.0) + 2;
+        if (stubTop < rowBottom) {
+            painter->drawLine(guideX(depth), stubTop, guideX(depth), rowBottom);
+        }
+        painter->restore();
+    }
 
-        const int rowTop = rect.top();
-        const int rowBottom = rect.bottom();
-        const int rowMiddle = rowTop + (rect.height() / 2);
-        const int iconHalf = iconSize().width() / 2;
+    if (showGuides && depth > 0) {
+        painter->save();
+        painter->setPen(QPen(guide, 1));
 
         // A guide belongs to a FOLDER, and runs the height of that folder's
         // contents. Which means the question at each level is "is this row the
@@ -6856,23 +6739,41 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
         // A row is the last thing inside an ancestor only if it is the last
         // child of its parent AND every folder between the two is likewise the
         // last child of its own parent, so the flag is carried outward.
-        bool lastInside = index.row() == (model()->rowCount(index.parent()) - 1);
+        // An open folder is never the last thing inside anything: its own
+        // children follow it, and every guide around it has to keep running.
+        bool lastInside = !openFolder && index.row() == (model()->rowCount(index.parent()) - 1);
 
         QModelIndex ancestor = index.parent();
         for (int level = depth - 1; level >= 0 && ancestor.isValid(); --level) {
-            // Lined up under the parent folder's ICON, not down the middle of the
-            // indent step. The step's centre sits in the parent's chevron column,
-            // which reads as a line beside the folder rather than one descending
-            // from it. The parent's icon starts one step in from its own depth.
-            const int x = rect.left() + ((level + 1) * step) + iconHalf;
+            const int x = guideX(level);
 
             if (lastInside) {
                 // The run ends here: stop halfway and turn into the row, so the
                 // last item reads as attached rather than the line running on
                 // past the end of the folder.
                 painter->drawLine(x, rowTop, x, rowMiddle);
-                const int elbowEnd = rect.left() + ((level + 2) * step) - 2;
-                painter->drawLine(x, rowMiddle, elbowEnd, rowMiddle);
+
+                // When a folder further in ends on this row too, its guide is
+                // the next line along, so the elbow runs into it and the two
+                // endings read as one join rather than two hooks. A closed
+                // folder's elbow stops short of its chevron; anything else runs
+                // up to the icon.
+                int elbowEnd;
+                if (level < depth - 1) {
+                    elbowEnd = guideX(level + 1);
+                } else if (folderRow) {
+                    elbowEnd = guideX(depth) - qRound(chevronSize) - 2;
+                } else {
+                    // Anything that is not a folder is painted one step left,
+                    // in the chevron column it has no use for, so its icon
+                    // starts where this row's own indent step does.
+                    elbowEnd = rect.left() + (depth * step) - 2;
+                }
+                // Starts one pixel right of the run so the corner is not
+                // painted twice (a brighter dot at 60 alpha).
+                if (elbowEnd > x) {
+                    painter->drawLine(x + 1, rowMiddle, elbowEnd, rowMiddle);
+                }
             } else {
                 painter->drawLine(x, rowTop, x, rowBottom);
             }
@@ -6894,17 +6795,11 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
     // than keep guessing which pseudo-state combination a given theme wants,
     // the dock draws its own - one shape, both states, every theme.
     if (model()->hasChildren(index)) {
-        const QRect cell(rect.left() + (depth * step), rect.top(), step, rect.height());
+        const qreal size = chevronSize;
 
-        // Sized off the row so it keeps its proportions as the row height
-        // setting changes, and kept small enough not to crowd the icon.
-        const qreal size = qBound(5, cell.height() / 4, 9);
-
-        // The guide line that runs past this row. A top level folder has none,
-        // so it falls back to the middle of its own indent step.
-        const qreal guideX = rect.left() + (depth * step) + (iconSize().width() / 2.0);
-        const qreal centreX = (depth > 0) ? guideX : cell.center().x();
-        const qreal centreY = cell.center().y() + 0.5;
+        // Centred on the line this folder's guide drops from.
+        const qreal centreX = guideX(depth);
+        const qreal centreY = rowMiddle + 0.5;
 
         // Follows the theme through the palette, so it stays legible on a light
         // theme and a dark one without either being special-cased.
@@ -6921,16 +6816,15 @@ void SceneTreeView::drawBranches(QPainter *painter, const QRect &rect, const QMo
         // other, which at this size reads as a blunt 2px tip instead of a point.
         QPolygonF triangle;
         if (isExpanded(index)) {
-            // Open: pointing down, sitting centred on the line.
+            // Open: pointing down, its tip on the guide it starts.
             triangle << QPointF(centreX - size, centreY - (size / 2.0))
                      << QPointF(centreX + size, centreY - (size / 2.0))
                      << QPointF(centreX, centreY + (size / 2.0));
         } else {
-            // Closed: pointing right, with its long side ON the line rather than
-            // straddling it, so the line reads as the edge the arrow grows from.
-            triangle << QPointF(centreX, centreY - size)
-                     << QPointF(centreX, centreY + size)
-                     << QPointF(centreX + size, centreY);
+            // Closed: pointing right, centred in the column.
+            triangle << QPointF(centreX - (size / 2.0), centreY - size)
+                     << QPointF(centreX - (size / 2.0), centreY + size)
+                     << QPointF(centreX + (size / 2.0), centreY);
         }
 
         painter->drawPolygon(triangle);
@@ -9404,11 +9298,6 @@ void StreamUP::SceneOrganiser::SceneOrganiserDock::processBatchedUpdates()
     }
 }
 
-void StreamUP::SceneOrganiser::SceneOrganiserDock::clearIconCaches()
-{
-    ClearIconCaches();
-}
-
 void StreamUP::SceneOrganiser::SceneOrganiserDock::applyThemeRowStyling()
 {
     // The colour a translucent row overlay has to be flattened against: the
@@ -9451,6 +9340,22 @@ void StreamUP::SceneOrganiser::SceneOrganiserDock::onThemeChanged()
 // CustomColorDelegate Implementation
 //==============================================================================
 
+// Only a folder can open, so only a folder needs the chevron column. Every other
+// row moves left into it, the way OBS's own Sources list lays out a group: a
+// scene inside a folder lines up under the folder's icon, and a top level scene
+// sits flush with the folder arrows, instead of everything carrying an empty
+// arrow's width of gap. The tree still lays the row out with that column, so the
+// shift is applied wherever the item is painted or edited.
+static QStyleOptionViewItem ShiftIntoChevronColumn(const QStyleOptionViewItem &option, const QModelIndex &index)
+{
+    QStyleOptionViewItem shifted = option;
+    const auto *tree = qobject_cast<const QTreeView *>(option.widget);
+    if (tree && index.isValid() && !index.data(StreamUP::SceneOrganiser::TabItemIsFolderRole).toBool()) {
+        shifted.rect.adjust(-tree->indentation(), 0, 0, 0);
+    }
+    return shifted;
+}
+
 StreamUP::SceneOrganiser::CustomColorDelegate::CustomColorDelegate(SceneOrganiserDock *dock, QObject *parent,
                                                                    QSortFilterProxyModel *proxy,
                                                                    QStandardItemModel *model)
@@ -9458,8 +9363,10 @@ StreamUP::SceneOrganiser::CustomColorDelegate::CustomColorDelegate(SceneOrganise
 {
 }
 
-void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
+void StreamUP::SceneOrganiser::CustomColorDelegate::paint(QPainter *painter, const QStyleOptionViewItem &rowOption, const QModelIndex &index) const
 {
+    const QStyleOptionViewItem option = ShiftIntoChevronColumn(rowOption, index);
+
     if (!index.isValid() || !m_dock) {
         QStyledItemDelegate::paint(painter, option, index);
         return;
@@ -9626,9 +9533,12 @@ QWidget *StreamUP::SceneOrganiser::CustomColorDelegate::createEditor(QWidget *pa
     return editor;
 }
 
-void StreamUP::SceneOrganiser::CustomColorDelegate::updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option,
+void StreamUP::SceneOrganiser::CustomColorDelegate::updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &rowOption,
                                                                          const QModelIndex &index) const
 {
+    // The box sits over the name, which has moved left with the rest of the row.
+    const QStyleOptionViewItem option = ShiftIntoChevronColumn(rowOption, index);
+
     QStyledItemDelegate::updateEditorGeometry(editor, option, index);
 
     // Text height plus the 1px border top and bottom. A row set smaller than

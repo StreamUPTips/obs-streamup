@@ -3,6 +3,7 @@
 #include "ui-helpers.hpp"
 #include <streamup/ui/window-chrome.hpp> // ShadowDialog, RoundedContainer, makeWindow, WindowShell
 #include <streamup/ui/pill-button.hpp>   // PillButton
+#include "streamup-kit.hpp"
 #include <streamup/ui/labels.hpp>        // makeLabel, sectionHeader
 #include <streamup/ui/ui-scrollbar.hpp>  // useScrollBars
 #include <streamup/ui/image-carousel.hpp> // su::ImageCarousel (SoT carousel look)
@@ -43,7 +44,7 @@ namespace ThemeWindow {
 // Adopts the SoT ImageCarousel visual language (su::ImageCarousel in
 // image-carousel.hpp): a rounded-clipped image area, a slide-across transition,
 // custom-painted circular nav arrows, and accent dot indicators. The SoT widget
-// only paints gradient placeholder slides and exposes no API to feed it real
+// only paints flat placeholder slides and exposes no API to feed it real
 // QPixmaps, so this consumer re-implements the same paint model but draws the
 // actual theme screenshots — preserving auto-advance, click-to-zoom and the real
 // preview images while matching the SoT carousel look.
@@ -52,9 +53,9 @@ class ThemeImageCarousel : public QWidget
     Q_OBJECT
 
 public:
-    explicit ThemeImageCarousel(QWidget* parent = nullptr) : QWidget(parent)
+    explicit ThemeImageCarousel(QWidget* parent = nullptr, int height = 400) : QWidget(parent)
     {
-        setFixedHeight(StreamUP::UIStyles::S(400));
+        setFixedHeight(StreamUP::UIStyles::S(height));
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         setCursor(Qt::PointingHandCursor);
 
@@ -112,13 +113,12 @@ private:
     void loadImages()
     {
         // Load theme images
-        QStringList imageFiles = {"obs-theme-1.png", "obs-theme-2.png", "obs-theme-3.png", "obs-theme-4.png"};
-
-        for (const QString& fileName : imageFiles) {
-            QString imagePath = QString(":/images/misc/%1").arg(fileName);
-            QPixmap pixmap(imagePath);
-            if (!pixmap.isNull())
-                images.append(pixmap);
+        // obs-theme-1.png, -2, ... one per colourway, as many as are bundled.
+        for (int i = 1; i <= 12; ++i) {
+            QPixmap pixmap(QString(":/images/misc/obs-theme-%1.png").arg(i));
+            if (pixmap.isNull())
+                break;
+            images.append(pixmap);
         }
     }
 
@@ -351,117 +351,34 @@ void CreateThemeDialog()
         dialog->setModal(false);
         dialog->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 
-        QVBoxLayout* mainLayout = shell.content;
-        mainLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(16),
-                                       StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(16));
+        // One column the window fits to: the pictures (16:9), one line, the
+        // membership strip. No spare space under them.
+        QVBoxLayout* contentLayout = StreamUP::Kit::ScrollingBody(shell.content);
+        ThemeImageCarousel* carousel = new ThemeImageCarousel(nullptr, 390);
+        contentLayout->addWidget(carousel);
 
-        // Modern unified content area with scroll - everything inside
-        QScrollArea* scrollArea = new QScrollArea();
-        scrollArea->setFrameShape(QFrame::NoFrame);
-        StreamUP::UIStyles::useScrollBars(scrollArea);
-        scrollArea->setWidgetResizable(true); // Ensure this is set for proper alignment
-        scrollArea->setAlignment(Qt::AlignTop | Qt::AlignHCenter); // Keep content top-aligned when shorter than viewport
-        scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); // Disable horizontal scrolling
-
-        QWidget* contentWidget = new QWidget();
-        contentWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
-        contentWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        contentWidget->setMaximumWidth(StreamUP::UIStyles::S(900)); // Match dialog width minus padding
-        QVBoxLayout* contentLayout = new QVBoxLayout(contentWidget);
-        contentLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-                                          StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-        contentLayout->setSpacing(StreamUP::UIStyles::S(20));
-
-        // Modern header inside scrollable area
-        QWidget* headerSection = new QWidget();
-        QVBoxLayout* headerLayout = new QVBoxLayout(headerSection);
-        headerLayout->setContentsMargins(0, 0, 0, 0);
-        headerLayout->setSpacing(StreamUP::UIStyles::S(8));
-
-        // Brief subtitle (title already in frameless chrome header)
-        QLabel* subtitleLabel = StreamUP::UIStyles::makeLabel(
-            "The cleanest OBS theme out there - available to all supporters of any tier", 13, 500,
-            StreamUP::UIStyles::Colors::TEXT_SECONDARY);
+        QLabel* subtitleLabel = StreamUP::UIStyles::makeLabel(obs_module_text("ThemeWindow.Line"), 14, 500,
+                                                              StreamUP::UIStyles::Colors::TEXT_SECONDARY);
         subtitleLabel->setWordWrap(true);
         subtitleLabel->setAlignment(Qt::AlignCenter);
+        contentLayout->addWidget(subtitleLabel);
 
-        headerLayout->addWidget(subtitleLabel);
-
-        contentLayout->addWidget(headerSection);
-        
-        // Description section
-        contentLayout->addWidget(StreamUP::UIStyles::sectionHeader("About the StreamUP Theme"));
-        QWidget* descriptionGroup = new QWidget();
-        QVBoxLayout* descriptionLayout = new QVBoxLayout(descriptionGroup);
-        descriptionLayout->setContentsMargins(0, 0, 0, 0);
-        descriptionLayout->setSpacing(StreamUP::UIStyles::S(12));
-
-        QLabel* descriptionText = StreamUP::UIStyles::makeLabel(
-            "The StreamUP OBS Theme is carefully crafted to provide the cleanest and most "
-            "professional OBS Studio experience. This theme perfectly matches the StreamUP plugin's "
-            "design language, creating a seamless and cohesive interface throughout OBS Studio. "
-            "Featuring modern design elements, improved readability, and streamlined interfaces - "
-            "it's the perfect companion to your streaming setup.", 14, 500,
-            StreamUP::UIStyles::Colors::TEXT_PRIMARY);
-        descriptionText->setWordWrap(true);
-        descriptionLayout->addWidget(descriptionText);
-
-        contentLayout->addWidget(descriptionGroup);
-
-        // Theme images carousel section
-        contentLayout->addWidget(StreamUP::UIStyles::sectionHeader("Theme Preview"));
-        QWidget* previewGroup = new QWidget();
-        QVBoxLayout* previewLayout = new QVBoxLayout(previewGroup);
-        previewLayout->setContentsMargins(0, 0, 0, 0);
-        previewLayout->setSpacing(StreamUP::UIStyles::S(12));
-
-        // The SoT-styled carousel paints its own circular nav arrows + accent
-        // dots internally and slides between the real theme screenshots, so it
-        // fills the full preview width (no external pill buttons needed).
-        ThemeImageCarousel* carousel = new ThemeImageCarousel();
-        previewLayout->addWidget(carousel);
-
-        contentLayout->addWidget(previewGroup);
-        
-        // Access information section
-        contentLayout->addWidget(StreamUP::UIStyles::sectionHeader("How to Get the Theme"));
-        QWidget* accessGroup = new QWidget();
-        QVBoxLayout* accessLayout = new QVBoxLayout(accessGroup);
-        accessLayout->setContentsMargins(0, 0, 0, 0);
-        accessLayout->setSpacing(StreamUP::UIStyles::S(12));
-
-        QLabel* accessText = StreamUP::UIStyles::makeLabel(
-            "The StreamUP OBS Theme is available to all StreamUP supporters of any tier. "
-            "Simply become a supporter and you'll gain access to download and use this "
-            "professional theme for your OBS Studio setup.", 14, 500,
-            StreamUP::UIStyles::Colors::TEXT_PRIMARY);
-        accessText->setWordWrap(true);
-        accessLayout->addWidget(accessText);
-
-        // Support button
-        QPushButton* supportButton = new StreamUP::UIStyles::PillButton("Become a Supporter", "primary");
-        QObject::connect(supportButton, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://streamup.tips/premium"));
-        });
-        accessLayout->addWidget(supportButton);
-        
-        contentLayout->addWidget(accessGroup);
-        
-        scrollArea->setWidget(contentWidget);
-        mainLayout->addWidget(scrollArea);
+        if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Strip,
+                                                             obs_module_text("ThemeWindow.Membership")))
+            contentLayout->addWidget(member);
 
         // Action/close buttons in footer (right-anchored, inline with brand line)
-        QPushButton* visitButton = new StreamUP::UIStyles::PillButton("Visit StreamUP.tips", "primary");
+        QPushButton* visitButton = new StreamUP::UIStyles::PillButton(obs_module_text("ThemeWindow.Get"), "primary");
         QObject::connect(visitButton, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://streamup.tips/"));
+            QDesktopServices::openUrl(QUrl("https://streamup.tips/product/streamup-obs-theme"));
         });
-        QPushButton* closeButton = new StreamUP::UIStyles::PillButton("Close", "outline");
+        QPushButton* closeButton = new StreamUP::UIStyles::PillButton(obs_module_text("UI.Button.Done"), "outline");
         QObject::connect(closeButton, &QPushButton::clicked, [dialog]() { dialog->close(); });
         shell.footerButtons->addWidget(closeButton);
         shell.footerButtons->addWidget(visitButton);
 
-        // Flexible sizing that fits content - made wider for carousel (preferred width + height)
-        dialog->resize(StreamUP::UIStyles::S(900), StreamUP::UIStyles::S(820));
+        StreamUP::Kit::FitToContent(dialog, 720);
+        StreamUP::UIHelpers::PlaceOverMainWindow(dialog);
 
         // Show dialog
         dialog->show();
@@ -478,11 +395,6 @@ void ShowThemeWindow()
     } catch (const std::exception& e) {
         StreamUP::ErrorHandler::LogError("Failed to show theme window: " + std::string(e.what()), StreamUP::ErrorHandler::Category::UI);
     }
-}
-
-bool IsThemeWindowOpen()
-{
-    return UIHelpers::DialogManager::IsSingletonDialogOpen("theme");
 }
 
 } // namespace ThemeWindow

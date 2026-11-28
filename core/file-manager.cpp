@@ -1,4 +1,6 @@
+#include "../ui/streamup-kit.hpp"
 #include "file-manager.hpp"
+#include "../ui/my-products-window.hpp"
 #include "streamup-common.hpp"
 #include "plugin-manager.hpp"
 #include "plugin-state.hpp"
@@ -8,6 +10,9 @@
 #include "version-utils.hpp"
 #include "path-utils.hpp"
 #include "overlay-controls.hpp"
+#include "canvas-lookup.hpp"
+#include "product-registry.hpp"
+#include "product-requirements.hpp"
 #include "../ui/overlay-controls-window.hpp"
 #include "../ui/ui-helpers.hpp"
 #include "../version.h"
@@ -18,10 +23,12 @@
 #include <streamup/ui/ui-scrollbar.hpp>
 #include <streamup/ui/gallery-style.hpp>
 #include <obs-module.h>
+#include <obs-frontend-api.h>
 #include <QFile>
 #include <QFileInfo>
 #include <QFileDialog>
 #include <QApplication>
+#include <QThread>
 #include <QString>
 #include <QTableWidget>
 #include <QTableWidgetItem>
@@ -33,6 +40,8 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <list>
+#include <string>
+#include <unordered_map>
 #include <map>
 
 using namespace StreamUP::UIStyles;
@@ -69,60 +78,6 @@ QTableWidget* MakeStyledTable(const QStringList& headers, QWidget* parent = null
     return table;
 }
 
-// Inlined replacement for the legacy HandleTableCellClick: if the clicked cell
-// carries a URL in UserRole, open it.
-void HandleFontTableCellClick(QTableWidget* table, int row, int column) {
-    QTableWidgetItem* item = table->item(row, column);
-    if (!item)
-        return;
-    QVariant urlData = item->data(Qt::UserRole);
-    if (urlData.isValid() && !urlData.toString().isEmpty())
-        QDesktopServices::openUrl(QUrl(urlData.toString()));
-}
-
-// Create styled table for missing fonts display
-QTableWidget* CreateMissingFontsTable(const std::vector<FontInfo>& missingFonts) {
-    QStringList headers = {
-        obs_module_text("Font.Label.FontName"),
-        obs_module_text("Font.Label.DownloadLink")
-    };
-
-    QTableWidget* table = MakeStyledTable(headers);
-    table->setRowCount(static_cast<int>(missingFonts.size()));
-
-    int row = 0;
-    for (const auto& fontInfo : missingFonts) {
-        // Font Name column
-        QTableWidgetItem* nameItem = new QTableWidgetItem(
-            QString::fromStdString(fontInfo.face));
-        table->setItem(row, 0, nameItem);
-
-        // Download Link column
-        if (!fontInfo.url.empty()) {
-            QTableWidgetItem* downloadItem = new QTableWidgetItem(
-                obs_module_text("UI.Button.Download"));
-            downloadItem->setForeground(QColor(su::Colors::TAG_COLOR));
-            downloadItem->setData(Qt::UserRole, QString::fromStdString(fontInfo.url));
-            table->setItem(row, 1, downloadItem);
-        } else {
-            QTableWidgetItem* noLinkItem = new QTableWidgetItem(
-                obs_module_text("Font.Message.NoDownloadAvailable"));
-            noLinkItem->setForeground(QColor(su::Colors::TEXT_MUTED));
-            table->setItem(row, 1, noLinkItem);
-        }
-
-        row++;
-    }
-
-    // Connect click handler for download links
-    QObject::connect(table, &QTableWidget::cellClicked,
-        [table](int r, int c) {
-            HandleFontTableCellClick(table, r, c);
-        });
-
-    table->resizeColumnsToContents();
-    return table;
-}
 } // anonymous namespace
 
 //-------------------FONT EXTRACTION FUNCTIONS-------------------
@@ -186,6 +141,51 @@ std::vector<FontInfo> ExtractFontsFromStreamupData(obs_data_t *data)
 	}
 
 	obs_data_array_release(sources);
+
+	// The product's own font list: "fonts": [{"name": "...", "url": "..."}] in
+	// its manifest (or its "product" block). It names fonts the scenes need
+	// that are not in an OBS text source (ProText, for one) and gives each a
+	// download link, which the Missing Fonts window shows as a Get button.
+	auto readList = [&fonts](obs_data_t *owner) {
+		obs_data_array_t *list = owner ? obs_data_get_array(owner, "fonts") : nullptr;
+		if (!list)
+			return;
+		const size_t n = obs_data_array_count(list);
+		for (size_t i = 0; i < n; i++) {
+			obs_data_t *item = obs_data_array_item(list, i);
+			const char *name = obs_data_get_string(item, "name");
+			const char *url = obs_data_get_string(item, "url");
+			if (name && *name) {
+				bool merged = false;
+				for (FontInfo &f : fonts) {
+					if (QString::fromStdString(f.face).compare(QString::fromUtf8(name), Qt::CaseInsensitive) == 0) {
+						if (f.url.empty() && url && *url)
+							f.url = url;
+						merged = true;
+						break;
+					}
+				}
+				if (!merged) {
+					FontInfo info;
+					info.face = name;
+					if (url && *url)
+						info.url = url;
+					fonts.push_back(info);
+				}
+			}
+			obs_data_release(item);
+		}
+		obs_data_array_release(list);
+	};
+	obs_data_t *manifest = obs_data_get_obj(data, "streamup_overlay");
+	if (manifest) {
+		readList(manifest);
+		obs_data_t *product = obs_data_get_obj(manifest, "product");
+		readList(product);
+		obs_data_release(product);
+		obs_data_release(manifest);
+	}
+	readList(data);
 	return fonts;
 }
 
@@ -246,84 +246,68 @@ void ShowMissingFontsDialog(const std::vector<FontInfo>& missingFonts,
 {
     StreamUP::UIHelpers::ShowDialogOnUIThread([missingFonts, continueCallback]() {
         QString titleText = obs_module_text("Font.Status.MissingFonts");
-        su::WindowShell shell = su::makeWindow(titleText, "v" PROJECT_VERSION, nullptr,
-            /*brandFooter=*/false, "StreamUP");
+        su::WindowShell shell = su::makeWindow(titleText, "v" PROJECT_VERSION,
+            static_cast<QWidget *>(obs_frontend_get_main_window()), /*brandFooter=*/true, "StreamUP");
         QDialog *dialog = shell.dialog;
+        namespace kit = StreamUP::Kit;
 
-        QVBoxLayout *dialogLayout = shell.content;
-        dialogLayout->setContentsMargins(S(20), S(16), S(20), S(16));
-
-        // Header section
-        QLabel* subtitleLabel = su::makeLabel(obs_module_text("Font.Message.RequiredNotInstalled"),
-            13, 500, su::Colors::TEXT_SECONDARY);
+        // The same layout as the plugin window: a pill and one line, then one
+        // row per font with a Get button when the product says where it is.
+        QVBoxLayout *body = kit::ScrollingBody(shell.content);
+        auto *pills = new QHBoxLayout();
+        pills->addWidget(kit::StatusPill(kit::Status::Bad,
+            QString(obs_module_text("Font.Count.Missing")).arg(missingFonts.size())));
+        pills->addStretch(1);
+        auto *header = new QVBoxLayout();
+        header->setSpacing(S(kit::Space::Gap));
+        header->addLayout(pills);
+        QLabel *subtitleLabel = su::makeLabel(obs_module_text("Font.Message.RequiredNotInstalled"),
+            su::Sizes::FONT_SIZE_NORMAL, 500, su::Colors::TEXT_SECONDARY);
         subtitleLabel->setWordWrap(true);
-        dialogLayout->addWidget(subtitleLabel);
+        header->addWidget(subtitleLabel);
+        body->addLayout(header);
 
-        // Content area with fonts table
-        QVBoxLayout *contentLayout = new QVBoxLayout();
-        contentLayout->setContentsMargins(0, S(12), 0, S(12));
-        contentLayout->setSpacing(S(8));
+        auto *section = new QVBoxLayout();
+        section->setSpacing(S(kit::Space::Gap));
+        QLabel *title = su::sectionHeader(obs_module_text("Font.Dialog.MissingGroup"));
+        title->setContentsMargins(0, 0, 0, 0);
+        section->addWidget(title);
+        auto *list = new kit::RowList();
+        for (const FontInfo &f : missingFonts) {
+            const QString name = QString::fromStdString(f.face);
+            const QString url = QString::fromStdString(f.url);
+            QList<QWidget *> trailing;
+            trailing << kit::StatusPill(kit::Status::Bad, obs_module_text("Plugin.Pill.Missing"));
+            if (!url.isEmpty()) {
+                auto *get = new su::PillButton(obs_module_text("Plugin.Button.Get"), "primary");
+                get->setToolTip(url);
+                get->setAccessibleName(QString(obs_module_text("Plugin.Button.GetAccessible")).arg(name));
+                QObject::connect(get, &QPushButton::clicked, [url]() { QDesktopServices::openUrl(QUrl(url)); });
+                trailing << get;
+            }
+            list->addRow(name, url.isEmpty() ? QString(obs_module_text("Font.Message.NoDownloadAvailable"))
+                                             : QUrl(url).host(), trailing);
+        }
+        section->addWidget(list);
+        body->addLayout(section);
+        body->addWidget(kit::Note(kit::Status::Warn, obs_module_text("Font.Dialog.WarningContinue")));
+        body->addStretch(1);
 
-        dialogLayout->addLayout(contentLayout);
-
-        // Section header + table card (replaces the styled GroupBox)
-        contentLayout->addWidget(su::sectionHeader(obs_module_text("Font.Dialog.MissingGroup")));
-
-        QTableWidget *fontTable = CreateMissingFontsTable(missingFonts);
-        fontTable->setMinimumWidth(S(400));
-        fontTable->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-        fontTable->setMinimumHeight(S(180));
-
-        su::RoundedContainer *tableCard = new su::RoundedContainer(18);
-        QVBoxLayout *tableCardLay = new QVBoxLayout(tableCard);
-        tableCardLay->setContentsMargins(S(8), S(8), S(8), S(8));
-        tableCardLay->setSpacing(0);
-        tableCardLay->addWidget(fontTable);
-        contentLayout->addWidget(tableCard);
-
-        // Warning message (same pattern as PluginsHaveIssue)
-        dialogLayout->addSpacing(S(12));
-
-        QLabel *warningLabel = new QLabel(QString::fromUtf8("\xe2\x9a\xa0\xef\xb8\x8f ") +
-            QString(obs_module_text("Font.Dialog.WarningContinue")));
-        warningLabel->setWordWrap(true);
-        warningLabel->setStyleSheet(su::scale_qss(QString(
-            "QLabel {"
-            "background: rgba(45, 55, 72, 0.8);"
-            "color: #fbbf24;"
-            "border: 1px solid #f59e0b;"
-            "border-radius: %1px;"
-            "padding: %2px;"
-            "margin: %3px %4px;"
-            "font-size: %5px;"
-            "line-height: 1.4;"
-            "}")
-            .arg(S(6))
-            .arg(S(12))
-            .arg(S(8))
-            .arg(S(20) + 5)
-            .arg(su::Sizes::FONT_SIZE_SMALL)));
-        dialogLayout->addWidget(warningLabel);
-
-        // Continue Anyway button
+        // The same pair as the plugin window: install anyway, or stop here.
         su::PillButton *continueButton = new su::PillButton(
-            obs_module_text("UI.Message.ContinueAnyway"), "primary");
+            obs_module_text("Plugin.Button.InstallAnyway"), "outline");
         QObject::connect(continueButton, &QPushButton::clicked, [dialog, continueCallback]() {
             dialog->close();
             continueCallback();
         });
-
-        // Cancel button
         su::PillButton *cancelButton = new su::PillButton(
-            obs_module_text("UI.Button.Cancel"), "outline");
+            obs_module_text("UI.Button.Cancel"), "primary");
         QObject::connect(cancelButton, &QPushButton::clicked, dialog, &QDialog::close);
-
-        shell.footerButtons->addWidget(cancelButton);
         shell.footerButtons->addWidget(continueButton);
+        shell.footerButtons->addWidget(cancelButton);
 
-        // Reasonable fixed size (replaces ApplyAutoSizing 500..800 x 200..600)
-        dialog->resize(S(560) + 2 * S(su::ShadowDialog::kShadowMargin),
-                       S(520) + 2 * S(su::ShadowDialog::kShadowMargin));
+        kit::FitToContent(dialog, 560);
+        StreamUP::UIHelpers::PlaceOverMainWindow(dialog);
         dialog->show();
     });
 }
@@ -704,7 +688,8 @@ void ResizeSceneItems(obs_data_t *settings, float factor)
 	for (size_t i = 0; i < count; i++) {
 		obs_data_t *item_data = obs_data_array_item(items, i);
 		const char *name = obs_data_get_string(item_data, "name");
-		obs_source_t *item_source = obs_get_source_by_name(name);
+		// A vertical scene's nested scenes are only found by asking every canvas.
+		obs_source_t *item_source = StreamUP::CanvasLookup::GetSourceByName(name);
 
 		vec2 vec2;
 		obs_data_get_vec2(item_data, "pos", &vec2);
@@ -863,7 +848,48 @@ void MergeFilters(obs_source_t *s, obs_data_array_t *filters)
 	// Note: caller owns the filters array lifecycle - do not release here
 }
 
-void LoadSources(obs_data_array_t *data, const QString &path)
+// A .StreamUP entry marked "canvas": "vertical" is a scene for Aitum's
+// Vertical canvas. Everything else (inputs, main scenes) installs as before.
+bool IsVerticalEntry(obs_data_t *sourceData)
+{
+	const char *canvas = obs_data_get_string(sourceData, "canvas");
+	return canvas && strcmp(canvas, "vertical") == 0;
+}
+
+// The source this entry would merge into, looked up on the canvas it belongs
+// to: obs_get_source_by_name never sees vertical scenes. NEW reference.
+obs_source_t *FindExisting(obs_data_t *sourceData, obs_canvas_t *vertical)
+{
+	const char *name = obs_data_get_string(sourceData, "name");
+	if (IsVerticalEntry(sourceData))
+		return vertical ? obs_canvas_get_source_by_name(vertical, name) : nullptr;
+	return obs_get_source_by_name(name);
+}
+
+// Scene items are found by source UUID first and by name only after that,
+// and a name only finds main-canvas scenes and inputs. When an entry merges
+// into a source that already exists, that source keeps its own UUID, so the
+// file's UUID is pointed at it or a vertical scene nested in another vertical
+// scene would not be found.
+void RemapItemUuids(obs_data_t *sourceData, const std::unordered_map<std::string, std::string> &remap)
+{
+	if (remap.empty())
+		return;
+	obs_data_t *settings = obs_data_get_obj(sourceData, "settings");
+	obs_data_array_t *items = settings ? obs_data_get_array(settings, "items") : nullptr;
+	const size_t n = obs_data_array_count(items);
+	for (size_t i = 0; i < n; i++) {
+		obs_data_t *item = obs_data_array_item(items, i);
+		const auto it = remap.find(obs_data_get_string(item, "source_uuid"));
+		if (it != remap.end())
+			obs_data_set_string(item, "source_uuid", it->second.c_str());
+		obs_data_release(item);
+	}
+	obs_data_array_release(items);
+	obs_data_release(settings);
+}
+
+void LoadSources(obs_data_array_t *data, const QString &path, int *verticalSkipped)
 {
 	const size_t count = obs_data_array_count(data);
 	std::list<obs_source_t *> ref_sources;
@@ -872,12 +898,57 @@ void LoadSources(obs_data_array_t *data, const QString &path)
 	uint32_t w = obs_source_get_width(cs);
 	float factor = (float)w / 1920.0f;
 	obs_source_release(cs);
+
+	// Vertical scenes are authored on a 1080-wide canvas and scale to the
+	// one this machine has, the same way main scenes scale from 1920.
+	bool anyVertical = false;
+	for (size_t i = 0; i < count && !anyVertical; i++) {
+		obs_data_t *sourceData = obs_data_array_item(data, i);
+		anyVertical = IsVerticalEntry(sourceData);
+		obs_data_release(sourceData);
+	}
+	obs_canvas_t *vertical = anyVertical ? StreamUP::CanvasLookup::AcquireVertical() : nullptr;
+	std::string verticalUuid;
+	uint32_t vw = 1080;
+	if (vertical) {
+		verticalUuid = obs_canvas_get_uuid(vertical);
+		struct obs_video_info ovi = {};
+		if (obs_canvas_get_video_info(vertical, &ovi) && ovi.base_width)
+			vw = ovi.base_width;
+	}
+	float vfactor = (float)vw / 1080.0f;
+
+	std::unordered_map<std::string, std::string> remap;
 	for (size_t i = 0; i < count; i++) {
 		obs_data_t *sourceData = obs_data_array_item(data, i);
-		const char *name = obs_data_get_string(sourceData, "name");
+		if (obs_source_t *existing = FindExisting(sourceData, vertical)) {
+			const char *fileUuid = obs_data_get_string(sourceData, "uuid");
+			const char *liveUuid = obs_source_get_uuid(existing);
+			if (fileUuid && *fileUuid && liveUuid && strcmp(fileUuid, liveUuid) != 0)
+				remap[fileUuid] = liveUuid;
+			obs_source_release(existing);
+		}
+		obs_data_release(sourceData);
+	}
+
+	for (size_t i = 0; i < count; i++) {
+		obs_data_t *sourceData = obs_data_array_item(data, i);
+		const bool isVertical = IsVerticalEntry(sourceData);
+		if (isVertical && !vertical) {
+			if (verticalSkipped)
+				++*verticalSkipped;
+			obs_data_release(sourceData);
+			continue;
+		}
+		if (isVertical)
+			obs_data_set_string(sourceData, "canvas_uuid", verticalUuid.c_str());
+		RemapItemUuids(sourceData, remap);
+		const uint32_t cw = isVertical ? vw : w;
+		const uint32_t designWidth = isVertical ? 1080 : 1920;
+		float *scaleBy = isVertical ? &vfactor : &factor;
 
 		bool new_source = true;
-		obs_source_t *s = obs_get_source_by_name(name);
+		obs_source_t *s = FindExisting(sourceData, vertical);
 		if (!s) {
 			ConvertSourcePaths(sourceData, path);
 			s = obs_load_source(sourceData);
@@ -897,10 +968,10 @@ void LoadSources(obs_data_array_t *data, const QString &path)
 			scene = obs_group_from_source(s);
 		if (scene) {
 			obs_data_t *scene_settings = obs_data_get_obj(sourceData, "settings");
-			if (w != 1920) {
-				ResizeSceneItems(scene_settings, factor);
+			if (cw != designWidth) {
+				ResizeSceneItems(scene_settings, *scaleBy);
 				if (new_source)
-					obs_source_enum_filters(s, ResizeMoveFilters, &factor);
+					obs_source_enum_filters(s, ResizeMoveFilters, scaleBy);
 			}
 			if (!new_source) {
 				obs_scene_enum_items(
@@ -931,48 +1002,67 @@ void LoadSources(obs_data_array_t *data, const QString &path)
 
 	for (obs_source_t *source : ref_sources)
 		obs_source_release(source);
+	obs_canvas_release(vertical);
 }
 
-void LoadScene(obs_data_t *data, const QString &path)
+void LoadScene(obs_data_t *data, const QString &path, int *verticalSkipped)
 {
 	if (!data)
 		return;
 	obs_data_array_t *sourcesData = obs_data_get_array(data, "sources");
 	if (!sourcesData)
 		return;
-	LoadSources(sourcesData, path);
+	LoadSources(sourcesData, path, verticalSkipped);
 	obs_data_array_release(sourcesData);
 }
 
 //-------------------MAIN LOADING FUNCTIONS-------------------
 bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad)
 {
-	if (!forceLoad) {
-		if (!StreamUP::PluginManager::CheckrequiredOBSPlugins(true)) {
-			return false;
-		}
-	}
-
 	// Validate file path first
 	if (!StreamUP::ErrorHandler::ValidateFile(file_path)) {
 		return false;
+	}
+
+	// Only what this file uses has to be there. Anything missing or too old
+	// gets the issues window, whose Continue Anyway installs it regardless.
+	if (!forceLoad) {
+		const StreamUP::ProductRequirements::Result needs = StreamUP::ProductRequirements::Check(file_path);
+		if (needs.readable && !needs.ok()) {
+			StreamUP::ProductRequirements::ShowIssues(needs, [file_path]() { LoadStreamupFileFromPath(file_path, true); });
+			return false;
+		}
 	}
 
 	// Load the .streamup file from the file path
 	auto data = OBSWrappers::MakeOBSDataFromJsonFile(QT_TO_UTF8(file_path));
 	if (data) {
 		StreamUP::ErrorHandler::LogInfo("Successfully loaded StreamUP file: " + file_path.toStdString(), StreamUP::ErrorHandler::Category::FileSystem);
-		LoadScene(data.get(), QFileInfo(file_path).absolutePath());
+		int verticalSkipped = 0;
+		LoadScene(data.get(), QFileInfo(file_path).absolutePath(), &verticalSkipped);
+		if (verticalSkipped > 0) {
+			const std::string note = std::to_string(verticalSkipped) +
+						 " vertical scene(s) in this file were skipped: the Aitum Vertical plugin is not installed.";
+			StreamUP::ErrorHandler::LogWarning(note, StreamUP::ErrorHandler::Category::FileSystem);
+			if (QThread::currentThread() == qApp->thread())
+				StreamUP::ErrorHandler::ShowWarningDialog("Vertical scenes skipped", note);
+		}
+
+		// Say which product these scenes came from, so My Products can
+		// find them again whatever happens to the controls.
+		const StreamUP::OverlayControls::ProductStamp stamp = StreamUP::Products::StampFromFile(file_path);
 
 		// A file that describes its own controls is an overlay: register them
 		// against the sources that just loaded and offer the panel.
 		QString overlayId;
 		QString overlayError;
-		if (StreamUP::OverlayControls::RegisterFromStreamupData(data.get(), file_path, &overlayId, &overlayError))
-			StreamUP::OverlayControlsWindow::OfferAfterInstall(overlayId);
-		else if (!overlayError.isEmpty())
+		if (!StreamUP::OverlayControls::RegisterFromStreamupData(data.get(), file_path, &overlayId, &overlayError) &&
+		    !overlayError.isEmpty())
 			StreamUP::ErrorHandler::LogWarning("Overlay controls not registered: " + overlayError.toStdString(),
 							   StreamUP::ErrorHandler::Category::FileSystem);
+
+		// Every install ends on the same card: what went in and the next step.
+		StreamUP::MyProductsWindow::ShowInstalled(stamp.id, stamp.name, overlayId);
 		return true;
 	} else {
 		StreamUP::ErrorHandler::LogError("Failed to parse StreamUP file: " + file_path.toStdString(), StreamUP::ErrorHandler::Category::FileSystem);
@@ -981,69 +1071,41 @@ bool LoadStreamupFileFromPath(const QString &file_path, bool forceLoad)
 	return false;
 }
 
+// Missing fonts get their own warning before the install goes ahead.
+static void InstallAfterFontCheck(const QString &fileName)
+{
+	std::vector<FontInfo> fonts = ExtractFontsFromStreamupFile(fileName);
+	std::vector<FontInfo> missingFonts = CheckFontAvailability(fonts);
+	if (missingFonts.empty()) {
+		LoadStreamupFileFromPath(fileName, true);
+		return;
+	}
+	ShowMissingFontsDialog(missingFonts, [fileName]() { LoadStreamupFileFromPath(fileName, true); });
+}
+
+// The file is chosen first and then checked, so the plugins asked for are the
+// ones this product uses, not every plugin any StreamUP product might need.
+static void InstallChosenFile(const QString &fileName)
+{
+	StreamUP::ProductRequirements::CheckThen(fileName, [fileName]() { InstallAfterFontCheck(fileName); });
+}
+
 void LoadStreamupFile(bool forceLoad)
 {
-	if (!forceLoad) {
-		if (!StreamUP::PluginManager::CheckrequiredOBSPlugins(true)) {
-			return;
-		}
-	}
-
 	QString fileName =
 		QFileDialog::getOpenFileName(nullptr, QT_UTF8(obs_module_text("UI.Button.Load")), QString(), "StreamUP File (*.streamup)");
-	if (!fileName.isEmpty()) {
-		LoadStreamupFileFromPath(fileName, forceLoad);
-	}
+	if (fileName.isEmpty())
+		return;
+	// Shift: no checks at all.
+	if (forceLoad)
+		LoadStreamupFileFromPath(fileName, true);
+	else
+		InstallChosenFile(fileName);
 }
 
 void LoadStreamupFileWithWarning()
 {
-	// Use cached plugin status for instant response
-	if (StreamUP::PluginManager::IsAllPluginsUpToDateCached()) {
-		// Plugins are OK, show file selector
-		QString fileName = QFileDialog::getOpenFileName(
-			nullptr, QT_UTF8(obs_module_text("UI.Button.Load")),
-			QString(), "StreamUP File (*.streamup)");
-
-		if (!fileName.isEmpty()) {
-			// Check fonts in selected file
-			std::vector<FontInfo> fonts = ExtractFontsFromStreamupFile(fileName);
-			std::vector<FontInfo> missingFonts = CheckFontAvailability(fonts);
-
-			if (missingFonts.empty()) {
-				// All fonts available, load directly
-				LoadStreamupFileFromPath(fileName, false);
-			} else {
-				// Fonts missing, show warning with continue callback
-				ShowMissingFontsDialog(missingFonts, [fileName]() {
-					LoadStreamupFileFromPath(fileName, true);
-				});
-			}
-		}
-		return;
-	}
-
-	// Plugins have issues, show cached plugin issues dialog first
-	// On continue, allow loading with font check
-	StreamUP::PluginManager::ShowCachedPluginIssuesDialog([]() {
-		// After user clicks Continue Anyway for plugins, show file selector with font check
-		QString fileName = QFileDialog::getOpenFileName(
-			nullptr, QT_UTF8(obs_module_text("UI.Button.Load")),
-			QString(), "StreamUP File (*.streamup)");
-
-		if (!fileName.isEmpty()) {
-			std::vector<FontInfo> fonts = ExtractFontsFromStreamupFile(fileName);
-			std::vector<FontInfo> missingFonts = CheckFontAvailability(fonts);
-
-			if (missingFonts.empty()) {
-				LoadStreamupFileFromPath(fileName, true);
-			} else {
-				ShowMissingFontsDialog(missingFonts, [fileName]() {
-					LoadStreamupFileFromPath(fileName, true);
-				});
-			}
-		}
-	});
+	LoadStreamupFile(false);
 }
 
 } // namespace FileManager

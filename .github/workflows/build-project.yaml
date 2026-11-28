@@ -81,8 +81,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
+
+      # The StreamUP UI library (shared/obs-streamup-ui) is a private repo. The
+      # read-only deploy key in STREAMUP_UI_DEPLOY_KEY opens it; every other
+      # submodule comes over HTTPS as usual.
+      - name: Check Out Submodules 🎨
+        shell: bash
+        env:
+          STREAMUP_UI_DEPLOY_KEY: ${{ secrets.STREAMUP_UI_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          key=~/.ssh/streamup-ui-key
+          echo "$STREAMUP_UI_DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git config --global url."git@github.com:StreamUPTips/obs-streamup-ui".insteadOf https://github.com/StreamUPTips/obs-streamup-ui
+          git submodule update --init --recursive
+          rm -f "$key"
 
       - name: Set Up Environment 🔧
         id: setup
@@ -188,8 +204,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
+
+      # The StreamUP UI library (shared/obs-streamup-ui) is a private repo. The
+      # read-only deploy key in STREAMUP_UI_DEPLOY_KEY opens it; every other
+      # submodule comes over HTTPS as usual.
+      - name: Check Out Submodules 🎨
+        shell: bash
+        env:
+          STREAMUP_UI_DEPLOY_KEY: ${{ secrets.STREAMUP_UI_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          key=~/.ssh/streamup-ui-key
+          echo "$STREAMUP_UI_DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git config --global url."git@github.com:StreamUPTips/obs-streamup-ui".insteadOf https://github.com/StreamUPTips/obs-streamup-ui
+          git submodule update --init --recursive
+          rm -f "$key"
 
       - name: Set Up Environment 🔧
         id: setup
@@ -259,8 +291,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
+
+      # The StreamUP UI library (shared/obs-streamup-ui) is a private repo. The
+      # read-only deploy key in STREAMUP_UI_DEPLOY_KEY opens it; every other
+      # submodule comes over HTTPS as usual.
+      - name: Check Out Submodules 🎨
+        shell: bash
+        env:
+          STREAMUP_UI_DEPLOY_KEY: ${{ secrets.STREAMUP_UI_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          key=~/.ssh/streamup-ui-key
+          echo "$STREAMUP_UI_DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git config --global url."git@github.com:StreamUPTips/obs-streamup-ui".insteadOf https://github.com/StreamUPTips/obs-streamup-ui
+          git submodule update --init --recursive
+          rm -f "$key"
 
       - name: Set Up Environment 🔧
         id: setup

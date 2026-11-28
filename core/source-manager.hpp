@@ -17,11 +17,6 @@ namespace SourceManager {
  */
 bool RefreshAudioMonitoring(void *data, obs_source_t *source);
 
-/**
- * Show dialog and refresh audio monitoring for all sources
- */
-void RefreshAudioMonitoringDialog();
-
 // Browser source functions
 /**
  * Refresh browser sources (callback for obs_enum_sources)
@@ -30,11 +25,6 @@ void RefreshAudioMonitoringDialog();
  * @return bool Always returns true to continue enumeration
  */
 bool RefreshBrowserSources(void *data, obs_source_t *source);
-
-/**
- * Show dialog and refresh all browser sources
- */
-void RefreshBrowserSourcesDialog();
 
 // Source locking functions
 /**
@@ -79,16 +69,6 @@ bool ToggleLockAllSources(bool sendNotification = true);
  * @return bool True if any sources are unlocked across all scenes
  */
 bool CheckIfAnyUnlockedInAllScenes();
-
-/**
- * Show dialog for locking all sources
- */
-void LockAllSourcesDialog();
-
-/**
- * Show dialog for locking current scene sources
- */
-void LockAllCurrentSourcesDialog();
 
 // Helper functions for scene item manipulation
 /**
@@ -160,21 +140,6 @@ bool DeactivateAllVideoCaptureDevices(bool sendNotification = true);
  * @return bool True if operation was successful
  */
 bool RefreshAllVideoCaptureDevices(bool sendNotification = true);
-
-/**
- * Show dialog for activating all video capture devices
- */
-void ActivateAllVideoCaptureDevicesDialog();
-
-/**
- * Show dialog for deactivating all video capture devices
- */
-void DeactivateAllVideoCaptureDevicesDialog();
-
-/**
- * Show dialog for refreshing all video capture devices
- */
-void RefreshAllVideoCaptureDevicesDialog();
 
 /**
  * Check if a source is a video capture device

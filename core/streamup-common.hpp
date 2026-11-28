@@ -27,6 +27,14 @@ struct PluginInfo {
 	std::string generalURL;
 	std::string moduleName;
 	bool required;
+	// Resolved for the running OBS when the list is loaded (see
+	// InitialiseRequiredModules). True when the list says the version and
+	// links above are a build for this OBS, so Get can download it directly.
+	bool linksFitThisObs = false;
+	// Set when the list's build needs a newer OBS and it names no older
+	// build: version and download links are then empty, and nothing is
+	// reported as out of date. Holds the OBS major version it needs.
+	int needsObs = 0;
 };
 
 // SystemTrayNotification struct moved to StreamUP::NotificationManager module

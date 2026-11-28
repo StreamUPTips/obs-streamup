@@ -13,6 +13,7 @@
 #include "obs-hotkey-manager.hpp"
 #include <streamup/ui/window-chrome.hpp>
 #include <streamup/ui/pill-button.hpp>
+#include "streamup-kit.hpp"
 
 namespace StreamUP {
 
@@ -35,6 +36,7 @@ private:
     void setupUI();
     void updateHotkeyDisplay();
     void updateIconDisplay();
+    void refreshPreview();
     void setExistingItem(std::shared_ptr<StreamUP::ToolbarConfig::HotkeyButtonItem> item);
     
     // UI Components
@@ -72,6 +74,7 @@ private:
     StreamUP::HotkeyInfo selectedHotkey;
     QString selectedIconPath;
     bool isEditMode;
+    StreamUP::Kit::ButtonPreview* m_preview = nullptr;
     QString originalItemId; // For edit mode
 };
 

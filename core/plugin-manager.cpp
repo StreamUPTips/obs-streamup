@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include "../ui/ui-helpers.hpp"
+#include "../ui/streamup-kit.hpp"
 #include <streamup/ui/window-chrome.hpp>
 #include <streamup/ui/pill-button.hpp>
 #include <streamup/ui/labels.hpp>
@@ -29,9 +30,6 @@
 #include <QHBoxLayout>
 #include <QStyle>
 #include <QLabel>
-#include <QTableWidget>
-#include <QTableWidgetItem>
-#include <QHeaderView>
 #include <QUrl>
 #include <QDesktopServices>
 #include <QProcess>
@@ -40,8 +38,6 @@
 #include <QApplication>
 #include <QGuiApplication>
 #include <QScreen>
-#include <QClipboard>
-#include <QMenu>
 #include <QAction>
 #include <QFrame>
 #include <QPainter>
@@ -79,136 +75,6 @@ namespace PluginManager {
 
 namespace {
 
-// ── Local table helpers (replacing the legacy ui-styles factory) ──────────────
-// The SoT has no styled-table factory; we build a QTableWidget with tableStyle()
-// + custom scrollbars and wrap it in a RoundedContainer (radius 18) so the table
-// corners clip cleanly. The container is tracked on a widget property so
-// GetTableContainerLocal() returns the same wrapper the table lives in.
-QTableWidget *MakeStyledTable(const QStringList &headers, QWidget *parent = nullptr)
-{
-	QTableWidget *table = new QTableWidget(parent);
-
-	table->setAlternatingRowColors(false);
-	table->setSelectionBehavior(QAbstractItemView::SelectRows);
-	table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-	table->setSortingEnabled(false);
-	table->setShowGrid(false);
-	table->setFrameShape(QFrame::NoFrame);
-	table->horizontalHeader()->setStretchLastSection(true);
-	table->verticalHeader()->setVisible(false);
-	table->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
-
-	table->setStyleSheet(su::tableStyle());
-	su::useScrollBars(table);
-
-	// Right-click → Copy / Copy Row (preserved from the legacy factory).
-	table->setContextMenuPolicy(Qt::CustomContextMenu);
-	QObject::connect(table, &QWidget::customContextMenuRequested, [table](const QPoint &pos) {
-		QTableWidgetItem *item = table->itemAt(pos);
-		if (!item)
-			return;
-		QMenu contextMenu(table);
-		contextMenu.setStyleSheet(su::menuStyle());
-		QAction *copyAction = contextMenu.addAction(obs_module_text("UI.Button.Copy"));
-		QObject::connect(copyAction, &QAction::triggered,
-				 [item]() { QApplication::clipboard()->setText(item->text()); });
-		QAction *copyRowAction = contextMenu.addAction(obs_module_text("UI.Button.CopyRow"));
-		QObject::connect(copyRowAction, &QAction::triggered, [table, item]() {
-			int row = item->row();
-			QStringList rowData;
-			for (int col = 0; col < table->columnCount(); ++col) {
-				QTableWidgetItem *cellItem = table->item(row, col);
-				rowData << (cellItem ? cellItem->text() : "");
-			}
-			QApplication::clipboard()->setText(rowData.join("\t"));
-		});
-		contextMenu.exec(table->mapToGlobal(pos));
-	});
-
-	if (!headers.isEmpty()) {
-		table->setColumnCount(headers.count());
-		table->setHorizontalHeaderLabels(headers);
-		table->horizontalHeader()->setSectionResizeMode(headers.count() - 1, QHeaderView::Stretch);
-	}
-
-	return table;
-}
-
-// Wrap (once) the table in a RoundedContainer(18) for corner clipping, caching
-// the container on the table so repeat calls return the same wrapper.
-QWidget *GetTableContainerLocal(QTableWidget *table)
-{
-	if (!table)
-		return table;
-	QVariant v = table->property("streamup_table_container");
-	if (v.isValid())
-		return static_cast<QWidget *>(v.value<void *>());
-
-	auto *container = new su::RoundedContainer(18, table->parentWidget());
-	auto *lay = new QVBoxLayout(container);
-	lay->setContentsMargins(S(1), S(1), S(1), S(1));
-	lay->setSpacing(0);
-
-	if (table->minimumHeight() > 0)
-		container->setMinimumHeight(table->minimumHeight());
-	if (table->maximumHeight() < QWIDGETSIZE_MAX)
-		container->setMaximumHeight(table->maximumHeight());
-	if (table->minimumWidth() > 0)
-		container->setMinimumWidth(table->minimumWidth());
-	container->setSizePolicy(table->sizePolicy());
-
-	table->setParent(container);
-	lay->addWidget(table);
-	table->setProperty("streamup_table_container", QVariant::fromValue(static_cast<QWidget *>(container)));
-	return container;
-}
-
-// Resize columns to their content (plus a little breathing room), then record
-// the full natural pixel width the table needs so the host window can size to
-// fit it. The last column stretches, so we give it a sensible minimum too and
-// fold that into the reported minimum width. The reported width is stashed on a
-// widget property ("streamup_table_natural_width") so the dialog can read the
-// widest table without re-measuring.
-void AutoResizeTableColumnsLocal(QTableWidget *table)
-{
-	table->resizeColumnsToContents();
-	for (int col = 0; col < table->columnCount() - 1; ++col)
-		table->setColumnWidth(col, table->columnWidth(col) + S(16));
-
-	int fixedColumnsWidth = 0;
-	for (int col = 0; col < table->columnCount() - 1; ++col)
-		fixedColumnsWidth += table->columnWidth(col);
-
-	// The stretchy last column also has natural content; honour the larger of a
-	// sensible minimum and its resized-to-content width so links aren't clipped.
-	const int lastCol = table->columnCount() - 1;
-	int lastColWidth = S(120);
-	if (lastCol >= 0)
-		lastColWidth = std::max(lastColWidth, table->columnWidth(lastCol) + S(16));
-
-	// Frame + a vertical scrollbar's worth of slack so the row never clips and a
-	// fallback scrollbar (if rows overflow) doesn't push columns off-screen.
-	const int chrome = S(Sizes::SCROLLBAR_SIZE) + S(8);
-	const int naturalWidth = fixedColumnsWidth + lastColWidth + chrome;
-
-	table->setMinimumWidth(naturalWidth);
-	table->setProperty("streamup_table_natural_width", naturalWidth);
-}
-
-void ApplyDialogTableSizingLocal(QTableWidget *table, int maxRows = 10)
-{
-	if (!table)
-		return;
-	const int kRowHeight = S(36);
-	table->verticalHeader()->setDefaultSectionSize(kRowHeight);
-	const int rowCount = table->rowCount();
-	const int visibleRows = std::min(rowCount, maxRows);
-	const int headerH = table->horizontalHeader()->sizeHint().height();
-	table->setFixedHeight(headerH + (kRowHeight * visibleRows) + S(6));
-	table->setVerticalScrollBarPolicy(rowCount > maxRows ? Qt::ScrollBarAsNeeded
-							     : Qt::ScrollBarAlwaysOff);
-}
-
 // Reveal a file in the OS file manager with the file itself selected/highlighted
 // (not just its containing folder opened). Falls back to opening the folder when
 // the platform can't select a file.
@@ -228,23 +94,6 @@ void RevealFileInFileManager(const QString &filePath)
 	// Fallback (Linux, or if the reveal command failed): open the folder.
 	QDesktopServices::openUrl(
 		QUrl::fromLocalFile(QFileInfo(filePath).absolutePath()));
-}
-
-void HandleTableCellClickLocal(QTableWidget *table, int row, int column)
-{
-	QTableWidgetItem *item = table->item(row, column);
-	if (!item)
-		return;
-	// If this cell carries a module file path, highlight that file in the file
-	// manager instead of merely opening the folder.
-	QVariant fileData = item->data(Qt::UserRole + 1);
-	if (fileData.isValid() && !fileData.toString().isEmpty()) {
-		RevealFileInFileManager(fileData.toString());
-		return;
-	}
-	QVariant urlData = item->data(Qt::UserRole);
-	if (urlData.isValid())
-		QDesktopServices::openUrl(QUrl(urlData.toString()));
 }
 
 } // namespace
@@ -289,328 +138,35 @@ static std::map<std::string, bool> ResolveDisabledRequiredPlugins(const std::map
 	return ResolveDisabledPlugins(disabledModules, missing_modules, outdated_modules, /*requiredOnly=*/true);
 }
 
-//-------------------TABLE WIDGET HELPERS-------------------
-QString ExtractDomainFromUrl(const QString& url) {
-	QUrl qurl(url);
-	QString host = qurl.host();
-	
-	// Remove www. prefix if present
-	if (host.startsWith("www.")) {
-		host = host.mid(4);
-	}
-	
-	// If no host found, try to extract manually
-	if (host.isEmpty()) {
-		QString cleanUrl = url;
-		if (cleanUrl.contains("://")) {
-			cleanUrl = cleanUrl.split("://").last();
-		}
-		if (cleanUrl.contains("/")) {
-			cleanUrl = cleanUrl.split("/").first();
-		}
-		if (cleanUrl.startsWith("www.")) {
-			cleanUrl = cleanUrl.mid(4);
-		}
-		return cleanUrl;
-	}
-	
-	return host;
-}
-QTableWidget* CreateMissingPluginsTable(const std::map<std::string, std::string>& missing_modules) {
-	QStringList headers = {
-		obs_module_text("UI.Label.PluginName"),
-		obs_module_text("UI.Label.Status"), 
-		obs_module_text("UI.Label.CurrentVersion"),
-		obs_module_text("UI.Label.DownloadLink"),
-		obs_module_text("UI.Label.WebsiteLink")
-	};
-	
-	QTableWidget* table = MakeStyledTable(headers);
-	table->setRowCount(static_cast<int>(missing_modules.size()));
-	
-	int row = 0;
-	const auto& requiredPlugins = StreamUP::GetRequiredPlugins();
-	
-	for (const auto& module : missing_modules) {
-		const std::string& moduleName = module.first;
-		const StreamUP::PluginInfo& pluginInfo = requiredPlugins.at(moduleName);
-		const std::string& required_version = pluginInfo.version;
-		const std::string& forum_link = pluginInfo.generalURL;
-		const std::string& direct_download_link = StringUtils::GetPlatformURL(
-			QString::fromStdString(pluginInfo.windowsURL),
-			QString::fromStdString(pluginInfo.macURL),
-			QString::fromStdString(pluginInfo.linuxURL),
-			QString::fromStdString(pluginInfo.generalURL)).toStdString();
-		
-		// Plugin Name column
-		table->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(moduleName)));
-		
-		// Status column - Missing
-		QTableWidgetItem* statusItem = new QTableWidgetItem("❌ " + QString(obs_module_text("UI.Message.MISSING")));
-		statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_DANGER));
-		table->setItem(row, 1, statusItem);
-		
-		// Version column
-		QTableWidgetItem* versionItem = new QTableWidgetItem("v" + QString::fromStdString(required_version));
-		versionItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_SUCCESS));
-		table->setItem(row, 2, versionItem);
-		
-		// Download Link column
-		QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
-		downloadItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
-		downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
-		table->setItem(row, 3, downloadItem);
-		
-		// Website Link column - show domain name
-		QString domainName = ExtractDomainFromUrl(QString::fromStdString(forum_link));
-		QTableWidgetItem* websiteItem = new QTableWidgetItem(domainName);
-		websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
-		websiteItem->setData(Qt::UserRole, QString::fromStdString(forum_link));
-		table->setItem(row, 4, websiteItem);
-		
-		row++;
-	}
-	
-	AutoResizeTableColumnsLocal(table);
-	return table;
+// The plugin list links the OBS 33+ build where a plugin ships separate OBS 33 and OBS 30-32
+// ("Legacy") builds. On older OBS the Download button installs a build that never loads, so the
+// old copy keeps loading and the update prompt never clears (feedback 2026-11-18). On OBS < 33 the
+// dialog says to use the Website Link instead, and the Download cells carry the same tooltip.
+static bool IsObsOlderThan33()
+{
+	return (obs_get_version() >> 24) < 33;
 }
 
-QTableWidget* CreateUpdatesTable(const std::map<std::string, std::string>& version_mismatch_modules) {
-	QStringList headers = {
-		obs_module_text("UI.Label.PluginName"),
-		obs_module_text("UI.Label.InstalledVersion"),
-		obs_module_text("UI.Label.CurrentVersion"), 
-		obs_module_text("UI.Label.DownloadLink"),
-		obs_module_text("UI.Label.WebsiteLink")
-	};
-	
-	QTableWidget* table = MakeStyledTable(headers);
-	table->setRowCount(static_cast<int>(version_mismatch_modules.size()));
-	
-	int row = 0;
-	const auto& allPlugins = StreamUP::GetAllPlugins();
-	
-	for (const auto& module : version_mismatch_modules) {
-		const std::string& moduleName = module.first;
-		const std::string& installed_version = module.second;
-		const StreamUP::PluginInfo& plugin_info = allPlugins.at(moduleName);
-		const std::string& required_version = plugin_info.version;
-		const std::string& forum_link = plugin_info.generalURL;
-		const std::string& direct_download_link = StringUtils::GetPlatformURL(
-			QString::fromStdString(plugin_info.windowsURL),
-			QString::fromStdString(plugin_info.macURL),
-			QString::fromStdString(plugin_info.linuxURL),
-			QString::fromStdString(plugin_info.generalURL)).toStdString();
-		
-		// Plugin Name column
-		table->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(moduleName)));
-		
-		// Installed Version column
-		QTableWidgetItem* installedItem = new QTableWidgetItem("v" + QString::fromStdString(installed_version));
-		installedItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_DANGER));
-		table->setItem(row, 1, installedItem);
-		
-		// Current Version column
-		QTableWidgetItem* currentItem = new QTableWidgetItem("v" + QString::fromStdString(required_version));
-		currentItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_SUCCESS));
-		table->setItem(row, 2, currentItem);
-		
-		// Download Link column
-		QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
-		downloadItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
-		downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
-		table->setItem(row, 3, downloadItem);
-		
-		// Website Link column - show domain name
-		QString domainName = ExtractDomainFromUrl(QString::fromStdString(forum_link));
-		QTableWidgetItem* websiteItem = new QTableWidgetItem(domainName);
-		websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
-		websiteItem->setData(Qt::UserRole, QString::fromStdString(forum_link));
-		table->setItem(row, 4, websiteItem);
-		
-		row++;
-	}
-	
-	AutoResizeTableColumnsLocal(table);
-	return table;
-}
-
-// Plugins OBS found on disk but never loaded because they're switched off. The
-// fix isn't a download, it's a toggle in OBS, so this table explains where.
-QTableWidget* CreateDisabledPluginsTable(const std::map<std::string, bool>& disabled_modules) {
-	QStringList headers = {
-		obs_module_text("UI.Label.PluginName"),
-		obs_module_text("UI.Label.Status"),
-		obs_module_text("UI.Label.HowToFix"),
-		obs_module_text("UI.Label.WebsiteLink")
-	};
-
-	QTableWidget* table = MakeStyledTable(headers);
-	table->setRowCount(static_cast<int>(disabled_modules.size()));
-
-	int row = 0;
-	const auto& allPlugins = StreamUP::GetAllPlugins();
-
-	for (const auto& module : disabled_modules) {
-		const std::string& plugin_name = module.first;
-		const bool safeMode = module.second;
-
-		// Plugin Name column
-		table->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(plugin_name)));
-
-		// Status column - why OBS skipped it
-		QTableWidgetItem* statusItem = new QTableWidgetItem(
-			"🚫 " + QString(obs_module_text(safeMode ? "Plugin.Status.DisabledSafeMode"
-								: "Plugin.Status.Disabled")));
-		statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_WARNING));
-		table->setItem(row, 1, statusItem);
-
-		// How to Fix column - the toggle that brings it back
-		QTableWidgetItem* fixItem = new QTableWidgetItem(
-			obs_module_text(safeMode ? "Plugin.Message.DisabledSafeModeFix"
-						 : "Plugin.Message.DisabledFix"));
-		fixItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_SECONDARY));
-		fixItem->setToolTip(fixItem->text());
-		table->setItem(row, 2, fixItem);
-
-		// Website Link column - show domain name when we know the plugin
-		auto it = allPlugins.find(plugin_name);
-		if (it != allPlugins.end() && !it->second.generalURL.empty()) {
-			QString domainName = ExtractDomainFromUrl(QString::fromStdString(it->second.generalURL));
-			QTableWidgetItem* websiteItem = new QTableWidgetItem(domainName);
-			websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
-			websiteItem->setData(Qt::UserRole, QString::fromStdString(it->second.generalURL));
-			table->setItem(row, 3, websiteItem);
-		} else {
-			QTableWidgetItem* unknownItem = new QTableWidgetItem(obs_module_text("UI.Label.Unknown"));
-			unknownItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
-			table->setItem(row, 3, unknownItem);
-		}
-
-		row++;
-	}
-
-	AutoResizeTableColumnsLocal(table);
-	return table;
-}
-
-QTableWidget* CreateFailedToLoadPluginsTable(const std::vector<std::string>& failed_modules) {
-	QStringList headers = {
-		obs_module_text("UI.Label.PluginName"),
-		obs_module_text("UI.Label.Status"),
-		obs_module_text("UI.Label.DownloadLink"),
-		obs_module_text("UI.Label.WebsiteLink"),
-		obs_module_text("UI.Label.PluginFolder")
-	};
-
-	QTableWidget* table = MakeStyledTable(headers);
-	table->setRowCount(static_cast<int>(failed_modules.size()));
-
-	int row = 0;
-	const auto& allPlugins = StreamUP::GetAllPlugins();
-
-	// Pull the on-disk folder + failure reason for each failed module straight
-	// from the OBS log (the same log the failed-modules list came from).
-	std::map<std::string, ModuleLoadFailure> loadFailures;
-	if (char *logPath = StreamUP::PathUtils::GetOBSLogPath()) {
-		loadFailures = GetModuleLoadFailures(logPath);
-		bfree(logPath);
-	}
-
-	for (const auto& module_name : failed_modules) {
-		// Try to find this module in the API plugins by matching moduleName
-		bool found_in_api = false;
-		std::string plugin_name;
-		const StreamUP::PluginInfo* plugin_info = nullptr;
-
-		for (const auto& plugin : allPlugins) {
-			if (plugin.second.moduleName == module_name) {
-				found_in_api = true;
-				plugin_name = plugin.first;
-				plugin_info = &plugin.second;
-				break;
-			}
-		}
-
-		// Plugin Name column - use friendly name if found in API, otherwise use module name
-		QString displayName = found_in_api ? QString::fromStdString(plugin_name) : QString::fromStdString(module_name);
-		table->setItem(row, 0, new QTableWidgetItem(displayName));
-
-		// Look up the folder + reason harvested from the log for this module.
-		auto failureIt = loadFailures.find(module_name);
-		const ModuleLoadFailure *failure = (failureIt != loadFailures.end()) ? &failureIt->second : nullptr;
-
-		// Status column - Failed to Load. If we found a reason in the log, show
-		// it on hover so people can see WHY it wouldn't load.
-		QTableWidgetItem* statusItem = new QTableWidgetItem("⚠️ " + QString(obs_module_text("Plugin.Status.FailedToLoad")));
-		statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_WARNING)); // Orange/amber color for warning
-		if (failure && !failure->reason.empty())
-			statusItem->setToolTip(QString(obs_module_text("Plugin.Message.FailReasonPrefix")) + " " +
-					       QString::fromStdString(failure->reason));
-		table->setItem(row, 1, statusItem);
-
-		if (found_in_api && plugin_info) {
-			// Plugin is in our API - show download link
-			const std::string& direct_download_link = StringUtils::GetPlatformURL(
-				QString::fromStdString(plugin_info->windowsURL),
-				QString::fromStdString(plugin_info->macURL),
-				QString::fromStdString(plugin_info->linuxURL),
-				QString::fromStdString(plugin_info->generalURL)).toStdString();
-
-			QTableWidgetItem* downloadItem = new QTableWidgetItem(obs_module_text("UI.Button.Download"));
-			downloadItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
-			downloadItem->setData(Qt::UserRole, QString::fromStdString(direct_download_link));
-			table->setItem(row, 2, downloadItem);
-
-			// Website Link column - show domain name
-			QString domainName = ExtractDomainFromUrl(QString::fromStdString(plugin_info->generalURL));
-			QTableWidgetItem* websiteItem = new QTableWidgetItem(domainName);
-			websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
-			websiteItem->setData(Qt::UserRole, QString::fromStdString(plugin_info->generalURL));
-			table->setItem(row, 3, websiteItem);
-		} else {
-			// Plugin not in our API - show message to find manually
-			QTableWidgetItem* notSupportedItem = new QTableWidgetItem(obs_module_text("Plugin.Message.NotSupported"));
-			notSupportedItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED)); // Gray
-			table->setItem(row, 2, notSupportedItem);
-
-			// Link to OBS forums for manual search
-			QString obsForumUrl = "https://obsproject.com/forum/resources/";
-			QTableWidgetItem* forumItem = new QTableWidgetItem("OBS Forums");
-			forumItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
-			forumItem->setData(Qt::UserRole, obsForumUrl);
-			table->setItem(row, 3, forumItem);
-		}
-
-		// Open Folder column - reveal the folder the failed module lives in so
-		// people can remove/replace an unsupported plugin. The generic cell-click
-		// handler opens whatever URL sits in Qt::UserRole, so we store the folder
-		// as a file:// URL. Falls back to a muted "Unknown" when the log didn't
-		// give us a resolvable path.
-		if (failure && !failure->absoluteFolder.empty()) {
-			QTableWidgetItem* folderItem = new QTableWidgetItem(obs_module_text("UI.Button.OpenFolder"));
-			folderItem->setForeground(QColor(StreamUP::UIStyles::Colors::TAG_COLOR));
-			QString folderUrl = QUrl::fromLocalFile(QString::fromStdString(failure->absoluteFolder)).toString();
-			folderItem->setData(Qt::UserRole, folderUrl);
-			// Prefer highlighting the actual module file when we resolved it, so
-			// the failed plugin is selected in the file manager, not just its
-			// folder opened. The click handler special-cases this role.
-			if (!failure->absoluteModulePath.empty())
-				folderItem->setData(Qt::UserRole + 1,
-						    QString::fromStdString(failure->absoluteModulePath));
-			folderItem->setToolTip(QString::fromStdString(failure->absoluteFolder));
-			table->setItem(row, 4, folderItem);
-		} else {
-			QTableWidgetItem* unknownItem = new QTableWidgetItem(obs_module_text("UI.Label.Unknown"));
-			unknownItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
-			table->setItem(row, 4, unknownItem);
-		}
-
-		row++;
-	}
-
-	AutoResizeTableColumnsLocal(table);
-	return table;
+PluginRow RowForListedPlugin(const std::string &name, const std::string &installedVersion)
+{
+	PluginRow row;
+	row.name = name;
+	row.installedVersion = installedVersion;
+	const auto allPlugins = StreamUP::GetAllPlugins();
+	auto it = allPlugins.find(name);
+	if (it == allPlugins.end())
+		return row;
+	const StreamUP::PluginInfo &info = it->second;
+	row.requiredVersion = info.version;
+	row.websiteUrl = info.generalURL;
+	row.linksFitThisObs = info.linksFitThisObs;
+	row.needsObs = info.needsObs;
+	row.downloadUrl = StringUtils::GetPlatformURL(QString::fromStdString(info.windowsURL),
+						      QString::fromStdString(info.macURL),
+						      QString::fromStdString(info.linuxURL),
+						      QString::fromStdString(info.generalURL))
+				  .toStdString();
+	return row;
 }
 
 //-------------------ERROR HANDLING FUNCTIONS-------------------
@@ -622,85 +178,168 @@ void ErrorDialog(const QString &errorMessage)
 
 void PluginsUpToDateOutput(bool manuallyTriggered)
 {
-	if (manuallyTriggered) {
-		StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
-			// Frameless toast card: ShadowDialog elevation shadow + rounded
-			// success-green card (fill only, no border stroke). The SoT
-			// RoundedContainer now takes a fill colour, so the toast uses it
-			// directly with COLOR_SUCCESS.
-			const int sm = S(su::ShadowDialog::kShadowMargin);
-			QDialog *toast = new su::ShadowDialog();
-			toast->setWindowTitle(obs_module_text("App.Name"));
-			toast->setWindowFlags(Qt::FramelessWindowHint | Qt::Dialog | Qt::WindowStaysOnTopHint);
-			toast->setAttribute(Qt::WA_DeleteOnClose);
-			toast->setAttribute(Qt::WA_TranslucentBackground);
-			toast->setFixedSize(S(400) + 2 * sm, S(100) + 2 * sm);
+	if (manuallyTriggered)
+		StreamUP::Kit::Toast(obs_module_text("Plugin.Status.AllUpToDate"), StreamUP::Kit::Status::Ok);
+}
 
-			QVBoxLayout *outerLayout = new QVBoxLayout(toast);
-			outerLayout->setContentsMargins(sm, sm, sm, sm);
-			outerLayout->setSpacing(0);
-
-			auto *card = new su::RoundedContainer(18, nullptr, QColor(Colors::COLOR_SUCCESS));
-			outerLayout->addWidget(card);
-
-			QVBoxLayout *toastLayout = new QVBoxLayout(card);
-			toastLayout->setContentsMargins(S(20), S(12), S(20), S(12));
-			toastLayout->setSpacing(S(8));
-
-			QLabel *messageLabel = new QLabel(obs_module_text("Plugin.Status.AllUpToDate"));
-			messageLabel->setStyleSheet(scale_qss(QString(
-				"QLabel {"
-				"color: %2;"
-				"font-size: %1px;"
-				"font-weight: bold;"
-				"background: transparent;"
-				"border: none;"
-				"}").arg(S(14)).arg(Colors::BG_DARKEST)));
-			messageLabel->setAlignment(Qt::AlignCenter);
-			toastLayout->addWidget(messageLabel);
-
-			QLabel *countdownLabel = new QLabel(obs_module_text("Plugin.Message.AutoClosing3"));
-			countdownLabel->setStyleSheet(scale_qss(QString(
-				"QLabel {"
-				"color: rgba(30, 30, 46, 0.75);"
-				"font-size: %1px;"
-				"background: transparent;"
-				"border: none;"
-				"}").arg(S(12))));
-			countdownLabel->setAlignment(Qt::AlignCenter);
-			toastLayout->addWidget(countdownLabel);
-			
-			toast->show();
-			
-			// Create countdown timer
-			QTimer *countdownTimer = new QTimer(toast);
-			int *remainingSeconds = new int(3);
-			
-			QObject::connect(countdownTimer, &QTimer::timeout, [countdownLabel, remainingSeconds, toast, countdownTimer]() {
-				(*remainingSeconds)--;
-				if (*remainingSeconds > 0) {
-					countdownLabel->setText(QString(obs_module_text("Plugin.Message.AutoClosingN")).arg(*remainingSeconds));
-				} else {
-					countdownTimer->stop();
-					toast->close();
-				}
-			});
-			
-			countdownTimer->start(1000); // Update every second
-		});
+// One plugin per row in the shared row style: name, versions underneath, a
+// status pill and one Get button on the right.
+static QWidget *PluginRowsCard(const std::vector<PluginRow> &rows, bool outdated)
+{
+	namespace kit = StreamUP::Kit;
+	auto *list = new kit::RowList();
+	for (const PluginRow &r : rows) {
+		const QString name = QString::fromStdString(r.name);
+		QString detail;
+		if (outdated && !r.installedVersion.empty() && !r.requiredVersion.empty())
+			detail = QString::fromStdString(r.installedVersion) + QString::fromUtf8(" \xe2\x86\x92 ") +
+				 QString::fromStdString(r.requiredVersion);
+		else if (!r.requiredVersion.empty())
+			detail = QString::fromStdString(r.requiredVersion);
+		else if (r.needsObs > 0)
+			detail = QString(obs_module_text("Plugin.Line.NeedsObs")).arg(r.needsObs);
+		// The section header and the count pill at the top already say these
+		// are missing, so a red pill on every row only adds noise. An update
+		// keeps its pill: it is the one detail the row cannot show otherwise.
+		QWidget *pill = outdated ? kit::StatusPill(kit::Status::Warn, obs_module_text("Plugin.Pill.Update")) : nullptr;
+		// On OBS 30-32 the download link can be an OBS 33 build: open the page.
+		// Not when the list names a build for this OBS (its "legacy" build).
+		const bool pageOnly = IsObsOlderThan33() && !r.linksFitThisObs && !r.websiteUrl.empty();
+		const QString url = QString::fromStdString(!pageOnly && !r.downloadUrl.empty() ? r.downloadUrl : r.websiteUrl);
+		// Soft-surface Get on every row; blue stays for the one footer action.
+		auto *get = new su::PillButton(obs_module_text("Plugin.Button.Get"), "neutral");
+		get->setEnabled(!url.isEmpty());
+		get->setAccessibleName(QString(obs_module_text("Plugin.Button.GetAccessible")).arg(name));
+		if (!r.websiteUrl.empty())
+			get->setToolTip(QString::fromStdString(r.websiteUrl));
+		QObject::connect(get, &QPushButton::clicked, [url]() { QDesktopServices::openUrl(QUrl(url)); });
+		QList<QWidget *> trailing;
+		if (pill)
+			trailing << pill;
+		trailing << get;
+		list->addRow(name, detail, trailing);
 	}
+	return list;
+}
+
+// Plugins OBS found but could not load: the reason underneath, a pill, and the
+// two ways out (get a fresh copy, or open the folder to remove it).
+static QWidget *FailedRowsCard(const std::vector<std::string> &failed_modules)
+{
+	namespace kit = StreamUP::Kit;
+	auto *list = new kit::RowList();
+	const auto &allPlugins = StreamUP::GetAllPlugins();
+	std::map<std::string, ModuleLoadFailure> loadFailures;
+	if (char *logPath = StreamUP::PathUtils::GetOBSLogPath()) {
+		loadFailures = GetModuleLoadFailures(logPath);
+		bfree(logPath);
+	}
+	for (const std::string &module_name : failed_modules) {
+		const StreamUP::PluginInfo *info = nullptr;
+		std::string friendly;
+		for (const auto &plugin : allPlugins) {
+			if (plugin.second.moduleName == module_name) {
+				friendly = plugin.first;
+				info = &plugin.second;
+				break;
+			}
+		}
+		const QString name = QString::fromStdString(info ? friendly : module_name);
+		auto fit = loadFailures.find(module_name);
+		const ModuleLoadFailure *failure = fit != loadFailures.end() ? &fit->second : nullptr;
+		QString reason;
+		if (failure && !failure->reason.empty())
+			reason = QString::fromStdString(failure->reason);
+		QList<QWidget *> trailing;
+		trailing << kit::StatusPill(kit::Status::Bad, obs_module_text("Plugin.Pill.NotLoading"));
+		if (failure && !failure->absoluteFolder.empty()) {
+			auto *folder = new su::PillButton(obs_module_text("Plugin.Button.Folder"), "neutral");
+			folder->setToolTip(QString::fromStdString(failure->absoluteFolder));
+			const QString module = QString::fromStdString(failure->absoluteModulePath);
+			const QString dir = QString::fromStdString(failure->absoluteFolder);
+			QObject::connect(folder, &QPushButton::clicked, [module, dir]() {
+				if (!module.isEmpty())
+					RevealFileInFileManager(module);
+				else
+					QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
+			});
+			trailing << folder;
+		}
+		QString url = QStringLiteral("https://obsproject.com/forum/resources/");
+		if (info && IsObsOlderThan33() && !info->linksFitThisObs && !info->generalURL.empty())
+			url = QString::fromStdString(info->generalURL);
+		else if (info)
+			url = StringUtils::GetPlatformURL(QString::fromStdString(info->windowsURL),
+							  QString::fromStdString(info->macURL),
+							  QString::fromStdString(info->linuxURL),
+							  QString::fromStdString(info->generalURL));
+		auto *get = new su::PillButton(obs_module_text("Plugin.Button.Get"), "neutral");
+		get->setToolTip(url);
+		get->setAccessibleName(QString(obs_module_text("Plugin.Button.GetAccessible")).arg(name));
+		QObject::connect(get, &QPushButton::clicked, [url]() { QDesktopServices::openUrl(QUrl(url)); });
+		trailing << get;
+		list->addRow(name, reason.isEmpty() ? QString(obs_module_text("Plugin.Line.NoReason")) : reason, trailing,
+			     nullptr, reason);
+	}
+	return list;
+}
+
+// Plugins switched off in OBS: nothing to download, so the line says where the
+// switch is.
+static QWidget *DisabledRowsCard(const std::map<std::string, bool> &disabled_modules)
+{
+	namespace kit = StreamUP::Kit;
+	auto *list = new kit::RowList();
+	const auto &allPlugins = StreamUP::GetAllPlugins();
+	for (const auto &module : disabled_modules) {
+		const bool safeMode = module.second;
+		QList<QWidget *> trailing;
+		trailing << kit::StatusPill(kit::Status::Neutral,
+					    obs_module_text(safeMode ? "Plugin.Pill.SafeMode" : "Plugin.Pill.Off"));
+		auto it = allPlugins.find(module.first);
+		if (it != allPlugins.end() && !it->second.generalURL.empty()) {
+			const QString url = QString::fromStdString(it->second.generalURL);
+			auto *site = new su::PillButton(obs_module_text("Plugin.Button.Website"), "neutral");
+			site->setToolTip(url);
+			QObject::connect(site, &QPushButton::clicked, [url]() { QDesktopServices::openUrl(QUrl(url)); });
+			trailing << site;
+		}
+		list->addRow(QString::fromStdString(module.first),
+			     obs_module_text(safeMode ? "Plugin.Message.DisabledSafeModeFix" : "Plugin.Message.DisabledFix"),
+			     trailing);
+	}
+	return list;
 }
 
 void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback, bool isStartupCheck, const std::map<std::string, bool>& disabled_modules)
 {
-	StreamUP::UIHelpers::ShowDialogOnUIThread([missing_modules, version_mismatch_modules, failed_to_load_modules, continueCallback, isStartupCheck, disabled_modules]() {
+	PluginIssues issues;
+	for (const auto& module : missing_modules)
+		issues.missing.push_back(RowForListedPlugin(module.first));
+	for (const auto& module : version_mismatch_modules)
+		issues.outdated.push_back(RowForListedPlugin(module.first, module.second));
+	issues.failedToLoad = failed_to_load_modules;
+	issues.disabled = disabled_modules;
+	ShowPluginIssues(issues, continueCallback, isStartupCheck);
+}
+
+void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continueCallback, bool isStartupCheck)
+{
+	StreamUP::UIHelpers::ShowDialogOnUIThread([issues, continueCallback, isStartupCheck]() {
+		std::map<std::string, std::string> version_mismatch_modules;
+		for (const PluginRow& r : issues.outdated)
+			version_mismatch_modules[r.name] = r.installedVersion;
+		const std::vector<std::string>& failed_to_load_modules = issues.failedToLoad;
+		const std::map<std::string, bool>& disabled_modules = issues.disabled;
+
 		// Create styled dialog with dynamic title
-		bool hasMissing = !missing_modules.empty();
+		bool hasMissing = !issues.missing.empty();
 		bool hasUpdates = !version_mismatch_modules.empty();
 		bool hasFailedToLoad = !failed_to_load_modules.empty();
 		bool hasDisabled = !disabled_modules.empty();
 
 		QString titleText;
+		const bool installing = static_cast<bool>(continueCallback);
 		// Prioritize title based on what issues exist
 		if (hasMissing && hasUpdates) {
 			// Both missing and updates
@@ -722,6 +361,9 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			titleText = obs_module_text("Plugin.Status.DisabledOnly");
 		}
 
+		// One plain title: what the window is for, not a sentence about it.
+		titleText = obs_module_text(installing ? "Plugin.Title.Install" : "Plugin.Title.Check");
+
 		// Branded custom window. Primary StreamUP surface → brandFooter=true.
 		// brandName "StreamUP" + the bare status title compose "StreamUP • <title>".
 		QWidget *parent = static_cast<QWidget *>(obs_frontend_get_main_window());
@@ -730,127 +372,94 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		QDialog *dialog = shell.dialog;
 		QVBoxLayout *dialogLayout = shell.content;
 
-		// Header section — centered title + description in the content (the chrome
-		// titlebar already shows the composed title; this echoes it inside the body).
-		QWidget *headerWidget = new QWidget();
-		QVBoxLayout *headerLayout = new QVBoxLayout(headerWidget);
-		headerLayout->setContentsMargins(S(20), S(20), S(20), S(8));
-		headerLayout->setSpacing(S(4));
+		namespace kit = StreamUP::Kit;
+		// Everything sits in one scrolling column on the shared spacing scale,
+		// so the window opens as tall as its rows and never clips them.
+		QVBoxLayout *body = kit::ScrollingBody(dialogLayout);
 
-		QLabel *titleLabel = su::makeLabel(titleText, 22, 700, Colors::TEXT_PRIMARY);
-		titleLabel->setAlignment(Qt::AlignCenter);
-		headerLayout->addWidget(titleLabel);
-
-		QString descText;
-		// Description should match the title context
-		if (hasMissing && hasUpdates) {
-			descText = obs_module_text("Plugin.Status.SomeMissingAndNeedUpdates");
-		} else if (hasMissing) {
-			descText = obs_module_text("Plugin.Message.RequiredNotInstalled");
-		} else if (hasUpdates) {
-			descText = obs_module_text("Plugin.Message.UpdatesAvailable");
-		} else if (hasFailedToLoad) {
-			descText = obs_module_text("Plugin.Message.FailedToLoadDescription");
-		} else if (hasDisabled) {
-			descText = obs_module_text("Plugin.Message.DisabledDescription");
-		}
-
-		QLabel *subtitleLabel = su::makeLabel(descText, 13, 500, Colors::TEXT_SECONDARY);
-		subtitleLabel->setAlignment(Qt::AlignCenter);
-		subtitleLabel->setWordWrap(true);
-		headerLayout->addWidget(subtitleLabel);
-
-		dialogLayout->addWidget(headerWidget);
-
-		// Content area - direct layout without main scrolling
-		QVBoxLayout *contentLayout = new QVBoxLayout();
-		contentLayout->setContentsMargins(S(25), S(20), S(25), S(20));
-		contentLayout->setSpacing(S(20));
-
-		dialogLayout->addLayout(contentLayout);
-
-		// Track the widest table so the window can size to fit its content
-		// (columns clip horizontally if the window is narrower than the table).
-		int widestTable = 0;
-
-		// Section helper: accent sectionHeader + a plain widget holding the table
-		// (replaces the legacy CreateStyledGroupBox frame).
-		auto addTableSection = [&](const char *headerKey, QTableWidget *table) {
-			widestTable = std::max(widestTable,
-					       table->property("streamup_table_natural_width").toInt());
-
-			QWidget *section = new QWidget();
-			section->setMinimumWidth(S(500));
-			section->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-			QVBoxLayout *secLay = new QVBoxLayout(section);
-			secLay->setContentsMargins(S(8), S(8), S(8), S(8));
-			secLay->setSpacing(S(4));
-			secLay->addWidget(su::sectionHeader(obs_module_text(headerKey)));
-
-			ApplyDialogTableSizingLocal(table);
-			QObject::connect(table, &QTableWidget::cellClicked,
-					 [table](int row, int column) { HandleTableCellClickLocal(table, row, column); });
-			secLay->addWidget(GetTableContainerLocal(table));
-			contentLayout->addWidget(section);
+		// Header: a pill per kind of problem, then one short line.
+		auto *pills = new QHBoxLayout();
+		pills->setSpacing(S(kit::Space::Gap));
+		auto pillCount = [&](kit::Status st, const char *key, size_t n) {
+			if (n)
+				pills->addWidget(kit::StatusPill(st, QString(obs_module_text(key)).arg(n)));
 		};
+		pillCount(kit::Status::Bad, "Plugin.Count.Missing", issues.missing.size());
+		pillCount(kit::Status::Warn, "Plugin.Count.Update", issues.outdated.size());
+		pillCount(kit::Status::Bad, "Plugin.Count.Failed", failed_to_load_modules.size());
+		pillCount(kit::Status::Neutral, "Plugin.Count.Off", disabled_modules.size());
+		pills->addStretch(1);
+		auto *header = new QVBoxLayout();
+		header->setSpacing(S(kit::Space::Gap));
+		header->addLayout(pills);
+		QString descText = issues.description;
+		if (descText.isEmpty())
+			descText = obs_module_text(installing ? "Plugin.Line.Install" : "Plugin.Line.Check");
+		QLabel *subtitleLabel = su::makeLabel(descText, Sizes::FONT_SIZE_NORMAL, 500, Colors::TEXT_SECONDARY);
+		subtitleLabel->setWordWrap(true);
+		header->addWidget(subtitleLabel);
+		body->addLayout(header);
 
+		// Each kind of problem: a section title, then its rows.
+		auto addRows = [&](const char *headerKey, QWidget *card) {
+			auto *section = new QVBoxLayout();
+			section->setSpacing(S(kit::Space::Gap));
+			QLabel *title = su::sectionHeader(obs_module_text(headerKey));
+			title->setContentsMargins(0, 0, 0, 0);
+			section->addWidget(title);
+			section->addWidget(card);
+			body->addLayout(section);
+		};
 		if (hasMissing)
-			addTableSection("Plugin.Dialog.MissingGroup", CreateMissingPluginsTable(missing_modules));
+			addRows("Plugin.Dialog.MissingGroup", PluginRowsCard(issues.missing, false));
 		if (hasUpdates)
-			addTableSection("Plugin.Dialog.UpdateGroup", CreateUpdatesTable(version_mismatch_modules));
+			addRows("Plugin.Dialog.UpdateGroup", PluginRowsCard(issues.outdated, true));
 		if (hasFailedToLoad)
-			addTableSection("Plugin.Dialog.FailedToLoadGroup", CreateFailedToLoadPluginsTable(failed_to_load_modules));
+			addRows("Plugin.Dialog.FailedToLoadGroup", FailedRowsCard(failed_to_load_modules));
 		if (hasDisabled)
-			addTableSection("Plugin.Dialog.DisabledGroup", CreateDisabledPluginsTable(disabled_modules));
+			addRows("Plugin.Dialog.DisabledGroup", DisabledRowsCard(disabled_modules));
 
-		// Add warning message above buttons if there's a continue callback (meaning this is for install product)
-		if (continueCallback) {
-			dialogLayout->addSpacing(S(12));
-
-			QLabel *warningLabel = new QLabel("⚠️ " + QString(obs_module_text("Plugin.Dialog.WarningContinue")));
-			warningLabel->setWordWrap(true);
-			warningLabel->setStyleSheet(scale_qss(QString(
-				"QLabel {"
-				"background: rgba(45, 55, 72, 0.8);"
-				"color: #fbbf24;"
-				"border: 1px solid #f59e0b;"
-				"border-radius: %1px;"
-				"padding: %2px;"
-				"margin: %3px %4px;"
-				"font-size: %5px;"
-				"line-height: 1.4;"
-				"}")
-				.arg(S(6))
-				.arg(S(12))
-				.arg(S(8))
-				.arg(S(25))
-				.arg(Sizes::FONT_SIZE_SMALL)));
-			dialogLayout->addWidget(warningLabel);
+		// OBS 30-32: the plugin list's download links can be OBS 33 builds that
+		// never load there, so Get opens each plugin's page instead and a note
+		// says to pick the build for this OBS (from release/2.4.2).
+		// Not needed when every row's Get already downloads a build for this OBS.
+		bool anyUnsureLink = hasFailedToLoad;
+		for (const auto *rows : {&issues.missing, &issues.outdated})
+			for (const PluginRow &r : *rows)
+				anyUnsureLink = anyUnsureLink || !r.linksFitThisObs;
+		if ((hasMissing || hasUpdates || hasFailedToLoad) && IsObsOlderThan33() && anyUnsureLink) {
+			const uint32_t v = obs_get_version();
+			const QString obsVer = QString("%1.%2").arg(v >> 24).arg((v >> 16) & 0xFF);
+			body->addWidget(kit::Note(kit::Status::Warn, QString(obs_module_text("Plugin.Dialog.OldObsNote")).arg(obsVer)));
 		}
 
-		// Add skip checkbox for startup checks (only if there are updates/failures
-		// or deliberately switched-off plugins, and no missing plugins).
-		// A switched-off plugin gets its own wording when that's all the dialog
-		// is reporting: "these updates" reads wrong for something the user turned
-		// off themselves, which is the whole reason they want it to stop asking.
+		// Installing a product: what "Install anyway" means, as a note.
+		if (continueCallback)
+			body->addWidget(kit::Note(kit::Status::Warn,
+						  issues.warning.isEmpty() ? QString(obs_module_text("Plugin.Dialog.WarningContinue"))
+									   : issues.warning));
+
+		// Start-up only: stop showing these. Updates keep their own wording;
+		// anything that is not loading or switched off is about the plugins.
 		IOSCheckBox *skipCheckbox = nullptr;
 		if (isStartupCheck && !hasMissing && (hasUpdates || hasFailedToLoad || hasDisabled)) {
-			dialogLayout->addSpacing(S(12));
-			const bool disabledOnly = hasDisabled && !hasUpdates && !hasFailedToLoad;
-			skipCheckbox = new IOSCheckBox(obs_module_text(disabledOnly ? "Plugin.Dialog.SkipTheseDisabled"
-										 : "Plugin.Dialog.SkipTheseUpdates"));
-			QWidget *skipRow = new QWidget();
-			QHBoxLayout *skipLay = new QHBoxLayout(skipRow);
-			skipLay->setContentsMargins(S(25), 0, S(25), 0);
-			skipLay->addWidget(skipCheckbox);
-			skipLay->addStretch();
-			dialogLayout->addWidget(skipRow);
+			const bool updatesOnly = hasUpdates && !hasFailedToLoad && !hasDisabled;
+			skipCheckbox = new IOSCheckBox(obs_module_text(updatesOnly ? "Plugin.Dialog.SkipTheseUpdates"
+										  : "Plugin.Dialog.SkipThesePlugins"));
+			body->addWidget(skipCheckbox);
 		}
+
+		// A manual check is a calm moment to mention membership, once.
+		if (!installing && !isStartupCheck) {
+			if (QWidget *member = kit::MembershipCard(kit::MemberStyle::Strip))
+				body->addWidget(member);
+		}
+		body->addStretch(1);
 
 		// Action buttons → footer's right-anchored slot.
 		// Continue Anyway is a risky action → "primary"; OK is the neutral dismiss.
 		if (continueCallback) {
-			auto *continueButton = new su::PillButton(obs_module_text("UI.Message.ContinueAnyway"), "primary");
+			auto *continueButton = new su::PillButton(obs_module_text("Plugin.Button.InstallAnyway"), "outline");
 			QObject::connect(continueButton, &QPushButton::clicked, [dialog, continueCallback]() {
 				dialog->close();
 				continueCallback();
@@ -858,7 +467,7 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 			shell.footerButtons->addWidget(continueButton);
 		}
 
-		auto *okButton = new su::PillButton(obs_module_text("UI.Button.OK"), continueCallback ? "outline" : "primary");
+		auto *okButton = new su::PillButton(obs_module_text(continueCallback ? "UI.Button.Cancel" : "UI.Button.Done"), "primary");
 		QObject::connect(okButton, &QPushButton::clicked, [dialog, skipCheckbox, isStartupCheck, version_mismatch_modules, failed_to_load_modules, disabled_modules]() {
 			// Save skipped updates if checkbox is checked
 			if (skipCheckbox && skipCheckbox->isChecked()) {
@@ -905,120 +514,73 @@ void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules,
 		});
 		shell.footerButtons->addWidget(okButton);
 
-		// Pool any spare height at the bottom. Without this the layout shares it
-		// out between the header, the sections and the tables, which is why a
-		// single-row dialog used to open with big gaps down the middle.
-		dialogLayout->addStretch();
-
-		// Size the window to fit its widest table so columns aren't clipped
-		// horizontally. The table sits inside: content margins (S(25)*2) +
-		// section margins (S(8)*2) + container border (S(1)*2). Clamp to a sane
-		// range so the window never opens too small to show its table, nor wider
-		// than the screen. A horizontal scrollbar remains only as a fallback.
-		const int sideChrome = 2 * (S(25) + S(8) + S(1));
-		int contentW = widestTable + sideChrome;
-		contentW = std::clamp(contentW, S(640), S(1100));
-
-		// Height follows the content instead of a fixed S(620): one plugin gets a
-		// short window, a long list gets a tall one. Clamped to 85% of the screen
-		// so a big list can't open taller than the display.
-		const int shadow = 2 * S(su::ShadowDialog::kShadowMargin);
-		dialog->resize(contentW + shadow, S(620) + shadow);
-		int wantedH = dialog->sizeHint().height();
-		int maxH = shadow + S(620);
-		if (QScreen *screen = parent && parent->screen() ? parent->screen() : QGuiApplication::primaryScreen())
-			maxH = static_cast<int>(screen->availableGeometry().height() * 0.85);
-		dialog->resize(contentW + shadow, std::clamp(wantedH, dialog->minimumHeight(), maxH));
+		kit::FitToContent(dialog, 600);
+		StreamUP::UIHelpers::PlaceOverMainWindow(dialog);
 		dialog->show();
 	});
 }
 
 
-//-------------------PLUGIN UPDATE FUNCTIONS-------------------
-void CheckAllPluginsForUpdates(bool manuallyTriggered)
+// HTTP functionality moved to StreamUP::HttpClient module
+
+// Optional fields in the plugin list, for plugins whose newest build needs a
+// newer OBS than some users run (from 3.0.0; older StreamUP ignores them):
+//   "minObs": 33                      lowest OBS major the version/downloads above work on
+//   "legacy": { "version": "1.5.0",   newest build for older OBS
+//               "downloads": { "windows": "...", "macOS": "...", "linux": "..." } }
+// Without them nothing changes. With them, OBS older than minObs checks against
+// and downloads the legacy build, or, when there is none, is not told to update
+// to a build that cannot load (the old copy kept loading and the prompt never
+// cleared: NikNes, 18 Nov 2026).
+static void ResolveForThisObs(obs_data_t *plugin, StreamUP::PluginInfo &info)
 {
-	const auto& allPlugins = StreamUP::GetAllPlugins();
-	if (allPlugins.empty()) {
-		ErrorDialog(obs_module_text("Plugin.Error.LoadIssue"));
+	int minObs = static_cast<int>(obs_data_get_int(plugin, "minObs"));
+	if (minObs <= 0)
+		minObs = std::atoi(obs_data_get_string(plugin, "minObs"));
+	if (minObs <= 0)
+		return;
+	const int obsMajor = static_cast<int>(obs_get_version() >> 24);
+	if (obsMajor >= minObs) {
+		info.linksFitThisObs = true;
 		return;
 	}
-
-	std::map<std::string, std::string> version_mismatch_modules;
-	std::vector<std::pair<std::string, std::string>> installedPlugins = GetInstalledPlugins();
-
-	for (const auto &plugin : installedPlugins) {
-		const std::string &plugin_name = plugin.first;
-		const std::string &installed_version = plugin.second;
-		
-		auto plugin_it = allPlugins.find(plugin_name);
-		if (plugin_it == allPlugins.end()) {
-			continue;
+	auto legacy = OBSWrappers::GetObjectProperty(plugin, "legacy");
+	const std::string legacyVersion = legacy ? OBSWrappers::GetStringProperty(legacy.get(), "version") : std::string();
+	if (!legacyVersion.empty()) {
+		info.version = legacyVersion;
+		info.windowsURL.clear();
+		info.macURL.clear();
+		info.linuxURL.clear();
+		if (auto downloads = OBSWrappers::GetObjectProperty(legacy.get(), "downloads")) {
+			info.windowsURL = OBSWrappers::GetStringProperty(downloads.get(), "windows");
+			info.macURL = OBSWrappers::GetStringProperty(downloads.get(), "macOS");
+			info.linuxURL = OBSWrappers::GetStringProperty(downloads.get(), "linux");
 		}
-		
-		const StreamUP::PluginInfo &plugin_info = plugin_it->second;
-		const std::string &required_version = plugin_info.version;
-
-		if (installed_version != required_version && VersionUtils::IsVersionLessThan(installed_version, required_version)) {
-			version_mismatch_modules.emplace(plugin_name, installed_version);
-		}
+		info.linksFitThisObs = true;
+		return;
 	}
-
-	// DEV ONLY: set env STREAMUP_FAKE_UPDATES=1 to inject a few real plugins as "outdated" so the
-	// update dialog can be screenshotted for marketing. No effect unless the env var is present, so
-	// it can never reach real users. Uses real entries from allPlugins (needs valid version + URLs).
-	if (std::getenv("STREAMUP_FAKE_UPDATES")) {
-		auto prevVersion = [](std::string v) -> std::string {
-			std::vector<int> parts;
-			std::stringstream ss(v);
-			std::string tok;
-			while (std::getline(ss, tok, '.')) {
-				try { parts.push_back(std::stoi(tok)); } catch (...) { parts.push_back(0); }
-			}
-			if (parts.empty()) return "0.0.0";
-			for (int i = static_cast<int>(parts.size()) - 1; i >= 0; --i) {
-				if (parts[i] > 0) { parts[i]--; for (size_t j = i + 1; j < parts.size(); ++j) parts[j] = 0; break; }
-			}
-			std::string out;
-			for (size_t i = 0; i < parts.size(); ++i) { if (i) out += "."; out += std::to_string(parts[i]); }
-			return out;
-		};
-		int fakeCount = 0;
-		for (const auto &kv : allPlugins) {
-			if (fakeCount >= 6) break;
-			version_mismatch_modules[kv.first] = prevVersion(kv.second.version);
-			fakeCount++;
-		}
-	}
-
-	QString appDataPath = PathUtils::GetLocalAppDataPath();
-	QString filePath = appDataPath + "/StreamUP-OutdatedPluginsList.txt";
-
-	std::ofstream outFile(filePath.toStdString(), std::ios::out);
-	if (outFile.is_open()) {
-		for (const auto &module : version_mismatch_modules) {
-			outFile << module.first << "\n";
-		}
-		outFile.close();
-	}
-	
-	if (!version_mismatch_modules.empty()) {
-		std::map<std::string, std::string> empty_missing_modules;
-		std::vector<std::string> empty_failed_modules;
-		PluginsHaveIssue(empty_missing_modules, version_mismatch_modules, empty_failed_modules, nullptr);
-		version_mismatch_modules.clear();
-	} else {
-		PluginsUpToDateOutput(manuallyTriggered);
-	}
+	info.version.clear();
+	info.windowsURL.clear();
+	info.macURL.clear();
+	info.linuxURL.clear();
+	info.needsObs = minObs;
 }
-
-// HTTP functionality moved to StreamUP::HttpClient module
 
 void InitialiseRequiredModules()
 {
 	std::string api_response;
 	const std::string url = "https://api.streamup.tips/plugins";
-	
-	if (!StreamUP::HttpClient::MakeGetRequest(url, api_response)) {
+
+	// Dev hook: STREAMUP_PLUGIN_LIST=<file> reads the list from a JSON file
+	// instead, to try list changes before the API serves them. Unset, it
+	// does nothing.
+	if (const char *listFile = std::getenv("STREAMUP_PLUGIN_LIST"); listFile && *listFile) {
+		if (char *text = os_quick_read_utf8_file(listFile)) {
+			api_response = text;
+			bfree(text);
+		}
+		blog(LOG_INFO, "[StreamUP] Plugin list read from %s (STREAMUP_PLUGIN_LIST)", listFile);
+	} else if (!StreamUP::HttpClient::MakeGetRequest(url, api_response)) {
 		return;
 	}
 
@@ -1054,6 +616,7 @@ void InitialiseRequiredModules()
 		info.generalURL = OBSWrappers::GetStringProperty(plugin.get(), "url");
 		info.moduleName = OBSWrappers::GetStringProperty(plugin.get(), "moduleName");
 		info.required = OBSWrappers::GetBoolProperty(plugin.get(), "required");
+		ResolveForThisObs(plugin.get(), info);
 
 		StreamUP::PluginState::Instance().AddPlugin(name, info);
 
@@ -1537,67 +1100,6 @@ bool IsUpdateCheckSkipped(const std::string &searchString)
 	return searchString.find(kIgnoreMarker) != std::string::npos;
 }
 
-std::string GetUpdateCheckSkipReason(const std::string &searchString)
-{
-	size_t marker = searchString.find(kIgnoreMarker);
-	if (marker == std::string::npos) {
-		return "";
-	}
-
-	std::string reason = searchString.substr(marker + strlen(kIgnoreMarker));
-	size_t first = reason.find_first_not_of(" \t\r\n");
-	if (first == std::string::npos) {
-		return "";
-	}
-	size_t last = reason.find_last_not_of(" \t\r\n");
-
-	return reason.substr(first, last - first + 1);
-}
-
-std::vector<std::pair<std::string, std::string>> GetUncheckablePlugins()
-{
-	std::vector<std::pair<std::string, std::string>> uncheckable;
-
-	char *filepath = StreamUP::PathUtils::GetOBSLogPath();
-	if (filepath == nullptr) {
-		return uncheckable;
-	}
-
-	std::vector<std::string> loadedModules = GetLoadedModuleNamesFromLog(filepath);
-	bfree(filepath);
-
-	if (loadedModules.empty()) {
-		return uncheckable;
-	}
-
-	std::unordered_set<std::string> loaded(loadedModules.begin(), loadedModules.end());
-
-	for (const auto &module : StreamUP::GetAllPlugins()) {
-		const StreamUP::PluginInfo &info = module.second;
-
-		if (!IsUpdateCheckSkipped(info.searchString)) {
-			continue;
-		}
-
-		// Only surface plugins the user actually has loaded. Theme entries have
-		// no module to match against, so they're left to the theme check.
-		if (info.moduleName.empty() || loaded.find(info.moduleName) == loaded.end()) {
-			continue;
-		}
-
-		uncheckable.emplace_back(module.first, GetUpdateCheckSkipReason(info.searchString));
-	}
-
-	std::sort(uncheckable.begin(), uncheckable.end(),
-		  [](const std::pair<std::string, std::string> &a, const std::pair<std::string, std::string> &b) {
-			  return std::lexicographical_compare(
-				  a.first.begin(), a.first.end(), b.first.begin(), b.first.end(),
-				  [](char c1, char c2) { return std::tolower(c1) < std::tolower(c2); });
-		  });
-
-	return uncheckable;
-}
-
 std::vector<std::pair<std::string, std::string>> GetInstalledPlugins()
 {
 	std::vector<std::pair<std::string, std::string>> installedPlugins;
@@ -1926,7 +1428,7 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 	// DEV ONLY: STREAMUP_FAKE_UPDATES=1 injects the first ~6 real plugins as "outdated" so the
 	// update dialog can be screenshotted for marketing. No effect unless the env var is set, so it
 	// can never reach real users. Build target `streamup`, launch the dev OBS with the env var, open
-	// StreamUP -> Check for OBS Plugin Updates, screenshot the dialog.
+	// StreamUP -> Check for Plugin Updates…, screenshot the dialog.
 	if (std::getenv("STREAMUP_FAKE_UPDATES")) {
 		auto prevVersion = [](std::string v) -> std::string {
 			std::vector<int> parts;
@@ -1979,16 +1481,6 @@ void PerformPluginCheckAndCache(bool checkAllPlugins)
 	results.allRequiredUpToDate = results.missingPlugins.empty() && results.outdatedPlugins.empty() && !anyRequiredDisabled;
 
 	StreamUP::PluginState::Instance().SetPluginStatus(results);
-}
-
-bool IsAllPluginsUpToDateCached()
-{
-	if (!StreamUP::PluginState::Instance().IsPluginStatusCached()) {
-		PerformPluginCheckAndCache(false); // Check only required plugins for "up to date" status
-	}
-
-	const auto& status = StreamUP::PluginState::Instance().GetCachedPluginStatus();
-	return status.allRequiredUpToDate;
 }
 
 void ShowCachedPluginIssuesDialog(std::function<void()> continueCallback)
@@ -2186,138 +1678,6 @@ void ShowCachedPluginUpdatesDialogSilent()
 	std::map<std::string, std::string> empty_missing_modules;
 	PluginsHaveIssue(empty_missing_modules, status.outdatedPlugins, status.failedToLoadPlugins, nullptr, true,
 			 requiredDisabled);
-}
-
-void InvalidatePluginCache()
-{
-	StreamUP::PluginState::Instance().InvalidatePluginStatus();
-}
-
-std::vector<std::pair<std::string, std::string>> GetInstalledPluginsCached()
-{
-	if (!StreamUP::PluginState::Instance().IsPluginStatusCached()) {
-		PerformPluginCheckAndCache(true); // Check all plugins to get complete installed list
-	}
-
-	const auto& status = StreamUP::PluginState::Instance().GetCachedPluginStatus();
-	return status.installedPlugins;
-}
-
-//-------------------UI HELPER FUNCTIONS-------------------
-QString GetPluginForumLink(const std::string &pluginName)
-{
-	const auto& allPlugins = StreamUP::GetAllPlugins();
-	if (allPlugins.find(pluginName) != allPlugins.end()) {
-		const StreamUP::PluginInfo &pluginInfo = allPlugins.at(pluginName);
-		return QString::fromStdString(pluginInfo.generalURL);
-	}
-	return QString();
-}
-
-QString GetPluginPlatformURL(const std::string &pluginName)
-{
-	const auto& allPlugins = StreamUP::GetAllPlugins();
-	if (allPlugins.find(pluginName) == allPlugins.end()) {
-		return QString();
-	}
-
-	const StreamUP::PluginInfo &pluginInfo = allPlugins.at(pluginName);
-	std::string url;
-#ifdef _WIN32
-	url = pluginInfo.windowsURL;
-#elif defined(__APPLE__)
-	url = pluginInfo.macURL;
-#elif defined(__linux__)
-	url = pluginInfo.linuxURL;
-#else
-	url = pluginInfo.windowsURL;
-#endif
-	return QString::fromStdString(url);
-}
-
-std::vector<std::string> GetLoadedModuleNamesFromLog(const char *logPath)
-{
-	// OBS's own modules. They ship with OBS, so they're never ours to track.
-	static const std::unordered_set<std::string> builtInModules = {
-		"obs-websocket",    "coreaudio-encoder", "decklink-captions", "decklink-output-ui", "frontend-tools",
-		"image-source",     "obs-browser",       "obs-ffmpeg",        "obs-filters",        "obs-outputs",
-		"obs-qsv11",        "obs-text",          "obs-transitions",   "obs-vst",            "obs-x264",
-		"rtmp-services",    "text-freetype2",    "vlc-video",         "win-capture",        "win-dshow",
-		"win-wasapi",       "mac-avcapture",     "mac-capture",       "mac-syphon",         "mac-videotoolbox",
-		"mac-virtualcam",   "linux-v4l2",        "linux-pulseaudio",  "linux-pipewire",     "linux-jack",
-		"linux-capture",    "linux-source",      "obs-libfdk"};
-
-	std::string filepath = StreamUP::PathUtils::GetMostRecentTxtFile(logPath);
-	FILE *file = fopen(filepath.c_str(), "r");
-	std::vector<std::string> collected_modules;
-	std::regex timestamp_regex("^[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}:");
-
-	if (file) {
-		char line[256];
-		bool in_section = false;
-
-		while (fgets(line, 256, file) != NULL) {
-			std::string str_line(line);
-			str_line = std::regex_replace(str_line, timestamp_regex, "");
-			str_line.erase(0, str_line.find_first_not_of(" \t\r\n"));
-			str_line.erase(str_line.find_last_not_of(" \t\r\n") + 1);
-
-			if (str_line.find("Loaded Modules:") != std::string::npos) {
-				in_section = true;
-			} else if (str_line.find("---------------------------------") != std::string::npos) {
-				in_section = false;
-			}
-
-			if (in_section && !str_line.empty() && str_line != "Loaded Modules:") {
-				size_t suffix_pos = std::string::npos;
-#ifdef _WIN32
-				suffix_pos = str_line.find(".dll");
-#elif defined(__linux__)
-				suffix_pos = str_line.find(".so");
-#endif
-
-				if (suffix_pos != std::string::npos) {
-					str_line = str_line.substr(0, suffix_pos);
-				}
-
-				if (builtInModules.find(str_line) == builtInModules.end()) {
-					collected_modules.push_back(str_line);
-				}
-			}
-		}
-		fclose(file);
-	} else {
-		StreamUP::DebugLogger::LogErrorFormat("PluginManager", "Failed to open log file: %s", filepath.c_str());
-	}
-
-	std::sort(collected_modules.begin(), collected_modules.end(), [](const std::string &a, const std::string &b) {
-		return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), [](char char1, char char2) {
-			return std::tolower(char1) < std::tolower(char2);
-		});
-	});
-
-	return collected_modules;
-}
-
-std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath)
-{
-	std::vector<std::string> collected_modules = GetLoadedModuleNamesFromLog(logPath);
-
-	// Keep only modules we have no database entry for - those are the ones we
-	// can say nothing at all about.
-	const auto &allPlugins = StreamUP::GetAllPlugins();
-	collected_modules.erase(std::remove_if(collected_modules.begin(), collected_modules.end(),
-					       [&allPlugins](const std::string &moduleName) {
-						       for (const auto &pair : allPlugins) {
-							       if (pair.second.moduleName == moduleName) {
-								       return true;
-							       }
-						       }
-						       return false;
-					       }),
-				collected_modules.end());
-
-	return collected_modules;
 }
 
 std::vector<std::string> SearchFailedToLoadModulesInLogFile(const char *logPath)

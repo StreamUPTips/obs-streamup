@@ -109,7 +109,10 @@ int FlowLayout::doLayout(const QRect &rect, bool testOnly) const
 
     for (QLayoutItem *item : itemList) {
         const QWidget *wid = item->widget();
-        if (wid && !wid->isVisible()) {
+        // Skip only widgets hidden on purpose. isVisible() is also false while
+        // an ancestor is hidden, so a group shown later kept stale geometry
+        // (a chip painted as a wide band behind the names).
+        if (wid && wid->isHidden()) {
             continue;
         }
         

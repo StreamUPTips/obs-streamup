@@ -9,11 +9,9 @@ namespace PatchNotesWindow {
 // Show patch notes window
 void ShowPatchNotesWindow();
 
-// Check if patch notes window is currently open
-bool IsPatchNotesWindowOpen();
-
-// Internal dialog creation
-void CreatePatchNotesDialog();
+// The What's new page: picture cards for this release, every change folded
+// underneath and the membership strip. Hosted by the Features window.
+QWidget *BuildWhatsNewContent();
 
 } // namespace PatchNotesWindow
 } // namespace StreamUP

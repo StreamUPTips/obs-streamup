@@ -93,13 +93,6 @@ void ApplyMainWindowPadding(QMainWindow* mainWindow);
 void SetToolbarDockedEdge(Qt::ToolBarArea area);
 
 /**
- * @brief Refresh theme enhancements
- *
- * Call when dialogs are opened or theme changes to reapply enhancements.
- */
-void RefreshThemeEnhancements();
-
-/**
  * @brief Check if the current OBS theme is a StreamUP theme
  */
 bool IsUsingStreamUPTheme();
@@ -110,6 +103,46 @@ bool IsUsingStreamUPTheme();
  * Call this when the OBS theme changes (e.g., from a frontend event callback).
  */
 void ResetThemeCache();
+
+/**
+ * @brief The StreamUP theme's UI tweaks that can be switched off one by one
+ */
+enum class Tweak {
+    SourceFolders,  // Sources dock folder icons and child alignment
+    SourceGuides,   // Sources dock folder lines
+    Mixer,          // Audio mixer layout
+    VerticalCanvas, // Aitum Vertical Canvas control row
+    Multistream,    // Aitum Multistream dock
+    StudioMode,     // Transition slider marker and program area
+    Spacing,        // Dock and window edge spacing
+    WindowPolish    // Colour preview pills, taller rows in list dialogs
+};
+
+/**
+ * @brief True when a StreamUP theme is active and this tweak is switched on
+ *
+ * The switches are cached, so this is cheap enough to call from a paint.
+ */
+bool IsTweakActive(Tweak tweak);
+
+/**
+ * @brief Re-read the tweak switches after the settings change
+ */
+void ReloadTweakSettings();
+
+/**
+ * @brief Bring every tweak in line with the current theme and switches
+ *
+ * Called when the theme changes and when a switch is flipped. Anything that
+ * can be put back live is; the rest stops being applied and is fully undone
+ * the next time OBS starts.
+ */
+void ReapplyThemeTweaks();
+
+/**
+ * @brief Zero the margins inside OBS's own docks, or put OBS's back
+ */
+void ApplyDockSpacing();
 
 /**
  * @brief Clean up theme enhancement resources

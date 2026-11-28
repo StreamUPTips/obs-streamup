@@ -13,6 +13,18 @@
 //                                   its ring, glass and nameplate) moved and
 //                                   scaled as one, with geometry links that keep
 //                                   derived settings (a ring's cut-out) in step
+//   image                           a file path (an image source's "file")
+//
+// A link can point at a scene transition instead of a source ("transition":
+// name), so a slider can drive a transition product's duration.
+//
+// "actions" are one-click jobs a product offers, shown as buttons in its panel.
+// "use_as_transition" makes (or updates) a Scene as Transition that plays one
+// of the product's scenes. "product" names the product; every scene an install
+// creates is stamped with it, so My Products can find it later.
+//
+// Unknown control types, link kinds and actions are skipped with a warning,
+// never fatal, so an older plugin still loads a newer product file.
 //
 // "outputs" are templates: a setting whose value is built from several
 // controls, e.g. a nameplate's ProText markup from the platform list.
@@ -30,6 +42,7 @@
 
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QByteArray>
 #include <QJsonValue>
 #include <QList>
 #include <QObject>
@@ -40,7 +53,7 @@
 namespace StreamUP {
 namespace OverlayControls {
 
-enum class ControlType { Colour, Slider, Number, Toggle, Text, TextArea, Select, Font, Platforms, Layout };
+enum class ControlType { Colour, Slider, Number, Toggle, Text, TextArea, Select, Font, Platforms, Layout, Image };
 
 struct SelectOption {
 	QString value;
@@ -81,11 +94,12 @@ struct ControlInfo {
 	QList<SelectOption> options;       // select
 	QList<PlatformDef> platforms;      // platforms
 	LayoutInfo layout;                 // layout
-	QJsonValue value;                  // shape depends on type, see FormatValue
+	QJsonValue value;                  // shape depends on type
 	QJsonValue defaultValue;
 	bool applied = false;              // written since install or the last reset
 	int links = 0;
 	int missing = 0;                   // links whose target no longer exists
+	bool advanced = false;             // manifest "advanced": folded under More options
 };
 
 struct GroupInfo {
@@ -104,6 +118,37 @@ struct PresetInfo {
 	bool builtIn = true;
 };
 
+// What a product says it is. Stamped onto the scenes it installs.
+struct ProductStamp {
+	QString id;
+	QString name;
+	QString version;
+	QString overlay; // the controls manifest id, when there is one
+	QString category; // "alerts", "transitions"... (lower case), may be empty
+	QString icon;         // ProductFromFile only: absolute path of the manifest's icon file
+	QByteArray iconData;  // ProductFromFile only: an icon embedded in the manifest, validated
+	QString iconSuffix;   // "png", "jpg" or "webp", for iconData
+	bool isEmpty() const { return id.isEmpty(); }
+};
+
+enum class ActionType { UseAsTransition };
+
+struct ActionInfo {
+	QString id;
+	ActionType type = ActionType::UseAsTransition;
+	QString label;
+	QString help;
+	// use_as_transition
+	QString scene;           // the product scene the transition plays
+	QString transition;      // the transition's name in OBS's list
+	int duration = 2000;     // ms
+	double transitionPoint = 50.0; // percent: where the scenes swap
+	bool makeCurrent = true; // pick it in the Transitions dock afterwards
+	// Live state, filled in by GetOverlay / ListOverlays.
+	bool exists = false;     // a transition with that name is in OBS's list
+	bool current = false;    // ...and it is the one picked
+};
+
 struct OverlayInfo {
 	QString id;
 	QString name;
@@ -113,6 +158,9 @@ struct OverlayInfo {
 	QList<TabInfo> tabs;
 	QList<GroupInfo> groups;
 	QList<PresetInfo> presets;
+	QList<ActionInfo> actions;
+	ProductStamp product;
+	bool hasControls = false; // any control at all (a product can be actions only)
 	int links = 0;
 	int missing = 0;
 };
@@ -125,7 +173,6 @@ signals:
 	void overlaysChanged();
 	void controlChanged(const QString &overlayId, const QString &controlId);
 	void overlayReset(const QString &overlayId);
-	void sourceReset(const QString &overlayId, const QString &sourceName);
 };
 
 Notifier *GetNotifier();
@@ -171,18 +218,31 @@ bool DeletePreset(const QString &overlayId, const QString &presetName);
 
 QStringList DriftedControls(const QString &overlayId);
 
+// Takes what each control's setting holds now as the control's value, for
+// settings changed by hand outside the panel, so the panel shows what is really
+// there. Writes nothing to OBS. Returns the controls whose value changed (they
+// also get controlChanged).
+QStringList SyncFromSources(const QString &overlayId);
+
 QString OverlayForScene(obs_source_t *scene);
 
 // Current frame of a layout part in one of its scenes (canvas pixels). Empty
 // when the part has nothing in that scene.
 QRectF LayoutFrame(const QString &overlayId, const QString &controlId, const QString &sceneName);
 
-// Snapshot-backed reset of a single source: its settings, its filters and its
-// transform in every overlay scene.
-bool ResetSource(const QString &overlayId, const QString &sourceName);
-bool HasSnapshot(const QString &overlayId, const QString &sourceName);
+// The source types a control's links point at ("text_gdiplus",
+// "text_ft2_source", ...), unversioned, without duplicates. Lets the font
+// picker say what a newly installed font needs to show up.
+QStringList BoundSourceKinds(const QString &overlayId, const QString &controlId);
 
-QString FormatValue(const ControlInfo &control, const QJsonValue &value);
+// Runs one of a product's actions. UI thread only: it drives OBS's transition
+// list. On success *message says what happened, in words for the user.
+bool RunAction(const QString &overlayId, const QString &actionId, QString *message = nullptr,
+	       QString *error = nullptr);
+
+// The "product" a manifest declares, falling back to the manifest's own id,
+// name and version. Empty when the file has no manifest.
+ProductStamp ProductFromFile(const QString &path);
 
 } // namespace OverlayControls
 } // namespace StreamUP

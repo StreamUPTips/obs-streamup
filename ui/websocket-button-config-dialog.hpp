@@ -1,5 +1,7 @@
 #pragma once
 
+#include "streamup-kit.hpp"
+
 #include <QDialog>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -71,6 +73,7 @@ private:
 	bool jsonIsUsable(QString *errorOut) const;
 
 	void updateIconDisplay();
+	void refreshPreview();
 	void setExistingItem(std::shared_ptr<StreamUP::ToolbarConfig::WebSocketButtonItem> item);
 
 	static void filterList(QListWidget *list, const QString &needle);
@@ -100,6 +103,8 @@ private:
 
 	// Icon
 	QLabel *iconPreview;
+	StreamUP::Kit::ButtonPreview *m_preview = nullptr;
+	QVBoxLayout *m_buttonCard = nullptr;
 	StreamUP::UIStyles::PillButton *selectIconButton;
 
 	// Customisation

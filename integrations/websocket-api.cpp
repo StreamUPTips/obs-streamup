@@ -9,7 +9,10 @@
 #include "../ui/settings-manager.hpp"
 #include "backup-manager.hpp"
 #include "overlay-controls.hpp"
+#include "../core/canvas-lookup.hpp"
 #include "../ui/overlay-controls-window.hpp"
+#include "../ui/my-products-window.hpp"
+#include "../core/product-registry.hpp"
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <util/platform.h>
@@ -19,6 +22,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <algorithm>
+#include <vector>
 
 // Forward declarations for functions from main streamup.cpp
 extern void GetShowHideTransition(obs_data_t *request_data, obs_data_t *response_data, void *private_data, bool transition_type);
@@ -854,6 +859,80 @@ void WebsocketGroupSelectedSources(obs_data_t *request_data, obs_data_t *respons
 	}
 }
 
+void WebsocketGroupSceneItems(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+	auto fail = [&](const char *error) {
+		obs_data_set_string(response_data, "error", error);
+		obs_data_set_bool(response_data, "success", false);
+	};
+
+	const char *groupName = obs_data_get_string(request_data, "groupName");
+	if (!groupName || !*groupName)
+		return fail("'groupName' is required.");
+	// Group names are source names, shared by every canvas.
+	if (obs_source_t *taken = StreamUP::CanvasLookup::GetSourceByName(groupName)) {
+		obs_source_release(taken);
+		return fail("A source with that name already exists.");
+	}
+
+	// By UUID, so a scene on the vertical canvas is found too.
+	obs_source_t *sceneSource = nullptr;
+	const char *sceneUuid = obs_data_get_string(request_data, "sceneUuid");
+	if (sceneUuid && *sceneUuid)
+		sceneSource = obs_get_source_by_uuid(sceneUuid);
+	if (!sceneSource)
+		sceneSource = StreamUP::CanvasLookup::GetSourceByName(obs_data_get_string(request_data, "sceneName"));
+	obs_scene_t *scene = obs_scene_from_source(sceneSource);
+	if (!scene) {
+		obs_source_release(sceneSource);
+		return fail("Scene not found. Pass 'sceneUuid' or 'sceneName'.");
+	}
+
+	std::vector<int64_t> ids;
+	obs_data_array_t *idArray = obs_data_get_array(request_data, "sceneItemIds");
+	for (size_t i = 0; i < obs_data_array_count(idArray); i++) {
+		obs_data_t *entry = obs_data_array_item(idArray, i);
+		ids.push_back(obs_data_get_int(entry, "value"));
+		obs_data_release(entry);
+	}
+	obs_data_array_release(idArray);
+	if (ids.empty()) {
+		obs_source_release(sceneSource);
+		return fail("'sceneItemIds' must list at least one item.");
+	}
+
+	// OBS wants the items bottom to top, in the order they already stack.
+	struct Walk {
+		const std::vector<int64_t> *ids;
+		std::vector<obs_sceneitem_t *> items;
+	} walk{&ids, {}};
+	obs_scene_enum_items(
+		scene,
+		[](obs_scene_t *, obs_sceneitem_t *item, void *param) {
+			auto *w = static_cast<Walk *>(param);
+			if (std::find(w->ids->begin(), w->ids->end(), obs_sceneitem_get_id(item)) != w->ids->end() &&
+			    !obs_sceneitem_is_group(item))
+				w->items.push_back(item);
+			return true;
+		},
+		&walk);
+	if (walk.items.size() != ids.size()) {
+		obs_source_release(sceneSource);
+		return fail("Some items were not found at the top level of the scene, or are groups themselves.");
+	}
+
+	obs_sceneitem_t *group = obs_scene_insert_group(scene, groupName, walk.items.data(), walk.items.size());
+	if (!group) {
+		obs_source_release(sceneSource);
+		return fail("OBS could not make the group.");
+	}
+	obs_data_set_int(response_data, "sceneItemId", obs_sceneitem_get_id(group));
+	obs_data_set_string(response_data, "groupUuid", obs_source_get_uuid(obs_sceneitem_get_source(group)));
+	obs_data_set_bool(response_data, "success", true);
+	obs_source_release(sceneSource);
+}
+
 void WebsocketToggleVisibilitySelectedSources(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
 {
 	UNUSED_PARAMETER(request_data);
@@ -1066,6 +1145,8 @@ const char *TypeName(oc::ControlType t)
 		return "platforms";
 	case oc::ControlType::Layout:
 		return "layout";
+	case oc::ControlType::Image:
+		return "image";
 	}
 	return "";
 }
@@ -1093,6 +1174,35 @@ void WebsocketGetOverlays(obs_data_t *request_data, obs_data_t *response_data, v
 	}
 	obs_data_set_array(response_data, "overlays", list);
 	obs_data_array_release(list);
+	obs_data_set_bool(response_data, "success", true);
+}
+
+// Registers (or re-registers) an overlay's controls from a .StreamUP file
+// without installing any of its sources. For a creator iterating on a product:
+// the scenes already exist, only the control panel needs the new manifest.
+void WebsocketRegisterOverlay(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+	const QString file = QString::fromUtf8(obs_data_get_string(request_data, "file")).trimmed();
+	if (file.isEmpty()) {
+		obs_data_set_string(response_data, "error", "'file' is required (the path of a .StreamUP file).");
+		obs_data_set_bool(response_data, "success", false);
+		return;
+	}
+	QString overlayId;
+	QString error;
+	if (!oc::RegisterFromFile(file, &overlayId, &error)) {
+		obs_data_set_string(response_data, "error", error.toUtf8().constData());
+		obs_data_set_bool(response_data, "success", false);
+		return;
+	}
+	StreamUP::Products::CacheIconFromFile(file);
+	oc::OverlayInfo info;
+	if (oc::GetOverlay(overlayId, info)) {
+		obs_data_set_int(response_data, "links", info.links);
+		obs_data_set_int(response_data, "missingLinks", info.missing);
+	}
+	obs_data_set_string(response_data, "overlay", overlayId.toUtf8().constData());
 	obs_data_set_bool(response_data, "success", true);
 }
 
@@ -1147,6 +1257,21 @@ void WebsocketGetOverlayControls(obs_data_t *request_data, obs_data_t *response_
 	}
 	obs_data_set_array(response_data, "presets", presets);
 	obs_data_array_release(presets);
+
+	obs_data_array_t *actions = obs_data_array_create();
+	for (const oc::ActionInfo &a : o.actions) {
+		obs_data_t *action = obs_data_create();
+		obs_data_set_string(action, "id", a.id.toUtf8().constData());
+		obs_data_set_string(action, "type", "use_as_transition");
+		obs_data_set_string(action, "scene", a.scene.toUtf8().constData());
+		obs_data_set_string(action, "transition", a.transition.toUtf8().constData());
+		obs_data_set_bool(action, "exists", a.exists);
+		obs_data_set_bool(action, "current", a.current);
+		obs_data_array_push_back(actions, action);
+		obs_data_release(action);
+	}
+	obs_data_set_array(response_data, "actions", actions);
+	obs_data_array_release(actions);
 	obs_data_set_bool(response_data, "success", true);
 }
 
@@ -1206,6 +1331,80 @@ void WebsocketOpenOverlayControls(obs_data_t *request_data, obs_data_t *response
 	if (!FindOverlayFromRequest(request_data, response_data, o))
 		return;
 	StreamUP::OverlayControlsWindow::Show(o.id);
+	obs_data_set_bool(response_data, "success", true);
+}
+
+void WebsocketRunOverlayAction(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(private_data);
+	oc::OverlayInfo o;
+	if (!FindOverlayFromRequest(request_data, response_data, o))
+		return;
+	QString actionId = QString::fromUtf8(obs_data_get_string(request_data, "action"));
+	if (actionId.isEmpty() && !o.actions.isEmpty())
+		actionId = o.actions.first().id;
+	// Adding a transition drives OBS's own windows: UI thread, and wait.
+	struct ActionTask {
+		QString overlay;
+		QString action;
+		QString message;
+		QString error;
+		bool ok = false;
+	} task{o.id, actionId, QString(), QString(), false};
+	obs_queue_task(
+		OBS_TASK_UI,
+		[](void *param) {
+			auto *t = static_cast<ActionTask *>(param);
+			t->ok = oc::RunAction(t->overlay, t->action, &t->message, &t->error);
+		},
+		&task, true);
+	obs_data_set_bool(response_data, "success", task.ok);
+	obs_data_set_string(response_data, task.ok ? "message" : "error",
+			    (task.ok ? task.message : task.error).toUtf8().constData());
+}
+
+void WebsocketGetMyProducts(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+	struct ListTask {
+		QList<StreamUP::Products::ProductEntry> products;
+	} task;
+	obs_queue_task(
+		OBS_TASK_UI,
+		[](void *param) { static_cast<ListTask *>(param)->products = StreamUP::Products::ListProducts(); }, &task,
+		true);
+	obs_data_array_t *list = obs_data_array_create();
+	for (const StreamUP::Products::ProductEntry &p : task.products) {
+		obs_data_t *item = obs_data_create();
+		obs_data_set_string(item, "id", p.id.toUtf8().constData());
+		obs_data_set_string(item, "name", p.name.toUtf8().constData());
+		obs_data_set_string(item, "version", p.version.toUtf8().constData());
+		obs_data_set_string(item, "overlay", p.overlayId.toUtf8().constData());
+		obs_data_set_bool(item, "stamped", p.stamped);
+		obs_data_set_bool(item, "transition", p.isTransition);
+		obs_data_array_t *scenes = obs_data_array_create();
+		for (const QString &scene : p.scenes) {
+			obs_data_t *sd = obs_data_create();
+			obs_data_set_string(sd, "name", scene.toUtf8().constData());
+			obs_data_array_push_back(scenes, sd);
+			obs_data_release(sd);
+		}
+		obs_data_set_array(item, "scenes", scenes);
+		obs_data_array_release(scenes);
+		obs_data_array_push_back(list, item);
+		obs_data_release(item);
+	}
+	obs_data_set_array(response_data, "products", list);
+	obs_data_array_release(list);
+	obs_data_set_bool(response_data, "success", true);
+}
+
+void WebsocketOpenMyProducts(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	UNUSED_PARAMETER(request_data);
+	UNUSED_PARAMETER(private_data);
+	StreamUP::MyProductsWindow::Show();
 	obs_data_set_bool(response_data, "success", true);
 }
 

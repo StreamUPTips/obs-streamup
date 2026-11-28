@@ -30,7 +30,6 @@ public:
     // Public methods for external access
     void updatePositionAwareTheme();
     void refreshFromConfiguration();
-    void updateButtonSizes();  // Update button and icon sizes without rebuilding
     void refreshSizeClass();   // Re-read toolbar size setting and re-polish styles
     void refreshAlignment();   // Re-read toolbar alignment setting and re-lay out
 
@@ -59,11 +58,9 @@ private slots:
 
 private:
     void setupDynamicUI();
-    void clearLayout();
     QToolButton* createButtonFromConfig(std::shared_ptr<StreamUP::ToolbarConfig::ToolbarItem> item);
     void executeDockAction(const QString& actionType);
     void executeDockActionWithButton(const QString& actionType, QToolButton* button);
-    void showToolbarContextMenu(const QPoint& position);
     void updateStreamButton();
     void updateRecordButton();
     void updatePauseButton();
@@ -106,9 +103,6 @@ private:
     // own confirmation dialogs and pre-flight checks. Returns false if the
     // slot could not be found.
     bool invokeMainWindowAction(const char* slotName);
-
-    // Theme-aware icon helper
-    QString getThemedIconPath(const QString& iconName);
 
     // Enhanced cached icon loading system
     QIcon getCachedIcon(const QString& iconName);

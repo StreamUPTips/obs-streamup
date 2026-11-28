@@ -30,12 +30,6 @@ public:
     void SetHotkey(obs_data_array_t* hotkeyData);
 
     /**
-     * @brief Get the current hotkey combination as OBS data
-     * @return obs_data_array_t* Current hotkey data (caller must release)
-     */
-    obs_data_array_t* GetHotkey() const;
-
-    /**
      * @brief Clear the current hotkey assignment
      */
     void ClearHotkey();

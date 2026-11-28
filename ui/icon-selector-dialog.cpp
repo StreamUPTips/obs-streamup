@@ -373,10 +373,7 @@ void IconSelectorDialog::populateCommonIcons() {
     // Add StreamUP plugin icons from Qt resources
     // StreamUP icons are embedded as Qt resources using ":images/icons/..." paths
     
-    bool isDark = obs_frontend_is_theme_dark();
-    QString themeSuffix = isDark ? "-dark" : "-light";
-    
-    // StreamUP UI icons (theme-aware)
+    // StreamUP UI icons (theme-aware, through the shared kit's resolver)
     QStringList uiIconNames = {
         "streaming-inactive", "streaming", 
         "record-off", "record-on", "pause",
@@ -391,7 +388,7 @@ void IconSelectorDialog::populateCommonIcons() {
     };
     
     for (const QString& iconName : uiIconNames) {
-        QString resourcePath = QString(":images/icons/ui/%1%2.svg").arg(iconName).arg(themeSuffix);
+        QString resourcePath = StreamUP::UIHelpers::GetThemedIconPath(iconName);
         
         // Check if the resource exists
         if (QFile::exists(resourcePath)) {

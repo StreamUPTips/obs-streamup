@@ -3,11 +3,14 @@
 // All of it runs under the registry lock held by overlay-controls.cpp.
 
 #include "overlay-controls-internal.hpp"
+#include "canvas-lookup.hpp"
+#include "product-transitions.hpp"
 
 #include <streamup/debug-logger.hpp>
 
 #include <QHash>
 #include <QJsonDocument>
+#include <QList>
 #include <QRegularExpression>
 #include <QSet>
 
@@ -56,16 +59,6 @@ qint64 ToObsColour(const QColor &c)
 	       (static_cast<qint64>(c.green()) << 8) | static_cast<qint64>(c.red());
 }
 
-bool IsNumeric(ControlType t)
-{
-	return t == ControlType::Slider || t == ControlType::Number;
-}
-
-bool IsString(ControlType t)
-{
-	return t == ControlType::Text || t == ControlType::TextArea || t == ControlType::Select || t == ControlType::Font;
-}
-
 QJsonValue NormaliseValue(const Control &c, const QJsonValue &in)
 {
 	const QJsonValue undefined(QJsonValue::Undefined);
@@ -102,6 +95,11 @@ QJsonValue NormaliseValue(const Control &c, const QJsonValue &in)
 			if (s == "false" || s == "off" || s == "0")
 				return false;
 		}
+		return undefined;
+	case ControlType::Image:
+		// A path. Backslashes are fine on Windows but OBS stores forward ones.
+		if (in.isString())
+			return QString(in.toString()).replace(QLatin1Char('\\'), QLatin1Char('/'));
 		return undefined;
 	case ControlType::Text:
 	case ControlType::TextArea:
@@ -185,7 +183,7 @@ obs_source_t *ResolveTarget(QString &source, QString &sourceUuid, QString &filte
 	if (!sourceUuid.isEmpty())
 		src = obs_get_source_by_uuid(sourceUuid.toUtf8().constData());
 	if (!src)
-		src = obs_get_source_by_name(source.toUtf8().constData());
+		src = StreamUP::CanvasLookup::GetSourceByName(source.toUtf8().constData());
 
 	if (filter.isEmpty()) {
 		if (src) {
@@ -218,9 +216,68 @@ obs_source_t *ResolveTarget(QString &source, QString &sourceUuid, QString &filte
 	return f;
 }
 
+obs_source_t *ResolveBinding(Binding &b)
+{
+	if (!b.transition)
+		return ResolveTarget(b.source, b.sourceUuid, b.filter, b.filterUuid);
+	obs_source_t *t = StreamUP::ProductTransitions::Find(b.source, b.sourceUuid);
+	if (t) {
+		b.sourceUuid = QString::fromUtf8(obs_source_get_uuid(t));
+		b.source = QString::fromUtf8(obs_source_get_name(t));
+	}
+	return t;
+}
+
+bool PropertyRange(Binding &b, double *min, double *max, double *step)
+{
+	if (b.mode != BindMode::Set || !b.scene.isEmpty() || b.key.isEmpty() || b.key.startsWith('@') ||
+	    b.key.contains('.'))
+		return false;
+	obs_source_t *src = ResolveBinding(b);
+	if (!src)
+		return false;
+	bool found = false;
+	obs_properties_t *props = obs_source_properties(src);
+	if (obs_property_t *prop = props ? obs_properties_get(props, b.key.toUtf8().constData()) : nullptr) {
+		switch (obs_property_get_type(prop)) {
+		case OBS_PROPERTY_INT:
+			*min = obs_property_int_min(prop);
+			*max = obs_property_int_max(prop);
+			*step = obs_property_int_step(prop);
+			found = true;
+			break;
+		case OBS_PROPERTY_FLOAT:
+			*min = obs_property_float_min(prop);
+			*max = obs_property_float_max(prop);
+			*step = obs_property_float_step(prop);
+			found = true;
+			break;
+		default:
+			break;
+		}
+	}
+	obs_properties_destroy(props);
+	obs_source_release(src);
+	// A huge "anything goes" range (INT_MAX and the like) is no use as a slider.
+	return found && *max > *min && (*max - *min) <= 1000000.0;
+}
+
 namespace {
 
-// Runs fn on a scene item. The item pointer is only valid inside fn.
+// The scene WithItem searched, while its fn runs. A part can sit inside a
+// group, and the group's own transform is what places it on the canvas.
+thread_local obs_scene_t *t_itemScene = nullptr;
+
+// The group item holding item, or null when the item sits on the scene itself.
+obs_sceneitem_t *ParentGroup(obs_sceneitem_t *item)
+{
+	if (!t_itemScene || obs_sceneitem_get_scene(item) == t_itemScene)
+		return nullptr;
+	return obs_sceneitem_get_group(t_itemScene, item);
+}
+
+// Runs fn on a scene item, which may be inside a group. The item pointer is
+// only valid inside fn.
 bool WithItem(QString &scene, QString &sceneUuid, const QString &source, const QString &sourceUuid, qint64 *itemId,
 	      const std::function<void(obs_sceneitem_t *)> &fn)
 {
@@ -228,7 +285,7 @@ bool WithItem(QString &scene, QString &sceneUuid, const QString &source, const Q
 	if (!sceneUuid.isEmpty())
 		sceneSource = obs_get_source_by_uuid(sceneUuid.toUtf8().constData());
 	if (!sceneSource)
-		sceneSource = obs_get_source_by_name(scene.toUtf8().constData());
+		sceneSource = StreamUP::CanvasLookup::GetSourceByName(scene.toUtf8().constData());
 	if (!sceneSource)
 		return false;
 	obs_scene_t *sc = obs_scene_from_source(sceneSource);
@@ -260,35 +317,84 @@ bool WithItem(QString &scene, QString &sceneUuid, const QString &source, const Q
 		item = obs_scene_find_source_recursive(sc, source.toUtf8().constData());
 	if (item && itemId)
 		*itemId = obs_sceneitem_get_id(item);
-	if (item)
+	if (item) {
+		obs_scene_t *outer = t_itemScene;
+		t_itemScene = sc;
 		fn(item);
+		t_itemScene = outer;
+	}
 	obs_source_release(sceneSource);
 	return item != nullptr;
 }
 
-// The item's box on its scene's canvas, worked out from its transform rather
-// than read from OBS's box matrix: that matrix only catches up on the next
-// video tick, and layout moves need the answer straight away. Rotation is
+// Group space to canvas space: canvas = origin + scale * local. Identity for
+// an item that is not in a group.
+struct GroupXf {
+	double ox = 0.0;
+	double oy = 0.0;
+	double sx = 1.0;
+	double sy = 1.0;
+};
+
+QRectF ItemBox(obs_sceneitem_t *item, const double *pos = nullptr, const double *scale = nullptr);
+
+GroupXf GroupTransform(obs_sceneitem_t *item)
+{
+	GroupXf g;
+	obs_sceneitem_t *group = ParentGroup(item);
+	if (!group)
+		return g;
+	// A group's source is the size of what it holds, and its children are
+	// placed from its top-left corner.
+	const QRectF box = ItemBox(group);
+	obs_source_t *gs = obs_sceneitem_get_source(group);
+	const uint32_t gw = obs_source_get_width(gs);
+	const uint32_t gh = obs_source_get_height(gs);
+	g.ox = box.x();
+	g.oy = box.y();
+	g.sx = gw ? box.width() / gw : 1.0;
+	g.sy = gh ? box.height() / gh : 1.0;
+	return g;
+}
+
+// An item's position and scale on the canvas, through its group if it has one.
+void CanvasTransform(obs_sceneitem_t *item, double &px, double &py, double &sx, double &sy)
+{
+	const GroupXf g = GroupTransform(item);
+	struct obs_transform_info info;
+	obs_sceneitem_get_info2(item, &info);
+	px = g.ox + g.sx * info.pos.x;
+	py = g.oy + g.sy * info.pos.y;
+	sx = g.sx * info.scale.x;
+	sy = g.sy * info.scale.y;
+}
+
+// The item's box on the canvas, worked out from its transform rather than
+// read from OBS's box matrix: that matrix only catches up on the next video
+// tick, and layout moves need the answer straight away. pos and scale, when
+// given, are canvas values (a part's captured install transform). Rotation is
 // ignored; every overlay part is square to the canvas.
-QRectF ItemBox(obs_sceneitem_t *item, const double *pos = nullptr, const double *scale = nullptr)
+QRectF ItemBox(obs_sceneitem_t *item, const double *pos, const double *scale)
 {
 	obs_source_t *src = obs_sceneitem_get_source(item);
 	struct obs_transform_info info;
 	obs_sceneitem_get_info2(item, &info);
 	struct obs_sceneitem_crop crop;
 	obs_sceneitem_get_crop(item, &crop);
-	const double px = pos ? pos[0] : info.pos.x;
-	const double py = pos ? pos[1] : info.pos.y;
-	const double sx = scale ? scale[0] : info.scale.x;
-	const double sy = scale ? scale[1] : info.scale.y;
+	const GroupXf g = GroupTransform(item);
+	const double px = pos ? pos[0] : g.ox + g.sx * info.pos.x;
+	const double py = pos ? pos[1] : g.oy + g.sy * info.pos.y;
+	const double sx = scale ? scale[0] : g.sx * info.scale.x;
+	const double sy = scale ? scale[1] : g.sy * info.scale.y;
 	double w;
 	double h;
 	if (info.bounds_type != OBS_BOUNDS_NONE) {
 		// Bounds are a fixed box the source is fitted into; they scale with
 		// the part like the item's own scale would.
-		const double k = (scale && info.scale.x != 0.0f) ? scale[0] / info.scale.x : 1.0;
-		w = info.bounds.x * k;
-		h = info.bounds.y * k;
+		const double live = g.sx * info.scale.x;
+		const double k = (scale && live != 0.0) ? scale[0] / live : 1.0;
+		w = info.bounds.x * g.sx * k;
+		h = info.bounds.y * g.sy * k;
 	} else {
 		w = double(int(obs_source_get_width(src)) - crop.left - crop.right) * std::fabs(sx);
 		h = double(int(obs_source_get_height(src)) - crop.top - crop.bottom) * std::fabs(sy);
@@ -492,7 +598,7 @@ bool BindingTargetExists(Binding &b)
 		qint64 id = 0;
 		return WithItem(b.scene, b.sceneUuid, b.source, b.sourceUuid, &id, [](obs_sceneitem_t *) {});
 	}
-	obs_source_t *t = ResolveTarget(b.source, b.sourceUuid, b.filter, b.filterUuid);
+	obs_source_t *t = ResolveBinding(b);
 	obs_source_release(t);
 	return t != nullptr;
 }
@@ -518,7 +624,7 @@ bool CaptureBinding(Binding &b)
 		return true;
 	}
 
-	obs_source_t *target = ResolveTarget(b.source, b.sourceUuid, b.filter, b.filterUuid);
+	obs_source_t *target = ResolveBinding(b);
 	if (!target)
 		return false;
 
@@ -566,6 +672,9 @@ bool CaptureBinding(Binding &b)
 bool WriteBinding(Binding &b, const Control &c)
 {
 	if (!b.captured && !CaptureBinding(b)) {
+		// A transition link waits quietly for its transition to be made.
+		if (b.transition)
+			return false;
 		DebugLogger::LogWarningFormat("OverlayControls", "'%s' / '%s' has no '%s' yet, skipped this time",
 					      b.source.toUtf8().constData(), b.filter.toUtf8().constData(),
 					      b.key.toUtf8().constData());
@@ -579,7 +688,7 @@ bool WriteBinding(Binding &b, const Control &c)
 				[on](obs_sceneitem_t *item) { obs_sceneitem_set_visible(item, on); });
 	}
 
-	obs_source_t *target = ResolveTarget(b.source, b.sourceUuid, b.filter, b.filterUuid);
+	obs_source_t *target = ResolveBinding(b);
 	if (!target)
 		return false;
 
@@ -618,7 +727,8 @@ bool WriteBinding(Binding &b, const Control &c)
 	case ControlType::Text:
 	case ControlType::TextArea:
 	case ControlType::Select:
-	case ControlType::Font: {
+	case ControlType::Font:
+	case ControlType::Image: {
 		const QByteArray s = TransformText(b, c.value.toString()).toUtf8();
 		UpdateKey(target, b.key, [&s](obs_data_t *d, const char *k) { obs_data_set_string(d, k, s.constData()); });
 		break;
@@ -642,7 +752,7 @@ void RestoreBinding(Binding &b)
 			 [on](obs_sceneitem_t *item) { obs_sceneitem_set_visible(item, on); });
 		return;
 	}
-	obs_source_t *target = ResolveTarget(b.source, b.sourceUuid, b.filter, b.filterUuid);
+	obs_source_t *target = ResolveBinding(b);
 	if (!target)
 		return;
 
@@ -674,7 +784,7 @@ bool BindingDrifted(Binding &b, const Control &c)
 			 [&](obs_sceneitem_t *item) { drifted = obs_sceneitem_visible(item) != want; });
 		return drifted;
 	}
-	obs_source_t *target = ResolveTarget(b.source, b.sourceUuid, b.filter, b.filterUuid);
+	obs_source_t *target = ResolveBinding(b);
 	if (!target)
 		return false;
 
@@ -708,6 +818,7 @@ bool BindingDrifted(Binding &b, const Control &c)
 			case ControlType::TextArea:
 			case ControlType::Select:
 			case ControlType::Font:
+			case ControlType::Image:
 				drifted = QString::fromUtf8(obs_data_get_string(container, k.constData())) !=
 					  TransformText(b, c.value.toString());
 				break;
@@ -720,6 +831,107 @@ bool BindingDrifted(Binding &b, const Control &c)
 	}
 	obs_source_release(target);
 	return drifted;
+}
+
+// What the control would have to be for this link to write what the setting
+// holds now: the link's mapping run backwards. Used when a setting was changed
+// by hand, so the panel shows what is really there. Undefined when the setting
+// cannot be read or the mapping cannot be undone.
+QJsonValue ReadBack(Binding &b, const Control &c)
+{
+	const QJsonValue none(QJsonValue::Undefined);
+	if (!b.captured)
+		return none;
+	if (!b.scene.isEmpty()) {
+		if (c.type != ControlType::Toggle)
+			return none;
+		bool visible = true;
+		qint64 id = 0;
+		if (!WithItem(b.scene, b.sceneUuid, b.source, b.sourceUuid, &id,
+			      [&](obs_sceneitem_t *item) { visible = obs_sceneitem_visible(item); }))
+			return none;
+		return ToggleResult(b, visible);
+	}
+	obs_source_t *target = ResolveBinding(b);
+	if (!target)
+		return none;
+	QJsonValue out = none;
+	if (b.key == kEnabledKey) {
+		if (c.type == ControlType::Toggle)
+			out = ToggleResult(b, obs_source_enabled(target));
+		obs_source_release(target);
+		return out;
+	}
+	QString leaf;
+	obs_data_t *container = Container(target, b.key, leaf);
+	const QByteArray k = leaf.toUtf8();
+	obs_data_item_t *item = container ? obs_data_item_byname(container, k.constData()) : nullptr;
+	if (item) {
+		switch (c.type) {
+		case ControlType::Colour: {
+			QColor live = FromObsColour(obs_data_get_int(container, k.constData()));
+			if (b.lighten != 0.0) {
+				const double t = std::fabs(b.lighten);
+				const double target = b.lighten > 0.0 ? 255.0 : 0.0;
+				if (t >= 1.0)
+					break; // fully white or black: the colour is gone
+				auto undo = [&](int v) {
+					return std::clamp(static_cast<int>(std::lround((v - target * t) / (1.0 - t))), 0, 255);
+				};
+				live.setRgb(undo(live.red()), undo(live.green()), undo(live.blue()), live.alpha());
+			}
+			const int installAlpha = static_cast<int>((static_cast<quint32>(b.baseColour) >> 24) & 0xff);
+			live.setAlpha(installAlpha > 0 ? std::clamp(static_cast<int>(std::lround(255.0 * live.alpha() / installAlpha)), 0, 255)
+						       : 255);
+			out = ColourText(live);
+			break;
+		}
+		case ControlType::Slider:
+		case ControlType::Number: {
+			const double live = obs_data_get_double(container, k.constData());
+			switch (b.mode) {
+			case BindMode::Set:
+				out = live;
+				break;
+			case BindMode::Multiply:
+				if (b.base != 0.0)
+					out = live / b.base;
+				break;
+			case BindMode::Map:
+				if (b.mapTo1 != b.mapTo0)
+					out = c.min + (live - b.mapTo0) / (b.mapTo1 - b.mapTo0) * (c.max - c.min);
+				break;
+			}
+			break;
+		}
+		case ControlType::Toggle:
+			out = ToggleResult(b, obs_data_get_bool(container, k.constData()));
+			break;
+		case ControlType::Text:
+		case ControlType::TextArea:
+		case ControlType::Select:
+		case ControlType::Font:
+		case ControlType::Image: {
+			QString live = QString::fromUtf8(obs_data_get_string(container, k.constData()));
+			if (b.letterSpace) {
+				QStringList words;
+				for (QString w : live.split(QStringLiteral("   "), Qt::SkipEmptyParts))
+					words.append(w.remove(QLatin1Char(' ')));
+				live = words.join(QLatin1Char(' '));
+			}
+			// Upper or lower case cannot be undone; the panel shows it as it is.
+			out = live;
+			break;
+		}
+		case ControlType::Platforms:
+		case ControlType::Layout:
+			break;
+		}
+	}
+	obs_data_item_release(&item);
+	obs_data_release(container);
+	obs_source_release(target);
+	return out;
 }
 
 // ================================================================ templates
@@ -808,6 +1020,7 @@ QString ControlText(const Control &c)
 	case ControlType::TextArea:
 	case ControlType::Select:
 	case ControlType::Font:
+	case ControlType::Image:
 		return c.value.toString();
 	case ControlType::Platforms:
 	case ControlType::Layout:
@@ -955,9 +1168,10 @@ int Depth(Overlay &o, Control &c)
 	return d;
 }
 
-bool FindItemBox(QString scene, const QString &source, QRectF &box)
+// The scene's UUID is kept by the caller: resolving it by name on every call
+// costs a lookup across every canvas per item per layout step.
+bool FindItemBox(QString &scene, QString &sceneUuid, const QString &source, QRectF &box)
 {
-	QString sceneUuid;
 	qint64 id = 0;
 	return WithItem(scene, sceneUuid, source, QString(), &id, [&](obs_sceneitem_t *item) { box = ItemBox(item); });
 }
@@ -995,7 +1209,7 @@ bool CaptureGeoLink(GeoLink &l, Overlay &o)
 							return WithItem(scene, sceneUuid, it.source, it.sourceUuid, &id,
 									[&](obs_sceneitem_t *item) { box = ItemBox(item, pos, scale); });
 						}
-		return FindItemBox(l.scene, source, box);
+		return FindItemBox(l.scene, l.sceneUuid, source, box);
 	};
 	if (!installBox(l.of, l.ofInstall) || !installBox(l.within, l.withinInstall))
 		return false;
@@ -1011,7 +1225,8 @@ void UpdateGeoLink(GeoLink &l, Overlay &o)
 		return;
 	QRectF of;
 	QRectF within;
-	if (!FindItemBox(l.scene, l.of, of) || !FindItemBox(l.scene, l.within, within) || within.width() <= 0 ||
+	if (!FindItemBox(l.scene, l.sceneUuid, l.of, of) || !FindItemBox(l.scene, l.sceneUuid, l.within, within) ||
+	    within.width() <= 0 ||
 	    within.height() <= 0)
 		return;
 	double v = l.base;
@@ -1058,12 +1273,8 @@ bool CaptureRig(Overlay &o, Control &c)
 		if (it.captured)
 			continue;
 		WithItem(it.scene, it.sceneUuid, it.source, QString(), &it.itemId, [&](obs_sceneitem_t *item) {
-			struct obs_transform_info info;
-			obs_sceneitem_get_info2(item, &info);
-			it.px = info.pos.x;
-			it.py = info.pos.y;
-			it.sx = info.scale.x;
-			it.sy = info.scale.y;
+			// On the canvas, so an item in a group is captured where it shows.
+			CanvasTransform(item, it.px, it.py, it.sx, it.sy);
 			it.visible = obs_sceneitem_visible(item);
 			it.sourceUuid = QString::fromUtf8(obs_source_get_uuid(obs_sceneitem_get_source(item)));
 			it.captured = true;
@@ -1147,18 +1358,32 @@ void ApplyLayout(Overlay &o, const QString &changedPart)
 		}
 	}
 
+	// Sources this pass actually moved, so only the links that measure them
+	// (or belong to a part that moved) are recomputed.
+	QSet<QString> moved;
+	// A group refits itself to its children on the next video tick, which
+	// moves its origin. Held still for the whole pass, every child of it is
+	// placed against the same origin.
+	QList<obs_sceneitem_t *> held;
 	for (Target &t : targets) {
 		if (!affected(*t.control))
 			continue;
 		const Affine xf = FullTransform(o, *t.control);
 		RigItem &it = *t.item;
+		moved.insert(it.scene + '\n' + it.source);
 		WithItem(it.scene, it.sceneUuid, it.source, it.sourceUuid, &it.itemId, [&](obs_sceneitem_t *item) {
+			if (obs_sceneitem_t *group = ParentGroup(item); group && !held.contains(group)) {
+				obs_sceneitem_addref(group);
+				obs_sceneitem_defer_group_resize_begin(group);
+				held.append(group);
+			}
+			const GroupXf g = GroupTransform(item);
 			struct obs_transform_info info;
 			obs_sceneitem_get_info2(item, &info);
-			const float px = float(xf.a * it.px + xf.bx);
-			const float py = float(xf.a * it.py + xf.by);
-			const float sx = float(it.sx * xf.a);
-			const float sy = float(it.sy * xf.a);
+			const float px = float((xf.a * it.px + xf.bx - g.ox) / g.sx);
+			const float py = float((xf.a * it.py + xf.by - g.oy) / g.sy);
+			const float sx = float(it.sx * xf.a / g.sx);
+			const float sy = float(it.sy * xf.a / g.sy);
 			if (std::fabs(info.pos.x - px) > 1e-3f || std::fabs(info.pos.y - py) > 1e-3f ||
 			    std::fabs(info.scale.x - sx) > 1e-6f || std::fabs(info.scale.y - sy) > 1e-6f) {
 				info.pos.x = px;
@@ -1178,22 +1403,18 @@ void ApplyLayout(Overlay &o, const QString &changedPart)
 			}
 		});
 	}
+	for (obs_sceneitem_t *group : held) {
+		obs_sceneitem_defer_group_resize_end(group);
+		obs_sceneitem_release(group);
+	}
 
 	for (Group &g : o.groups)
 		for (Control &c : g.controls)
 			if (c.type == ControlType::Layout)
 				for (GeoLink &l : c.rig.links)
-					UpdateGeoLink(l, o);
-}
-
-QRectF CurrentFrame(Overlay &o, Control &c)
-{
-	CaptureRig(o, c);
-	if (!c.rig.frameCaptured)
-		return QRectF();
-	const Affine xf = FullTransform(o, c);
-	const QRectF f = c.rig.installFrame;
-	return QRectF(xf.a * f.x() + xf.bx, xf.a * f.y() + xf.by, f.width() * xf.a, f.height() * xf.a);
+					if (changedPart.isEmpty() || affected(c) || moved.contains(l.scene + '\n' + l.of) ||
+					    moved.contains(l.scene + '\n' + l.within))
+						UpdateGeoLink(l, o);
 }
 
 QRectF FrameInScene(Control &c, const QString &scene)
@@ -1383,7 +1604,7 @@ void TakeSnapshot(Overlay &o)
 	o.snapItems.clear();
 	SnapWalk w{&o, {}};
 	for (const QString &name : o.scenes) {
-		obs_source_t *scene = obs_get_source_by_name(name.toUtf8().constData());
+		obs_source_t *scene = StreamUP::CanvasLookup::GetSourceByName(name.toUtf8().constData());
 		if (!scene)
 			continue;
 		SnapScene(w, scene);
@@ -1399,7 +1620,7 @@ void RestoreSnapshot(Overlay &o, const QString &onlySource)
 			continue;
 		obs_source_t *src = obs_get_source_by_uuid(s.uuid.toUtf8().constData());
 		if (!src)
-			src = obs_get_source_by_name(s.name.toUtf8().constData());
+			src = StreamUP::CanvasLookup::GetSourceByName(s.name.toUtf8().constData());
 		if (!src)
 			continue;
 		// A scene's own settings are its item list; items are restored

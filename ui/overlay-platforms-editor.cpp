@@ -129,12 +129,19 @@ void PlatformsEditor::rebuild()
 
 		auto *order = new QHBoxLayout();
 		order->setSpacing(0);
-		auto *up = IconButton(QString::fromUtf8("▲"), T("OverlayControls.Platforms.Up"),
+		auto *up = new GlyphButton(GlyphButton::Glyph::Up, T("OverlayControls.Platforms.Up"),
 				      T("OverlayControls.Platforms.Up"));
-		auto *down = IconButton(QString::fromUtf8("▼"), T("OverlayControls.Platforms.Down"),
+		auto *down = new GlyphButton(GlyphButton::Glyph::Down, T("OverlayControls.Platforms.Down"),
 					T("OverlayControls.Platforms.Down"));
-		up->setEnabled(i > 0);
-		down->setEnabled(i < m_rows.size() - 1);
+		// The ends of the list have nowhere to move: hidden, space kept, so
+		// every row's columns stay lined up.
+		for (QWidget *w : {static_cast<QWidget *>(up), static_cast<QWidget *>(down)}) {
+			QSizePolicy sp = w->sizePolicy();
+			sp.setRetainSizeWhenHidden(true);
+			w->setSizePolicy(sp);
+		}
+		up->setVisible(i > 0);
+		down->setVisible(i < m_rows.size() - 1);
 		order->addWidget(up);
 		order->addWidget(down);
 		g->addLayout(order, 0, 0);
@@ -168,8 +175,8 @@ void PlatformsEditor::rebuild()
 		chat->setAccessibleName(T("OverlayControls.Platforms.Chat"));
 		g->addWidget(chat, 0, 4, Qt::AlignCenter);
 
-		auto *remove = IconButton(QString::fromUtf8("✕"), T("OverlayControls.Platforms.Remove"),
-					  T("OverlayControls.Platforms.Remove"), su::Colors::COLOR_DANGER);
+		auto *remove = new GlyphButton(GlyphButton::Glyph::Remove, T("OverlayControls.Platforms.Remove"),
+					  T("OverlayControls.Platforms.Remove"));
 		g->addWidget(remove, 0, 5);
 
 		m_list->addWidget(w);

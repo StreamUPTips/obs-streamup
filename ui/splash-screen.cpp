@@ -1,4 +1,7 @@
 #include "splash-screen.hpp"
+#include <streamup/ui/svg-icon.hpp>
+#include <QGridLayout>
+#include "streamup-kit.hpp"
 #include "ui-helpers.hpp"
 #include <streamup/ui/window-chrome.hpp> // ShadowDialog, RoundedContainer, makeWindow, WindowShell
 #include <streamup/ui/pill-button.hpp>   // PillButton
@@ -29,6 +32,8 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QTimer>
+#include <QSet>
+#include <QDateTime>
 #include <QFrame>
 #include <QPropertyAnimation>
 #include <QEasingCurve>
@@ -480,143 +485,88 @@ std::string ProcessInlineFormatting(const std::string& text)
     return result;
 }
 
-void LoadSupportersData() 
+// The last supporters list, kept on disk so About shows names straight away
+// and swaps in the fresh list when it arrives.
+static QString SupportersCachePath()
 {
-    StreamUP::HttpClient::MakeAsyncGetRequest("https://streamup.tips/api/supporters", 
-        [](const std::string& /* url */, const std::string& response, bool success) {
-            if (!success) {
-                supportersData.errorMessage = "Failed to fetch supporters data";
-                supportersData.loaded = true;
-                ErrorHandler::LogWarning("Failed to fetch supporters API: " + response, ErrorHandler::Category::Network);
-                return;
-            }
-
-            QJsonParseError parseError;
-            QJsonDocument doc = QJsonDocument::fromJson(response.c_str(), &parseError);
-            
-            if (parseError.error != QJsonParseError::NoError) {
-                supportersData.errorMessage = "Failed to parse supporters JSON: " + parseError.errorString();
-                supportersData.loaded = true;
-                ErrorHandler::LogWarning("Failed to parse supporters JSON: " + parseError.errorString().toStdString(), ErrorHandler::Category::Network);
-                return;
-            }
-
-            QJsonObject rootObj = doc.object();
-            
-            // Parse Andi supporters
-            if (rootObj.contains("andilippi") && rootObj["andilippi"].isObject()) {
-                QJsonObject andiObj = rootObj["andilippi"].toObject();
-                if (andiObj.contains("supporters") && andiObj["supporters"].isArray()) {
-                    QJsonArray andiSupportersArray = andiObj["supporters"].toArray();
-                    for (const QJsonValue value : andiSupportersArray) {
-                        if (value.isObject()) {
-                            QJsonObject supporterObj = value.toObject();
-                            Supporter supporter;
-                            supporter.userId = supporterObj["userId"].toString();
-                            supporter.displayName = supporterObj["displayName"].toString();
-                            supportersData.andiSupporters.push_back(supporter);
-                        }
-                    }
-                }
-            }
-
-            // Parse StreamUP supporters
-            if (rootObj.contains("streamUP") && rootObj["streamUP"].isObject()) {
-                QJsonObject streamupObj = rootObj["streamUP"].toObject();
-                if (streamupObj.contains("supporters") && streamupObj["supporters"].isArray()) {
-                    QJsonArray streamupSupportersArray = streamupObj["supporters"].toArray();
-                    for (const QJsonValue value : streamupSupportersArray) {
-                        if (value.isObject()) {
-                            QJsonObject supporterObj = value.toObject();
-                            Supporter supporter;
-                            supporter.userId = supporterObj["userId"].toString();
-                            supporter.displayName = supporterObj["displayName"].toString();
-                            supportersData.streamupSupporters.push_back(supporter);
-                        }
-                    }
-                }
-            }
-
-            // Sort supporters alphabetically
-            std::sort(supportersData.andiSupporters.begin(), supportersData.andiSupporters.end());
-            std::sort(supportersData.streamupSupporters.begin(), supportersData.streamupSupporters.end());
-
-            supportersData.loaded = true;
-            
-            ErrorHandler::LogInfo(QString("Loaded %1 Andi supporters and %2 StreamUP supporters")
-                .arg(supportersData.andiSupporters.size())
-                .arg(supportersData.streamupSupporters.size()).toStdString(), ErrorHandler::Category::Network);
-        });
+    char *path = obs_module_config_path("supporters-cache.json");
+    const QString p = path ? QString::fromUtf8(path) : QString();
+    bfree(path);
+    return p;
 }
 
-QString GenerateSupportersHTML() 
+static SupportersData ParseSupporters(const QJsonObject &root)
 {
-    if (!supportersData.loaded) {
-        return R"(
-<div style="color: #e9d5ff; line-height: 1.4; font-size: 13px;">
-    <p style="margin: 0; color: #d8b4fe;">Loading supporters...</p>
-</div>
-        )";
-    }
-
-    if (!supportersData.errorMessage.isEmpty()) {
-        return QString(R"(
-<div style="color: #e9d5ff; line-height: 1.4; font-size: 13px;">
-    <p style="margin: 0; color: #fca5a5;">Unable to load supporters at this time.</p>
-</div>
-        )");
-    }
-
-    QString html = R"(<div style="color: #e9d5ff; line-height: 1.4; font-size: 13px;">)";
-
-    // Andi's supporters section
-    if (!supportersData.andiSupporters.empty()) {
-        html += R"(<h4 style="color: #fbbf24; margin: 14px 0 10px 0; font-size: 14px; font-weight: 700;">Andi's Supporters</h4>)";
-        html += R"(<p style="margin: 8px 0; line-height: 2.4;">)";
-
-        for (size_t i = 0; i < supportersData.andiSupporters.size(); ++i) {
-            const auto& supporter = supportersData.andiSupporters[i];
-            html += QString(R"(<span style="background-color: rgba(251, 191, 36, 0.18); color: #fde68a; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap;">%1</span>)")
-                .arg(supporter.displayName.toHtmlEscaped());
-
-            if (i < supportersData.andiSupporters.size() - 1) {
-                html += " &nbsp; ";
-            }
+    SupportersData out;
+    auto read = [&root](const char *key, std::vector<Supporter> &into) {
+        const QJsonObject obj = root.value(key).toObject();
+        // One chip per name: a supporter on two tiers is still one person.
+        QSet<QString> seen;
+        for (const QJsonValue value : obj.value("supporters").toArray()) {
+            const QJsonObject o = value.toObject();
+            Supporter s;
+            s.userId = o.value("userId").toString();
+            s.displayName = o.value("displayName").toString().trimmed();
+            if (s.displayName.isEmpty())
+                continue;
+            const QString k = s.displayName.toCaseFolded();
+            if (seen.contains(k))
+                continue;
+            seen.insert(k);
+            into.push_back(s);
         }
-        html += R"(</p>)";
-    }
+        std::sort(into.begin(), into.end());
+    };
+    read("andilippi", out.andiSupporters);
+    read("streamUP", out.streamupSupporters);
+    return out;
+}
 
-    // StreamUP supporters section
-    if (!supportersData.streamupSupporters.empty()) {
-        html += R"(<h4 style="color: #a855f7; margin: 14px 0 10px 0; font-size: 14px; font-weight: 700;">StreamUP Supporters</h4>)";
-        html += R"(<p style="margin: 8px 0; line-height: 2.4;">)";
+// Fills the list from the cache when nothing has loaded yet. Not "loaded":
+// the window keeps refreshing until the network answers.
+static bool g_fromCache = false;
+static void LoadCachedSupporters()
+{
+    if (supportersData.loaded || g_fromCache)
+        return;
+    QFile f(SupportersCachePath());
+    if (!f.open(QIODevice::ReadOnly))
+        return;
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    if (!doc.isObject())
+        return;
+    SupportersData cached = ParseSupporters(doc.object());
+    supportersData.andiSupporters = cached.andiSupporters;
+    supportersData.streamupSupporters = cached.streamupSupporters;
+    g_fromCache = true;
+}
 
-        for (size_t i = 0; i < supportersData.streamupSupporters.size(); ++i) {
-            const auto& supporter = supportersData.streamupSupporters[i];
-            html += QString(R"(<span style="background-color: rgba(168, 85, 247, 0.18); color: #e9d5ff; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap;">%1</span>)")
-                .arg(supporter.displayName.toHtmlEscaped());
-
-            if (i < supportersData.streamupSupporters.size() - 1) {
-                html += " &nbsp; ";
-            }
-        }
-        html += R"(</p>)";
-    }
-
-    // If both lists are empty
-    if (supportersData.andiSupporters.empty() && supportersData.streamupSupporters.empty()) {
-        html += R"(<p style="margin: 0; color: #d8b4fe; font-style: italic;">No public supporters to display at this time.</p>)";
-    }
-
-    // Opt-in message — modern card with rounded edges and generous padding
-    html += R"(<div style="margin: 18px 0 0 0; padding: 16px 20px; background: rgba(168, 85, 247, 0.1); border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 14px;">)";
-    html += R"(<p style="margin: 0 0 6px 0; color: #f5d0fe; font-size: 13px; font-weight: 700;">If you're a supporter and your name is not here</p>)";
-    html += R"(<p style="margin: 0 0 4px 0; color: #e9d5ff; font-size: 12px; line-height: 1.6;">This is an opt-in feature which you can enable in your account settings. You can opt-in right now and choose exactly how your name will appear.</p>)";
-    html += R"(<p style="margin: 8px 0 0 0;"><a href="https://streamup.tips/Identity/Account/Manage" style="color: #c4b5fd; text-decoration: underline; font-size: 12px;">https://streamup.tips/Identity/Account/Manage</a></p>)";
-    html += R"(</div>)";
-
-    html += R"(</div>)";
-    return html;
+void LoadSupportersData()
+{
+    LoadCachedSupporters();
+    StreamUP::HttpClient::MakeAsyncGetRequest("https://streamup.tips/api/supporters",
+        [](const std::string& /* url */, const std::string& response, bool success) {
+            QJsonParseError parseError;
+            const QJsonDocument doc = success ? QJsonDocument::fromJson(response.c_str(), &parseError) : QJsonDocument();
+            const bool ok = success && parseError.error == QJsonParseError::NoError && doc.isObject();
+            if (!ok)
+                ErrorHandler::LogWarning("Failed to load the supporters list", ErrorHandler::Category::Network);
+            SupportersData fresh = ok ? ParseSupporters(doc.object()) : SupportersData();
+            const QByteArray raw = ok ? QByteArray::fromStdString(response) : QByteArray();
+            // Hand over on the UI thread: the About window reads this list.
+            QMetaObject::invokeMethod(qApp, [fresh, raw, ok]() {
+                if (ok) {
+                    supportersData.andiSupporters = fresh.andiSupporters;
+                    supportersData.streamupSupporters = fresh.streamupSupporters;
+                    QFile f(SupportersCachePath());
+                    if (f.open(QIODevice::WriteOnly))
+                        f.write(raw);
+                } else if (!g_fromCache) {
+                    supportersData.errorMessage = "Failed to load supporters";
+                }
+                supportersData.loaded = true;
+            }, Qt::QueuedConnection);
+        });
 }
 
 std::string LoadLocalSupportInfo()
@@ -675,11 +625,11 @@ std::string LoadLocalSupportInfo()
             std::string headerText = line.substr(3);
             // Use different colors for "What Your Support" vs "Monthly Supporter Benefits"
             if (headerText.find("What Your Support") != std::string::npos) {
-                result += "<h3 style=\"color: #fbbf24; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+                result += "<h3 style=\"color: #fbbf24; margin: 16px 0 8px 0; font-size: 14px;\">" + headerText + "</h3>\n";
             } else if (headerText.find("Monthly Supporter") != std::string::npos) {
-                result += "<h3 style=\"color: #a78bfa; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+                result += "<h3 style=\"color: #a78bfa; margin: 16px 0 8px 0; font-size: 14px;\">" + headerText + "</h3>\n";
             } else {
-                result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+                result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 14px;\">" + headerText + "</h3>\n";
             }
         }
         else if (line.length() >= 2 && line.substr(0, 2) == "# ") {
@@ -783,7 +733,7 @@ std::string LoadLocalPluginInfo()
                 inList = false;
             }
             std::string headerText = line.substr(3);
-            result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+            result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 14px;\">" + headerText + "</h3>\n";
         }
         else if (line.length() >= 2 && line.substr(0, 2) == "# ") {
             if (inList) {
@@ -836,18 +786,18 @@ std::string GetWelcomeMessage()
 {
     return std::string(R"(
 <div style="color: #cdd6f4; line-height: 1.4; font-size: 14px;">
-    <h2 style="color: #89b4fa; margin: 18px 0 12px 0; font-size: 20px; font-weight: 600;">Welcome to StreamUP</h2>
+    <h2 style="color: #89b4fa; margin: 18px 0 12px 0; font-size: 18px; font-weight: 600;">Welcome to StreamUP</h2>
 
-    <p style="margin: 12px 0; color: #cdd6f4; font-size: 15px;">
+    <p style="margin: 12px 0; color: #cdd6f4; font-size: 14px;">
         <strong>Thank you for installing StreamUP.</strong> You've just unlocked a powerful toolkit designed to supercharge your OBS Studio experience.
     </p>
 
-    <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;">What is StreamUP?</h3>
+    <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 14px;">What is StreamUP?</h3>
     <p style="margin: 8px 0;">
         StreamUP is an advanced plugin that provides essential tools for content creators, streamers, and anyone using OBS Studio. From source management and plugin updates to WebSocket API control and automated workflows — StreamUP streamlines your creative process.
     </p>
 
-    <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;">Getting Started</h3>
+    <h3 style="color: #a855f7; margin: 16px 0 8px 0; font-size: 14px;">Getting Started</h3>
     <p style="margin: 8px 0;">
         Ready to dive in? Check out our comprehensive documentation to learn about all the features at your fingertips:
     </p>
@@ -855,7 +805,7 @@ std::string GetWelcomeMessage()
         <a href="https://streamup.doras.click/docs" style="color: #89b4fa; text-decoration: underline; font-weight: 500;">Read the Documentation</a>
     </p>
 
-    <h3 style="color: #fbbf24; margin: 16px 0 8px 0; font-size: 16px;">Support Our Development</h3>
+    <h3 style="color: #fbbf24; margin: 16px 0 8px 0; font-size: 14px;">Support Our Development</h3>
     <p style="margin: 8px 0;">
         StreamUP is a passion project created for the OBS community. If you find it useful, please consider supporting our development efforts. Your support helps us continue adding new features and maintaining compatibility with the latest OBS versions.
     </p>
@@ -927,7 +877,7 @@ std::string LoadLocalPatchNotes()
                 inList = false;
             }
             std::string headerText = line.substr(3);
-            result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 16px;\">" + headerText + "</h3>\n";
+            result += "<h3 style=\"color: #a855f7; margin: 16px 0 8px 0; font-size: 14px;\">" + headerText + "</h3>\n";
         }
         else if (line.length() >= 2 && line.substr(0, 2) == "# ") {
             if (inList) {
@@ -1041,8 +991,14 @@ void CreateSplashDialog(ShowCondition condition)
         return; // Dialog already handled by DialogManager
     }
 
-    // Start loading supporters data if not already loaded or in progress
-    if (!supportersData.loaded && supportersData.errorMessage.isEmpty()) {
+    // Start loading supporters data if not already loaded or in progress.
+    // A list older than an hour is fetched again in the background, so an
+    // OBS left open for days still picks up new supporters.
+    static qint64 lastFetch = 0;
+    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    if ((!supportersData.loaded && supportersData.errorMessage.isEmpty()) ||
+        (supportersData.loaded && now - lastFetch > 3600)) {
+        lastFetch = now;
         LoadSupportersData();
     }
 
@@ -1052,10 +1008,11 @@ void CreateSplashDialog(ShowCondition condition)
             nullptr, /*brandFooter=*/true, "StreamUP");
         QDialog* dialog = shell.dialog;
         dialog->setModal(false);
-        // Taller so all content + the pinned footer fit without clipping.
-        dialog->setFixedSize(
-            StreamUP::UIStyles::S(820) + 2 * StreamUP::UIStyles::S(StreamUP::UIStyles::ShadowDialog::kShadowMargin),
-            StreamUP::UIStyles::S(820) + 2 * StreamUP::UIStyles::S(StreamUP::UIStyles::ShadowDialog::kShadowMargin));
+        // A normal, resizable window: wide enough for the links on one row,
+        // as tall as the screen allows up to its content.
+        dialog->resize(
+            StreamUP::UIStyles::S(720) + 2 * StreamUP::UIStyles::S(StreamUP::UIStyles::ShadowDialog::kShadowMargin),
+            StreamUP::UIStyles::S(760) + 2 * StreamUP::UIStyles::S(StreamUP::UIStyles::ShadowDialog::kShadowMargin));
 
         // Ensure version tracking is updated when dialog closes (any way)
         QObject::connect(dialog, &QDialog::finished, []() {
@@ -1115,8 +1072,8 @@ void CreateSplashDialog(ShowCondition condition)
                     // Header - using HTML like the about window
                     QString headerHTML = R"(
 <div style="color: #cdd6f4; line-height: 1.4; font-size: 14px;">
-    <h2 style="color: #fbbf24; margin: 18px 0 12px 0; font-size: 20px; font-weight: 600; text-align: center;">Get Exclusive Early Access to New Features</h2>
-    <p style="margin: 12px 0; color: #cdd6f4; font-size: 15px; text-align: center;">
+    <h2 style="color: #fbbf24; margin: 18px 0 12px 0; font-size: 18px; font-weight: 600; text-align: center;">Get Exclusive Early Access to New Features</h2>
+    <p style="margin: 12px 0; color: #cdd6f4; font-size: 14px; text-align: center;">
         Support StreamUP development and unlock cutting-edge features before they're released to the public:
     </p>
 </div>
@@ -1310,14 +1267,12 @@ void CreateSplashDialog(ShowCondition condition)
         earlyAccessBanner->setCursor(Qt::PointingHandCursor);
         earlyAccessBanner->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
             "QWidget#earlyAccessBanner {"
-            "    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "        stop:0 #f59e0b, stop:0.5 #fbbf24, stop:1 #f59e0b);"
+            "    background: #fbbf24;"
             "    padding: %1px %2px;"
             "    border-bottom: 2px solid #d97706;"
             "}"
             "QWidget#earlyAccessBanner:hover {"
-            "    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "        stop:0 #d97706, stop:0.5 #f59e0b, stop:1 #d97706);"
+            "    background: #f59e0b;"
             "}"
         ).arg(StreamUP::UIStyles::S(12))
          .arg(StreamUP::UIStyles::S(16))));
@@ -1344,7 +1299,8 @@ void CreateSplashDialog(ShowCondition condition)
 
         bannerLayout->addWidget(bannerText, 1);
 
-        mainLayout->addWidget(earlyAccessBanner);
+        // 3.0: the Early Access banner gave way to the membership card below.
+        earlyAccessBanner->deleteLater();
 
         // Header section: 3-column row [left spacer | centered logo+version stack | patch notes].
         // The left spacer is sized to the button's width so the centered stack
@@ -1401,9 +1357,8 @@ void CreateSplashDialog(ShowCondition condition)
             textLogoLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
                 "QLabel {"
                 "font-size: %1px;"
-                "font-weight: bold;"
-                "color: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-                "    stop:0 #f472b6, stop:0.25 #a855f7, stop:0.5 #89b4fa, stop:1 #06b6d4);"
+                "font-weight: 600;"
+                "color: #ffffff;"
                 "margin: 0;"
                 "}")
                 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_LARGE)));
@@ -1418,7 +1373,7 @@ void CreateSplashDialog(ShowCondition condition)
         versionLabel->setWordWrap(false); // single line under the logo
         versionLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
-        QPushButton* patchNotesBtn = new StreamUP::UIStyles::PillButton("View Patch Notes", "success");
+        QPushButton* patchNotesBtn = new StreamUP::UIStyles::PillButton(obs_module_text("About.WhatsNew"), "neutral");
         QObject::connect(patchNotesBtn, &QPushButton::clicked, []() {
             StreamUP::PatchNotesWindow::ShowPatchNotesWindow();
         });
@@ -1464,54 +1419,87 @@ void CreateSplashDialog(ShowCondition condition)
         // Header (logo + version + patch notes button) inline at the top
         contentLayout->addWidget(headerWidget);
 
-        // Welcome section — the HTML body has its own h2, no duplicate header.
-        std::string welcomeMessage = GetWelcomeMessage();
-        QLabel* mainContentLabel = UIHelpers::CreateRichTextLabel(QString::fromStdString(welcomeMessage), false, true, Qt::Alignment(), true);
-        contentLayout->addWidget(mainContentLabel);
+        // One line about StreamUP, the membership card, and the long welcome
+        // letter folded under "Learn more".
+        QLabel *aboutLine = StreamUP::UIStyles::makeLabel(obs_module_text("About.Line"), StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL,
+                                                          500, StreamUP::UIStyles::Colors::TEXT_SECONDARY);
+        aboutLine->setAlignment(Qt::AlignCenter);
+        aboutLine->setWordWrap(true);
+        contentLayout->addWidget(aboutLine);
+        if (QWidget *member = StreamUP::Kit::MembershipCard(StreamUP::Kit::MemberStyle::Card))
+            contentLayout->addWidget(member);
+        // Four small cards under a plain section title, always shown: a
+        // folded "Learn more" line read as a stray link rather than a part of
+        // the page.
+        contentLayout->addSpacing(StreamUP::UIStyles::S(4));
+        contentLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("About.MoreHeading")));
 
-        // Support section — same, HTML carries its own heading.
-        std::string supportContent = LoadLocalSupportInfo();
-        QLabel* supportLabel = UIHelpers::CreateRichTextLabel(QString::fromStdString(supportContent), false, true, Qt::Alignment(), true);
-        contentLayout->addWidget(supportLabel);
-        
-        // More compact donation buttons
-        QHBoxLayout* donationLayout = new QHBoxLayout();
-        donationLayout->setSpacing(StreamUP::UIStyles::S(8));
-        donationLayout->setContentsMargins(0, StreamUP::UIStyles::S(8), 0, 0);
-
-
-        auto* patreonBtn = new StreamUP::UIStyles::PillButton("Patreon", "primary");
-        patreonBtn->setLeadingIcon(QIcon(":images/icons/social/patreon.svg"), 14);
-        QObject::connect(patreonBtn, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://www.patreon.com/streamup"));
-        });
-
-        auto* kofiBtn = new StreamUP::UIStyles::PillButton("Ko-Fi", "primary");
-        kofiBtn->setLeadingIcon(QIcon(":images/icons/social/kofi.svg"), 14);
-        QObject::connect(kofiBtn, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://ko-fi.com/streamup"));
-        });
-
-        auto* beerBtn = new StreamUP::UIStyles::PillButton("Buy a Beer", "primary");
-        beerBtn->setLeadingIcon(QIcon(":images/icons/social/beer.svg"), 14);
-        QObject::connect(beerBtn, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://streamup.lemonsqueezy.com/buy/15f64c2f-8b8c-443e-bd6c-e8bf49a0fc97"));
-        });
-
-        auto* githubBtn = new StreamUP::UIStyles::PillButton("Star Project", "neutral");
-        githubBtn->setLeadingIcon(QIcon(":images/icons/social/github.svg"), 14);
-        QObject::connect(githubBtn, &QPushButton::clicked, []() {
-            QDesktopServices::openUrl(QUrl("https://github.com/StreamUPTips/obs-streamup"));
-        });
-        
-        donationLayout->addStretch();
-        donationLayout->addWidget(patreonBtn);
-        donationLayout->addWidget(kofiBtn);
-        donationLayout->addWidget(beerBtn);
-        donationLayout->addWidget(githubBtn);
-        donationLayout->addStretch();
-        
-        contentLayout->addLayout(donationLayout);
+        // Learn more: four small cards, each an icon, a few words and at most a
+        // button, instead of the old letter.
+        {
+            auto *grid = new QGridLayout();
+            grid->setHorizontalSpacing(StreamUP::UIStyles::S(10));
+            grid->setVerticalSpacing(StreamUP::UIStyles::S(10));
+            struct Chunk {
+                const char *icon;
+                const char *titleKey;
+                const char *lineKey;
+                QList<QPair<QString, QString>> links; // label, url
+            };
+            const QList<Chunk> chunks = {
+                {"package", "About.Chunk.Products", "About.Chunk.ProductsLine",
+                 {{obs_module_text("About.Chunk.Browse"), "https://streamup.tips/"}}},
+                {"tools", "About.Chunk.Tools", "About.Chunk.ToolsLine",
+                 {{obs_module_text("About.Docs"), "https://streamup.doras.click/docs"}}},
+                {"heart", "About.Chunk.Support", "About.Chunk.SupportLine",
+                 {{"Patreon", "https://www.patreon.com/streamup"},
+                  {"Ko-fi", "https://ko-fi.com/streamup"},
+                  {obs_module_text("About.Chunk.Beer"), "https://streamup.lemonsqueezy.com/buy/15f64c2f-8b8c-443e-bd6c-e8bf49a0fc97"}}},
+                {"users", "About.Chunk.Community", "About.Chunk.CommunityLine",
+                 {{"Discord", "https://discord.com/invite/RnDKRaVCEu"},
+                  {"GitHub", "https://github.com/StreamUPTips/obs-streamup"}}},
+            };
+            int n = 0;
+            for (const Chunk &c : chunks) {
+                auto *box = new QFrame();
+                box->setObjectName("aboutChunk");
+                box->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
+                    "QFrame#aboutChunk{background:%1;border:1px solid " + QString(StreamUP::UIStyles::Colors::BORDER_SUBTLE) + ";border-radius:12px;}"
+                    "QFrame#aboutChunk QLabel{background:transparent;border:none;}")
+                    .arg(StreamUP::UIStyles::Colors::BG_PRIMARY)));
+                auto *v = new QVBoxLayout(box);
+                v->setContentsMargins(StreamUP::UIStyles::S(14), StreamUP::UIStyles::S(12),
+                                      StreamUP::UIStyles::S(14), StreamUP::UIStyles::S(12));
+                v->setSpacing(StreamUP::UIStyles::S(6));
+                auto *top = new QHBoxLayout();
+                top->setSpacing(StreamUP::UIStyles::S(8));
+                auto *icon = new QLabel();
+                icon->setPixmap(StreamUP::UIStyles::svgIcon(QString::fromLatin1(c.icon),
+                                QColor(StreamUP::UIStyles::Colors::PRIMARY_LIGHT), 20, dialog->devicePixelRatioF()));
+                top->addWidget(icon);
+                top->addWidget(StreamUP::UIStyles::makeLabel(obs_module_text(c.titleKey),
+                               StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL, 700, StreamUP::UIStyles::Colors::TEXT_PRIMARY), 1);
+                v->addLayout(top);
+                QLabel *line = StreamUP::UIStyles::makeLabel(obs_module_text(c.lineKey), StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL,
+                                                             400, StreamUP::UIStyles::Colors::TEXT_SECONDARY);
+                line->setWordWrap(true);
+                v->addWidget(line);
+                auto *buttons = new QHBoxLayout();
+                buttons->setSpacing(StreamUP::UIStyles::S(6));
+                for (const auto &link : c.links) {
+                    auto *b = new StreamUP::UIStyles::PillButton(link.first, "neutral");
+                    const QString url = link.second;
+                    QObject::connect(b, &QPushButton::clicked, [url]() { QDesktopServices::openUrl(QUrl(url)); });
+                    buttons->addWidget(b);
+                }
+                buttons->addStretch(1);
+                v->addStretch(1);
+                v->addLayout(buttons);
+                grid->addWidget(box, n / 2, n % 2);
+                ++n;
+            }
+            contentLayout->addLayout(grid);
+        }
 
         // === Supporters section — real widgets, FlowLayout, proper pills ===
         // Wrapper card so the section reads as a distinct panel.
@@ -1525,8 +1513,8 @@ void CreateSplashDialog(ShowCondition condition)
         supportersCardLay->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(18), StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
         supportersCardLay->setSpacing(StreamUP::UIStyles::S(12));
 
-        QLabel *supportersTitle = new QLabel("Thank You to Our Supporters");
-        supportersTitle->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 16px; font-weight: 700; background: transparent;")
+        QLabel *supportersTitle = new QLabel(obs_module_text("About.Supporters.Title"));
+        supportersTitle->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 14px; font-weight: 600; background: transparent;")
             .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)));
         supportersCardLay->addWidget(supportersTitle);
 
@@ -1552,30 +1540,55 @@ void CreateSplashDialog(ShowCondition condition)
             g.badgeBg = badgeBg;
             g.badgeFg = badgeFg;
             g.card = new QFrame();
-            g.card->setStyleSheet(QString("QFrame { background: transparent; border: none; }"));
+            g.card->setObjectName("supportersGroup");
+            g.card->setStyleSheet(QString("QFrame#supportersGroup { background: transparent; border: none; }"));
             g.cardLay = new QVBoxLayout(g.card);
             g.cardLay->setContentsMargins(0, 0, 0, 0);
             g.cardLay->setSpacing(StreamUP::UIStyles::S(10));
             QLabel *t = new QLabel(title);
-            t->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 13px; font-weight: 700; background: transparent;").arg(accent)));
+            t->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 12px; font-weight: 600; background: transparent;").arg(accent)));
             g.cardLay->addWidget(t);
+            // Scoped by object name so the chips' own rules never reach the
+            // host: an unscoped rule here let one chip's fill paint the whole
+            // flow area as a tinted band behind the names.
             g.flowHost = new QWidget();
-            g.flowHost->setStyleSheet("background: transparent;");
+            g.flowHost->setObjectName("supportersFlow");
+            g.flowHost->setAttribute(Qt::WA_StyledBackground, true);
+            g.flowHost->setAutoFillBackground(false);
+            g.flowHost->setStyleSheet("QWidget#supportersFlow { background: transparent; }");
             g.flow = new FlowLayout(g.flowHost, 0, 8, 8);
             g.cardLay->addWidget(g.flowHost);
             supportersCardLay->addWidget(g.card);
             return g;
         };
 
-        SupporterGroup andiGroup = buildGroup("Andi's Supporters", "#fbbf24",
-                                               "rgba(251, 191, 36, 0.15)", "#fde68a");
-        SupporterGroup streamupGroup = buildGroup("StreamUP Supporters", "#a855f7",
-                                                   "rgba(168, 85, 247, 0.15)", "#e9d5ff");
+        // Both groups share one calm look: a quiet grey label and neutral
+        // hairline chips, so neither fights the rest of the window.
+        const QString chipBg = "rgba(255, 255, 255, 0.06)";
+        SupporterGroup andiGroup = buildGroup("Andi's supporters", StreamUP::UIStyles::Colors::TEXT_MUTED,
+                                               chipBg, StreamUP::UIStyles::Colors::TEXT_PRIMARY);
+        SupporterGroup streamupGroup = buildGroup("StreamUP supporters", StreamUP::UIStyles::Colors::TEXT_MUTED,
+                                                   chipBg, StreamUP::UIStyles::Colors::TEXT_PRIMARY);
 
-        // Empty-state placeholder shown when neither list has loaded yet.
-        QLabel *emptyLabel = new QLabel("Loading supporters...");
+        // While nothing has loaded: grey placeholder pills, the shape of the
+        // list to come, instead of a "Loading" line.
+        QWidget *skeleton = new QWidget();
+        skeleton->setStyleSheet("background: transparent;");
+        {
+            auto *flow = new FlowLayout(skeleton, 0, 8, 8);
+            const int widths[] = {84, 120, 68, 104, 92, 140, 76, 110, 96, 62, 128, 88};
+            for (int w : widths) {
+                auto *pill = new QFrame();
+                pill->setFixedSize(StreamUP::UIStyles::S(w), StreamUP::UIStyles::S(28));
+                pill->setStyleSheet(StreamUP::UIStyles::scale_qss("QFrame{background:rgba(255,255,255,0.06);border-radius:12px;}"));
+                flow->addWidget(pill);
+            }
+        }
+        supportersCardLay->addWidget(skeleton);
+        QLabel *emptyLabel = new QLabel(obs_module_text("StreamUP.SplashScreen.NoSupporters"));
         emptyLabel->setStyleSheet(QString("color: %1; font-style: italic; background: transparent;")
             .arg(StreamUP::UIStyles::Colors::TEXT_MUTED));
+        emptyLabel->hide();
         supportersCardLay->addWidget(emptyLabel);
 
         // Modernised opt-in card. Object-name scoped so the border doesn't
@@ -1590,12 +1603,12 @@ void CreateSplashDialog(ShowCondition condition)
         QVBoxLayout *optInLay = new QVBoxLayout(optInBox);
         optInLay->setContentsMargins(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(14), StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(14));
         optInLay->setSpacing(StreamUP::UIStyles::S(6));
-        QLabel *optInTitle = new QLabel("If you're a supporter and your name is not here");
-        optInTitle->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 13px; font-weight: 700;")
+        QLabel *optInTitle = new QLabel(obs_module_text("About.OptIn.Title"));
+        optInTitle->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 13px; font-weight: 600;")
             .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)));
-        QLabel *optInBody = new QLabel("This is an opt-in feature which you can enable in your account settings. You can opt-in right now and choose exactly how your name will appear.");
+        QLabel *optInBody = new QLabel(obs_module_text("About.OptIn.Line"));
         optInBody->setWordWrap(true);
-        optInBody->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 12px;")
+        optInBody->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: 12px; font-weight: 400;")
             .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)));
         QLabel *optInLink = new QLabel(QString(R"(<a href="https://streamup.tips/Identity/Account/Manage" style="color: %1; text-decoration: underline;">https://streamup.tips/Identity/Account/Manage</a>)")
             .arg(StreamUP::UIStyles::Colors::PRIMARY_LIGHT));
@@ -1609,7 +1622,7 @@ void CreateSplashDialog(ShowCondition condition)
         contentLayout->addWidget(supportersCard);
 
         // Rebuild helper — clears each flow layout and re-adds badges.
-        auto rebuildSupporters = [andiGroup, streamupGroup, emptyLabel]() {
+        auto rebuildSupporters = [andiGroup, streamupGroup, emptyLabel, skeleton]() {
             auto clear = [](FlowLayout *flow) {
                 while (QLayoutItem *item = flow->takeAt(0)) {
                     if (QWidget *w = item->widget()) w->deleteLater();
@@ -1618,11 +1631,13 @@ void CreateSplashDialog(ShowCondition condition)
             };
             auto addBadges = [](const SupporterGroup &g, const std::vector<Supporter> &list) {
                 const QString style = QString(
-                    "QLabel { background: %1; color: %2; padding: 6px 14px;"
-                    "  border-radius: 12px; font-size: 12px; font-weight: 600; }")
+                    "QLabel#supporterChip { background: %1; color: %2; padding: 5px 12px;"
+                    "  border: 1px solid rgba(255, 255, 255, 0.08);"
+                    "  border-radius: 12px; font-size: 12px; font-weight: 400; }")
                     .arg(g.badgeBg, g.badgeFg);
                 for (const auto &supporter : list) {
                     QLabel *badge = new QLabel(supporter.displayName);
+                    badge->setObjectName("supporterChip");
                     badge->setStyleSheet(StreamUP::UIStyles::scale_qss(style));
                     g.flow->addWidget(badge);
                 }
@@ -1635,15 +1650,8 @@ void CreateSplashDialog(ShowCondition condition)
                           || !supportersData.streamupSupporters.empty();
             andiGroup.card->setVisible(!supportersData.andiSupporters.empty());
             streamupGroup.card->setVisible(!supportersData.streamupSupporters.empty());
-            emptyLabel->setVisible(!any);
-            if (any) {
-                if (supportersData.loaded && supportersData.andiSupporters.empty() && supportersData.streamupSupporters.empty()) {
-                    emptyLabel->setText(obs_module_text("StreamUP.SplashScreen.NoSupporters"));
-                    emptyLabel->setVisible(true);
-                }
-            } else if (supportersData.loaded) {
-                emptyLabel->setText(obs_module_text("StreamUP.SplashScreen.NoSupporters"));
-            }
+            skeleton->setVisible(!any && !supportersData.loaded);
+            emptyLabel->setVisible(!any && supportersData.loaded);
         };
 
         // Initial population.
@@ -1657,50 +1665,53 @@ void CreateSplashDialog(ShowCondition condition)
                 refreshTimer->stop();
             }
         });
-        refreshTimer->start(2000);
+        refreshTimer->start(500);
 
         scrollArea->setWidget(contentWidget);
 
         mainLayout->addWidget(scrollArea);
 
-        // === Persistent footer: links + actions, always visible ===
-        // Two rows: top row = link buttons, bottom row = check-for-update + close.
-        QVBoxLayout* footerLayout = shell.footer;
+        // Links: one row in the content, under the header.
 
         QHBoxLayout* linksRow = new QHBoxLayout();
         linksRow->setSpacing(StreamUP::UIStyles::S(8));
 
-        auto* docsBtn = new StreamUP::UIStyles::PillButton("Documentation", "success");
+        auto* docsBtn = new StreamUP::UIStyles::PillButton(obs_module_text("About.Docs"), "neutral");
         QObject::connect(docsBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.doras.click/docs"));
         });
 
-        auto* discordBtn = new StreamUP::UIStyles::PillButton("Discord", "primary");
+        auto* discordBtn = new StreamUP::UIStyles::PillButton("Discord", "neutral");
         discordBtn->setLeadingIcon(QIcon(":images/icons/social/discord.svg"), 14);
         QObject::connect(discordBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://discord.com/invite/RnDKRaVCEu"));
         });
 
-        auto* websiteBtn = new StreamUP::UIStyles::PillButton("Website", "outline");
+        auto* websiteBtn = new StreamUP::UIStyles::PillButton(obs_module_text("About.Website"), "neutral");
         QObject::connect(websiteBtn, &QPushButton::clicked, []() {
             QDesktopServices::openUrl(QUrl("https://streamup.tips"));
         });
 
-        // Brand-coloured social buttons. Each keeps its own filled stylesheet
-        // matching the platform's primary colour, so these stay plain QPushButtons
-        // (PillButton is custom-painted and ignores per-widget fill QSS).
+        // Round icon buttons for the socials, on the neutral pill surface.
         auto makeSocialButton = [](const QString &text, const QString &iconPath,
                                    const QString &bg, const QString &hover, const QString &fg) {
-            QPushButton *btn = new QPushButton(text);
+            QPushButton *btn = new QPushButton();
+            btn->setToolTip(text);
+            btn->setAccessibleName(text);
             btn->setCursor(Qt::PointingHandCursor);
             btn->setIcon(QIcon(iconPath));
             btn->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));
+            // Same soft surface as the pills beside them, so the row reads as
+            // one set rather than three brand blocks.
+            Q_UNUSED(bg);
+            Q_UNUSED(hover);
             btn->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
-                "QPushButton { background: %1; color: %3; border: 1px solid %1;"
-                "  border-radius: 12px; font-weight: bold; font-size: 11px;"
-                "  padding: 0 14px; min-height: 22px; max-height: 22px; min-width: 80px; }"
-                "QPushButton:hover { background: %2; border: 1px solid %2; }")
-                .arg(bg, hover, fg)));
+                "QPushButton { background: rgba(255,255,255,0.07); color: %1; border: none;"
+                "  border-radius: 13px; padding: 0;"
+                "  min-height: 26px; max-height: 26px; min-width: 26px; max-width: 26px; }"
+                "QPushButton:hover { background: rgba(255,255,255,0.13); }"
+                "QPushButton:pressed { background: rgba(255,255,255,0.05); }")
+                .arg(fg)));
             return btn;
         };
 
@@ -1731,77 +1742,27 @@ void CreateSplashDialog(ShowCondition condition)
         linksRow->addWidget(blueskyBtn);
         linksRow->addWidget(dorasBtn);
         linksRow->addStretch();
-        footerLayout->addLayout(linksRow);
+        contentLayout->insertLayout(2, linksRow);
 
-        QHBoxLayout* actionRow = new QHBoxLayout();
-        actionRow->setSpacing(StreamUP::UIStyles::S(12));
-
-        auto* updateBtn = new StreamUP::UIStyles::PillButton(obs_module_text("StreamUP.SplashScreen.CheckForUpdate"), "primary");
-        QObject::connect(updateBtn, &QPushButton::clicked, []() {
-            StreamUP::PluginManager::ShowCachedPluginUpdatesDialog();
-        });
-
-        auto* closeBtn = new StreamUP::UIStyles::PillButton(obs_module_text("Close"), "outline");
+        // Footer: just Done. Plugin updates are in the StreamUP menu.
+        auto* closeBtn = new StreamUP::UIStyles::PillButton(obs_module_text("UI.Button.Done"), "primary");
         closeBtn->setDefault(true);
         QObject::connect(closeBtn, &QPushButton::clicked, [dialog]() {
             dialog->close();
         });
-
-        actionRow->addStretch();
-        actionRow->addWidget(updateBtn);
-        actionRow->addWidget(closeBtn);
-        actionRow->addStretch();
-        footerLayout->addLayout(actionRow);
+        shell.footerButtons->addWidget(closeBtn);
 
         // Dialog will be managed by DialogManager
 
+        StreamUP::UIHelpers::PlaceOverMainWindow(dialog);
         dialog->show();
-        StreamUP::UIHelpers::CenterDialog(dialog);
         return dialog;
     });
-}
-
-void ShowSplashScreenIfNeeded()
-{
-    ShowCondition condition = CheckSplashCondition();
-    if (condition == ShowCondition::Never) {
-        return;
-    }
-
-    // Check if user disabled splash screen
-    obs_data_t* settings = SettingsManager::LoadSettings();
-    if (settings && obs_data_get_bool(settings, "splash_disabled")) {
-        // Still update version tracking even if splash is disabled
-        UpdateVersionTracking();
-        if (settings) obs_data_release(settings);
-        return;
-    }
-    if (settings) obs_data_release(settings);
-
-    if (condition == ShowCondition::VersionUpdate) {
-        // For version updates, show patch notes directly instead of the welcome splash
-        UpdateVersionTracking();
-        PatchNotesWindow::ShowPatchNotesWindow();
-
-        ErrorHandler::LogInfo("Patch notes shown for version update to " + std::string(PROJECT_VERSION),
-                             ErrorHandler::Category::UI);
-    } else {
-        // For first install, show the full welcome splash screen
-        CreateSplashDialog(condition);
-
-        ErrorHandler::LogInfo("Welcome splash shown for first install of version " + std::string(PROJECT_VERSION),
-                             ErrorHandler::Category::UI);
-    }
 }
 
 void ShowSplashScreen()
 {
     CreateSplashDialog(ShowCondition::VersionUpdate);
-}
-
-bool IsSplashScreenOpen()
-{
-    return UIHelpers::DialogManager::IsSingletonDialogOpen("splash");
 }
 
 } // namespace SplashScreen

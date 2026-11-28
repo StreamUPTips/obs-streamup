@@ -17,8 +17,6 @@ QT_END_NAMESPACE
 class FlowLayout;
 class VideoCapturePopup;
 
-void ShowDockConfigDialog();
-
 class StreamUPDock : public QFrame {
 	Q_OBJECT
 

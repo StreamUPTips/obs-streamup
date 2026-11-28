@@ -1,3 +1,4 @@
+#include <streamup/ui/svg-icon.hpp>
 #include "hotkey-widget.hpp"
 #include <streamup/ui/gallery-style.hpp>
 #include <QHBoxLayout>
@@ -64,7 +65,7 @@ HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
         .arg(StreamUP::UIStyles::Colors::HOVER_ROW);
 
     m_recordButton = new QPushButton();
-    m_recordButton->setIcon(QIcon(":/images/icons/ui/hotkey-set-light.svg"));
+    m_recordButton->setIcon(QIcon(StreamUP::UIStyles::svgIcon("pencil", QColor(StreamUP::UIStyles::Colors::TEXT_PRIMARY), 14, 2.0)));
     m_recordButton->setIconSize(QSize(StreamUP::UIStyles::S(14), StreamUP::UIStyles::S(14)));
     m_recordButton->setCursor(Qt::PointingHandCursor);
     m_recordButton->setToolTip(obs_module_text("Hotkey.Widget.Set"));
@@ -72,7 +73,7 @@ HotkeyWidget::HotkeyWidget(const QString& hotkeyName, QWidget* parent)
     connect(m_recordButton, &QPushButton::clicked, this, &HotkeyWidget::OnRecordButtonClicked);
 
     m_clearButton = new QPushButton();
-    m_clearButton->setIcon(QIcon(":/images/icons/ui/hotkey-clear-light.svg"));
+    m_clearButton->setIcon(QIcon(StreamUP::UIStyles::svgIcon("x", QColor(StreamUP::UIStyles::Colors::TEXT_PRIMARY), 14, 2.0)));
     m_clearButton->setIconSize(QSize(StreamUP::UIStyles::S(14), StreamUP::UIStyles::S(14)));
     m_clearButton->setCursor(Qt::PointingHandCursor);
     m_clearButton->setToolTip(obs_module_text("Hotkey.Widget.Clear"));
@@ -116,23 +117,6 @@ void HotkeyWidget::SetHotkey(obs_data_array_t* hotkeyData)
     }
     
     UpdateDisplay();
-}
-
-obs_data_array_t* HotkeyWidget::GetHotkey() const
-{
-    if (!m_currentHotkeyData) {
-        return obs_data_array_create(); // Return empty array
-    }
-    
-    obs_data_array_t* copy = obs_data_array_create();
-    // Copy each item from the current array
-    size_t count = obs_data_array_count(m_currentHotkeyData);
-    for (size_t i = 0; i < count; i++) {
-        obs_data_t* item = obs_data_array_item(m_currentHotkeyData, i);
-        obs_data_array_push_back(copy, item);
-        obs_data_release(item);
-    }
-    return copy;
 }
 
 void HotkeyWidget::ClearHotkey()

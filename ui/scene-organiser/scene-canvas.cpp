@@ -1,4 +1,5 @@
 #include "scene-canvas.hpp"
+#include "../../core/canvas-lookup.hpp"
 
 #include <obs-frontend-api.h>
 #include <util/platform.h>
@@ -12,40 +13,16 @@ namespace Canvas {
 const char *const kVerticalCanvasName = "Aitum Vertical";
 
 namespace {
-// Aitum's OBS module name (its file name without the extension). Used to tell a
-// live vertical canvas apart from one OBS restored out of the scene collection
-// after the plugin was removed.
-const char *const kVerticalModuleName = "vertical-canvas";
-
 // Find Aitum's canvas among the frontend canvases. NEW reference or nullptr.
 // A canvas that has been removed but not yet freed still shows up in the list,
 // so skip those or the dock would keep talking to a dead canvas.
 obs_canvas_t *AcquireVertical()
 {
-	// The canvas alone is not proof the plugin is there. OBS 32.2 saves canvases
-	// into the scene collection and restores them on load, so once Aitum has run
-	// even once, "Aitum Vertical" keeps coming back whether or not the plugin is
-	// still installed. Driving a dock off that orphan gives people a Vertical
-	// Scene Organiser they cannot use, and leaves us talking to a canvas nobody
-	// owns. Require the module to actually be loaded.
-	if (!obs_get_module(kVerticalModuleName))
-		return nullptr;
-
-	obs_canvas_t *found = nullptr;
-
-	struct obs_frontend_canvas_list list = {0};
-	obs_frontend_get_canvases(&list);
-	for (size_t i = 0; i < list.canvases.num; i++) {
-		obs_canvas_t *c = list.canvases.array[i];
-		const char *name = obs_canvas_get_name(c);
-		if (name && strcmp(name, kVerticalCanvasName) == 0 && !obs_canvas_removed(c)) {
-			found = obs_canvas_get_ref(c);
-			break;
-		}
-	}
-	obs_frontend_canvas_list_free(&list);
-
-	return found;
+	// Shared with the .StreamUP installer and Overlay Controls, which also
+	// need to find Aitum's canvas. It requires the module to be loaded: OBS
+	// 32.2 restores saved canvases from the scene collection, so the canvas
+	// alone is not proof the plugin is there.
+	return StreamUP::CanvasLookup::AcquireVertical();
 }
 
 bool CollectScene(void *param, obs_source_t *scene)

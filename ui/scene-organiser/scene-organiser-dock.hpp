@@ -124,7 +124,6 @@ private slots:
     void onSceneFiltersClicked();
     void onScreenshotSceneClicked();
     void onShowInMultiviewClicked();
-    void onOpenProjectorClicked();
     void onOpenProjectorWindowClicked();
     void onOpenProjectorOnMonitorClicked();
     void onSceneMoveUpClicked();
@@ -180,7 +179,6 @@ private:
     void refreshSceneList();
     void applySortingIfEnabled();
     void sortManually(StreamUP::SettingsManager::SceneSortMethod method, QStandardItem *parent = nullptr);
-    void updateFromObsScenes();
     void showFolderContextMenu(const QPoint &pos, const QModelIndex &index);
     void showSceneContextMenu(const QPoint &pos, const QModelIndex &index);
     void showBackgroundContextMenu(const QPoint &pos);
@@ -214,7 +212,6 @@ private:
     void onSetCustomIconColorClicked();
     void refreshColorMenuState();
     void applyPresetColor(int presetIndex);
-    void updateTreeViewStylesheet();
     void onToggleLockClicked();
     void setLocked(bool locked);
     void updateUIEnabledState();
@@ -516,8 +513,6 @@ public:
     void scheduleOptimizedUpdate();
     void processBatchedUpdates();
 
-    // Cache management
-    static void clearIconCaches();
     static void onThemeChanged();
 
     // Mirrors the active theme's own list-row rules onto our tree views, so
@@ -559,17 +554,11 @@ public:
     // Consumed by the next saveSceneTree(), whether or not it needed it.
     void allowFolderLoss() { m_allowFolderLoss = true; }
     void loadSceneTree();
-    QStandardItem *findSceneItem(obs_weak_source_t *weak_source);
-    QStandardItem *findFolderItem(const QString &folderName);
     QStandardItem *createFolderItem(const QString &folderName);
-    QStandardItem *createSceneItem(const QString &sceneName, obs_weak_source_t *weak_source);
-    void moveSceneToFolder(obs_weak_source_t *weak_source, QStandardItem *folderItem);
 
     // Configuration (now handled by DigitOtter approach)
     // saveToConfig and loadFromConfig removed - using saveSceneTree/loadSceneTree instead
 
-    // Migration from original obs_scene_tree_view plugin
-    bool migrateFromOriginalPlugin(const QString &originalConfigPath);
     static bool checkMigrationAvailable(const QString &sceneCollectionName, QString &outConfigPath);
     bool migrateCurrentCollection();
     static obs_data_array_t* convertSceneTreeViewFormat(obs_data_array_t *original_array);
@@ -591,15 +580,11 @@ private:
     void setupRootItem();
     bool isValidSceneForCanvas(obs_scene_t *scene);
     void cleanupEmptyItemsRecursive(QStandardItem *parent);
-    bool isChildOf(QStandardItem *potentialChild, QStandardItem *potentialParent);
     QString createUniqueFolderName(const QString &baseName, QStandardItem *parentItem);
     void cleanupSceneTree();
     bool isManagedScene(obs_source_t *source);
     obs_data_array_t *createFolderArray(QStandardItem &parent);
     void loadFolderArray(obs_data_array_t *folder_array, QStandardItem &parent);
-
-    // Migration helpers
-    void loadOriginalFolderArray(obs_data_array_t *folder_array, QStandardItem &parent);
 
     // DigitOtter-style scene tracking
     using source_map_t = std::map<obs_weak_source_t*, QStandardItem*>;

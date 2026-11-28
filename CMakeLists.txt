@@ -51,21 +51,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/multidock
     ${CMAKE_CURRENT_SOURCE_DIR}/sources)
 
-# Shared StreamUP custom-window UI design system (obs-streamup-ui-gallery),
-# vendored under shared/obs-streamup-ui/. Compiled directly into the plugin
-# (header-only + one moc'd .cpp) so each plugin is self-contained: no shared
-# sub-target, no cross-plugin link, builds in any config/order.
-set(STREAMUP_UI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shared/obs-streamup-ui")
-target_include_directories(${PROJECT_NAME} PRIVATE
-  "${STREAMUP_UI_DIR}/include"
-  "${STREAMUP_UI_DIR}/include/streamup/ui" # flat includes inside switch-button.cpp
-)
-target_sources(${PROJECT_NAME} PRIVATE
-  "${STREAMUP_UI_DIR}/src/switch-button.cpp"
-  "${STREAMUP_UI_DIR}/src/feedback.cpp" # shared in-app feedback dialog
-  "${STREAMUP_UI_DIR}/include/streamup/ui/switch-button.hpp" # Q_OBJECT -> AUTOMOC
-  "${STREAMUP_UI_DIR}/include/streamup/ui/ios-checkbox.hpp"  # Q_OBJECT -> AUTOMOC
-)
+# Shared StreamUP UI library (shared/obs-streamup-ui): the 3.0 look, theme
+# tokens, the kit and the icon set. Compiled straight into the plugin.
+include("${CMAKE_CURRENT_SOURCE_DIR}/shared/obs-streamup-ui/cmake/streamup-ui.cmake")
+streamup_ui_add(${PROJECT_NAME})
 
 # Shared StreamUP utilities (debug logger + undo/redo helpers), vendored under
 # shared/obs-streamup-utils/. Compiled directly into the plugin for the same
@@ -140,7 +129,17 @@ target_sources(${PROJECT_NAME} PRIVATE
   core/overlay-controls.hpp
   core/overlay-controls.cpp
   core/overlay-controls-internal.hpp
-  core/overlay-apply.cpp)
+  core/overlay-apply.cpp
+  core/canvas-lookup.hpp
+  core/canvas-lookup.cpp
+  core/product-transitions.hpp
+  core/product-transitions.cpp
+  core/product-registry.hpp
+  core/product-registry.cpp
+  core/product-requirements.hpp
+  core/product-requirements.cpp
+  core/google-fonts.hpp
+  core/google-fonts.cpp)
 
 # Utilities module files
 target_sources(${PROJECT_NAME} PRIVATE
@@ -189,8 +188,12 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/splash-screen.cpp
   ui/patch-notes-window.hpp
   ui/patch-notes-window.cpp
-  ui/module-setup-wizard.hpp
-  ui/module-setup-wizard.cpp
+  ui/streamup-kit.hpp
+  ui/streamup-kit.cpp
+  ui/features-page.hpp
+  ui/features-page.cpp
+  core/features.hpp
+  core/features.cpp
   ui/theme-window.hpp
   ui/theme-window.cpp
   ui/websocket-window.hpp
@@ -201,6 +204,12 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/mixer-enhancements.cpp
   ui/vertical-canvas-enhancements.hpp
   ui/vertical-canvas-enhancements.cpp
+  ui/multistream-enhancements.hpp
+  ui/multistream-enhancements.cpp
+  ui/source-tree-enhancements.hpp
+  ui/source-tree-enhancements.cpp
+  ui/source-menu-scene-switch.hpp
+  ui/source-menu-scene-switch.cpp
   ui/theme-enhancements.hpp
   ui/theme-enhancements.cpp
   ui/overlay-controls-window.hpp
@@ -210,8 +219,10 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/overlay-platforms-editor.cpp
   ui/overlay-layout-page.hpp
   ui/overlay-layout-page.cpp
-  ui/overlay-all-settings.hpp
-  ui/overlay-all-settings.cpp
+  ui/my-products-window.hpp
+  ui/my-products-window.cpp
+  ui/font-picker.hpp
+  ui/font-picker.cpp
   ui/dock/streamup-dock.hpp
   ui/dock/streamup-dock.cpp
   ui/scene-organiser/scene-organiser-dock.hpp
@@ -220,6 +231,12 @@ target_sources(${PROJECT_NAME} PRIVATE
   ui/scene-organiser/scene-canvas.cpp
   ui/scene-organiser/scene-organiser-collection-data.hpp
   ui/scene-organiser/scene-organiser-collection-data.cpp
+  ui/mixer-dock/mixer-dock.hpp
+  ui/mixer-dock/mixer-dock.cpp
+  ui/mixer-dock/mixer-strip.hpp
+  ui/mixer-dock/mixer-strip.cpp
+  ui/mixer-dock/mixer-native-widgets.hpp
+  ui/mixer-dock/mixer-native-widgets.cpp
   ui/streamup-toolbar.hpp
   ui/streamup-toolbar.cpp
   ui/streamup-toolbar-config.hpp
@@ -299,7 +316,17 @@ source_group("Core" FILES
   core/overlay-controls.hpp
   core/overlay-controls.cpp
   core/overlay-controls-internal.hpp
-  core/overlay-apply.cpp)
+  core/overlay-apply.cpp
+  core/canvas-lookup.hpp
+  core/canvas-lookup.cpp
+  core/product-transitions.hpp
+  core/product-transitions.cpp
+  core/product-registry.hpp
+  core/product-registry.cpp
+  core/product-requirements.hpp
+  core/product-requirements.cpp
+  core/google-fonts.hpp
+  core/google-fonts.cpp)
 
 source_group("Utilities" FILES
   utilities/path-utils.hpp
@@ -348,8 +375,12 @@ source_group("UI" FILES
   ui/splash-screen.cpp
   ui/patch-notes-window.hpp
   ui/patch-notes-window.cpp
-  ui/module-setup-wizard.hpp
-  ui/module-setup-wizard.cpp
+  ui/streamup-kit.hpp
+  ui/streamup-kit.cpp
+  ui/features-page.hpp
+  ui/features-page.cpp
+  core/features.hpp
+  core/features.cpp
   ui/websocket-window.hpp
   ui/websocket-window.cpp
   ui/studio-mode-enhancements.hpp
@@ -358,6 +389,12 @@ source_group("UI" FILES
   ui/mixer-enhancements.cpp
   ui/vertical-canvas-enhancements.hpp
   ui/vertical-canvas-enhancements.cpp
+  ui/multistream-enhancements.hpp
+  ui/multistream-enhancements.cpp
+  ui/source-tree-enhancements.hpp
+  ui/source-tree-enhancements.cpp
+  ui/source-menu-scene-switch.hpp
+  ui/source-menu-scene-switch.cpp
   ui/theme-enhancements.hpp
   ui/theme-enhancements.cpp
   ui/overlay-controls-window.hpp
@@ -367,8 +404,10 @@ source_group("UI" FILES
   ui/overlay-platforms-editor.cpp
   ui/overlay-layout-page.hpp
   ui/overlay-layout-page.cpp
-  ui/overlay-all-settings.hpp
-  ui/overlay-all-settings.cpp)
+  ui/my-products-window.hpp
+  ui/my-products-window.cpp
+  ui/font-picker.hpp
+  ui/font-picker.cpp)
 
 source_group("UI\\Dock" FILES
   ui/dock/streamup-dock.hpp
@@ -381,6 +420,14 @@ source_group("UI\\Scene Organiser" FILES
   ui/scene-organiser/scene-canvas.cpp
   ui/scene-organiser/scene-organiser-collection-data.hpp
   ui/scene-organiser/scene-organiser-collection-data.cpp)
+
+source_group("UI\\Mixer" FILES
+  ui/mixer-dock/mixer-dock.hpp
+  ui/mixer-dock/mixer-dock.cpp
+  ui/mixer-dock/mixer-strip.hpp
+  ui/mixer-dock/mixer-strip.cpp
+  ui/mixer-dock/mixer-native-widgets.hpp
+  ui/mixer-dock/mixer-native-widgets.cpp)
 
 source_group("UI\\Toolbar" FILES
   ui/streamup-toolbar.hpp

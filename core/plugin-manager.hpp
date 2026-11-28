@@ -34,12 +34,35 @@ void PluginsUpToDateOutput(bool manuallyTriggered);
  */
 void PluginsHaveIssue(const std::map<std::string, std::string>& missing_modules, const std::map<std::string, std::string>& version_mismatch_modules, const std::vector<std::string>& failed_to_load_modules, std::function<void()> continueCallback = nullptr, bool isStartupCheck = false, const std::map<std::string, bool>& disabled_modules = std::map<std::string, bool>());
 
-//-------------------PLUGIN UPDATE FUNCTIONS-------------------
-/**
- * Check all plugins for updates and display results
- * @param manuallyTriggered Whether the check was manually triggered by user
- */
-void CheckAllPluginsForUpdates(bool manuallyTriggered);
+// One row of the plugin issues window. Rows carry their own links, so a plugin
+// that is not in the StreamUP plugin list (one a product names itself, or a raw
+// source type nobody recognises) can still be shown.
+struct PluginRow {
+	std::string name;
+	std::string requiredVersion;  // may be empty
+	std::string installedVersion; // outdated rows
+	std::string downloadUrl;
+	std::string websiteUrl;
+	bool linksFitThisObs = false; // the download is a build for this OBS
+	int needsObs = 0;             // the listed build needs this OBS major or newer
+};
+
+// A row for a plugin in the StreamUP plugin list, with its links and version.
+// Falls back to just the name when the list does not know it.
+PluginRow RowForListedPlugin(const std::string &name, const std::string &installedVersion = std::string());
+
+struct PluginIssues {
+	std::vector<PluginRow> missing;
+	std::vector<PluginRow> outdated;
+	std::vector<std::string> failedToLoad;
+	std::map<std::string, bool> disabled;
+	QString description; // replaces the default line under the title when set
+	QString warning;     // replaces the Continue Anyway warning when set
+};
+
+// The plugin issues window, built from rows. PluginsHaveIssue is a wrapper.
+void ShowPluginIssues(const PluginIssues &issues, std::function<void()> continueCallback = nullptr,
+		      bool isStartupCheck = false);
 
 // HTTP functionality moved to StreamUP::HttpClient module
 
@@ -99,24 +122,6 @@ std::vector<std::pair<std::string, std::string>> GetInstalledPlugins();
  */
 bool IsUpdateCheckSkipped(const std::string &searchString);
 
-/**
- * Human-readable reason a plugin is skipped, for display in the UI.
- * Returns the text following "[ignore]" in the search string, or an empty
- * string if no reason was given.
- * @param searchString The plugin's search string from the database
- * @return std::string The reason text, trimmed
- */
-std::string GetUpdateCheckSkipReason(const std::string &searchString);
-
-/**
- * Plugins that are in our database and loaded in OBS, but that cannot have
- * their version checked (see IsUpdateCheckSkipped). Without this they show in
- * neither the compatible nor the incompatible list, so they'd silently vanish
- * from the Installed Plugins table.
- * @return std::vector of (plugin name, reason) pairs
- */
-std::vector<std::pair<std::string, std::string>> GetUncheckablePlugins();
-
 //-------------------EFFICIENT CACHING FUNCTIONS-------------------
 /**
  * Perform plugin check once and cache results for future use
@@ -124,12 +129,6 @@ std::vector<std::pair<std::string, std::string>> GetUncheckablePlugins();
  * @param checkAllPlugins If true, check all plugins; if false, only check required plugins
  */
 void PerformPluginCheckAndCache(bool checkAllPlugins = true);
-
-/**
- * Check if all plugins are up to date using cached results
- * @return bool True if cached results show all plugins are up to date
- */
-bool IsAllPluginsUpToDateCached();
 
 /**
  * Show plugin issues dialog using cached results
@@ -147,48 +146,6 @@ void ShowCachedPluginUpdatesDialog();
  * Used for startup checks to avoid showing "everything is fine" notifications
  */
 void ShowCachedPluginUpdatesDialogSilent();
-
-/**
- * Invalidate cached plugin status (call when plugins might have changed)
- */
-void InvalidatePluginCache();
-
-/**
- * Get installed plugins from cached results (much faster than scanning files)
- * @return std::vector containing pairs of plugin names and versions from cache
- */
-std::vector<std::pair<std::string, std::string>> GetInstalledPluginsCached();
-
-//-------------------UI HELPER FUNCTIONS-------------------
-/**
- * Get forum/general URL for a specific plugin
- * @param pluginName The name of the plugin to get URL for
- * @return QString The forum/general URL for the plugin
- */
-QString GetPluginForumLink(const std::string &pluginName);
-
-/**
- * Get platform-specific download URL for a plugin
- * @param pluginName The name of the plugin to get URL for  
- * @return QString The platform-appropriate download URL
- */
-QString GetPluginPlatformURL(const std::string &pluginName);
-
-/**
- * Every third-party module in the log's "Loaded Modules:" section, whether or
- * not we have a database entry for it. Excludes modules that ship with OBS.
- * @param logPath Path to the OBS log directory
- * @return std::vector List of loaded module names
- */
-std::vector<std::string> GetLoadedModuleNamesFromLog(const char *logPath);
-
-/**
- * Search for loaded modules in OBS log files (excludes default OBS modules)
- * Narrows GetLoadedModuleNamesFromLog to modules with no database entry.
- * @param logPath Path to the OBS log directory
- * @return std::vector List of non-standard loaded module names
- */
-std::vector<std::string> SearchLoadedModulesInLogFile(const char *logPath);
 
 /**
  * Search for modules that failed to load in OBS log files

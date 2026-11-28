@@ -25,6 +25,9 @@
 #include <QStyle>
 #include <QDockWidget>
 #include <QMainWindow>
+#include <QMenu>
+#include <QContextMenuEvent>
+#include <util/config-file.h>
 
 namespace StreamUP {
 namespace MultiDock {
@@ -153,6 +156,34 @@ private:
 // top of the host, which raises itself when docks are added.
 bool MultiDockDock::eventFilter(QObject *watched, QEvent *event)
 {
+	if (event->type() == QEvent::ContextMenu) {
+		auto *menuEvent = static_cast<QContextMenuEvent *>(event);
+		if (watched == m_outerDock) {
+			// Only the title bar: everything below it is this frame.
+			if (menuEvent->pos().y() < geometry().top()) {
+				ShowControlsMenu(menuEvent->globalPos());
+				return true;
+			}
+		} else if (watched == m_innerHost) {
+			// Like QMainWindow's own menu: title bars and empty space, never a
+			// click inside a dock's content.
+			QWidget *child = m_innerHost->childAt(menuEvent->pos());
+			for (QWidget *w = child; w && w != m_innerHost; w = w->parentWidget()) {
+				if (auto *dock = qobject_cast<QDockWidget *>(w)) {
+					QWidget *content = dock->widget();
+					if (content && content->geometry().contains(dock->mapFrom(m_innerHost, menuEvent->pos())))
+						return QFrame::eventFilter(watched, event);
+					break;
+				}
+			}
+			ShowControlsMenu(menuEvent->globalPos());
+			return true;
+		} else if (watched->objectName() == QLatin1String("MultiDockInnerContainer")) {
+			ShowControlsMenu(menuEvent->globalPos());
+			return true;
+		}
+	}
+
 	if (!m_cornerOverlays.isEmpty() && event->type() == QEvent::Resize) {
 		if (QWidget *widget = qobject_cast<QWidget *>(watched)) {
 			for (QWidget *piece : m_cornerOverlays) {
@@ -162,6 +193,77 @@ bool MultiDockDock::eventFilter(QObject *watched, QEvent *event)
 	}
 
 	return QFrame::eventFilter(watched, event);
+}
+
+bool MultiDockDock::event(QEvent *event)
+{
+	if (event->type() == QEvent::ParentChange) {
+		HookOuterDock();
+	}
+	return QFrame::event(event);
+}
+
+void MultiDockDock::HookOuterDock()
+{
+	QDockWidget *dock = nullptr;
+	for (QWidget *w = parentWidget(); w; w = w->parentWidget()) {
+		if ((dock = qobject_cast<QDockWidget *>(w)))
+			break;
+	}
+	if (dock == m_outerDock)
+		return;
+	if (m_outerDock)
+		m_outerDock->removeEventFilter(this);
+	m_outerDock = dock;
+	if (m_outerDock)
+		m_outerDock->installEventFilter(this);
+}
+
+void MultiDockDock::ShowControlsMenu(const QPoint &globalPos)
+{
+	if (!m_innerHost)
+		return;
+
+	QMenu menu(this);
+	QAction *add = menu.addAction(obs_module_text("MultiDock.Menu.AddDock"));
+	connect(add, &QAction::triggered, this, [this]() {
+		if (m_innerHost)
+			m_innerHost->ShowAddDockDialog();
+	});
+	QAction *lock = menu.addAction(obs_module_text("MultiDock.Menu.LockDocks"));
+	lock->setCheckable(true);
+	lock->setChecked(m_docksLocked);
+	connect(lock, &QAction::toggled, this, [this](bool checked) {
+		// The toolbar's checkbox holds the state, hidden or not, so both agree.
+		if (m_lockCheckbox)
+			m_lockCheckbox->setChecked(checked);
+	});
+
+	// Keep what this host's own right-click used to offer (show or hide docks).
+	QMenu *own = m_innerHost->createPopupMenu();
+	if (own && !own->actions().isEmpty()) {
+		menu.addSeparator();
+		for (QAction *action : own->actions())
+			menu.addAction(action);
+	}
+	menu.exec(globalPos);
+	delete own;
+}
+
+void MultiDockDock::ApplyToolbarVisibility()
+{
+	if (!m_toolBar)
+		return;
+	config_t *config = obs_frontend_get_user_config();
+	const bool show = !config || !config_has_user_value(config, "BasicWindow", "ShowListboxToolbars") ||
+			  config_get_bool(config, "BasicWindow", "ShowListboxToolbars");
+	m_toolBar->setVisible(show);
+}
+
+void MultiDockDock::obsUserSettingChanged(const std::string &category, const std::string &name)
+{
+	if (category == "BasicWindow" && name == "ShowListboxToolbars")
+		ApplyToolbarVisibility();
 }
 
 // Both of these are driven by the theme through qproperty. Until a theme sets
@@ -511,6 +613,20 @@ void MultiDockDock::CreateBottomToolbar(QVBoxLayout* layout)
     // Store references for later access
     m_addDockAction = addDockAction;
     m_lockCheckbox = lockCheckbox;
+    m_toolBar = toolBar;
+    ApplyToolbarVisibility();
+
+    // OBS says when "Show toolbars" changes. Connected by name: OBSBasic is
+    // internal to the frontend, and an OBS without the signal simply keeps the
+    // state read above until the next start.
+    if (QObject *main = static_cast<QObject *>(obs_frontend_get_main_window())) {
+        if (main->metaObject()->indexOfSignal("userSettingChanged(std::string,std::string)") >= 0) {
+            connect(main, SIGNAL(userSettingChanged(std::string, std::string)), this,
+                    SLOT(obsUserSettingChanged(std::string, std::string)));
+        }
+    }
+    m_innerHost->installEventFilter(this);
+    HookOuterDock();
     
     // Add toolbar widget to the bottom of the layout
     layout->addWidget(toolBar, 0); // 0 means don't stretch

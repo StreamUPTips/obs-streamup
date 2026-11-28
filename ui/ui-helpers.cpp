@@ -1,4 +1,5 @@
 #include "ui-helpers.hpp"
+#include <streamup/ui/kit.hpp>
 #include <streamup/ui/window-chrome.hpp>
 #include <streamup/ui/pill-button.hpp>
 #include <streamup/ui/labels.hpp>
@@ -18,6 +19,8 @@
 #include <QGridLayout>
 #include <QObject>
 #include <QScreen>
+#include <QGuiApplication>
+#include <algorithm>
 #include <QTimer>
 #include <QIcon>
 #include <QStyle>
@@ -71,16 +74,6 @@ bool DialogManager::ShowSingletonDialog(const std::string& dialogId,
     return false;
 }
 
-void DialogManager::CloseSingletonDialog(const std::string& dialogId)
-{
-    std::lock_guard<std::mutex> lock(s_dialogsMutex);
-    auto it = s_dialogs.find(dialogId);
-    if (it != s_dialogs.end() && !it->second.isNull()) {
-        it->second->close();
-        s_dialogs.erase(it);
-    }
-}
-
 bool DialogManager::IsSingletonDialogOpen(const std::string& dialogId)
 {
     std::lock_guard<std::mutex> lock(s_dialogsMutex);
@@ -113,20 +106,6 @@ void ShowSingletonDialogOnUIThread(const std::string& dialogId,
     ShowDialogOnUIThread([dialogId, createFunction, bringToFront]() {
         DialogManager::ShowSingletonDialog(dialogId, createFunction, bringToFront);
     });
-}
-
-QDialog *CreateDialogWindow(const char *windowTitle, QWidget *parentWidget)
-{
-	// Use provided parent or fallback to OBS main window
-	QWidget *parent = parentWidget ? parentWidget : static_cast<QWidget *>(obs_frontend_get_main_window());
-	QDialog *dialog = new QDialog(parent);
-	dialog->setWindowTitle(obs_module_text(windowTitle));
-	dialog->setWindowFlags(Qt::Dialog); // Use Dialog instead of Window for better positioning
-	dialog->setAttribute(Qt::WA_DeleteOnClose);
-	
-	// Note: Positioning is deferred to CenterDialog() after dialog is properly sized
-	
-	return dialog;
 }
 
 void CenterDialog(QDialog *dialog, QWidget *parentWidget)
@@ -166,19 +145,6 @@ void CenterDialog(QDialog *dialog, QWidget *parentWidget)
 	}
 }
 
-void ShowDialogCentered(QDialog *dialog, QWidget *parentWidget)
-{
-	if (!dialog) return;
-	
-	// Show the dialog first
-	dialog->show();
-	
-	// Use a small delay to ensure the dialog is properly sized before centering
-	QTimer::singleShot(10, [dialog, parentWidget]() {
-		CenterDialog(dialog, parentWidget);
-	});
-}
-
 void CreateToolDialog(const char *infoText1, const char *infoText2, const char *infoText3, const QString &titleText,
 		      const QStyle::StandardPixmap &iconType)
 {
@@ -201,7 +167,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		// First info text (main message) — emphasised
 		QLabel *info1 = CreateRichTextLabel(infoText1Str, false, true, Qt::AlignCenter);
 		info1->setStyleSheet(scale_qss(QString(
-			"QLabel{color:%1;font-size:%2px;font-weight:bold;background:transparent;border:none;}")
+			"QLabel{color:%1;font-size:%2px;font-weight: 600;background:transparent;border:none;}")
 			.arg(Colors::TEXT_SECONDARY)
 			.arg(Sizes::FONT_SIZE_NORMAL)));
 		shell.content->addWidget(info1);
@@ -209,7 +175,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		// Second info text
 		QLabel *info2 = CreateRichTextLabel(infoText2Str, false, true, Qt::AlignCenter);
 		info2->setStyleSheet(scale_qss(QString(
-			"QLabel{color:%1;font-size:%2px;background:transparent;border:none;}")
+			"QLabel{color:%1;font-size:%2px; font-weight: 400;background:transparent;border:none;}")
 			.arg(Colors::TEXT_MUTED)
 			.arg(Sizes::FONT_SIZE_SMALL)));
 		shell.content->addWidget(info2);
@@ -217,7 +183,7 @@ void CreateToolDialog(const char *infoText1, const char *infoText2, const char *
 		// Third info text
 		QLabel *info3 = CreateRichTextLabel(infoText3Str, false, true, Qt::AlignCenter);
 		info3->setStyleSheet(scale_qss(QString(
-			"QLabel{color:%1;font-size:%2px;background:transparent;border:none;}")
+			"QLabel{color:%1;font-size:%2px; font-weight: 400;background:transparent;border:none;}")
 			.arg(Colors::TEXT_MUTED)
 			.arg(Sizes::FONT_SIZE_SMALL)));
 		shell.content->addWidget(info3);
@@ -259,7 +225,7 @@ QLabel *CreateRichTextLabel(const QString &text, bool bold, bool wrap, Qt::Align
 	}
 	
 	if (bold) {
-		styleSheet += "font-weight: bold; font-size: 14px;";
+		styleSheet += "font-weight: 600; font-size: 14px;";
 	}
 	
 	styleSheet += "}";
@@ -302,30 +268,6 @@ QHBoxLayout *AddIconAndText(const QStyle::StandardPixmap &iconText, const char *
 	return iconTextLayout;
 }
 
-QVBoxLayout *CreateVBoxLayout(QWidget *parent)
-{
-	QVBoxLayout *layout = new QVBoxLayout(parent);
-	layout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(15), StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(10));
-	return layout;
-}
-
-//-------------------CONTROL CREATION FUNCTIONS-------------------
-void CreateLabelWithLink(QLayout *layout, const QString &text, const QString &url, int row, int column)
-{
-	QLabel *label = CreateRichTextLabel(text, false, false, Qt::AlignCenter);
-	label->setTextInteractionFlags(Qt::TextBrowserInteraction);
-	label->setOpenExternalLinks(true);
-	QObject::connect(label, &QLabel::linkActivated, [url]() { QDesktopServices::openUrl(QUrl(url)); });
-	static_cast<QGridLayout *>(layout)->addWidget(label, row, column);
-}
-
-void CreateButton(QLayout *layout, const QString &text, const std::function<void()> &onClick)
-{
-	auto *button = new su::PillButton(text, "neutral");
-	QObject::connect(button, &QPushButton::clicked, onClick);
-	layout->addWidget(button);
-}
-
 //-------------------UTILITY FUNCTIONS-------------------
 void CopyToClipboard(const QString &text)
 {
@@ -333,117 +275,11 @@ void CopyToClipboard(const QString &text)
 	clipboard->setText(text);
 }
 
-// Applies OBS theme metadata to a button so it uses standard themed icons (e.g. lock, add).
-// Typical usage: ApplyThemedIcon(button, "icon-button", "addIconSmall");
-void ApplyThemedIcon(QAbstractButton *btn, const char *klass, const char *themeId, bool checkable, bool checked)
-{
-	if (!btn) {
-		return;
-	}
-
-	btn->setIcon(QIcon());
-
-	if (klass && *klass) {
-		btn->setProperty("class", QString::fromUtf8(klass));
-	} else {
-		btn->setProperty("class", QVariant());
-	}
-
-	if (themeId && *themeId) {
-		btn->setProperty("themeID", QString::fromUtf8(themeId));
-	} else {
-		btn->setProperty("themeID", QVariant());
-	}
-
-	btn->setCheckable(checkable);
-	if (checkable) {
-		btn->setChecked(checked);
-	} else if (btn->isChecked()) {
-		btn->setChecked(false);
-	}
-
-	if (QStyle *style = btn->style()) {
-		style->unpolish(btn);
-		style->polish(btn);
-	}
-	btn->update();
-}
-
-// Removes OBS theme metadata from a button so a file-based icon can be shown reliably.
-// Typical usage: ClearThemeIconProps(button);
-void ClearThemeIconProps(QAbstractButton *btn)
-{
-	if (!btn) {
-		return;
-	}
-
-	btn->setProperty("class", QVariant());
-	btn->setProperty("themeID", QVariant());
-	btn->setCheckable(false);
-	if (btn->isChecked()) {
-		btn->setChecked(false);
-	}
-
-	if (QStyle *style = btn->style()) {
-		style->unpolish(btn);
-		style->polish(btn);
-	}
-	btn->update();
-}
-
-// Applies a file-based icon to a button after clearing theme metadata.
-// Typical usage: ApplyFileIcon(button, GetThemedIconPath("refresh"));
-void ApplyFileIcon(QAbstractButton *btn, const QString &filePath)
-{
-	if (!btn) {
-		return;
-	}
-
-	ClearThemeIconProps(btn);
-	btn->setIcon(QIcon(filePath));
-	btn->update();
-}
-
-// Convenience helper for OBS-style visibility buttons with eye icons toggled by :checked.
-// Typical usage: ApplyVisibilityTheme(toggleVisibilityButton, true);
-void ApplyVisibilityTheme(QAbstractButton *btn, bool visible)
-{
-	ApplyThemedIcon(btn, "icon-button", "visibility", true, visible);
-}
-
 QString GetThemedIconPath(const QString &iconName)
 {
-	bool isDarkTheme = obs_frontend_is_theme_dark();
-	StreamUP::DebugLogger::LogDebugFormat("UI", "Theme Detection", "obs_frontend_is_theme_dark() returned: %s", isDarkTheme ? "true" : "false");
-
-	// Use appropriate suffix based on theme for custom icons
-	QString themeSuffix = isDarkTheme ? "-dark" : "-light";
-	QString iconPath = QString(":images/icons/ui/%1%2.svg").arg(iconName).arg(themeSuffix);
-
-	StreamUP::DebugLogger::LogDebugFormat("UI", "Icon Path", "Icon '%s' -> %s theme -> %s",
-		iconName.toUtf8().constData(), isDarkTheme ? "dark" : "light", iconPath.toUtf8().constData());
-
-	return iconPath;
-}
-
-QIcon CreateThemedIcon(const QString &baseName)
-{
-	// Create a QIcon that can handle theme changes automatically
-	// This approach is more Qt-standard and handles theme switching better
-	QIcon icon;
-	
-	// Add both light and dark variants to the icon
-	// Qt and OBS can then automatically choose the appropriate one
-	QString lightIconPath = QString(":images/icons/ui/%1-light.svg").arg(baseName);
-	QString darkIconPath = QString(":images/icons/ui/%1-dark.svg").arg(baseName);
-	
-	// Add the current theme's icon as the default
-	bool isDarkTheme = obs_frontend_is_theme_dark();
-	QString currentIconPath = isDarkTheme ? darkIconPath : lightIconPath;
-	
-	icon.addFile(currentIconPath);
-	
-	return icon;
+	// One resolver for every StreamUP icon: the shared kit's Tabler set first,
+	// then this plugin's own :images/icons/ui files.
+	return StreamUP::Kit::IconPath(iconName);
 }
 
 bool IsOBSThemeDark()
@@ -474,6 +310,30 @@ QStandardItem* FindItemRecursive(QStandardItem* parent, const QString& text, int
 	}
 
 	return nullptr;
+}
+
+void PlaceOverMainWindow(QWidget *window, bool onlyWhenElsewhere)
+{
+	QWidget *main = static_cast<QWidget *>(obs_frontend_get_main_window());
+	if (!window || !main)
+		return;
+	QScreen *mainScreen = main->screen() ? main->screen() : QGuiApplication::primaryScreen();
+	if (!mainScreen)
+		return;
+	const QRect area = mainScreen->availableGeometry();
+	const QRect frame = window->frameGeometry();
+	if (onlyWhenElsewhere) {
+		QScreen *at = QGuiApplication::screenAt(frame.center());
+		if (at == mainScreen && area.contains(frame.center()))
+			return;
+	}
+	// Centre over OBS itself, or over its screen when OBS is minimised.
+	const QRect over = main->isMinimized() ? area : main->frameGeometry().intersected(area);
+	QPoint pos = (over.isValid() ? over : area).center() - QPoint(frame.width() / 2, frame.height() / 2);
+	// Keep it on that screen, title bar first when it is too tall to fit.
+	pos.setX(std::clamp(pos.x(), area.left(), std::max(area.left(), area.right() - frame.width())));
+	pos.setY(std::clamp(pos.y(), area.top(), std::max(area.top(), area.bottom() - frame.height())));
+	window->move(pos);
 }
 
 } // namespace UIHelpers

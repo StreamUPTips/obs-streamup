@@ -7,10 +7,14 @@
 #include "core/streamup-common.hpp"
 #include "core/plugin-state.hpp"
 #include "core/plugin-manager.hpp"
+#include "core/features.hpp"
+#include "ui/features-page.hpp"
+#include "ui/streamup-kit.hpp"
 #include "core/source-manager.hpp"
 #include "core/backup-manager.hpp"
 #include "core/restore-manager.hpp"
 #include "core/overlay-controls.hpp"
+#include "core/google-fonts.hpp"
 #include "ui/restore-dialog.hpp"
 #include "integrations/websocket-api.hpp"
 #include "utilities/path-utils.hpp"
@@ -19,6 +23,8 @@
 // UI modules
 #include "ui/dock/streamup-dock.hpp"
 #include "ui/scene-organiser/scene-organiser-dock.hpp"
+#include "ui/mixer-dock/mixer-dock.hpp"
+#include "ui/source-menu-scene-switch.hpp"
 #include "ui/scene-organiser/scene-canvas.hpp"
 #include "ui/scene-organiser/scene-organiser-collection-data.hpp"
 #include "ui/streamup-toolbar.hpp"
@@ -32,10 +38,11 @@
 #include "ui/hotkey-manager.hpp"
 #include "ui/splash-screen.hpp"
 #include "ui/patch-notes-window.hpp"
-#include "ui/module-setup-wizard.hpp"
 #include "ui/studio-mode-enhancements.hpp"
 #include "ui/mixer-enhancements.hpp"
 #include "ui/vertical-canvas-enhancements.hpp"
+#include "ui/multistream-enhancements.hpp"
+#include "ui/source-tree-enhancements.hpp"
 #include "ui/theme-enhancements.hpp"
 #include "multidock/multidock_manager.hpp"
 #include "multidock/multidock_utils.hpp"
@@ -378,9 +385,16 @@ static obs_source_t *g_streamup_sel_scene = nullptr; // hooked scene (owns a +1 
 // were cleared when clearing scene data" and can take the whole app down with it.
 static bool g_streamup_sel_collection_changing = false;
 
+// With the WebSocket API switched off there is nobody to tell, so neither
+// event does its scene walk.
+static bool StreamUpEventsWanted()
+{
+	return vendor && StreamUP::Features::IsOn("websocket");
+}
+
 static void StreamUpEmitSelectionChanged()
 {
-	if (!vendor)
+	if (!StreamUpEventsWanted())
 		return;
 	int count = StreamUP::SourceManager::GetSelectedSourceCount();
 	const char *sel = StreamUP::SourceManager::GetSelectedSourceFromCurrentScene();
@@ -444,7 +458,7 @@ static void StreamUpOnItemSelect(void *, calldata_t *)
 // directly in OBS. Fires on the current scene's item_locked / item_visible.
 static void StreamUpEmitSourceStateChanged()
 {
-	if (!vendor)
+	if (!StreamUpEventsWanted())
 		return;
 	obs_data_t *d = obs_data_create();
 	obs_data_set_bool(d, "allLocked", StreamUP::SourceManager::AreAllSourcesLockedInAllScenes());
@@ -559,6 +573,39 @@ void SettingsDialog()
 }
 
 //--------------------WEBSOCKET REGISTRATION--------------------
+// Every request goes through this. A request whose part of StreamUP is
+// switched off (or with the WebSocket API itself off) answers with a readable
+// error instead of vanishing, so a Streamer.bot action says why it failed.
+struct GatedRequest {
+	obs_websocket_request_callback_function fn;
+	const char *feature; // nullptr: belongs to the WebSocket API only
+};
+
+static void GatedTrampoline(obs_data_t *request_data, obs_data_t *response_data, void *private_data)
+{
+	auto *g = static_cast<GatedRequest *>(private_data);
+	const char *off = nullptr;
+	if (!StreamUP::Features::IsOn("websocket"))
+		off = "websocket";
+	else if (g->feature && !StreamUP::Features::IsOn(g->feature))
+		off = g->feature;
+	if (off) {
+		obs_data_set_bool(response_data, "success", false);
+		obs_data_set_string(response_data, "error",
+				    StreamUP::Features::SwitchedOffMessage(QString::fromUtf8(off)).toUtf8().constData());
+		obs_data_set_string(response_data, "feature", off);
+		return;
+	}
+	g->fn(request_data, response_data, nullptr);
+}
+
+static void RegisterGated(const char *name, obs_websocket_request_callback_function fn, const char *feature)
+{
+	// Lives for the session, like the vendor itself.
+	auto *g = new GatedRequest{fn, feature};
+	obs_websocket_vendor_register_request(vendor, name, GatedTrampoline, g);
+}
+
 static void RegisterWebsocketRequests()
 {
 	blog(LOG_INFO, "[StreamUP] RegisterWebsocketRequests: Starting WebSocket vendor registration");
@@ -571,44 +618,49 @@ static void RegisterWebsocketRequests()
 
 	// Register new properly named commands (PascalCase following OBS WebSocket conventions)
 	// Utility commands
-	obs_websocket_vendor_register_request(vendor, "GetStreamBitrate", StreamUP::WebSocketAPI::WebsocketRequestBitrate, nullptr);
-	obs_websocket_vendor_register_request(vendor, "GetPluginVersion", StreamUP::WebSocketAPI::WebsocketRequestVersion, nullptr);
+	RegisterGated("GetStreamBitrate", StreamUP::WebSocketAPI::WebsocketRequestBitrate, nullptr);
+	RegisterGated("GetPluginVersion", StreamUP::WebSocketAPI::WebsocketRequestVersion, nullptr);
 	
 	// Plugin management
-	obs_websocket_vendor_register_request(vendor, "CheckRequiredPlugins", StreamUP::WebSocketAPI::WebsocketRequestCheckPlugins, nullptr);
+	RegisterGated("CheckRequiredPlugins", StreamUP::WebSocketAPI::WebsocketRequestCheckPlugins, nullptr);
 	
 	// Source management
-	obs_websocket_vendor_register_request(vendor, "ToggleLockAllSources", StreamUP::WebSocketAPI::WebsocketRequestLockAllSources, nullptr);
-	obs_websocket_vendor_register_request(vendor, "ToggleLockCurrentSceneSources", StreamUP::WebSocketAPI::WebsocketRequestLockCurrentSources, nullptr);
-	obs_websocket_vendor_register_request(vendor, "GetAllSourcesLocked", StreamUP::WebSocketAPI::WebsocketRequestGetAllSourcesLocked, nullptr);
-	obs_websocket_vendor_register_request(vendor, "GetCurrentSceneSourcesLocked", StreamUP::WebSocketAPI::WebsocketRequestGetCurrentSceneSourcesLocked, nullptr);
-	obs_websocket_vendor_register_request(vendor, "GetSelectedVisibility", StreamUP::WebSocketAPI::WebsocketRequestGetSelectedVisibility, nullptr);
-	obs_websocket_vendor_register_request(vendor, "RefreshAudioMonitoring", StreamUP::WebSocketAPI::WebsocketRequestRefreshAudioMonitoring, nullptr);
-	obs_websocket_vendor_register_request(vendor, "RefreshBrowserSources", StreamUP::WebSocketAPI::WebsocketRequestRefreshBrowserSources, nullptr);
-	obs_websocket_vendor_register_request(vendor, "GetSelectedSource", StreamUP::WebSocketAPI::WebsocketRequestGetCurrentSelectedSource, nullptr);
+	RegisterGated("ToggleLockAllSources", StreamUP::WebSocketAPI::WebsocketRequestLockAllSources, nullptr);
+	RegisterGated("ToggleLockCurrentSceneSources", StreamUP::WebSocketAPI::WebsocketRequestLockCurrentSources, nullptr);
+	RegisterGated("GetAllSourcesLocked", StreamUP::WebSocketAPI::WebsocketRequestGetAllSourcesLocked, nullptr);
+	RegisterGated("GetCurrentSceneSourcesLocked", StreamUP::WebSocketAPI::WebsocketRequestGetCurrentSceneSourcesLocked, nullptr);
+	RegisterGated("GetSelectedVisibility", StreamUP::WebSocketAPI::WebsocketRequestGetSelectedVisibility, nullptr);
+	RegisterGated("RefreshAudioMonitoring", StreamUP::WebSocketAPI::WebsocketRequestRefreshAudioMonitoring, nullptr);
+	RegisterGated("RefreshBrowserSources", StreamUP::WebSocketAPI::WebsocketRequestRefreshBrowserSources, nullptr);
+	RegisterGated("GetSelectedSource", StreamUP::WebSocketAPI::WebsocketRequestGetCurrentSelectedSource, nullptr);
 	
 	// Transition management
-	obs_websocket_vendor_register_request(vendor, "GetShowTransition", StreamUP::WebSocketAPI::WebsocketRequestGetShowTransition, nullptr);
-	obs_websocket_vendor_register_request(vendor, "GetHideTransition", StreamUP::WebSocketAPI::WebsocketRequestGetHideTransition, nullptr);
-	obs_websocket_vendor_register_request(vendor, "SetShowTransition", StreamUP::WebSocketAPI::WebsocketRequestSetShowTransition, nullptr);
-	obs_websocket_vendor_register_request(vendor, "SetHideTransition", StreamUP::WebSocketAPI::WebsocketRequestSetHideTransition, nullptr);
+	RegisterGated("GetShowTransition", StreamUP::WebSocketAPI::WebsocketRequestGetShowTransition, nullptr);
+	RegisterGated("GetHideTransition", StreamUP::WebSocketAPI::WebsocketRequestGetHideTransition, nullptr);
+	RegisterGated("SetShowTransition", StreamUP::WebSocketAPI::WebsocketRequestSetShowTransition, nullptr);
+	RegisterGated("SetHideTransition", StreamUP::WebSocketAPI::WebsocketRequestSetHideTransition, nullptr);
 	
 	// File and output management
-	obs_websocket_vendor_register_request(vendor, "GetRecordingOutputPath", StreamUP::WebSocketAPI::WebsocketRequestGetOutputFilePath, nullptr);
-	obs_websocket_vendor_register_request(vendor, "GetVLCCurrentFile", StreamUP::WebSocketAPI::WebsocketRequestVLCGetCurrentFile, nullptr);
-	obs_websocket_vendor_register_request(vendor, "LoadStreamUpFile", StreamUP::WebSocketAPI::WebsocketLoadStreamupFile, nullptr);
+	RegisterGated("GetRecordingOutputPath", StreamUP::WebSocketAPI::WebsocketRequestGetOutputFilePath, nullptr);
+	RegisterGated("GetVLCCurrentFile", StreamUP::WebSocketAPI::WebsocketRequestVLCGetCurrentFile, nullptr);
+	RegisterGated("LoadStreamUpFile", StreamUP::WebSocketAPI::WebsocketLoadStreamupFile, nullptr);
 	
 	// Backup
-	obs_websocket_vendor_register_request(vendor, "CreateBackup", StreamUP::WebSocketAPI::WebsocketRequestCreateBackup, nullptr);
-	obs_websocket_vendor_register_request(vendor, "GetBackupInfo", StreamUP::WebSocketAPI::WebsocketRequestGetBackupInfo, nullptr);
+	RegisterGated("CreateBackup", StreamUP::WebSocketAPI::WebsocketRequestCreateBackup, "backup");
+	RegisterGated("GetBackupInfo", StreamUP::WebSocketAPI::WebsocketRequestGetBackupInfo, "backup");
 
 	// Overlay controls
-	obs_websocket_vendor_register_request(vendor, "GetOverlays", StreamUP::WebSocketAPI::WebsocketGetOverlays, nullptr);
-	obs_websocket_vendor_register_request(vendor, "GetOverlayControls", StreamUP::WebSocketAPI::WebsocketGetOverlayControls, nullptr);
-	obs_websocket_vendor_register_request(vendor, "SetOverlayControl", StreamUP::WebSocketAPI::WebsocketSetOverlayControl, nullptr);
-	obs_websocket_vendor_register_request(vendor, "ResetOverlayControls", StreamUP::WebSocketAPI::WebsocketResetOverlayControls, nullptr);
-	obs_websocket_vendor_register_request(vendor, "ApplyOverlayPreset", StreamUP::WebSocketAPI::WebsocketApplyOverlayPreset, nullptr);
-	obs_websocket_vendor_register_request(vendor, "OpenOverlayControls", StreamUP::WebSocketAPI::WebsocketOpenOverlayControls, nullptr);
+	RegisterGated("GetOverlays", StreamUP::WebSocketAPI::WebsocketGetOverlays, nullptr);
+	RegisterGated("RegisterOverlay", StreamUP::WebSocketAPI::WebsocketRegisterOverlay, nullptr);
+	RegisterGated("GroupSceneItems", StreamUP::WebSocketAPI::WebsocketGroupSceneItems, nullptr);
+	RegisterGated("GetOverlayControls", StreamUP::WebSocketAPI::WebsocketGetOverlayControls, nullptr);
+	RegisterGated("SetOverlayControl", StreamUP::WebSocketAPI::WebsocketSetOverlayControl, nullptr);
+	RegisterGated("ResetOverlayControls", StreamUP::WebSocketAPI::WebsocketResetOverlayControls, nullptr);
+	RegisterGated("ApplyOverlayPreset", StreamUP::WebSocketAPI::WebsocketApplyOverlayPreset, nullptr);
+	RegisterGated("OpenOverlayControls", StreamUP::WebSocketAPI::WebsocketOpenOverlayControls, nullptr);
+	RegisterGated("RunOverlayAction", StreamUP::WebSocketAPI::WebsocketRunOverlayAction, nullptr);
+	RegisterGated("GetMyProducts", StreamUP::WebSocketAPI::WebsocketGetMyProducts, nullptr);
+	RegisterGated("OpenMyProducts", StreamUP::WebSocketAPI::WebsocketOpenMyProducts, nullptr);
 
 	// Vendor events so a Stream Deck key or Streamer.bot action showing an
 	// overlay control stays in step with the panel.
@@ -648,56 +700,56 @@ static void RegisterWebsocketRequests()
 	}
 
 	// Source properties
-	obs_websocket_vendor_register_request(vendor, "GetBlendingMethod", StreamUP::WebSocketAPI::WebsocketRequestGetBlendingMethod, nullptr);
-	obs_websocket_vendor_register_request(vendor, "SetBlendingMethod", StreamUP::WebSocketAPI::WebsocketRequestSetBlendingMethod, nullptr);
-	obs_websocket_vendor_register_request(vendor, "GetDeinterlacing", StreamUP::WebSocketAPI::WebsocketRequestGetDeinterlacing, nullptr);
-	obs_websocket_vendor_register_request(vendor, "SetDeinterlacing", StreamUP::WebSocketAPI::WebsocketRequestSetDeinterlacing, nullptr);
-	obs_websocket_vendor_register_request(vendor, "GetScaleFiltering", StreamUP::WebSocketAPI::WebsocketRequestGetScaleFiltering, nullptr);
-	obs_websocket_vendor_register_request(vendor, "SetScaleFiltering", StreamUP::WebSocketAPI::WebsocketRequestSetScaleFiltering, nullptr);
-	obs_websocket_vendor_register_request(vendor, "GetDownmixMono", StreamUP::WebSocketAPI::WebsocketRequestGetDownmixMono, nullptr);
-	obs_websocket_vendor_register_request(vendor, "SetDownmixMono", StreamUP::WebSocketAPI::WebsocketRequestSetDownmixMono, nullptr);
+	RegisterGated("GetBlendingMethod", StreamUP::WebSocketAPI::WebsocketRequestGetBlendingMethod, nullptr);
+	RegisterGated("SetBlendingMethod", StreamUP::WebSocketAPI::WebsocketRequestSetBlendingMethod, nullptr);
+	RegisterGated("GetDeinterlacing", StreamUP::WebSocketAPI::WebsocketRequestGetDeinterlacing, nullptr);
+	RegisterGated("SetDeinterlacing", StreamUP::WebSocketAPI::WebsocketRequestSetDeinterlacing, nullptr);
+	RegisterGated("GetScaleFiltering", StreamUP::WebSocketAPI::WebsocketRequestGetScaleFiltering, nullptr);
+	RegisterGated("SetScaleFiltering", StreamUP::WebSocketAPI::WebsocketRequestSetScaleFiltering, nullptr);
+	RegisterGated("GetDownmixMono", StreamUP::WebSocketAPI::WebsocketRequestGetDownmixMono, nullptr);
+	RegisterGated("SetDownmixMono", StreamUP::WebSocketAPI::WebsocketRequestSetDownmixMono, nullptr);
 	
 	// UI interaction
-	obs_websocket_vendor_register_request(vendor, "OpenSourceProperties", StreamUP::WebSocketAPI::WebsocketOpenSourceProperties, nullptr);
-	obs_websocket_vendor_register_request(vendor, "OpenSourceFilters", StreamUP::WebSocketAPI::WebsocketOpenSourceFilters, nullptr);
-	obs_websocket_vendor_register_request(vendor, "OpenSourceInteraction", StreamUP::WebSocketAPI::WebsocketOpenSourceInteract, nullptr);
-	obs_websocket_vendor_register_request(vendor, "OpenSceneFilters", StreamUP::WebSocketAPI::WebsocketOpenSceneFilters, nullptr);
+	RegisterGated("OpenSourceProperties", StreamUP::WebSocketAPI::WebsocketOpenSourceProperties, nullptr);
+	RegisterGated("OpenSourceFilters", StreamUP::WebSocketAPI::WebsocketOpenSourceFilters, nullptr);
+	RegisterGated("OpenSourceInteraction", StreamUP::WebSocketAPI::WebsocketOpenSourceInteract, nullptr);
+	RegisterGated("OpenSceneFilters", StreamUP::WebSocketAPI::WebsocketOpenSceneFilters, nullptr);
 	
 	// Video capture device management
-	obs_websocket_vendor_register_request(vendor, "ActivateAllVideoCaptureDevices", StreamUP::WebSocketAPI::WebsocketActivateAllVideoCaptureDevices, nullptr);
-	obs_websocket_vendor_register_request(vendor, "DeactivateAllVideoCaptureDevices", StreamUP::WebSocketAPI::WebsocketDeactivateAllVideoCaptureDevices, nullptr);
-	obs_websocket_vendor_register_request(vendor, "RefreshAllVideoCaptureDevices", StreamUP::WebSocketAPI::WebsocketRefreshAllVideoCaptureDevices, nullptr);
+	RegisterGated("ActivateAllVideoCaptureDevices", StreamUP::WebSocketAPI::WebsocketActivateAllVideoCaptureDevices, nullptr);
+	RegisterGated("DeactivateAllVideoCaptureDevices", StreamUP::WebSocketAPI::WebsocketDeactivateAllVideoCaptureDevices, nullptr);
+	RegisterGated("RefreshAllVideoCaptureDevices", StreamUP::WebSocketAPI::WebsocketRefreshAllVideoCaptureDevices, nullptr);
 
 	// Transition copy/paste
-	obs_websocket_vendor_register_request(vendor, "CopyShowTransition", StreamUP::WebSocketAPI::WebsocketCopyShowTransition, nullptr);
-	obs_websocket_vendor_register_request(vendor, "CopyHideTransition", StreamUP::WebSocketAPI::WebsocketCopyHideTransition, nullptr);
-	obs_websocket_vendor_register_request(vendor, "PasteShowTransition", StreamUP::WebSocketAPI::WebsocketPasteShowTransition, nullptr);
-	obs_websocket_vendor_register_request(vendor, "PasteHideTransition", StreamUP::WebSocketAPI::WebsocketPasteHideTransition, nullptr);
+	RegisterGated("CopyShowTransition", StreamUP::WebSocketAPI::WebsocketCopyShowTransition, nullptr);
+	RegisterGated("CopyHideTransition", StreamUP::WebSocketAPI::WebsocketCopyHideTransition, nullptr);
+	RegisterGated("PasteShowTransition", StreamUP::WebSocketAPI::WebsocketPasteShowTransition, nullptr);
+	RegisterGated("PasteHideTransition", StreamUP::WebSocketAPI::WebsocketPasteHideTransition, nullptr);
 
 	// Group and visibility management
-	obs_websocket_vendor_register_request(vendor, "GroupSelectedSources", StreamUP::WebSocketAPI::WebsocketGroupSelectedSources, nullptr);
-	obs_websocket_vendor_register_request(vendor, "ToggleVisibilitySelectedSources", StreamUP::WebSocketAPI::WebsocketToggleVisibilitySelectedSources, nullptr);
+	RegisterGated("GroupSelectedSources", StreamUP::WebSocketAPI::WebsocketGroupSelectedSources, nullptr);
+	RegisterGated("ToggleVisibilitySelectedSources", StreamUP::WebSocketAPI::WebsocketToggleVisibilitySelectedSources, nullptr);
 
 	// Backward compatibility - register old command names (deprecated)
-	obs_websocket_vendor_register_request(vendor, "getOutputFilePath", StreamUP::WebSocketAPI::WebsocketRequestGetOutputFilePath, nullptr);
-	obs_websocket_vendor_register_request(vendor, "getCurrentSource", StreamUP::WebSocketAPI::WebsocketRequestGetCurrentSelectedSource, nullptr);
-	obs_websocket_vendor_register_request(vendor, "getShowTransition", StreamUP::WebSocketAPI::WebsocketRequestGetShowTransition, nullptr);
-	obs_websocket_vendor_register_request(vendor, "getHideTransition", StreamUP::WebSocketAPI::WebsocketRequestGetHideTransition, nullptr);
-	obs_websocket_vendor_register_request(vendor, "setShowTransition", StreamUP::WebSocketAPI::WebsocketRequestSetShowTransition, nullptr);
-	obs_websocket_vendor_register_request(vendor, "setHideTransition", StreamUP::WebSocketAPI::WebsocketRequestSetHideTransition, nullptr);
-	obs_websocket_vendor_register_request(vendor, "toggleLockCurrentSources", StreamUP::WebSocketAPI::WebsocketRequestLockCurrentSources, nullptr);
-	obs_websocket_vendor_register_request(vendor, "toggleLockAllSources", StreamUP::WebSocketAPI::WebsocketRequestLockAllSources, nullptr);
-	obs_websocket_vendor_register_request(vendor, "getBitrate", StreamUP::WebSocketAPI::WebsocketRequestBitrate, nullptr);
-	obs_websocket_vendor_register_request(vendor, "version", StreamUP::WebSocketAPI::WebsocketRequestVersion, nullptr);
-	obs_websocket_vendor_register_request(vendor, "check_plugins", StreamUP::WebSocketAPI::WebsocketRequestCheckPlugins, nullptr);
-	obs_websocket_vendor_register_request(vendor, "refresh_audio_monitoring", StreamUP::WebSocketAPI::WebsocketRequestRefreshAudioMonitoring, nullptr);
-	obs_websocket_vendor_register_request(vendor, "refresh_browser_sources", StreamUP::WebSocketAPI::WebsocketRequestRefreshBrowserSources, nullptr);
-	obs_websocket_vendor_register_request(vendor, "vlcGetCurrentFile", StreamUP::WebSocketAPI::WebsocketRequestVLCGetCurrentFile, nullptr);
-	obs_websocket_vendor_register_request(vendor, "openSourceProperties", StreamUP::WebSocketAPI::WebsocketOpenSourceProperties, nullptr);
-	obs_websocket_vendor_register_request(vendor, "openSourceFilters", StreamUP::WebSocketAPI::WebsocketOpenSourceFilters, nullptr);
-	obs_websocket_vendor_register_request(vendor, "openSourceInteract", StreamUP::WebSocketAPI::WebsocketOpenSourceInteract, nullptr);
-	obs_websocket_vendor_register_request(vendor, "openSceneFilters", StreamUP::WebSocketAPI::WebsocketOpenSceneFilters, nullptr);
-	obs_websocket_vendor_register_request(vendor, "loadStreamupFile", StreamUP::WebSocketAPI::WebsocketLoadStreamupFile, nullptr);
+	RegisterGated("getOutputFilePath", StreamUP::WebSocketAPI::WebsocketRequestGetOutputFilePath, nullptr);
+	RegisterGated("getCurrentSource", StreamUP::WebSocketAPI::WebsocketRequestGetCurrentSelectedSource, nullptr);
+	RegisterGated("getShowTransition", StreamUP::WebSocketAPI::WebsocketRequestGetShowTransition, nullptr);
+	RegisterGated("getHideTransition", StreamUP::WebSocketAPI::WebsocketRequestGetHideTransition, nullptr);
+	RegisterGated("setShowTransition", StreamUP::WebSocketAPI::WebsocketRequestSetShowTransition, nullptr);
+	RegisterGated("setHideTransition", StreamUP::WebSocketAPI::WebsocketRequestSetHideTransition, nullptr);
+	RegisterGated("toggleLockCurrentSources", StreamUP::WebSocketAPI::WebsocketRequestLockCurrentSources, nullptr);
+	RegisterGated("toggleLockAllSources", StreamUP::WebSocketAPI::WebsocketRequestLockAllSources, nullptr);
+	RegisterGated("getBitrate", StreamUP::WebSocketAPI::WebsocketRequestBitrate, nullptr);
+	RegisterGated("version", StreamUP::WebSocketAPI::WebsocketRequestVersion, nullptr);
+	RegisterGated("check_plugins", StreamUP::WebSocketAPI::WebsocketRequestCheckPlugins, nullptr);
+	RegisterGated("refresh_audio_monitoring", StreamUP::WebSocketAPI::WebsocketRequestRefreshAudioMonitoring, nullptr);
+	RegisterGated("refresh_browser_sources", StreamUP::WebSocketAPI::WebsocketRequestRefreshBrowserSources, nullptr);
+	RegisterGated("vlcGetCurrentFile", StreamUP::WebSocketAPI::WebsocketRequestVLCGetCurrentFile, nullptr);
+	RegisterGated("openSourceProperties", StreamUP::WebSocketAPI::WebsocketOpenSourceProperties, nullptr);
+	RegisterGated("openSourceFilters", StreamUP::WebSocketAPI::WebsocketOpenSourceFilters, nullptr);
+	RegisterGated("openSourceInteract", StreamUP::WebSocketAPI::WebsocketOpenSourceInteract, nullptr);
+	RegisterGated("openSceneFilters", StreamUP::WebSocketAPI::WebsocketOpenSceneFilters, nullptr);
+	RegisterGated("loadStreamupFile", StreamUP::WebSocketAPI::WebsocketLoadStreamupFile, nullptr);
 
 	blog(LOG_INFO, "[StreamUP] RegisterWebsocketRequests: All WebSocket requests registered successfully");
 }
@@ -838,7 +890,9 @@ static void CreateVerticalSceneOrganiserDock()
 	// The Scenes dock gates on this at load; the Vertical one is built from
 	// canvas events instead and used to skip the check entirely, so turning the
 	// Scene Organiser module off still left a vertical dock running.
-	if (!StreamUP::SettingsManager::GetCurrentSettings().modules.sceneOrganiser)
+	// What this session started with, so a runtime flip cannot give a
+	// Vertical dock with no Normal dock and no collection data behind it.
+	if (!StreamUP::Features::IsActive("scene-organiser"))
 		return;
 
 	const auto main_window = static_cast<QMainWindow *>(obs_frontend_get_main_window());
@@ -1012,6 +1066,24 @@ static void LoadStreamUPToolbar()
 	blog(LOG_INFO, "[StreamUP] LoadStreamUPToolbar: Toolbar creation completed");
 }
 
+// Toolbar on and off while OBS runs. Off takes it out of the main window and
+// deletes it, so its event callback and status timer go with it.
+void SetToolbarEnabled(bool enabled)
+{
+	if (enabled) {
+		if (!globalToolbar)
+			LoadStreamUPToolbar();
+		ApplyToolbarVisibility();
+		return;
+	}
+	if (globalToolbar) {
+		if (auto *main_window = static_cast<QMainWindow *>(obs_frontend_get_main_window()))
+			main_window->removeToolBar(globalToolbar);
+		globalToolbar->deleteLater();
+		globalToolbar = nullptr;
+	}
+}
+
 void ApplyToolbarVisibility()
 {
 	if (globalToolbar) {
@@ -1110,6 +1182,10 @@ bool obs_module_load()
 	// (OBSBasic::OBSInit loads modules at line ~1056, scene collections at
 	// ~1120), so this is the last safe moment to put files right.
 	StreamUP::Restore::VerifyPending();
+
+	// Every StreamUP window takes its colours from the active StreamUP theme
+	// variant (or The Andi's gold when another theme is on).
+	StreamUP::Kit::Theme::LoadTokens();
 #ifdef _WIN32
 	blog(LOG_INFO, "[StreamUP] Platform: Windows");
 #elif defined(__APPLE__)
@@ -1164,6 +1240,8 @@ bool obs_module_load()
 	// or doesn't yet contain the modules object.
 	StreamUP::SettingsManager::PluginSettings moduleSettings = StreamUP::SettingsManager::GetCurrentSettings();
 	const StreamUP::SettingsManager::ModuleSettings &mod = moduleSettings.modules;
+	StreamUP::Features::MarkStartupState();
+	StreamUP::Kit::SetOpenFeaturesHook([]() { StreamUP::FeaturesPage::Show(); });
 
 	// Register source types (before frontend initialization)
 	if (mod.adjustmentLayerSource) {
@@ -1194,19 +1272,11 @@ bool obs_module_load()
 		RegisterWebsocketRequests();
 		blog(LOG_INFO, "[StreamUP] Step 2/8: WebSocket requests registered");
 
-		if (mod.hotkeys) {
-			blog(LOG_INFO, "[StreamUP] Step 3/8: Registering hotkeys");
-			StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Registering hotkeys");
-			StreamUP::HotkeyManager::RegisterHotkeys();
-			blog(LOG_INFO, "[StreamUP] Step 3/8: Hotkeys registered");
-
-			blog(LOG_INFO, "[StreamUP] Step 4/8: Adding save callback for hotkeys");
-			StreamUP::DebugLogger::LogDebug("Plugin", "Initialize", "Adding save callback for hotkeys");
-			obs_frontend_add_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
-			blog(LOG_INFO, "[StreamUP] Step 4/8: Save callback added");
-		} else {
-			blog(LOG_INFO, "[StreamUP] Step 3-4/8: Module 'hotkeys' disabled — skipping registration and save callback");
-		}
+		// The save callback is added either way: it only runs when OBS saves
+		// or loads a collection, and while the hotkeys are off it keeps their
+		// bindings so switching them back on gives them back.
+		blog(LOG_INFO, "[StreamUP] Step 3-4/8: Hotkeys %s", mod.hotkeys ? "on" : "off");
+		StreamUP::HotkeyManager::Initialise(mod.hotkeys);
 
 		if (mod.streamupDock) {
 			blog(LOG_INFO, "[StreamUP] Step 5/8: Loading StreamUP dock");
@@ -1227,6 +1297,14 @@ bool obs_module_load()
 			blog(LOG_INFO, "[StreamUP] Step 6/8: Scene Organiser docks loaded");
 		} else {
 			blog(LOG_INFO, "[StreamUP] Step 6/8: Module 'scene_organiser' disabled — skipping");
+		}
+
+		if (mod.mixerDock) {
+			// Tabbed mixer. Its layout rides in each scene collection via
+			// its own save callback, registered alongside the dock.
+			StreamUP::Mixer::RegisterMixerDock();
+		} else {
+			blog(LOG_INFO, "[StreamUP] Module 'mixer_dock' disabled, skipping");
 		}
 
 		if (mod.toolbar) {
@@ -1256,6 +1334,7 @@ bool obs_module_load()
 			StreamUP::SettingsManager::AppliedModuleSnapshot snap;
 			snap.sceneOrganiser = mod.sceneOrganiser;
 			snap.streamupDock = mod.streamupDock;
+			snap.mixerDock = mod.mixerDock;
 			snap.websocketApi = true; // Always registered — see Step 2/8 above.
 			snap.adjustmentLayerSource = mod.adjustmentLayerSource;
 			// Enhancement values are committed in OnOBSFinishedLoading where
@@ -1293,12 +1372,11 @@ static void OnOBSShutdown(enum obs_frontend_event event, void *private_data)
 	UNUSED_PARAMETER(private_data);
 
 	if (event == OBS_FRONTEND_EVENT_THEME_CHANGED) {
-		// Reset cached theme checks so enhancements re-evaluate on next use,
-		// then re-apply. Apply self-gates on whether a StreamUP theme is
-		// active, so this is silent on any other theme.
-		StreamUP::MixerEnhancements::ResetThemeCache();
-		StreamUP::ThemeEnhancements::ResetThemeCache();
-		StreamUP::ThemeEnhancements::ApplyThemeEnhancements();
+		// Bring every StreamUP theme tweak in line with the new theme. Each
+		// one self-gates, so switching to the theme styles OBS straight away
+		// and switching away puts back what can be put back live.
+		StreamUP::ThemeEnhancements::ReapplyThemeTweaks();
+		StreamUP::Kit::Theme::LoadTokens();
 		return;
 	}
 
@@ -1319,45 +1397,9 @@ static void OnOBSShutdown(enum obs_frontend_event event, void *private_data)
 		// an access violation on shutdown. Cleanup is idempotent (it nulls the
 		// pointer), so the unload-time call becomes a safe no-op.
 		StreamUpSelectionCleanup();
+
+		StreamUP::SourceMenuSceneSwitch::Uninstall();
 	}
-}
-
-static void ApplyOBSDockStyleOverrides()
-{
-	// Override OBS native dock margins to match StreamUP style
-	QMainWindow* mainWindow = static_cast<QMainWindow*>(obs_frontend_get_main_window());
-	if (!mainWindow) {
-		blog(LOG_WARNING, "[StreamUP] Failed to get main window for dock style overrides");
-		return;
-	}
-
-	// Find all OBS native docks
-	QList<QDockWidget*> allDocks = StreamUP::MultiDock::FindAllObsDocks(mainWindow);
-
-	int overrideCount = 0;
-	for (QDockWidget* dock : allDocks) {
-		if (!dock) continue;
-
-		// Skip StreamUP's own docks (they already have correct styling)
-		QString objectName = dock->objectName();
-		if (objectName.contains("StreamUP", Qt::CaseInsensitive) ||
-		    objectName.contains("SceneOrganiser", Qt::CaseInsensitive) ||
-		    StreamUP::MultiDock::IsMultiDockContainer(dock)) {
-			continue;
-		}
-
-		// Get the widget inside the dock
-		QWidget* dockWidget = dock->widget();
-		if (dockWidget) {
-			// Override the layout margins to 0
-			if (dockWidget->layout()) {
-				dockWidget->layout()->setContentsMargins(0, 0, 0, 0);
-				overrideCount++;
-			}
-		}
-	}
-
-	blog(LOG_INFO, "[StreamUP] Applied margin overrides to %d OBS native docks", overrideCount);
 }
 
 static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_data)
@@ -1377,10 +1419,13 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 		// Resolve and cache where OBS keeps its config while the frontend API
 		// is still up. The automatic backup runs inside obs_shutdown, by which
 		// point that API is gone and nothing can be resolved from scratch.
-		StreamUP::Backup::ResolveLocations();
+		// Only needed by Backup (and a restore queued for this shutdown);
+		// switching Backup on later resolves them then.
+		if (StreamUP::Features::IsOn("backup") || StreamUP::Restore::HasPending())
+			StreamUP::Backup::ResolveLocations();
 
 		// Apply style overrides to OBS native docks
-		ApplyOBSDockStyleOverrides();
+		StreamUP::ThemeEnhancements::ApplyDockSpacing();
 
 		// Aitum's vertical canvas may already exist by now (its plugin can
 		// load before ours), in which case no CANVAS_ADDED ever reaches us.
@@ -1393,7 +1438,14 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 		StreamUP::StudioModeEnhancements::ApplyStudioModeEnhancements();
 		StreamUP::MixerEnhancements::ApplyMixerEnhancements();
 		StreamUP::VerticalCanvasEnhancements::ApplyVerticalCanvasEnhancements();
+		StreamUP::MultistreamEnhancements::ApplyMultistreamEnhancements();
+		StreamUP::SourceTreeEnhancements::ApplySourceTreeEnhancements();
 		StreamUP::ThemeEnhancements::ApplyThemeEnhancements();
+
+		// "Switch to Scene" in the Sources docks' right-click menus. Its
+		// app-wide filter only goes on while the feature is on.
+		if (StreamUP::Features::IsOn("scene-switch"))
+			StreamUP::SourceMenuSceneSwitch::Install();
 
 		// Snapshot fields for the three enhancements always read true now —
 		// there is no user-facing toggle for them, so the "Restart required"
@@ -1432,33 +1484,9 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 			StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
 				constexpr int STARTUP_DELAY_MS = 2000;
 				QTimer::singleShot(STARTUP_DELAY_MS, []() {
-					// Lambda that runs the existing splash/patch-notes flow.
-					// Defined first so it can be invoked directly OR chained
-					// after the first-launch wizard.
-					auto runSplashFlow = []() {
-						StreamUP::SplashScreen::ShowCondition condition = StreamUP::SplashScreen::CheckSplashCondition();
-						if (condition == StreamUP::SplashScreen::ShowCondition::FirstInstall) {
-							StreamUP::SplashScreen::ShowSplashScreenIfNeeded();
-						} else if (condition == StreamUP::SplashScreen::ShowCondition::VersionUpdate) {
-							StreamUP::SplashScreen::ShowSplashScreenIfNeeded();
-						}
-						// If Never, don't show anything.
-					};
-
-					// Show the plugin picker whenever the saved version stamp
-					// doesn't match the current build. Catches three cases:
-					//   - Fresh install (no key, mismatch with "")
-					//   - Upgrader from a build before the wizard existed (no key)
-					//   - Future deliberate version bump where we want the user
-					//     to see the picker again because new plugins exist
-					// On finish the wizard writes PROJECT_VERSION back, so users
-					// who already saw THIS exact build go straight to the splash.
-					StreamUP::SettingsManager::PluginSettings startupSettings = StreamUP::SettingsManager::GetCurrentSettings();
-					if (startupSettings.wizardVersionShown != PROJECT_VERSION) {
-						StreamUP::ModuleSetupWizard::Show(runSplashFlow);
-					} else {
-						runSplashFlow();
-					}
+					// One window at start-up: Welcome, What's new or
+					// Features, changing page in place.
+					StreamUP::FeaturesPage::ShowAtStartup();
 				});
 			});
 			
@@ -1468,13 +1496,14 @@ static void OnOBSFinishedLoading(enum obs_frontend_event event, void *private_da
 				QTimer::singleShot(PLUGIN_CHECK_DELAY_MS, []() {
 					// Check for plugin updates on startup if enabled, but stay silent if up to date
 					// Only show if no splash screen or patch notes window is open
-					if (!StreamUP::SplashScreen::IsSplashScreenOpen() && !StreamUP::PatchNotesWindow::IsPatchNotesWindowOpen()) {
+					// Never on top of the start-up window: wait for it to close.
+					StreamUP::FeaturesPage::WhenClosed([]() {
 						StreamUP::SettingsManager::PluginSettings settings = StreamUP::SettingsManager::GetCurrentSettings();
 						if (settings.runAtStartup) {
 							// Use the silent version that only shows dialogs if there are actual updates
 							StreamUP::PluginManager::ShowCachedPluginUpdatesDialogSilent();
 						}
-					}
+					});
 				});
 			});
 		});
@@ -1539,13 +1568,15 @@ void obs_module_unload()
 
 		blog(LOG_INFO, "[StreamUP] Unload step 2/8: Removing save callback for hotkeys");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Removing save callback for hotkeys");
-		obs_frontend_remove_save_callback(StreamUP::HotkeyManager::SaveLoadHotkeys, nullptr);
+		// (Hotkeys' save callback is removed in Shutdown below.)
 		StreamUP::SceneOrganiser::CollectionData::Unregister();
 		StreamUP::OverlayControls::Shutdown();
+		// Font downloads still running are given a moment, then let go.
+		StreamUP::GoogleFonts::Shutdown();
 
 		blog(LOG_INFO, "[StreamUP] Unload step 3/8: Unregistering hotkeys");
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Unregistering hotkeys");
-		StreamUP::HotkeyManager::UnregisterHotkeys();
+		StreamUP::HotkeyManager::Shutdown();
 
 		// Clean up toolbar - just nullify the pointer, let Qt/OBS handle destruction
 		blog(LOG_INFO, "[StreamUP] Unload step 4/8: Cleaning up toolbar reference");
@@ -1562,7 +1593,9 @@ void obs_module_unload()
 		StreamUP::DebugLogger::LogDebug("Plugin", "Unload", "Cleaning up UI enhancements");
 		StreamUP::StudioModeEnhancements::CleanupStudioModeEnhancements();
 		StreamUP::MixerEnhancements::CleanupMixerEnhancements();
+		StreamUP::SourceTreeEnhancements::CleanupSourceTreeEnhancements();
 		StreamUP::VerticalCanvasEnhancements::CleanupVerticalCanvasEnhancements();
+		StreamUP::MultistreamEnhancements::CleanupMultistreamEnhancements();
 		StreamUP::ThemeEnhancements::CleanupThemeEnhancements();
 
 		// Save all current settings before cleanup

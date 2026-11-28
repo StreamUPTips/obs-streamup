@@ -36,20 +36,6 @@ bool SearchStringInFile(const QString &filePath, const QString &searchString);
 QString GetPlatformURL(const QString &windowsURL, const QString &macURL, 
                       const QString &linuxURL, const QString &generalURL);
 
-/**
- * Convert QString to UTF-8 std::string
- * @param qstr The QString to convert
- * @return std::string UTF-8 encoded string
- */
-std::string QStringToStdString(const QString &qstr);
-
-/**
- * Convert std::string to QString
- * @param str The std::string to convert
- * @return QString converted string
- */
-QString StdStringToQString(const std::string &str);
-
 } // namespace StringUtils
 } // namespace StreamUP
 

@@ -549,10 +549,49 @@ void HotkeyFocusSceneOrganiserSearchVertical(void *data, obs_hotkey_id id, obs_h
 }
 
 //-------------------HOTKEY MANAGEMENT-------------------
+// The bindings while the hotkeys are switched off. OBS rebuilds a collection's
+// module data on every save, so without this a save made while the hotkeys
+// are off would drop every StreamUP binding for good. Parked bindings are
+// written back on save and restored when the hotkeys come back.
+static obs_data_t *g_parked = nullptr;
+static bool s_hotkeysCurrentlyRegistered = false;
+static bool s_saveCallbackAdded = false;
+
 void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 {
 	Q_UNUSED(param);
-	
+
+	if (!s_hotkeysCurrentlyRegistered) {
+		// Only StreamUP's own keys move: the save data is shared with every
+		// other plugin's collection data.
+		static const char *const kKeys[] = {
+			"refresh_browser_sources_hotkey", "refresh_audio_monitoring_hotkey", "lock_all_sources_hotkey",
+			"lock_current_sources_hotkey", "open_source_properties_hotkey", "open_source_filters_hotkey",
+			"open_source_interact_hotkey", "open_scene_filters_hotkey",
+			"activate_video_capture_devices_hotkey", "deactivate_video_capture_devices_hotkey",
+			"refresh_video_capture_devices_hotkey", "copy_show_transition_hotkey",
+			"copy_hide_transition_hotkey", "paste_show_transition_hotkey", "paste_hide_transition_hotkey",
+			"group_selected_sources_hotkey", "toggle_visibility_selected_sources_hotkey",
+			"focus_scene_organiser_search_hotkey", "focus_scene_organiser_search_vertical_hotkey"};
+		obs_data_t *from = saving ? g_parked : save_data;
+		if (!saving) {
+			if (!g_parked)
+				g_parked = obs_data_create();
+			obs_data_clear(g_parked);
+		}
+		obs_data_t *to = saving ? save_data : g_parked;
+		if (!from)
+			return;
+		for (const char *key : kKeys) {
+			obs_data_array_t *arr = obs_data_get_array(from, key);
+			if (arr) {
+				obs_data_set_array(to, key, arr);
+				obs_data_array_release(arr);
+			}
+		}
+		return;
+	}
+
 	if (saving) {
 		// save hotkeys
 		StreamUP::OBSDataHelpers::SaveHotkeyToData(save_data, "refresh_browser_sources_hotkey", refresh_browser_sources_hotkey_id);
@@ -603,8 +642,6 @@ void SaveLoadHotkeys(obs_data_t *save_data, bool saving, void *param)
 // toggle (SetHotkeyGroupEnabled) can avoid double-register / double-unregister.
 // Set by Register/UnregisterHotkeys themselves so the flag stays accurate
 // regardless of caller.
-static bool s_hotkeysCurrentlyRegistered = false;
-
 void RegisterHotkeys()
 {
 	if (s_hotkeysCurrentlyRegistered) {
@@ -651,10 +688,42 @@ void RegisterHotkeys()
 											HotkeyFocusSceneOrganiserSearchVertical, nullptr);
 }
 
+void Initialise(bool enabled)
+{
+	// Passive: runs only when OBS saves or loads a collection, and keeps the
+	// bindings safe whether the hotkeys are on or off (see g_parked).
+	if (!s_saveCallbackAdded) {
+		obs_frontend_add_save_callback(SaveLoadHotkeys, nullptr);
+		s_saveCallbackAdded = true;
+	}
+	if (enabled)
+		RegisterHotkeys();
+}
+
+void Shutdown()
+{
+	if (s_saveCallbackAdded) {
+		obs_frontend_remove_save_callback(SaveLoadHotkeys, nullptr);
+		s_saveCallbackAdded = false;
+	}
+	UnregisterHotkeys();
+	if (g_parked) {
+		obs_data_release(g_parked);
+		g_parked = nullptr;
+	}
+}
+
 void SetHotkeyGroupEnabled(bool enabled)
 {
 	if (enabled && !s_hotkeysCurrentlyRegistered) {
 		RegisterHotkeys();
+		// Give back the bindings they had when they were switched off (or
+		// that the collection held while they were off).
+		if (g_parked) {
+			SaveLoadHotkeys(g_parked, false, nullptr);
+			obs_data_release(g_parked);
+			g_parked = nullptr;
+		}
 	} else if (!enabled && s_hotkeysCurrentlyRegistered) {
 		UnregisterHotkeys();
 	}
@@ -665,6 +734,11 @@ void UnregisterHotkeys()
 	if (!s_hotkeysCurrentlyRegistered) {
 		return;
 	}
+	// Park the bindings before the IDs go, so a save while off keeps them.
+	if (!g_parked)
+		g_parked = obs_data_create();
+	obs_data_clear(g_parked);
+	SaveLoadHotkeys(g_parked, true, nullptr);
 	s_hotkeysCurrentlyRegistered = false;
 	obs_hotkey_unregister(refresh_browser_sources_hotkey_id);
 	obs_hotkey_unregister(refresh_audio_monitoring_hotkey_id);
@@ -685,37 +759,17 @@ void UnregisterHotkeys()
 	obs_hotkey_unregister(toggle_visibility_selected_sources_hotkey_id);
 	obs_hotkey_unregister(focus_scene_organiser_search_hotkey_id);
 	obs_hotkey_unregister(focus_scene_organiser_search_vertical_hotkey_id);
-}
-
-void ResetAllHotkeys()
-{
-	// Create empty data arrays to clear hotkey assignments
-	obs_data_array_t *emptyArray = obs_data_array_create();
-
-	// Reset all StreamUP hotkeys to empty assignments
-	obs_hotkey_load(refresh_browser_sources_hotkey_id, emptyArray);
-	obs_hotkey_load(refresh_audio_monitoring_hotkey_id, emptyArray);
-	obs_hotkey_load(lock_all_sources_hotkey_id, emptyArray);
-	obs_hotkey_load(lock_current_sources_hotkey_id, emptyArray);
-	obs_hotkey_load(open_source_properties_hotkey_id, emptyArray);
-	obs_hotkey_load(open_source_filters_hotkey_id, emptyArray);
-	obs_hotkey_load(open_source_interact_hotkey_id, emptyArray);
-	obs_hotkey_load(open_scene_filters_hotkey_id, emptyArray);
-	obs_hotkey_load(activate_video_capture_devices_hotkey_id, emptyArray);
-	obs_hotkey_load(deactivate_video_capture_devices_hotkey_id, emptyArray);
-	obs_hotkey_load(refresh_video_capture_devices_hotkey_id, emptyArray);
-	obs_hotkey_load(copy_show_transition_hotkey_id, emptyArray);
-	obs_hotkey_load(copy_hide_transition_hotkey_id, emptyArray);
-	obs_hotkey_load(paste_show_transition_hotkey_id, emptyArray);
-	obs_hotkey_load(paste_hide_transition_hotkey_id, emptyArray);
-	obs_hotkey_load(group_selected_sources_hotkey_id, emptyArray);
-	obs_hotkey_load(toggle_visibility_selected_sources_hotkey_id, emptyArray);
-	obs_hotkey_load(focus_scene_organiser_search_hotkey_id, emptyArray);
-	obs_hotkey_load(focus_scene_organiser_search_vertical_hotkey_id, emptyArray);
-
-	obs_data_array_release(emptyArray);
-
-	StreamUP::DebugLogger::LogDebug("Hotkeys", "Reset", "All hotkeys have been reset to no key assignments");
+	for (obs_hotkey_id *id : {&refresh_browser_sources_hotkey_id, &refresh_audio_monitoring_hotkey_id,
+				  &lock_all_sources_hotkey_id, &lock_current_sources_hotkey_id,
+				  &open_source_properties_hotkey_id, &open_source_filters_hotkey_id,
+				  &open_source_interact_hotkey_id, &open_scene_filters_hotkey_id,
+				  &activate_video_capture_devices_hotkey_id, &deactivate_video_capture_devices_hotkey_id,
+				  &refresh_video_capture_devices_hotkey_id, &copy_show_transition_hotkey_id,
+				  &copy_hide_transition_hotkey_id, &paste_show_transition_hotkey_id,
+				  &paste_hide_transition_hotkey_id, &group_selected_sources_hotkey_id,
+				  &toggle_visibility_selected_sources_hotkey_id, &focus_scene_organiser_search_hotkey_id,
+				  &focus_scene_organiser_search_vertical_hotkey_id})
+		*id = OBS_INVALID_HOTKEY_ID;
 }
 
 obs_hotkey_id GetHotkeyId(const char* hotkeyName)

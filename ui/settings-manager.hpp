@@ -6,18 +6,6 @@
 #include <string>
 #include <vector>
 
-// Forward declarations
-class QScrollArea;
-class QWidget;
-class QDialog;
-class QTableWidget;
-
-namespace StreamUP {
-namespace UIStyles {
-    struct StandardDialogComponents;
-}
-}
-
 namespace StreamUP {
 namespace SettingsManager {
 
@@ -52,10 +40,12 @@ struct ModuleSettings {
     bool multiDock;
     bool hotkeys;
     bool backup;
+    bool sourceMenuSceneSwitch; // "Switch to Scene" in the Sources dock menu
 
     // Hard toggles — require an OBS restart to apply (no unregister API in OBS)
     bool sceneOrganiser;
     bool streamupDock;
+    bool mixerDock;
     bool mixerEnhancements;
     bool studioModeEnhancements;
     bool themeEnhancements;
@@ -67,8 +57,10 @@ struct ModuleSettings {
         multiDock(true),
         hotkeys(true),
         backup(true),
+        sourceMenuSceneSwitch(true),
         sceneOrganiser(true),
         streamupDock(true),
+        mixerDock(true),
         mixerEnhancements(true),
         studioModeEnhancements(true),
         themeEnhancements(true),
@@ -84,6 +76,7 @@ struct ModuleSettings {
 struct AppliedModuleSnapshot {
     bool sceneOrganiser;
     bool streamupDock;
+    bool mixerDock;
     bool mixerEnhancements;
     bool studioModeEnhancements;
     bool themeEnhancements;
@@ -93,6 +86,7 @@ struct AppliedModuleSnapshot {
     AppliedModuleSnapshot() :
         sceneOrganiser(true),
         streamupDock(true),
+        mixerDock(true),
         mixerEnhancements(true),
         studioModeEnhancements(true),
         themeEnhancements(true),
@@ -182,6 +176,17 @@ struct PluginSettings {
     ToolbarSize toolbarSize;        // Size tier — actual pixel sizing comes from the OBS theme via [size="..."] selectors
     ToolbarAlignment toolbarAlignment; // Where the button run sits along the toolbar's main axis
 
+    // StreamUP theme UI tweaks. Each only ever applies while a StreamUP OBS
+    // theme is active; these let someone on the theme switch single ones off.
+    bool themeSourceFolders;  // Sources dock: folder icons and children lined up under them
+    bool themeSourceGuides;   // Sources dock: folder lines down to each group's children
+    bool themeMixer;          // Audio mixer layout
+    bool themeVerticalCanvas; // Aitum Vertical Canvas control row
+    bool themeMultistream;    // Aitum Multistream dock
+    bool themeStudioMode;     // Studio mode transition marker and program area
+    bool themeSpacing;        // Dock and window edge spacing
+    bool themeWindowPolish;   // Colour previews as pills, taller rows in list dialogs
+
     // Automatic backups. Written during shutdown, after OBS has saved its final
     // state, and limited to one a day so closing OBS repeatedly does not fill
     // the folder. Empty backupLocation means the default beside the OBS config.
@@ -192,8 +197,9 @@ struct PluginSettings {
     ModuleSettings modules;
     bool moduleSetupComplete;       // Legacy wizard sentinel (kept for compat)
     std::string wizardVersionShown; // PROJECT_VERSION when the wizard last ran. Drives the upgrader prompt.
+    std::string featuresVersionSeen; // PROJECT_VERSION when the Features page was last opened. Drives its "New" badges.
 
-    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserShowIndentGuides(true), sceneOrganiserShowFavouritesTab(true), sceneOrganiserShowRecentTab(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), toolbarAlignment(ToolbarAlignment::Start), backupAutomatic(true), backupKeepCount(10), backupLocation(), backupLastAutoDate(), moduleSetupComplete(false), wizardVersionShown() {}
+    PluginSettings() : runAtStartup(true), notificationsMute(false), showCPHIntegration(true), showToolbar(true), debugLoggingEnabled(false), sceneOrganiserShowIcons(true), sceneOrganiserShowIndentGuides(true), sceneOrganiserShowFavouritesTab(true), sceneOrganiserShowRecentTab(true), sceneOrganiserGroupFolders(true), sceneOrganiserRememberFolderState(true), sceneOrganiserDisablePreviewSwitchingInStudioMode(false), sceneOrganiserDisableTransitionInStudioMode(false), sceneOrganiserSwitchToNewScene(false), sceneOrganiserItemHeight(24), sceneOrganiserSwitchMode(SceneSwitchMode::SingleClick), sceneOrganiserSortMethod(SceneSortMethod::None), toolbarPosition(ToolbarPosition::Top), toolbarSize(ToolbarSize::Medium), toolbarAlignment(ToolbarAlignment::Start), themeSourceFolders(true), themeSourceGuides(true), themeMixer(true), themeVerticalCanvas(true), themeMultistream(true), themeStudioMode(true), themeSpacing(true), themeWindowPolish(true), backupAutomatic(true), backupKeepCount(10), backupLocation(), backupLastAutoDate(), moduleSetupComplete(false), wizardVersionShown(), featuresVersionSeen() {}
 };
 
 /**
@@ -247,6 +253,9 @@ enum SettingsTab {
     SettingsTabDockConfig = 5,
     SettingsTabPlugins = 6,
     SettingsTabBackup = 7,
+    // Tools and tweaks (was the Features page). Shown first in the sidebar,
+    // but its page keeps the old Plugins slot so the indices stay put.
+    SettingsTabTools = SettingsTabPlugins,
 };
 
 /**
@@ -262,12 +271,6 @@ void ShowSettingsDialog(int tabIndex);
 bool AreNotificationsMuted();
 
 /**
- * @brief Set notification mute state
- * @param muted True to mute notifications, false to enable them
- */
-void SetNotificationsMuted(bool muted);
-
-/**
  * @brief Check if CPH integration is enabled
  * @return bool True if CPH integration should be shown
  */
@@ -280,30 +283,6 @@ bool IsCPHIntegrationEnabled();
 bool IsDebugLoggingEnabled();
 
 /**
- * @brief Set debug logging state
- * @param enabled True to enable debug logging, false to disable it
- */
-void SetDebugLoggingEnabled(bool enabled);
-
-/**
- * @brief Show the installed plugins page inline within the same window
- * @param components The dialog components from the template system
- */
-void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponents& components);
-
-/**
- * @brief Show the installed plugins page in a separate window
- * @param parentWidget Optional parent widget for proper positioning
- */
-void ShowInstalledPluginsPage(QWidget* parentWidget = nullptr);
-
-/**
- * @brief Show the hotkeys management page inline within the same window
- * @param components The dialog components from the template system
- */
-void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents& components);
-
-/**
  * @brief Get current dock tool settings
  * @return DockToolSettings Current dock tool visibility configuration
  */
@@ -314,17 +293,6 @@ DockToolSettings GetDockToolSettings();
  * @param dockSettings The new dock tool settings to apply
  */
 void UpdateDockToolSettings(const DockToolSettings& dockSettings);
-
-/**
- * @brief Show dock configuration settings inline within the same window
- * @param components The dialog components from the template system
- */
-void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents& components);
-
-/**
- * Invalidate settings cache (forces reload on next access)
- */
-void InvalidateSettingsCache();
 
 /**
  * Clean up cached settings on plugin shutdown
@@ -393,19 +361,12 @@ AppliedModuleSnapshot GetAppliedModuleSnapshot();
  */
 void CommitAppliedModuleSnapshot(const AppliedModuleSnapshot& snapshot);
 
-/**
- * @brief Whether any pre-existing StreamUP settings key is present in the
- * config file. Used by the first-launch wizard to distinguish a fresh install
- * (no keys) from an upgrade from an older version (keys present, but no
- * module_setup_complete flag yet).
- */
-bool HasAnyExistingSettings();
-
 } // namespace SettingsManager
 } // namespace StreamUP
 
 // Global functions for toolbar management (defined in streamup.cpp)
 extern void ApplyToolbarVisibility();
+extern void SetToolbarEnabled(bool enabled);
 extern void ApplyToolbarPosition();
 extern void ApplyToolbarSize();
 extern void ApplyToolbarAlignment();

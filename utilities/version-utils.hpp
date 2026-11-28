@@ -22,22 +22,6 @@ bool IsVersionLessThan(const std::string &version1, const std::string &version2)
  */
 std::vector<int> ParseVersion(const std::string &version);
 
-/**
- * Compare two version strings for equality
- * @param version1 First version string
- * @param version2 Second version string
- * @return bool true if versions are equal
- */
-bool AreVersionsEqual(const std::string &version1, const std::string &version2);
-
-/**
- * Get the newer of two version strings
- * @param version1 First version string
- * @param version2 Second version string
- * @return std::string the newer version
- */
-std::string GetNewerVersion(const std::string &version1, const std::string &version2);
-
 } // namespace VersionUtils
 } // namespace StreamUP
 

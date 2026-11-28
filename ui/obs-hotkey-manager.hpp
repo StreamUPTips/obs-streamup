@@ -31,9 +31,6 @@ public:
     // Get all available hotkeys from OBS
     static QList<HotkeyInfo> getAvailableHotkeys();
     
-    // Get only frontend hotkeys (most useful for toolbar buttons)
-    static QList<HotkeyInfo> getFrontendHotkeys();
-    
     // Trigger a hotkey by name
     static bool triggerHotkey(const QString& hotkeyName);
     // Disambiguated by the name of the source that registered it.
@@ -41,12 +38,6 @@ public:
     
     // Trigger a hotkey by ID
     static bool triggerHotkeyById(obs_hotkey_id hotkeyId);
-    
-    // Get hotkey description by name
-    static QString getHotkeyDescription(const QString& hotkeyName);
-    
-    // Check if a hotkey exists
-    static bool hotkeyExists(const QString& hotkeyName);
     
     // Get default icon for a hotkey (based on hotkey name)
     static QString getDefaultHotkeyIcon(const QString& hotkeyName);
@@ -59,9 +50,6 @@ public:
     static QString displayLabel(const HotkeyInfo& info);
 
 private:
-    // Internal helper functions
-    static obs_hotkey_t* findHotkeyByName(const QString& hotkeyName);
-    static QString formatHotkeyDescription(obs_hotkey_t* hotkey);
     // Takes the whole info, not just the name: source hotkeys share names
     // across sources and can only be told apart by their registerer.
     static QString getHotkeyCategory(const HotkeyInfo& info);

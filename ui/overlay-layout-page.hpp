@@ -6,12 +6,12 @@
 
 #include "../core/overlay-controls.hpp"
 
+#include <QJsonObject>
 #include <QWidget>
 
-#include <atomic>
+#include <obs.h>
+
 #include <functional>
-#include <memory>
-#include <thread>
 
 class QComboBox;
 class QListWidget;
@@ -41,13 +41,13 @@ protected:
 	void hideEvent(QHideEvent *e) override;
 
 private:
-	void renderPreview();
-	void joinRender();
 	void fillScenes();
 	void fillParts();
 	void selectPart(const QString &id);
 	void showSelected();
 	void write(const QJsonObject &partial);
+	bool flushWrite();
+	void showScene(bool show);
 	const OverlayControls::ControlInfo *part(const QString &id) const;
 	QList<const OverlayControls::ControlInfo *> partsInScene(const QString &scene) const;
 
@@ -69,10 +69,14 @@ private:
 	QPushButton *m_reset = nullptr;
 	QWidget *m_editor = nullptr;
 
-	// The preview renders off the UI thread, like obs-websocket's screenshot:
-	// some sources (ProText, source clones) draw wrong from the UI thread.
-	std::thread m_render;
-	std::shared_ptr<std::atomic<bool>> m_rendering = std::make_shared<std::atomic<bool>>(false);
+	// The previewed scene, held "showing" for as long as it is on screen
+	// rather than toggled every frame (each toggle fires show/hide on every
+	// source in it).
+	obs_source_t *m_shown = nullptr;
+
+	// Drag, nudge, spin and scale writes, throttled like the controls page.
+	QJsonObject m_pending;
+	class QTimer *m_flushTimer = nullptr;
 };
 
 } // namespace OverlayUI

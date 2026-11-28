@@ -3,14 +3,18 @@
 // overlay-apply.cpp.
 
 #include "overlay-controls-internal.hpp"
+#include "canvas-lookup.hpp"
+#include "product-transitions.hpp"
 
 #include <streamup/debug-logger.hpp>
 
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QImage>
 #include <QJsonDocument>
 #include <QRegularExpression>
 #include <QSet>
@@ -26,9 +30,13 @@ using namespace Internal;
 
 namespace {
 
-// The manifest is versioned so a future plugin can refuse a newer file cleanly
-// instead of half-reading it. Format 2 added text, platforms, layout and outputs;
-// a format 1 file reads the same as before.
+// The manifest is versioned. Format 2 added text, platforms, layout and outputs;
+// a format 1 file reads the same as before. Everything added since (image
+// controls, transition links, actions, product) is optional and is skipped by
+// a plugin that does not know it, so those files still say format 2. A file
+// with a higher number is read as far as this plugin understands it, with a
+// warning, rather than refused: an older plugin keeps working with newer
+// products, minus the parts it cannot do.
 constexpr int kManifestFormat = 2;
 constexpr const char *kFileKey = "streamup_overlay";
 constexpr const char *kModuleKey = "streamup_overlay_controls";
@@ -64,6 +72,16 @@ bool ParseBinding(const QJsonObject &j, Binding &b, QString *why)
 	b.filter = j.value("filter").toString();
 	b.scene = j.value("scene").toString();
 	b.key = j.value("key").toString();
+	if (j.contains("transition")) {
+		// A scene transition's own settings (duration, transition point).
+		b.transition = true;
+		b.source = j.value("transition").toString();
+		if (b.source.isEmpty() || b.key.isEmpty() || !b.filter.isEmpty() || !b.scene.isEmpty() ||
+		    b.key.startsWith('@')) {
+			*why = "a transition link needs a transition name and a settings key, and nothing else";
+			return false;
+		}
+	}
 	if (b.source.isEmpty() || b.key.isEmpty()) {
 		*why = "a link needs a source and a key";
 		return false;
@@ -150,6 +168,7 @@ bool ParseControl(const QJsonObject &j, const QString &groupTab, Control &c, QSt
 	c.id = j.value("id").toString();
 	c.label = j.value("label").toString(c.id);
 	c.help = j.value("help").toString();
+	c.advanced = j.value("advanced").toBool(false);
 	c.tab = j.value("tab").toString(groupTab);
 	if (c.id.isEmpty()) {
 		*why = "a control needs an id";
@@ -163,8 +182,14 @@ bool ParseControl(const QJsonObject &j, const QString &groupTab, Control &c, QSt
 			def = "#FFFFFF";
 	} else if (type == "slider" || type == "number") {
 		c.type = type == "slider" ? ControlType::Slider : ControlType::Number;
-		c.min = j.value("min").toDouble(0.0);
-		c.max = j.value("max").toDouble(1.0);
+		// No min or max: the linked OBS setting's own range is used once it
+		// is found (see MakeInfo). Until then a wide range keeps the default.
+		c.autoMin = !j.contains("min");
+		c.autoMax = !j.contains("max");
+		c.autoStep = !j.contains("step");
+		const double defNum = def.isDouble() ? def.toDouble() : 0.0;
+		c.min = j.value("min").toDouble(std::min(0.0, defNum));
+		c.max = j.value("max").toDouble(c.autoMin ? std::max({1.0, defNum, 100.0}) : std::max(1.0, defNum));
 		if (!(c.max > c.min)) {
 			*why = QString("control \"%1\" needs max above min").arg(c.id);
 			return false;
@@ -221,6 +246,10 @@ bool ParseControl(const QJsonObject &j, const QString &groupTab, Control &c, QSt
 		}
 		if (def.isUndefined())
 			def = QJsonArray();
+	} else if (type == "image") {
+		c.type = ControlType::Image;
+		if (def.isUndefined())
+			def = QString();
 	} else if (type == "layout") {
 		c.type = ControlType::Layout;
 		if (!ParseLayout(j, c, why))
@@ -252,6 +281,29 @@ bool ParseControl(const QJsonObject &j, const QString &groupTab, Control &c, QSt
 	return true;
 }
 
+bool ParseAction(const QJsonObject &j, int index, const Overlay &o, ActionInfo &a, QString *why)
+{
+	const QString type = j.value("type").toString();
+	a.id = j.value("id").toString(QString("%1-%2").arg(type).arg(index));
+	a.label = j.value("label").toString();
+	a.help = j.value("help").toString();
+	if (type == "use_as_transition") {
+		a.type = ActionType::UseAsTransition;
+		a.scene = j.value("scene").toString(o.scenes.value(0));
+		a.transition = j.value("name").toString(o.name).trimmed();
+		a.duration = std::clamp(j.value("duration").toInt(2000), 50, 20000);
+		a.transitionPoint = std::clamp(j.value("transition_point").toDouble(50.0), 0.0, 100.0);
+		a.makeCurrent = j.value("make_current").toBool(true);
+		if (a.scene.isEmpty() || a.transition.isEmpty()) {
+			*why = "use_as_transition needs a scene and a name";
+			return false;
+		}
+		return true;
+	}
+	*why = QString("unknown action type \"%1\"").arg(type);
+	return false;
+}
+
 QStringList TemplateUses(const QString &templ)
 {
 	static const QRegularExpression token(QStringLiteral("\\{\\{\\s*([^{}|.]+)"));
@@ -268,10 +320,11 @@ QStringList TemplateUses(const QString &templ)
 bool ParseManifest(const QJsonObject &m, Overlay &o, QString *error)
 {
 	const int format = m.value("format").toInt(1);
-	if (format > kManifestFormat) {
-		*error = QString("This overlay needs a newer StreamUP plugin (controls format %1).").arg(format);
-		return false;
-	}
+	if (format > kManifestFormat)
+		DebugLogger::LogWarningFormat("OverlayControls",
+					      "Overlay '%s' is controls format %d; this plugin reads format %d, so "
+					      "anything newer is skipped. Update StreamUP for everything.",
+					      m.value("id").toString().toUtf8().constData(), format, kManifestFormat);
 	o.id = m.value("id").toString().trimmed();
 	o.name = m.value("name").toString(o.id);
 	o.version = m.value("version").toString();
@@ -316,7 +369,29 @@ bool ParseManifest(const QJsonObject &m, Overlay &o, QString *error)
 		if (!g.controls.isEmpty())
 			o.groups.append(g);
 	}
-	if (o.groups.isEmpty()) {
+	const QJsonArray actions = m.value("actions").toArray();
+	for (int i = 0; i < actions.size(); ++i) {
+		ActionInfo a;
+		QString why;
+		if (!ParseAction(actions.at(i).toObject(), i, o, a, &why)) {
+			DebugLogger::LogWarningFormat("OverlayControls", "Overlay '%s': skipping an action, %s",
+						      o.id.toUtf8().constData(), why.toUtf8().constData());
+			continue;
+		}
+		o.actions.append(a);
+	}
+
+	const QJsonObject product = m.value("product").toObject();
+	o.product.id = product.value("id").toString(o.id).trimmed();
+	o.product.name = product.value("name").toString(o.name);
+	o.product.version = product.value("version").toString(o.version);
+	o.product.overlay = o.id;
+	o.product.category = product.value("category").toString(m.value("category").toString()).trimmed().toLower();
+	if (o.product.id.isEmpty())
+		o.product.id = o.id;
+
+	// A product can be all actions (a transition with nothing to tune).
+	if (o.groups.isEmpty() && o.actions.isEmpty()) {
 		*error = QString("The overlay \"%1\" has no usable controls.").arg(o.name);
 		return false;
 	}
@@ -347,6 +422,21 @@ bool ParseManifest(const QJsonObject &m, Overlay &o, QString *error)
 }
 
 // ---------------------------------------------------------------- state (what the collection file keeps)
+
+// An image with no default in the manifest defaults to the file the product
+// installed, so the panel never says "no image" over a logo on screen, and
+// Reset shows the file it puts back.
+void SeedImageDefault(Control &c)
+{
+	if (c.type != ControlType::Image || !c.defaultValue.toString().isEmpty() || c.bindings.isEmpty())
+		return;
+	const Binding &b = c.bindings.first();
+	if (!b.captured || b.original.value("t").toString() != "s")
+		return;
+	c.defaultValue = NormaliseValue(c, b.original.value("v"));
+	if (!c.applied)
+		c.value = c.defaultValue;
+}
 
 QJsonObject BindingState(const Binding &b)
 {
@@ -516,6 +606,7 @@ void RestoreOverlayState(Overlay &o, const QJsonObject &state)
 				RestoreBindingState(c.bindings[i], bindings.at(i).toObject());
 			if (c.type == ControlType::Layout)
 				RestoreRigState(c.rig, cj.value("rig").toObject());
+			SeedImageDefault(c);
 		}
 	}
 	for (const QJsonValue pv : state.value("userPresets").toArray()) {
@@ -600,7 +691,7 @@ void CaptureAll(Overlay &o)
 			for (Binding &b : c.bindings) {
 				if (b.captured)
 					continue;
-				if (!CaptureBinding(b) && !BindingTargetExists(b))
+				if (!CaptureBinding(b) && !b.transition && !BindingTargetExists(b))
 					DebugLogger::LogWarningFormat("OverlayControls",
 								      "Overlay '%s': '%s' / '%s' not found for control '%s'",
 								      o.id.toUtf8().constData(), b.source.toUtf8().constData(),
@@ -608,11 +699,12 @@ void CaptureAll(Overlay &o)
 			}
 			if (c.type == ControlType::Layout)
 				CaptureRig(o, c);
+			SeedImageDefault(c);
 		}
 	}
 	o.sceneUuids.clear();
 	for (const QString &name : o.scenes) {
-		obs_source_t *scene = obs_get_source_by_name(name.toUtf8().constData());
+		obs_source_t *scene = StreamUP::CanvasLookup::GetSourceByName(name.toUtf8().constData());
 		if (scene) {
 			o.sceneUuids.append(QString::fromUtf8(obs_source_get_uuid(scene)));
 			obs_source_release(scene);
@@ -678,12 +770,37 @@ QString ResourcesBeside(const QString &filePath)
 
 // ---------------------------------------------------------------- info snapshots
 
+// Fills in a slider's range from the OBS setting it is linked to, for any end
+// the manifest left out.
+void ResolveAutoRange(Control &c)
+{
+	if (!(c.autoMin || c.autoMax) || (c.type != ControlType::Slider && c.type != ControlType::Number))
+		return;
+	for (Binding &b : c.bindings) {
+		double lo = 0.0, hi = 0.0, step = 0.0;
+		if (!PropertyRange(b, &lo, &hi, &step))
+			continue;
+		const double newMin = c.autoMin ? lo : c.min;
+		const double newMax = c.autoMax ? hi : c.max;
+		if (!(newMax > newMin))
+			continue;
+		c.min = newMin;
+		c.max = newMax;
+		if (c.autoStep && step > 0.0)
+			c.step = step;
+		c.autoMin = c.autoMax = false;
+		return;
+	}
+}
+
 ControlInfo MakeInfo(Overlay &o, Control &c)
 {
+	ResolveAutoRange(c);
 	ControlInfo i;
 	i.id = c.id;
 	i.label = c.label;
 	i.help = c.help;
+	i.advanced = c.advanced;
 	i.tab = c.tab;
 	i.type = c.type;
 	i.min = c.min;
@@ -698,8 +815,10 @@ ControlInfo MakeInfo(Overlay &o, Control &c)
 	i.defaultValue = c.defaultValue;
 	i.applied = c.applied;
 	i.links = c.bindings.size();
+	// A transition link waits for the product's "use as transition" action,
+	// so it is not reported missing.
 	for (Binding &b : c.bindings)
-		if (!BindingTargetExists(b))
+		if (!b.transition && !BindingTargetExists(b))
 			++i.missing;
 	if (c.type == ControlType::Layout) {
 		CaptureRig(o, c);
@@ -740,6 +859,17 @@ OverlayInfo MakeInfo(Overlay &o)
 	}
 	for (const Preset &p : o.presets)
 		info.presets.append(PresetInfo{p.name, p.builtIn});
+	info.hasControls = !o.groups.isEmpty();
+	info.product = o.product;
+	for (ActionInfo a : o.actions) {
+		if (a.type == ActionType::UseAsTransition) {
+			obs_source_t *t = StreamUP::ProductTransitions::Find(a.transition);
+			a.exists = t != nullptr;
+			obs_source_release(t);
+			a.current = a.exists && StreamUP::ProductTransitions::IsCurrent(a.transition);
+		}
+		info.actions.append(a);
+	}
 	return info;
 }
 
@@ -863,6 +993,11 @@ bool RegisterFromStreamupData(obs_data_t *fileData, const QString &filePath, QSt
 			*error = QString("Could not read the overlay controls in %1.").arg(QFileInfo(filePath).fileName());
 		return false;
 	}
+	// A block that only says what the product is (id, name, category, icon),
+	// as the packager adds to products with no controls: nothing to register,
+	// and nothing wrong. The product stamp reads it on its own.
+	if (manifest.value("groups").toArray().isEmpty() && manifest.value("actions").toArray().isEmpty())
+		return false;
 	if (!RegisterManifest(manifest, ResourcesBeside(filePath), overlayId, error))
 		return false;
 	RequestSave();
@@ -924,6 +1059,7 @@ bool GetOverlay(const QString &overlayId, OverlayInfo &out)
 
 bool GetControlValue(const QString &overlayId, const QString &controlId, QJsonValue &out)
 {
+	SyncFromSources(overlayId); // a hand edit is the value now, for WebSocket readers too
 	std::lock_guard<std::recursive_mutex> lock(g_mutex);
 	Overlay *o = FindOverlay(overlayId);
 	Control *c = o ? FindControl(*o, controlId) : nullptr;
@@ -1142,6 +1278,41 @@ QStringList DriftedControls(const QString &overlayId)
 	return out;
 }
 
+QStringList SyncFromSources(const QString &overlayId)
+{
+	QStringList changed;
+	{
+		std::lock_guard<std::recursive_mutex> lock(g_mutex);
+		Overlay *o = FindOverlay(overlayId);
+		if (!o)
+			return changed;
+		for (Group &g : o->groups) {
+			for (Control &c : g.controls) {
+				if (c.type == ControlType::Layout || c.type == ControlType::Platforms || c.bindings.isEmpty())
+					continue;
+				// The first link speaks for the control. Read only when it no
+				// longer holds what the control would write, so a mapping that
+				// rounds or clamps never nudges a value that is still right.
+				Binding &b = c.bindings.first();
+				if (!BindingDrifted(b, c))
+					continue;
+				const QJsonValue v = NormaliseValue(c, ReadBack(b, c));
+				if (v.isUndefined() || v == c.value)
+					continue;
+				c.value = v;
+				c.applied = true;
+				changed.append(c.id);
+			}
+		}
+	}
+	if (!changed.isEmpty()) {
+		RequestSave();
+		for (const QString &id : changed)
+			emit g_notifier->controlChanged(overlayId, id);
+	}
+	return changed;
+}
+
 QString OverlayForScene(obs_source_t *scene)
 {
 	if (!scene)
@@ -1166,61 +1337,174 @@ QRectF LayoutFrame(const QString &overlayId, const QString &controlId, const QSt
 	return FrameInScene(*c, sceneName);
 }
 
-bool ResetSource(const QString &overlayId, const QString &sourceName)
+QStringList BoundSourceKinds(const QString &overlayId, const QString &controlId)
 {
+	QStringList kinds;
+	std::lock_guard<std::recursive_mutex> lock(g_mutex);
+	Overlay *o = FindOverlay(overlayId);
+	Control *c = o ? FindControl(*o, controlId) : nullptr;
+	if (!c)
+		return kinds;
+	for (Binding &b : c->bindings) {
+		obs_source_t *target = ResolveBinding(b);
+		if (!target)
+			continue;
+		// A filter's settings belong to the filter, the text to its parent.
+		obs_source_t *owner = obs_source_get_type(target) == OBS_SOURCE_TYPE_FILTER ? obs_filter_get_parent(target)
+											      : target;
+		const char *id = owner ? obs_source_get_unversioned_id(owner) : nullptr;
+		if (id && !kinds.contains(QString::fromUtf8(id)))
+			kinds.append(QString::fromUtf8(id));
+		obs_source_release(target);
+	}
+	return kinds;
+}
+
+bool RunAction(const QString &overlayId, const QString &actionId, QString *message, QString *error)
+{
+	ActionInfo action;
 	{
 		std::lock_guard<std::recursive_mutex> lock(g_mutex);
 		Overlay *o = FindOverlay(overlayId);
-		if (!o || !o->snapshotTaken)
+		if (!o) {
+			if (error)
+				*error = QString("No overlay called \"%1\".").arg(overlayId);
 			return false;
-		RestoreSnapshot(*o, sourceName);
-		// The panel's own controls stay in charge: a moved part stays moved
-		// and a nameplate keeps the platforms it was given.
-		ApplyLayout(*o);
-		RenderOutputs(*o);
+		}
+		bool found = false;
+		for (const ActionInfo &a : o->actions) {
+			if (a.id == actionId) {
+				action = a;
+				found = true;
+			}
+		}
+		if (!found) {
+			if (error)
+				*error = QString("\"%1\" has no action \"%2\".").arg(o->name, actionId);
+			return false;
+		}
 	}
-	emit g_notifier->sourceReset(overlayId, sourceName);
+
+	// Outside the lock: adding a transition runs OBS's own dialogs.
+	bool created = false;
+	if (!StreamUP::ProductTransitions::UseSceneAsTransition(action, &created, error))
+		return false;
+
+	// The transition now exists, so links to it can land. A link captured
+	// against a transition that has since gone is measured again, and a value
+	// the user set in the panel before the transition existed applies now.
+	QStringList touched;
+	{
+		std::lock_guard<std::recursive_mutex> lock(g_mutex);
+		Overlay *o = FindOverlay(overlayId);
+		if (o) {
+			for (Group &g : o->groups) {
+				for (Control &c : g.controls) {
+					bool linked = false;
+					for (Binding &b : c.bindings) {
+						if (!b.transition || b.source != action.transition)
+							continue;
+						linked = true;
+						if (created) {
+							b.captured = false;
+							b.sourceUuid.clear();
+						}
+						if (!b.captured)
+							CaptureBinding(b);
+						if (c.applied)
+							WriteBinding(b, c);
+					}
+					if (linked)
+						touched.append(c.id);
+				}
+			}
+		}
+	}
+	for (const QString &id : touched)
+		emit g_notifier->controlChanged(overlayId, id);
+	emit g_notifier->overlaysChanged();
+	RequestSave();
+
+	if (message) {
+		const char *key = created ? (action.makeCurrent ? "Products.Transition.AddedPicked" : "Products.Transition.Added")
+					  : (action.makeCurrent ? "Products.Transition.UpdatedPicked"
+								: "Products.Transition.Updated");
+		*message = QString::fromUtf8(obs_module_text(key)).arg(action.transition);
+	}
 	return true;
 }
 
-bool HasSnapshot(const QString &overlayId, const QString &sourceName)
+namespace {
+
+// An icon embedded as a data URI: "data:image/png;base64,...". Anything that is
+// not a small, real png, jpg or webp is ignored with a log line, never an error:
+// a bad icon must not get in the way of installing the product.
+constexpr qsizetype kMaxIconBytes = 256 * 1024;
+
+void DecodeIcon(const QString &uri, ProductStamp &p)
 {
-	std::lock_guard<std::recursive_mutex> lock(g_mutex);
-	Overlay *o = FindOverlay(overlayId);
-	if (!o || !o->snapshotTaken)
-		return false;
-	for (const SnapSource &s : o->snapSources)
-		if (s.name == sourceName)
-			return true;
-	return false;
+	const qsizetype comma = uri.indexOf(',');
+	const QString header = uri.left(comma).toLower(); // data:image/png;base64
+	QString suffix;
+	if (header.startsWith("data:image/png"))
+		suffix = "png";
+	else if (header.startsWith("data:image/jpeg") || header.startsWith("data:image/jpg"))
+		suffix = "jpg";
+	else if (header.startsWith("data:image/webp"))
+		suffix = "webp";
+	if (comma < 0 || suffix.isEmpty() || !header.endsWith(";base64")) {
+		DebugLogger::LogWarningFormat("OverlayControls", "Product icon skipped: not a base64 png, jpg or webp");
+		return;
+	}
+	// Base64 is 4 characters per 3 bytes; refuse an oversized one before decoding.
+	if ((uri.size() - comma - 1) / 4 * 3 > kMaxIconBytes + 3) {
+		DebugLogger::LogWarningFormat("OverlayControls", "Product icon skipped: bigger than %d KB",
+					      int(kMaxIconBytes / 1024));
+		return;
+	}
+	const auto decoded = QByteArray::fromBase64Encoding(uri.mid(comma + 1).toLatin1(),
+							   QByteArray::AbortOnBase64DecodingErrors);
+	if (!decoded || decoded.decoded.size() > kMaxIconBytes) {
+		DebugLogger::LogWarningFormat("OverlayControls", "Product icon skipped: bad base64 or too big");
+		return;
+	}
+	QImage img;
+	if (!img.loadFromData(decoded.decoded, suffix == "jpg" ? "JPG" : suffix.toUpper().toLatin1().constData()) ||
+	    img.width() < 8 || img.height() < 8 || img.width() > 2048 || img.height() > 2048) {
+		DebugLogger::LogWarningFormat("OverlayControls", "Product icon skipped: not a readable %s image",
+					      suffix.toUtf8().constData());
+		return;
+	}
+	p.iconData = decoded.decoded;
+	p.iconSuffix = suffix;
 }
 
-QString FormatValue(const ControlInfo &control, const QJsonValue &value)
+} // namespace
+
+ProductStamp ProductFromFile(const QString &path)
 {
-	switch (control.type) {
-	case ControlType::Colour:
-		return value.toString();
-	case ControlType::Slider:
-	case ControlType::Number:
-		return QString::number(value.toDouble(), 'f', control.decimals) + control.unit;
-	case ControlType::Toggle:
-		return value.toBool() ? QStringLiteral("On") : QStringLiteral("Off");
-	case ControlType::Text:
-	case ControlType::TextArea:
-	case ControlType::Select:
-	case ControlType::Font:
-		return value.toString();
-	case ControlType::Platforms:
-		return QString::number(value.toArray().size());
-	case ControlType::Layout: {
-		const QJsonObject v = value.toObject();
-		return QString("%1, %2 @ %3x")
-			.arg(value.toObject().value("x").toDouble(), 0, 'f', 0)
-			.arg(v.value("y").toDouble(), 0, 'f', 0)
-			.arg(v.value("scale").toDouble(1.0), 0, 'f', 2);
+	ProductStamp p;
+	const QJsonObject m = ManifestFromFile(path);
+	if (m.isEmpty())
+		return p;
+	const QJsonObject product = m.value("product").toObject();
+	// Only a manifest with controls or actions has a panel to come back to;
+	// one that only says what the product is (id, name, icon) does not.
+	if (!m.value("groups").toArray().isEmpty() || !m.value("actions").toArray().isEmpty())
+		p.overlay = m.value("id").toString().trimmed();
+	p.id = product.value("id").toString(m.value("id").toString()).trimmed();
+	p.name = product.value("name").toString(m.value("name").toString(p.id));
+	p.version = product.value("version").toString(m.value("version").toString());
+	p.category = product.value("category").toString(m.value("category").toString()).trimmed().toLower();
+	const QString icon = product.value("icon").toString(m.value("icon").toString()).trimmed();
+	if (icon.startsWith("data:", Qt::CaseInsensitive)) {
+		DecodeIcon(icon, p);
+	} else if (!icon.isEmpty()) {
+		const QFileInfo fi(QDir(QFileInfo(path).absolutePath()), icon);
+		if (fi.isFile())
+			p.icon = fi.absoluteFilePath();
 	}
-	}
-	return QString();
+	return p;
 }
 
 } // namespace OverlayControls

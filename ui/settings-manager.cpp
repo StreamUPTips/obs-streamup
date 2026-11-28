@@ -1,4 +1,6 @@
 #include "settings-manager.hpp"
+#include "features-page.hpp"
+#include "streamup-kit.hpp"
 #include "backup-dialog.hpp"
 #include "restore-dialog.hpp"
 #include "../core/backup-manager.hpp"
@@ -24,6 +26,8 @@
 #include "dock/streamup-dock.hpp"
 #include "scene-organiser/scene-organiser-dock.hpp"
 #include "streamup-toolbar.hpp"
+#include "theme-enhancements.hpp"
+#include "theme-window.hpp"
 #include "../multidock/multidock_manager.hpp"
 #include <obs-module.h>
 #include <obs-data.h>
@@ -36,6 +40,7 @@
 #include <QFormLayout>
 #include <QPushButton>
 #include <QLabel>
+#include <QUrl>
 #include <QSpacerItem>
 #include <QGroupBox>
 #include <QScrollArea>
@@ -54,7 +59,9 @@
 #include <QDesktopServices>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QDateTime>
 #include <QDir>
+#include <QLocale>
 #include <QFileInfo>
 #include <memory>
 #include <mutex>
@@ -72,87 +79,8 @@ namespace su = StreamUP::UIStyles;
 // Register obs_data_array_t* as opaque pointer with Qt's metatype system
 Q_DECLARE_OPAQUE_POINTER(obs_data_array_t*)
 
-// ── Local compat shims for the legacy ui-styles helpers that have no SoT
-// equivalent and are only used by the (currently un-wired) Inline sub-page
-// builders below. The SoT replaced these with makeLabel/RoundedContainer; the
-// struct mirrors the old ui-styles StandardDialogComponents (forward-declared in
-// settings-manager.hpp) so those signatures still match. ────────────────────
 namespace StreamUP {
 namespace UIStyles {
-
-struct StandardDialogComponents {
-	QDialog *dialog;
-	QWidget *headerWidget;
-	QLabel *titleLabel;
-	QLabel *subtitleLabel;
-	QScrollArea *scrollArea;
-	QWidget *contentWidget;
-	QVBoxLayout *contentLayout;
-	QPushButton *mainButton;
-};
-
-// Title / description labels — the SoT uses makeLabel() with explicit sizes.
-inline QLabel *CreateStyledTitle(const QString &text)
-{
-	return makeLabel(text, 22, 700, Colors::TEXT_PRIMARY);
-}
-inline QLabel *CreateStyledDescription(const QString &text)
-{
-	auto *l = makeLabel(text, 13, 500, Colors::TEXT_SECONDARY);
-	l->setWordWrap(true);
-	return l;
-}
-
-// Auto-size + website-link click for the installed-plugins table. Small local
-// reimplementations of the old ui-styles helpers (no SoT equivalent).
-// Resizes columns to content and records the full natural pixel width (sum of
-// column widths + frame + scrollbar slack) as the table's minimumWidth so the
-// host window can size to fit it instead of clipping columns horizontally.
-inline void AutoResizeTableColumns(QTableWidget *table)
-{
-	if (!table)
-		return;
-	table->resizeColumnsToContents();
-
-	int totalCols = 0;
-	for (int col = 0; col < table->columnCount(); ++col)
-		totalCols += table->columnWidth(col) + StreamUP::UIStyles::S(8);
-
-	// Frame + a vertical scrollbar's worth of slack so a fallback scrollbar
-	// (rows overflow) doesn't push the last column off-screen.
-	const int chrome = StreamUP::UIStyles::S(StreamUP::UIStyles::Sizes::SCROLLBAR_SIZE) +
-			   StreamUP::UIStyles::S(8);
-	table->setMinimumWidth(totalCols + chrome);
-}
-inline void HandleTableCellClick(QTableWidget *table, int row, int column)
-{
-	if (!table)
-		return;
-	QTableWidgetItem *item = table->item(row, column);
-	if (!item)
-		return;
-	const QVariant link = item->data(Qt::UserRole);
-	if (link.isValid() && !link.toString().isEmpty())
-		QDesktopServices::openUrl(QUrl(link.toString()));
-}
-
-// Build a SoT-styled table wrapped in a RoundedContainer so its corners clip,
-// using the shared makeTableCard() helper (tableStyle() + useScrollBars() +
-// corner-clipping RoundedContainer). Returns the table; GetTableContainer()
-// hands back the wrapping container makeTableCard() reparented it into.
-inline QTableWidget *CreateStyledTable(QWidget *parent = nullptr)
-{
-	auto *table = new QTableWidget();
-	auto *card = makeTableCard(table); // applies style + scrollbars + rounded wrap
-	if (parent)
-		card->setParent(parent);
-	return table;
-}
-// The RoundedContainer wrapping a table built by CreateStyledTable().
-inline QWidget *GetTableContainer(QTableWidget *table)
-{
-	return table ? qobject_cast<QWidget *>(table->parent()) : nullptr;
-}
 
 // Plain, frameless, capsule-scrollbar scroll area (replaces the old
 // CreateStyledScrollArea()). Callers still apply their own background QSS.
@@ -178,155 +106,6 @@ static bool notificationsMuted = false;
 static obs_data_t* cachedSettings = nullptr;
 static bool settingsLoadLogged = false;
 static std::mutex settingsCacheMutex; // Thread safety for settings cache
-
-// Helper function to extract domain from URL
-QString ExtractDomain(const QString &url)
-{
-	QUrl qurl(url);
-	QString host = qurl.host();
-	if (host.startsWith("www.")) {
-		host = host.mid(4); // Remove "www."
-	}
-	return host.isEmpty() ? url : host;
-}
-
-// Helper function to create styled plugin table
-QTableWidget *CreatePluginTable()
-{
-	QTableWidget *table = StreamUP::UIStyles::CreateStyledTable();
-
-	// Set column headers
-	QStringList headers;
-	headers << "Status"
-		<< "Plugin Name"
-		<< "Module Name"
-		<< "Version"
-		<< "Website";
-	table->setColumnCount(5);
-	table->setHorizontalHeaderLabels(headers);
-
-	// Drop Qt's automatic row-index numbering down the left edge — the table
-	// shows real data columns only.
-	table->verticalHeader()->setVisible(false);
-
-	// Configure last column to stretch (Website column)
-	table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
-
-	return table;
-}
-
-// Helper function to add compatible plugin row
-void AddCompatiblePluginRow(QTableWidget *table, const std::string &pluginName, const std::string &version)
-{
-	const auto &allPlugins = StreamUP::GetAllPlugins();
-	auto it = allPlugins.find(pluginName);
-
-	int row = table->rowCount();
-	table->insertRow(row);
-
-	// Status column - Compatible
-	QTableWidgetItem *statusItem = new QTableWidgetItem("✅ Compatible");
-	statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_SUCCESS));
-	table->setItem(row, 0, statusItem);
-
-	// Plugin Name column
-	table->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(pluginName)));
-
-	// Module Name column
-	QString moduleName = "N/A";
-	if (it != allPlugins.end() && !it->second.moduleName.empty()) {
-		moduleName = QString::fromStdString(it->second.moduleName);
-	}
-	table->setItem(row, 2, new QTableWidgetItem(moduleName));
-
-	// Version column
-	table->setItem(row, 3, new QTableWidgetItem(QString::fromStdString(version)));
-
-	// Website column - Show domain name
-	QString forumLink = StreamUP::PluginManager::GetPluginForumLink(pluginName);
-	QString domainName = ExtractDomain(forumLink);
-	QTableWidgetItem *websiteItem = new QTableWidgetItem(domainName);
-	websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::PRIMARY_COLOR));
-	websiteItem->setData(Qt::UserRole, forumLink);
-	table->setItem(row, 4, websiteItem);
-}
-
-// Helper function to add a row for a plugin we know about but can't version check
-void AddUncheckablePluginRow(QTableWidget *table, const std::string &pluginName, const std::string &reason)
-{
-	const auto &allPlugins = StreamUP::GetAllPlugins();
-	auto it = allPlugins.find(pluginName);
-
-	int row = table->rowCount();
-	table->insertRow(row);
-
-	// Status column - in our database, but no version to compare against
-	QTableWidgetItem *statusItem = new QTableWidgetItem(obs_module_text("Settings.Plugin.StatusNotChecked"));
-	statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_WARNING));
-
-	// Spell out why on hover, so nobody waits on an update prompt that will
-	// never arrive for this plugin.
-	QString tooltip = obs_module_text("Settings.Plugin.StatusNotCheckedTooltip");
-	if (!reason.empty()) {
-		tooltip += "\n\n" + QString::fromStdString(reason);
-	}
-	statusItem->setToolTip(tooltip);
-	table->setItem(row, 0, statusItem);
-
-	// Plugin Name column
-	table->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(pluginName)));
-
-	// Module Name column
-	QString moduleName = "N/A";
-	if (it != allPlugins.end() && !it->second.moduleName.empty()) {
-		moduleName = QString::fromStdString(it->second.moduleName);
-	}
-	table->setItem(row, 2, new QTableWidgetItem(moduleName));
-
-	// Version column - the plugin never logs one, so we have nothing to show
-	QTableWidgetItem *versionItem = new QTableWidgetItem(obs_module_text("Settings.Plugin.VersionUnknown"));
-	versionItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
-	versionItem->setToolTip(tooltip);
-	table->setItem(row, 3, versionItem);
-
-	// Website column - we still know where to get it, so keep the link
-	QString forumLink = StreamUP::PluginManager::GetPluginForumLink(pluginName);
-	QString domainName = ExtractDomain(forumLink);
-	QTableWidgetItem *websiteItem = new QTableWidgetItem(domainName);
-	websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::PRIMARY_COLOR));
-	websiteItem->setData(Qt::UserRole, forumLink);
-	table->setItem(row, 4, websiteItem);
-}
-
-// Helper function to add incompatible plugin row
-void AddIncompatiblePluginRow(QTableWidget *table, const std::string &moduleName)
-{
-	int row = table->rowCount();
-	table->insertRow(row);
-
-	// Status column - Incompatible
-	QTableWidgetItem *statusItem = new QTableWidgetItem("❌ Incompatible");
-	statusItem->setForeground(QColor(StreamUP::UIStyles::Colors::COLOR_DANGER));
-	table->setItem(row, 0, statusItem);
-
-	// Plugin Name column - N/A for incompatible
-	QTableWidgetItem *nameItem = new QTableWidgetItem("N/A");
-	nameItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
-	table->setItem(row, 1, nameItem);
-
-	// Module Name column
-	table->setItem(row, 2, new QTableWidgetItem(QString::fromStdString(moduleName)));
-
-	// Version column - N/A for incompatible
-	QTableWidgetItem *versionItem = new QTableWidgetItem("N/A");
-	versionItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
-	table->setItem(row, 3, versionItem);
-
-	// Website column - N/A for incompatible
-	QTableWidgetItem *websiteItem = new QTableWidgetItem("N/A");
-	websiteItem->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
-	table->setItem(row, 4, websiteItem);
-}
 
 // Settings dialog is now managed by DialogManager in ui-helpers
 
@@ -354,8 +133,10 @@ static void LoadModuleSettings(obs_data_t *data, ModuleSettings &out)
     out.multiDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "multi_dock", true);
     out.backup = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "backup", true);
     out.hotkeys = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "hotkeys", true);
+    out.sourceMenuSceneSwitch = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "source_menu_scene_switch", true);
     out.sceneOrganiser = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "scene_organiser", true);
     out.streamupDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "streamup_dock", true);
+    out.mixerDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "mixer_dock", true);
     out.mixerEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "mixer_enhancements", true);
     out.studioModeEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "studio_mode_enhancements", true);
     out.themeEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(modulesData, "theme_enhancements", true);
@@ -372,8 +153,10 @@ static void SaveModuleSettings(obs_data_t *data, const ModuleSettings &in)
     obs_data_set_bool(modulesData, "multi_dock", in.multiDock);
     obs_data_set_bool(modulesData, "backup", in.backup);
     obs_data_set_bool(modulesData, "hotkeys", in.hotkeys);
+    obs_data_set_bool(modulesData, "source_menu_scene_switch", in.sourceMenuSceneSwitch);
     obs_data_set_bool(modulesData, "scene_organiser", in.sceneOrganiser);
     obs_data_set_bool(modulesData, "streamup_dock", in.streamupDock);
+    obs_data_set_bool(modulesData, "mixer_dock", in.mixerDock);
     obs_data_set_bool(modulesData, "mixer_enhancements", in.mixerEnhancements);
     obs_data_set_bool(modulesData, "studio_mode_enhancements", in.studioModeEnhancements);
     obs_data_set_bool(modulesData, "theme_enhancements", in.themeEnhancements);
@@ -495,6 +278,14 @@ PluginSettings GetCurrentSettings()
 		settings.debugLoggingEnabled = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "debug_logging_enabled", false);
 		settings.sceneOrganiserShowIcons = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_icons", true);
 		settings.sceneOrganiserShowIndentGuides = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_indent_guides", true);
+		settings.themeSourceFolders = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_source_folders", true);
+		settings.themeSourceGuides = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_source_guides", true);
+		settings.themeMixer = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_mixer", true);
+		settings.themeVerticalCanvas = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_vertical_canvas", true);
+		settings.themeMultistream = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_multistream", true);
+		settings.themeStudioMode = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_studio_mode", true);
+		settings.themeSpacing = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_spacing", true);
+		settings.themeWindowPolish = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "theme_window_polish", true);
 		// The pair replaced a single show-both switch; that key is the default for
 		// both halves so an existing config carries over rather than resetting.
 		const bool legacyShowTabs = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "scene_organiser_show_quick_tabs", true);
@@ -622,9 +413,17 @@ PluginSettings GetCurrentSettings()
 
 		// Load module enable/disable settings
 		LoadModuleSettings(data, settings.modules);
+		// One switch for the toolbar since 3.0: the Features page. Someone who
+		// had hidden it with the old Show Toolbar switch keeps it hidden.
+		if (!settings.showToolbar) {
+			settings.modules.toolbar = false;
+			settings.showToolbar = true;
+		}
 		settings.moduleSetupComplete = StreamUP::OBSDataHelpers::GetBoolWithDefault(data, "module_setup_complete", false);
 		const char *wvs = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "wizard_version_shown", "");
 		settings.wizardVersionShown = wvs ? wvs : "";
+		const char *fvs = StreamUP::OBSDataHelpers::GetStringWithDefault(data, "features_version_seen", "");
+		settings.featuresVersionSeen = fvs ? fvs : "";
 
 		// Load dock tool settings
 		obs_data_t *dockData = obs_data_get_obj(data, "dock_tools");
@@ -663,6 +462,14 @@ void UpdateSettings(const PluginSettings &settings)
 	obs_data_set_bool(data, "debug_logging_enabled", settings.debugLoggingEnabled);
 	obs_data_set_bool(data, "scene_organiser_show_icons", settings.sceneOrganiserShowIcons);
 	obs_data_set_bool(data, "scene_organiser_show_indent_guides", settings.sceneOrganiserShowIndentGuides);
+	obs_data_set_bool(data, "theme_source_folders", settings.themeSourceFolders);
+	obs_data_set_bool(data, "theme_source_guides", settings.themeSourceGuides);
+	obs_data_set_bool(data, "theme_mixer", settings.themeMixer);
+	obs_data_set_bool(data, "theme_vertical_canvas", settings.themeVerticalCanvas);
+	obs_data_set_bool(data, "theme_multistream", settings.themeMultistream);
+	obs_data_set_bool(data, "theme_studio_mode", settings.themeStudioMode);
+	obs_data_set_bool(data, "theme_spacing", settings.themeSpacing);
+	obs_data_set_bool(data, "theme_window_polish", settings.themeWindowPolish);
 	obs_data_set_bool(data, "scene_organiser_show_favourites_tab", settings.sceneOrganiserShowFavouritesTab);
 	obs_data_set_bool(data, "scene_organiser_show_recent_tab", settings.sceneOrganiserShowRecentTab);
 	obs_data_set_bool(data, "scene_organiser_group_folders", settings.sceneOrganiserGroupFolders);
@@ -784,6 +591,7 @@ void UpdateSettings(const PluginSettings &settings)
 	SaveModuleSettings(data, settings.modules);
 	obs_data_set_bool(data, "module_setup_complete", settings.moduleSetupComplete);
 	obs_data_set_string(data, "wizard_version_shown", settings.wizardVersionShown.c_str());
+	obs_data_set_string(data, "features_version_seen", settings.featuresVersionSeen.c_str());
 
 	SaveSettings(data);
 
@@ -812,11 +620,40 @@ void InitializeSettingsSystem()
 
 void ShowSettingsDialog()
 {
-	ShowSettingsDialog(0); // Default to General Settings tab
+	ShowSettingsDialog(SettingsTabTools); // The first tab: Tools and tweaks
+}
+
+// The open Settings window's sidebar, so a second request switches its tab
+// instead of opening another window.
+static QPointer<QListWidget> g_settingsNav;
+
+// The sidebar row showing a page (rows are not in page order: Tools and
+// tweaks is listed first but keeps its old page slot).
+static int RowForPage(QListWidget *nav, int page)
+{
+	for (int row = 0; row < nav->count(); ++row)
+		if (nav->item(row)->data(Qt::UserRole).toInt() == page)
+			return row;
+	return -1;
 }
 
 void ShowSettingsDialog(int tabIndex)
 {
+	if (tabIndex == SettingsTabPluginManagement || tabIndex == 8)
+		tabIndex = SettingsTabGeneral;
+	if (g_settingsNav) {
+		QMetaObject::invokeMethod(g_settingsNav, [tabIndex]() {
+			if (!g_settingsNav)
+				return;
+			g_settingsNav->setCurrentRow(RowForPage(g_settingsNav, tabIndex));
+			if (QWidget *w = g_settingsNav->window()) {
+				w->showNormal();
+				w->raise();
+				w->activateWindow();
+			}
+		}, Qt::QueuedConnection);
+		return;
+	}
 	StreamUP::UIHelpers::ShowSingletonDialogOnUIThread("settings", [tabIndex]() -> QDialog* {
 		obs_data_t *settings = LoadSettings();
 		if (!settings) {
@@ -859,46 +696,7 @@ void ShowSettingsDialog(int tabIndex)
 		sidebarLayout->setSpacing(0);
 
 		QListWidget *categoryList = new QListWidget();
-		categoryList->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
-			"QListWidget {"
-			"    background-color: transparent;"
-			"    border: none;"
-			"    font-family: Roboto, 'Open Sans', '.AppleSystemUIFont', Helvetica, Arial, 'MS Shell Dlg', sans-serif;"
-			"    font-size: 14px;"
-			"    outline: none;"
-			"    border-radius: %5px;"
-			"}"
-			"QListWidget::item {"
-			"    padding: 12px 16px;"
-			"    border: none;"
-			"    color: %1;"
-			"    background-color: transparent;"
-			"}"
-			"QListWidget::item:selected {"
-			"    background-color: %2;"
-			"    color: %3;"
-			"    border: none;"
-			"    border-radius: %6px;"
-			"}"
-			"QListWidget::item:hover:!selected {"
-			"    background-color: %4;"
-			"    color: %3;"
-			"    border-radius: %6px;"
-			"}"
-			"QListWidget::item:first {"
-			"    border-top-left-radius: %5px;"
-			"    border-top-right-radius: %5px;"
-			"}"
-			"QListWidget::item:last {"
-			"    border-bottom-left-radius: %5px;"
-			"    border-bottom-right-radius: %5px;"
-			"}"
-		).arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-		 .arg(StreamUP::UIStyles::Colors::PRIMARY_COLOR)
-		 .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-		 .arg(StreamUP::UIStyles::Colors::HOVER_ROW)
-		 .arg(22)
-		 .arg(16)));
+		categoryList->setStyleSheet(StreamUP::Kit::NavListQss());
 
 		sidebarLayout->addWidget(categoryList);
 
@@ -912,37 +710,36 @@ void ShowSettingsDialog(int tabIndex)
 			obs_module_text("Settings.Group.PluginManagement"),
 			obs_module_text("Settings.Group.Hotkeys"),
 			obs_module_text("Settings.Group.DockConfig"),
-			obs_module_text("Settings.Group.Plugins"),
-			obs_module_text("Settings.Group.Backup")
+			obs_module_text("Settings.Group.Tools"),
+			obs_module_text("Settings.Group.Backup"),
+			obs_module_text("Settings.Group.Theme")
 		};
 
-		for (const QString &category : categories) {
-			categoryList->addItem(category);
+		// Tools and tweaks leads the list; the rest follow in page order.
+		// Each row remembers its page, so the page indices never move.
+		QList<int> order = {SettingsTabTools};
+		for (int page = 0; page < categories.size(); ++page)
+			if (page != SettingsTabTools)
+				order << page;
+		for (int page : order) {
+			auto *item = new QListWidgetItem(categories.at(page));
+			item->setData(Qt::UserRole, page);
+			categoryList->addItem(item);
+		}
+		g_settingsNav = categoryList;
+
+		// Tabs for parts switched off on the Features page stay clickable but
+		// read as off: a muted entry here, and on the page a line saying so
+		// above greyed-out settings (see markSwitchedOff below).
+		// Tabs whose contents moved: Plugin Management is a button on General,
+		// Plugins and the StreamUP Theme switches live on the Features page.
+		// The rows stay (hidden) so the fixed tab indices keep working.
+		for (int hiddenPage : {(int)SettingsTabPluginManagement, 8}) {
+			if (auto *row = categoryList->item(RowForPage(categoryList, hiddenPage)); row)
+				row->setHidden(true);
 		}
 
-		// Gray out sidebar entries for plugins that are currently disabled.
-		// We keep the entries in the list (preserving fixed indices used by
-		// other callers) but strip ItemIsEnabled so the row paints muted and
-		// can't be clicked — making disabled plugins feel uninstalled
-		// without breaking ShowSettingsDialog(int) callers.
-		{
-			PluginSettings dimSettings = GetCurrentSettings();
-			auto setEnabled = [categoryList](int row, bool enabled) {
-				if (auto *item = categoryList->item(row); item) {
-					Qt::ItemFlags f = item->flags();
-					if (enabled) f |= Qt::ItemIsEnabled;
-					else         f &= ~Qt::ItemIsEnabled;
-					item->setFlags(f);
-				}
-			};
-			setEnabled(1, dimSettings.modules.toolbar);        // Toolbar
-			setEnabled(2, dimSettings.modules.sceneOrganiser); // Scene Organiser
-			setEnabled(4, dimSettings.modules.hotkeys);        // Hotkeys
-			setEnabled(5, dimSettings.modules.streamupDock);   // Dock Configuration
-			setEnabled(7, dimSettings.modules.backup);         // Backup
-		}
-
-		categoryList->setCurrentRow(tabIndex);
+		categoryList->setCurrentRow(RowForPage(categoryList, tabIndex));
 
 		// Right content area
 		// Note: No scroll area needed with stacked widget approach
@@ -965,17 +762,11 @@ void ShowSettingsDialog(int tabIndex)
 		// Create scrollable container with dialog box styling
 		QScrollArea *generalScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 		generalScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		generalScrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(generalScrollArea->styleSheet() + QString(
-			"QScrollArea {"
-			"    background-color: %1;"
-			"    border: none;"
-			"    border-radius: %2px;"
-			"}"
-			"QScrollArea > QWidget > QWidget {"
-			"    background: transparent;"
-			"}"
-		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-		 .arg(22)));
+		// Boxed sections on the window background, like the Backup tab: the
+		// page itself has no panel, each group is its own rounded card.
+		generalScrollArea->setStyleSheet(generalScrollArea->styleSheet() + QString(
+			"QScrollArea { background: transparent; border: none; }"
+			"QScrollArea > QWidget > QWidget { background: transparent; }"));
 		
 		// Create content container with dialog box background
 		QWidget *generalContentContainer = new QWidget();
@@ -986,131 +777,47 @@ void ShowSettingsDialog(int tabIndex)
 		));
 		
 		QVBoxLayout *generalContentLayout = new QVBoxLayout(generalContentContainer);
-		generalContentLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-							 StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-		generalContentLayout->setSpacing(StreamUP::UIStyles::S(16));
+		generalContentLayout->setContentsMargins( 0, 0, StreamUP::UIStyles::S(8), 0);
+		generalContentLayout->setSpacing(StreamUP::UIStyles::S(10));
 
-		// Remove the GroupBox wrapper - settings go directly in the content container
-		QWidget *generalSettingsWidget = new QWidget();
+		// One card, one line per setting; the longer explanation is behind "?".
+		{
+			namespace kit = StreamUP::Kit;
+			const PluginSettings gs = GetCurrentSettings();
+			QVBoxLayout *card = StreamUP::UIStyles::sectionCard(generalContentLayout, obs_module_text("Settings.General.Section"));
+			auto addSwitch = [&](const char *labelKey, const char *helpKey, bool on, std::function<void(PluginSettings &, bool)> set) {
+				auto *sw = StreamUP::UIStyles::CreateStyledSwitch("", on);
+				QObject::connect(sw, &StreamUP::UIStyles::SwitchButton::toggled, [set](bool checked) {
+					PluginSettings cur = GetCurrentSettings();
+					set(cur, checked);
+					UpdateSettings(cur);
+				});
+				card->addWidget(kit::SettingRow(obs_module_text(labelKey), sw, helpKey ? obs_module_text(helpKey) : QString()));
+			};
+			addSwitch("Settings.Plugin.RunOnStartup", "Settings.Plugin.RunOnStartupHelp", gs.runAtStartup,
+				  [](PluginSettings &c, bool v) { c.runAtStartup = v; });
+			addSwitch("Settings.Notifications.Mute", "Settings.Notifications.MuteTooltip", gs.notificationsMute,
+				  [](PluginSettings &c, bool v) { c.notificationsMute = v; });
+			addSwitch("Settings.CPH.Integration", "Settings.CPH.IntegrationTooltip", gs.showCPHIntegration,
+				  [](PluginSettings &c, bool v) { c.showCPHIntegration = v; });
+			addSwitch("Settings.Debug.Logging", "Settings.Debug.LoggingTooltip", gs.debugLoggingEnabled,
+				  [](PluginSettings &c, bool v) { c.debugLoggingEnabled = v; });
 
-		QVBoxLayout *generalLayout = new QVBoxLayout(generalSettingsWidget);
-		generalLayout->setSpacing(StreamUP::UIStyles::S(12));
-
-		// Run at startup setting
-		obs_property_t *runAtStartupProp =
-			obs_properties_add_bool(props, "run_at_startup", obs_module_text("Settings.Plugin.RunOnStartup"));
-
-		// Create horizontal layout for run at startup setting
-		QHBoxLayout *runAtStartupLayout = new QHBoxLayout();
-
-		QLabel *runAtStartupLabel = new QLabel(obs_module_text("Settings.Plugin.RunOnStartup"));
-		runAtStartupLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
-							 .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-							 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-
-		StreamUP::UIStyles::SwitchButton *runAtStartupSwitch = StreamUP::UIStyles::CreateStyledSwitch(
-			"", obs_data_get_bool(settings, obs_property_name(runAtStartupProp)));
-
-		QObject::connect(runAtStartupSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
-			// Use modern settings system to avoid conflicts with dock settings
-			PluginSettings currentSettings = GetCurrentSettings();
-			currentSettings.runAtStartup = checked;
-			UpdateSettings(currentSettings);
-		});
-
-		runAtStartupLayout->addWidget(runAtStartupLabel);
-		runAtStartupLayout->addStretch();
-		runAtStartupLayout->addWidget(runAtStartupSwitch);
-		generalLayout->addLayout(runAtStartupLayout);
-
-		// Notifications mute setting
-		obs_property_t *notificationsMuteProp =
-			obs_properties_add_bool(props, "notifications_mute", obs_module_text("Settings.Notifications.Mute"));
-
-		// Create horizontal layout for notifications setting
-		QHBoxLayout *notificationsLayout = new QHBoxLayout();
-
-		QLabel *notificationsLabel = new QLabel(obs_module_text("Settings.Notifications.Mute"));
-		notificationsLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
-							  .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-							  .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-		notificationsLabel->setToolTip(obs_module_text("Settings.Notifications.MuteTooltip"));
-
-		StreamUP::UIStyles::SwitchButton *notificationsMuteSwitch = StreamUP::UIStyles::CreateStyledSwitch(
-			"", obs_data_get_bool(settings, obs_property_name(notificationsMuteProp)));
-		notificationsMuteSwitch->setToolTip(obs_module_text("Settings.Notifications.MuteTooltip"));
-
-		QObject::connect(notificationsMuteSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
-			// Use modern settings system to avoid conflicts with dock settings
-			PluginSettings currentSettings = GetCurrentSettings();
-			currentSettings.notificationsMute = checked;
-			UpdateSettings(currentSettings);
-		});
-
-		notificationsLayout->addWidget(notificationsLabel);
-		notificationsLayout->addStretch();
-		notificationsLayout->addWidget(notificationsMuteSwitch);
-		generalLayout->addLayout(notificationsLayout);
-
-		// CPH Integration setting
-		obs_property_t *cphIntegrationProp =
-			obs_properties_add_bool(props, "show_cph_integration", obs_module_text("Settings.CPH.Integration"));
-
-		// Create horizontal layout for CPH integration setting
-		QHBoxLayout *cphLayout = new QHBoxLayout();
-
-		QLabel *cphLabel = new QLabel(obs_module_text("Settings.CPH.Integration"));
-		cphLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
-						.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-		cphLabel->setToolTip(obs_module_text("Settings.CPH.IntegrationTooltip"));
-
-		StreamUP::UIStyles::SwitchButton *cphIntegrationSwitch = StreamUP::UIStyles::CreateStyledSwitch(
-			"", obs_data_get_bool(settings, obs_property_name(cphIntegrationProp)));
-		cphIntegrationSwitch->setToolTip(obs_module_text("Settings.CPH.IntegrationTooltip"));
-
-		QObject::connect(cphIntegrationSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
-			// Use modern settings system to avoid conflicts with dock settings
-			PluginSettings currentSettings = GetCurrentSettings();
-			currentSettings.showCPHIntegration = checked;
-			UpdateSettings(currentSettings);
-		});
-
-		cphLayout->addWidget(cphLabel);
-		cphLayout->addStretch();
-		cphLayout->addWidget(cphIntegrationSwitch);
-		generalLayout->addLayout(cphLayout);
-
-		// Debug Logging setting
-		obs_property_t *debugLoggingProp =
-			obs_properties_add_bool(props, "debug_logging_enabled", obs_module_text("Settings.Debug.Logging"));
-
-		// Create horizontal layout for debug logging setting
-		QHBoxLayout *debugLoggingLayout = new QHBoxLayout();
-
-		QLabel *debugLoggingLabel = new QLabel(obs_module_text("Settings.Debug.Logging"));
-		debugLoggingLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
-							  .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-							  .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-		debugLoggingLabel->setToolTip(obs_module_text("Settings.Debug.LoggingTooltip"));
-
-		StreamUP::UIStyles::SwitchButton *debugLoggingSwitch = StreamUP::UIStyles::CreateStyledSwitch(
-			"", obs_data_get_bool(settings, obs_property_name(debugLoggingProp)));
-		debugLoggingSwitch->setToolTip(obs_module_text("Settings.Debug.LoggingTooltip"));
-
-		QObject::connect(debugLoggingSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
-			// Use modern settings system to avoid conflicts with dock settings
-			PluginSettings currentSettings = GetCurrentSettings();
-			currentSettings.debugLoggingEnabled = checked;
-			UpdateSettings(currentSettings);
-		});
-
-		debugLoggingLayout->addWidget(debugLoggingLabel);
-		debugLoggingLayout->addStretch();
-		debugLoggingLayout->addWidget(debugLoggingSwitch);
-		generalLayout->addLayout(debugLoggingLayout);
-
-		generalContentLayout->addWidget(generalSettingsWidget);
+			// What used to be the Plugin Management and StreamUP Theme tabs:
+			// one button each.
+			QVBoxLayout *more = StreamUP::UIStyles::sectionCard(generalContentLayout, obs_module_text("Settings.General.Shortcuts"));
+			auto *checkNow = new StreamUP::UIStyles::PillButton(obs_module_text("Settings.General.CheckNow"), "neutral");
+			QObject::connect(checkNow, &QPushButton::clicked, []() {
+				StreamUP::PluginManager::PerformPluginCheckAndCache();
+				StreamUP::PluginManager::ShowCachedPluginUpdatesDialog();
+			});
+			more->addWidget(kit::SettingRow(obs_module_text("Settings.General.Plugins"), checkNow,
+							 obs_module_text("Settings.General.PluginsHelp")));
+			auto *openFeatures = new StreamUP::UIStyles::PillButton(obs_module_text("Settings.General.OpenFeatures"), "neutral");
+			QObject::connect(openFeatures, &QPushButton::clicked, []() { ShowSettingsDialog(SettingsTabTools); });
+			more->addWidget(kit::SettingRow(obs_module_text("Settings.General.ThemeTweaks"), openFeatures,
+							 obs_module_text("Settings.General.ThemeTweaksHelp")));
+		}
 		generalContentLayout->addStretch();
 		
 		generalScrollArea->setWidget(generalContentContainer);
@@ -1126,17 +833,11 @@ void ShowSettingsDialog(int tabIndex)
 		// Create scrollable container with dialog box styling
 		QScrollArea *toolbarScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 		toolbarScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		toolbarScrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(toolbarScrollArea->styleSheet() + QString(
-			"QScrollArea {"
-			"    background-color: %1;"
-			"    border: none;"
-			"    border-radius: %2px;"
-			"}"
-			"QScrollArea > QWidget > QWidget {"
-			"    background: transparent;"
-			"}"
-		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-		 .arg(22)));
+		// Boxed sections on the window background, like the Backup tab: the
+		// page itself has no panel, each group is its own rounded card.
+		toolbarScrollArea->setStyleSheet(toolbarScrollArea->styleSheet() + QString(
+			"QScrollArea { background: transparent; border: none; }"
+			"QScrollArea > QWidget > QWidget { background: transparent; }"));
 		
 		// Create content container with dialog box background
 		QWidget *toolbarContentContainer = new QWidget();
@@ -1147,51 +848,19 @@ void ShowSettingsDialog(int tabIndex)
 		));
 		
 		QVBoxLayout *toolbarContentLayout = new QVBoxLayout(toolbarContentContainer);
-		toolbarContentLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-							 StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-		toolbarContentLayout->setSpacing(StreamUP::UIStyles::S(16));
+		toolbarContentLayout->setContentsMargins( 0, 0, StreamUP::UIStyles::S(8), 0);
+		toolbarContentLayout->setSpacing(StreamUP::UIStyles::S(10));
 
-		QWidget *toolbarSettingsWidget = new QWidget();
+		// Boxed sections: how the toolbar looks, then its buttons.
+		QVBoxLayout *toolbarLayout = StreamUP::UIStyles::sectionCard(toolbarContentLayout, obs_module_text("Settings.Toolbar.Look"));
 
-		QVBoxLayout *toolbarLayout = new QVBoxLayout(toolbarSettingsWidget);
-		toolbarLayout->setSpacing(StreamUP::UIStyles::S(12));
-
-		// Show toolbar setting
-		obs_property_t *showToolbarProp = obs_properties_add_bool(props, "show_toolbar", obs_module_text("StreamUP.Settings.ShowToolbar"));
-
-		// Create horizontal layout for show toolbar setting
-		QHBoxLayout *showToolbarLayout = new QHBoxLayout();
-
-		QLabel *showToolbarLabel = new QLabel(obs_module_text("StreamUP.Settings.ShowToolbar"));
-		showToolbarLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
-							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-		showToolbarLabel->setToolTip(obs_module_text("Toolbar.Tooltip.ShowHideToolbar"));
-
-		StreamUP::UIStyles::SwitchButton *showToolbarSwitch =
-			StreamUP::UIStyles::CreateStyledSwitch("", obs_data_get_bool(settings, obs_property_name(showToolbarProp)));
-		showToolbarSwitch->setToolTip(obs_module_text("Toolbar.Tooltip.ShowHideToolbar"));
-
-		QObject::connect(showToolbarSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [](bool checked) {
-			// Use modern settings system
-			PluginSettings currentSettings = GetCurrentSettings();
-			currentSettings.showToolbar = checked;
-			UpdateSettings(currentSettings);
-
-			// Apply toolbar visibility
-			ApplyToolbarVisibility();
-		});
-
-		showToolbarLayout->addWidget(showToolbarLabel);
-		showToolbarLayout->addStretch();
-		showToolbarLayout->addWidget(showToolbarSwitch);
-		toolbarLayout->addLayout(showToolbarLayout);
+		// On and off is the Toolbar switch on the Features page.
 
 		// Toolbar position setting with combobox
 		QHBoxLayout *toolbarPositionLayout = new QHBoxLayout();
 
 		QLabel *toolbarPositionLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarPosition"));
-		toolbarPositionLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		toolbarPositionLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							    .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							    .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		toolbarPositionLabel->setToolTip(obs_module_text("StreamUP.Settings.ToolbarPositionTooltip"));
@@ -1220,8 +889,7 @@ void ShowSettingsDialog(int tabIndex)
 		positionComboBox->setFixedHeight(StreamUP::UIStyles::S(28));
 		StreamUP::UIStyles::makeComboAnimated(positionComboBox);
 		StreamUP::UIStyles::useScrollBars(positionComboBox->view());
-		positionComboBox->setMinimumWidth(StreamUP::UIStyles::S(100));
-		positionComboBox->setMaximumWidth(StreamUP::UIStyles::S(150));
+		positionComboBox->setFixedWidth(StreamUP::UIStyles::S(150));
 		positionComboBox->setToolTip(obs_module_text("StreamUP.Settings.ToolbarPositionComboTooltip"));
 
 		// Connect combobox selection change
@@ -1248,7 +916,7 @@ void ShowSettingsDialog(int tabIndex)
 		QHBoxLayout *toolbarSizeLayout = new QHBoxLayout();
 
 		QLabel *toolbarSizeLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarSize"));
-		toolbarSizeLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		toolbarSizeLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							  .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							  .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		toolbarSizeLabel->setToolTip(obs_module_text("StreamUP.Settings.ToolbarSizeDesc"));
@@ -1264,8 +932,7 @@ void ShowSettingsDialog(int tabIndex)
 		sizeComboBox->setFixedHeight(StreamUP::UIStyles::S(28));
 		StreamUP::UIStyles::makeComboAnimated(sizeComboBox);
 		StreamUP::UIStyles::useScrollBars(sizeComboBox->view());
-		sizeComboBox->setMinimumWidth(StreamUP::UIStyles::S(100));
-		sizeComboBox->setMaximumWidth(StreamUP::UIStyles::S(150));
+		sizeComboBox->setFixedWidth(StreamUP::UIStyles::S(150));
 		sizeComboBox->setToolTip(obs_module_text("StreamUP.Settings.ToolbarSizeDesc"));
 
 		QObject::connect(sizeComboBox, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
@@ -1288,7 +955,7 @@ void ShowSettingsDialog(int tabIndex)
 		QHBoxLayout *toolbarAlignLayout = new QHBoxLayout();
 
 		QLabel *toolbarAlignLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarAlignment"));
-		toolbarAlignLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		toolbarAlignLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 								   .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 								   .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		toolbarAlignLabel->setToolTip(obs_module_text("StreamUP.Settings.ToolbarAlignmentDesc"));
@@ -1307,8 +974,7 @@ void ShowSettingsDialog(int tabIndex)
 		alignComboBox->setFixedHeight(StreamUP::UIStyles::S(28));
 		StreamUP::UIStyles::makeComboAnimated(alignComboBox);
 		StreamUP::UIStyles::useScrollBars(alignComboBox->view());
-		alignComboBox->setMinimumWidth(StreamUP::UIStyles::S(100));
-		alignComboBox->setMaximumWidth(StreamUP::UIStyles::S(150));
+		alignComboBox->setFixedWidth(StreamUP::UIStyles::S(150));
 		alignComboBox->setToolTip(obs_module_text("StreamUP.Settings.ToolbarAlignmentDesc"));
 
 		QObject::connect(alignComboBox, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
@@ -1325,14 +991,13 @@ void ShowSettingsDialog(int tabIndex)
 		toolbarAlignLayout->addWidget(alignComboBox);
 		toolbarLayout->addLayout(toolbarAlignLayout);
 
-	// Add spacing between sections
-	toolbarLayout->addSpacing(StreamUP::UIStyles::S(16));
+		toolbarLayout = StreamUP::UIStyles::sectionCard(toolbarContentLayout);
 
 		// Add "Configure Toolbar" button
 		QHBoxLayout *configureToolbarLayout = new QHBoxLayout();
 		
 		QLabel *configureToolbarLabel = new QLabel(obs_module_text("StreamUP.Settings.ToolbarConfiguration"));
-		configureToolbarLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		configureToolbarLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							    .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							    .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		configureToolbarLabel->setToolTip(obs_module_text("StreamUP.Settings.ConfigureToolbarTooltip"));
@@ -1361,7 +1026,6 @@ void ShowSettingsDialog(int tabIndex)
 		configureToolbarLayout->addWidget(configureToolbarButton);
 		toolbarLayout->addLayout(configureToolbarLayout);
 
-		toolbarContentLayout->addWidget(toolbarSettingsWidget);
 		toolbarContentLayout->addStretch();
 		
 		toolbarScrollArea->setWidget(toolbarContentContainer);
@@ -1377,17 +1041,11 @@ void ShowSettingsDialog(int tabIndex)
 		// Create scrollable container with dialog box styling
 		QScrollArea *sceneOrganiserScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 		sceneOrganiserScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		sceneOrganiserScrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(sceneOrganiserScrollArea->styleSheet() + QString(
-			"QScrollArea {"
-			"    background-color: %1;"
-			"    border: none;"
-			"    border-radius: %2px;"
-			"}"
-			"QScrollArea > QWidget > QWidget {"
-			"    background: transparent;"
-			"}"
-		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-		 .arg(22)));
+		// Boxed sections on the window background, like the Backup tab: the
+		// page itself has no panel, each group is its own rounded card.
+		sceneOrganiserScrollArea->setStyleSheet(sceneOrganiserScrollArea->styleSheet() + QString(
+			"QScrollArea { background: transparent; border: none; }"
+			"QScrollArea > QWidget > QWidget { background: transparent; }"));
 
 		// Create content container with dialog box background
 		QWidget *sceneOrganiserContentContainer = new QWidget();
@@ -1398,29 +1056,37 @@ void ShowSettingsDialog(int tabIndex)
 		));
 
 		QVBoxLayout *sceneOrganiserContentLayout = new QVBoxLayout(sceneOrganiserContentContainer);
-		sceneOrganiserContentLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-							 StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-		sceneOrganiserContentLayout->setSpacing(StreamUP::UIStyles::S(16));
+		sceneOrganiserContentLayout->setContentsMargins( 0, 0, StreamUP::UIStyles::S(8), 0);
+		sceneOrganiserContentLayout->setSpacing(StreamUP::UIStyles::S(10));
 
 		QWidget *sceneOrganiserSettingsWidget = new QWidget();
 		QVBoxLayout *sceneOrganiserLayout = new QVBoxLayout(sceneOrganiserSettingsWidget);
-		sceneOrganiserLayout->setSpacing(StreamUP::UIStyles::S(12));
+		sceneOrganiserLayout->setContentsMargins(0, 0, 0, 0);
+		sceneOrganiserLayout->setSpacing(StreamUP::UIStyles::S(10));
 
 		// Description header
 		QLabel *sceneOrganiserDescription = new QLabel(obs_module_text("SceneOrganiser.Settings.Description"));
-		sceneOrganiserDescription->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; margin-bottom: 16px; background: transparent;")
+		sceneOrganiserDescription->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; margin-bottom: 16px; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		sceneOrganiserDescription->setWordWrap(true);
-		sceneOrganiserLayout->addWidget(sceneOrganiserDescription);
+		delete sceneOrganiserDescription; // the Features card says what it is
+
+		// Cards: how it looks, which tabs, how clicking switches, then the
+		// rarely used ones as ordinary cards at the foot of the tab: studio
+		// mode, sorting, the SceneTree import and the credit.
+		QVBoxLayout *soLook = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.Card.Look"));
+		QVBoxLayout *soTabs = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.Card.Tabs"));
+		QVBoxLayout *soSwitch = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.Card.Switching"));
+		QVBoxLayout *soMoreL = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.Card.StudioMode"));
+		QVBoxLayout *tabTarget = soTabs;
 
 
 		// Show Icons setting
-		sceneOrganiserLayout->addSpacing(StreamUP::UIStyles::S(16));
 		QHBoxLayout *showIconsLayout = new QHBoxLayout();
 
 		QLabel *showIconsLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.ShowIcons"));
-		showIconsLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		showIconsLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 						.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		showIconsLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.ShowIconsDesc"));
@@ -1441,7 +1107,7 @@ void ShowSettingsDialog(int tabIndex)
 		showIconsLayout->addWidget(showIconsLabel);
 		showIconsLayout->addStretch();
 		showIconsLayout->addWidget(showIconsSwitch);
-		sceneOrganiserLayout->addLayout(showIconsLayout);
+		soLook->addLayout(showIconsLayout);
 
 		// Favourites tab and Recent tab, switched independently
 		auto addTabSwitch = [&](const char *labelKey, const char *descKey, bool initial,
@@ -1449,7 +1115,7 @@ void ShowSettingsDialog(int tabIndex)
 			QHBoxLayout *row = new QHBoxLayout();
 
 			QLabel *label = new QLabel(obs_module_text(labelKey));
-			label->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+			label->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 					.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 					.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 			label->setToolTip(obs_module_text(descKey));
@@ -1461,7 +1127,7 @@ void ShowSettingsDialog(int tabIndex)
 			row->addWidget(label);
 			row->addStretch();
 			row->addWidget(toggle);
-			sceneOrganiserLayout->addLayout(row);
+			tabTarget->addLayout(row);
 		};
 
 		addTabSwitch("SceneOrganiser.Settings.ShowFavouritesTab", "SceneOrganiser.Settings.ShowFavouritesTabDesc",
@@ -1480,6 +1146,7 @@ void ShowSettingsDialog(int tabIndex)
 				StreamUP::SceneOrganiser::SceneOrganiserDock::NotifyAllDocksSettingsChanged();
 			     });
 
+		tabTarget = soLook;
 		addTabSwitch("SceneOrganiser.Settings.ShowIndentGuides", "SceneOrganiser.Settings.ShowIndentGuidesDesc",
 			     currentSettings.sceneOrganiserShowIndentGuides, [](bool checked) {
 				PluginSettings settings = GetCurrentSettings();
@@ -1494,7 +1161,7 @@ void ShowSettingsDialog(int tabIndex)
 		rememberFolderStateLayout->setSpacing(StreamUP::UIStyles::S(12));
 
 		QLabel *rememberFolderStateLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.AutoSorting.RememberFolderState"));
-		rememberFolderStateLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		rememberFolderStateLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		rememberFolderStateLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.AutoSorting.RememberFolderStateDesc"));
@@ -1512,7 +1179,7 @@ void ShowSettingsDialog(int tabIndex)
 		rememberFolderStateLayout->addWidget(rememberFolderStateLabel);
 		rememberFolderStateLayout->addStretch();
 		rememberFolderStateLayout->addWidget(rememberFolderStateSwitch);
-		sceneOrganiserLayout->addLayout(rememberFolderStateLayout);
+		soLook->addLayout(rememberFolderStateLayout);
 
 		// Disable Preview Switching in Studio Mode setting (single-click)
 		QHBoxLayout *disablePreviewSwitchingLayout = new QHBoxLayout();
@@ -1520,7 +1187,7 @@ void ShowSettingsDialog(int tabIndex)
 		disablePreviewSwitchingLayout->setSpacing(StreamUP::UIStyles::S(12));
 
 		QLabel *disablePreviewSwitchingLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.DisablePreviewSwitchingInStudioMode"));
-		disablePreviewSwitchingLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		disablePreviewSwitchingLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		disablePreviewSwitchingLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.DisablePreviewSwitchingInStudioModeDesc"));
@@ -1539,7 +1206,7 @@ void ShowSettingsDialog(int tabIndex)
 		disablePreviewSwitchingLayout->addWidget(disablePreviewSwitchingLabel);
 		disablePreviewSwitchingLayout->addStretch();
 		disablePreviewSwitchingLayout->addWidget(disablePreviewSwitchingSwitch);
-		sceneOrganiserLayout->addLayout(disablePreviewSwitchingLayout);
+		soMoreL->addLayout(disablePreviewSwitchingLayout);
 
 		// Disable Transition in Studio Mode setting (double-click)
 		QHBoxLayout *disableTransitionLayout = new QHBoxLayout();
@@ -1547,7 +1214,7 @@ void ShowSettingsDialog(int tabIndex)
 		disableTransitionLayout->setSpacing(StreamUP::UIStyles::S(12));
 
 		QLabel *disableTransitionLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.DisableTransitionInStudioMode"));
-		disableTransitionLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		disableTransitionLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		disableTransitionLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.DisableTransitionInStudioModeDesc"));
@@ -1566,7 +1233,7 @@ void ShowSettingsDialog(int tabIndex)
 		disableTransitionLayout->addWidget(disableTransitionLabel);
 		disableTransitionLayout->addStretch();
 		disableTransitionLayout->addWidget(disableTransitionSwitch);
-		sceneOrganiserLayout->addLayout(disableTransitionLayout);
+		soMoreL->addLayout(disableTransitionLayout);
 
 		// Switch to New Scene on Create setting
 		QHBoxLayout *switchToNewSceneLayout = new QHBoxLayout();
@@ -1574,7 +1241,7 @@ void ShowSettingsDialog(int tabIndex)
 		switchToNewSceneLayout->setSpacing(StreamUP::UIStyles::S(12));
 
 		QLabel *switchToNewSceneLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.SwitchToNewScene"));
-		switchToNewSceneLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		switchToNewSceneLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		switchToNewSceneLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.SwitchToNewSceneDesc"));
@@ -1592,7 +1259,7 @@ void ShowSettingsDialog(int tabIndex)
 		switchToNewSceneLayout->addWidget(switchToNewSceneLabel);
 		switchToNewSceneLayout->addStretch();
 		switchToNewSceneLayout->addWidget(switchToNewSceneSwitch);
-		sceneOrganiserLayout->addLayout(switchToNewSceneLayout);
+		soSwitch->addLayout(switchToNewSceneLayout);
 
 		// Item Height setting
 		QHBoxLayout *itemHeightLayout = new QHBoxLayout();
@@ -1600,7 +1267,7 @@ void ShowSettingsDialog(int tabIndex)
 		itemHeightLayout->setSpacing(StreamUP::UIStyles::S(12));
 
 		QLabel *itemHeightLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.ItemHeight"));
-		itemHeightLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		itemHeightLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		itemHeightLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.ItemHeightDesc"));
@@ -1615,7 +1282,7 @@ void ShowSettingsDialog(int tabIndex)
 		itemHeightSlider->setMaximumWidth(StreamUP::UIStyles::S(200));
 
 		QLabel *itemHeightValueLabel = new QLabel(QString::number(currentSettings.sceneOrganiserItemHeight) + "px");
-		itemHeightValueLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent; min-width: 40px;")
+		itemHeightValueLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent; min-width: 40px;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		itemHeightValueLabel->setAlignment(Qt::AlignCenter);
@@ -1632,17 +1299,17 @@ void ShowSettingsDialog(int tabIndex)
 		itemHeightLayout->addStretch();
 		itemHeightLayout->addWidget(itemHeightSlider);
 		itemHeightLayout->addWidget(itemHeightValueLabel);
-		sceneOrganiserLayout->addLayout(itemHeightLayout);
+		soLook->addLayout(itemHeightLayout);
 
 		// Scene switching mode setting
 		QHBoxLayout *switchModeLayout = new QHBoxLayout();
 		switchModeLayout->setContentsMargins(0, 0, 0, 0);
 
 		QLabel *switchModeLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.SwitchMode"));
-		switchModeLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		switchModeLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-		switchModeLabel->setWordWrap(true);
+		switchModeLabel->setWordWrap(false);
 
 		// Create combobox for switch mode selection (MacComboBox = custom-painted field)
 		QComboBox *switchModeComboBox = new StreamUP::UIStyles::MacComboBox();
@@ -1659,8 +1326,7 @@ void ShowSettingsDialog(int tabIndex)
 		switchModeComboBox->setFixedHeight(StreamUP::UIStyles::S(28));
 		StreamUP::UIStyles::makeComboAnimated(switchModeComboBox);
 		StreamUP::UIStyles::useScrollBars(switchModeComboBox->view());
-		switchModeComboBox->setMinimumWidth(StreamUP::UIStyles::S(100));
-		switchModeComboBox->setMaximumWidth(StreamUP::UIStyles::S(150));
+		switchModeComboBox->setFixedWidth(StreamUP::UIStyles::S(150));
 
 		// Connect change handler
 		QObject::connect(switchModeComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -1678,28 +1344,24 @@ void ShowSettingsDialog(int tabIndex)
 		switchModeLayout->addWidget(switchModeLabel);
 		switchModeLayout->addStretch();
 		switchModeLayout->addWidget(switchModeComboBox);
-		sceneOrganiserLayout->addLayout(switchModeLayout);
+		soSwitch->addLayout(switchModeLayout);
 
 		// Sorting section
-		sceneOrganiserLayout->addSpacing(StreamUP::UIStyles::S(15));
-
-		sceneOrganiserLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("SceneOrganiser.Settings.AutoSorting.Title")));
+		QVBoxLayout *soSortL = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.AutoSorting.Title"));
 		QWidget *sortingGroup = new QWidget();
 		sortingGroup->setStyleSheet(QString("background: transparent;"));
 
 		QVBoxLayout *sortingLayout = new QVBoxLayout(sortingGroup);
-		sortingLayout->setSpacing(StreamUP::UIStyles::S(12));
-		sortingLayout->setContentsMargins(StreamUP::UIStyles::S(12),
-							StreamUP::UIStyles::S(12),
-							StreamUP::UIStyles::S(12),
-							StreamUP::UIStyles::S(12));
+		// The card already pads its rows; no second inset.
+		sortingLayout->setSpacing(StreamUP::UIStyles::S(6));
+		sortingLayout->setContentsMargins(0, StreamUP::UIStyles::S(4), 0, 0);
 
 		// Sort method dropdown
 		QHBoxLayout *sortMethodLayout = new QHBoxLayout();
 		sortMethodLayout->setContentsMargins(0, 0, 0, 0);
 
 		QLabel *sortMethodLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.AutoSorting.Method"));
-		sortMethodLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		sortMethodLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 
@@ -1730,8 +1392,7 @@ void ShowSettingsDialog(int tabIndex)
 		sortMethodComboBox->setFixedHeight(StreamUP::UIStyles::S(28));
 		StreamUP::UIStyles::makeComboAnimated(sortMethodComboBox);
 		StreamUP::UIStyles::useScrollBars(sortMethodComboBox->view());
-		sortMethodComboBox->setMinimumWidth(StreamUP::UIStyles::S(100));
-		sortMethodComboBox->setMaximumWidth(StreamUP::UIStyles::S(150));
+		sortMethodComboBox->setFixedWidth(StreamUP::UIStyles::S(150));
 
 		QObject::connect(sortMethodComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
 				 [sortMethodComboBox](int index) {
@@ -1756,7 +1417,7 @@ void ShowSettingsDialog(int tabIndex)
 		groupFoldersLayout->setContentsMargins(0, 0, 0, 0);
 
 		QLabel *groupFoldersLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.AutoSorting.GroupFolders"));
-		groupFoldersLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
+		groupFoldersLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		groupFoldersLabel->setToolTip(obs_module_text("SceneOrganiser.Settings.AutoSorting.GroupFoldersDesc"));
@@ -1777,44 +1438,29 @@ void ShowSettingsDialog(int tabIndex)
 		groupFoldersLayout->addWidget(groupFoldersSwitch);
 		sortingLayout->addLayout(groupFoldersLayout);
 
-		sceneOrganiserLayout->addWidget(sortingGroup);
+		soSortL->addWidget(sortingGroup);
 
 		// Manual Migration Section
-		sceneOrganiserLayout->addSpacing(StreamUP::UIStyles::S(20));
-
-		sceneOrganiserLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("SceneOrganiser.Settings.Migration")));
+		QVBoxLayout *soImportL = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.Migration"));
 		QWidget *migrationGroup = new QWidget();
 		migrationGroup->setStyleSheet(QString("background: transparent;"));
 
 		QVBoxLayout *migrationLayout = new QVBoxLayout(migrationGroup);
-		migrationLayout->setSpacing(StreamUP::UIStyles::S(12));
-		migrationLayout->setContentsMargins(StreamUP::UIStyles::S(12),
-							StreamUP::UIStyles::S(12),
-							StreamUP::UIStyles::S(12),
-							StreamUP::UIStyles::S(12));
+		migrationLayout->setSpacing(StreamUP::UIStyles::S(10));
+		migrationLayout->setContentsMargins(0, StreamUP::UIStyles::S(4), 0, StreamUP::UIStyles::S(4));
 
 		QLabel *migrationText = new QLabel(obs_module_text("SceneOrganiser.Settings.MigrationText"));
-		migrationText->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: %3; padding: %4px; border-radius: %5px;")
+		migrationText->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 						.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
-						.arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
-						.arg(12)
-						.arg(8)));
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		migrationText->setWordWrap(true);
 		migrationLayout->addWidget(migrationText);
 
-		// Warning label
-		QLabel *warningLabel = new QLabel(obs_module_text("SceneOrganiser.Settings.MigrationWarning"));
-		warningLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: rgba(255, 159, 10, 0.15); padding: %3px; border-radius: %4px; border: 1px solid %5; font-weight: bold;")
-						.arg(StreamUP::UIStyles::Colors::COLOR_WARNING)
-						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
-						.arg(12)
-						.arg(8)
-						.arg(StreamUP::UIStyles::Colors::COLOR_WARNING)));
-		warningLabel->setWordWrap(true);
-		migrationLayout->addWidget(warningLabel);
+		// The kit's warning note, the same as every other window's.
+		migrationLayout->addWidget(StreamUP::Kit::Note(StreamUP::Kit::Status::Warn,
+							       obs_module_text("SceneOrganiser.Settings.MigrationWarning")));
 
-		QPushButton *migrationButton = new StreamUP::UIStyles::PillButton(obs_module_text("SceneOrganiser.Settings.MigrationButton"), "primary");
+		QPushButton *migrationButton = new StreamUP::UIStyles::PillButton(obs_module_text("SceneOrganiser.Settings.MigrationButton"), "neutral");
 
 		QObject::connect(migrationButton, &QPushButton::clicked, [dialog]() {
 			QPointer<QDialog> dlg(dialog);
@@ -1875,27 +1521,27 @@ void ShowSettingsDialog(int tabIndex)
 				});
 		});
 
-		migrationLayout->addWidget(migrationButton);
-		sceneOrganiserLayout->addWidget(migrationGroup);
+		auto *migrationRow = new QHBoxLayout();
+		migrationRow->addStretch(1);
+		migrationRow->addWidget(migrationButton);
+		migrationLayout->addLayout(migrationRow);
+		soImportL->addWidget(migrationGroup);
 
 		// Credit section
-		sceneOrganiserLayout->addSpacing(StreamUP::UIStyles::S(20));
-
-		sceneOrganiserLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("SceneOrganiser.Settings.Credit")));
+		QVBoxLayout *soCreditL = StreamUP::UIStyles::sectionCard(sceneOrganiserLayout, obs_module_text("SceneOrganiser.Settings.Credit"));
 		QWidget *creditGroup = new QWidget();
 		creditGroup->setStyleSheet(QString("background: transparent;"));
-		QVBoxLayout *creditLayout = new QVBoxLayout(creditGroup);
+		// One line and a link button on the right, like any other row.
+		QHBoxLayout *creditLayout = new QHBoxLayout(creditGroup);
+		creditLayout->setContentsMargins(0, StreamUP::UIStyles::S(4), 0, StreamUP::UIStyles::S(2));
 		creditLayout->setSpacing(StreamUP::UIStyles::S(12));
 
 		QLabel *creditText = new QLabel(obs_module_text("SceneOrganiser.Settings.CreditText"));
-		creditText->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: %3; padding: %4px; border-radius: %5px;")
+		creditText->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 						.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)
-						.arg(StreamUP::UIStyles::Colors::BG_SECONDARY)
-						.arg(12)
-						.arg(8)));
+						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		creditText->setWordWrap(true);
-		creditLayout->addWidget(creditText);
+		creditLayout->addWidget(creditText, 1);
 
 		QPushButton *creditButton = new StreamUP::UIStyles::PillButton(obs_module_text("SceneOrganiser.Settings.CreditLink"), "neutral");
 		creditButton->setToolTip("https://github.com/DigitOtter/obs_scene_tree_view");
@@ -1904,8 +1550,8 @@ void ShowSettingsDialog(int tabIndex)
 			QDesktopServices::openUrl(QUrl("https://github.com/DigitOtter/obs_scene_tree_view"));
 		});
 
-		creditLayout->addWidget(creditButton);
-		sceneOrganiserLayout->addWidget(creditGroup);
+		creditLayout->addWidget(creditButton, 0, Qt::AlignVCenter);
+		soCreditL->addWidget(creditGroup);
 
 		sceneOrganiserContentLayout->addWidget(sceneOrganiserSettingsWidget);
 		sceneOrganiserContentLayout->addStretch();
@@ -1914,65 +1560,8 @@ void ShowSettingsDialog(int tabIndex)
 		sceneOrganiserPageLayout->addWidget(sceneOrganiserScrollArea);
 		stackedWidget->addWidget(sceneOrganiserPage);
 
-		// 4. Plugin Management Page
-		QWidget *pluginPage = new QWidget();
-		QVBoxLayout *pluginPageLayout = new QVBoxLayout(pluginPage);
-		pluginPageLayout->setContentsMargins(0, 0, 0, 0);
-		pluginPageLayout->setSpacing(0);
-		
-		// Create scrollable container with dialog box styling
-		QScrollArea *pluginScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-		pluginScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		pluginScrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(pluginScrollArea->styleSheet() + QString(
-			"QScrollArea {"
-			"    background-color: %1;"
-			"    border: none;"
-			"    border-radius: %2px;"
-			"}"
-			"QScrollArea > QWidget > QWidget {"
-			"    background: transparent;"
-			"}"
-		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-		 .arg(22)));
-		
-		// Create content container with dialog box background
-		QWidget *pluginContentContainer = new QWidget();
-		pluginContentContainer->setStyleSheet(QString(
-			"QWidget {"
-			"    background: transparent;"
-			"}"
-		));
-		
-		QVBoxLayout *pluginContentLayout = new QVBoxLayout(pluginContentContainer);
-		pluginContentLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-							StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-		pluginContentLayout->setSpacing(StreamUP::UIStyles::S(16));
-
-		QWidget *pluginSettingsWidget = new QWidget();
-
-		QVBoxLayout *pluginLayout = new QVBoxLayout(pluginSettingsWidget);
-		pluginLayout->setSpacing(StreamUP::UIStyles::S(12));
-
-		QPushButton *pluginButton =
-			new StreamUP::UIStyles::PillButton(obs_module_text("Settings.Plugin.ViewInstalled"), "primary");
-
-		// Connect plugin button to open plugins dialog
-		QObject::connect(pluginButton, &QPushButton::clicked, []() {
-			StreamUP::SettingsManager::ShowInstalledPluginsPage(nullptr);
-		});
-
-		QHBoxLayout *pluginButtonLayout = new QHBoxLayout();
-		pluginButtonLayout->addStretch();
-		pluginButtonLayout->addWidget(pluginButton);
-		pluginButtonLayout->addStretch();
-		pluginLayout->addLayout(pluginButtonLayout);
-
-		pluginContentLayout->addWidget(pluginSettingsWidget);
-		pluginContentLayout->addStretch();
-		
-		pluginScrollArea->setWidget(pluginContentContainer);
-		pluginPageLayout->addWidget(pluginScrollArea);
-		stackedWidget->addWidget(pluginPage);
+		// 4. Plugin Management: now the "Check now" button on General.
+		stackedWidget->addWidget(new QWidget());
 
 		// 5. Hotkeys Page - embed the full hotkeys UI directly
 		QWidget *hotkeysPage = new QWidget();
@@ -1983,17 +1572,11 @@ void ShowSettingsDialog(int tabIndex)
 		// Create scrollable container with dialog box styling
 		QScrollArea *hotkeysScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 		hotkeysScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		hotkeysScrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(hotkeysScrollArea->styleSheet() + QString(
-			"QScrollArea {"
-			"    background-color: %1;"
-			"    border: none;"
-			"    border-radius: %2px;"
-			"}"
-			"QScrollArea > QWidget > QWidget {"
-			"    background: transparent;"
-			"}"
-		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-		 .arg(22)));
+		// Boxed sections on the window background, like the Backup tab: the
+		// page itself has no panel, each group is its own rounded card.
+		hotkeysScrollArea->setStyleSheet(hotkeysScrollArea->styleSheet() + QString(
+			"QScrollArea { background: transparent; border: none; }"
+			"QScrollArea > QWidget > QWidget { background: transparent; }"));
 		
 		// Create content container with dialog box background
 		QWidget *hotkeysContentContainer = new QWidget();
@@ -2004,15 +1587,14 @@ void ShowSettingsDialog(int tabIndex)
 		));
 		
 		QVBoxLayout *hotkeysMainLayout = new QVBoxLayout(hotkeysContentContainer);
-		hotkeysMainLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-						      StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-		hotkeysMainLayout->setSpacing(StreamUP::UIStyles::S(16));
+		hotkeysMainLayout->setContentsMargins(0, 0, StreamUP::UIStyles::S(8), 0);
+		hotkeysMainLayout->setSpacing(StreamUP::UIStyles::S(10));
 		
 		// Add hotkeys content directly
 		QWidget *hotkeysContentWidget = new QWidget();
 		QVBoxLayout *hotkeysContentLayout = new QVBoxLayout(hotkeysContentWidget);
 		hotkeysContentLayout->setContentsMargins(0, 0, 0, 0);
-		hotkeysContentLayout->setSpacing(StreamUP::UIStyles::S(16));
+		hotkeysContentLayout->setSpacing(StreamUP::UIStyles::S(10));
 
 		// Define hotkey information structure
 		struct HotkeyInfo {
@@ -2025,19 +1607,13 @@ void ShowSettingsDialog(int tabIndex)
 		// Matches the WebSocket Commands window so both dialogs feel like the
 		// same product. Returns the card's layout so the existing
 		// buildHotkeySection helper can populate it unchanged.
+		// Each group is a boxed section with its title inside, the same card
+		// as every other Settings tab.
 		auto makeHotkeySection = [](QVBoxLayout *parentLayout, const QString &title) -> QVBoxLayout * {
-			parentLayout->addWidget(StreamUP::UIStyles::sectionHeader(title));
-			QFrame *card = new QFrame();
-			card->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
-				"QFrame { background: %1; border-radius: %2px; border: 1px solid %3; }")
-				.arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-				.arg(10)
-				.arg(StreamUP::UIStyles::Colors::BORDER_SUBTLE)));
-			QVBoxLayout *cardLay = new QVBoxLayout(card);
-			cardLay->setContentsMargins(StreamUP::UIStyles::S(12), 0,
-						     StreamUP::UIStyles::S(12), 0);
+			QVBoxLayout *cardLay = StreamUP::UIStyles::sectionCard(parentLayout, title);
+			cardLay->setContentsMargins(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(12),
+						    StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(6));
 			cardLay->setSpacing(0);
-			parentLayout->addWidget(card);
 			return cardLay;
 		};
 		std::vector<HotkeyInfo> lockingHotkeys = {
@@ -2088,7 +1664,7 @@ void ShowSettingsDialog(int tabIndex)
 				hotkeyRow->setStyleSheet(StreamUP::UIStyles::scale_qss("QWidget { background: transparent; border: none; padding: 0px; }"));
 				
 				QHBoxLayout *hotkeyRowLayout = new QHBoxLayout(hotkeyRow);
-				hotkeyRowLayout->setContentsMargins(0, StreamUP::UIStyles::S(8) + 3, 0, StreamUP::UIStyles::S(8) + 3);
+				hotkeyRowLayout->setContentsMargins(0, StreamUP::UIStyles::S(6), 0, StreamUP::UIStyles::S(6));
 				hotkeyRowLayout->setSpacing(StreamUP::UIStyles::S(12));
 				
 				// Text section
@@ -2097,18 +1673,24 @@ void ShowSettingsDialog(int tabIndex)
 				textLayout->setContentsMargins(0, 0, 0, 0);
 				
 				QLabel *nameLabel = new QLabel(hotkey.name);
-				nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { color: %1; font-size: %2px; font-weight: bold; background: transparent; }")
+				nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { color: %1; font-size: %2px; font-weight: 400; background: transparent; }")
 							.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 				
 				QLabel *descLabel = new QLabel(hotkey.description);
-				descLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { color: %1; font-size: %2px; background: transparent; }")
+				descLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { color: %1; font-size: %2px; font-weight: 400; background: transparent; }")
 							.arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
 							.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
 				descLabel->setWordWrap(true);
-				
-				textLayout->addWidget(nameLabel);
-				textLayout->addWidget(descLabel);
+				delete descLabel; // one line per hotkey; the detail is behind "?"
+
+				QHBoxLayout *nameRow = new QHBoxLayout();
+				nameRow->setSpacing(StreamUP::UIStyles::S(6));
+				nameRow->addWidget(nameLabel);
+				if (QLabel *dot = StreamUP::Kit::HelpDot(hotkey.description))
+					nameRow->addWidget(dot);
+				nameRow->addStretch(1);
+				textLayout->addLayout(nameRow);
 				
 				QWidget *textWrapper = new QWidget();
 				QVBoxLayout *wrapperLayout = new QVBoxLayout(textWrapper);
@@ -2157,13 +1739,54 @@ void ShowSettingsDialog(int tabIndex)
 			parentLayout->addLayout(sectionLayout);
 		};
 		
-		// Build each hotkey section: header + card + rows
-		buildHotkeySection(lockingHotkeys,       makeHotkeySection(hotkeysContentLayout, "Source Locking"));
-		buildHotkeySection(refreshHotkeys,       makeHotkeySection(hotkeysContentLayout, "Refresh Operations"));
-		buildHotkeySection(interactionHotkeys,   makeHotkeySection(hotkeysContentLayout, "Source Interaction"));
-		buildHotkeySection(videoCaptureHotkeys,  makeHotkeySection(hotkeysContentLayout, "Video Capture Devices"));
-		buildHotkeySection(transitionHotkeys,    makeHotkeySection(hotkeysContentLayout, "Transition Management"));
-		buildHotkeySection(groupVisibilityHotkeys, makeHotkeySection(hotkeysContentLayout, "Group and Visibility Management"));
+		// The hotkeys you have set come first; the rest fold under "Not set".
+		{
+			auto isSet = [](const QString &name) {
+				obs_data_array_t *binding = StreamUP::HotkeyManager::GetHotkeyBinding(name.toUtf8().constData());
+				const bool set = binding && obs_data_array_count(binding) > 0;
+				if (binding)
+					obs_data_array_release(binding);
+				return set;
+			};
+			const std::vector<std::pair<const char *, std::vector<HotkeyInfo> *>> groups = {
+				{"Hotkey.Group.Locking", &lockingHotkeys},
+				{"Hotkey.Group.Refresh", &refreshHotkeys},
+				{"Hotkey.Group.Sources", &interactionHotkeys},
+				{"Hotkey.Group.Cameras", &videoCaptureHotkeys},
+				{"Hotkey.Group.Transitions", &transitionHotkeys},
+				{"Hotkey.Group.Groups", &groupVisibilityHotkeys},
+			};
+			std::vector<HotkeyInfo> yours;
+			int unsetCount = 0;
+			for (const auto &g : groups)
+				for (const HotkeyInfo &h : *g.second)
+					isSet(h.obsHotkeyName) ? yours.push_back(h) : (void)++unsetCount;
+
+			if (!yours.empty()) {
+				buildHotkeySection(yours, makeHotkeySection(hotkeysContentLayout, obs_module_text("Hotkey.Group.Yours")));
+			} else {
+				QLabel *none = StreamUP::UIStyles::makeLabel(obs_module_text("Hotkey.NoneSet"), StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL,
+									     500, StreamUP::UIStyles::Colors::TEXT_MUTED);
+				hotkeysContentLayout->addWidget(none);
+			}
+
+			// The ones not set yet follow as ordinary sections, under a
+			// plain heading with their count; nothing folds away.
+			QVBoxLayout *unsetTarget = hotkeysContentLayout;
+			if (!yours.empty() && unsetCount > 0) {
+				hotkeysContentLayout->addSpacing(StreamUP::UIStyles::S(6));
+				hotkeysContentLayout->addWidget(StreamUP::UIStyles::sectionHeader(
+					QString("%1 (%2)").arg(QString::fromUtf8(obs_module_text("Hotkey.Group.NotSet"))).arg(unsetCount)));
+			}
+			for (const auto &g : groups) {
+				std::vector<HotkeyInfo> unset;
+				for (const HotkeyInfo &h : *g.second)
+					if (!isSet(h.obsHotkeyName))
+						unset.push_back(h);
+				if (!unset.empty())
+					buildHotkeySection(unset, makeHotkeySection(unsetTarget, obs_module_text(g.first)));
+			}
+		}
 		
 		hotkeysMainLayout->addWidget(hotkeysContentWidget);
 		hotkeysMainLayout->addStretch();
@@ -2181,17 +1804,11 @@ void ShowSettingsDialog(int tabIndex)
 		// Create scrollable container with dialog box styling
 		QScrollArea *dockScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
 		dockScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		dockScrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(dockScrollArea->styleSheet() + QString(
-			"QScrollArea {"
-			"    background-color: %1;"
-			"    border: none;"
-			"    border-radius: %2px;"
-			"}"
-			"QScrollArea > QWidget > QWidget {"
-			"    background: transparent;"
-			"}"
-		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-		 .arg(22)));
+		// Boxed sections on the window background, like the Backup tab: the
+		// page itself has no panel, each group is its own rounded card.
+		dockScrollArea->setStyleSheet(dockScrollArea->styleSheet() + QString(
+			"QScrollArea { background: transparent; border: none; }"
+			"QScrollArea > QWidget > QWidget { background: transparent; }"));
 		
 		// Create content container with dialog box background
 		QWidget *dockContentContainer = new QWidget();
@@ -2202,135 +1819,57 @@ void ShowSettingsDialog(int tabIndex)
 		));
 		
 		QVBoxLayout *dockMainLayout = new QVBoxLayout(dockContentContainer);
-		dockMainLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-						   StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-		dockMainLayout->setSpacing(StreamUP::UIStyles::S(16));
+		dockMainLayout->setContentsMargins(0, 0, StreamUP::UIStyles::S(8), 0);
+		dockMainLayout->setSpacing(StreamUP::UIStyles::S(10));
 		
 		// Add dock config content directly
 		QWidget *dockContentWidget = new QWidget();
 		QVBoxLayout *dockContentLayout = new QVBoxLayout(dockContentWidget);
 		dockContentLayout->setContentsMargins(0, 0, 0, 0);
-		dockContentLayout->setSpacing(StreamUP::UIStyles::S(16));
+		dockContentLayout->setSpacing(StreamUP::UIStyles::S(10));
 
-		// Section: dock tools (header + plain section widget, SoT house style).
-		dockContentLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("Settings.Dock.ToolsGroupTitle")));
-		QWidget *toolsGroup = new QWidget();
-		toolsGroup->setStyleSheet(QString("background: transparent;"));
-
-		QVBoxLayout *toolsGroupLayout = new QVBoxLayout(toolsGroup);
-		toolsGroupLayout->setContentsMargins(StreamUP::UIStyles::S(12), 0, StreamUP::UIStyles::S(12), 0);
-		toolsGroupLayout->setSpacing(0);
-
-		// Get current dock settings
-		DockToolSettings dockSettings = GetDockToolSettings();
-		
-		// Define tool information structure
-		struct ToolInfo {
-			QString name;
-			QString description;
-			bool *settingPtr;
-			int toolIndex;
-		};
-		
-		// List of all dock tools with pointers to their settings
-		std::vector<ToolInfo> dockTools = {
-			{obs_module_text("Dock.Tool.LockAllSources.Title"), obs_module_text("Dock.Tool.LockAllSources.Description"), &dockSettings.showLockAllSources, 0},
-			{obs_module_text("Dock.Tool.LockCurrentSources.Title"), obs_module_text("Dock.Tool.LockCurrentSources.Description"), &dockSettings.showLockCurrentSources, 1},
-			{obs_module_text("Dock.Tool.RefreshBrowserSources.Title"), obs_module_text("Dock.Tool.RefreshBrowserSources.Description"), &dockSettings.showRefreshBrowserSources, 2},
-			{obs_module_text("Dock.Tool.RefreshAudioMonitoring.Title"), obs_module_text("Dock.Tool.RefreshAudioMonitoring.Description"), &dockSettings.showRefreshAudioMonitoring, 3},
-			{obs_module_text("Dock.Tool.VideoCaptureOptions.Title"), obs_module_text("Dock.Tool.VideoCaptureOptions.Description"), &dockSettings.showVideoCaptureOptions, 4},
-			{obs_module_text("Dock.Tool.GroupSelectedSources.Title"), obs_module_text("Dock.Tool.GroupSelectedSources.Description"), &dockSettings.showGroupSelectedSources, 5},
-			{obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Title"), obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Description"), &dockSettings.showToggleVisibilitySelectedSources, 6}
-		};
-		
-		// Create tool rows
-		for (size_t i = 0; i < dockTools.size(); ++i) {
-			const auto &tool = dockTools[i];
-			
-			QWidget *toolRow = new QWidget();
-			toolRow->setStyleSheet(StreamUP::UIStyles::scale_qss("QWidget { background: transparent; border: none; padding: 0px; }"));
-			
-			QHBoxLayout *toolRowLayout = new QHBoxLayout(toolRow);
-			toolRowLayout->setContentsMargins(0, StreamUP::UIStyles::S(8) + 3, 0, StreamUP::UIStyles::S(8) + 3);
-			toolRowLayout->setSpacing(StreamUP::UIStyles::S(12));
-			
-			// Text section
-			QVBoxLayout *textLayout = new QVBoxLayout();
-			textLayout->setSpacing(StreamUP::UIStyles::S(2));
-			textLayout->setContentsMargins(0, 0, 0, 0);
-			
-			QLabel *nameLabel = new QLabel(tool.name);
-			nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { color: %1; font-size: %2px; font-weight: bold; background: transparent; }")
-						.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-			
-			QLabel *descLabel = new QLabel(tool.description);
-			descLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel { color: %1; font-size: %2px; background: transparent; }")
-						.arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-						.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
-			descLabel->setWordWrap(true);
-			
-			textLayout->addWidget(nameLabel);
-			textLayout->addWidget(descLabel);
-			
-			QWidget *textWrapper = new QWidget();
-			QVBoxLayout *wrapperLayout = new QVBoxLayout(textWrapper);
-			wrapperLayout->setContentsMargins(0, 0, 0, 0);
-			wrapperLayout->addStretch();
-			wrapperLayout->addLayout(textLayout);
-			wrapperLayout->addStretch();
-			
-			toolRowLayout->addWidget(textWrapper, 1);
-			
-			// Switch section
-			DockToolSettings freshSettings = GetDockToolSettings();
-			bool currentValue = false;
-			
-			// Get the current value based on tool index
-			switch (tool.toolIndex) {
-				case 0: currentValue = freshSettings.showLockAllSources; break;
-				case 1: currentValue = freshSettings.showLockCurrentSources; break;
-				case 2: currentValue = freshSettings.showRefreshBrowserSources; break;
-				case 3: currentValue = freshSettings.showRefreshAudioMonitoring; break;
-				case 4: currentValue = freshSettings.showVideoCaptureOptions; break;
-				case 5: currentValue = freshSettings.showGroupSelectedSources; break;
-				case 6: currentValue = freshSettings.showToggleVisibilitySelectedSources; break;
-			}
-			
-			StreamUP::UIStyles::SwitchButton *toolSwitch = StreamUP::UIStyles::CreateStyledSwitch("", currentValue);
-			
-			// Update settings when switch changes
-			QObject::connect(toolSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [toolIndex = tool.toolIndex](bool checked) {
-				DockToolSettings settings = GetDockToolSettings();
-
-				switch (toolIndex) {
-					case 0: settings.showLockAllSources = checked; break;
-					case 1: settings.showLockCurrentSources = checked; break;
-					case 2: settings.showRefreshBrowserSources = checked; break;
-					case 3: settings.showRefreshAudioMonitoring = checked; break;
-					case 4: settings.showVideoCaptureOptions = checked; break;
-					case 5: settings.showGroupSelectedSources = checked; break;
-					case 6: settings.showToggleVisibilitySelectedSources = checked; break;
-				}
-
-				UpdateDockToolSettings(settings);
-			});
-			
-			toolRowLayout->addWidget(toolSwitch);
-			toolsGroupLayout->addWidget(toolRow);
-			
-			// Add separator line between tools (but not after the last one)
-			if (i < dockTools.size() - 1) {
-				QFrame *separator = new QFrame();
-				separator->setFrameShape(QFrame::HLine);
-				separator->setFrameShadow(QFrame::Plain);
-				separator->setStyleSheet(StreamUP::UIStyles::scale_qss("QFrame { color: rgba(113, 128, 150, 0.3); background-color: rgba(113, 128, 150, 0.3); border: none; margin: 0px; max-height: 1px; }"));
-				toolsGroupLayout->addWidget(separator);
+		// Section: dock tools. One line per button like every other tab: its
+		// icon, its name, "?" for the detail and the switch.
+		{
+			namespace kit = StreamUP::Kit;
+			QVBoxLayout *card =
+				StreamUP::UIStyles::sectionCard(dockContentLayout, obs_module_text("Settings.Dock.ToolsGroupTitle"));
+			struct DockTool {
+				const char *titleKey;
+				const char *helpKey;
+				const char *icon;
+				bool DockToolSettings::*field;
+			};
+			static const DockTool kTools[] = {
+				{"Dock.Tool.LockAllSources.Title", "Dock.Tool.LockAllSources.Description", "all-scene-source-locked",
+				 &DockToolSettings::showLockAllSources},
+				{"Dock.Tool.LockCurrentSources.Title", "Dock.Tool.LockCurrentSources.Description",
+				 "current-scene-source-locked", &DockToolSettings::showLockCurrentSources},
+				{"Dock.Tool.RefreshBrowserSources.Title", "Dock.Tool.RefreshBrowserSources.Description",
+				 "refresh-browser-sources", &DockToolSettings::showRefreshBrowserSources},
+				{"Dock.Tool.RefreshAudioMonitoring.Title", "Dock.Tool.RefreshAudioMonitoring.Description",
+				 "refresh-audio-monitoring", &DockToolSettings::showRefreshAudioMonitoring},
+				{"Dock.Tool.VideoCaptureOptions.Title", "Dock.Tool.VideoCaptureOptions.Description", "camera",
+				 &DockToolSettings::showVideoCaptureOptions},
+				{"Dock.Tool.GroupSelectedSources.Title", "Dock.Tool.GroupSelectedSources.Description",
+				 "add-sources-to-group", &DockToolSettings::showGroupSelectedSources},
+				{"Dock.Tool.ToggleVisibilitySelectedSources.Title",
+				 "Dock.Tool.ToggleVisibilitySelectedSources.Description", "visible",
+				 &DockToolSettings::showToggleVisibilitySelectedSources},
+			};
+			const DockToolSettings current = GetDockToolSettings();
+			for (const DockTool &tool : kTools) {
+				auto *sw = StreamUP::UIStyles::CreateStyledSwitch("", current.*(tool.field));
+				QObject::connect(sw, &StreamUP::UIStyles::SwitchButton::toggled, [field = tool.field](bool checked) {
+					DockToolSettings settings = GetDockToolSettings();
+					settings.*field = checked;
+					UpdateDockToolSettings(settings);
+				});
+				card->addWidget(kit::SettingRow(obs_module_text(tool.titleKey), sw, obs_module_text(tool.helpKey),
+								kit::IconPath(QString::fromLatin1(tool.icon))));
 			}
 		}
-		
-		dockContentLayout->addWidget(toolsGroup);
-		
+
 		dockMainLayout->addWidget(dockContentWidget);
 		dockMainLayout->addStretch();
 		
@@ -2338,233 +1877,18 @@ void ShowSettingsDialog(int tabIndex)
 		dockPageLayout->addWidget(dockScrollArea);
 		stackedWidget->addWidget(dockPage);
 
-		// 7. Plugins Page — master enable/disable for each part of StreamUP.
-		QWidget *modulesPage = new QWidget();
-		QVBoxLayout *modulesPageLayout = new QVBoxLayout(modulesPage);
-		modulesPageLayout->setContentsMargins(0, 0, 0, 0);
-		modulesPageLayout->setSpacing(0);
-
-		QScrollArea *modulesScrollArea = StreamUP::UIStyles::CreateStyledScrollArea();
-		modulesScrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-		modulesScrollArea->setStyleSheet(StreamUP::UIStyles::scale_qss(modulesScrollArea->styleSheet() + QString(
-			"QScrollArea { background-color: %1; border: none; border-radius: %2px; }"
-			"QScrollArea > QWidget > QWidget { background: transparent; }"
-		).arg(StreamUP::UIStyles::Colors::BG_PRIMARY).arg(22)));
-
-		QWidget *modulesContentContainer = new QWidget();
-		modulesContentContainer->setStyleSheet("QWidget { background: transparent; }");
-		QVBoxLayout *modulesContentLayout = new QVBoxLayout(modulesContentContainer);
-		modulesContentLayout->setContentsMargins(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20),
-		                                         StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20));
-		modulesContentLayout->setSpacing(StreamUP::UIStyles::S(16));
-
-		// Page intro — explains what each toggle actually controls so users
-		// aren't worried about hidden resource cost.
-		QLabel *pluginsIntro = new QLabel(obs_module_text("Plugins.IntroBlurb"));
-		pluginsIntro->setWordWrap(true);
-		pluginsIntro->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("color: %1; font-size: %2px; background: transparent;")
-			.arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-			.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-		modulesContentLayout->addWidget(pluginsIntro);
-
-		// Restart-required banner (visible only when at least one hard toggle is dirty).
-		QLabel *modulesRestartBanner = new QLabel(obs_module_text("Plugins.RestartRequired.Banner"));
-		modulesRestartBanner->setWordWrap(true);
-		modulesRestartBanner->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
-			"QLabel { background-color: rgba(250, 179, 135, 0.15); color: %1; "
-			"border: 1px solid rgba(250, 179, 135, 0.5); border-radius: %2px; "
-			"padding: 10px; font-size: %3px; }"
-		).arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-		 .arg(8)
-		 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-		modulesRestartBanner->setVisible(false);
-		modulesContentLayout->addWidget(modulesRestartBanner);
-
-		// Hard-module restart-required chips. Captured by the row builder so the
-		// banner can refresh whenever any hard toggle changes.
-		auto hardChips = std::make_shared<std::vector<QLabel*>>();
-
-		// Helper: build one module row inside a parent layout.
-		// `getValue` returns the current bool from PluginSettings, `setValue` writes
-		// it back. `isHard` controls whether a "Restart required" chip is shown.
-		// `onAfterChange` runs after the new value is persisted, useful for soft
-		// toggles to apply runtime behaviour immediately.
-		auto refreshBanner = [hardChips, modulesRestartBanner]() {
-			bool anyDirty = false;
-			for (QLabel *chip : *hardChips) {
-				if (chip && chip->isVisible()) { anyDirty = true; break; }
-			}
-			modulesRestartBanner->setVisible(anyDirty);
-		};
-
-		auto addModuleRow = [&](QVBoxLayout *parent, const char *titleKey, const char *descKey,
-		                        std::function<bool(const PluginSettings&)> getValue,
-		                        std::function<void(PluginSettings&, bool)> setValue,
-		                        bool isHard,
-		                        std::function<bool(const AppliedModuleSnapshot&)> getApplied,
-		                        std::function<void()> onAfterChange) {
-			// Each setting is its own discrete card: a RoundedContainer (card
-			// radius) holding the title + description on the left and the toggle
-			// on the right, with the description living inside the same card so it
-			// reads as one unit. The Plugins-page scroll surface is BG_PRIMARY, so
-			// the card fills with the darker BG_SECONDARY to read as a distinct
-			// raised tile (a BG_PRIMARY card would be invisible on a BG_PRIMARY
-			// page).
-			auto *card = new StreamUP::UIStyles::RoundedContainer(
-				StreamUP::UIStyles::Sizes::RADIUS_CARD, nullptr,
-				QColor(StreamUP::UIStyles::Colors::BG_SECONDARY));
-
-			QHBoxLayout *rowLayout = new QHBoxLayout(card);
-			rowLayout->setContentsMargins(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(14),
-			                              StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(14));
-			rowLayout->setSpacing(StreamUP::UIStyles::S(16));
-
-			QWidget *textBlock = new QWidget();
-			QVBoxLayout *textLayout = new QVBoxLayout(textBlock);
-			textLayout->setContentsMargins(0, 0, 0, 0);
-			textLayout->setSpacing(StreamUP::UIStyles::S(6));
-
-			QLabel *titleLabel = new QLabel(obs_module_text(titleKey));
-			titleLabel->setStyleSheet(StreamUP::UIStyles::labelStyle(StreamUP::UIStyles::Colors::TEXT_PRIMARY));
-
-			QLabel *descLabel = new QLabel(obs_module_text(descKey));
-			descLabel->setWordWrap(true);
-			descLabel->setStyleSheet(StreamUP::UIStyles::dimLabelStyle());
-
-			textLayout->addWidget(titleLabel);
-			textLayout->addWidget(descLabel);
-			rowLayout->addWidget(textBlock, 1);
-
-			QLabel *restartChip = nullptr;
-			if (isHard) {
-				restartChip = new QLabel(obs_module_text("Plugins.RestartRequired"));
-				restartChip->setStyleSheet(StreamUP::UIStyles::scale_qss(QString(
-					"QLabel { color: rgb(250, 179, 135); background-color: rgba(250, 179, 135, 0.15); "
-					"border: 1px solid rgba(250, 179, 135, 0.4); border-radius: 8px; "
-					"padding: 2px 8px; font-size: %1px; }"
-				).arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
-				restartChip->setVisible(false);
-				rowLayout->addWidget(restartChip);
-				hardChips->push_back(restartChip);
-			}
-
-			PluginSettings cur = GetCurrentSettings();
-			AppliedModuleSnapshot snap = GetAppliedModuleSnapshot();
-			StreamUP::UIStyles::SwitchButton *moduleSwitch =
-				StreamUP::UIStyles::CreateStyledSwitch("", getValue(cur));
-
-			// Initial chip state
-			if (restartChip && getApplied) {
-				bool dirty = (getValue(cur) != getApplied(snap));
-				restartChip->setVisible(dirty);
-			}
-
-			QObject::connect(moduleSwitch, &StreamUP::UIStyles::SwitchButton::toggled,
-				[setValue, isHard, getApplied, restartChip, onAfterChange, refreshBanner](bool checked) {
-					PluginSettings s = GetCurrentSettings();
-					setValue(s, checked);
-					UpdateSettings(s);
-					if (restartChip && getApplied) {
-						AppliedModuleSnapshot snap2 = GetAppliedModuleSnapshot();
-						restartChip->setVisible(checked != getApplied(snap2));
-					}
-					if (onAfterChange) {
-						onAfterChange();
-					}
-					refreshBanner();
-				});
-
-			rowLayout->addWidget(moduleSwitch, 0, Qt::AlignVCenter);
-			parent->addWidget(card);
-		};
-
-		// Grouped by what each one gives you, not by how it is implemented.
-		// "Interface" and "System" said nothing useful: Backup and the
-		// Adjustment Layer are neither, and a user picking what to switch on
-		// cares about what appears in OBS, not which half of the plugin it
-		// lives in.
-		auto beginGroup = [&](const char *headerKey) {
-			modulesContentLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text(headerKey)));
-			QWidget *group = new QWidget();
-			group->setStyleSheet(QString("background: transparent;"));
-			QVBoxLayout *layout = StreamUP::UIHelpers::CreateVBoxLayout(group);
-			// Stack the per-setting cards flush to the content edge with an even gap.
-			layout->setContentsMargins(0, StreamUP::UIStyles::S(4), 0, StreamUP::UIStyles::S(4));
-			layout->setSpacing(StreamUP::UIStyles::S(12));
-			modulesContentLayout->addWidget(group);
-			return layout;
-		};
-
-		// ── Docks and panels ─────────────────────────────────────────────
-		QVBoxLayout *docksLayout = beginGroup("Plugins.Section.Docks");
-
-		addModuleRow(docksLayout, "Plugins.SceneOrganiser.Title", "Plugins.SceneOrganiser.Description",
-			[](const PluginSettings &s) { return s.modules.sceneOrganiser; },
-			[](PluginSettings &s, bool v) { s.modules.sceneOrganiser = v; },
-			true,
-			[](const AppliedModuleSnapshot &a) { return a.sceneOrganiser; },
-			nullptr);
-
-		addModuleRow(docksLayout, "Plugins.StreamupDock.Title", "Plugins.StreamupDock.Description",
-			[](const PluginSettings &s) { return s.modules.streamupDock; },
-			[](PluginSettings &s, bool v) { s.modules.streamupDock = v; },
-			true,
-			[](const AppliedModuleSnapshot &a) { return a.streamupDock; },
-			nullptr);
-
-		addModuleRow(docksLayout, "Plugins.MultiDock.Title", "Plugins.MultiDock.Description",
-			[](const PluginSettings &s) { return s.modules.multiDock; },
-			[](PluginSettings &s, bool v) { s.modules.multiDock = v; },
-			false, nullptr,
-			[]() { StreamUP::SettingsManager::PluginSettings ps = GetCurrentSettings();
-			       StreamUP::MultiDock::MultiDockManager::SetGlobalEnabled(ps.modules.multiDock); });
-
-		// ── Ways to control OBS ──────────────────────────────────────────
-		QVBoxLayout *controlsLayout = beginGroup("Plugins.Section.Controls");
-
-		addModuleRow(controlsLayout, "Plugins.Toolbar.Title", "Plugins.Toolbar.Description",
-			[](const PluginSettings &s) { return s.modules.toolbar; },
-			[](PluginSettings &s, bool v) { s.modules.toolbar = v; },
-			false, nullptr,
-			[]() { ApplyToolbarVisibility(); });
-
-		addModuleRow(controlsLayout, "Plugins.Hotkeys.Title", "Plugins.Hotkeys.Description",
-			[](const PluginSettings &s) { return s.modules.hotkeys; },
-			[](PluginSettings &s, bool v) { s.modules.hotkeys = v; },
-			false, nullptr,
-			[]() { StreamUP::SettingsManager::PluginSettings ps = GetCurrentSettings();
-			       StreamUP::HotkeyManager::SetHotkeyGroupEnabled(ps.modules.hotkeys); });
-
-		// ── Tools and sources ────────────────────────────────────────────
-		QVBoxLayout *toolsLayout = beginGroup("Plugins.Section.Tools");
-
-		addModuleRow(toolsLayout, "Plugins.Backup.Title", "Plugins.Backup.Description",
-			[](const PluginSettings &s) { return s.modules.backup; },
-			[](PluginSettings &s, bool v) { s.modules.backup = v; },
-			false, nullptr, nullptr);
-
-		addModuleRow(toolsLayout, "Plugins.AdjustmentLayer.Title", "Plugins.AdjustmentLayer.Description",
-			[](const PluginSettings &s) { return s.modules.adjustmentLayerSource; },
-			[](PluginSettings &s, bool v) { s.modules.adjustmentLayerSource = v; },
-			true,
-			[](const AppliedModuleSnapshot &a) { return a.adjustmentLayerSource; },
-			nullptr);
-
-		// Two things deliberately have no toggle here:
-		//
-		// The WebSocket API vendor is always registered. It powers Streamer.Bot,
-		// custom scripts and OBS Raw integrations, stays idle until something
-		// connects, and removing it breaks more workflows than it saves.
-		//
-		// Mixer, studio mode and theme polish always run. Each self-gates on
-		// whether a StreamUP theme is active, so they are already inert on any
-		// other theme, and they are what makes the StreamUP theme look right
-		// when it is.
-		modulesContentLayout->addStretch();
-
-		modulesScrollArea->setWidget(modulesContentContainer);
-		modulesPageLayout->addWidget(modulesScrollArea);
-		stackedWidget->addWidget(modulesPage);
+		// 7. Tools and tweaks: every part of StreamUP with its switch (what
+		// used to be the Features page), in the old Plugins slot.
+		{
+			QWidget *toolsPage = new QWidget();
+			// The stack's unscoped background would paint every plain child
+			// widget (a card's title row) in the window colour.
+			toolsPage->setStyleSheet(QStringLiteral("QWidget{background:transparent;}"));
+			auto *toolsLayout = new QVBoxLayout(toolsPage);
+			toolsLayout->setContentsMargins(0, 0, 0, 0);
+			toolsLayout->addWidget(StreamUP::FeaturesPage::BuildToolsPanel());
+			stackedWidget->addWidget(toolsPage);
+		}
 
 		// ── 8. Backup page ───────────────────────────────────────────────
 		QWidget *backupPage = new QWidget();
@@ -2574,16 +1898,37 @@ void ShowSettingsDialog(int tabIndex)
 
 		const PluginSettings backupSettings = GetCurrentSettings();
 
+		// Status first: when the newest backup in the folder was made.
+		{
+			QDir dir(StreamUP::Backup::ResolveBackupFolder());
+			const QFileInfoList zips = dir.entryInfoList({"*.zip"}, QDir::Files, QDir::Time);
+			QWidget *pill = nullptr;
+			if (zips.isEmpty()) {
+				pill = StreamUP::Kit::StatusPill(StreamUP::Kit::Status::Warn, obs_module_text("Settings.Backup.Status.None"));
+			} else {
+				const QDateTime when = zips.first().lastModified();
+				const QString text = when.date() == QDate::currentDate()
+							     ? QString(obs_module_text("Settings.Backup.Status.Today")).arg(when.toString("HH:mm"))
+							     : QString(obs_module_text("Settings.Backup.Status.On")).arg(QLocale().toString(when.date(), QLocale::ShortFormat));
+				pill = StreamUP::Kit::StatusPill(when.daysTo(QDateTime::currentDateTime()) > 7 ? StreamUP::Kit::Status::Warn
+															  : StreamUP::Kit::Status::Ok,
+								 text);
+			}
+			auto *statusRow = new QHBoxLayout();
+			statusRow->setContentsMargins(StreamUP::UIStyles::S(4), 0, 0, 0);
+			statusRow->addWidget(pill);
+			statusRow->addStretch(1);
+			backupPageLayout->addLayout(statusRow);
+		}
+
 		// Automatic backups
 		QVBoxLayout *autoCard =
 			StreamUP::UIStyles::sectionCard(backupPageLayout, obs_module_text("Settings.Backup.Section.Automatic"));
-		StreamUP::UIStyles::cardText(autoCard, obs_module_text("Settings.Backup.Automatic.Desc"),
-					     StreamUP::UIStyles::Colors::TEXT_SECONDARY);
 
 		QHBoxLayout *autoRow = new QHBoxLayout();
 		QLabel *autoLabel = new QLabel(obs_module_text("Settings.Backup.Automatic"));
 		autoLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(
-			QString("color: %1; font-size: %2px; background: transparent;")
+			QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 				.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		StreamUP::UIStyles::SwitchButton *autoSwitch =
@@ -2594,6 +1939,8 @@ void ShowSettingsDialog(int tabIndex)
 			UpdateSettings(s);
 		});
 		autoRow->addWidget(autoLabel);
+		if (QLabel *dot = StreamUP::Kit::HelpDot(obs_module_text("Settings.Backup.Automatic.Desc")))
+			autoRow->addWidget(dot);
 		autoRow->addStretch();
 		autoRow->addWidget(autoSwitch);
 		autoCard->addLayout(autoRow);
@@ -2602,7 +1949,7 @@ void ShowSettingsDialog(int tabIndex)
 		QHBoxLayout *keepRow = new QHBoxLayout();
 		QLabel *keepLabel = new QLabel(obs_module_text("Settings.Backup.Keep"));
 		keepLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(
-			QString("color: %1; font-size: %2px; background: transparent;")
+			QString("color: %1; font-size: %2px; font-weight: 400; background: transparent;")
 				.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
 				.arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
 		StreamUP::UIStyles::MacSpinBox *keepSpin = new StreamUP::UIStyles::MacSpinBox();
@@ -2623,17 +1970,22 @@ void ShowSettingsDialog(int tabIndex)
 		// Where they go
 		QVBoxLayout *locationCard =
 			StreamUP::UIStyles::sectionCard(backupPageLayout, obs_module_text("Settings.Backup.Section.Location"));
-		StreamUP::UIStyles::cardText(locationCard, obs_module_text("Settings.Backup.Location.Desc"),
-					     StreamUP::UIStyles::Colors::TEXT_SECONDARY);
-
-		QLabel *pathLabel = new QLabel(StreamUP::Backup::ResolveBackupFolder());
-		pathLabel->setWordWrap(true);
+		// The folder's name on one line; the full path is its tooltip.
+		auto showFolder = [](QLabel *label) {
+			const QString full = StreamUP::Backup::ResolveBackupFolder();
+			label->setText(QDir(full).dirName());
+			label->setToolTip(full);
+		};
+		QLabel *pathLabel = new QLabel();
+		showFolder(pathLabel);
 		pathLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(
-			QString("color: %1; font-size: 12px; background: transparent;")
+			QString("color: %1; font-size: 13px; font-weight: 400; background: transparent;")
 				.arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)));
-		locationCard->addWidget(pathLabel);
 
 		QHBoxLayout *pathButtons = new QHBoxLayout();
+		pathButtons->addWidget(pathLabel);
+		if (QLabel *dot = StreamUP::Kit::HelpDot(obs_module_text("Settings.Backup.Location.Desc")))
+			pathButtons->addWidget(dot);
 		pathButtons->addStretch();
 		QPushButton *chooseButton =
 			new StreamUP::UIStyles::PillButton(obs_module_text("Settings.Backup.Choose"), "neutral");
@@ -2643,10 +1995,11 @@ void ShowSettingsDialog(int tabIndex)
 			new StreamUP::UIStyles::PillButton(obs_module_text("Settings.Backup.OpenFolder"), "outline");
 		pathButtons->addWidget(openButton);
 		pathButtons->addWidget(defaultButton);
+		defaultButton->setVisible(!backupSettings.backupLocation.empty()); // only once you have moved it
 		pathButtons->addWidget(chooseButton);
 		locationCard->addLayout(pathButtons);
 
-		QObject::connect(chooseButton, &QPushButton::clicked, [pathLabel, dialog]() {
+		QObject::connect(chooseButton, &QPushButton::clicked, [pathLabel, dialog, showFolder, defaultButton]() {
 			const QString picked = QFileDialog::getExistingDirectory(
 				dialog, obs_module_text("Settings.Backup.ChooseTitle"),
 				StreamUP::Backup::ResolveBackupFolder());
@@ -2655,14 +2008,16 @@ void ShowSettingsDialog(int tabIndex)
 			PluginSettings s = GetCurrentSettings();
 			s.backupLocation = picked.toStdString();
 			UpdateSettings(s);
-			pathLabel->setText(StreamUP::Backup::ResolveBackupFolder());
+			showFolder(pathLabel);
+			defaultButton->setVisible(true);
 		});
 
-		QObject::connect(defaultButton, &QPushButton::clicked, [pathLabel]() {
+		QObject::connect(defaultButton, &QPushButton::clicked, [pathLabel, showFolder, defaultButton]() {
 			PluginSettings s = GetCurrentSettings();
 			s.backupLocation.clear();
 			UpdateSettings(s);
-			pathLabel->setText(StreamUP::Backup::ResolveBackupFolder());
+			showFolder(pathLabel);
+			defaultButton->hide();
 		});
 
 		QObject::connect(openButton, &QPushButton::clicked, []() {
@@ -2684,18 +2039,45 @@ void ShowSettingsDialog(int tabIndex)
 		manualButtons->addWidget(backupNowButton);
 		manualCard->addLayout(manualButtons);
 
-		QObject::connect(backupNowButton, &QPushButton::clicked, []() { StreamUP::Backup::ShowCreateBackupDialog(); });
-		QObject::connect(restoreButton, &QPushButton::clicked, []() { StreamUP::Restore::ShowRestoreDialog(); });
+		QObject::connect(backupNowButton, &QPushButton::clicked, [dialog]() { StreamUP::Backup::ShowCreateBackupDialog(dialog); });
+		QObject::connect(restoreButton, &QPushButton::clicked, [dialog]() { StreamUP::Restore::ShowRestoreDialog(dialog); });
 
 		backupPageLayout->addStretch();
 		stackedWidget->addWidget(backupPage);
 
-		// Set initial banner state based on current dirty chips
-		refreshBanner();
+		// 9. StreamUP Theme: its switches moved to the Features page, where each
+		// has a picture. The slot stays (empty, its row hidden) for the indices.
+		stackedWidget->addWidget(new QWidget());
+
+		// A tab whose part is switched off on the Features page: one line
+		// saying so (with the way there), and the settings greyed out under it.
+		{
+			const PluginSettings offSettings = GetCurrentSettings();
+			auto markSwitchedOff = [&](int row, bool on, const char *nameKey) {
+				if (on)
+					return;
+				if (auto *item = categoryList->item(RowForPage(categoryList, row)))
+					item->setForeground(QColor(StreamUP::UIStyles::Colors::TEXT_MUTED));
+				QWidget *page = stackedWidget->widget(row);
+				auto *layout = page ? qobject_cast<QVBoxLayout *>(page->layout()) : nullptr;
+				if (!layout)
+					return;
+				for (QWidget *child : page->findChildren<QWidget *>(Qt::FindDirectChildrenOnly))
+					StreamUP::Kit::DimForSwitchedOff(child, true);
+				layout->insertWidget(0, StreamUP::Kit::SwitchedOffBanner(obs_module_text(nameKey)));
+				layout->insertSpacing(1, StreamUP::UIStyles::S(10));
+			};
+			markSwitchedOff(1, offSettings.modules.toolbar, "Features.Toolbar.Name");
+			markSwitchedOff(2, offSettings.modules.sceneOrganiser, "Features.SceneOrganiser.Name");
+			markSwitchedOff(4, offSettings.modules.hotkeys, "Features.Hotkeys.Name");
+			markSwitchedOff(5, offSettings.modules.streamupDock, "Features.StreamupDock.Name");
+			markSwitchedOff(7, offSettings.modules.backup, "Features.Backup.Name");
+		}
 
 		// Connect category selection to page switching
-		QObject::connect(categoryList, &QListWidget::currentRowChanged, [stackedWidget](int index) {
-			stackedWidget->setCurrentIndex(index);
+		QObject::connect(categoryList, &QListWidget::currentRowChanged, [stackedWidget, categoryList](int row) {
+			if (QListWidgetItem *item = categoryList->item(row))
+				stackedWidget->setCurrentIndex(item->data(Qt::UserRole).toInt());
 		});
 		
 		// Set the stacked widget to show the correct page for the selected tab
@@ -2738,571 +2120,10 @@ bool AreNotificationsMuted()
 	return notificationsMuted;
 }
 
-void SetNotificationsMuted(bool muted)
-{
-	notificationsMuted = muted;
-
-	// Also update persistent settings
-	PluginSettings settings = GetCurrentSettings();
-	settings.notificationsMute = muted;
-	UpdateSettings(settings);
-}
-
 bool IsCPHIntegrationEnabled()
 {
 	PluginSettings settings = GetCurrentSettings();
 	return settings.showCPHIntegration;
-}
-
-void ShowInstalledPluginsInline(const StreamUP::UIStyles::StandardDialogComponents &components)
-{
-	// Store the current widget temporarily
-	QWidget *currentWidget = components.scrollArea->takeWidget();
-	(void)currentWidget; // Suppress unused variable warning
-
-	// Keep the main header unchanged - only replace content below it
-
-	// Create replacement content widget with sub-page header
-	QWidget *pluginsWidget = new QWidget();
-	pluginsWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
-	pluginsWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-	QVBoxLayout *pluginsLayout = new QVBoxLayout(pluginsWidget);
-	pluginsLayout->setContentsMargins(StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(20),
-					  StreamUP::UIStyles::S(8), StreamUP::UIStyles::S(20));
-	pluginsLayout->setSpacing(StreamUP::UIStyles::S(20));
-
-	// Create separate header section with same spacing as main header
-	QWidget *headerSection = new QWidget();
-	QVBoxLayout *headerSectionLayout = new QVBoxLayout(headerSection);
-	headerSectionLayout->setContentsMargins(0, 0, 0, 0);
-	headerSectionLayout->setSpacing(0); // Same as main header - no base spacing
-
-	QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("Settings.Plugin.InstalledPluginsTitle"));
-	titleLabel->setAlignment(Qt::AlignCenter);
-	headerSectionLayout->addWidget(titleLabel);
-
-	// Add small spacing between title and description for readability
-	//headerSectionLayout->addSpacing(StreamUP::UIStyles::S(4));
-
-	QLabel *descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("Settings.Plugin.InstalledPluginsDesc"));
-	descLabel->setAlignment(Qt::AlignCenter);
-	headerSectionLayout->addWidget(descLabel);
-
-	pluginsLayout->addWidget(headerSection);
-
-	// Info section - constrain width properly
-	QLabel *infoLabel = new QLabel(obs_module_text("Settings.Plugin.InstalledPluginsInfo"));
-	infoLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
-					 "color: %1;"
-					 "font-size: %2px;"
-					 "line-height: 1.3;"
-					 "padding: %3px;"
-					 "background: %4;"
-					 "border: 1px solid %5;"
-					 "border-radius: %6px;"
-					 "}")
-					 .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-					 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-					 .arg(8 + 2)
-					 .arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-					 .arg(StreamUP::UIStyles::Colors::BG_TERTIARY)
-					 .arg(6)));
-	infoLabel->setWordWrap(true);
-	infoLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
-	pluginsLayout->addWidget(infoLabel);
-
-	// Create plugin table
-	QTableWidget *pluginTable = CreatePluginTable();
-
-	// Add compatible plugins
-	auto installedPlugins = StreamUP::PluginManager::GetInstalledPluginsCached();
-	for (const auto &plugin : installedPlugins) {
-		AddCompatiblePluginRow(pluginTable, plugin.first, plugin.second);
-	}
-
-	// Add plugins we know about but can't version check
-	for (const auto &plugin : StreamUP::PluginManager::GetUncheckablePlugins()) {
-		AddUncheckablePluginRow(pluginTable, plugin.first, plugin.second);
-	}
-
-	// Add incompatible plugins
-	char *filePath = StreamUP::PathUtils::GetOBSLogPath();
-	std::vector<std::string> incompatibleModules = StreamUP::PluginManager::SearchLoadedModulesInLogFile(filePath);
-	bfree(filePath);
-
-	for (const std::string &moduleName : incompatibleModules) {
-		AddIncompatiblePluginRow(pluginTable, moduleName);
-	}
-
-	// Set appropriate height based on content
-	int totalRows = pluginTable->rowCount();
-	if (totalRows == 0) {
-		// Show empty state
-		QLabel *emptyLabel = new QLabel(obs_module_text("Settings.Plugin.InstalledPlugins"));
-		emptyLabel->setAlignment(Qt::AlignCenter);
-		emptyLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
-						  "color: %1;"
-						  "font-size: %2px;"
-						  "padding: 20px;"
-						  "}")
-						  .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-						  .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
-		pluginsLayout->addWidget(emptyLabel);
-	} else {
-		// Auto-resize columns to fit content perfectly
-		StreamUP::UIStyles::AutoResizeTableColumns(pluginTable);
-
-		// Configure table height based on content
-		int maxVisibleRows = std::min(totalRows, 8);
-		int headerHeight = pluginTable->horizontalHeader()->height();
-		int rowHeight = pluginTable->rowHeight(0);
-		int tableHeight = headerHeight + (rowHeight * maxVisibleRows) + 10; // 10px padding
-
-		pluginTable->setMinimumHeight(std::min(tableHeight, 300));
-		pluginTable->setMaximumHeight(StreamUP::UIStyles::S(400));
-
-		// Connect click handler for website links
-		QObject::connect(pluginTable, &QTableWidget::cellClicked, [pluginTable](int row, int column) {
-			StreamUP::UIStyles::HandleTableCellClick(pluginTable, row, column);
-		});
-
-		pluginsLayout->addWidget(StreamUP::UIStyles::GetTableContainer(pluginTable), 0, Qt::AlignTop);
-
-		// Set container to accommodate table width plus minimal padding
-		int tableWidth = pluginTable->minimumWidth();
-		int containerWidth = tableWidth + (StreamUP::UIStyles::S(8) * 2);
-		pluginsWidget->setMinimumWidth(containerWidth);
-		// Remove maximum width constraint to allow UI expansion
-	}
-	pluginsLayout->addStretch();
-
-	// Replace the content in the scroll area and configure for horizontal expansion
-	components.scrollArea->setWidget(pluginsWidget);
-
-	// Configure scroll area to expand horizontally to fit content
-	components.scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-	components.scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-	components.scrollArea->setWidgetResizable(true);
-
-	// Ensure the scroll area itself can expand and respect minimum sizes
-	components.scrollArea->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Preferred);
-
-	// Fix header stretching issue by setting fixed size policy
-	if (components.headerWidget) {
-		components.headerWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-		components.headerWidget->setMaximumHeight(components.headerWidget->sizeHint().height());
-	}
-
-	// Adjust the main dialog size to accommodate the table
-	if (components.dialog && pluginTable->rowCount() > 0) {
-		int tableWidth = pluginTable->minimumWidth();
-		int currentDialogWidth = components.dialog->width();
-		int requiredWidth = tableWidth + 100; // Add padding for dialog margins
-
-		if (requiredWidth > currentDialogWidth) {
-			QSize currentSize = components.dialog->size();
-			components.dialog->resize(requiredWidth, currentSize.height());
-		}
-	}
-
-	// Force the scroll area to consider the widget's size hints
-	components.scrollArea->updateGeometry();
-}
-
-void ShowInstalledPluginsPage(QWidget *parentWidget)
-{
-	StreamUP::UIHelpers::ShowDialogOnUIThread([parentWidget]() {
-		auto installedPlugins = StreamUP::PluginManager::GetInstalledPluginsCached();
-
-		StreamUP::UIStyles::WindowShell shell = StreamUP::UIStyles::makeWindow(
-			obs_module_text("Settings.Plugin.InstalledPlugins"), "v" PROJECT_VERSION, parentWidget,
-			/*brandFooter=*/true, "StreamUP");
-		QDialog *dialog = shell.dialog;
-		QHBoxLayout *shellFooterButtons = shell.footerButtons;
-
-		// Start smaller - will be resized based on content
-		dialog->resize(StreamUP::UIStyles::S(600) + 2 * StreamUP::UIStyles::S(StreamUP::UIStyles::ShadowDialog::kShadowMargin),
-			       StreamUP::UIStyles::S(500) + 2 * StreamUP::UIStyles::S(StreamUP::UIStyles::ShadowDialog::kShadowMargin));
-
-		QVBoxLayout *contentLayout = shell.content;
-		contentLayout->setContentsMargins(StreamUP::UIStyles::S(20),
-						  StreamUP::UIStyles::S(16),
-						  StreamUP::UIStyles::S(20),
-						  StreamUP::UIStyles::S(16));
-		contentLayout->setSpacing(StreamUP::UIStyles::S(12));
-
-		// Info section - fit to UI width
-		QLabel *infoLabel = new QLabel(obs_module_text("Settings.Plugin.InstalledPluginsInfo"));
-		infoLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
-						 "color: %1;"
-						 "font-size: %2px;"
-						 "line-height: 1.3;"
-						 "padding: %3px;"
-						 "background: %4;"
-						 "border: 1px solid %5;"
-						 "border-radius: %6px;"
-						 "}")
-						 .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-						 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-						 .arg(8 + 2)
-						 .arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-						 .arg(StreamUP::UIStyles::Colors::BG_TERTIARY)
-						 .arg(6)));
-		infoLabel->setWordWrap(true);
-		contentLayout->addWidget(infoLabel);
-
-		// Create plugin table for the dialog
-		QTableWidget *pluginTable = CreatePluginTable();
-
-		// Add compatible plugins
-		for (const auto &plugin : installedPlugins) {
-			AddCompatiblePluginRow(pluginTable, plugin.first, plugin.second);
-		}
-
-		// Add plugins we know about but can't version check
-		for (const auto &plugin : StreamUP::PluginManager::GetUncheckablePlugins()) {
-			AddUncheckablePluginRow(pluginTable, plugin.first, plugin.second);
-		}
-
-		// Add incompatible plugins
-		char *filePath = StreamUP::PathUtils::GetOBSLogPath();
-		std::vector<std::string> incompatibleModules = StreamUP::PluginManager::SearchLoadedModulesInLogFile(filePath);
-		bfree(filePath);
-
-		for (const std::string &moduleName : incompatibleModules) {
-			AddIncompatiblePluginRow(pluginTable, moduleName);
-		}
-
-		// Configure table for dialog - larger size and better layout
-		int totalRows = pluginTable->rowCount();
-		if (totalRows == 0) {
-			// Show empty state
-			QLabel *emptyLabel = new QLabel(obs_module_text("Settings.Plugin.InstalledPlugins"));
-			emptyLabel->setAlignment(Qt::AlignCenter);
-			emptyLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
-							  "color: %1;"
-							  "font-size: %2px;"
-							  "padding: 20px;"
-							  "}")
-							  .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-							  .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
-			contentLayout->addWidget(emptyLabel);
-		} else {
-			// Auto-resize columns to fit content perfectly
-			StreamUP::UIStyles::AutoResizeTableColumns(pluginTable);
-
-			// Set appropriate height for dialog
-			pluginTable->setMinimumHeight(StreamUP::UIStyles::S(300));
-			pluginTable->setMaximumHeight(StreamUP::UIStyles::S(500));
-
-			// Connect click handler for website links
-			QObject::connect(pluginTable, &QTableWidget::cellClicked, [pluginTable](int row, int column) {
-				StreamUP::UIStyles::HandleTableCellClick(pluginTable, row, column);
-			});
-
-			// Size the dialog to fit the table content so columns aren't clipped
-			// horizontally. tableWidth is a real (scaled) measurement; add the
-			// content margins (S(20)*2) and clamp to a sane range so the window
-			// never opens too small to show the table nor wider than the screen.
-			int tableWidth = pluginTable->minimumWidth();
-			int dialogWidth = tableWidth + 2 * StreamUP::UIStyles::S(20);
-			dialogWidth = std::clamp(dialogWidth, StreamUP::UIStyles::S(600), StreamUP::UIStyles::S(1100));
-			dialog->resize(dialogWidth + 2 * StreamUP::UIStyles::S(StreamUP::UIStyles::ShadowDialog::kShadowMargin),
-				       StreamUP::UIStyles::S(650) + 2 * StreamUP::UIStyles::S(StreamUP::UIStyles::ShadowDialog::kShadowMargin));
-
-			contentLayout->addWidget(StreamUP::UIStyles::GetTableContainer(pluginTable));
-		}
-
-		// Update button — right-anchored in the chrome footer's button slot.
-		QPushButton *updateButton = new StreamUP::UIStyles::PillButton(obs_module_text("StreamUP.Settings.CheckForUpdate"), "primary");
-		QObject::connect(updateButton, &QPushButton::clicked, [dialog]() {
-			StreamUP::PluginManager::ShowCachedPluginUpdatesDialog();
-			dialog->close();
-		});
-		shellFooterButtons->addWidget(updateButton);
-
-		dialog->show();
-	});
-}
-
-void ShowHotkeysInline(const StreamUP::UIStyles::StandardDialogComponents &components)
-{
-	// Store the current widget temporarily
-	QWidget *currentWidget = components.scrollArea->takeWidget();
-	(void)currentWidget; // Suppress unused variable warning
-
-	// Keep the main header unchanged - only replace content below it
-
-	// Create replacement content widget with sub-page header
-	QWidget *hotkeysWidget = new QWidget();
-	hotkeysWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
-	QVBoxLayout *hotkeysLayout = new QVBoxLayout(hotkeysWidget);
-	hotkeysLayout->setContentsMargins(StreamUP::UIStyles::S(20) + 5, StreamUP::UIStyles::S(20),
-					  StreamUP::UIStyles::S(20) + 5, StreamUP::UIStyles::S(20));
-	hotkeysLayout->setSpacing(StreamUP::UIStyles::S(20));
-
-	// Create separate header section with same spacing as main header
-	QWidget *headerSection = new QWidget();
-	QVBoxLayout *headerSectionLayout = new QVBoxLayout(headerSection);
-	headerSectionLayout->setContentsMargins(0, 0, 0, 0);
-	headerSectionLayout->setSpacing(0); // Same as main header - no base spacing
-
-	QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("Settings.Hotkeys.Title"));
-	titleLabel->setAlignment(Qt::AlignCenter);
-	headerSectionLayout->addWidget(titleLabel);
-
-	// Add small spacing between title and description for readability
-	// headerSectionLayout->addSpacing(StreamUP::UIStyles::S(4));
-
-	QLabel *descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("Settings.Hotkeys.Description"));
-	descLabel->setAlignment(Qt::AlignCenter);
-	headerSectionLayout->addWidget(descLabel);
-
-	hotkeysLayout->addWidget(headerSection);
-
-	// Info section
-	QLabel *infoLabel = new QLabel(obs_module_text("Settings.Hotkeys.Info"));
-	infoLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
-					 "color: %1;"
-					 "font-size: %2px;"
-					 "line-height: 1.3;"
-					 "padding: %3px;"
-					 "background: %4;"
-					 "border: 1px solid %5;"
-					 "border-radius: %6px;"
-					 "}")
-					 .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-					 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-					 .arg(8 + 2)
-					 .arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-					 .arg(StreamUP::UIStyles::Colors::BG_TERTIARY)
-					 .arg(6)));
-	infoLabel->setWordWrap(true);
-	hotkeysLayout->addWidget(infoLabel);
-
-	// Section for hotkeys (header + plain section widget, SoT house style).
-	hotkeysLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("Settings.Hotkeys.GroupTitle")));
-	QWidget *hotkeysGroup = new QWidget();
-	hotkeysGroup->setStyleSheet(QString("background: transparent;"));
-
-	QVBoxLayout *hotkeysGroupLayout = new QVBoxLayout(hotkeysGroup);
-	hotkeysGroupLayout->setSpacing(StreamUP::UIStyles::S(12));
-
-	// Define hotkey information structure
-	struct HotkeyInfo {
-		QString name;
-		QString description;
-		QString obsHotkeyName;
-	};
-
-	// List of all StreamUP hotkeys
-	std::vector<HotkeyInfo> streamupHotkeys = {
-		{obs_module_text("Hotkey.RefreshBrowserSources.Name"), obs_module_text("Hotkey.RefreshBrowserSources.Description"),
-		 "streamup_refresh_browser_sources"},
-		{obs_module_text("Hotkey.RefreshAudioMonitoring.Name"), obs_module_text("Hotkey.RefreshAudioMonitoring.Description"),
-		 "streamup_refresh_audio_monitoring"},
-		{obs_module_text("Hotkey.LockAllSources.Name"), obs_module_text("Hotkey.LockAllSources.Description"), "streamup_lock_all_sources"},
-		{obs_module_text("Hotkey.LockCurrentSources.Name"), obs_module_text("Hotkey.LockCurrentSources.Description"),
-		 "streamup_lock_current_sources"},
-		{obs_module_text("Hotkey.OpenSourceProperties.Name"), obs_module_text("Hotkey.OpenSourceProperties.Description"),
-		 "streamup_open_source_properties"},
-		{obs_module_text("Hotkey.OpenSourceFilters.Name"), obs_module_text("Hotkey.OpenSourceFilters.Description"),
-		 "streamup_open_source_filters"},
-		{obs_module_text("Hotkey.OpenSourceInteract.Name"), obs_module_text("Hotkey.OpenSourceInteract.Description"),
-		 "streamup_open_source_interact"},
-		{obs_module_text("Hotkey.OpenSceneFilters.Name"), obs_module_text("Hotkey.OpenSceneFilters.Description"),
-		 "streamup_open_scene_filters"},
-		{obs_module_text("Hotkey.ActivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.ActivateVideoCaptureDevices.Description"),
-		 "streamup_activate_video_capture_devices"},
-		{obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Name"), obs_module_text("Hotkey.DeactivateVideoCaptureDevices.Description"),
-		 "streamup_deactivate_video_capture_devices"},
-		{obs_module_text("Hotkey.RefreshVideoCaptureDevices.Name"), obs_module_text("Hotkey.RefreshVideoCaptureDevices.Description"),
-		 "streamup_refresh_video_capture_devices"},
-		{obs_module_text("Hotkey.CopyShowTransition.Name"), obs_module_text("Hotkey.CopyShowTransition.Description"),
-		 "streamup_copy_show_transition"},
-		{obs_module_text("Hotkey.CopyHideTransition.Name"), obs_module_text("Hotkey.CopyHideTransition.Description"),
-		 "streamup_copy_hide_transition"},
-		{obs_module_text("Hotkey.PasteShowTransition.Name"), obs_module_text("Hotkey.PasteShowTransition.Description"),
-		 "streamup_paste_show_transition"},
-		{obs_module_text("Hotkey.PasteHideTransition.Name"), obs_module_text("Hotkey.PasteHideTransition.Description"),
-		 "streamup_paste_hide_transition"}};
-
-	// Create direct layout for hotkeys (no scrolling, fit to content)
-	QVBoxLayout *hotkeyContentLayout = new QVBoxLayout();
-	hotkeyContentLayout->setSpacing(0);                  // No spacing, separators will handle it
-	hotkeyContentLayout->setContentsMargins(0, 0, 0, 0); // No padding inside the box (like WebSocket UI)
-
-	// Add each hotkey as a row with actual hotkey widget (WebSocket UI style)
-	for (size_t i = 0; i < streamupHotkeys.size(); ++i) {
-		const auto &hotkey = streamupHotkeys[i];
-
-		QWidget *hotkeyRow = new QWidget();
-		// Use transparent background with no border (like WebSocket UI)
-		hotkeyRow->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QWidget {"
-						 "background: transparent;"
-						 "border: none;"
-						 "padding: 0px;"
-						 "}")));
-
-		QHBoxLayout *hotkeyRowLayout = new QHBoxLayout(hotkeyRow);
-		// Match WebSocket UI margins: tight vertical padding, medium horizontal spacing
-		hotkeyRowLayout->setContentsMargins(0, StreamUP::UIStyles::S(8) + 3, 0,
-						    StreamUP::UIStyles::S(8) + 3);
-		hotkeyRowLayout->setSpacing(StreamUP::UIStyles::S(12));
-
-		// Text section - vertical layout with tight spacing (like WebSocket UI)
-		QVBoxLayout *textLayout = new QVBoxLayout();
-		textLayout->setSpacing(StreamUP::UIStyles::S(2)); // Very tight spacing between name and description
-		textLayout->setContentsMargins(0, 0, 0, 0);
-
-		// Hotkey name - use same styling as WebSocket UI
-		QLabel *nameLabel = new QLabel(hotkey.name);
-		nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
-						 "color: %1;"
-						 "font-size: %2px;"
-						 "font-weight: bold;"
-						 "background: transparent;"
-						 "border: none;"
-						 "margin: 0px;"
-						 "padding: 0px;"
-						 "}")
-						 .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-						 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-
-		// Hotkey description - use same styling as WebSocket UI
-		QLabel *descLabel = new QLabel(hotkey.description);
-		descLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
-						 "color: %1;"
-						 "font-size: %2px;"
-						 "background: transparent;"
-						 "border: none;"
-						 "margin: 0px;"
-						 "padding: 0px;"
-						 "}")
-						 .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-						 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
-		descLabel->setWordWrap(true);
-
-		textLayout->addWidget(nameLabel);
-		textLayout->addWidget(descLabel);
-
-		// Create a wrapper widget for text info that centers the content vertically (like WebSocket UI)
-		QWidget *textWrapper = new QWidget();
-		QVBoxLayout *wrapperLayout = new QVBoxLayout(textWrapper);
-		wrapperLayout->setContentsMargins(0, 0, 0, 0);
-		wrapperLayout->addStretch(); // Add stretch above
-		wrapperLayout->addLayout(textLayout);
-		wrapperLayout->addStretch(); // Add stretch below
-
-		hotkeyRowLayout->addWidget(textWrapper, 1);
-
-		// Hotkey configuration widget section - also center vertically
-		QVBoxLayout *hotkeyWrapperLayout = new QVBoxLayout();
-		hotkeyWrapperLayout->setContentsMargins(0, 0, 0, 0);
-		hotkeyWrapperLayout->addStretch(); // Add stretch above
-
-		StreamUP::UI::HotkeyWidget *hotkeyWidget = new StreamUP::UI::HotkeyWidget(hotkey.obsHotkeyName, hotkeyRow);
-
-		// Load current hotkey binding
-		obs_data_array_t *currentBinding =
-			StreamUP::HotkeyManager::GetHotkeyBinding(hotkey.obsHotkeyName.toUtf8().constData());
-		if (currentBinding) {
-			hotkeyWidget->SetHotkey(currentBinding);
-			obs_data_array_release(currentBinding);
-		}
-
-		// Connect to save changes immediately
-		QObject::connect(
-			hotkeyWidget, &StreamUP::UI::HotkeyWidget::HotkeyChanged,
-			[](const QString &hotkeyName, obs_data_array_t *hotkeyData) {
-				if (hotkeyData) {
-					StreamUP::HotkeyManager::SetHotkeyBinding(hotkeyName.toUtf8().constData(), hotkeyData);
-				} else {
-					// Clear the hotkey
-					obs_data_array_t *emptyArray = obs_data_array_create();
-					StreamUP::HotkeyManager::SetHotkeyBinding(hotkeyName.toUtf8().constData(), emptyArray);
-					obs_data_array_release(emptyArray);
-				}
-			});
-
-		hotkeyWrapperLayout->addWidget(hotkeyWidget);
-		hotkeyWrapperLayout->addStretch(); // Add stretch below
-
-		hotkeyRowLayout->addLayout(hotkeyWrapperLayout);
-
-		hotkeyContentLayout->addWidget(hotkeyRow);
-
-		// Add separator line between hotkeys (but not after the last one) - like WebSocket UI
-		if (i < streamupHotkeys.size() - 1) {
-			QFrame *separator = new QFrame();
-			separator->setFrameShape(QFrame::HLine);
-			separator->setFrameShadow(QFrame::Plain);
-			separator->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QFrame {"
-							 "color: rgba(113, 128, 150, 0.3);"
-							 "background-color: rgba(113, 128, 150, 0.3);"
-							 "border: none;"
-							 "margin: 0px;"
-							 "max-height: 1px;"
-							 "}")));
-			hotkeyContentLayout->addWidget(separator);
-		}
-	}
-
-	hotkeysGroupLayout->addLayout(hotkeyContentLayout);
-
-	// Action buttons section
-	QHBoxLayout *actionLayout = new QHBoxLayout();
-	actionLayout->setSpacing(StreamUP::UIStyles::S(12));
-
-	QPushButton *resetButton =
-		new StreamUP::UIStyles::PillButton(obs_module_text("Settings.Hotkeys.ResetAll"), "danger");
-
-	// Store all hotkey widgets so we can refresh them after reset
-	QList<StreamUP::UI::HotkeyWidget *> allHotkeyWidgets;
-
-	// Collect all hotkey widgets from the layout
-	for (int i = 0; i < hotkeyContentLayout->count(); i++) {
-		QLayoutItem *item = hotkeyContentLayout->itemAt(i);
-		if (item && item->widget()) {
-			QWidget *widget = item->widget();
-			// Skip separators (QFrame), only process hotkey rows
-			if (QString(widget->metaObject()->className()) != "QFrame") {
-				StreamUP::UI::HotkeyWidget *hotkeyWidget = widget->findChild<StreamUP::UI::HotkeyWidget *>();
-				if (hotkeyWidget) {
-					allHotkeyWidgets.append(hotkeyWidget);
-				}
-			}
-		}
-	}
-
-	QObject::connect(resetButton, &QPushButton::clicked, [allHotkeyWidgets]() {
-		// Branded confirm (modeless + callback). The reset runs in onAccept.
-		su::confirm(nullptr, obs_module_text("Settings.Hotkeys.ResetTitle"),
-			obs_module_text("Settings.Hotkeys.ResetWarning"),
-			obs_module_text("Settings.Hotkeys.ResetButton"), "danger", [allHotkeyWidgets]() {
-				// Clear all StreamUP hotkeys
-				StreamUP::HotkeyManager::ResetAllHotkeys();
-
-				// Refresh all hotkey widgets in the UI
-				for (StreamUP::UI::HotkeyWidget *widget : allHotkeyWidgets) {
-					if (widget) {
-						widget->ClearHotkey();
-					}
-				}
-			});
-	});
-
-	actionLayout->addStretch();
-	actionLayout->addWidget(resetButton);
-
-	hotkeysGroupLayout->addLayout(actionLayout);
-	hotkeysLayout->addWidget(hotkeysGroup);
-	hotkeysLayout->addStretch();
-
-	// Replace the content in the scroll area
-	components.scrollArea->setWidget(hotkeysWidget);
-
-	// Don't resize dialog when switching to sub-menus to maintain consistent header appearance
 }
 
 DockToolSettings GetDockToolSettings()
@@ -3321,336 +2142,10 @@ void UpdateDockToolSettings(const DockToolSettings &dockSettings)
 	StreamUPDock::NotifyAllDocksSettingsChanged();
 }
 
-void ShowDockConfigInline(const StreamUP::UIStyles::StandardDialogComponents &components)
-{
-	// Store the current widget temporarily
-	QWidget *currentWidget = components.scrollArea->takeWidget();
-	(void)currentWidget; // Suppress unused variable warning
-
-	// Keep the main header unchanged - only replace content below it
-
-	// Create replacement content widget with sub-page header
-	QWidget *dockConfigWidget = new QWidget();
-	dockConfigWidget->setStyleSheet(QString("background: %1;").arg(StreamUP::UIStyles::Colors::BG_DARKEST));
-	QVBoxLayout *dockConfigLayout = new QVBoxLayout(dockConfigWidget);
-	dockConfigLayout->setContentsMargins(StreamUP::UIStyles::S(20) + 5, StreamUP::UIStyles::S(20),
-					     StreamUP::UIStyles::S(20) + 5, StreamUP::UIStyles::S(20));
-	dockConfigLayout->setSpacing(StreamUP::UIStyles::S(20));
-
-	// Create separate header section with same spacing as main header
-	QWidget *headerSection = new QWidget();
-	QVBoxLayout *headerSectionLayout = new QVBoxLayout(headerSection);
-	headerSectionLayout->setContentsMargins(0, 0, 0, 0);
-	headerSectionLayout->setSpacing(0); // Same as main header - no base spacing
-
-	QLabel *titleLabel = StreamUP::UIStyles::CreateStyledTitle(obs_module_text("Settings.Dock.Title"));
-	titleLabel->setAlignment(Qt::AlignCenter);
-	headerSectionLayout->addWidget(titleLabel);
-
-	// Add small spacing between title and description for readability
-	// headerSectionLayout->addSpacing(StreamUP::UIStyles::S(4));
-
-	QLabel *descLabel = StreamUP::UIStyles::CreateStyledDescription(obs_module_text("Settings.Dock.Description"));
-	descLabel->setAlignment(Qt::AlignCenter);
-	headerSectionLayout->addWidget(descLabel);
-
-	dockConfigLayout->addWidget(headerSection);
-
-	// Info section
-	QLabel *infoLabel = new QLabel(obs_module_text("Settings.Dock.Info"));
-	infoLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
-					 "color: %1;"
-					 "font-size: %2px;"
-					 "line-height: 1.3;"
-					 "padding: %3px;"
-					 "background: %4;"
-					 "border: 1px solid %5;"
-					 "border-radius: %6px;"
-					 "}")
-					 .arg(StreamUP::UIStyles::Colors::TEXT_SECONDARY)
-					 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_TINY)
-					 .arg(8 + 2)
-					 .arg(StreamUP::UIStyles::Colors::BG_PRIMARY)
-					 .arg(StreamUP::UIStyles::Colors::BG_TERTIARY)
-					 .arg(6)));
-	infoLabel->setWordWrap(true);
-	dockConfigLayout->addWidget(infoLabel);
-
-	// Section for dock tools (header + plain section widget, SoT house style).
-	dockConfigLayout->addWidget(StreamUP::UIStyles::sectionHeader(obs_module_text("Settings.Dock.ToolsGroupTitle")));
-	QWidget *toolsGroup = new QWidget();
-	toolsGroup->setStyleSheet(QString("background: transparent;"));
-
-	QVBoxLayout *toolsGroupLayout = new QVBoxLayout(toolsGroup);
-	toolsGroupLayout->setContentsMargins(StreamUP::UIStyles::S(12),
-					     0, // No top padding
-					     StreamUP::UIStyles::S(12),
-					     0); // No bottom padding
-	toolsGroupLayout->setSpacing(0);         // No spacing since we handle it in the widget padding
-
-	// Get current dock settings
-	DockToolSettings currentDockSettings = GetDockToolSettings();
-
-	// Define tool information structure
-	struct ToolInfo {
-		QString name;
-		QString description;
-		bool *settingPtr;
-		int toolIndex; // Add index to identify which tool this is
-	};
-
-	// List of all dock tools with pointers to their settings
-	std::vector<ToolInfo> dockTools = {
-		{obs_module_text("Dock.Tool.LockAllSources.Title"), obs_module_text("Dock.Tool.LockAllSources.Description"),
-		 &currentDockSettings.showLockAllSources, 0},
-		{obs_module_text("Dock.Tool.LockCurrentSources.Title"), obs_module_text("Dock.Tool.LockCurrentSources.Description"),
-		 &currentDockSettings.showLockCurrentSources, 1},
-		{obs_module_text("Dock.Tool.RefreshBrowserSources.Title"), obs_module_text("Dock.Tool.RefreshBrowserSources.Description"),
-		 &currentDockSettings.showRefreshBrowserSources, 2},
-		{obs_module_text("Dock.Tool.RefreshAudioMonitoring.Title"), obs_module_text("Dock.Tool.RefreshAudioMonitoring.Description"),
-		 &currentDockSettings.showRefreshAudioMonitoring, 3},
-		{obs_module_text("Dock.Tool.VideoCaptureOptions.Title"), obs_module_text("Dock.Tool.VideoCaptureOptions.Description"),
-		 &currentDockSettings.showVideoCaptureOptions, 4},
-		{obs_module_text("Dock.Tool.GroupSelectedSources.Title"), obs_module_text("Dock.Tool.GroupSelectedSources.Description"),
-		 &currentDockSettings.showGroupSelectedSources, 5},
-		{obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Title"), obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Description"),
-		 &currentDockSettings.showToggleVisibilitySelectedSources, 6}};
-
-	// Create tool rows matching WebSocket/hotkeys UI pattern
-	for (size_t i = 0; i < dockTools.size(); ++i) {
-		const auto &tool = dockTools[i];
-
-		QWidget *toolRow = new QWidget();
-		toolRow->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QWidget {"
-					       "background: transparent;"
-					       "border: none;"
-					       "padding: 0px;"
-					       "}")));
-
-		QHBoxLayout *toolRowLayout = new QHBoxLayout(toolRow);
-		toolRowLayout->setContentsMargins(0, StreamUP::UIStyles::S(8) + 3, 0,
-						  StreamUP::UIStyles::S(8) + 3);
-		toolRowLayout->setSpacing(StreamUP::UIStyles::S(12));
-
-		// Text section - vertical layout with tight spacing (like WebSocket/hotkeys UI)
-		QVBoxLayout *textLayout = new QVBoxLayout();
-		textLayout->setSpacing(StreamUP::UIStyles::S(2)); // Very tight spacing between name and description
-		textLayout->setContentsMargins(0, 0, 0, 0);
-
-		// Tool name - use same styling as WebSocket/hotkeys UI
-		QLabel *nameLabel = new QLabel(tool.name);
-		nameLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
-						 "color: %1;"
-						 "font-size: %2px;"
-						 "font-weight: bold;"
-						 "background: transparent;"
-						 "border: none;"
-						 "margin: 0px;"
-						 "padding: 0px;"
-						 "}")
-						 .arg(StreamUP::UIStyles::Colors::TEXT_PRIMARY)
-						 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_NORMAL)));
-
-		// Tool description - use same styling as WebSocket/hotkeys UI
-		QLabel *descLabel = new QLabel(tool.description);
-		descLabel->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QLabel {"
-						 "color: %1;"
-						 "font-size: %2px;"
-						 "background: transparent;"
-						 "border: none;"
-						 "margin: 0px;"
-						 "padding: 0px;"
-						 "}")
-						 .arg(StreamUP::UIStyles::Colors::TEXT_MUTED)
-						 .arg(StreamUP::UIStyles::Sizes::FONT_SIZE_SMALL)));
-		descLabel->setWordWrap(true);
-
-		textLayout->addWidget(nameLabel);
-		textLayout->addWidget(descLabel);
-
-		// Create a wrapper widget for text info that centers the content vertically (like WebSocket/hotkeys UI)
-		QWidget *textWrapper = new QWidget();
-		QVBoxLayout *wrapperLayout = new QVBoxLayout(textWrapper);
-		wrapperLayout->setContentsMargins(0, 0, 0, 0);
-		wrapperLayout->addStretch(); // Add stretch above
-		wrapperLayout->addLayout(textLayout);
-		wrapperLayout->addStretch(); // Add stretch below
-
-		toolRowLayout->addWidget(textWrapper, 1);
-
-		// Switch section - also center vertically
-		QVBoxLayout *switchWrapperLayout = new QVBoxLayout();
-		switchWrapperLayout->setContentsMargins(0, 0, 0, 0);
-		switchWrapperLayout->addStretch(); // Add stretch above
-
-		// Force fresh settings load every time to ensure we have the latest values
-		DockToolSettings freshSettings = GetDockToolSettings();
-		bool currentValue = false;
-
-		// Get the current value based on tool index
-		switch (tool.toolIndex) {
-		case 0:
-			currentValue = freshSettings.showLockAllSources;
-			break;
-		case 1:
-			currentValue = freshSettings.showLockCurrentSources;
-			break;
-		case 2:
-			currentValue = freshSettings.showRefreshBrowserSources;
-			break;
-		case 3:
-			currentValue = freshSettings.showRefreshAudioMonitoring;
-			break;
-		case 4:
-			currentValue = freshSettings.showVideoCaptureOptions;
-			break;
-		case 5:
-			currentValue = freshSettings.showGroupSelectedSources;
-			break;
-		case 6:
-			currentValue = freshSettings.showToggleVisibilitySelectedSources;
-			break;
-		}
-
-		// Create switch with explicit initial state
-		StreamUP::UIStyles::SwitchButton *toolSwitch = StreamUP::UIStyles::CreateStyledSwitch("", currentValue);
-
-		// Force a visual refresh after the UI is fully constructed
-		QTimer::singleShot(0, [toolSwitch, currentValue]() { toolSwitch->setChecked(currentValue); });
-
-		// Update settings immediately when switch changes
-		QObject::connect(toolSwitch, &StreamUP::UIStyles::SwitchButton::toggled, [toolIndex = tool.toolIndex](bool checked) {
-			// Get current settings from persistent storage
-			DockToolSettings settings = GetDockToolSettings();
-
-			// Update the specific setting based on tool index
-			switch (toolIndex) {
-			case 0:
-				settings.showLockAllSources = checked;
-				break;
-			case 1:
-				settings.showLockCurrentSources = checked;
-				break;
-			case 2:
-				settings.showRefreshBrowserSources = checked;
-				break;
-			case 3:
-				settings.showRefreshAudioMonitoring = checked;
-				break;
-			case 4:
-				settings.showVideoCaptureOptions = checked;
-				break;
-			case 5:
-				settings.showGroupSelectedSources = checked;
-				break;
-			case 6:
-				settings.showToggleVisibilitySelectedSources = checked;
-				break;
-			}
-
-			// Save the updated settings immediately (this calls NotifyAllDocksSettingsChanged)
-			UpdateDockToolSettings(settings);
-		});
-
-		switchWrapperLayout->addWidget(toolSwitch);
-		switchWrapperLayout->addStretch(); // Add stretch below
-
-		toolRowLayout->addLayout(switchWrapperLayout);
-
-		toolsGroupLayout->addWidget(toolRow);
-
-		// Add separator line between tools (but not after the last one) - like WebSocket/hotkeys UI
-		if (i < dockTools.size() - 1) {
-			QFrame *separator = new QFrame();
-			separator->setFrameShape(QFrame::HLine);
-			separator->setFrameShadow(QFrame::Plain);
-			separator->setStyleSheet(StreamUP::UIStyles::scale_qss(QString("QFrame {"
-							 "color: rgba(113, 128, 150, 0.3);"
-							 "background-color: rgba(113, 128, 150, 0.3);"
-							 "border: none;"
-							 "margin: 0px;"
-							 "max-height: 1px;"
-							 "}")));
-			toolsGroupLayout->addWidget(separator);
-		}
-	}
-
-	// Action buttons section - only reset button, no save (like hotkeys UI)
-	QHBoxLayout *actionLayout = new QHBoxLayout();
-	actionLayout->setSpacing(StreamUP::UIStyles::S(12));
-	actionLayout->setContentsMargins(0, StreamUP::UIStyles::S(8) + 3, 0,
-					 StreamUP::UIStyles::S(8) + 3);
-
-	QPushButton *resetButton =
-		new StreamUP::UIStyles::PillButton(obs_module_text("Settings.Dock.ResetConfig"), "danger");
-
-	// Store all switches so we can update them after reset
-	QList<StreamUP::UIStyles::SwitchButton *> allSwitches;
-	for (int i = 0; i < toolsGroupLayout->count(); i++) {
-		QLayoutItem *item = toolsGroupLayout->itemAt(i);
-		if (item && item->widget()) {
-			QWidget *widget = item->widget();
-			if (QString(widget->metaObject()->className()) != "QFrame") {
-				StreamUP::UIStyles::SwitchButton *switchButton =
-					widget->findChild<StreamUP::UIStyles::SwitchButton *>();
-				if (switchButton) {
-					allSwitches.append(switchButton);
-				}
-			}
-		}
-	}
-
-	QObject::connect(resetButton, &QPushButton::clicked, [allSwitches]() {
-		// Branded confirm (modeless + callback). The reset runs in onAccept.
-		su::confirm(nullptr, obs_module_text("Settings.Dock.ResetTitle"),
-			obs_module_text("Settings.Dock.ResetWarning"),
-			obs_module_text("Settings.Dock.ResetButton"), "danger", [allSwitches]() {
-				// Reset all dock tools to default (visible)
-				DockToolSettings defaultSettings;
-				UpdateDockToolSettings(defaultSettings);
-
-				// Update all switches to checked state
-				for (StreamUP::UIStyles::SwitchButton *switchButton : allSwitches) {
-					if (switchButton) {
-						switchButton->setChecked(true);
-					}
-				}
-			});
-	});
-
-	actionLayout->addStretch();
-	actionLayout->addWidget(resetButton);
-
-	toolsGroupLayout->addLayout(actionLayout);
-	dockConfigLayout->addWidget(toolsGroup);
-	dockConfigLayout->addStretch();
-
-	// Replace the content in the scroll area
-	components.scrollArea->setWidget(dockConfigWidget);
-
-	// Don't resize dialog when switching to sub-menus to maintain consistent header appearance
-}
-
 bool IsDebugLoggingEnabled()
 {
 	PluginSettings settings = GetCurrentSettings();
 	return settings.debugLoggingEnabled;
-}
-
-void SetDebugLoggingEnabled(bool enabled)
-{
-	PluginSettings settings = GetCurrentSettings();
-	settings.debugLoggingEnabled = enabled;
-	UpdateSettings(settings);
-}
-
-void InvalidateSettingsCache()
-{
-	std::lock_guard<std::mutex> lock(settingsCacheMutex);
-	if (cachedSettings) {
-		obs_data_release(cachedSettings);
-		cachedSettings = nullptr;
-	}
 }
 
 void CleanupSettingsCache()
@@ -3915,6 +2410,7 @@ AppliedModuleSnapshot GetAppliedModuleSnapshot()
 	if (appliedData) {
 		snap.sceneOrganiser = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "scene_organiser", true);
 		snap.streamupDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "streamup_dock", true);
+		snap.mixerDock = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "mixer_dock", true);
 		snap.mixerEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "mixer_enhancements", true);
 		snap.studioModeEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "studio_mode_enhancements", true);
 		snap.themeEnhancements = StreamUP::OBSDataHelpers::GetBoolWithDefault(appliedData, "theme_enhancements", true);
@@ -3937,6 +2433,7 @@ void CommitAppliedModuleSnapshot(const AppliedModuleSnapshot &snapshot)
 	obs_data_t *appliedData = obs_data_create();
 	obs_data_set_bool(appliedData, "scene_organiser", snapshot.sceneOrganiser);
 	obs_data_set_bool(appliedData, "streamup_dock", snapshot.streamupDock);
+	obs_data_set_bool(appliedData, "mixer_dock", snapshot.mixerDock);
 	obs_data_set_bool(appliedData, "mixer_enhancements", snapshot.mixerEnhancements);
 	obs_data_set_bool(appliedData, "studio_mode_enhancements", snapshot.studioModeEnhancements);
 	obs_data_set_bool(appliedData, "theme_enhancements", snapshot.themeEnhancements);
@@ -3947,17 +2444,6 @@ void CommitAppliedModuleSnapshot(const AppliedModuleSnapshot &snapshot)
 
 	SaveSettings(data);
 	obs_data_release(data);
-}
-
-bool HasAnyExistingSettings()
-{
-	// Make sure the latch has been initialised (calling LoadSettings is the
-	// only way to set settingsFileFirstLoadChecked).
-	obs_data_t *data = LoadSettings();
-	if (data) {
-		obs_data_release(data);
-	}
-	return settingsFileExistedAtFirstLoad;
 }
 
 } // namespace SettingsManager

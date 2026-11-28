@@ -46,228 +46,6 @@ namespace su = StreamUP::UIStyles;
 // Static list to track all dock instances
 static QList<StreamUPDock*> dockInstances;
 
-void ShowDockConfigDialog()
-{
-	StreamUP::UIHelpers::ShowDialogOnUIThread([]() {
-		su::WindowShell shell = su::makeWindow(obs_module_text("Settings.Dock.Title"),
-			"v" PROJECT_VERSION, nullptr, /*brandFooter=*/false, "StreamUP");
-		QDialog* dialog = shell.dialog;
-		dialog->resize(S(600) + 2 * S(su::ShadowDialog::kShadowMargin),
-		               S(540) + 2 * S(su::ShadowDialog::kShadowMargin));
-
-		QVBoxLayout* mainLayout = shell.content;
-		mainLayout->setContentsMargins(S(20), S(16), S(20), S(16));
-
-		// Subtitle (title is already in the frameless chrome header)
-		{
-			QLabel* desc = su::makeLabel(obs_module_text("Settings.Dock.Description"),
-				13, 500, su::Colors::TEXT_SECONDARY);
-			desc->setWordWrap(true);
-			mainLayout->addWidget(desc);
-		}
-
-		// Info card — bordered panel using shared theme constants
-		QFrame* infoCard = new QFrame();
-		infoCard->setObjectName("dockInfoCard");
-		infoCard->setStyleSheet(su::scale_qss(QString(
-			"QFrame#dockInfoCard { background: %1; border: 1px solid %2; border-radius: %3px; }"
-			"QFrame#dockInfoCard QLabel { background: transparent; border: none; color: %4; }")
-			.arg(su::Colors::BG_PRIMARY)
-			.arg(su::Colors::BORDER_SUBTLE)
-			.arg(S(10))
-			.arg(su::Colors::TEXT_SECONDARY)));
-		QVBoxLayout* infoLay = new QVBoxLayout(infoCard);
-		infoLay->setContentsMargins(S(12), S(8) + 2, S(12), S(8) + 2);
-		QLabel* infoLabel = new QLabel(obs_module_text("Settings.Dock.Info"));
-		infoLabel->setWordWrap(true);
-		infoLabel->setStyleSheet(su::scale_qss(QString("font-size: %1px; line-height: 1.4;")
-			.arg(su::Sizes::FONT_SIZE_TINY)));
-		infoLay->addWidget(infoLabel);
-		mainLayout->addWidget(infoCard);
-
-		// Tools section header + bordered card — same pattern as websocket / hotkey
-		mainLayout->addWidget(su::sectionHeader(obs_module_text("Settings.Dock.ToolsGroupTitle")));
-
-		QFrame* toolsCard = new QFrame();
-		toolsCard->setObjectName("dockToolsCard");
-		toolsCard->setStyleSheet(su::scale_qss(QString(
-			"QFrame#dockToolsCard { background: %1; border: 1px solid %2; border-radius: %3px; }"
-			"QFrame#dockToolsCard QWidget { background: transparent; }"
-			"QFrame#dockToolsCard QLabel { border: none; }")
-			.arg(su::Colors::BG_PRIMARY)
-			.arg(su::Colors::BORDER_SUBTLE)
-			.arg(S(10))));
-		QVBoxLayout* toolsGroupLayout = new QVBoxLayout(toolsCard);
-		toolsGroupLayout->setContentsMargins(S(12), 0, S(12), 0);
-		toolsGroupLayout->setSpacing(0);
-		
-		// Get current dock settings
-		StreamUP::SettingsManager::DockToolSettings currentSettings = StreamUP::SettingsManager::GetDockToolSettings();
-		(void)currentSettings; // Suppress unused variable warning
-
-		// Define tool information structure
-		struct ToolInfo {
-			QString name;
-			QString description;
-			int toolIndex;
-		};
-		
-		// List of all dock tools
-		std::vector<ToolInfo> dockTools = {
-			{obs_module_text("Dock.Tool.LockAllSources.Title"), obs_module_text("Dock.Tool.LockAllSources.Description"), 0},
-			{obs_module_text("Dock.Tool.LockCurrentSources.Title"), obs_module_text("Dock.Tool.LockCurrentSources.Description"), 1},
-			{obs_module_text("Dock.Tool.RefreshBrowserSources.Title"), obs_module_text("Dock.Tool.RefreshBrowserSources.Description"), 2},
-			{obs_module_text("Dock.Tool.RefreshAudioMonitoring.Title"), obs_module_text("Dock.Tool.RefreshAudioMonitoring.Description"), 3},
-			{obs_module_text("Dock.Tool.VideoCaptureOptions.Title"), obs_module_text("Dock.Tool.VideoCaptureOptions.Description"), 4},
-			{obs_module_text("Dock.Tool.GroupSelectedSources.Title"), obs_module_text("Dock.Tool.GroupSelectedSources.Description"), 5},
-			{obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Title"), obs_module_text("Dock.Tool.ToggleVisibilitySelectedSources.Description"), 6}
-		};
-		
-		// Create tool rows and collect switches
-		for (int i = 0; i < static_cast<int>(dockTools.size()); ++i) {
-			const auto& tool = dockTools[i];
-			
-			QWidget* toolRow = new QWidget();
-
-			QHBoxLayout* toolRowLayout = new QHBoxLayout(toolRow);
-			toolRowLayout->setContentsMargins(0, S(8) + 3, 0, S(8) + 3);
-			toolRowLayout->setSpacing(S(12));
-
-			// Text section
-			QVBoxLayout* textLayout = new QVBoxLayout();
-			textLayout->setSpacing(S(2));
-			textLayout->setContentsMargins(0, 0, 0, 0);
-
-			QLabel* nameLabel = new QLabel(tool.name);
-			nameLabel->setStyleSheet(su::scale_qss(QString("QLabel { color: %1; font-size: %2px; font-weight: bold; }")
-				.arg(su::Colors::TEXT_PRIMARY)
-				.arg(su::Sizes::FONT_SIZE_NORMAL)));
-
-			QLabel* descLabel = new QLabel(tool.description);
-			descLabel->setStyleSheet(su::scale_qss(QString("QLabel { color: %1; font-size: %2px; }")
-				.arg(su::Colors::TEXT_MUTED)
-				.arg(su::Sizes::FONT_SIZE_SMALL)));
-			descLabel->setWordWrap(true);
-			
-			textLayout->addWidget(nameLabel);
-			textLayout->addWidget(descLabel);
-			
-			QWidget* textWrapper = new QWidget();
-			QVBoxLayout* wrapperLayout = new QVBoxLayout(textWrapper);
-			wrapperLayout->setContentsMargins(0, 0, 0, 0);
-			wrapperLayout->addStretch();
-			wrapperLayout->addLayout(textLayout);
-			wrapperLayout->addStretch();
-			
-			toolRowLayout->addWidget(textWrapper, 1);
-			
-			// Switch section
-			QVBoxLayout* switchWrapperLayout = new QVBoxLayout();
-			switchWrapperLayout->setContentsMargins(0, 0, 0, 0);
-			switchWrapperLayout->addStretch();
-			
-			StreamUP::SettingsManager::DockToolSettings freshSettings = StreamUP::SettingsManager::GetDockToolSettings();
-			bool currentValue = false;
-			
-			switch (tool.toolIndex) {
-				case 0: currentValue = freshSettings.showLockAllSources; break;
-				case 1: currentValue = freshSettings.showLockCurrentSources; break;
-				case 2: currentValue = freshSettings.showRefreshBrowserSources; break;
-				case 3: currentValue = freshSettings.showRefreshAudioMonitoring; break;
-				case 4: currentValue = freshSettings.showVideoCaptureOptions; break;
-				case 5: currentValue = freshSettings.showGroupSelectedSources; break;
-				case 6: currentValue = freshSettings.showToggleVisibilitySelectedSources; break;
-			}
-			
-			su::SwitchButton* toolSwitch = su::CreateStyledSwitch("", currentValue);
-
-			QTimer::singleShot(0, [toolSwitch, currentValue]() {
-				toolSwitch->setChecked(currentValue);
-			});
-
-			QObject::connect(toolSwitch, &su::SwitchButton::toggled, [tool](bool checked) {
-				StreamUP::SettingsManager::DockToolSettings settings = StreamUP::SettingsManager::GetDockToolSettings();
-
-				switch (tool.toolIndex) {
-					case 0: settings.showLockAllSources = checked; break;
-					case 1: settings.showLockCurrentSources = checked; break;
-					case 2: settings.showRefreshBrowserSources = checked; break;
-					case 3: settings.showRefreshAudioMonitoring = checked; break;
-					case 4: settings.showVideoCaptureOptions = checked; break;
-					case 5: settings.showGroupSelectedSources = checked; break;
-					case 6: settings.showToggleVisibilitySelectedSources = checked; break;
-				}
-
-				StreamUP::SettingsManager::UpdateDockToolSettings(settings);
-			});
-			
-			switchWrapperLayout->addWidget(toolSwitch);
-			switchWrapperLayout->addStretch();
-			
-			toolRowLayout->addLayout(switchWrapperLayout);
-			toolsGroupLayout->addWidget(toolRow);
-			
-			// Subtle row divider — uses the shared theme border colour.
-			if (i < static_cast<int>(dockTools.size()) - 1) {
-				QFrame* separator = new QFrame();
-				separator->setFrameShape(QFrame::HLine);
-				separator->setFrameShadow(QFrame::Plain);
-				separator->setStyleSheet(su::scale_qss(QString(
-					"QFrame { background-color: %1; border: none; max-height: 1px; }")
-					.arg(su::Colors::BORDER_SUBTLE)));
-				toolsGroupLayout->addWidget(separator);
-			}
-		}
-		
-		// Action buttons section
-		QHBoxLayout* actionLayout = new QHBoxLayout();
-		actionLayout->setSpacing(S(12));
-		actionLayout->setContentsMargins(0, S(8) + 3, 0, S(8) + 3);
-
-		su::PillButton* resetButton = new su::PillButton(obs_module_text("Settings.Dock.ResetConfig"), "danger");
-
-		// QPointer-guard the switch container so the modeless confirm callback can't
-		// touch a destroyed widget.
-		QPointer<QFrame> toolsCardGuard(toolsCard);
-		QObject::connect(resetButton, &QPushButton::clicked, [dialog, toolsCardGuard]() {
-			su::confirm(dialog, obs_module_text("Settings.Dock.ResetTitle"),
-				obs_module_text("Settings.Dock.ResetWarning"),
-				obs_module_text("Settings.Dock.ResetButton"), "danger",
-				[toolsCardGuard]() {
-					StreamUP::SettingsManager::DockToolSettings defaultSettings;
-					StreamUP::SettingsManager::UpdateDockToolSettings(defaultSettings);
-
-					if (!toolsCardGuard)
-						return;
-
-					// Find all switch buttons in the toolsGroup
-					QList<su::SwitchButton*> switches = toolsCardGuard->findChildren<su::SwitchButton*>();
-					for (int j = 0; j < switches.size(); ++j) {
-						su::SwitchButton* switchButton = switches.at(j);
-						if (switchButton) {
-							switchButton->setChecked(true);
-						}
-					}
-				});
-		});
-
-		actionLayout->addStretch();
-		actionLayout->addWidget(resetButton);
-
-		toolsGroupLayout->addLayout(actionLayout);
-		mainLayout->addStretch();
-
-		// Close button in footer
-		su::PillButton* closeButton = new su::PillButton(obs_module_text("UI.Button.Close"), "outline");
-		QObject::connect(closeButton, &QPushButton::clicked, [=]() {
-			dialog->close();
-		});
-		shell.footerButtons->addWidget(closeButton);
-
-		dialog->show();
-	});
-}
-
 void StreamUPDock::applyFileIconToButton(QPushButton *button, const QString &filePath)
 {
 	button->setIcon(QIcon(filePath));
@@ -296,7 +74,9 @@ StreamUPDock::StreamUPDock(QWidget *parent) : QFrame(parent), ui(new Ui::StreamU
 	applyFileIconToButton(toggleVisibilityButton, StreamUP::UIHelpers::GetThemedIconPath("visible"));
 
 	auto setButtonProperties = [](QPushButton *button) {
-		button->setIconSize(QSize(StreamUP::UIStyles::S(16), StreamUP::UIStyles::S(16)));  // Smaller icon for smaller button
+		// 20 in a 28 button: a 4 px ring all round, whole pixels at 100%,
+		// 150% and 200%, and big enough for the outline glyphs to read.
+		button->setIconSize(QSize(StreamUP::UIStyles::S(20), StreamUP::UIStyles::S(20)));
 		// Force square dimensions aggressively
 		button->setFixedSize(StreamUP::UIStyles::S(28), StreamUP::UIStyles::S(28));
 		button->setMinimumSize(StreamUP::UIStyles::S(28), StreamUP::UIStyles::S(28));
@@ -779,10 +559,40 @@ void StreamUPDock::showContextMenu(const QPoint& position)
 {
 	QMenu contextMenu(this);
 
+	// Pick the buttons right here: tick to show, untick to hide.
+	using DTS = StreamUP::SettingsManager::DockToolSettings;
+	const DTS current = StreamUP::SettingsManager::GetDockToolSettings();
+	struct Choice {
+		const char *key;
+		bool DTS::*field;
+	};
+	static const Choice choices[] = {
+		{"Dock.Tool.LockAllSources.Title", &DTS::showLockAllSources},
+		{"Dock.Tool.LockCurrentSources.Title", &DTS::showLockCurrentSources},
+		{"Dock.Tool.RefreshBrowserSources.Title", &DTS::showRefreshBrowserSources},
+		{"Dock.Tool.RefreshAudioMonitoring.Title", &DTS::showRefreshAudioMonitoring},
+		{"Dock.Tool.VideoCaptureOptions.Title", &DTS::showVideoCaptureOptions},
+		{"Dock.Tool.GroupSelectedSources.Title", &DTS::showGroupSelectedSources},
+		{"Dock.Tool.ToggleVisibilitySelectedSources.Title", &DTS::showToggleVisibilitySelectedSources},
+	};
+	QAction *heading = contextMenu.addAction(obs_module_text("Dock.ContextMenu.Buttons"));
+	heading->setEnabled(false);
+	for (const Choice &c : choices) {
+		QAction *a = contextMenu.addAction(obs_module_text(c.key));
+		a->setCheckable(true);
+		a->setChecked(current.*(c.field));
+		const auto field = c.field;
+		connect(a, &QAction::toggled, [field](bool on) {
+			DTS s = StreamUP::SettingsManager::GetDockToolSettings();
+			s.*field = on;
+			StreamUP::SettingsManager::UpdateDockToolSettings(s);
+		});
+	}
+	contextMenu.addSeparator();
+
 	QAction* configureAction = contextMenu.addAction(obs_module_text("Dock.ContextMenu.Configure"));
 	connect(configureAction, &QAction::triggered, []() {
-		// Open Settings window on Dock Configuration tab (index 5)
-		StreamUP::SettingsManager::ShowSettingsDialog(5);
+		StreamUP::SettingsManager::ShowSettingsDialog(StreamUP::SettingsManager::SettingsTabDockConfig);
 	});
 
 	contextMenu.exec(mapToGlobal(position));

@@ -1,4 +1,5 @@
 #include "mixer-enhancements.hpp"
+#include "theme-enhancements.hpp"
 #include <streamup/ui/gallery-style.hpp>
 
 #include <obs.h>
@@ -109,10 +110,16 @@ bool MixerEventFilter::eventFilter(QObject* watched, QEvent* event)
         event->type() == QEvent::ChildAdded ||
         event->type() == QEvent::Show) {
 
-        // Delay the refresh slightly to let OBS finish its layout
-        QTimer::singleShot(50, []() {
-            RefreshMixerEnhancements();
-        });
+        // Delay the refresh slightly to let OBS finish its layout. One
+        // refresh covers a burst of events, not one each.
+        static bool pending = false;
+        if (!pending) {
+            pending = true;
+            QTimer::singleShot(50, []() {
+                pending = false;
+                RefreshMixerEnhancements();
+            });
+        }
     }
 
     return QObject::eventFilter(watched, event);
@@ -630,7 +637,7 @@ void EnhanceVolumeControl(QWidget* volumeControl)
 
 void RefreshMixerEnhancements()
 {
-    if (!IsOBS32_1OrNewer() || !IsUsingStreamUPTheme()) {
+    if (!IsOBS32_1OrNewer() || !ThemeEnhancements::IsTweakActive(ThemeEnhancements::Tweak::Mixer)) {
         return;
     }
 
@@ -685,10 +692,33 @@ static void AdjustMixerToolbar(QWidget* mixerWidget)
     toolbar->setProperty("streamup_toolbar_adjusted", true);
 }
 
+// Switched off (or the theme changed): the watchers come off every channel, so
+// nothing is left looking at the mixer. The layout itself settles back on the
+// next OBS start.
+static void RemoveMixerWatchers()
+{
+    CleanupMixerEnhancements();
+    QWidget* mixerWidget = FindMixerDock();
+    if (!mixerWidget)
+        return;
+    for (QAbstractButton* button : mixerWidget->findChildren<QAbstractButton*>()) {
+        if (!button->property("streamup_tintwatch").toBool() && !button->property("streamup_multiline").toBool())
+            continue;
+        for (QObject* child : button->children()) {
+            if (dynamic_cast<IconTintFilter*>(child) || dynamic_cast<VolumeNameFilter*>(child))
+                child->deleteLater();
+        }
+        button->setProperty("streamup_tintwatch", false);
+        button->setProperty("streamup_multiline", false);
+    }
+}
+
 void ApplyMixerEnhancements()
 {
     // Mixer enhancements require OBS 32.1+ due to mixer layout changes
-    if (!IsOBS32_1OrNewer() || !IsUsingStreamUPTheme()) {
+    if (!IsOBS32_1OrNewer() || !ThemeEnhancements::IsTweakActive(ThemeEnhancements::Tweak::Mixer)) {
+        if (g_mixerFilter)
+            RemoveMixerWatchers();
         return;
     }
 

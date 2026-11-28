@@ -1,4 +1,5 @@
 #include "restore-dialog.hpp"
+#include "streamup-kit.hpp"
 
 #include "../core/backup-manager.hpp"
 #include "../core/restore-manager.hpp"
@@ -19,6 +20,7 @@
 #include <obs-module.h>
 
 #include <QApplication>
+#include <QPointer>
 #include <QDateTime>
 #include <QDir>
 #include <QFileDialog>
@@ -126,14 +128,19 @@ void ShowAppliedReportIfAny()
 	dialog->resize(S(560) + 2 * S(su::ShadowDialog::kShadowMargin), dialog->sizeHint().height());
 	// Shrink to the content's real height once it has been laid out. See
 	// fitWindowToContent: no size hint matches what actually gets drawn here.
-	QTimer::singleShot(0, dialog, [dialog, layout]() { fitWindowToContent(dialog, layout); });
+	QTimer::singleShot(0, dialog, [dialog, layout]() {
+		fitWindowToContent(dialog, layout);
+		StreamUP::BackupUI::fitWindowToScreen(dialog, layout);
+	});
 
 	dialog->show();
 }
 
-void ShowRestoreDialog()
+void ShowRestoreDialog(QWidget *over)
 {
-	QWidget *parent = static_cast<QWidget *>(obs_frontend_get_main_window());
+	// Opened from Settings: the file picker and this window sit over Settings,
+	// so Settings is not pushed behind OBS, and comes back to the front after.
+	QWidget *parent = over ? over : static_cast<QWidget *>(obs_frontend_get_main_window());
 
 	// Start where the backups actually are. Automatic backups live in the
 	// configured folder, and opening in Documents made them hard to find.
@@ -195,8 +202,17 @@ void ShowRestoreDialog()
 	// is exactly what it did here.
 	QVBoxLayout *contentsCard = sectionCard(rightColumn, obs_module_text("Restore.Section.Contents"));
 
-	cardText(contentsCard, obs_module_text("Restore.Section.ContentsHint"), Colors::TEXT_SECONDARY,
-		 CardText::kCaption);
+	if (QLabel *dot = StreamUP::Kit::HelpDot(obs_module_text("Restore.Section.ContentsHint"))) {
+		auto *hintRow = new QHBoxLayout();
+		// One line: wrapped, it folded to two short lines beside the tabs.
+		QLabel *hint = su::makeLabel(obs_module_text("Restore.Section.ContentsShort"), CardText::kCaption, 500,
+					     Colors::TEXT_SECONDARY);
+		hint->setWordWrap(false);
+		hintRow->addWidget(hint);
+		hintRow->addWidget(dot);
+		hintRow->addStretch(1);
+		contentsCard->addLayout(hintRow);
+	}
 
 	// Each area gets a switch, so a restore can be narrowed to just what was
 	// lost. Scene collections additionally get a checkable list, because
@@ -266,7 +282,9 @@ void ShowRestoreDialog()
 		return page;
 	};
 
-	pageLabels << QStringLiteral("%1 (%2)").arg(obs_module_text("Restore.Tab.Scenes")).arg(info.sceneCollections);
+	// The tabs take short names: with Media as a fifth tab, "Scene collections"
+	// and "Plugin settings" plus their counts ran the labels into each other.
+	pageLabels << QStringLiteral("%1 (%2)").arg(obs_module_text("Restore.Tab.Short.Scenes")).arg(info.sceneCollections);
 	collectionPage->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
 	pageWidgets << collectionPage;
 
@@ -279,7 +297,7 @@ void ShowRestoreDialog()
 	};
 
 	addSimplePage(obs_module_text("Restore.Tab.Profiles"), info.profileNames, info.profiles);
-	addSimplePage(obs_module_text("Restore.Tab.Plugins"), info.pluginConfigNames, info.pluginConfigFiles);
+	addSimplePage(obs_module_text("Restore.Tab.Short.Plugins"), info.pluginConfigNames, info.pluginConfigFiles);
 	addSimplePage(obs_module_text("Restore.Tab.Themes"), info.themeNames, info.themeFiles);
 	if (info.mediaFiles > 0)
 		addSimplePage(obs_module_text("Restore.Tab.Media"), QStringList(), info.mediaFiles);
@@ -307,7 +325,7 @@ void ShowRestoreDialog()
 		auto *rowLayout = new QHBoxLayout(row);
 		rowLayout->setContentsMargins(0, 0, 0, 0);
 		auto *text = new QLabel(label);
-		text->setStyleSheet(scale_qss(QString("QLabel{color:%1;font-size:%2px;background:transparent;}")
+		text->setStyleSheet(scale_qss(QString("QLabel{color:%1;font-size:%2px; font-weight: 400;background:transparent;}")
 						      .arg(QString(enabled ? Colors::TEXT_PRIMARY : Colors::TEXT_MUTED))
 						      .arg(CardText::kBody)));
 		rowLayout->addWidget(text, 1);
@@ -404,8 +422,13 @@ void ShowRestoreDialog()
 			QStringList names;
 			for (const PluginGap &gap : info.pluginGaps)
 				names << gap.name;
-			cardText(warnCard, QString(obs_module_text("Restore.Warn.MissingPluginsShort")).arg(names.size()),
-				Colors::COLOR_WARNING, CardText::kBody, true);
+			auto *pillRow = new QHBoxLayout();
+			pillRow->addWidget(StreamUP::Kit::StatusPill(StreamUP::Kit::Status::Warn,
+								     QString(obs_module_text("Restore.Warn.PluginsPill")).arg(names.size())));
+			if (QLabel *dot = StreamUP::Kit::HelpDot(QString(obs_module_text("Restore.Warn.MissingPluginsShort")).arg(names.size())))
+				pillRow->addWidget(dot);
+			pillRow->addStretch(1);
+			warnCard->addLayout(pillRow);
 
 			warnCard->addWidget(cardList(names, 90));
 		}
@@ -415,10 +438,19 @@ void ShowRestoreDialog()
 	}
 
 	// ── What is about to happen ────────────────────────────────────────
-	QVBoxLayout *processCard = sectionCard(leftColumn, obs_module_text("Restore.Section.WhatHappens"));
-	cardText(processCard, obs_module_text("Restore.Step.Safety"), Colors::TEXT_SECONDARY, CardText::kBody);
-	cardText(processCard, obs_module_text("Restore.Step.Prepare"), Colors::TEXT_SECONDARY, CardText::kBody);
-	cardText(processCard, obs_module_text("Restore.Step.Apply"), Colors::TEXT_SECONDARY, CardText::kBody);
+	// One line; the three steps are behind "?".
+	{
+		auto *stepsRow = new QHBoxLayout();
+		stepsRow->setContentsMargins(S(4), 0, 0, 0);
+		stepsRow->addWidget(StreamUP::Kit::StatusPill(StreamUP::Kit::Status::Ok, obs_module_text("Restore.SafetyCopy")));
+		const QString steps = QString("%1\n%2\n%3")
+					      .arg(obs_module_text("Restore.Step.Safety"), obs_module_text("Restore.Step.Prepare"),
+						   obs_module_text("Restore.Step.Apply"));
+		if (QLabel *dot = StreamUP::Kit::HelpDot(steps))
+			stepsRow->addWidget(dot);
+		stepsRow->addStretch(1);
+		leftColumn->addLayout(stepsRow);
+	}
 
 	// Only the left column pools its slack: the right column's card expands.
 	leftColumn->addStretch();
@@ -450,9 +482,18 @@ void ShowRestoreDialog()
 		restoreButton->setEnabled(false);
 		cancelButton->setEnabled(false);
 
-		const int grow = progressArea->sizeHint().height() + layout->spacing();
+		// Grow for the progress bar only as far as the screen allows; past that the
+		// content scrolls, and the bar is scrolled into view below.
+		const int grow = qMin(progressArea->sizeHint().height() + layout->spacing(),
+				      StreamUP::BackupUI::roomBelowWindow(dialog));
 		progressArea->setVisible(true);
 		dialog->resize(dialog->width(), dialog->height() + grow);
+		for (QWidget *w = progressArea->parentWidget(); w; w = w->parentWidget()) {
+			if (auto *scroller = qobject_cast<QScrollArea *>(w)) {
+				scroller->ensureWidgetVisible(progressArea);
+				break;
+			}
+		}
 		progress->setRange(0, 0); // indeterminate until the file count is known
 		status->setText(obs_module_text("Restore.Status.SafetyBackup"));
 		QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
@@ -494,8 +535,20 @@ void ShowRestoreDialog()
 	dialog->resize(S(1000) + 2 * S(su::ShadowDialog::kShadowMargin), dialog->sizeHint().height());
 	// Shrink to the content's real height once it has been laid out. See
 	// fitWindowToContent: no size hint matches what actually gets drawn here.
-	QTimer::singleShot(0, dialog, [dialog, layout]() { fitWindowToContent(dialog, layout); });
+	QTimer::singleShot(0, dialog, [dialog, layout]() {
+		fitWindowToContent(dialog, layout);
+		StreamUP::BackupUI::fitWindowToScreen(dialog, layout);
+	});
 
+	if (over) {
+		QPointer<QWidget> back(over);
+		QObject::connect(dialog, &QObject::destroyed, qApp, [back]() {
+			if (back) {
+				back->raise();
+				back->activateWindow();
+			}
+		});
+	}
 	dialog->show();
 }
 

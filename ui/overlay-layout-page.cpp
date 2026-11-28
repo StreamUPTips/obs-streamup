@@ -1,4 +1,5 @@
 #include "overlay-layout-page.hpp"
+#include "../core/canvas-lookup.hpp"
 #include "overlay-ui-common.hpp"
 
 #include <streamup/ui/glass.hpp>
@@ -11,23 +12,28 @@
 #include <graphics/graphics.h>
 #include <graphics/vec4.h>
 
+#if !defined(_WIN32) && !defined(__APPLE__)
+#include <obs-nix-platform.h>
+#endif
+
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
-#include <QImage>
 #include <QJsonObject>
 #include <QKeyEvent>
 #include <QListWidget>
 #include <QApplication>
 #include <QMouseEvent>
 #include <QPointer>
-#include <QPainter>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QWindow>
 
 #include <cmath>
 #include <cstring>
 #include <memory>
+#include <mutex>
+#include <utility>
 
 namespace StreamUP {
 namespace OverlayUI {
@@ -36,72 +42,52 @@ namespace oc = StreamUP::OverlayControls;
 
 namespace {
 
-// Renders a scene into an image the same way obs-websocket's screenshot does:
-// into a texture on the graphics thread's context, then copied back.
-QImage RenderScene(const QString &sceneName, int width)
+// The native window OBS draws into, the same way OBS's own preview and
+// projectors get theirs (OBSQTDisplay::QTToGSWindow).
+bool ToGSWindow(QWindow *window, gs_window &gswindow)
 {
-	obs_source_t *scene = obs_get_source_by_name(sceneName.toUtf8().constData());
-	if (!scene)
-		return QImage();
-	struct obs_video_info ovi;
-	if (!obs_get_video_info(&ovi) || !ovi.base_width || !ovi.base_height) {
-		obs_source_release(scene);
-		return QImage();
-	}
-	const uint32_t cw = ovi.base_width;
-	const uint32_t ch = ovi.base_height;
-	const uint32_t w = uint32_t(width);
-	const uint32_t h = uint32_t(std::lround(double(width) * ch / cw));
-
-	QImage img(int(w), int(h), QImage::Format_RGBA8888);
-	img.fill(0);
-
-	obs_enter_graphics();
-	gs_texrender_t *tex = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
-	gs_stagesurf_t *stage = gs_stagesurface_create(w, h, GS_RGBA);
-	if (gs_texrender_begin(tex, w, h)) {
-		struct vec4 clear;
-		vec4_zero(&clear);
-		gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
-		gs_ortho(0.0f, float(cw), 0.0f, float(ch), -100.0f, 100.0f);
-		gs_blend_state_push();
-		gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
-		obs_source_inc_showing(scene);
-		obs_source_video_render(scene);
-		obs_source_dec_showing(scene);
-		gs_blend_state_pop();
-		gs_texrender_end(tex);
-		gs_stage_texture(stage, gs_texrender_get_texture(tex));
-		uint8_t *data = nullptr;
-		uint32_t linesize = 0;
-		if (gs_stagesurface_map(stage, &data, &linesize)) {
-			for (uint32_t y = 0; y < h; ++y)
-				std::memcpy(img.scanLine(int(y)), data + y * linesize, size_t(img.bytesPerLine()));
-			gs_stagesurface_unmap(stage);
-		}
-	}
-	gs_stagesurface_destroy(stage);
-	gs_texrender_destroy(tex);
-	obs_leave_graphics();
-	obs_source_release(scene);
-	// A composited scene's alpha is not coverage (a text source can leave a
-	// transparent box over an opaque background), so the preview shows the
-	// colour and drops the alpha, like the program output does.
-	return img.convertToFormat(QImage::Format_RGB888);
-}
-
-QSize CanvasSize()
-{
-	struct obs_video_info ovi;
-	if (obs_get_video_info(&ovi) && ovi.base_width && ovi.base_height)
-		return QSize(int(ovi.base_width), int(ovi.base_height));
-	return QSize(1920, 1080);
+#ifdef _WIN32
+	gswindow.hwnd = (void *)window->winId();
+	return true;
+#elif defined(__APPLE__)
+	gswindow.view = (id)window->winId();
+	return true;
+#else
+	if (obs_get_nix_platform() != OBS_NIX_PLATFORM_X11_EGL)
+		return false; // Wayland needs the platform interface OBS keeps to itself
+	gswindow.id = uint32_t(window->winId());
+	gswindow.display = obs_get_nix_platform_display();
+	return true;
+#endif
 }
 
 } // namespace
 
 // ---------------------------------------------------------------- preview
 
+// What the draw callback needs, shared with the graphics thread.
+struct PreviewState {
+	std::mutex lock;
+	obs_weak_source_t *scene = nullptr;
+	uint32_t cw = 1920;
+	uint32_t ch = 1080;
+	struct Box {
+		QRectF rect;
+		bool selected = false;
+	};
+	QList<Box> boxes;
+
+	~PreviewState() { obs_weak_source_release(scene); }
+};
+
+// The Layout preview is a live OBS display, like OBS's own preview: the scene
+// is drawn straight onto this widget's window by OBS's render thread every
+// frame. The earlier preview rendered the scene off screen a few times a
+// second and copied it back to the CPU, which was both choppy and soft, and
+// stalled OBS while it waited for the copy.
+//
+// The part outlines are drawn in the same pass, in canvas pixels. Mouse
+// handling stays in Qt.
 class ScenePreview : public QWidget {
 public:
 	struct Frame {
@@ -113,107 +99,75 @@ public:
 
 	ScenePreview()
 	{
+		setAttribute(Qt::WA_PaintOnScreen);
+		setAttribute(Qt::WA_StaticContents);
+		setAttribute(Qt::WA_NoSystemBackground);
+		setAttribute(Qt::WA_OpaquePaintEvent);
+		setAttribute(Qt::WA_DontCreateNativeAncestors);
+		setAttribute(Qt::WA_NativeWindow);
 		setFocusPolicy(Qt::StrongFocus);
 		setMouseTracking(true);
 		setMinimumSize(su::S(420), su::S(236));
 		setAccessibleName(T("OverlayControls.Layout.Preview"));
 	}
 
+	~ScenePreview() override { destroyDisplay(); }
+
 	std::function<void(const QString &)> onSelect;
 	std::function<void(double dx, double dy, bool finished)> onDrag; // canvas px from drag start
 	std::function<void(double dx, double dy)> onNudge;
 
-	void setImage(const QImage &img)
+	// The scene to show and the canvas it draws on (vertical scenes are tall).
+	void setScene(obs_source_t *scene, const QSize &canvas)
 	{
-		m_image = img;
-		update();
+		m_canvas = canvas;
+		std::lock_guard<std::mutex> l(m_state->lock);
+		obs_weak_source_release(m_state->scene);
+		m_state->scene = scene ? obs_source_get_weak_source(scene) : nullptr;
+		m_state->cw = uint32_t(canvas.width());
+		m_state->ch = uint32_t(canvas.height());
 	}
+
 	void setFrames(const QList<Frame> &frames, const QString &selected)
 	{
 		m_frames = frames;
 		m_selected = selected;
-		update();
+		pushBoxes();
 	}
 
 protected:
+	QPaintEngine *paintEngine() const override { return nullptr; }
+
+	void paintEvent(QPaintEvent *) override { createDisplay(); }
+	void showEvent(QShowEvent *e) override
+	{
+		QWidget::showEvent(e);
+		createDisplay();
+	}
+	void resizeEvent(QResizeEvent *e) override
+	{
+		QWidget::resizeEvent(e);
+		createDisplay();
+		if (m_display) {
+			const QSize px = pixelSize();
+			obs_display_resize(m_display, uint32_t(px.width()), uint32_t(px.height()));
+		}
+	}
+
+	// Same letterboxing as the draw callback, in widget (logical) pixels.
 	QRectF target() const
 	{
-		const QSize canvas = CanvasSize();
-		const QRectF area = QRectF(rect()).adjusted(1, 1, -1, -1);
-		const double k = std::min(area.width() / canvas.width(), area.height() / canvas.height());
-		const QSizeF size(canvas.width() * k, canvas.height() * k);
+		const QRectF area = QRectF(rect());
+		const double k = std::min(area.width() / m_canvas.width(), area.height() / m_canvas.height());
+		const QSizeF size(m_canvas.width() * k, m_canvas.height() * k);
 		return QRectF(area.center().x() - size.width() / 2, area.center().y() - size.height() / 2, size.width(),
 			      size.height());
 	}
-	double scale() const { return target().width() / CanvasSize().width(); }
-	QRectF toWidget(const QRectF &r) const
-	{
-		const QRectF t = target();
-		const double k = scale();
-		return QRectF(t.x() + r.x() * k, t.y() + r.y() * k, r.width() * k, r.height() * k);
-	}
+	double scale() const { return target().width() / m_canvas.width(); }
 	QPointF toCanvas(const QPointF &p) const
 	{
 		const QRectF t = target();
 		return (p - t.topLeft()) / scale();
-	}
-
-	void paintEvent(QPaintEvent *) override
-	{
-		QPainter p(this);
-		p.setRenderHint(QPainter::Antialiasing, true);
-		const QRectF t = target();
-		// Checkerboard-free dark backing: transparency in a scene reads
-		// as the canvas background, like the OBS preview.
-		p.fillRect(rect(), QColor(su::Colors::BG_DARKEST));
-		p.fillRect(t, QColor(0, 0, 0));
-		if (!m_image.isNull())
-			p.drawImage(t, m_image);
-
-		QFont f = font();
-		f.setPixelSize(su::S(11));
-		f.setBold(true);
-		p.setFont(f);
-		for (const Frame &fr : m_frames) {
-			const bool sel = fr.id == m_selected;
-			const QRectF r = toWidget(fr.rect);
-			QPen pen(sel ? QColor(su::Colors::PRIMARY_LIGHT) : QColor(255, 255, 255, 110));
-			pen.setWidthF(sel ? 2.0 : 1.0);
-			if (!sel)
-				pen.setStyle(Qt::DashLine);
-			p.setPen(pen);
-			// Not a ternary: Qt::NoBrush would convert to QColor(Qt::color0),
-			// which is opaque black, and fill every frame.
-			if (sel)
-				p.setBrush(QColor(41, 151, 255, 28));
-			else
-				p.setBrush(Qt::NoBrush);
-			p.drawRect(r);
-			if (sel) {
-				// Corner handles, so the selection reads at a glance.
-				const double hs = su::S(6);
-				p.setBrush(QColor(su::Colors::PRIMARY_LIGHT));
-				p.setPen(Qt::NoPen);
-				for (const QPointF &c : {r.topLeft(), r.topRight(), r.bottomLeft(), r.bottomRight()})
-					p.drawRect(QRectF(c.x() - hs / 2, c.y() - hs / 2, hs, hs));
-			}
-			// Name tag inside the frame's top-left corner.
-			const QString text = fr.label;
-			const QFontMetrics fm(f);
-			const QRectF tag(r.x() + 1, r.y() + 1, fm.horizontalAdvance(text) + su::S(10), fm.height() + su::S(4));
-			p.setPen(Qt::NoPen);
-			p.setBrush(sel ? QColor(su::Colors::PRIMARY_COLOR) : QColor(0, 0, 0, 150));
-			p.drawRoundedRect(tag, su::S(3), su::S(3));
-			p.setPen(QColor(255, 255, 255));
-			p.drawText(tag, Qt::AlignCenter, text);
-		}
-		if (hasFocus()) {
-			QPen fp{QColor(su::Colors::PRIMARY_COLOR)};
-			fp.setWidthF(1.5);
-			p.setPen(fp);
-			p.setBrush(Qt::NoBrush);
-			p.drawRect(t.adjusted(0.5, 0.5, -0.5, -0.5));
-		}
 	}
 
 	void mousePressEvent(QMouseEvent *e) override
@@ -235,8 +189,8 @@ protected:
 			m_dragging = hit->movable;
 			m_pressCanvas = c;
 			setCursor(m_dragging ? Qt::ClosedHandCursor : Qt::ArrowCursor);
+			pushBoxes();
 		}
-		update();
 	}
 	void mouseMoveEvent(QMouseEvent *e) override
 	{
@@ -298,19 +252,143 @@ protected:
 		if (onNudge && !m_selected.isEmpty())
 			onNudge(dx, dy);
 	}
-	void focusInEvent(QFocusEvent *e) override
-	{
-		update();
-		QWidget::focusInEvent(e);
-	}
-	void focusOutEvent(QFocusEvent *e) override
-	{
-		update();
-		QWidget::focusOutEvent(e);
-	}
 
 private:
-	QImage m_image;
+	QSize pixelSize() const { return size() * devicePixelRatioF(); }
+
+	void createDisplay()
+	{
+		if (m_display || !windowHandle() || !windowHandle()->isExposed())
+			return;
+		const QSize px = pixelSize();
+		gs_init_data info = {};
+		info.cx = uint32_t(px.width());
+		info.cy = uint32_t(px.height());
+		info.format = GS_BGRA;
+		info.zsformat = GS_ZS_NONE;
+		if (!ToGSWindow(windowHandle(), info.window))
+			return;
+		const QColor bg(su::Colors::BG_DARKEST);
+		const uint32_t abgr = 0xFF000000u | (uint32_t(bg.blue()) << 16) | (uint32_t(bg.green()) << 8) | uint32_t(bg.red());
+		m_display = obs_display_create(&info, abgr);
+		if (m_display)
+			obs_display_add_draw_callback(m_display, Draw, m_state.get());
+	}
+
+	void destroyDisplay()
+	{
+		if (!m_display)
+			return;
+		obs_display_remove_draw_callback(m_display, Draw, m_state.get());
+		obs_display_destroy(m_display);
+		m_display = nullptr;
+	}
+
+	void pushBoxes()
+	{
+		std::lock_guard<std::mutex> l(m_state->lock);
+		m_state->boxes.clear();
+		// Selected last so it draws on top.
+		for (const Frame &fr : m_frames)
+			if (fr.id != m_selected)
+				m_state->boxes.append({fr.rect, false});
+		for (const Frame &fr : m_frames)
+			if (fr.id == m_selected)
+				m_state->boxes.append({fr.rect, true});
+	}
+
+	// ---- graphics thread
+
+	static void FillRect(gs_eparam_t *colour, const vec4 &c, float x, float y, float w, float h)
+	{
+		gs_effect_set_vec4(colour, &c);
+		gs_matrix_push();
+		gs_matrix_translate3f(x, y, 0.0f);
+		gs_matrix_scale3f(w, h, 1.0f);
+		gs_draw_sprite(nullptr, 0, 1, 1);
+		gs_matrix_pop();
+	}
+
+	static void OutlineRect(gs_eparam_t *colour, const vec4 &c, const QRectF &r, float t)
+	{
+		const float x = float(r.x()), y = float(r.y()), w = float(r.width()), h = float(r.height());
+		FillRect(colour, c, x, y, w, t);
+		FillRect(colour, c, x, y + h - t, w, t);
+		FillRect(colour, c, x, y, t, h);
+		FillRect(colour, c, x + w - t, y, t, h);
+	}
+
+	static void Draw(void *param, uint32_t cx, uint32_t cy)
+	{
+		auto *st = static_cast<PreviewState *>(param);
+		std::lock_guard<std::mutex> l(st->lock);
+		obs_source_t *scene = obs_weak_source_get_source(st->scene);
+		if (!scene || !st->cw || !st->ch) {
+			obs_source_release(scene);
+			return;
+		}
+		const float k = std::min(float(cx) / float(st->cw), float(cy) / float(st->ch));
+		const int vw = int(float(st->cw) * k);
+		const int vh = int(float(st->ch) * k);
+		const int vx = (int(cx) - vw) / 2;
+		const int vy = (int(cy) - vh) / 2;
+
+		gs_viewport_push();
+		gs_projection_push();
+		gs_set_viewport(vx, vy, vw, vh);
+		gs_ortho(0.0f, float(st->cw), 0.0f, float(st->ch), -100.0f, 100.0f);
+
+		gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_SOLID);
+		gs_eparam_t *colour = gs_effect_get_param_by_name(solid, "color");
+		gs_technique_t *tech = gs_effect_get_technique(solid, "Solid");
+
+		// The canvas reads black where the scene is transparent, like the
+		// program output.
+		vec4 black;
+		vec4_set(&black, 0.0f, 0.0f, 0.0f, 1.0f);
+		gs_technique_begin(tech);
+		gs_technique_begin_pass(tech, 0);
+		FillRect(colour, black, 0.0f, 0.0f, float(st->cw), float(st->ch));
+		gs_technique_end_pass(tech);
+		gs_technique_end(tech);
+
+		obs_source_video_render(scene);
+
+		// Outlines a constant on-screen width whatever the zoom.
+		gs_blend_state_push();
+		gs_enable_blending(true);
+		gs_blend_function(GS_BLEND_SRCALPHA, GS_BLEND_INVSRCALPHA);
+		gs_technique_begin(tech);
+		gs_technique_begin_pass(tech, 0);
+		const float px = 1.0f / std::max(k, 0.0001f);
+		vec4 dim, sel, fill;
+		vec4_set(&dim, 1.0f, 1.0f, 1.0f, 0.45f);
+		vec4_set(&sel, 0.25f, 0.62f, 1.0f, 1.0f);
+		vec4_set(&fill, 0.16f, 0.59f, 1.0f, 0.12f);
+		for (const PreviewState::Box &b : st->boxes) {
+			if (b.selected) {
+				FillRect(colour, fill, float(b.rect.x()), float(b.rect.y()), float(b.rect.width()),
+					 float(b.rect.height()));
+				OutlineRect(colour, sel, b.rect, 2.0f * px);
+				const float hs = 7.0f * px;
+				for (const QPointF &c : {b.rect.topLeft(), b.rect.topRight(), b.rect.bottomLeft(), b.rect.bottomRight()})
+					FillRect(colour, sel, float(c.x()) - hs / 2, float(c.y()) - hs / 2, hs, hs);
+			} else {
+				OutlineRect(colour, dim, b.rect, 1.0f * px);
+			}
+		}
+		gs_technique_end_pass(tech);
+		gs_technique_end(tech);
+		gs_blend_state_pop();
+
+		gs_projection_pop();
+		gs_viewport_pop();
+		obs_source_release(scene);
+	}
+
+	std::shared_ptr<PreviewState> m_state = std::make_shared<PreviewState>();
+	obs_display_t *m_display = nullptr;
+	QSize m_canvas{1920, 1080};
 	QList<Frame> m_frames;
 	QString m_selected;
 	bool m_dragging = false;
@@ -344,7 +422,7 @@ LayoutPage::LayoutPage(const QString &overlayId, const oc::OverlayInfo &info, QW
 
 	auto *partsCard = new QFrame();
 	partsCard->setObjectName("ocPartsCard");
-	partsCard->setStyleSheet(su::scale_qss(QString("QFrame#ocPartsCard{background:%1;border-radius:14px;}")
+	partsCard->setStyleSheet(su::scale_qss(QString("QFrame#ocPartsCard{background:%1;border:1px solid " + QString(StreamUP::UIStyles::Colors::BORDER_SUBTLE) + ";border-radius:12px;}")
 						       .arg(su::Colors::BG_PRIMARY)));
 	auto *pc = new QVBoxLayout(partsCard);
 	pc->setContentsMargins(su::S(4), su::S(4), su::S(4), su::S(4));
@@ -367,7 +445,7 @@ LayoutPage::LayoutPage(const QString &overlayId, const oc::OverlayInfo &info, QW
 
 	m_editor = new QFrame();
 	m_editor->setObjectName("ocPartEditor");
-	m_editor->setStyleSheet(su::scale_qss(QString("QFrame#ocPartEditor{background:%1;border-radius:14px;}")
+	m_editor->setStyleSheet(su::scale_qss(QString("QFrame#ocPartEditor{background:%1;border-radius:12px;}")
 						      .arg(su::Colors::BG_PRIMARY)));
 	auto *eg = new QGridLayout(m_editor);
 	eg->setContentsMargins(su::S(16), su::S(12), su::S(16), su::S(12));
@@ -380,6 +458,8 @@ LayoutPage::LayoutPage(const QString &overlayId, const oc::OverlayInfo &info, QW
 	m_x = new PanelDoubleSpin();
 	m_y = new PanelDoubleSpin();
 	for (PanelDoubleSpin *s : {m_x, m_y}) {
+		// Typing "1250" is one move, not four.
+		s->setKeyboardTracking(false);
 		s->setRange(-4000, 4000);
 		s->setDecimals(0);
 		s->setSuffix(" px");
@@ -412,14 +492,13 @@ LayoutPage::LayoutPage(const QString &overlayId, const oc::OverlayInfo &info, QW
 	right->addWidget(m_editor, 0);
 	outer->addLayout(right, 1);
 
-	// Preview refresh: a few frames a second is plenty to see a part land,
-	// and only while this page is on screen.
+	// The preview draws itself every frame; this only keeps the part
+	// outlines in step with the live scene (a part moved elsewhere shows
+	// here), which is a few cheap lookups.
 	auto *timer = new QTimer(this);
 	timer->setObjectName("ocPreviewTimer");
-	timer->setInterval(220);
+	timer->setInterval(100);
 	QObject::connect(timer, &QTimer::timeout, this, [this]() {
-		if (!m_scene.isEmpty() && isVisible())
-			renderPreview();
 		// Frames follow the live scene: a part moved elsewhere shows here.
 		QList<ScenePreview::Frame> frames;
 		for (const oc::ControlInfo *c : partsInScene(m_scene)) {
@@ -430,8 +509,17 @@ LayoutPage::LayoutPage(const QString &overlayId, const oc::OverlayInfo &info, QW
 		m_preview->setFrames(frames, m_selected);
 	});
 
+	m_flushTimer = new QTimer(this);
+	m_flushTimer->setSingleShot(true);
+	m_flushTimer->setInterval(33);
+	QObject::connect(m_flushTimer, &QTimer::timeout, this, [this]() {
+		if (flushWrite())
+			m_flushTimer->start();
+	});
+
 	QObject::connect(m_scenes, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int) {
 		m_scene = m_scenes->currentData().toString();
+		showScene(isVisible());
 		fillParts();
 	});
 	QObject::connect(m_parts, &QListWidget::currentRowChanged, this, [this](int row) {
@@ -463,8 +551,10 @@ LayoutPage::LayoutPage(const QString &overlayId, const oc::OverlayInfo &info, QW
 			*dragging = true;
 		}
 		write(QJsonObject{{"x", dragStart->x() + dx}, {"y", dragStart->y() + dy}});
-		if (finished)
+		if (finished) {
 			*dragging = false;
+			flushWrite(); // the drop lands where it was let go
+		}
 	};
 	m_preview->onNudge = [this](double dx, double dy) {
 		const oc::ControlInfo *c = part(m_selected);
@@ -503,37 +593,38 @@ LayoutPage::LayoutPage(const QString &overlayId, const oc::OverlayInfo &info, QW
 
 LayoutPage::~LayoutPage()
 {
-	joinRender();
+	flushWrite();
+	showScene(false);
 }
 
-void LayoutPage::joinRender()
+// Keeps the previewed scene showing while the page is up, so its sources
+// render properly, without toggling it every frame.
+void LayoutPage::showScene(bool show)
 {
-	if (m_render.joinable())
-		m_render.join();
-}
-
-void LayoutPage::renderPreview()
-{
-	// One frame in flight at a time; a slow frame just skips a tick.
-	if (m_rendering->load())
+	if (m_shown) {
+		obs_source_dec_showing(m_shown);
+		obs_source_release(m_shown);
+		m_shown = nullptr;
+	}
+	m_preview->setScene(nullptr, QSize(1920, 1080));
+	if (m_scene.isEmpty())
 		return;
-	joinRender();
-	m_rendering->store(true);
-	const QString scene = m_scene;
-	const int width = std::clamp(m_preview->width(), 320, 960);
-	QPointer<ScenePreview> preview(m_preview);
-	auto busy = m_rendering;
-	m_render = std::thread([scene, width, preview, busy]() {
-		const QImage img = RenderScene(scene, width);
-		QMetaObject::invokeMethod(
-			qApp,
-			[preview, img]() {
-				if (preview)
-					preview->setImage(img);
-			},
-			Qt::QueuedConnection);
-		busy->store(false);
-	});
+	obs_source_t *scene = StreamUP::CanvasLookup::GetSourceByName(m_scene.toUtf8().constData());
+	if (!scene)
+		return;
+	uint32_t cw = 0;
+	uint32_t ch = 0;
+	if (!StreamUP::CanvasLookup::GetCanvasSize(scene, cw, ch)) {
+		cw = 1920;
+		ch = 1080;
+	}
+	m_preview->setScene(scene, QSize(int(cw), int(ch)));
+	if (show) {
+		obs_source_inc_showing(scene);
+		m_shown = scene;
+	} else {
+		obs_source_release(scene);
+	}
 }
 
 const oc::ControlInfo *LayoutPage::part(const QString &id) const
@@ -600,6 +691,8 @@ void LayoutPage::fillParts()
 
 void LayoutPage::selectPart(const QString &id)
 {
+	// A write still waiting on the throttle belongs to the part it was made on.
+	flushWrite();
 	m_selected = id;
 	m_updating = true;
 	for (int i = 0; i < m_parts->count(); ++i)
@@ -618,7 +711,7 @@ void LayoutPage::showSelected()
 		return;
 	}
 	m_updating = true;
-	m_partTitle->setText(c->label.toUpper());
+	m_partTitle->setText(c->label);
 	const QJsonObject v = c->value.toObject();
 	m_x->setValue(v.value("x").toDouble());
 	m_y->setValue(v.value("y").toDouble());
@@ -635,13 +728,31 @@ void LayoutPage::showSelected()
 	m_updating = false;
 }
 
+// A drag reports every mouse move. Each write moves every item of the part,
+// recomputes its ring cut-outs and tells the window, so they are throttled to
+// ~30 a second: the first lands at once, later ones merge and land on the
+// timer, the last always lands.
 void LayoutPage::write(const QJsonObject &partial)
 {
+	for (auto it = partial.begin(); it != partial.end(); ++it)
+		m_pending[it.key()] = it.value();
+	if (!m_flushTimer->isActive()) {
+		flushWrite();
+		m_flushTimer->start();
+	}
+	// The window refreshes every page from the notifier; this page's own
+	// fields follow on that refresh.
+}
+
+bool LayoutPage::flushWrite()
+{
+	if (m_pending.isEmpty() || m_selected.isEmpty())
+		return false;
+	const QJsonObject partial = std::exchange(m_pending, QJsonObject());
 	QString error;
 	if (!oc::SetControlValue(m_overlay, m_selected, partial, &error) && onStatus)
 		onStatus(error);
-	// The window refreshes every page from the notifier; this page's own
-	// fields follow on that refresh.
+	return true;
 }
 
 void LayoutPage::refresh(const oc::OverlayInfo &info)
@@ -653,6 +764,7 @@ void LayoutPage::refresh(const oc::OverlayInfo &info)
 void LayoutPage::showEvent(QShowEvent *e)
 {
 	QWidget::showEvent(e);
+	showScene(true);
 	if (auto *t = findChild<QTimer *>("ocPreviewTimer"))
 		t->start();
 }
@@ -661,7 +773,8 @@ void LayoutPage::hideEvent(QHideEvent *e)
 {
 	if (auto *t = findChild<QTimer *>("ocPreviewTimer"))
 		t->stop();
-	joinRender();
+	flushWrite();
+	showScene(false);
 	QWidget::hideEvent(e);
 }
 
